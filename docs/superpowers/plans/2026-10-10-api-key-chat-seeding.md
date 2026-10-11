@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-10-api-key-chat-design.md` (approved 2026-10-10), sections 6 and 7. Task issue: #3410. This plan continues `docs/superpowers/plans/2026-10-10-api-key-chat.md` (Tasks 1-16) and must run after it: chat only accepts API-key rows once Task 12 lands.
 
+**Revised 2026-10-11** after an independent review. Seeding now checks the chosen chat model against the list the provider returned on this run (Task 18), the seeded-key check reads the stored column and decrypts it (Task 20), leak searches use the key scanner, and phase 5 stays open until a run through the relay passes (Task 21).
+
 ## Global Constraints
 
 - Never hardcode a model or provider in product code. Test fixtures may use literal ids.
@@ -18,7 +20,11 @@
 - No PR may push a file from under 1000 lines to over 1000 lines. `tests/uat/provisioner.ts` is at 966. Run `wc -l` on it after Task 19.
 - Prettier `printWidth` 100.
 - Unit tests run one file at a time: `pnpm test:unit <file>`. The full gate, database tests (`tests/integration/**`, `tests/uat/seed/**` database cases) and UAT runs go only through the verify-gate skill, at the points marked **verify-gate**.
-- The key must never appear in any process argv, in a log line, in an error message or in a seeded row other than the encrypted credential. Each such rule has a test that is observed failing with its protection removed ("removal step").
+- The key must never appear in any process argv, in a log line, in an error message or in a seeded row other than the encrypted credential. Each such rule has a test that is observed failing with its protection removed ("removal step"), and the removal step records the observed failure in the PR body.
+- Leak searches use `/tmp/acp-proof/key-scan.mjs` from the main plan's phase 0 setup. It reads the key file itself and prints only counts, pids and file names. Never put key text, or any slice of it, on a command line.
+- OpenAI-compatible means a service that speaks Chat Completions. Docs and PR text say "OpenAI-compatible (Chat Completions)" and claim no more than the proxy that was tested.
+- Seeding uses only a model the provider listed on this run. API-key discovery never deletes older model rows, so an older row is not evidence the provider still serves it.
+- Phase 5 closes only on a UAT run through the relay that passes. A run that skips because the relay is not configured proves the skip works, nothing more. Seeding success is reported separately.
 - Test-only settings stay out of checked-in production compose and out of dev scripts' defaults. The `extra_hosts` entry goes in `tests/uat/compose.override.yml` only.
 - Chat, status updates, PR text and handoff docs are plain English for a non-engineer reader: name things by what they do, at most one code-formatted name per sentence, plain ASCII punctuation, no invented shorthand. Pass this instruction on to every agent you spawn. Commit messages and code comments stay precise and technical.
 
@@ -29,6 +35,8 @@
 3. A proxy that lists no chat-capable model, or an admin-pinned model on another provider. Expect provisioning to fail with a message that says so, not to leave chat silently on another provider. Pinned in Task 18 ("refuses when the chat model belongs to another provider").
 4. Three of the four UAT variables set. Expect a failure that names the missing variables and never prints a value. Pinned in Task 19 (`readApiKeyChatUatProvider` partial case).
 5. A stray seed-key variable already in the host shell when the spec did not opt in. Expect the seed container to receive an empty value. Pinned in Task 19 ("sends an empty key when the spec did not opt in").
+6. Re-provisioning after the proxy stops listing the model chosen last time. Expect a refusal, even though the old model row is still in the database. Pinned in Task 18 ("refuses a stale model the provider no longer lists" and the real-repository integration case).
+7. A proxy that lists only embedding models, or nothing. Discovery drops non-chat ids (main plan Task 5), so the list is empty and provisioning refuses before making the row default. Pinned in Task 18 ("refuses an empty model list before making the row default").
 
 ---
 
@@ -49,6 +57,10 @@ Checked against the code on 2026-10-10. Line numbers are on the planning branch.
 | Seed CLI reads env and calls `seedLevel` | `tests/uat/seed/cli.ts:48-87` |
 | AI seed chunks run after `seedAiProviderChunk` in the admin+data block | `tests/uat/seed/levels.ts:136-170` |
 | No `extra_hosts` anywhere in UAT compose | `tests/uat/compose.override.yml` |
+| Discovery outcome is `{ reason?, message? }`; API-key rows are insert-only, so older model rows survive a new list | `packages/ai/src/discover-and-persist-models.ts:8-11`, `:54-66` |
+| The CLI ok case asserts `toEqual({})` on the discovery outcome | `tests/unit/ai-discover-and-persist-models.test.ts:68` |
+| `listProviders` selects no `encrypted_credential`; `selectProviderWithCredential` does | `packages/ai/src/repository.ts` |
+| `parseAiApiKeyCredential` is exported from `@moss/ai` | `packages/ai/src/credentials.ts:5` |
 
 ## File Structure
 
@@ -59,6 +71,7 @@ Checked against the code on 2026-10-10. Line numbers are on the planning branch.
 | `scripts/dev-instance/provision.ts` | Modify | Branch the provider-rows and cli-token steps on auth |
 | `scripts/dev-instance.ts` | Modify | Wire the real repository, cipher, discovery and key reader |
 | `packages/ai/src/index.ts` | Modify | Export the discovery helper |
+| `packages/ai/src/discover-and-persist-models.ts` | Modify | Report the chat model ids the provider listed on this run |
 | `tests/uat/compose.override.yml` | Modify | `host.docker.internal` on the `jarv1s` service |
 | `tests/uat/api-key-chat-env.ts` | Create | Host-side settings, seed args and seed child env |
 | `tests/uat/seed/types.ts` | Modify | Seed-container variable names and the seed value type |
@@ -301,19 +314,64 @@ git commit -m "feat(dev-instance): read API-key provider auth, address and key f
 - Modify: `scripts/dev-instance/provision.ts`
 - Modify: `scripts/dev-instance.ts:15`, `:86-89`, `:110-124`
 - Modify: `packages/ai/src/index.ts`
+- Modify: `packages/ai/src/discover-and-persist-models.ts:8-11`, `:65-66`
+- Test: `tests/unit/ai-discover-and-persist-models.test.ts` (one changed expectation, one new case)
 - Test: `tests/unit/dev-instance-api-key-provider.test.ts` (create)
-- Test: `tests/integration/dev-instance-provision.test.ts` (two new cases, verify-gate only)
+- Test: `tests/integration/dev-instance-provision.test.ts` (three new cases, database)
 
 **Interfaces:**
 - Consumes: Task 17's `providerAuth`, `providerBaseUrl`, `providerKeyFilePath`. From `@moss/ai`: `AiRepository`, `AiSecretCipher`, `discoverAndPersistModels(scopedDb, input, { repository, modelDiscovery })`, `DiscoverAndPersistModelsInput`, `DiscoverAndPersistModelsOutcome`, `ModelDiscoveryService`.
 - Produces:
+  - `DiscoverAndPersistModelsOutcome.discoveredModelIds?: readonly string[]`, the chat-capable ids the provider listed on this run. Set only when `reason` is absent.
   - `DEV_API_KEY_PROVIDER_NAME = "Dev instance API key"`
   - `ensureApiKeyProvider(scopedDb: DataContextDb, adminUserId: string, config: DevInstanceConfig, deps: EnsureApiKeyProviderDeps): Promise<ApiKeyProviderOutcome>`
   - `ApiKeyProviderOutcome { changed: boolean; providerId: string; chatModelId: string }`
   - `ProvisionDeps.ensureApiKeyProvider?: (scopedDb: DataContextDb, adminUserId: string) => Promise<ApiKeyProviderOutcome>`
   - cli-token step detail `"skipped: API-key provider"` for API-key configs.
 
-- [ ] **Step 1: Write the failing unit test**
+- [ ] **Step 1: Write the failing unit tests**
+
+In `tests/unit/ai-discover-and-persist-models.test.ts`, change the CLI ok case's `expect(outcome).toEqual({});` (line 68) to:
+
+```ts
+    expect(outcome).toEqual({
+      discoveredModelIds: ["claude-fable-5-1", "claude-haiku-4-5-20251001"]
+    });
+```
+
+and add, after "never deletes rows for an API-key provider":
+
+```ts
+  it("reports only the chat ids the provider listed on this run", async () => {
+    const repository = fakeRepository();
+    const modelDiscovery = new ModelDiscoveryService();
+    modelDiscovery.discoverModels = async () => ({
+      models: [
+        {
+          providerModelId: "org/model:tag@v2",
+          displayName: "org/model:tag@v2",
+          capabilities: ["chat", "tool-use"],
+          tier: "interactive"
+        },
+        {
+          providerModelId: "org/vision-only",
+          displayName: "org/vision-only",
+          capabilities: ["vision"],
+          tier: "interactive"
+        }
+      ],
+      fromCache: false,
+      fromFallback: false,
+      cacheExpiresAt: null
+    });
+    const outcome = await discoverAndPersistModels(
+      scopedDb,
+      { ...input, providerKind: "openai-compatible", acpAgentId: null, authMethod: "api_key" },
+      { repository: repository as never, modelDiscovery }
+    );
+    expect(outcome).toEqual({ discoveredModelIds: ["org/model:tag@v2"] });
+  });
+```
 
 Create `tests/unit/dev-instance-api-key-provider.test.ts`:
 
@@ -380,8 +438,14 @@ function providerRow(overrides: Partial<AiProviderConfigSafeRow> = {}): AiProvid
   };
 }
 
+const LISTED_MODEL = "org/model:tag@v2";
+
 function chatModel(providerConfigId: string): AiConfiguredModelSafeRow {
-  return { id: "model-1", provider_config_id: providerConfigId } as AiConfiguredModelSafeRow;
+  return {
+    id: "model-1",
+    provider_config_id: providerConfigId,
+    provider_model_id: LISTED_MODEL
+  } as AiConfiguredModelSafeRow;
 }
 
 interface HarnessOptions {
@@ -426,7 +490,7 @@ function harness(options: HarnessOptions = {}) {
     },
     discoverModels: async (_db, input) => {
       discovered.push(input);
-      return options.discovery ?? {};
+      return options.discovery ?? { discoveredModelIds: [LISTED_MODEL] };
     },
     readKeyFile: async () => options.keyFile ?? `  ${KEY}\n`
   };
@@ -535,6 +599,23 @@ describe("ensureApiKeyProvider (#3410)", () => {
     );
   });
 
+  it("refuses a stale model the provider no longer lists", async () => {
+    const h = harness({ discovery: { discoveredModelIds: ["org/other-model"] } });
+
+    await expect(ensureApiKeyProvider(scopedDb, ADMIN, config(), h.deps)).rejects.toThrow(
+      /listed no chat model/
+    );
+  });
+
+  it("refuses an empty model list before making the row default", async () => {
+    const h = harness({ discovery: { discoveredModelIds: [] } });
+
+    await expect(ensureApiKeyProvider(scopedDb, ADMIN, config(), h.deps)).rejects.toThrow(
+      /listed no chat model/
+    );
+    expect(h.promoted).toEqual([]);
+  });
+
   it("refuses a cli config", async () => {
     const h = harness();
 
@@ -550,12 +631,41 @@ describe("ensureApiKeyProvider (#3410)", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 2: Run the tests to verify they fail**
 
+Run: `pnpm test:unit tests/unit/ai-discover-and-persist-models.test.ts`
+Expected: FAIL on "reconciles the provider's rows against an ok list (sentinel kept)" and "reports only the chat ids the provider listed on this run" (the outcome is `{}`).
 Run: `pnpm test:unit tests/unit/dev-instance-api-key-provider.test.ts`
 Expected: FAIL with "Cannot find module '../../scripts/dev-instance/api-key-provider.js'" (and a type error on the missing `@moss/ai` exports).
 
-- [ ] **Step 3: Export the discovery helper**
+- [ ] **Step 3: Report the listed ids and export the discovery helper**
+
+In `packages/ai/src/discover-and-persist-models.ts`, replace the outcome interface (lines 8-11) with:
+
+```ts
+/** #2208: what the refresh route reports back — why nothing changed, when that is the case. */
+export interface DiscoverAndPersistModelsOutcome {
+  readonly reason?: ModelDiscoveryReason;
+  readonly message?: string;
+  /** Chat-capable ids the provider listed on this run. Set only when `reason` is absent. */
+  readonly discoveredModelIds?: readonly string[];
+}
+```
+
+and replace the last two lines of `discoverAndPersistModels` (`await deps.repository.upsertDiscoveredModels(...)` and `return {};`) with:
+
+```ts
+  await deps.repository.upsertDiscoveredModels(scopedDb, input.providerId, models);
+  // API-key rows are insert-only, so older rows outlive the list; callers check against this.
+  return {
+    discoveredModelIds: models
+      .filter((model) => model.capabilities.includes("chat"))
+      .map((model) => model.providerModelId)
+  };
+```
+
+Run: `rg -n "toEqual\(\{\}\)" tests/unit | rg -i discover`
+Expected: no matches. Any other test that pins the empty ok outcome gets the same change as line 68.
 
 In `packages/ai/src/index.ts`, add after the line `export * from "./credentials.js";`:
 
@@ -580,6 +690,10 @@ import type { DevInstanceConfig } from "./config.js";
 
 /** Display name of the one API-key row the dev instance owns. Re-runs find it by this name. */
 export const DEV_API_KEY_PROVIDER_NAME = "Dev instance API key";
+
+const NO_CHAT_MODEL_MESSAGE =
+  `"${DEV_API_KEY_PROVIDER_NAME}" listed no chat model Moss can use. Pick one for it in ` +
+  "Admin > AI providers, or check the provider's model list.";
 
 export interface EnsureApiKeyProviderDeps {
   readonly repository: Pick<
@@ -665,6 +779,9 @@ export async function ensureApiKeyProvider(
         "Check MOSS_DEV_INSTANCE_PROVIDER_BASE_URL and the key file."
     );
   }
+  // Older model rows survive discovery, so only this run's list counts.
+  const listed = discovery.discoveredModelIds ?? [];
+  if (listed.length === 0) throw new Error(NO_CHAT_MODEL_MESSAGE);
 
   const promoted = await deps.repository.setInstanceDefaultProvider(scopedDb, provider.id);
   if (!promoted) {
@@ -672,11 +789,12 @@ export async function ensureApiKeyProvider(
   }
 
   const model = await deps.repository.selectChatModelForUser(scopedDb);
-  if (!model || model.provider_config_id !== provider.id) {
-    throw new Error(
-      `"${DEV_API_KEY_PROVIDER_NAME}" listed no chat model Moss can use. Pick one for it in ` +
-        "Admin > AI providers, or check the provider's model list."
-    );
+  if (
+    !model ||
+    model.provider_config_id !== provider.id ||
+    !listed.includes(model.provider_model_id)
+  ) {
+    throw new Error(NO_CHAT_MODEL_MESSAGE);
   }
 
   return {
@@ -687,12 +805,13 @@ export async function ensureApiKeyProvider(
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 5: Run the tests to verify they pass**
 
+Run: `pnpm test:unit tests/unit/ai-discover-and-persist-models.test.ts`
 Run: `pnpm test:unit tests/unit/dev-instance-api-key-provider.test.ts`
-Expected: PASS, 8 tests.
+Expected: PASS for both; the second reports 10 tests.
 
-- [ ] **Step 6: Removal step (provider message stays out of errors)**
+- [ ] **Step 6: Removal steps (provider message stays out of errors; only listed models count)**
 
 Temporarily change the discovery error to append the provider's message:
 
@@ -702,11 +821,15 @@ Temporarily change the discovery error to append the provider's message:
 ```
 
 Run: `pnpm test:unit tests/unit/dev-instance-api-key-provider.test.ts`
-Expected: FAIL on "names the discovery failure without echoing the provider's message". Revert the change and rerun to PASS.
+Expected: FAIL on "names the discovery failure without echoing the provider's message". Record the failure in the PR body. Revert the change and rerun to PASS.
+
+Then temporarily delete `|| !listed.includes(model.provider_model_id)` from the model check.
+Run: `pnpm test:unit tests/unit/dev-instance-api-key-provider.test.ts`
+Expected: FAIL on "refuses a stale model the provider no longer lists". Record it, revert, and rerun to PASS.
 
 - [ ] **Step 7: Write the failing provision cases**
 
-In `tests/integration/dev-instance-provision.test.ts`, add `import type { AiAutoRegisterPort } from "@moss/ai";` to the imports, then add a new `describe` block inside the top-level `describe`, after the last existing block:
+In `tests/integration/dev-instance-provision.test.ts`, add `import type { AiAutoRegisterPort } from "@moss/ai";`, `import { ModelDiscoveryService, discoverAndPersistModels } from "@moss/ai";` and `import { ensureApiKeyProvider, type EnsureApiKeyProviderDeps } from "../../scripts/dev-instance/api-key-provider.js";` to the imports, then add a new `describe` block inside the top-level `describe`, after the last existing block:
 
 ```ts
   describe("API-key provider (#3410)", () => {
@@ -771,10 +894,65 @@ In `tests/integration/dev-instance-provision.test.ts`, add `import type { AiAuto
         )
       ).rejects.toThrow(/ensureApiKeyProvider is not wired/);
     });
+
+    it("refuses a re-run whose list no longer has the model, though the old row remains", async () => {
+      await insertActiveAdmin(ADMIN_ID, "ada@example.com");
+      const repository = new AiRepository();
+      const modelDiscovery = new ModelDiscoveryService();
+      let listed: readonly string[] = ["org/model:tag@v2"];
+      modelDiscovery.discoverModels = async () => ({
+        models: listed.map((id) => ({
+          providerModelId: id,
+          displayName: id,
+          capabilities: ["chat" as const],
+          tier: "interactive" as const
+        })),
+        fromCache: false,
+        fromFallback: false,
+        cacheExpiresAt: null
+      });
+      const ensureDeps: EnsureApiKeyProviderDeps = {
+        repository,
+        cipher: createAiSecretCipher(),
+        discoverModels: (scopedDb, input) =>
+          discoverAndPersistModels(scopedDb, input, { repository, modelDiscovery }),
+        readKeyFile: async () => "ada-dev-instance-key-0002\n"
+      };
+      const config = fakeConfig({
+        providerKind: "openai-compatible",
+        providerAuth: "api_key",
+        providerBaseUrl: "http://proxy.test",
+        providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
+      });
+      const context = { actorUserId: ADMIN_ID, requestId: "request:dev-api-key" };
+      const ensure = () =>
+        runner.withDataContext(context, (scopedDb) =>
+          ensureApiKeyProvider(scopedDb, ADMIN_ID, config, ensureDeps)
+        );
+
+      const first = await ensure();
+      listed = [];
+      await expect(ensure()).rejects.toThrow(/listed no chat model/);
+
+      const models = await runner.withDataContext(context, (scopedDb) =>
+        repository.listModels(scopedDb)
+      );
+      expect(
+        models.some(
+          (model) =>
+            model.provider_config_id === first.providerId &&
+            model.provider_model_id === "org/model:tag@v2"
+        )
+      ).toBe(true);
+    });
   });
 ```
 
-These are database tests. Do not run them directly; they run under verify-gate in Task 21.
+These are database tests. Do not run them directly; they run under verify-gate in Task 21. The removal step for the real-repository case runs one database gate now:
+
+Temporarily delete `|| !listed.includes(model.provider_model_id)` again.
+Run: `scripts/run-gate.sh start --gate test:integration`, then `scripts/run-gate.sh wait --follow`.
+Expected: FAIL on "refuses a re-run whose list no longer has the model, though the old row remains". Record the failure in the PR body, revert, and leave the passing run to Task 21.
 
 - [ ] **Step 8: Branch the provision steps**
 
@@ -891,9 +1069,10 @@ Expected: PASS, 13 tests.
 
 ```bash
 git add scripts/dev-instance/api-key-provider.ts scripts/dev-instance/provision.ts \
-  scripts/dev-instance.ts packages/ai/src/index.ts \
+  scripts/dev-instance.ts packages/ai/src/index.ts packages/ai/src/discover-and-persist-models.ts \
+  tests/unit/ai-discover-and-persist-models.test.ts \
   tests/unit/dev-instance-api-key-provider.test.ts tests/integration/dev-instance-provision.test.ts
-git commit -m "feat(dev-instance): provision an API-key provider as the default (#3410)"
+git commit -m "feat(dev-instance): provision an API-key provider as the default, from this run's model list (#3410)"
 ```
 
 ---
@@ -1569,7 +1748,7 @@ Create `tests/uat/seed/chunks/api-key-chat.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { AiRepository } from "@moss/ai";
+import { AiRepository, createAiSecretCipher, parseAiApiKeyCredential } from "@moss/ai";
 
 import { createAppRuntimeRunner, createMigrationOwnerDb } from "../connections.js";
 import { seedSoloAdmin } from "../admin.js";
@@ -1602,7 +1781,15 @@ describe("seedApiKeyChatProviderChunk (#3410)", () => {
         expect(seeded[0]?.auth_method).toBe("api_key");
         expect(seeded[0]?.base_url).toBe("http://proxy.test");
         expect(seeded[0]?.is_instance_default).toBe(true);
-        expect(JSON.stringify(providers)).not.toContain("ada-uat-key-0001");
+
+        // listProviders never selects the credential column, so read the stored value itself.
+        const sealed = await repo.selectProviderWithCredential(scopedDb, seeded[0]?.id ?? "");
+        if (!sealed) throw new Error("seeded provider row has no stored credential");
+        expect(JSON.stringify(sealed.encrypted_credential)).not.toContain("ada-uat-key-0001");
+        const opened = parseAiApiKeyCredential(
+          createAiSecretCipher().decryptJson(sealed.encrypted_credential)
+        );
+        expect(opened?.apiKey).toBe("ada-uat-key-0001");
 
         const chatModel = await repo.selectChatModelForUser(scopedDb);
         expect(chatModel?.provider_config_id).toBe(seeded[0]?.id);
@@ -1616,6 +1803,10 @@ describe("seedApiKeyChatProviderChunk (#3410)", () => {
 ```
 
 This is a database test. It runs under verify-gate in Task 21 (`pnpm test:uat-seed`).
+
+Removal step (the stored key is sealed): temporarily change the chunk's `encryptedCredential: cipher.encryptJson({ apiKey: seed.apiKey })` to `encryptedCredential: { apiKey: seed.apiKey } as unknown as ReturnType<typeof cipher.encryptJson>`.
+Run: `scripts/run-gate.sh start --gate test:uat-seed`, then `scripts/run-gate.sh wait --follow`.
+Expected: FAIL on "seeds an API-key provider whose model chat selects, after the default AI chunk", at the `not.toContain` line. Record the failure in the PR body, then revert. The passing run is part of Task 21.
 
 - [ ] **Step 5: Add the seed option**
 
@@ -1767,7 +1958,7 @@ git commit -m "test(uat): seed an API-key chat provider and prove drawer chat wi
 
 - [ ] **Step 1: verify-gate**
 
-Run the full gate through the verify-gate skill. It covers the two new provision cases in `tests/integration/dev-instance-provision.test.ts` and the chunk test through `pnpm test:uat-seed`.
+Run the full gate through the verify-gate skill. It covers the three new provision cases in `tests/integration/dev-instance-provision.test.ts` and the chunk test through `pnpm test:uat-seed`.
 Expected: green. Then:
 
 ```bash
@@ -1790,12 +1981,19 @@ pnpm dev:instance provision
 
 Expected output lines: `provider-rows: changed` naming the API-key provider, and `cli-token: unchanged — skipped: API-key provider`. Run `pnpm dev:instance provision` a second time and expect `provider-rows: unchanged`. In the browser, Admin > AI providers shows "Dev instance API key" as the default with chat readiness "ready"; the chat drawer answers a plain question. Repeat once with `MOSS_DEV_INSTANCE_PROVIDER_KIND=anthropic` and the Anthropic-style address.
 
-Then run the leak search from main plan Task 16 Step 7 against this instance (file names only, never matching lines). Stop the instance and run `devports release <port>`.
+Then run the key scanner as in main plan Task 16 Step 7, with this instance's log and agent-home directories:
+
+```bash
+node /tmp/acp-proof/key-scan.mjs "$PROXY_KEY_FILE" --argv
+node /tmp/acp-proof/key-scan.mjs "$PROXY_KEY_FILE" <dev-instance log directory> <dev-instance agent homes>
+```
+
+Expected: `ARGV_HITS 0` and `FILE_HITS 0`, then `FILE_HITS 0`. Report counts and file names only. Stop the instance and run `devports release <port>`.
 
 - [ ] **Step 3: UAT spec skips cleanly when not configured**
 
 With none of the `MOSS_UAT_CHAT_PROVIDER_*` variables set, run `3410-api-key-chat.uat.spec.ts` through the verify-gate skill's UAT mode.
-Expected: the spec reports skipped and the run passes.
+Expected: the spec reports skipped and the run passes. This proves only that an unconfigured run stays out of the way. It does not close phase 5.
 
 - [ ] **Step 4: UAT spec through the relay, if one is available**
 
@@ -1806,11 +2004,18 @@ docker run --rm --add-host host.docker.internal:host-gateway curlimages/curl \
   -s -o /dev/null -w '%{http_code}\n' "$MOSS_UAT_CHAT_PROVIDER_BASE_URL/v1/models"
 ```
 
-If it is reachable, set the four `MOSS_UAT_CHAT_PROVIDER_*` variables (the key file is `$PROXY_KEY_FILE`, the model `$PROXY_OPENAI_MODEL` or `$PROXY_ANTHROPIC_MODEL` to match the kind) and run the spec through verify-gate's UAT mode. Expected: pass. If it is not reachable, do not set the variables; record that the UAT proof waits on the relay.
+If it is reachable, set the four `MOSS_UAT_CHAT_PROVIDER_*` variables (the key file is `$PROXY_KEY_FILE`, the model `$PROXY_OPENAI_MODEL` or `$PROXY_ANTHROPIC_MODEL` to match the kind) and run the spec through verify-gate's UAT mode. Expected: pass, with the spec reported as run, not skipped. If it is not reachable, do not set the variables; record that the UAT proof waits on the relay.
+
+Phase 5 closes only when this step passes through the relay. Until then, phase 4 (dev-instance seeding) can close on Step 2, and phase 5 stays open on #3410 with "waiting on the relay". The relay lives outside this repo, so it is not built here.
 
 - [ ] **Step 5: Report on the PR**
 
-Post one `gh pr comment` in plain English: the gate result, the dev-instance seeding result for each kind, whether provisioning twice left one row, the leak search result, and the UAT result (passed, or "skipped: relay not available"). Say that the proof used a stand-in local proxy. Never paste the address, the key, the key file path or matching log lines.
+Post one `gh pr comment` in plain English, with seeding and UAT as two separate results:
+
+- Seeding (phase 4): the gate result, the dev-instance seeding result for each kind, whether provisioning twice left one row, and the key scanner result.
+- UAT (phase 5): "passed through the relay", or "open: relay not available". A skipped run is never reported as a pass.
+
+Say that the proof used a stand-in local proxy that speaks Chat Completions. Never paste the address, the key, the key file path or matching log lines. Post the same two results on #3410, and leave phase 5 unticked there until the relay run passes.
 
 ---
 
@@ -1826,21 +2031,28 @@ Post one `gh pr comment` in plain English: the gate result, the dev-instance see
 | UAT `extra_hosts` host-gateway entry, test-only | 19 |
 | UAT seed gets the address and the key; production compose never sees them | 19, 20 |
 | UAT proof of chat with a confirmation card | 20, 21 |
+| Seeding uses a model from this run's list; an empty or stale list refuses | 18 |
+| Seeded key is stored sealed and opens to the same key | 20 |
+| Leak searches read the key file themselves | 21 Step 2 |
+| Phase 5 closes only on a relay-backed UAT pass; seeding reported separately | 21 Steps 3-5 |
 
 ### Deviations from the spec, found in the code
 
 - The UAT key reaches the seed container through its environment, by variable name only, not through the generated env file. The env file feeds the long-running `jarv1s` service and the seed needs the key once (Task 19).
 - The UAT seed is opt-in per spec through `withApiKeyChatProvider`. Otherwise a host shell with the variables set would replace the default provider for every spec (Task 19).
 - The discovery helper was not exported from `@moss/ai`, so Task 18 exports it.
+- API-key discovery never deletes older model rows, so the discovery outcome now reports this run's chat ids and seeding checks against them (Task 18).
+- `listProviders` never selects the stored credential, so the seed test reads it through `selectProviderWithCredential` (Task 20).
 - Three test helpers build a full dev config, so the new required fields touch two integration files (Task 17).
 
 ### Placeholder scan
 
-No "TBD", "TODO" or "similar to Task N". `<your-agent-name>` and `<relay port>` are filled on the day.
+No "TBD", "TODO" or "similar to Task N". `<your-agent-name>`, `<relay port>`, `<dev-instance log directory>` and `<dev-instance agent homes>` are filled on the day from the tools that print them.
 
 ### Type consistency
 
 - `DevInstanceConfig.providerAuth`, `providerBaseUrl`, `providerKeyFilePath`: Tasks 17 and 18.
 - `ApiKeyProviderOutcome { changed, providerId, chatModelId }`: Task 18 module, provision step and integration test.
+- `DiscoverAndPersistModelsOutcome.discoveredModelIds`: produced in Task 18 Step 3, read by `ensureApiKeyProvider`, faked by the unit harness and real in the integration case.
 - `ApiKeyChatSeed { providerKind, baseUrl, model, apiKey }` and `API_KEY_CHAT_SEED_ENV`: Tasks 19 and 20.
 - `withApiKeyChatProvider`: run-uat regex, `UatProvisionOptions`, spec `uatLevel` (Tasks 19 and 20).

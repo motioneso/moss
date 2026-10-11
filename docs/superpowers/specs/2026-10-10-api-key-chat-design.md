@@ -4,6 +4,12 @@ Date: 2026-10-10
 
 Status: Approved (Ben, 2026-10-10). Build-ready after the phase 0 proofs below.
 
+Revised 2026-10-11 after an independent review of the plans. The approval stands; the changes
+tighten how the approved design is proved and kept safe. Changed sections: Scope, 4 (live sessions
+follow the provider row), 5 (one address rule, one model id rule, chat models only), 6 (seeding
+uses this run's model list), 7 (phase 5 closure), Must hold, Rollout phases, Testing, Open
+questions.
+
 Owner: Ben
 
 Decision record: overrides ADR 0003 for the interactive path and reverses the "not planned"
@@ -47,6 +53,8 @@ closure of issue #307. Ben's ruling, 2026-10-10: "yes, it will override intentio
 
 - Open the three chat gates that refuse API-key rows.
 - Map API-key rows to an agent program, per provider kind.
+- "OpenAI-compatible" means a service that speaks Chat Completions. The claim covers the proxy
+  that was tested, not every service that uses the name.
 - Carry the provider key from the app to one agent session in the sidecar.
 - Custom base URL for Anthropic API-key rows (chat, background jobs, model discovery).
 - "Anthropic (API key)" entry in the admin add-provider menu.
@@ -165,6 +173,14 @@ Address format:
   next to the deny settings. It writes the entry on API-key spawns and removes it on every other
   OpenCode spawn, so no stale entry survives a provider switch.
 - No key is written to disk by Moss. Full trace in Security.
+- A live chat session follows the provider row it launched from. The active-provider identity
+  carries a non-secret launch revision: a hash of the row's kind, address and sealed credential
+  (ciphertext, never the key). Engine reuse, the pending-turn check and the post-launch check
+  compare it. A new key or address on the same row discards the engine and replays the
+  conversation into a fresh one. The row's update time is not used, because status and default
+  changes also bump it.
+- Saving a new key, address, kind, auth method or agent on a row, or revoking it, drops that row's
+  live sessions at once (by provider row id), best effort. The revision check covers a failed drop.
 - The design brief suggested following the Codex login copy. That pattern writes a per-person file
   that outlives the session (see Security), so this spec uses the agent env instead. A per-session
   file is the fallback if phase 0 shows OpenCode cannot read an env reference.
@@ -181,6 +197,13 @@ Address format:
   value.
 - Model names come from the provider's `/v1/models` through the existing app-side discovery
   (`model-discovery.ts`, `discover-and-persist-models.ts`). Never hardcoded.
+- Discovery and the key test build their URLs with the same address normalizer as launch, so a
+  saved address ending in `/v1` or `/v1/` works the same everywhere.
+- One model id rule (letters, digits and `._:/@-`, up to 200 characters) applies at discovery and
+  at launch. At a custom Anthropic address, discovery keeps every id that passes it, not only
+  `claude-` ids.
+- Chat lists chat models only. Embedding, moderation, rerank, speech and image ids are dropped at
+  discovery, so a provider that lists only those offers no chat model.
 - The sidecar's model-list adapters (`model-list-adapters.ts`) stay CLI-only.
 - A 401 from the provider shows the existing "The provider rejected the API key" state, not a
   CLI sign-in prompt.
@@ -199,6 +222,9 @@ Address format:
 - The provider-rows step creates the API-key row through the same repository path the admin route
   uses (encrypted credential), runs model discovery, and sets the chat model from the discovered
   list.
+- The chosen chat model must be in the list the provider returned on this run. Discovery never
+  deletes older API-key model rows, so an older row is not evidence. An empty or stale list fails
+  provisioning with a message that names the problem.
 - The cli-token step is skipped for `api_key`. No GPG token is read.
 - Dev instances run cli-runner on the host (`scripts/dev-instance/cli-runner.ts:130-150`), so
   agents reach a proxy on `127.0.0.1` with no relay.
@@ -214,6 +240,8 @@ Address format:
 - A host-side relay listens on the bridge gateway and forwards to the proxy on `127.0.0.1`. It
   lives in Ben's model-router repo.
 - Related: issue #2906 (UAT chat provider refused by live chat).
+- Phase 5 closes only on a UAT run through the relay that passes. A run that skips because the
+  relay is not configured does not count. Seeding success (phase 4) is recorded separately.
 
 ### 8. App map, ADR, release note
 
@@ -226,8 +254,13 @@ Address format:
 - ADR 0003 status becomes "Superseded in part (interactive transport) by
   `docs/superpowers/specs/2026-10-10-api-key-chat-design.md`".
 - Release note, Category Added: "Chat can now use an API-key provider".
-- Live-path gate: chat through the real UI on a live dev instance, once per agent, with a tool call
-  approved through the confirmation card.
+- Live-path gate: chat through the real UI on a live dev instance, for each agent:
+  - deny, and cancel, a write, with no write made
+  - approve a write, then another turn
+  - a streamed tool result that completes
+  - cancel, then retry
+  - a provider switch that replays history
+  - a same-row key save that relaunches the session
 
 ## Security
 
@@ -259,7 +292,12 @@ Address format:
 ### Must hold (each needs a test observed failing with the protection removed)
 
 - The key never appears in argv of any process (`/proc/<pid>/cmdline`).
-- The key never appears in api or cli-runner logs, RPC error messages, or pg-boss payloads.
+- The key never appears in api or cli-runner logs, RPC error messages, or pg-boss payloads. This
+  includes a key split across two chunks of adapter error output, and launch errors that carry
+  agent text. There is no disclosure waiver.
+- A same-row key or address change never leaves a session running on the old values.
+- Leak searches read the key file themselves and print counts and file names only. No key text,
+  or any slice of it, goes on a command line.
 - The key never reaches the frontend. The app map and errors name the row, never the key.
 - CLI-row spawns carry no API-key variables.
 - The OpenCode settings file never contains the key value.
@@ -302,11 +340,20 @@ Phase 0 proves:
   `ANTHROPIC_API_KEY` answered through the proxy, with no login and no trust prompt.
 - To prove: the same through the claude ACP adapter that Moss pins, including `initialize` passing
   without a login.
-- To prove: `setModelForChat` accepts the proxy's model ids on the claude agent.
+- To prove: the effective model through Moss's own client (`MossAcpClient`), which picks from
+  the agent's advertised values and may substitute another. Record the model the proxy actually
+  received, for set-only, `ANTHROPIC_MODEL`-only and both, including a proxy id the agent does not
+  advertise.
+- To prove: history replay on both agents, and on OpenCode a conversation near the model's
+  context limit. OpenCode entries with no limits default to 0, which turns off its own overflow
+  handling, so each turn must end or fail cleanly within a time bound and a fresh session must
+  recover.
 - To prove: OpenCode answers through the proxy with a provider entry and an `{env:...}` key
   reference.
 - To prove: a Moss tool call and its confirmation card work on both agents.
 - To prove: no key fragment lands in the agent home after a session.
+- Vendor behaviour the plans rely on stays unproved until phase 0 records it. A phase 0 failure
+  stops the build and goes to Ben.
 
 ## Testing
 
@@ -319,12 +366,20 @@ Vitest, one file at a time with `pnpm test:unit <file>`. No full gate, no databa
 - OpenCode entry: written with `/v1` address, model and env reference; removed on CLI spawns; never
   contains the key value.
 - Key absence: argv and log capture contain no key (observed failing with the protection removed).
+- Split key: the stderr mask holds at every split position, one character per chunk, repeats and
+  the final flush. Launch errors are masked the same way.
+- Session follows the row: same-row key rotation, address replacement and a key change between
+  the provider read and the key read each relaunch; a provider save drops only that row's
+  sessions.
+- Discovery: `/v1` and `/v1/` addresses, ids with slash, colon and `@`, an embedding-only list.
 - Readiness: API-key row reads ready on a 200 `/v1/models` and rejected on 401; cache key holds no
   key value.
 - Anthropic base URL: HTTP adapter and model discovery use the row's address and fall back to the
   default.
 - Seeding: `api_key` config reads the key file, skips the cli-token step, and sets the default chat
-  model from discovery; missing key file fails with a clear message.
+  model from discovery; missing key file fails with a clear message. A re-run against an empty
+  list fails even though the old model row remains (real repository). The seeded credential column
+  holds no plaintext key and decrypts to the key.
 
 ## Open questions
 
@@ -333,6 +388,7 @@ Vitest, one file at a time with `pnpm test:unit <file>`. No full gate, no databa
 - Key in env versus a per-session 0600 file. This spec picks env, matching today's OAuth token.
   The file is the fallback if OpenCode cannot read an env reference.
 - Should the claude agent get its model through `ANTHROPIC_MODEL` at spawn if the adapter does not
-  list proxy model ids?
+  list proxy model ids? The plans set it, and phase 0 measures whether it changes the model the
+  proxy receives.
 - Name and placement of the new dev-instance variables, against the "no scattered mode flags" rule
   in `docs/DEVELOPMENT_STANDARDS.md`.
