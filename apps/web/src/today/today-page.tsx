@@ -567,10 +567,10 @@ export function TodayPage(props: {
           todayMode === "evening"
             ? eveningHeroKicker(userFirstName)
             : morningDefinition?.enabled === true
-              ? morningHeroKicker(userFirstName, now)
+              ? morningHeroKicker(userFirstName, locale.timezone, now)
               : userFirstName
-                ? `${greeting()}, ${userFirstName}`
-                : greeting()
+                ? `${greeting(locale.timezone, now)}, ${userFirstName}`
+                : greeting(locale.timezone, now)
         }
         headline={heroContent.headline}
         summary={heroContent.summary}

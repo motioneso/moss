@@ -6,7 +6,12 @@ import {
   type TaskDto
 } from "@moss/shared";
 
-import { formatDate, formatTime } from "../locale/locale-format.js";
+import {
+  formatClockTime,
+  formatDate,
+  formatTime,
+  zonedClockParts
+} from "../locale/locale-format.js";
 import type { TodayMode } from "./evening-mode.js";
 
 /** Pure label/headline helpers for the Today masthead and brief lists — no React. */
@@ -74,8 +79,13 @@ export function firstName(name: string, email: string): string {
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
-export function greeting(now: Date = new Date()): string {
-  const h = now.getHours();
+/** The hour of day on the person's clock, never the browser's (#3393). */
+function personHour(now: Date, timeZone: string): number {
+  return zonedClockParts(now, timeZone)?.hour ?? now.getUTCHours();
+}
+
+export function greeting(timeZone: string, now: Date = new Date()): string {
+  const h = personHour(now, timeZone);
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
@@ -133,22 +143,38 @@ export function byStart(a: CalendarEventDto, b: CalendarEventDto): number {
   return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
 }
 
+function is24Hour(locale: LocaleSettingsDto): boolean {
+  return locale.dateFormat === "24";
+}
+
+/** Clock digits in the person's zone: "8:00" beside {@link ampm} for 12-hour, "08:00" for 24-hour. */
 export function timeLabel(iso: string, locale: LocaleSettingsDto): string {
+  if (is24Hour(locale)) return formatTime(iso, locale);
   return formatTime(iso, locale, { hour: "numeric", minute: "2-digit", hour12: true }).replace(
     /\s?[AP]M$/i,
     ""
   );
 }
 
+/** "am"/"pm" for a 12-hour person; empty for a 24-hour person. */
 export function ampm(iso: string, locale: LocaleSettingsDto): string {
+  if (is24Hour(locale)) return "";
   return /pm$/i.test(formatTime(iso, locale, { hour: "numeric", hour12: true })) ? "pm" : "am";
 }
 
-/** "Prepared at 8:00 am" for English regions. Other regions keep their own localized
-    12-hour text (day period included), since am/pm is an English convention. */
+/** {@link timeLabel} and {@link ampm} joined by `separator`; no dangling separator in 24-hour. */
+export function clockText(iso: string, locale: LocaleSettingsDto, separator = " "): string {
+  const period = ampm(iso, locale);
+  return period ? `${timeLabel(iso, locale)}${separator}${period}` : timeLabel(iso, locale);
+}
+
+/** "Prepared at 8:00 am" for English 12-hour regions, "Prepared at 08:00" for 24-hour. Other
+    12-hour regions keep their own localized text (day period included), since am/pm is an
+    English convention. */
 export function preparedAtLabel(iso: string, locale: LocaleSettingsDto): string {
-  const english = /^en(-|$)/i.test(locale.region);
-  if (english) return `Prepared at ${timeLabel(iso, locale)} ${ampm(iso, locale)}`;
+  if (is24Hour(locale) || /^en(-|$)/i.test(locale.region)) {
+    return `Prepared at ${clockText(iso, locale)}`;
+  }
   return `Prepared at ${formatTime(iso, locale, { hour: "numeric", minute: "2-digit", hour12: true })}`;
 }
 
@@ -169,10 +195,7 @@ export function durationLabel(event: CalendarEventDto): string {
  * `data-jarvis-capture-text` (apps/web/src/chat/page-context.ts).
  */
 export function eventCaptureText(event: CalendarEventDto, locale: LocaleSettingsDto): string {
-  const parts = [
-    `${timeLabel(event.startsAt, locale)} ${ampm(event.startsAt, locale)}`,
-    event.title
-  ];
+  const parts = [clockText(event.startsAt, locale), event.title];
   if (event.location) parts.push(event.location);
   const duration = durationLabel(event);
   if (duration) parts.push(duration);
@@ -319,29 +342,34 @@ export const MORNING_BRIEFING_TITLE = "Morning briefing";
 export const DAYTIME_BRIEFING_TITLE = "Today's briefing";
 export const MORNING_READ_FULL_LABEL = "Read the full morning briefing";
 /** The day briefing is only "morning" before noon; later it is simply today's. */
-export function morningHeroKicker(firstName: string | null, now: Date = new Date()): string {
+export function morningHeroKicker(
+  firstName: string | null,
+  timeZone: string,
+  now: Date = new Date()
+): string {
   const name = (firstName ?? "").trim();
-  const title = now.getHours() < 12 ? MORNING_BRIEFING_TITLE : DAYTIME_BRIEFING_TITLE;
-  return name ? `${greeting(now)}, ${name} / ${title}` : `${greeting(now)} / ${title}`;
+  const title = personHour(now, timeZone) < 12 ? MORNING_BRIEFING_TITLE : DAYTIME_BRIEFING_TITLE;
+  const hello = greeting(timeZone, now);
+  return name ? `${hello}, ${name} / ${title}` : `${hello} / ${title}`;
 }
 
 export const BRIEFING_OFF_REASON = "Your morning briefing is switched off.";
 export const BRIEFING_FAILED_REASON = "Today's briefing failed to run.";
 export const BRIEFING_BLOCKED_REASON = "Today's briefing was blocked.";
 
-/** "07:00" -> "7:00 AM". Returns the raw value when it does not parse. */
-export function clockLabel(targetTime: string): string {
-  const match = targetTime.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return targetTime;
-  const hour = Number(match[1]);
-  const suffix = hour >= 12 ? "PM" : "AM";
-  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${suffix}`;
+/** "07:00" -> "7:00 AM" or "07:00" per the person's 12/24-hour choice. Unparsed values pass through. */
+export function clockLabel(targetTime: string, locale: LocaleSettingsDto): string {
+  return formatClockTime(targetTime, locale);
 }
 
-export function briefingScheduledReason(targetTime: string, pastTarget: boolean): string {
+export function briefingScheduledReason(
+  targetTime: string,
+  pastTarget: boolean,
+  locale: LocaleSettingsDto
+): string {
   return pastTarget
-    ? `It should have run at ${clockLabel(targetTime)}.`
-    : `It runs at ${clockLabel(targetTime)}.`;
+    ? `It should have run at ${clockLabel(targetTime, locale)}.`
+    : `It runs at ${clockLabel(targetTime, locale)}.`;
 }
 
 /** Evening step 1 reflection choices and note composer (VP-REFLECTION-R1). */

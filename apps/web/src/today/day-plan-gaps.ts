@@ -1,6 +1,6 @@
 import type { LocaleSettingsDto } from "@moss/shared";
 
-import { ampm, timeLabel } from "./today-labels.js";
+import { clockText } from "./today-labels.js";
 import type { DayItem } from "./day-plan-view-model.js";
 
 /** A gap this long or shorter reads as "a break"; anything longer reads as "open time".
@@ -52,7 +52,7 @@ function resolveKnownEnd(item: DayItem): number | null {
 }
 
 function compactTime(iso: string, locale: LocaleSettingsDto): string {
-  return `${timeLabel(iso, locale)}${ampm(iso, locale)}`;
+  return clockText(iso, locale, "");
 }
 
 /** An item with no computable end takes the first later start among the other items as its

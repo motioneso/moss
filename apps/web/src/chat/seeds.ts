@@ -68,8 +68,10 @@ function isToday(iso: string, timeZone?: string): boolean {
   return localDay(iso, timeZone) === localDay(new Date(), timeZone);
 }
 
-/** Casual clock label ("3:30pm", "9am") in the user's persisted timezone + region (#579). */
+/** Casual clock label in the person's zone and region: "3:30pm"/"9am" for 12-hour, "15:30" for
+    24-hour (#579, #3393). */
 function eventTime(event: CalendarEventDto, locale: LocaleSettingsDto): string {
+  if (locale.dateFormat === "24") return formatTime(event.startsAt, locale);
   return formatTime(event.startsAt, locale, { hour: "numeric", minute: "2-digit", hour12: true })
     .replace(/\s+/g, "")
     .replace(":00", "")
