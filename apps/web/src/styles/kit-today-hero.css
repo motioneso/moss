@@ -55,7 +55,7 @@
   align-items: center;
   gap: 8px 16px;
   margin: 21px 0 0;
-  font-size: 0.625rem;
+  font-size: var(--text-2xs);
   color: var(--hero-fg-muted);
 }
 
@@ -116,7 +116,7 @@
 
 /* ===== Today section index (V2 restyle in place) ===== */
 .cmd-sections {
-  gap: 6px 26px;
+  gap: var(--space-2) 26px;
   margin: 0 0 20px;
   padding: 0 0 10px;
   border-bottom: 1px solid var(--line);
@@ -134,7 +134,7 @@
 .today-hero__sections {
   display: flex;
   align-items: center;
-  gap: 6px 26px;
+  gap: var(--space-2) 26px;
   margin: 0 16px 28px;
   padding: 18px 0 21px;
   border-bottom: 1px solid var(--line);
@@ -172,7 +172,7 @@
 
 @media (max-width: 920px) {
   .today-hero__sections {
-    gap: 6px 20px;
+    gap: var(--space-2) 20px;
   }
 }
 
@@ -204,7 +204,7 @@
   }
 
   .cmd-sections {
-    gap: 6px 20px;
+    gap: var(--space-2) 20px;
   }
 }
 
@@ -267,7 +267,7 @@
   margin: 0 0 23px;
   font-size: var(--text-2xs);
   letter-spacing: 1.5px;
-  color: var(--sage);
+  color: var(--hero-fg);
 }
 
 .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__title,
@@ -312,13 +312,13 @@
   gap: 18px;
   margin: 21px 0 0;
   font-size: var(--text-2xs);
-  color: var(--sage);
+  color: var(--hero-fg);
 }
 
 .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__links {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
+  gap: var(--space-2) 18px;
 }
 
 .today-hero:is([data-mode="day"], [data-mode="evening"]) .today-hero__links .jds-btn--link {
@@ -402,7 +402,7 @@
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0;
-  color: var(--sage);
+  color: var(--hero-fg);
 }
 
 .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook {
@@ -417,7 +417,7 @@
 
 .today-hero:is([data-mode="day"], [data-mode="evening"]) .wx-outlook > span {
   font-size: 11px;
-  color: var(--sage);
+  color: var(--hero-fg);
 }
 
 @media (max-width: 680px) {

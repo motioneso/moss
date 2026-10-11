@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge, Group, Note, PaneHead, Row, Switch } from "@moss/settings-ui";
@@ -5,7 +6,10 @@ import type { PutWellnessAiConsentRequest, WellnessAiConsentResponse } from "@mo
 
 const AI_CONSENT_KEY = ["wellness", "ai-consent"] as const;
 
-async function requestJson<T>(path: string, init?: RequestInit & { body?: unknown }): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  init?: Omit<RequestInit, "body"> & { body?: unknown }
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("accept", "application/json");
   if (init?.body !== undefined) headers.set("content-type", "application/json");
@@ -20,8 +24,8 @@ async function requestJson<T>(path: string, init?: RequestInit & { body?: unknow
   return (await response.json()) as T;
 }
 
-function getWellnessAiConsent(): Promise<WellnessAiConsentResponse> {
-  return requestJson<WellnessAiConsentResponse>("/api/wellness/ai-consent");
+function getWellnessAiConsent(signal: AbortSignal): Promise<WellnessAiConsentResponse> {
+  return requestJson<WellnessAiConsentResponse>("/api/wellness/ai-consent", { signal });
 }
 
 function putWellnessAiConsent(granted: boolean): Promise<WellnessAiConsentResponse> {
@@ -35,21 +39,49 @@ export default function WellnessSettings() {
   const queryClient = useQueryClient();
   const consentQuery = useQuery({
     queryKey: AI_CONSENT_KEY,
-    queryFn: getWellnessAiConsent
+    queryFn: ({ signal }) => getWellnessAiConsent(signal)
   });
   const consentMutation = useMutation({
     mutationFn: putWellnessAiConsent,
-    onSuccess: (data) => queryClient.setQueryData(AI_CONSENT_KEY, data)
+    onMutate: () => queryClient.cancelQueries({ queryKey: AI_CONSENT_KEY, exact: true }),
+    onSuccess: async (data) => {
+      // A focus refresh or explicit retry may have started while the write was pending.
+      // Cancel both that read and any pre-write read before publishing the server response.
+      await queryClient.cancelQueries({ queryKey: AI_CONSENT_KEY, exact: true });
+      queryClient.setQueryData(AI_CONSENT_KEY, data);
+    }
   });
 
-  const consent = consentMutation.data ?? consentQuery.data;
-  const checked = consent?.effective ?? true;
-  const disabled = consentQuery.isLoading || consentMutation.isPending;
-  const error = consentQuery.isError || consentMutation.isError;
+  const consent = consentQuery.data;
+  const head = (
+    <PaneHead title="Wellness" desc="What your assistant can read from your Wellness data." />
+  );
+  if (!consent)
+    return (
+      <>
+        {head}
+        <p role="status">
+          {consentQuery.isError
+            ? "Could not load Wellness AI access."
+            : "Loading Wellness AI access…"}
+        </p>
+        {consentQuery.isError ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={consentMutation.isPending}
+            onClick={() => void consentQuery.refetch()}
+          >
+            Try again
+          </Button>
+        ) : null}
+      </>
+    );
+  const disabled = consentMutation.isPending;
 
   return (
     <>
-      <PaneHead title="Wellness" desc="What your assistant can read from your Wellness data." />
+      {head}
       <Group title="AI access">
         <Row
           name="Allow your assistant to read your wellness data"
@@ -59,7 +91,7 @@ export default function WellnessSettings() {
               {consent?.explicit === null ? <Badge tone="neutral">Inherited</Badge> : null}
               <Switch
                 ariaLabel="Allow your assistant to read your wellness data"
-                checked={checked}
+                checked={consent.effective}
                 disabled={disabled}
                 onChange={(value) => consentMutation.mutate(value)}
               />
@@ -67,7 +99,24 @@ export default function WellnessSettings() {
           }
         />
       </Group>
-      {error ? <Note>Could not save Wellness AI access. Try again.</Note> : null}
+      {consentQuery.isError ? (
+        <div role="status">
+          <Note>Could not refresh Wellness AI access. Showing the last saved choice.</Note>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={consentMutation.isPending}
+            onClick={() => void consentQuery.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : null}
+      {consentMutation.isError ? (
+        <div role="alert">
+          <Note>Could not save Wellness AI access. Try again.</Note>
+        </div>
+      ) : null}
       <Note>
         Disabling this does not turn off the Wellness module itself - you'll still log check-ins and
         meds; your assistant just won't see them.

@@ -26,8 +26,6 @@
 /* Supporting status lines on the project list share the excerpt treatment. */
 .workshop-status {
   margin: 0;
-  font-size: var(--text-sm);
-  color: var(--text-subtle);
 }
 
 /* The authored empty state has no spacing of its own between the description and a slotted
@@ -50,8 +48,9 @@
   gap: var(--space-4);
   max-width: 56rem;
   margin-inline: auto;
-  height: calc(100dvh - var(--topbar-h) - var(--space-7) - var(--space-11));
-  min-height: 20rem;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .workshop-chat__history {
@@ -74,12 +73,6 @@
    a cap the assistant column fills the whole row and long lines run wall to wall. */
 .workshop-chat__history .chatd-msg:not(.chatd-msg--me) .chatd-bubble {
   max-width: 80%;
-}
-
-.workshop-chat__caption {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--text-subtle);
 }
 
 .workshop-chat__composer {
@@ -114,4 +107,26 @@
   .workshop-project-pane--inactive {
     display: none;
   }
+}
+
+/* The host bounds this visible conversation to its actual remaining grid row.
+   Fill that row rather than subtracting a topbar token: narrow headers can wrap. */
+.workshop-page--conversation {
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+}
+.workshop-notice {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.workshop-chat > .workshop-notice {
+  flex: none;
 }

@@ -1,6 +1,15 @@
+import "./notifications.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LocaleSettingsDto, NotificationDto } from "@moss/shared";
-import { Button, buttonLinkClassName, EmptyState, IconButton, Segmented } from "@moss/ui";
+import {
+  Button,
+  buttonLinkClassName,
+  EmptyState,
+  IconButton,
+  RowIndex,
+  RowIndexItem,
+  Segmented
+} from "@moss/ui";
 import { Bell, Check, CheckCheck, Inbox, LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -32,32 +41,27 @@ export function NotificationsPage() {
 
     return filter === "unread" ? items.filter((notification) => !notification.readAt) : items;
   }, [filter, notificationsQuery.data?.notifications]);
-  const totalCount = notificationsQuery.data?.notifications.length ?? 0;
-  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
+  const totalCount = notificationsQuery.data?.notifications.length;
+  const unreadCount = notificationsQuery.data?.unreadCount;
 
   return (
-    <section
-      className="page-stack"
-      aria-label="Notifications"
-      style={{ marginTop: "var(--space-4)" }}
-    >
-      <section
-        className="tk-toolbar"
-        aria-label="Notification filters"
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-      >
+    <section className="notifications-page" aria-label="Notifications">
+      <section className="notifications-toolbar" aria-label="Notification filters">
         <Segmented
           ariaLabel="Read filter"
           options={[
-            { value: "all", label: `All (${totalCount})` },
-            { value: "unread", label: `Unread (${unreadCount})` }
+            { value: "all", label: totalCount === undefined ? "All" : `All (${totalCount})` },
+            {
+              value: "unread",
+              label: unreadCount === undefined ? "Unread" : `Unread (${unreadCount})`
+            }
           ]}
           value={filter}
           onChange={setFilter}
         />
 
         <Button
-          disabled={unreadCount === 0 || markAllReadMutation.isPending}
+          disabled={!unreadCount || markAllReadMutation.isPending || markReadMutation.isPending}
           icon={
             markAllReadMutation.isPending ? (
               <LoaderCircle className="spin" size={18} aria-hidden="true" />
@@ -68,32 +72,50 @@ export function NotificationsPage() {
           variant="secondary"
           onClick={() => markAllReadMutation.mutate()}
         >
-          Mark all read
+          {markAllReadMutation.isPending ? "Marking all read…" : "Mark all read"}
         </Button>
       </section>
 
-      <section className="tk-list tk-list--loose" aria-live="polite">
-        {notificationsQuery.isLoading ? (
-          <EmptyState
-            icon={<LoaderCircle className="spin" size={22} aria-hidden="true" />}
-            title="Loading notifications"
-          />
-        ) : notificationsQuery.error ? (
+      {markAllReadMutation.isError ? (
+        <p role="alert">Could not mark notifications read. Try again.</p>
+      ) : null}
+      {notificationsQuery.isError ? (
+        <p role="status">
+          {notificationsQuery.data
+            ? "Could not refresh notifications. Showing the last loaded list."
+            : "Could not load notifications."}{" "}
+          <Button variant="link" onClick={() => void notificationsQuery.refetch()}>
+            Try again
+          </Button>
+        </p>
+      ) : null}
+      <section aria-label="Notification list">
+        {!notificationsQuery.data ? (
+          notificationsQuery.isPending ? (
+            <p role="status">Loading notifications…</p>
+          ) : null
+        ) : notifications.length === 0 ? (
           <EmptyState
             icon={<Inbox size={22} aria-hidden="true" />}
-            title={notificationsQuery.error.message}
+            title={filter === "unread" ? "No unread notifications" : "No notifications"}
           />
-        ) : notifications.length === 0 ? (
-          <EmptyState icon={<Inbox size={22} aria-hidden="true" />} title="No notifications" />
         ) : (
-          notifications.map((notification) => (
-            <NotificationRow
-              isUpdating={markReadMutation.isPending}
-              key={notification.id}
-              notification={notification}
-              onMarkRead={() => markReadMutation.mutate(notification.id)}
-            />
-          ))
+          <RowIndex density="compact">
+            {notifications.map((notification) => (
+              <NotificationRow
+                isUpdating={
+                  markReadMutation.isPending && markReadMutation.variables === notification.id
+                }
+                isDisabled={markReadMutation.isPending || markAllReadMutation.isPending}
+                hasError={
+                  markReadMutation.isError && markReadMutation.variables === notification.id
+                }
+                key={notification.id}
+                notification={notification}
+                onMarkRead={() => markReadMutation.mutate(notification.id)}
+              />
+            ))}
+          </RowIndex>
         )}
       </section>
     </section>
@@ -102,6 +124,8 @@ export function NotificationsPage() {
 
 function NotificationRow(props: {
   readonly isUpdating: boolean;
+  readonly isDisabled: boolean;
+  readonly hasError: boolean;
   readonly notification: NotificationDto;
   readonly onMarkRead: () => void;
 }) {
@@ -110,44 +134,50 @@ function NotificationRow(props: {
   const upgrade = props.notification.metadata.kind === "upgrade_available";
 
   return (
-    <article className={`jds-task ${unread ? "jds-task--unread" : ""}`}>
-      <div className="jds-task__check" aria-hidden="true">
-        <Bell size={22} />
-      </div>
-      <div className="jds-task__main">
-        <div className="jds-task__title">{personalize(props.notification.title)}</div>
-        {props.notification.body ? <p>{personalize(props.notification.body)}</p> : null}
-        {upgrade ? (
-          <Link className={buttonLinkClassName("secondary", "sm")} to="/settings?section=host">
-            View changes
-          </Link>
-        ) : props.notification.href ? (
-          // Task 2b (#1283): module-supplied deep link. Always same-origin — validated at
-          // the RPC boundary and again in NotificationsRepository — so a plain router Link
-          // (not a full page anchor) is safe here.
-          <Link className={buttonLinkClassName("secondary", "sm")} to={props.notification.href}>
-            View
-          </Link>
-        ) : null}
-        <div className="jds-task__meta">
-          <span>{unread ? "Unread" : "Read"}</span>
-          <span>{formatNotificationDate(props.notification.createdAt, locale)}</span>
-        </div>
-      </div>
-      <div className="tk-row-actions">
-        <IconButton
-          aria-label={`Mark ${personalize(props.notification.title)} read`}
-          disabled={props.isUpdating || !unread}
-          title="Mark read"
-          onClick={props.onMarkRead}
-        >
-          {props.isUpdating ? (
-            <LoaderCircle className="spin" size={18} aria-hidden="true" />
-          ) : (
-            <Check size={18} aria-hidden="true" />
-          )}
-        </IconButton>
-      </div>
+    <article aria-busy={props.isUpdating}>
+      <RowIndexItem
+        title={
+          <span className="notifications-title">
+            <Bell size={18} aria-hidden="true" />
+            {personalize(props.notification.title)}
+          </span>
+        }
+        excerpt={
+          <div className="notifications-body">
+            {props.notification.body ? <p>{personalize(props.notification.body)}</p> : null}
+            {upgrade ? (
+              <Link className={buttonLinkClassName("link", "sm")} to="/settings?section=host">
+                View changes
+              </Link>
+            ) : props.notification.href ? (
+              <Link className={buttonLinkClassName("link", "sm")} to={props.notification.href}>
+                View
+              </Link>
+            ) : null}
+            {props.hasError ? (
+              <p role="alert">Could not mark this notification read. Try again.</p>
+            ) : null}
+          </div>
+        }
+        meta={
+          <span className="notifications-meta">
+            <span>{unread ? "Unread" : "Read"}</span>
+            <span>{formatNotificationDate(props.notification.createdAt, locale)}</span>
+            <IconButton
+              aria-label={`Mark ${personalize(props.notification.title)} read`}
+              disabled={props.isDisabled || !unread}
+              title="Mark read"
+              onClick={props.onMarkRead}
+            >
+              {props.isUpdating ? (
+                <LoaderCircle className="spin" size={18} aria-hidden="true" />
+              ) : (
+                <Check size={18} aria-hidden="true" />
+              )}
+            </IconButton>
+          </span>
+        }
+      />
     </article>
   );
 }

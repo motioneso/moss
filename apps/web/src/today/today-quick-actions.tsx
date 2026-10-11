@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { localDay } from "@moss/shared";
-import { Button, Eyebrow, IconButton } from "@moss/ui";
+import { Button, Dialog, Eyebrow, IconButton } from "@moss/ui";
 
 import { createWellnessCheckin, getMedicationSchedule } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -50,21 +50,8 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
 
   function closeMedsModal() {
     setMedsModalOpen(false);
-    medsOpener.current?.focus();
   }
 
-  useEffect(() => {
-    if (!medsModalOpen) return;
-    medsClose.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeMedsModal();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [medsModalOpen]);
   const createCheckinMutation = useMutation({
     mutationFn: (val: CheckinFormValue) =>
       createWellnessCheckin({
@@ -122,52 +109,29 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
       ) : null}
       <ModuleTodayWidgets slot="quick-actions" disabledModuleIds={props.disabledModuleIds} />
       {props.enabled && medsModalOpen ? (
-        <div
-          className="wl-modal-scrim"
-          onMouseDown={(ev) => {
-            if (ev.target !== ev.currentTarget) return;
-            // Cancel the mousedown default so it cannot pull focus off the
-            // opener the close function just focused (the scrim is not focusable).
-            ev.preventDefault();
-            closeMedsModal();
-          }}
+        <Dialog
+          title={<span id="today-meds-title">Medications</span>}
+          closeLabel="Close"
+          aria-labelledby="today-meds-title"
+          description="Today"
+          onClose={closeMedsModal}
+          initialFocusRef={medsClose}
+          returnFocusRef={medsOpener}
+          footer={
+            <Button ref={medsClose} size="sm" onClick={closeMedsModal}>
+              Done
+            </Button>
+          }
         >
-          <div
-            className="wl-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="today-meds-title"
-            style={{ maxWidth: 480 }}
-          >
-            <div className="wl-modal__head">
-              <div className="hm">
-                <div className="wl-modal__eyebrow">Today</div>
-                <div className="wl-modal__title" id="today-meds-title">
-                  Medications
-                </div>
-              </div>
-              <IconButton ref={medsClose} aria-label="Close" onClick={() => closeMedsModal()}>
-                <XIcon />
-              </IconButton>
-            </div>
-            <div className="wl-modal__body" style={{ padding: "0 0 8px" }}>
-              <MedToday
-                theme={props.theme}
-                onManage={() => {
-                  closeMedsModal();
-                  setManageMedsOpen(true);
-                }}
-                timeZone={props.timeZone}
-              />
-            </div>
-            <div className="wl-modal__foot">
-              <span className="spacer" />
-              <Button size="sm" onClick={() => closeMedsModal()}>
-                Done
-              </Button>
-            </div>
-          </div>
-        </div>
+          <MedToday
+            theme={props.theme}
+            onManage={() => {
+              closeMedsModal();
+              setManageMedsOpen(true);
+            }}
+            timeZone={props.timeZone}
+          />
+        </Dialog>
       ) : null}
 
       {props.enabled ? (
@@ -189,22 +153,5 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
         />
       ) : null}
     </>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
   );
 }

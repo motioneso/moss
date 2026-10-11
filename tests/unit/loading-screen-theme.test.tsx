@@ -109,10 +109,17 @@ describe("pre-script loading screen theme", () => {
   });
 
   it("colours the address bar with the page background for the chosen mode", () => {
-    const paper = (block: string) =>
-      tokensCss.slice(tokensCss.indexOf(block)).match(/--paper: (#[0-9a-f]{6});/)![1];
-    const lightPaper = paper(":root {");
-    const darkPaper = paper('[data-color-mode="dark"],');
+    const rules = [...tokensCss.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const paper = (selector: string) => {
+      const block = rules.find((rule) =>
+        rule[1]!.split(",").some((item) => item.trim() === selector)
+      )?.[2];
+      const value = block?.match(/--paper: (#[0-9a-f]{6});/)?.[1];
+      expect(value, `paper declared for ${selector}`).toBeDefined();
+      return value!;
+    };
+    const lightPaper = paper(":root");
+    const darkPaper = paper('[data-color-mode="dark"]');
     const meta = document.createElement("meta");
     meta.name = "theme-color";
     document.head.append(meta);

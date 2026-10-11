@@ -30,8 +30,8 @@
 /* Hairline-boxed section bar, the same broadsheet frame as sports' masthead — but these
    chips are functional topic filters, not an inert preview nav. */
 .nw-mast {
-  border-top: 2px solid var(--border-strong);
-  border-bottom: 2px solid var(--border-strong);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .nw-mast__chip {
@@ -323,7 +323,7 @@
   background: inherit;
   color: inherit;
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: var(--weight-bold);
   line-height: 1.2;
   letter-spacing: 0.9px;
@@ -331,7 +331,7 @@
 }
 @media (max-width: 720px) {
   .nw-leadart__label {
-    font-size: 7px;
+    font-size: var(--text-2xs);
     letter-spacing: 0.65px;
   }
 }

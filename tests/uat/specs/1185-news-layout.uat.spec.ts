@@ -30,7 +30,7 @@ test("News mosaic renders live photo and no-photo card variants (#1185)", async 
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   // Poll the live page: reload every few seconds until the first news.refresh job has landed real
   // headlines AND the feed mix has produced both variants. Real RSS output is variable, so we wait

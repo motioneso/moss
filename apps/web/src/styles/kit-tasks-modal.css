@@ -3,7 +3,9 @@
 .tk-modal {
   width: 100%;
   max-width: 620px;
-  max-height: 88vh;
+  max-height: calc(100dvh - var(--space-8));
+  min-width: 0;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -11,6 +13,8 @@
 }
 .tk-modal .jds-dialog__body {
   overflow-y: auto;
+  min-height: 0;
+  min-width: 0;
 }
 /* The dialog's own head wrapper adds a second 24px inset; drop it so the header lines up with the body. */
 .tk-modal .jds-dialog__head {
@@ -50,13 +54,13 @@
 /* form */
 .tk-form {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 .tk-field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .tk-field--full {
@@ -87,7 +91,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   padding: 8px 10px;
 }
 .tk-tagedit input {
@@ -97,7 +101,7 @@
 .tk-tagsugg {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
   margin-top: 8px;
 }
 .tk-tagsugg__btn {
@@ -157,7 +161,7 @@
 .tk-sub__add {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   align-self: flex-start;
   margin-top: 4px;
   cursor: pointer;
@@ -174,18 +178,12 @@
 }
 
 /* ---- People picker (multi-assignee) ---- */
-.tk-ava {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  letter-spacing: -0.02em;
-  flex: none;
-}
+
 .tk-peoplefield {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-height: 40px;
   box-sizing: border-box;
   padding: 6px 9px;
@@ -197,7 +195,7 @@
 .tk-person {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   padding: 4px 7px 4px 5px;
 }
 .tk-person__nm {
@@ -258,4 +256,61 @@
 }
 .tk-act-hint {
   margin-top: 7px;
+}
+
+/* Every field can shrink inside the dialog before paired fields stack. */
+.tk-form > *,
+.tk-form .jds-field,
+.tk-form input,
+.tk-form textarea,
+.tk-form .jds-selectwrap {
+  min-width: 0;
+  max-width: 100%;
+}
+.tk-form input[type="date"] {
+  width: 100%;
+}
+.tk-modal .jds-dialog__foot {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.tk-modal__save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+.tk-modal__save-error {
+  flex-basis: 100%;
+  order: -1;
+  margin: 0;
+}
+.tk-modal__save-actions > .jds-btn {
+  white-space: normal;
+}
+.tk-act__head {
+  flex-wrap: wrap;
+}
+.tk-act__text,
+.tk-person__nm {
+  overflow-wrap: anywhere;
+}
+.tk-person__nm {
+  white-space: normal;
+}
+@container (max-width: 480px) {
+  .tk-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tk-modal .jds-dialog__foot > .tk-statusctl {
+    flex-basis: 100%;
+  }
+  .tk-modal__save-actions {
+    width: 100%;
+  }
+  .tk-modal__save-actions > .jds-btn {
+    flex: 1;
+  }
 }

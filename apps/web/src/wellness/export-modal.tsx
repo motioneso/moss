@@ -1,25 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, ButtonLink } from "@moss/ui";
+import { Button, ButtonLink, Dialog } from "@moss/ui";
 import { WELLNESS_EXPORT_CATEGORIES, type WellnessExportCategory } from "@moss/shared";
 import { getDataExportDownloadUrl, getDataExportStatus, type ExportJobStatus } from "../api/client";
 import { requestWellnessExport } from "../api/wellness-export";
-
-function XIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
-}
 
 function DownloadIcon() {
   return (
@@ -94,7 +78,6 @@ export function WellnessExportModal({ open, onClose }: Props) {
 
   const rangeValid = from <= to && from !== "" && to !== "";
   const categoriesValid = categories.length > 0;
-  const canGenerate = rangeValid && categoriesValid && acknowledged && jobId === null;
 
   const statusQuery = useQuery<ExportJobStatus>({
     queryKey: ["wellness-export", "status", jobId],
@@ -122,6 +105,7 @@ export function WellnessExportModal({ open, onClose }: Props) {
   const isReady = status === "ready";
   const isFailed = status === "failed";
   const inProgress = status === "pending" || status === "building";
+  const canGenerate = rangeValid && categoriesValid && acknowledged && (jobId === null || isFailed);
 
   function toggleCategory(cat: WellnessExportCategory) {
     setCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
@@ -139,137 +123,132 @@ export function WellnessExportModal({ open, onClose }: Props) {
   }
 
   return (
-    <div
-      className="wl-modal-scrim"
-      onMouseDown={(ev) => {
-        if (ev.target === ev.currentTarget) close();
-      }}
+    <Dialog
+      title="Export for a clinician"
+      closeLabel="Close export"
+      description="Share"
+      onClose={close}
+      className="wl-dialog wl-dialog--export"
+      footer={
+        <Button variant="secondary" onClick={close}>
+          Close
+        </Button>
+      }
     >
-      <div
-        className="wl-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="wlexport-modal-title"
-        style={{ maxWidth: 480 }}
-      >
-        <div className="wl-modal__head">
-          <div className="hm">
-            <div className="wl-modal__eyebrow">Share</div>
-            <div className="wl-modal__title" id="wlexport-modal-title">
-              Export for a clinician
-            </div>
+      {!jobId || isFailed ? (
+        <>
+          <p className="wl-modal__desc" style={{ marginBottom: 14 }}>
+            Generate a printable document of your wellness data for a date range and the categories
+            you choose. Open it in a browser and print to PDF to share.
+          </p>
+
+          <div className="wl-field" style={{ marginBottom: 12 }}>
+            <label htmlFor="wlexport-from" className="wl-field__label">
+              From
+            </label>
+            <input
+              id="wlexport-from"
+              type="date"
+              className="wl-input"
+              value={from}
+              max={to}
+              onChange={(e) => setFrom(e.target.value)}
+            />
           </div>
-          <button type="button" className="wl-modal__x" aria-label="Close" onClick={close}>
-            <XIcon />
-          </button>
-        </div>
+          <div className="wl-field" style={{ marginBottom: 12 }}>
+            <label htmlFor="wlexport-to" className="wl-field__label">
+              To
+            </label>
+            <input
+              id="wlexport-to"
+              type="date"
+              className="wl-input"
+              value={to}
+              max={todayIso()}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </div>
 
-        <div className="wl-modal__body">
-          {!jobId || isFailed ? (
-            <>
-              <p className="wl-modal__desc" style={{ marginBottom: 14 }}>
-                Generate a printable document of your wellness data for a date range and the
-                categories you choose. Open it in a browser and print to PDF to share.
-              </p>
-
-              <div className="wl-field" style={{ marginBottom: 12 }}>
-                <label htmlFor="wlexport-from" className="wl-field__label">
-                  From
-                </label>
-                <input
-                  id="wlexport-from"
-                  type="date"
-                  className="wl-input"
-                  value={from}
-                  max={to}
-                  onChange={(e) => setFrom(e.target.value)}
-                />
-              </div>
-              <div className="wl-field" style={{ marginBottom: 12 }}>
-                <label htmlFor="wlexport-to" className="wl-field__label">
-                  To
-                </label>
-                <input
-                  id="wlexport-to"
-                  type="date"
-                  className="wl-input"
-                  value={to}
-                  max={todayIso()}
-                  onChange={(e) => setTo(e.target.value)}
-                />
-              </div>
-
-              <fieldset className="wl-fieldset" style={{ marginBottom: 12 }}>
-                <legend className="wl-field__label">Include</legend>
-                {WELLNESS_EXPORT_CATEGORIES.map((cat) => (
-                  <label key={cat} className="jds-check">
-                    <input
-                      type="checkbox"
-                      checked={categories.includes(cat)}
-                      onChange={() => toggleCategory(cat)}
-                    />
-                    <span className="jds-check__box">
-                      <CheckIcon />
-                    </span>
-                    {CATEGORY_LABELS[cat]}
-                  </label>
-                ))}
-              </fieldset>
-
-              <label className="jds-check" style={{ marginBottom: 14, alignItems: "flex-start" }}>
+          <fieldset className="wl-fieldset" style={{ marginBottom: 12 }}>
+            <legend className="wl-field__label">Include</legend>
+            {WELLNESS_EXPORT_CATEGORIES.map((cat) => (
+              <label key={cat} className="jds-check">
                 <input
                   type="checkbox"
-                  checked={acknowledged}
-                  onChange={(e) => setAcknowledged(e.target.checked)}
+                  checked={categories.includes(cat)}
+                  onChange={() => toggleCategory(cat)}
                 />
                 <span className="jds-check__box">
                   <CheckIcon />
                 </span>
-                <span className="wl-consent-text">{SENSITIVE_COPY}</span>
+                {CATEGORY_LABELS[cat]}
               </label>
+            ))}
+          </fieldset>
 
-              {isFailed || startMutation.isError ? (
-                <div className="wl-modal__note wl-modal__note--error" style={{ marginBottom: 10 }}>
-                  Export failed. Please try again.
-                </div>
-              ) : null}
+          <label className="jds-check" style={{ marginBottom: 14, alignItems: "flex-start" }}>
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+            />
+            <span className="jds-check__box">
+              <CheckIcon />
+            </span>
+            <span className="wl-consent-text">{SENSITIVE_COPY}</span>
+          </label>
 
-              <Button
-                variant="primary"
-                icon={<DownloadIcon />}
-                disabled={!canGenerate || startMutation.isPending}
-                onClick={() => startMutation.mutate()}
-              >
-                {startMutation.isPending ? "Starting…" : "Generate export"}
-              </Button>
-            </>
-          ) : inProgress ? (
-            <div className="wl-modal__progress">
-              <p>Building your export… this usually takes a few seconds.</p>
-            </div>
-          ) : isReady && jobId ? (
-            <div className="wl-modal__ready">
-              <p className="wl-modal__note">
-                Your export is ready. Open it in a browser and print to PDF to share.
-              </p>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <ButtonLink
-                  href={getDataExportDownloadUrl(jobId)}
-                  variant="primary"
-                  size="sm"
-                  icon={<DownloadIcon />}
-                  download
-                >
-                  Download
-                </ButtonLink>
-                <Button variant="quiet" size="sm" onClick={reset}>
-                  Start a new export
-                </Button>
-              </div>
+          {isFailed || startMutation.isError ? (
+            <div
+              className="wl-modal__note wl-modal__note--error"
+              role="alert"
+              style={{ marginBottom: 10 }}
+            >
+              Export failed. Please try again.
             </div>
           ) : null}
+
+          <Button
+            variant="primary"
+            icon={<DownloadIcon />}
+            disabled={!canGenerate || startMutation.isPending}
+            onClick={() => startMutation.mutate()}
+          >
+            {startMutation.isPending ? "Starting…" : "Generate export"}
+          </Button>
+        </>
+      ) : statusQuery.isError ? (
+        <p role="alert">
+          Could not check your export.{" "}
+          <Button variant="link" onClick={() => void statusQuery.refetch()}>
+            Try again
+          </Button>
+        </p>
+      ) : inProgress || statusQuery.isPending ? (
+        <div className="wl-modal__progress" role="status">
+          <p>Building your export… this usually takes a few seconds.</p>
         </div>
-      </div>
-    </div>
+      ) : isReady && jobId ? (
+        <div className="wl-modal__ready" role="status">
+          <p className="wl-modal__note">
+            Your export is ready. Open it in a browser and print to PDF to share.
+          </p>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <ButtonLink
+              href={getDataExportDownloadUrl(jobId)}
+              variant="primary"
+              size="sm"
+              icon={<DownloadIcon />}
+              download
+            >
+              Download
+            </ButtonLink>
+            <Button variant="quiet" size="sm" onClick={reset}>
+              Start a new export
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </Dialog>
   );
 }

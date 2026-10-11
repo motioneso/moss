@@ -369,7 +369,11 @@ export function ProfilePane({ me, onSelectSection }: PaneProps) {
             />
           }
         />
-        <Field label="Location" hint={weatherLocationHint(weatherLocation, weatherLocationSource)}>
+        <Field
+          label="Location"
+          group
+          hint={weatherLocationHint(weatherLocation, weatherLocationSource)}
+        >
           <Button
             size="sm"
             disabled={weatherLocationBusy}
