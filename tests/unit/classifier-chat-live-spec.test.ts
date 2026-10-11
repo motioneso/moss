@@ -106,6 +106,7 @@ const RESTORED_RUN_ASSERTIONS: readonly (readonly [string, number])[] = [
   ['await askUntilRan(page, LIGHT, "Turn the hallway light off with the hub tool.");', 1],
   ["await setYolo(page, true);", 4],
   ["await setYolo(page, false);", 4],
+  ['.poll(() => rows().some((row) => row.includes("|pending|")), { timeout: 120_000 })', 1],
   ['await setGate(page, "on");\n  await setYolo(page, false);', 1],
   [
     "      outcome.ran &&\n      outcome.unlocked &&\n      !outcome.failureShown &&\n      !outcome.asked &&\n      outcome.chatAnswers === 0",

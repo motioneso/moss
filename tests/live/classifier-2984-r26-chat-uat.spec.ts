@@ -361,6 +361,10 @@ test("10. a kept-out tool still reaches chat and is never named in shadow record
   await expect
     .poll(() => rows().filter((row) => !row.includes("|pending|")).length, { timeout: 120_000 })
     .toBeGreaterThanOrEqual(2);
+  // Earlier cancelled rows meet the count while the final light check is still running.
+  await expect
+    .poll(() => rows().some((row) => row.includes("|pending|")), { timeout: 120_000 })
+    .toBe(false);
   const records = rows();
   console.log("R2.6 shadow records since the gate went to shadow:", JSON.stringify(records));
   const keptOutName = new RegExp(DEVICES.replace("_", "[._]"), "i");
@@ -376,8 +380,8 @@ test("10. a kept-out tool still reaches chat and is never named in shadow record
 test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and logs the gate's timing", async ({
   page
 }) => {
-  // Up to seven chat turns of about four minutes each when no clear ask reaches the bar.
-  test.setTimeout(2_400_000);
+  // Up to nine chat turns of about four minutes each when the gate never handles a clear ask.
+  test.setTimeout(3_000_000);
   await signIn(page);
   const ownerId = sql(`select id from app.users where email = '${R26.ownerEmail}'`);
   const classifier = await findClassifierModel(page);
