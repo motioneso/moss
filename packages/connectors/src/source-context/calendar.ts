@@ -1,5 +1,9 @@
 import { withSavepoint, type CalendarEvent, type DataContextDb } from "@moss/db";
-import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale
+} from "@moss/shared";
 
 import type { ConnectorAccountSafeRow } from "../repository.js";
 import type { GoogleCalendarEvent } from "../google-api-client.js";
@@ -365,10 +369,15 @@ export async function listCalendarContext(
 
   unflagged.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
   const capped = unflagged.slice(0, limit);
+  // A failed read inside its savepoint falls back to the default and cannot abort the caller.
   const timeZone =
     deps.timeZone ??
-    resolveEffectiveLocale(await deps.preferencesRepository.get(scopedDb, LOCALE_PREFERENCE_KEY))
-      .timezone;
+    (await withSavepoint(scopedDb, () =>
+      deps.preferencesRepository.get(scopedDb, LOCALE_PREFERENCE_KEY)
+    ).then(
+      (stored) => resolveEffectiveLocale(stored).timezone,
+      () => DEFAULT_LOCALE_SETTINGS.timezone
+    ));
   const flags = classifyCalendarFlags(capped, timeZone);
   const items: CalendarContextItem[] = capped.map((item, index) => ({
     ...item,
