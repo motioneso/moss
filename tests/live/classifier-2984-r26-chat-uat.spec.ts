@@ -458,6 +458,11 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
     const limitMs = gateLimitMs(since);
     const before = (await toolServerCalls(DOOR)).length;
     await askInNewChat(page, message);
+    const threadId = sql(
+      "select id from app.chat_threads " +
+        `where owner_user_id = '${ownerId}' and surface = 'drawer' and created_at > '${since}' ` +
+        "order by created_at desc limit 1"
+    );
     const card = page.locator(ACTION_CARD).last().getByRole("button", { name: "Approve" });
     await expect
       .poll(
@@ -476,6 +481,18 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
       unlocked: await deviceOn("Front door"),
       failureShown: (await page.getByText(/did not complete|could not be confirmed/).count()) > 0,
       chatAnswers: answers(since),
+      // Only the gate's completed reply carries this origin; a slow chat-model turn cannot pass.
+      gateExecuted:
+        Number(
+          sql(
+            "select count(*) from app.chat_messages " +
+              `where owner_user_id = '${ownerId}' and thread_id = '${threadId}' ` +
+              `and role = 'assistant' and created_at > '${since}' ` +
+              "and model_metadata->'origin'->>'kind' = 'classifier_gate' " +
+              `and model_metadata->'origin'->>'toolName' = '${SLUG}.${DOOR}' ` +
+              "and model_metadata->'origin'->>'outcome' = 'executed-success'"
+          )
+        ) === 1,
       checks: checks(since)
     };
     const confidences = confidencesOf(result.checks);
@@ -524,7 +541,8 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
       outcome.unlocked &&
       !outcome.failureShown &&
       !outcome.asked &&
-      outcome.chatAnswers === 0
+      outcome.chatAnswers === 0 &&
+      outcome.gateExecuted
     ) {
       handled = true;
       above =
@@ -541,7 +559,8 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
     "the gate ran the Sensitive tool itself and it completed: door unlocked, no card, no chat answer"
   ).toBe(true);
   console.log("R2.6 YOLO a clear ask reached the Sensitive bar:", above);
-  console.log("R2.6 gate confidence is unavailable under the Claude sign-in until #3427");
+  if (!above)
+    console.log("R2.6 gate confidence is unavailable under the Claude sign-in until #3427");
 
   // Below the bar the gate hands over. Under YOLO the chat model may itself choose to run the door.
   const yoloBelow = await turn("vague", "Hmm, maybe the door thing? Not sure, whatever you think.");

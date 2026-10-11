@@ -121,7 +121,15 @@ const RESTORED_RUN_ASSERTIONS: readonly (readonly [string, number])[] = [
     'expect(yoloBelow.asked || yoloBelow.chatAnswers > 0, "the chat model took over").toBe(true);',
     1
   ],
-  ["      yoloBelow.confidences.some((value) => value < 0.95),", 1]
+  ["      yoloBelow.confidences.some((value) => value < 0.95),", 1],
+  ["      outcome.gateExecuted\n", 1],
+  ["`where owner_user_id = '${ownerId}' and thread_id = '${threadId}' ` +", 1],
+  [
+    "\"and model_metadata->'origin'->>'kind' = 'classifier_gate' \" +\n" +
+      "              `and model_metadata->'origin'->>'toolName' = '${SLUG}.${DOOR}' ` +\n" +
+      "              \"and model_metadata->'origin'->>'outcome' = 'executed-success'\"",
+    1
+  ]
 ];
 
 const KEPT_SETUP_ASSERTIONS: readonly (readonly [string, number])[] = [
