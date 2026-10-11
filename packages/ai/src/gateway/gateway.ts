@@ -524,18 +524,16 @@ export class AssistantToolGateway {
     // Read taint after every policy hook so content admitted meanwhile still counts.
     const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
     const marked = conversationTainted && (await isConversationMarked(this.deps.provenance, ctx));
-    const ask = (kind: "confirm" | "yolo-confirm") =>
-      plannedConfirm(kind, marked, async () => (yolo ? yoloRuns : (await policy(false)) === "run"));
+    const ask = () =>
+      plannedConfirm(marked, async () => (yolo ? yoloRuns : (await policy(false)) === "run"));
     if (conversationTainted && (confirmWhenTainted || found.tool.risk === "outbound")) {
-      return ask("confirm");
+      return ask();
     }
     // The user's trust runs past a durable outside-content mark only. Any other taint asks.
     if (conversationTainted && !marked) return { kind: yolo ? "yolo-confirm" : "confirm" };
     const trusted = conversationTainted ? { userTrusted: true as const } : {};
     if (yolo) return yoloRuns ? { kind: "yolo-run", ...trusted } : { kind: "yolo-confirm" };
-    return (await policy(conversationTainted)) === "run"
-      ? { kind: "auto-run", ...trusted }
-      : ask("confirm");
+    return (await policy(conversationTainted)) === "run" ? { kind: "auto-run", ...trusted } : ask();
   }
 
   async requestNativeToolPermission(

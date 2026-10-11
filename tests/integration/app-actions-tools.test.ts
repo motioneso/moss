@@ -573,16 +573,24 @@ describe("app actions through the real gateway and app routes", () => {
     );
     callSpy.mockClear();
     mintSpy.mockClear();
-    for (const start of [
-      () => h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "imperial" } }),
-      () =>
-        h.call({
-          method: "GET",
-          path: "/api/me/weather-location/search",
-          query: { query: "Paris" }
-        }),
-      () => h.theme("light")
-    ]) {
+    // Ask-each-time writes ask in a clean chat too. Only the outbound search asks because of
+    // the outside-content mark, so only its card names it (#3338).
+    for (const [start, outsideContentNotice] of [
+      [
+        () => h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "imperial" } }),
+        false
+      ],
+      [
+        () =>
+          h.call({
+            method: "GET",
+            path: "/api/me/weather-location/search",
+            query: { query: "Paris" }
+          }),
+        true
+      ],
+      [() => h.theme("light"), false]
+    ] as const) {
       h.events.length = 0;
       const pending = start();
       await vi.waitFor(
@@ -590,6 +598,7 @@ describe("app actions through the real gateway and app routes", () => {
         { timeout: 5_000 }
       );
       const card = h.events.find((event) => event.kind === "action_request")!;
+      expect(card.outsideContentNotice).toBe(outsideContentNotice);
       expect(
         await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected")
       ).toBe("resolved");

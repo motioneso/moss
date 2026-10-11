@@ -45,9 +45,10 @@ export type PlannedCall = {
  * cause: the chat is marked and a clean conversation would run the same call (#3338).
  */
 export async function plannedConfirm(
-  kind: "confirm" | "yolo-confirm",
   marked: boolean,
-  cleanRuns: () => Promise<boolean> = async () => true
+  cleanRuns: () => Promise<boolean>
 ): Promise<PlannedCall> {
-  return marked && (await cleanRuns()) ? { kind, outsideContentReason: true } : { kind };
+  return marked && (await cleanRuns())
+    ? { kind: "confirm", outsideContentReason: true }
+    : { kind: "confirm" };
 }

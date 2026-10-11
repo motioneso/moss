@@ -130,6 +130,22 @@ describe("ACP effective actor YOLO permission", () => {
     }
   );
 
+  it("names outside content when a write the folder rules allow asks only because of the mark", async () => {
+    const state = setup(false, true);
+    await expect(
+      state.gateway.requestAcpBuiltInPermission(state.token, {
+        ...request,
+        toolName: "Write",
+        toolInput: { file_path: "/workspace/project/file.txt", content: "x" }
+      })
+    ).resolves.toMatchObject({ decision: "deny", asked: true });
+    expect(state.yoloMode).not.toHaveBeenCalled();
+    expect(state.emit).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({ kind: "action_request", outsideContentNotice: true })
+    );
+  });
+
   it("keeps YOLO off requests on the human approval path", async () => {
     const state = setup(false);
     await expect(

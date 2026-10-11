@@ -101,6 +101,7 @@ function themeGateway(threadId: string, actorUserId: string = ids.userA, trusted
 }
 
 // The thread carries a durable outside-content mark, and a write the user has not trusted asks.
+// It would ask in a clean chat too, so the card does not name outside content (#3338).
 async function expectThemeApproval(threadId: string) {
   expect(await store.isMarked(ids.userA, threadId)).toBe(true);
   const h = themeGateway(threadId, ids.userA, false);
@@ -110,6 +111,7 @@ async function expectThemeApproval(threadId: string) {
     { timeout: 5000 }
   );
   const request = h.records.find((record) => record.kind === "action_request")!;
+  expect(request.outsideContentNotice).toBe(false);
   await h.gateway.resolveActionRequest(h.actorUserId, request.actionRequestId, "rejected");
   expect(await pending).toMatchObject({ ok: false, denied: true });
 }
