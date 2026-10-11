@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { UsefulnessFeedbackDto } from "@moss/shared";
 
 import { Button } from "@moss/module-web-sdk";
-import { formatTimestamp, Note } from "@moss/settings-ui";
+import { formatTimestamp, Note, useUserLocale } from "@moss/settings-ui";
 
 import { newsQueryKeys } from "../web/query-keys.js";
 import {
@@ -20,6 +20,7 @@ function text(metadata: Record<string, unknown>, key: string): string | null {
 
 function StoryFeedbackRow({ feedback }: { readonly feedback: UsefulnessFeedbackDto }) {
   const queryClient = useQueryClient();
+  const locale = useUserLocale();
   const [editing, setEditing] = useState<string | null>(null);
   const updateMutation = useMutation({
     mutationFn: (reason: string) => updateNewsStoryFeedback(feedback.id, { reason }),
@@ -51,7 +52,7 @@ function StoryFeedbackRow({ feedback }: { readonly feedback: UsefulnessFeedbackD
           {feedback.kind === "less_like_this" ? "Less like this" : "More like this"}
         </div>
         <div className="nw-set__item-meta">
-          {formatTimestamp(feedback.updatedAt, "Date unavailable")}
+          {formatTimestamp(feedback.updatedAt, "Date unavailable", locale)}
         </div>
       </div>
       {feedback.kind === "less_like_this" ? (

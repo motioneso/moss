@@ -16,10 +16,15 @@ import type { MemoryRetriever } from "@moss/memory";
 import type { MossModuleManifest, JsonMossModuleManifest } from "@moss/module-sdk";
 import { isBehaviorEnabled, type SourceBehaviorPolicyDeps } from "@moss/source-behaviors";
 import {
+  formatLocaleDateTime,
+  LOCALE_PREFERENCE_KEY,
   parseCalendarAutomationMode,
   normalizePersonaSettings,
   renderPersonaText,
+  resolveEffectiveLocale,
+  timezoneFor,
   type DayPlanDto,
+  type LocaleSettingsDto,
   type WeatherTodayDto
 } from "@moss/shared";
 import type { BriefingContribution, ExternalBriefingInvoker } from "./external-contributions.js";
@@ -50,6 +55,10 @@ export interface ComposeDeps {
     get(scopedDb: DataContextDb, key: string): Promise<unknown>;
   };
   readonly priorityPreferencesRepository?: {
+    get(scopedDb: DataContextDb, key: string): Promise<unknown>;
+  };
+  /** Reads the owner's saved locale; every briefing time follows it (#3390). */
+  readonly localePreferences?: {
     get(scopedDb: DataContextDb, key: string): Promise<unknown>;
   };
   readonly focusReadiness?: (ctx: {
@@ -182,6 +191,8 @@ export interface ComposeRunInput {
    * by the repository. Absent or null means the task window falls back to 24 hours.
    */
   readonly previousMorningRunAt?: Date | null;
+  /** The owner's effective locale, resolved by the repository. See `briefingLocale`. */
+  readonly locale?: LocaleSettingsDto;
 }
 
 export interface BriefingGap {
@@ -280,6 +291,68 @@ export function withinLocalDay(isoOrDate: unknown, now: Date, timeZone: string):
       day: "2-digit"
     }).format(d);
   return fmt(ts) === fmt(now);
+}
+
+/**
+ * The owner's effective locale: their saved timezone, 12/24-hour choice and region, or
+ * the default Settings shows when nothing is saved. The briefing's stored timezone is
+ * used only when no locale source is wired, with the original 12-hour en-US clock.
+ */
+export async function resolveOwnerLocale(
+  scopedDb: DataContextDb,
+  deps: Pick<ComposeDeps, "localePreferences">,
+  definition: BriefingDefinition
+): Promise<LocaleSettingsDto> {
+  if (!deps.localePreferences) return briefingLocale({}, definition);
+  return resolveEffectiveLocale(await deps.localePreferences.get(scopedDb, LOCALE_PREFERENCE_KEY));
+}
+
+/** A copy of the definition whose schedule timezone is `timeZone`; the stored row is untouched. */
+export function withTimeZone(definition: BriefingDefinition, timeZone: string): BriefingDefinition {
+  return {
+    ...definition,
+    schedule_metadata: { ...definition.schedule_metadata, timezone: timeZone }
+  };
+}
+
+/**
+ * The run's locale, or the fallback `resolveOwnerLocale` uses when none was resolved. Production
+ * always wires a locale source; the fallback keeps the stored zone with an en-US 12-hour clock,
+ * the format briefings used before they read the owner's locale.
+ */
+export function briefingLocale(
+  input: Pick<ComposeRunInput, "locale">,
+  definition: BriefingDefinition
+): LocaleSettingsDto {
+  return (
+    input.locale ?? {
+      timezone: timezoneFor(definition.schedule_metadata),
+      region: "en-US",
+      dateFormat: "12"
+    }
+  );
+}
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const STAMP_OPTS: Intl.DateTimeFormatOptions = {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit"
+};
+
+/**
+ * A source timestamp as the owner's local date and time ("Sun, Oct 11, 10:15 AM"), so the
+ * writer never sees a UTC clock. A date-only value has no zone and passes through, as does
+ * anything unparseable.
+ */
+export function localStamp(value: unknown, locale: LocaleSettingsDto): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (trimmed === "" || DATE_ONLY.test(trimmed)) return trimmed;
+  if (Number.isNaN(new Date(trimmed).getTime())) return trimmed;
+  return formatLocaleDateTime(trimmed, locale, STAMP_OPTS);
 }
 
 export function findExecute(manifests: readonly MossModuleManifest[], toolName: string) {

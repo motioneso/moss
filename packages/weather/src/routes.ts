@@ -1,7 +1,11 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
-import { getWeatherTodayRouteSchema } from "@moss/shared";
+import {
+  getWeatherTodayRouteSchema,
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale
+} from "@moss/shared";
 import { WeatherService } from "./weather-service.js";
 
 interface WeatherRoutesDependencies {
@@ -9,25 +13,25 @@ interface WeatherRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly preferencesRepo: PreferencesPort;
   readonly logger: FastifyBaseLogger;
-  readonly resolveRequestTimeZone?: (
-    request: FastifyRequest,
-    accessContext: AccessContext
-  ) => Promise<string> | string;
   readonly fetchFn?: typeof fetch;
 }
 
-type WeatherRequest = FastifyRequest & { readonly timeZone?: string };
-
-async function resolveRouteTimeZone(
+/**
+ * The person's saved locale timezone, or null when none is saved. The zone only picks a fallback
+ * city, so the shared default zone must never stand in for one (#3395).
+ */
+async function savedTimeZone(
   dependencies: WeatherRoutesDependencies,
-  request: FastifyRequest,
   accessContext: AccessContext
-): Promise<string> {
-  return (
-    (await dependencies.resolveRequestTimeZone?.(request, accessContext)) ??
-    (request as WeatherRequest).timeZone ??
-    "UTC"
+): Promise<string | null> {
+  const stored = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+    dependencies.preferencesRepo.get(scopedDb, LOCALE_PREFERENCE_KEY)
   );
+  const saved =
+    stored !== null &&
+    typeof stored === "object" &&
+    typeof (stored as { timezone?: unknown }).timezone === "string";
+  return saved ? resolveEffectiveLocale(stored).timezone : null;
 }
 
 export function registerWeatherRoutes(
@@ -47,7 +51,7 @@ export function registerWeatherRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await savedTimeZone(dependencies, accessContext);
         const data = await service.getWeatherForUser(accessContext, request.ip, timeZone);
         return { data };
       } catch (error) {

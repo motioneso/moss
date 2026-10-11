@@ -355,12 +355,12 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await dialog.getByLabel("Write the launch brief: start time").fill("10:30");
   await dialog.getByLabel("Call the vendor: placement").selectOption("add");
   await dialog.getByLabel("Call the vendor: start time").fill("12:30");
-  await expect(dialog).toContainText("Add Write the launch brief at 10:30");
-  await expect(dialog).toContainText("Add Call the vendor at 12:30");
+  await expect(dialog).toContainText("Add Write the launch brief at 10:30 am");
+  await expect(dialog).toContainText("Add Call the vendor at 12:30 pm");
 
   // Preview: the lunch overlap names the commitment; only the clean add applies.
   await dialog.getByRole("button", { name: "Save changes" }).click();
-  await expect(dialog).toContainText("Overlaps Lunch with Sam, 12:00 to 1:00");
+  await expect(dialog).toContainText("Overlaps Lunch with Sam, 12:00 pm to 1:00 pm");
   await expect(dialog).toContainText("Applied 1; 0 failed; 0 pending.");
   await expect(dialog).not.toContainText("Confirm calendar changes");
 

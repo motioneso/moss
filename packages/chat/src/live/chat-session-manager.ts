@@ -367,6 +367,7 @@ export class ChatSessionManager {
         { attachmentManifest: renderAttachmentsManifest(attachments), moduleControl }
       );
       const { pendingItems } = engineText;
+      if (engineText.locale) session.locale = engineText.locale;
       const currentProvider = await this.deps.persistence.resolveActiveProvider(actorUserId);
       await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
       this.emit(actorUserId, surface, { kind: "user", text });

@@ -92,7 +92,7 @@ export async function admitResolvedCard(
   }
 }
 
-/** Missing guards cannot authorize automatic effects. Post-dispatch failures never ask again. */
+/** A missing guard never claims a clean conversation. Post-dispatch failures never ask again. */
 export async function runAutomaticAction<T>(
   provenance: ConversationProvenancePort | undefined,
   ctx: Pick<ToolContext, "actorUserId" | "threadId">,
@@ -103,6 +103,20 @@ export async function runAutomaticAction<T>(
     return await provenance.runAutomatic(ctx.actorUserId, ctx.threadId, execute);
   } catch {
     // The callback may already have run. Never convert this into a second confirmation/execution.
+    return { kind: "failed" };
+  }
+}
+
+/**
+ * Runs a decision the user's trust has already granted past a durable outside-content mark. It
+ * skips the clean-conversation claim, which exists to refuse tainted conversations.
+ */
+export async function runTrustedAction<T>(
+  execute: () => Promise<T>
+): Promise<AutomaticExecution<T> | { readonly kind: "failed" }> {
+  try {
+    return { kind: "ran", value: await execute() };
+  } catch {
     return { kind: "failed" };
   }
 }

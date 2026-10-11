@@ -123,7 +123,7 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
       markup.indexOf("</section>")
     );
     expect(markup).not.toContain('class="today-hero__rule"');
-    expect(labels.morningHeroKicker("Ben")).toMatch(
+    expect(labels.morningHeroKicker("Ben", "America/Los_Angeles")).toMatch(
       /^(Good morning|Good afternoon|Good evening), Ben \/ (Morning|Today's) briefing$/
     );
   });
@@ -358,13 +358,13 @@ describe("morning hero vertical rhythm (day mode only)", () => {
 
 describe("hero label by time of day", () => {
   it("says morning only before noon", () => {
-    expect(labels.morningHeroKicker("Ben", new Date(2026, 9, 2, 9, 0))).toBe(
+    expect(labels.morningHeroKicker("Ben", "UTC", new Date(Date.UTC(2026, 9, 2, 9, 0)))).toBe(
       "Good morning, Ben / Morning briefing"
     );
-    expect(labels.morningHeroKicker("Ben", new Date(2026, 9, 2, 14, 0))).toBe(
+    expect(labels.morningHeroKicker("Ben", "UTC", new Date(Date.UTC(2026, 9, 2, 14, 0)))).toBe(
       "Good afternoon, Ben / Today's briefing"
     );
-    expect(labels.morningHeroKicker(null, new Date(2026, 9, 2, 19, 0))).toBe(
+    expect(labels.morningHeroKicker(null, "UTC", new Date(Date.UTC(2026, 9, 2, 19, 0)))).toBe(
       "Good evening / Today's briefing"
     );
   });
@@ -381,7 +381,7 @@ describe("not-ready reason", () => {
     [null, schedule, "It runs at 7:00 AM."],
     [null, { ...schedule, pastTarget: true }, "It should have run at 7:00 AM."]
   ])("explains run %#", (run, sched, reason) => {
-    expect(morningNotReadyReason(run, sched)).toBe(reason);
+    expect(morningNotReadyReason(run, sched, locale)).toBe(reason);
     const content = buildTodayHeroContent({
       ...baseInput,
       morningRun: run ? { ...run, summaryText: "" } : null,

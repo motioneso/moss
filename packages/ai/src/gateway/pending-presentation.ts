@@ -9,7 +9,6 @@ import { approvalOutcomeTitle } from "./approval-outcome-title.js";
 import { summarizeToolAction } from "./policy.js";
 import { freezeSnapshot } from "./per-call-resolution.js";
 import { admitResolvedCard, CONTEXT_ADMISSION_UNAVAILABLE } from "./content-admission.js";
-import { isConversationTainted } from "./conversation-policy.js";
 import type {
   ActiveModulesResolver,
   ConversationProvenancePort,
@@ -219,7 +218,6 @@ export async function prepareApprovalCard(
       outcomeTitle: string | undefined;
       presentation: PendingPresentation;
       readPresentation: () => Promise<PendingPresentation>;
-      outsideContentNotice: boolean;
     }
 > {
   const unavailable = {
@@ -290,6 +288,5 @@ export async function prepareApprovalCard(
     return {
       failure: { ok: false, error: CONTEXT_ADMISSION_UNAVAILABLE } satisfies GatewayToolResponse
     };
-  const outsideContentNotice = await isConversationTainted(deps.provenance, ctx);
-  return { input, summary, outcomeTitle, presentation, readPresentation, outsideContentNotice };
+  return { input, summary, outcomeTitle, presentation, readPresentation };
 }

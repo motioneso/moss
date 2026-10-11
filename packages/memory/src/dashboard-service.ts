@@ -272,15 +272,6 @@ export class MemoryDashboardService {
     assertDataContextDb(scopedDb);
     return this.dashRepo.forgetEntity(scopedDb, ownerUserId, entityId);
   }
-
-  async deleteFact(
-    scopedDb: DataContextDb,
-    ownerUserId: string,
-    factId: string
-  ): Promise<{ deleted: boolean }> {
-    assertDataContextDb(scopedDb);
-    return this.dashRepo.forgetFactWithConflictCleanup(scopedDb, ownerUserId, factId);
-  }
 }
 
 function statusFilterToFactStatuses(filter: string): string[] {

@@ -71,7 +71,7 @@ afterAll(async () => {
 
 // Real settings handler, approval storage, token identity and durable provenance. Only embeddings
 // and the launch engine are local no-provider fakes; notes and memory come from actor-scoped SQL.
-function themeGateway(threadId: string, actorUserId: string = ids.userA) {
+function themeGateway(threadId: string, actorUserId: string = ids.userA, trusted = true) {
   const tokens = new SessionTokenRegistry();
   const records: GatewaySessionRecord[] = [];
   const gateway = new AssistantToolGateway({
@@ -83,9 +83,9 @@ function themeGateway(threadId: string, actorUserId: string = ids.userA) {
     notifier: { emit: (_session, record) => records.push(record) },
     provenance: store,
     confirmTimeoutMs: 10_000,
-    yoloMode: async () => true,
+    yoloMode: async () => trusted,
     actionPolicy: () => ({
-      getFamilyTier: async () => "trusted_auto",
+      getFamilyTier: async () => (trusted ? "trusted_auto" : "ask_each_time"),
       getFamilyManifest: async (_moduleId, familyId) =>
         settingsModuleManifest.assistantActionFamilies?.find((family) => family.id === familyId) ??
         null
@@ -100,14 +100,18 @@ function themeGateway(threadId: string, actorUserId: string = ids.userA) {
   return { gateway, token, records, actorUserId };
 }
 
-async function expectThemeApproval(h: ReturnType<typeof themeGateway>) {
+// The thread carries a durable outside-content mark, and a write the user has not trusted asks.
+// It would ask in a clean chat too, so the card does not name outside content (#3338).
+async function expectThemeApproval(threadId: string) {
+  expect(await store.isMarked(ids.userA, threadId)).toBe(true);
+  const h = themeGateway(threadId, ids.userA, false);
   const pending = h.gateway.callTool(h.token, "settings.themeMode.set", { mode: "dark" });
   await vi.waitFor(
     () => expect(h.records.some((record) => record.kind === "action_request")).toBe(true),
     { timeout: 5000 }
   );
   const request = h.records.find((record) => record.kind === "action_request")!;
-  expect(request.outsideContentNotice).toBe(true);
+  expect(request.outsideContentNotice).toBe(false);
   await h.gateway.resolveActionRequest(h.actorUserId, request.actionRequestId, "rejected");
   expect(await pending).toMatchObject({ ok: false, denied: true });
 }
@@ -185,7 +189,7 @@ describe("non-tool context admission protects later writes", () => {
     expect(text.text).toContain("The launch is on Thursday.");
     expect(runReadTool.mock.calls).not.toContainEqual(expect.arrayContaining(["notes.search"]));
     expect(await firstPath(thread.id)).toBe("recall_notes");
-    await expectThemeApproval(themeGateway(thread.id));
+    await expectThemeApproval(thread.id);
   });
 
   it("passive graph-memory recall admits stored memory before a later theme write", async () => {
@@ -220,7 +224,7 @@ describe("non-tool context admission protects later writes", () => {
     );
     expect(text.text).toContain("concise launch summaries");
     expect(await firstPath(thread.id)).toBe("recall_memory_turn");
-    await expectThemeApproval(themeGateway(thread.id));
+    await expectThemeApproval(thread.id);
   });
 
   it("empty automatic memory, notes and cross-tool retrieval preserve a clean YOLO thread", async () => {
@@ -298,7 +302,7 @@ describe("non-tool context admission protects later writes", () => {
     await manager.ensureSession(ids.userA, "Owner");
     expect(submit).toHaveBeenCalledWith(expect.stringContaining("Launch memory marker"));
     expect(await firstPath(thread.id)).toBe("launch_memory_seed");
-    await expectThemeApproval(themeGateway(thread.id));
+    await expectThemeApproval(thread.id);
   });
 
   it("a turn's delayed admission stays on A after switching to clean B", async () => {
@@ -330,7 +334,7 @@ describe("non-tool context admission protects later writes", () => {
     await pending;
     expect(await store.isTainted(ids.userA, a.id)).toBe(true);
     expect(await store.isTainted(ids.userA, b.id)).toBe(false);
-    await expectThemeApproval(themeGateway(a.id));
+    await expectThemeApproval(a.id);
     const clean = themeGateway(b.id);
     expect(
       await clean.gateway.callTool(clean.token, "settings.themeMode.set", { mode: "light" })

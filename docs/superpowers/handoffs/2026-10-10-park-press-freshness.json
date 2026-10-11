@@ -454,6 +454,187 @@
         ]
       },
       "previous_heads": "Unchanged from the initial snapshot; new PR has no migration-owned frontend or metadata overlap."
+    },
+    {
+      "checked_at": "2026-10-10T15:19:46Z",
+      "main": "bc9e76df2caa0f8a2351674786fef2da81db129a",
+      "open_external_prs": [
+        {
+          "number": 3345,
+          "title": "fix(gateway): user's trust runs writes after outside content (#3338)",
+          "url": "https://github.com/motioneso/moss/pull/3345",
+          "head": "2ee58617e47e13d51a14d026b72bf5cbaabd1027",
+          "branch": "fix/3338-chat-launch-taint",
+          "base": "main",
+          "files": [
+            "docs/superpowers/specs/2026-10-05-moss-acts-through-app-design.md",
+            "packages/ai/src/gateway/gateway.ts",
+            "packages/ai/src/gateway/policy.ts",
+            "tests/fixtures/app-actions-gateway.ts",
+            "tests/uat/specs/3187-finance-r1-freedom-moves.uat.spec.ts",
+            "tests/unit/app-action-validation-mcp.test.ts",
+            "tests/unit/gateway-content-admission.test.ts",
+            "tests/unit/gateway-conversation-policy.test.ts",
+            "tests/unit/gateway-error-admission.test.ts",
+            "tests/unit/gateway-owner-descriptor-admission.test.ts",
+            "tests/unit/gateway-permission-admission.test.ts",
+            "tests/unit/gateway-write-confirmation-coverage.test.ts",
+            "tests/unit/helpers/gateway-admission-fixture.ts",
+            "tests/unit/route-chat-content-records.test.ts"
+          ]
+        },
+        {
+          "number": 3341,
+          "title": "fix(chat): a launch replay never runs a tool or raises a card (#3335)",
+          "url": "https://github.com/motioneso/moss/pull/3341",
+          "head": "ce67053fe17f56a248111735c6a6997f980e1dd4",
+          "branch": "scheduled/3335-replay-never-acts",
+          "base": "integration/scheduled-proactive",
+          "files": [
+            "docs/evidence/3335-launch-replay-never-acts/live-proof.md",
+            "packages/ai/src/gateway/acp-permission.ts",
+            "packages/ai/src/gateway/gateway.ts",
+            "packages/ai/src/gateway/native-permission-handler.ts",
+            "packages/ai/src/gateway/session-tokens.ts",
+            "packages/chat/src/live/chat-session-launch.ts",
+            "packages/chat/src/live/chat-session-ports.ts",
+            "packages/chat/src/live/runtime.ts",
+            "packages/chat/src/routes.ts",
+            "tests/uat/fixtures/scripted-provider/claude-main.ts",
+            "tests/unit/chat-launch-replay-never-acts.test.ts",
+            "tests/unit/chat-routes-launch-replay-wiring.test.ts",
+            "tests/unit/chat-runtime-launch-replay-wiring.test.ts",
+            "tests/unit/gateway-launch-replay-refusal.test.ts",
+            "tests/unit/gateway-tool-progress.test.ts",
+            "tests/unit/uat-scripted-replay-header.test.ts"
+          ]
+        },
+        {
+          "number": 3337,
+          "title": "fix(today): medication times follow the 12/24-hour setting",
+          "url": "https://github.com/motioneso/moss/pull/3337",
+          "head": "81060bd3724cf3e005913045b5153abd0623e2e8",
+          "branch": "fix/3326-today-reminder-clock",
+          "base": "main"
+        },
+        {
+          "number": 3336,
+          "title": "test(uat): give the chat attachments spec a scripted chat model (#3113)",
+          "url": "https://github.com/motioneso/moss/pull/3336",
+          "head": "353b5ef4c341a932b15530bd4963abc75f0c8d6e",
+          "branch": "fix/3113-attachment-upload-flake",
+          "base": "main",
+          "files": [
+            ".claude/skills/coordinate/uat-trigger-map.tsv",
+            "tests/uat/fixtures/chat-scripts/1133-chat-attachments.json",
+            "tests/uat/seed/types.ts",
+            "tests/uat/specs/1133-chat-attachments.uat.spec.ts"
+          ]
+        },
+        {
+          "number": 3328,
+          "title": "feat(chat): hand an over-budget live session off to a fresh one in the same chat (#3157)",
+          "url": "https://github.com/motioneso/moss/pull/3328",
+          "head": "ae5796eb1e92f45a82a4d8be4b9c9f1c29997fbb",
+          "branch": "scheduled/3157-automatic-rollover",
+          "base": "integration/scheduled-proactive"
+        },
+        {
+          "number": 3154,
+          "title": "Scheduled tasks and proactive messaging",
+          "url": "https://github.com/motioneso/moss/pull/3154",
+          "head": "e206e0afe9aa66e1c2115b78add7bf2cb1907e0e",
+          "branch": "integration/scheduled-proactive",
+          "base": "main"
+        },
+        {
+          "number": 3097,
+          "title": "docs: reconcile scheduled proactive spec and publish 24 build tickets",
+          "url": "https://github.com/motioneso/moss/pull/3097",
+          "head": "7b422e3ff5e4d03c7edcbc6ea6e9926b0299d332",
+          "branch": "research/scheduled-proactive",
+          "base": "main"
+        },
+        {
+          "number": 3088,
+          "title": "fix(chat): compute account-local timestamps for model tool results",
+          "url": "https://github.com/motioneso/moss/pull/3088",
+          "head": "3cd1d45c2894a70554fdddd4375980c7b1bd522d",
+          "branch": "fix/chat-tool-timestamp-guidance",
+          "base": "main"
+        },
+        {
+          "number": 3084,
+          "title": "fix(memory): Forget on a memory fact works (#3083)",
+          "url": "https://github.com/motioneso/moss/pull/3084",
+          "head": "ea0911b1c836d70947da14cc17236763868a3b01",
+          "branch": "fix/3083-forget-fact",
+          "base": "main"
+        },
+        {
+          "number": 3075,
+          "title": "feat(focus): let an image-capable judge read the screenshot directly (#3067)",
+          "url": "https://github.com/motioneso/moss/pull/3075",
+          "head": "46678a1c2ffcaf31bbf35fb3dd1d5bc1d87e11fc",
+          "branch": "feat/3067-judge-screenshot-server",
+          "base": "main"
+        },
+        {
+          "number": 3072,
+          "title": "docs(release-notes): publish merged notes",
+          "url": "https://github.com/motioneso/moss/pull/3072",
+          "head": "60a76bd0bb13f59a7fbf82d17b5b3502da08b95c",
+          "branch": "automation/release-notes",
+          "base": "main"
+        },
+        {
+          "number": 3055,
+          "title": "fix(ci): release-notes job waits for its held CI run before approving (#3054)",
+          "url": "https://github.com/motioneso/moss/pull/3055",
+          "head": "aa721fd635cd853e593b1d0666db80d8cb8375a6",
+          "branch": "fix/3054-release-notes-approval",
+          "base": "main"
+        }
+      ],
+      "compatibility": [
+        {
+          "number": 3345,
+          "paths": [
+            "tests/uat/specs/3187-finance-r1-freedom-moves.uat.spec.ts"
+          ],
+          "result": "Owner trust/approval assertion hunks apply cleanly. Migration changes only separate account-menu locators; no owner product behavior imported."
+        },
+        {
+          "number": 3341,
+          "result": "Updated owner head has no changed-path overlap with the migration."
+        },
+        {
+          "number": 3336,
+          "paths": [
+            "tests/uat/specs/1133-chat-attachments.uat.spec.ts"
+          ],
+          "result": "Updated scripted-model fixture hunk applies cleanly beside migration account-menu locator; not imported."
+        },
+        {
+          "number": 3337,
+          "paths": [
+            "apps/web/src/wellness/wellness-today.tsx"
+          ],
+          "result": "Clock-format hunk applies cleanly; time imports/hook/span preserved."
+        },
+        {
+          "number": 3084,
+          "paths": [
+            "apps/web/src/settings/settings-memory-dashboard.tsx"
+          ],
+          "result": "FactActions import and forget call preserved; owner patch applies cleanly."
+        },
+        {
+          "number": 3154,
+          "result": "Approved disjoint shared styles/token guard, host aria, recovery metadata and Location grouping plus three sign-in test patches remain compatible. Assistant-name fixture patch already conflicts on current main before migration; locator-only changes remain disjoint. Finance manifest preserves main version 0.6.8 instead of the active branch older version. Conversations/Alerts replacements remain held."
+        }
+      ],
+      "limits": "Read-only current-main/owner reconciliation and patch checks, not runtime acceptance. Existing other-owner branches are neither edited nor imported."
     }
   ]
 }

@@ -1782,12 +1782,8 @@ export * from "./client-proactive.js";
 export async function requestJson<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   const hasBody = options.body !== undefined;
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   headers.set("accept", "application/json");
-  if (timeZone && !headers.has("X-Timezone")) {
-    headers.set("X-Timezone", timeZone);
-  }
   if (hasBody) {
     headers.set("content-type", "application/json");
   }

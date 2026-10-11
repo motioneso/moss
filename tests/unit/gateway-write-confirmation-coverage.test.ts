@@ -47,7 +47,14 @@ const excludedWrites = shippedWrites.filter(({ module, tool }) =>
   isSelfOperationExcluded(module.id, tool)
 );
 
-function setup(module: MossModuleManifest, declared: ModuleAssistantToolManifest, yolo: boolean) {
+type Tier = "ask_each_time" | "trusted_auto";
+
+function setup(
+  module: MossModuleManifest,
+  declared: ModuleAssistantToolManifest,
+  yolo: boolean,
+  tier: Tier = "trusted_auto"
+) {
   const execute = vi.fn(async () => ({ data: { changed: true } }));
   const requiresConfirmation = vi.fn(async () => false);
   const runsWithoutAsking = vi.fn(async () => true);
@@ -70,7 +77,7 @@ function setup(module: MossModuleManifest, declared: ModuleAssistantToolManifest
   const outsideRead = admissionTool("fixture.outsideRead", { content: "outside" });
   const services = Object.fromEntries((tool.requiresServices ?? []).map((key) => [key, {}]));
   const yoloMode = vi.fn(async () => yolo);
-  const getFamilyTier = vi.fn(async () => "trusted_auto" as const);
+  const getFamilyTier = vi.fn(async (): Promise<Tier> => tier);
   // The fixture tools name the shared "change" family, which a real module declares.
   const getFamilyManifest = vi.fn(
     async (_module: string, id: string) =>
@@ -121,7 +128,8 @@ async function admitOutside(h: ReturnType<typeof setup>) {
   expect(h.recordAdmission).toHaveBeenCalledWith("actor-a", "thread-a", "tool_external_content");
 }
 
-async function expectWriteHeld(h: ReturnType<typeof setup>) {
+/** The card names outside content only when the same call would run in a clean chat. */
+async function expectWriteHeld(h: ReturnType<typeof setup>, outsideContentNotice: boolean) {
   for (const mode of ["dry-run", "execute"] as const) {
     expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, mode)).toEqual({
       kind: "declined",
@@ -142,16 +150,19 @@ async function expectWriteHeld(h: ReturnType<typeof setup>) {
     expect.objectContaining({
       kind: "action_request",
       toolName: h.tool.name,
-      outsideContentNotice: true
+      outsideContentNotice
     })
   );
   expect(h.execute).not.toHaveBeenCalled();
   expect(h.runAutomatic).not.toHaveBeenCalled();
-  expect(h.requiresConfirmation).not.toHaveBeenCalled();
-  expect(h.runsWithoutAsking).not.toHaveBeenCalled();
-  expect(h.yoloMode).not.toHaveBeenCalled();
-  expect(h.getFamilyTier).not.toHaveBeenCalled();
-  expect(h.getFamilyManifest).not.toHaveBeenCalled();
+}
+
+async function gateDryRun(h: ReturnType<typeof setup>) {
+  return h.gateway.callToolForGate(h.token, h.tool.name, {}, "dry-run");
+}
+
+async function runsInCleanChat(...args: Parameters<typeof setup>) {
+  return (await gateDryRun(setup(...args))).kind === "would_run";
 }
 
 describe("outside-content confirmation across every shipped write declaration", () => {
@@ -169,12 +180,26 @@ describe("outside-content confirmation across every shipped write declaration", 
   });
 
   it.each(callableWrites)(
-    "$name asks before dispatch with and without YOLO",
+    "$name asks after outside content unless the user trusted it",
+    async ({ module, tool }) => {
+      const h = setup(module, tool, false, "ask_each_time");
+      await admitOutside(h);
+      await expectWriteHeld(h, await runsInCleanChat(module, tool, false, "ask_each_time"));
+    }
+  );
+
+  it.each(callableWrites)(
+    "$name runs after outside content only where the user's trust runs it in a clean chat",
     async ({ module, tool }) => {
       for (const yolo of [false, true]) {
+        const clean = await gateDryRun(setup(module, tool, yolo));
         const h = setup(module, tool, yolo);
         await admitOutside(h);
-        await expectWriteHeld(h);
+        const tainted = await gateDryRun(h);
+        if (tainted.kind === "would_run") expect(clean).toEqual(tainted);
+        if (tool.risk !== "write" || (tool.name === "app.callAction" && !yolo)) {
+          expect(tainted).toEqual({ kind: "declined", reason: "would_confirm" });
+        }
       }
     }
   );
@@ -205,18 +230,97 @@ const externalWrites = [
   { name: "foreign.write", risk: "write", descriptorOwnerUserId: "actor-b" }
 ] as const;
 
-describe("outside-content confirmation also covers external write origins", () => {
-  it.each(externalWrites)(
-    "$name cannot use owner trust, sorted-safe or YOLO to bypass the floor",
-    async (entry) => {
-      const tool = admissionTool(entry.name, { ...entry, isExternal: true });
-      for (const yolo of [false, true]) {
-        const h = setup(admissionModule([tool]), tool, yolo);
-        await admitOutside(h);
-        await expectWriteHeld(h);
-      }
+describe("the user's trust after outside content", () => {
+  const move = callableWrites.find(({ name }) => name === "finance.budget.move")!;
+
+  it.each([false, true])(
+    "a promoted family runs without claiming a clean chat (YOLO=%s)",
+    async (yolo) => {
+      const h = setup(move.module, move.tool, yolo);
+      await admitOutside(h);
+      expect(await gateDryRun(h)).toEqual({
+        kind: "would_run",
+        approvalMode: yolo ? "yolo" : "auto"
+      });
+      expect(await h.gateway.callTool(h.token, move.tool.name, {})).toMatchObject({ ok: true });
+      expect(h.execute).toHaveBeenCalledOnce();
+      expect(h.runAutomatic).not.toHaveBeenCalled();
+      expect(h.createPending).not.toHaveBeenCalled();
     }
   );
+
+  it.each([false, true])("a per-call limit still asks (YOLO=%s)", async (yolo) => {
+    const h = setup(move.module, move.tool, yolo);
+    h.requiresConfirmation.mockResolvedValue(true);
+    await admitOutside(h);
+    await expectWriteHeld(h, false);
+  });
+
+  it.each([false, true])(
+    "another automatic run holding a clean chat is not a mark trust runs past (YOLO=%s)",
+    async (yolo) => {
+      const h = setup(move.module, move.tool, yolo);
+      h.state.held = true;
+      expect(await gateDryRun(h)).toEqual({ kind: "declined", reason: "would_confirm" });
+      expect(h.execute).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([false, true])(
+    "a held reservation's card does not name outside content (YOLO=%s)",
+    async (yolo) => {
+      const h = setup(move.module, move.tool, yolo);
+      h.state.held = true;
+      await expectWriteHeld(h, false);
+    }
+  );
+
+  it.each([false, true])("an unreadable mark gets no trust (YOLO=%s)", async (yolo) => {
+    const h = setup(move.module, move.tool, yolo);
+    await admitOutside(h);
+    vi.mocked(h.provenance.isMarked!).mockRejectedValue(new Error("storage down"));
+    await expectWriteHeld(h, false);
+  });
+
+  it("outbound and destructive writes ask under YOLO", async () => {
+    for (const risk of ["outbound", "destructive"] as const) {
+      const tool = admissionTool(`fixture.${risk}`, { risk });
+      const h = setup(admissionModule([tool]), tool, true);
+      await admitOutside(h);
+      await expectWriteHeld(h, false);
+    }
+  });
+
+  it("runs a connected outbound write past the mark under YOLO, as in a clean chat", async () => {
+    const tool = admissionTool("connected.outbound", {
+      risk: "outbound",
+      isExternal: true,
+      descriptorOwnerUserId: "actor-a"
+    });
+    const module = admissionModule([tool]);
+    expect(await runsInCleanChat(module, tool, true)).toBe(true);
+    const h = setup(module, tool, true);
+    await admitOutside(h);
+    const claims = h.runAutomatic.mock.calls.length;
+    expect(await h.gateway.callToolForGate(h.token, tool.name, {}, "dry-run")).toEqual({
+      kind: "would_run",
+      approvalMode: "yolo"
+    });
+    expect(await h.gateway.callTool(h.token, tool.name, {})).toMatchObject({ ok: true });
+    expect(h.execute).toHaveBeenCalledOnce();
+    expect(h.runAutomatic).toHaveBeenCalledTimes(claims);
+    expect(h.createPending).not.toHaveBeenCalled();
+  });
+});
+
+describe("outside-content confirmation also covers external write origins", () => {
+  it.each(externalWrites)("$name cannot use sorted-safe to bypass the floor", async (entry) => {
+    const tool = admissionTool(entry.name, { ...entry, isExternal: true });
+    const module = admissionModule([tool]);
+    const h = setup(module, tool, false, "ask_each_time");
+    await admitOutside(h);
+    await expectWriteHeld(h, await runsInCleanChat(module, tool, false, "ask_each_time"));
+  });
 
   it.each(externalWrites)(
     "$name retains clean automatic dispatch before its result taints",

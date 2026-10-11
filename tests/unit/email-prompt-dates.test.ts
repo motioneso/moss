@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   extractEmailSignalsBatch,
@@ -60,13 +60,21 @@ async function capturePrompt(message: ParsedEmail): Promise<string> {
 describe("what the model is told about dates", () => {
   it("gives it the date the email arrived", async () => {
     const prompt = await capturePrompt(email());
+    // No saved locale: the default zone, Los Angeles. Date only, no time.
     expect(prompt).toContain("Received: 2026-09-03");
+    expect(prompt).not.toContain("02:15");
   });
 
-  it("gives it today's date", async () => {
-    const prompt = await capturePrompt(email());
-    const today = new Date().toISOString().slice(0, 10);
-    expect(prompt).toContain(`Today: ${today}`);
+  it("gives it today's date in the default zone, not the machine's", async () => {
+    // 03:30 UTC on Oct 10 is still Oct 9 in Los Angeles.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-10T03:30:00Z"));
+    try {
+      const prompt = await capturePrompt(email());
+      expect(prompt).toContain("Today: 2026-10-09");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("leaves the arrival line out rather than sending a broken date", async () => {

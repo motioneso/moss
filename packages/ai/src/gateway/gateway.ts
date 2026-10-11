@@ -1,4 +1,5 @@
 import { emitInputValidationFailure } from "./validation-failure.js";
+import { localeContext } from "./locale-context.js";
 import { randomUUID } from "node:crypto";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -6,6 +7,7 @@ import type {
   ModuleAssistantToolManifest,
   MossModuleManifest,
   ToolContext,
+  ToolLocale,
   ToolResult,
   ToolServices
 } from "@moss/module-sdk";
@@ -33,7 +35,12 @@ import {
 import { ActionRequestRecovery } from "./action-request-recovery.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
-import { isConversationTainted } from "./conversation-policy.js";
+import {
+  isConversationMarked,
+  isConversationTainted,
+  plannedConfirm,
+  type PlannedCall
+} from "./conversation-policy.js";
 import {
   admitToolOutcome,
   recordContextAdmission,
@@ -67,7 +74,7 @@ import {
 } from "./run-tool-handler.js";
 export type { GatewayLogger };
 import { isSelfOperationExcluded } from "./self-operation.js";
-import { recordUnattendedRun } from "./unattended-run-record.js";
+import { denyRateLimited, recordUnattendedRun } from "./unattended-run-record.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type {
   ActiveModulesResolver,
@@ -124,12 +131,8 @@ export interface AssistantToolGatewayDependencies {
     readonly ctx: ToolContext;
     readonly execute: () => Promise<ToolResult>;
   }) => Promise<ToolResult>;
-  /**
-   * Returns the user's configured IANA timezone (e.g. "America/Chicago"), or null if unknown.
-   * Injected by the composition root; used to populate ToolContext.localTimezone so tools that
-   * format user-visible date/time strings (e.g. calendar approval cards) use the correct timezone.
-   */
-  readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
+  /** The person's effective locale; fills ToolContext.locale and localTimezone for user-visible times. */
+  readonly resolveLocale?: (actorUserId: string) => Promise<ToolLocale | null>;
   /**
    * Returns which web search engine is active for this actor: "brave" (the web.search tool calls
    * the Brave API directly), "model-native" (the web.search tool runs one structured search
@@ -148,6 +151,7 @@ export interface AssistantToolGatewayDependencies {
 }
 
 const denyPrefs: AgencyPrefLookup = { get: async () => false };
+
 const defaultPolicyLookup: ActionPolicyLookup = {
   getFamilyTier: async () => null,
   getFamilyManifest: async () => null
@@ -235,15 +239,17 @@ export class AssistantToolGateway {
         found,
         input,
         ctx,
-        await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
+        await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs),
+        route
       );
     }
     if (route.kind === "yolo-run") {
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
-        return this.denyRateLimited(found, input, ctx, "yolo");
+        return denyRateLimited(this.deps, found, input, ctx, "yolo");
       }
-      const dispatched = await this.runAutomatically(found, input, ctx);
-      if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
+      const dispatched = await this.runAutomatically(found, input, ctx, route);
+      if (dispatched.kind === "confirm")
+        return this.confirmAndRun(found, input, ctx, undefined, dispatched);
       const { response: result } = dispatched.value;
       recordUnattendedRun(this.deps, found, ctx, "yolo", dispatched.value, dispatched.outcomeTitle);
       return result;
@@ -272,8 +278,9 @@ export class AssistantToolGateway {
           "Automatic execution hit its rate limit — please confirm this action."
         );
       }
-      const dispatched = await this.runAutomatically(found, input, ctx);
-      if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
+      const dispatched = await this.runAutomatically(found, input, ctx, route);
+      if (dispatched.kind === "confirm")
+        return this.confirmAndRun(found, input, ctx, undefined, dispatched);
       const { response: result } = dispatched.value;
       if (found.tool.risk !== "read") {
         recordUnattendedRun(
@@ -291,7 +298,8 @@ export class AssistantToolGateway {
       found,
       input,
       ctx,
-      await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
+      await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs),
+      route
     );
   }
 
@@ -327,7 +335,7 @@ export class AssistantToolGateway {
     }
     if (limited && !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
       if (route.kind === "yolo-run") {
-        this.denyRateLimited(found, input, ctx, "yolo");
+        denyRateLimited(this.deps, found, input, ctx, "yolo");
       } else {
         void recordGatewayAudit(
           this.deps,
@@ -344,7 +352,7 @@ export class AssistantToolGateway {
       }
       return { kind: "declined", reason: "rate_limited" };
     }
-    const dispatched = await this.runAutomatically(found, input, ctx);
+    const dispatched = await this.runAutomatically(found, input, ctx, route);
     if (dispatched.kind === "confirm") return { kind: "declined", reason: "would_confirm" };
     const { response, audit } = dispatched.value;
     if (limited)
@@ -380,7 +388,7 @@ export class AssistantToolGateway {
   > {
     const { actorUserId, chatSessionId, threadId, allowedToolNames } =
       this.deps.tokens.verify(token);
-    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
     let progressTool: ExecutableTool | undefined;
     let progressAdmission: Promise<void> | undefined;
     const ctx: ToolContext = {
@@ -388,7 +396,7 @@ export class AssistantToolGateway {
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
       ...(threadId ? { threadId } : {}),
-      localTimezone,
+      ...localeContext(locale),
       // Only the MCP transport passes a sink; every other caller sends nowhere.
       ...(onProgress
         ? {
@@ -471,19 +479,20 @@ export class AssistantToolGateway {
     return "failure" in prepared ? prepared : { ...prepared, ctx };
   }
 
-  /** The single approval decision shared by live calls and the gate's dry run. */
+  /**
+   * The single approval decision shared by live calls and the gate's dry run. In a tainted
+   * conversation only the user's own trust runs a write (#3338). Under YOLO a durable
+   * outside-content mark changes nothing (#3417). `userTrusted` marks such a run so it skips the
+   * clean-conversation claim it can no longer win.
+   */
   private async planCall(
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext
-  ): Promise<{ kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm" }> {
+  ): Promise<PlannedCall> {
     if (found.resolution?.forceConfirm) return { kind: "confirm" };
     const confirmWhenTainted = found.resolution?.confirmWhenTainted ?? false;
     if (found.tool.risk === "read" && !confirmWhenTainted) return { kind: "auto-run" };
-    const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
-    if (conversationTainted && (found.tool.risk !== "read" || confirmWhenTainted)) {
-      return { kind: "confirm" };
-    }
     const perCallResolved = found.resolution !== undefined;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
     const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
@@ -492,67 +501,37 @@ export class AssistantToolGateway {
       this.deps.resolveActiveModules,
       ctx.actorUserId
     );
-    if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
-      return confirmOverride ||
-        !(await familyAllowsAutoRun(
-          found.tool,
-          found.dto.moduleId,
-          effectiveLookup,
-          perCallResolved
-        ))
-        ? { kind: "yolo-confirm" }
-        : (await isConversationTainted(this.deps.provenance, ctx))
-          ? { kind: "confirm" }
-          : { kind: "yolo-run" };
-    }
-    return (await resolvePolicy(
-      found.tool,
-      found.dto.moduleId,
-      confirmOverride,
-      effectiveLookup,
-      await this.computeSortedSafe(found, ctx),
-      perCallResolved,
-      conversationTainted,
-      confirmWhenTainted
-    )) === "run" && !(await isConversationTainted(this.deps.provenance, ctx))
-      ? { kind: "auto-run" }
-      : { kind: "confirm" };
-  }
+    const yoloOn = (await this.deps.yoloMode?.(ctx)) === true;
+    const yolo = found.tool.risk !== "read" && yoloOn;
+    const yoloRuns =
+      yolo &&
+      !confirmOverride &&
+      (await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup, perCallResolved));
+    const sortedSafe = yolo ? false : await this.computeSortedSafe(found, ctx);
 
-  private denyRateLimited(
-    found: ExecutableTool,
-    input: Record<string, unknown>,
-    ctx: ToolContext,
-    approvalMode: "yolo"
-  ): GatewayToolResponse {
-    const summary = captureActionOutcomeTitle(found.tool, input, ctx) ?? "Perform action";
-    emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
-      actionRequestId: ctx.requestId,
-      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
-      toolName: found.dto.name,
-      outcome: "denied",
-      decidedBy: "policy",
-      summary,
-      holdDurationMs: null,
-      reason: "Rate limit exceeded for unattended runs of this tool."
-    });
-    void recordGatewayAudit(
-      this.deps,
-      { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
-      found,
-      {
-        approvalMode,
-        outcome: "denied",
-        durationMs: null,
-        errorClass: "rate_limited",
-        chatSessionId: ctx.chatSessionId
-      }
-    );
-    return {
-      ok: false,
-      denied: true,
-      reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
-    };
+    const policy = (tainted: boolean) =>
+      resolvePolicy(
+        found.tool,
+        found.dto.moduleId,
+        confirmOverride,
+        effectiveLookup,
+        sortedSafe,
+        perCallResolved,
+        tainted,
+        confirmWhenTainted
+      );
+
+    // Read taint after every policy hook so content admitted meanwhile still counts.
+    const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
+    const marked = conversationTainted && (await isConversationMarked(this.deps.provenance, ctx));
+    // The user's trust runs past a durable outside-content mark only. Any other taint asks.
+    if (conversationTainted && !marked) return { kind: yolo ? "yolo-confirm" : "confirm" };
+    const trusted = conversationTainted ? { userTrusted: true as const } : {};
+    if (yolo) return yoloRuns ? { kind: "yolo-run", ...trusted } : { kind: "yolo-confirm" };
+    // Under YOLO a marked conversation runs a confirmWhenTainted read as a clean one does.
+    return (await policy(conversationTainted && !yoloOn)) === "run"
+      ? { kind: "auto-run", ...trusted }
+      : plannedConfirm(marked, async () => (await policy(false)) === "run");
   }
 
   async requestNativeToolPermission(
@@ -591,12 +570,12 @@ export class AssistantToolGateway {
     if (!declared) return { ok: false, error: `Tool not available: ${toolName}` };
     const requestId = `cross-tool_${randomUUID()}`;
     const access: AccessContext = { actorUserId, requestId };
-    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId,
       chatSessionId: bound?.chatSessionId ?? "",
-      localTimezone,
+      ...localeContext(locale),
       ...(bound?.threadId ? { threadId: bound.threadId } : {})
     };
     const prepared = await prepareToolCall(
@@ -623,7 +602,8 @@ export class AssistantToolGateway {
         data: renderAndCap(
           found.tool.outputSchema,
           result,
-          toolHasOutsideContent(found.tool) ? found.tool.name : undefined
+          toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
+          ctx
         )
       };
     } catch {
@@ -729,16 +709,20 @@ export class AssistantToolGateway {
   private async runAutomatically(
     found: ExecutableTool,
     input: Record<string, unknown>,
-    ctx: ToolContext
+    ctx: ToolContext,
+    route: PlannedCall
   ) {
     const outcomeTitle = captureActionOutcomeTitle(found.tool, input, ctx);
     const result =
-      found.tool.risk === "read" && !found.resolution?.confirmWhenTainted
+      (found.tool.risk === "read" && !found.resolution?.confirmWhenTainted) || route.userTrusted
         ? { kind: "ran" as const, value: await this.dispatchHandler(found, input, ctx) }
         : await runAutomaticAction(this.deps.provenance, ctx, () =>
             this.dispatchHandler(found, input, ctx)
           );
-    if (result.kind === "confirm") return result;
+    if (result.kind === "confirm")
+      return (await isConversationMarked(this.deps.provenance, ctx))
+        ? { kind: "confirm" as const, outsideContentReason: true as const }
+        : { kind: "confirm" as const };
     if (result.kind === "failed")
       return {
         kind: "ran" as const,
@@ -796,7 +780,8 @@ export class AssistantToolGateway {
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext,
-    notice?: string
+    notice?: string,
+    route: Pick<PlannedCall, "outsideContentReason"> = {}
   ): Promise<GatewayToolResponse> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     // #2956: the approval hold below can outlive the turn, so the turn is
@@ -821,8 +806,7 @@ export class AssistantToolGateway {
         );
       return prepared.failure;
     }
-    const { summary, outcomeTitle, presentation, readPresentation, outsideContentNotice } =
-      prepared;
+    const { summary, outcomeTitle, presentation, readPresentation } = prepared;
     input = prepared.input;
 
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
@@ -851,7 +835,7 @@ export class AssistantToolGateway {
         toolName: found.dto.name,
         summary,
         ...(outcomeTitle ? { outcomeTitle } : {}),
-        outsideContentNotice,
+        outsideContentNotice: route.outsideContentReason === true,
         ...(presentation.externalTool
           ? { externalTool: true, exactArguments: presentation.exactArguments }
           : {}),

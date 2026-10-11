@@ -6,7 +6,8 @@ import {
   presentApprovalFields,
   type ApprovalFieldMap,
   type RouteApprovalPresentation,
-  type ToolApprovalPresentation
+  type ToolApprovalPresentation,
+  type ToolLocale
 } from "@moss/module-sdk";
 import { GoalsRepository } from "./repository.js";
 
@@ -25,6 +26,8 @@ export type GoalApprovalSourceResolver = (
   db: DataContextDb,
   input: {
     readonly actorUserId: string;
+    /** The person's locale for any time in the label; the default locale when absent. */
+    readonly locale?: ToolLocale;
     readonly sourceKind: keyof typeof sourceLabels;
     readonly sourceRef: string;
   }
@@ -151,6 +154,7 @@ export const goalEvidencePresentation: ToolApprovalPresentation = async (db, inp
       source =
         (await resolveSource?.(db, {
           actorUserId: ctx.actorUserId,
+          locale: ctx.locale,
           sourceKind: changes.sourceKind as keyof typeof sourceLabels,
           sourceRef: changes.sourceRef
         })) ?? null;

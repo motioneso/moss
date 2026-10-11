@@ -2,9 +2,10 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, isUuid } from "@moss/db";
 import type { RouteChatTargetResolver } from "@moss/module-sdk";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleDateTime } from "@moss/shared";
 
 /** Identify the actor's note for deletion without reading its body or linked health details. */
-export const therapyNoteTarget: RouteChatTargetResolver = async (db, params) => {
+export const therapyNoteTarget: RouteChatTargetResolver = async (db, params, ctx) => {
   assertDataContextDb(db);
   const id = params.id;
   if (!id || !isUuid(id)) return null;
@@ -14,5 +15,7 @@ export const therapyNoteTarget: RouteChatTargetResolver = async (db, params) => 
     .where("id", "=", id)
     .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
     .executeTakeFirst();
-  return row ? `Therapy note from ${row.created_at.toISOString()}` : null;
+  return row
+    ? `Therapy note from ${formatLocaleDateTime(row.created_at, ctx?.locale ?? DEFAULT_LOCALE_SETTINGS)}`
+    : null;
 };
