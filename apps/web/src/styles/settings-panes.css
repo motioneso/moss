@@ -607,6 +607,18 @@
   gap: 8px;
   flex: none;
 }
+
+/* On phones the actions take their own row, aligned under the folder text. */
+@media (max-width: 560px) {
+  .vault {
+    flex-wrap: wrap;
+  }
+  .vault__act {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    padding-left: 54px;
+  }
+}
 .module-title-with-badge {
   display: inline-flex;
   align-items: center;
