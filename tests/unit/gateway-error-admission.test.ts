@@ -8,6 +8,7 @@ import {
   admissionTool,
   deferred,
   expectYoloWriteRunsPastMark,
+  resolvedCall,
   untrustedWrite
 } from "./helpers/gateway-admission-fixture.js";
 
@@ -30,22 +31,27 @@ describe("forwarded safe tool error admission", () => {
     });
     await expectYoloWriteRunsPastMark(h, write);
   });
-  it("shows no outside-content notice when Auto-approve is off and a fresh chat would ask too", async () => {
+  it("names outside content on the next app write after forwarding safe error text", async () => {
     const failed = admissionTool("example.safeError", {
       safeErrors: true,
       execute: async () => {
         throw new HttpError(400, errorSentinel);
       }
     });
-    const write = untrustedWrite();
-    const h = admissionFixture([failed, write], { deps: { yoloMode: async () => false } });
+    const write = admissionTool("app.callAction", { risk: "write" });
+    const h = admissionFixture([failed, write], {
+      deps: {
+        yoloMode: async () => false,
+        perCallResolvers: { [write.name]: async () => resolvedCall() }
+      }
+    });
+    expect(await h.gateway.callToolForGate(h.token, write.name, {}, "dry-run")).toEqual({
+      kind: "would_run",
+      approvalMode: "auto"
+    });
     expect(await h.gateway.callTool(h.token, failed.name, {})).toEqual({
       ok: false,
       error: errorSentinel
-    });
-    expect(await h.gateway.callToolForGate(h.token, write.name, {}, "dry-run")).toEqual({
-      kind: "declined",
-      reason: "would_confirm"
     });
     const pending = h.gateway.callTool(h.token, write.name, {});
     await vi.waitFor(() => expect(h.createPending).toHaveBeenCalledOnce(), { interval: 1 });
@@ -53,10 +59,9 @@ describe("forwarded safe tool error admission", () => {
       expect.objectContaining({
         kind: "action_request",
         toolName: write.name,
-        outsideContentNotice: false
+        outsideContentNotice: true
       })
     );
-    expect(write.execute).not.toHaveBeenCalled();
     h.confirmations.resolve("action-1", "rejected");
     expect(await pending).toMatchObject({ ok: false, denied: true });
     expect(write.execute).not.toHaveBeenCalled();

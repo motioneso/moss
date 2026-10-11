@@ -285,7 +285,7 @@ put an approval card on every write, even under YOLO. In a tainted conversation:
 | `forceConfirm` or a per-call `requiresConfirmation` result, any trust              | asks                 |
 
 **YOLO ruling (Ben, 2026-10-11, #3417): "I don't want it to ask for approvals for pretty much
-everything when YOLO mode is on."** Under YOLO a durable outside-content mark changes no decision.
+everything when YOLO mode is on."** Under YOLO a durable outside-content mark changes almost no decision.
 A marked conversation runs what YOLO runs in a clean one, except ACP shell and destructive requests
 (below): integration tools (all `outbound`),
 outbound app GETs, and ordinary writes. Non-external first-party `outbound` tools and destructive

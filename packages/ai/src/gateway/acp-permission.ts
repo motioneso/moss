@@ -323,7 +323,7 @@ export async function requestAcpBuiltInPermission(
     family !== "shell" &&
     actionKind !== "destructive" &&
     classification.verdict !== "deny" &&
-    (await yoloOn()) &&
+    (await yoloOn().catch(() => false)) &&
     (await isConversationMarked(deps.provenance, ctx));
   const taintRequiresApproval = taintRaisesFloor && !userTrusted;
   // Reuse the effective actor setting on every eligible ask; never override hard denials.
