@@ -11,7 +11,8 @@ import type { ChatMessageDto, TranscriptRecord } from "@moss/shared";
 import { Thread, activityVerb, groupRecords } from "@moss/ui";
 import { recordsFromMessages } from "../../apps/web/src/chat/chat-drawer.js";
 import { RecordRow } from "../../apps/web/src/chat/message-row.js";
-import { parseRecord, upsertTranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { upsertTranscriptRecord } from "../../apps/web/src/chat/stream-record-identity.js";
+import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
 import {
   serializeSubscriberRecord,
   serializeSubscriberRecords
