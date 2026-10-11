@@ -173,7 +173,11 @@ test("lists and marks notifications read through REST calls", async ({ page }) =
   await page.getByRole("button", { name: "Mark all read" }).click();
   await expect(page.getByRole("button", { name: /Unread\s*\(0\)/ })).toBeVisible();
   await page.getByRole("button", { name: /Unread/ }).click();
-  await expect(page.getByText("No notifications")).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Notification list" })
+      .getByText("No unread notifications", { exact: true })
+  ).toBeVisible();
 });
 
 test("Calendar page renders its real empty data view", async ({ page }) => {

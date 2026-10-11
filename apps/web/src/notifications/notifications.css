@@ -1,0 +1,61 @@
+/* Notifications own their layout; shared editorial rows supply the visual treatment. */
+.notifications-page {
+  margin-top: var(--space-4);
+}
+.notifications-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.notifications-title {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.notifications-title svg {
+  flex: none;
+}
+.notifications-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  overflow-wrap: anywhere;
+}
+.notifications-body p {
+  margin: 0;
+}
+.notifications-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.notifications-page .jds-index__title {
+  overflow-wrap: anywhere;
+}
+
+.notifications-page .jds-index {
+  grid-template-columns: minmax(0, 1fr);
+}
+.notifications-page .jds-index > article {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+}
+.notifications-page .jds-index__excerpt {
+  grid-column: 1;
+  max-width: var(--measure);
+  white-space: normal;
+  overflow: visible;
+}
+.notifications-page .jds-index__meta {
+  grid-column: 1;
+  grid-row: auto;
+  justify-self: start;
+  white-space: normal;
+  margin-top: var(--space-2);
+}
