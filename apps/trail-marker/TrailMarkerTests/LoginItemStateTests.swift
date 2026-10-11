@@ -8,11 +8,11 @@ final class LoginItemStateTests: XCTestCase {
         var state = LoginItemState()
         state.refresh(using: service)
         XCTAssertTrue(state.isEnabled)
-        XCTAssertEqual(state.statusMessage, "Trail Marker will start at login.")
+        XCTAssertNil(state.statusMessage)
         service.currentStatus = .notRegistered
         state.refresh(using: service)
         XCTAssertFalse(state.isEnabled)
-        XCTAssertEqual(state.statusMessage, "Trail Marker won’t start at login.")
+        XCTAssertNil(state.statusMessage)
         XCTAssertEqual(service.requests, [])
         XCTAssertEqual(service.statusReads, 2)
     }

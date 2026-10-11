@@ -101,18 +101,9 @@ test("Meeting search names its timeline scope and keeps separate cited evidence 
       });
       await expect(search).toBeFocused();
       await expect(search).toHaveAttribute("aria-describedby", "meeting-transcript-search-scope");
-      await expect(
-        page.getByText(
-          "Search checks only the loaded timeline lines. Separate cited excerpts aren’t searched.",
-          { exact: true }
-        )
-      ).toBeVisible();
+      await expect(page.getByText("Searches shown lines only.", { exact: true })).toBeVisible();
       const pane = page.getByRole("region", { name: "Transcript", exact: true });
-      await expect(pane).toContainText("1 line is outside this view’s limits.");
-      await expect(pane).toContainText(
-        "Search checks only loaded timeline lines. Separate cited excerpts aren’t searched."
-      );
-      await expect(pane).toContainText("Meeting chat needs a ready configured model.");
+      await expect(pane).toContainText("1 line not shown.");
       await search.fill(displayedPhrase.toUpperCase());
       await expect(pane.getByText(displayedPhrase, { exact: true })).toBeVisible();
       await expect(pane.getByRole("article")).toHaveCount(1);
@@ -146,7 +137,7 @@ test("Meeting search names its timeline scope and keeps separate cited evidence 
     });
     await citedSearch.fill(omittedPhrase);
     const citedPane = page.getByRole("region", { name: "Transcript", exact: true });
-    await expect(citedPane).toContainText("Separate cited excerpts aren’t searched.");
+    await expect(citedPane).toContainText("Searches shown lines only.");
     await expect(citedPane.getByRole("status")).toHaveText("No loaded timeline lines match.");
     await expect(citedPane.locator(".meetings-transcript-turn")).toHaveCount(0);
     await expect(excerpt).toContainText(omittedPhrase);

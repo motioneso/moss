@@ -23,9 +23,11 @@ struct ThisMacPane: View {
                     set: { loginItemState.setEnabled($0, using: loginItem) }
                 ))
 
-                Text(loginItemState.statusMessage)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let message = loginItemState.statusMessage {
+                    Text(message)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if let error = loginItemState.errorMessage {
                     Text(error)

@@ -20,10 +20,9 @@ struct LoginItemState {
         status == .requiresApproval || status == .unavailable || errorMessage != nil
     }
 
-    var statusMessage: String {
+    var statusMessage: String? {
         switch status {
-        case .notRegistered: return "Trail Marker won’t start at login."
-        case .enabled: return "Trail Marker will start at login."
+        case .notRegistered, .enabled: return nil
         case .requiresApproval: return "Start at login needs approval in System Settings."
         case .unavailable: return "macOS couldn’t confirm Trail Marker’s login item."
         }

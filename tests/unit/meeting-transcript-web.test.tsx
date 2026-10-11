@@ -62,12 +62,7 @@ describe("retained transcript review", () => {
   it("describes omitted lines without promising full retained local search", () => {
     const before = JSON.stringify(fixture);
     const html = renderToString(<TranscriptTimeline {...fixture} />).replaceAll("<!-- -->", "");
-    expect(html).toContain("3 lines are outside this view’s limits.");
-    expect(html).toContain(
-      "Search checks only loaded timeline lines. Separate cited excerpts aren’t searched."
-    );
-    expect(html).toContain("Cited timestamps can open retained text outside this view.");
-    expect(html).toContain("Meeting chat needs a ready configured model.");
+    expect(html).toContain("3 lines not shown.");
     expect(html).not.toContain("Search or follow a cited timestamp to find the text.");
     expect(JSON.stringify(fixture)).toBe(before);
   });
@@ -105,10 +100,8 @@ describe("retained transcript review", () => {
       expect(html).toContain("Search transcript timeline");
       expect(html).toContain('aria-describedby="meeting-transcript-search-scope"');
       expect(html).toContain('id="meeting-transcript-search-scope"');
-      expect(html).toContain(
-        "Search checks only the loaded timeline lines. Separate cited excerpts aren’t searched."
-      );
-      expect(html).not.toContain("lines are outside");
+      expect(html).toContain("Searches shown lines only.");
+      expect(html).not.toContain("not shown");
     } finally {
       client.clear();
     }
@@ -140,7 +133,7 @@ describe("retained transcript review", () => {
     try {
       const unmatched = render("Cited old text");
       expect(unmatched).toContain("Search transcript timeline");
-      expect(unmatched).toContain("Separate cited excerpts aren’t searched.");
+      expect(unmatched).toContain("Searches shown lines only.");
       expect(unmatched).toContain("No loaded timeline lines match.");
       expect(unmatched).toContain('id="meeting-reference-meeting"');
       expect(unmatched).toContain("Cited old text");
@@ -282,7 +275,7 @@ describe("retained transcript review", () => {
     expect(html).toContain("Still being finalised");
     expect(html).toContain('class="meetings-transcript-turn meetings-transcript-turn--live"');
     expect(html).toContain('class="meetings-transcript-text jds-hint"');
-    expect(html).toContain("lines are outside");
+    expect(html).toContain("lines not shown.");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("anonymous-1");
     expect(html).not.toContain("<script>");
