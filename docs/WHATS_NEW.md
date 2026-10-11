@@ -44,6 +44,10 @@ feature that is not present in the image you are running.
 - **More reliable meeting and companion controls.** Meeting confirmations use consistent keyboard behavior, companion requests stay readable on phones, and Finance settings make loading and retry states clearer. [PR #3349](https://github.com/motioneso/moss/pull/3349)
 - **Briefings show times in your own time zone.** Your briefings now show event times in the time zone and 12- or 24-hour clock you chose in Settings, and arrive at the time you set in that time zone. [PR #3412](https://github.com/motioneso/moss/pull/3412)
 
+#### Changed
+
+- **Auto-approve actions no longer asks in chats that read outside content.** With Auto-approve actions on, Moss no longer stops for approval in chats that have read web pages or other outside content; deleting things in Moss and running commands still ask. [PR #3419](https://github.com/motioneso/moss/pull/3419)
+
 ### 2026-10-10
 
 #### Fixed
