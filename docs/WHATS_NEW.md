@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Clear News feedback and Sports pause controls.** News preferences show saved and failed changes clearly, and Sports carousels can stay paused while scores refresh. [PR #3403](https://github.com/motioneso/moss/pull/3403)
 - **Chat reconnects after closing during startup.** Closing or reloading chat while it starts no longer leaves Moss stuck thinking. [PR #3445](https://github.com/motioneso/moss/pull/3445)
 - **Reliable dialog focus.** Dialogs keep keyboard focus usable when a focused control becomes unavailable. [PR #3401](https://github.com/motioneso/moss/pull/3401)
 - **Chat and approvals use your time zone and clock.** Times in chat answers, approval cards and approval messages now follow the time zone, region and 12- or 24-hour clock you chose in Settings. [PR #3437](https://github.com/motioneso/moss/pull/3437)
