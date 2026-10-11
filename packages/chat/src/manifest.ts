@@ -230,7 +230,7 @@ export const chatModuleManifest = {
           code: "reminder_time_unclear",
           class: "validation",
           description:
-            "A request Moss cannot pin to one time, like 'tonight at 7am', 'tonight at 1', 'at midnight', 'at 3ish' or 'at 3pm or 4pm', is refused and nothing is saved."
+            "A request Moss cannot pin to one time, like 'tonight at 7am', 'at midnight', 'at 3ish' or 'at 3pm or 4pm', is refused and nothing is saved."
         },
         {
           code: "reminder_day_unsupported",

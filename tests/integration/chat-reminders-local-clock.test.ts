@@ -386,7 +386,7 @@ describe("what the worker may change on a clock reminder", () => {
 
   it.each([
     ["deadline", { deadline_at: new Date(Date.now() + 6 * 3600_000) }],
-    ["timing", { timing: "relative", delay_seconds: 600, local_due: null, time_zone: null }],
+    ["timing", { timing: "relative" }],
     ["wall clock", { local_due: "2099-01-01T09:00" }],
     ["time zone", { time_zone: "Asia/Tokyo" }]
   ])("never lets it rewrite the %s", async (_field, values) => {
