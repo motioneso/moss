@@ -128,7 +128,8 @@ async function admitOutside(h: ReturnType<typeof setup>) {
   expect(h.recordAdmission).toHaveBeenCalledWith("actor-a", "thread-a", "tool_external_content");
 }
 
-async function expectWriteHeld(h: ReturnType<typeof setup>) {
+/** The card names outside content only when the same call would run in a clean chat. */
+async function expectWriteHeld(h: ReturnType<typeof setup>, outsideContentNotice: boolean) {
   for (const mode of ["dry-run", "execute"] as const) {
     expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, mode)).toEqual({
       kind: "declined",
@@ -149,7 +150,7 @@ async function expectWriteHeld(h: ReturnType<typeof setup>) {
     expect.objectContaining({
       kind: "action_request",
       toolName: h.tool.name,
-      outsideContentNotice: true
+      outsideContentNotice
     })
   );
   expect(h.execute).not.toHaveBeenCalled();
@@ -158,6 +159,10 @@ async function expectWriteHeld(h: ReturnType<typeof setup>) {
 
 async function gateDryRun(h: ReturnType<typeof setup>) {
   return h.gateway.callToolForGate(h.token, h.tool.name, {}, "dry-run");
+}
+
+async function runsInCleanChat(...args: Parameters<typeof setup>) {
+  return (await gateDryRun(setup(...args))).kind === "would_run";
 }
 
 describe("outside-content confirmation across every shipped write declaration", () => {
@@ -179,7 +184,7 @@ describe("outside-content confirmation across every shipped write declaration", 
     async ({ module, tool }) => {
       const h = setup(module, tool, false, "ask_each_time");
       await admitOutside(h);
-      await expectWriteHeld(h);
+      await expectWriteHeld(h, await runsInCleanChat(module, tool, false, "ask_each_time"));
     }
   );
 
@@ -248,7 +253,7 @@ describe("the user's trust after outside content", () => {
     const h = setup(move.module, move.tool, yolo);
     h.requiresConfirmation.mockResolvedValue(true);
     await admitOutside(h);
-    await expectWriteHeld(h);
+    await expectWriteHeld(h, false);
   });
 
   it.each([false, true])(
@@ -261,11 +266,20 @@ describe("the user's trust after outside content", () => {
     }
   );
 
+  it.each([false, true])(
+    "a held reservation's card does not name outside content (YOLO=%s)",
+    async (yolo) => {
+      const h = setup(move.module, move.tool, yolo);
+      h.state.held = true;
+      await expectWriteHeld(h, false);
+    }
+  );
+
   it.each([false, true])("an unreadable mark gets no trust (YOLO=%s)", async (yolo) => {
     const h = setup(move.module, move.tool, yolo);
     await admitOutside(h);
     vi.mocked(h.provenance.isMarked!).mockRejectedValue(new Error("storage down"));
-    await expectWriteHeld(h);
+    await expectWriteHeld(h, false);
   });
 
   it("outbound and destructive writes ask under YOLO", async () => {
@@ -273,17 +287,31 @@ describe("the user's trust after outside content", () => {
       const tool = admissionTool(`fixture.${risk}`, { risk });
       const h = setup(admissionModule([tool]), tool, true);
       await admitOutside(h);
-      await expectWriteHeld(h);
+      await expectWriteHeld(h, false);
     }
+  });
+
+  it("names outside content on a connected outbound write YOLO runs in a clean chat", async () => {
+    const tool = admissionTool("connected.outbound", {
+      risk: "outbound",
+      isExternal: true,
+      descriptorOwnerUserId: "actor-a"
+    });
+    const module = admissionModule([tool]);
+    expect(await runsInCleanChat(module, tool, true)).toBe(true);
+    const h = setup(module, tool, true);
+    await admitOutside(h);
+    await expectWriteHeld(h, true);
   });
 });
 
 describe("outside-content confirmation also covers external write origins", () => {
   it.each(externalWrites)("$name cannot use sorted-safe to bypass the floor", async (entry) => {
     const tool = admissionTool(entry.name, { ...entry, isExternal: true });
-    const h = setup(admissionModule([tool]), tool, false, "ask_each_time");
+    const module = admissionModule([tool]);
+    const h = setup(module, tool, false, "ask_each_time");
     await admitOutside(h);
-    await expectWriteHeld(h);
+    await expectWriteHeld(h, await runsInCleanChat(module, tool, false, "ask_each_time"));
   });
 
   it.each(externalWrites)(

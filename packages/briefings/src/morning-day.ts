@@ -1,4 +1,5 @@
 import type { BriefingDefinition } from "@moss/db";
+import { formatLocaleTime, type LocaleSettingsDto } from "@moss/shared";
 
 import {
   capLines,
@@ -17,15 +18,7 @@ export const CALENDAR_TODAY_SECTION_LABEL = "TODAY'S EVENTS";
 export const WEATHER_SECTION_KEY = "weather";
 export const WEATHER_SECTION_LABEL = "WEATHER";
 
-function localTime(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(new Date(iso));
-}
-
-function eventLine(item: Record<string, unknown>, timeZone: string): string {
+function eventLine(item: Record<string, unknown>, locale: LocaleSettingsDto): string {
   const startsAt = item["startsAt"] as string;
   const endsAt = typeof item["endsAt"] === "string" ? item["endsAt"] : null;
   const endValid = endsAt !== null && !Number.isNaN(new Date(endsAt).getTime());
@@ -33,8 +26,8 @@ function eventLine(item: Record<string, unknown>, timeZone: string): string {
     item["allDay"] === true
       ? "All day"
       : endValid
-        ? `${localTime(startsAt, timeZone)}-${localTime(endsAt, timeZone)}`
-        : localTime(startsAt, timeZone);
+        ? `${formatLocaleTime(startsAt, locale)}-${formatLocaleTime(endsAt, locale)}`
+        : formatLocaleTime(startsAt, locale);
   const title = sanitizeExternal(item["title"]) || "Untitled event";
   const place = sanitizeExternal(item["location"]);
   return [when, title, place ? `at ${place}` : ""].filter(Boolean).join(" · ");
@@ -65,12 +58,14 @@ function coversToday(item: Record<string, unknown>, now: Date, timeZone: string)
 /**
  * The day's real events in time order, one line each (time, title, place). The calendar
  * section carries only derived warnings, so without this a normal day gives the writer nothing.
+ * "Today" and each time follow the person's locale: timezone and 12/24-hour choice.
  */
 export function calendarTodaySection(
   rawItems: readonly Record<string, unknown>[] | undefined,
   now: Date,
-  timeZone: string
+  locale: LocaleSettingsDto
 ): Section {
+  const timeZone = locale.timezone;
   const events = (rawItems ?? [])
     .filter((item) => coversToday(item, now, timeZone))
     .sort(
@@ -80,7 +75,7 @@ export function calendarTodaySection(
   if (events.length === 0) {
     return emptySection(CALENDAR_TODAY_SECTION_KEY, CALENDAR_TODAY_SECTION_LABEL);
   }
-  const lines = events.map((item) => eventLine(item, timeZone));
+  const lines = events.map((item) => eventLine(item, locale));
   const capped = capLines(lines);
   return {
     key: CALENDAR_TODAY_SECTION_KEY,

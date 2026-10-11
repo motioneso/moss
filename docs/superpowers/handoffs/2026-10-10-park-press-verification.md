@@ -298,11 +298,118 @@ repaired authored test. The old lifestyle web phase-cap timeout has no establish
 cause and is not relabelled as solved by this coverage correction; the next
 exact-head CI result is the acceptance gate.
 
+## Meetings, companion and Finance batch
+
+The approved minimal Meetings workspace and recording pill are preserved. This
+batch repairs retained presentation and recovery behavior, with same-batch Finance
+and companion declarations; it does not change backend action authority.
+
+| Finding | Result |
+| --- | --- |
+| LN11, Finance portion | Unknown policy/limit reads disable writes; initial and retained-value failure states have read-only retry. Save failures retain last-confirmed values. |
+| LN14 | Finance R1 per-screen loading, skeleton and state-design precedence remains pending the recorded ruling. |
+| LN15 | The documented red over-budget badge is preserved as a deliberate Finance exception unless its product ruling changes. |
+| LN16 | Reports retirement remains decision-gated; no routes or capabilities are removed. |
+| LN19 | Native branding precedence remains a recorded design decision hold. |
+| LN20 | Meetings actions use shared controls and delete/unlink use shared modal lifecycle while keeping retention, mutation and duplicate-action guards. |
+| LN21 | Companion distinguishes closed/invalid requests from unavailable reads, exposes safe retry and announces progress/outcomes. Long device names wrap at phone widths without truncating identity. |
+| LN22 | Native semantic controls and the approved recording pill are preserved. The seventh expected Settings destination is added to the existing native UI assertion. Its execution and native pixel/keyboard/VoiceOver proof require macOS and remain unrun. |
+| LN25 | Finance disclosure uses an explicit child marker and visible spacing rather than a pseudo-element collision. |
+
+Independent consumer review and focused regression tests cover read/write guards,
+request identity, retries, status copy, transcript hooks and declaration integrity.
+Actual-source synthetic Chromium checked Meetings across five widths and its chat
+layer, safe dialog cancellation, and companion pending/approved states at 320/390 px
+with an unbroken 64-character name. Finance's canonical bundle was rebuilt after
+shared changes and remained byte-identical to the measured artifact: all fifteen
+width/theme combinations retained 6.343 px disclosure clearance, contained layout,
+phone hit targets and keyboard expansion. These fixtures do not exercise real
+capture, permission changes, account data or external financial writes.
+
+The first registry check correctly rejected changing the already published Finance
+0.6.8 artifact. The repaired UI/metadata now declares a new 0.6.9 patch version,
+absent from the current release assets; the immutable-artifact rule is preserved.
+This version correction changes no capability, approval policy or money limit.
+
+Native production code is unchanged. Local Linux checks do not replace the recorded
+macOS, real-data live-path or capture/accessibility gates. No release or merge
+acceptance is implied.
+
+### Optional visual review output
+
+The native and final-guard web runs reached the unchanged ten-minute phase cap
+before completing all 277 cases, including on their one diagnostic retry. No
+named assertion failure appeared in those bounded logs. The added 28 cases wrote
+25 full-page PNGs unconditionally; those images were not assertion baselines.
+The CI logs do not isolate their timing cost, so no measured speedup is claimed.
+
+These review captures are now opt-in. All cases, navigation, fixture setup,
+geometry/keyboard/state assertions, individual timeouts and retained failure
+traces remain unchanged. To save the same named PNGs during an explicit local
+review run, use:
+
+```sh
+MOSS_VISUAL_ARTIFACT_DIR=./test-results/park-press pnpm test:e2e tests/e2e/e1-park-press-design.spec.ts tests/e2e/l4-park-press-design.spec.ts tests/e2e/companion-link.spec.ts
+```
+
+Without that variable, only the non-asserting capture calls are skipped. Opted-in
+capture errors still fail rather than falsely claiming saved evidence. This
+bounded workload reduction is not a claim that the phase cap is resolved; the
+next exact-head CI result must establish that.
+
+## Final bounded class-guard batch
+
+The remaining F-07 module-local class coverage is now implemented after its consumer
+cleanup prerequisites. The existing UI-class gate checks direct JSX `className`
+attributes in the six audited module roots. It validates literal and supported
+finite expressions against owned styles and explicit, file-bounded contracts.
+
+The gate rejects unsupported shadowing, array aliases/escapes, closure mutation,
+unsafe coercions and arbitrary callbacks instead of silently accepting an unknown
+class. Six independent negative reproductions were repaired; the integrated
+real-tree assertion and all thirty guard tests pass with the consumer cleanup.
+Real UAT/test hooks have narrow, documented exceptions rather than wildcard skips.
+
+This is deliberately bounded static coverage. JSX spreads, other props, runtime
+`classList` changes, arbitrary external CSS and the correctness of declared finite
+runtime domains are not proved by it. It is not universal CSS or accessibility
+certification. Source review approved the full corrective sequence and the precise
+coverage documentation.
+
+The final owner freshness check keeps main at the recorded merged baseline and
+preserves active work. The new trust/approval branch overlaps only separate Finance
+UAT locator lines; its behavior assertions apply cleanly and are not imported.
+Other approved disjoint patches remain compatible, apart from the explicitly
+pre-existing assistant-name fixture conflict and the older pending Finance
+manifest version. Main’s published 0.6.8 artifact remains immutable; the reviewed
+UI/metadata repair declares the new 0.6.9 patch version. Remaining Conversations/Alerts
+replacements, Meals/Food and Job Search replacements, native branding, Reports
+retirement and real-data/native/AT
+proof are still held or unverified, not counted as completed repairs.
+
+### Complete browser CI partitions
+
+The optional-capture native head completed all 277 browser cases (276 passed and
+one known skip) in 7.5 minutes, plus its separate Service Worker regression. The
+same suite on the guard head still reached the ten-minute cap after 267 reported
+outcomes. This does not establish screenshot timing as the cause or a reliable
+single-runner budget. No further unchanged-head retry is used as a remedy.
+
+The final tooling batch partitions the complete browser suite into two jobs using
+Playwright's built-in sharding. Collection proves a disjoint union of 142 and 135
+cases, exactly the original 277 names, with no omitted or duplicated case. Each
+shard retains the ten-minute phase cap and existing worker configuration; neither
+cancels the other on failure. The production Service Worker regression runs once,
+on shard 1, with its unchanged five-minute cap. The existing required CI gate
+still waits for the full browser job matrix and rejects failure or cancellation.
+No product source, browser assertions, fixtures or runtime timeouts change. The
+new exact-head CI result must still verify both partitions and the aggregate.
+
 ## Explicit outstanding gates
 
-- Later planning, lifestyle and Meetings/Finance batches must receive their own
-  source/test/browser review and same-PR metadata. The final bounded module-local
-  class guard remains a separate dependent followup.
+- The original foundation-stage requirement for consumer source/test/browser
+  review and same-PR metadata is satisfied for the included batches above. The
+  bounded module-local class guard is closed by the final batch described above.
 - Active PR-owned Conversations/Alerts changes are not imported or rewritten by
   this foundation batch. Relevant disjoint patch compatibility is recorded in the
   freshness handoff; overlapping future changes still need reconciliation.

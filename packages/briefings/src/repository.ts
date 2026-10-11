@@ -17,6 +17,7 @@ import {
 import type { MossModuleManifest } from "@moss/module-sdk";
 
 import { composeBriefing, sourceIncludedInBriefings, type ComposeDeps } from "./compose.js";
+import { resolveOwnerLocale, withTimeZone } from "./compose-shared.js";
 import { emptyStructuredPayload } from "./action-rows.js";
 import { withToolSavepoint } from "./savepoint.js";
 import { defaultScheduleMetadataFor, timezoneFor } from "./schedule.js";
@@ -268,10 +269,14 @@ export class BriefingsRepository {
   ): Promise<GenerateBriefingRunOutcome | undefined> {
     assertDataContextDb(scopedDb);
 
-    const definition = await this.getOwnedDefinitionById(scopedDb, definitionId);
-    if (!definition) {
+    const stored = await this.getOwnedDefinitionById(scopedDb, definitionId);
+    if (!stored) {
       return undefined;
     }
+    // Day boundaries, the scheduled-run window and every displayed time follow the
+    // owner's own locale, never the timezone stored on the definition (#3390).
+    const locale = await resolveOwnerLocale(scopedDb, input.composeDeps, stored);
+    const definition = withTimeZone(stored, locale.timezone);
 
     // Capture ONE `now` so the lock-day, the existing-run comparison, and compose's
     // local-day window all agree even across a local-midnight boundary.
@@ -355,7 +360,8 @@ export class BriefingsRepository {
         jobId: input.jobId,
         sameDayMorningMeta,
         previousMorningRunAt,
-        now
+        now,
+        locale
       },
       input.composeDeps
     );

@@ -246,11 +246,16 @@ jobs:
         run: docker compose -f infra/docker-compose.yml down -v
 
   browser:
-    name: Verify web and browser tests
+    name: Verify web and browser tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
+    # Keep each complete shard inside the existing phase budget; do not cancel its sibling.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
       - name: Check out repository
@@ -294,9 +299,9 @@ jobs:
       - name: Run Playwright smoke tests
         run: |
           status=0
-          timeout --verbose --signal=TERM 10m pnpm test:e2e || status=$?
+          timeout --verbose --signal=TERM 10m pnpm test:e2e --shard=${{ matrix.shard }}/2 || status=$?
           if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright budget=10m issue=#1534"
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-${{ matrix.shard }}-of-2 budget=10m issue=#1534"
           fi
           exit "$status"
 
@@ -304,6 +309,7 @@ jobs:
       # registers the Service Worker (registration is gated to production builds). This is
       # the only path that exercises the real, registered worker in a browser.
       - name: Run Service Worker regression test
+        if: matrix.shard == 1
         run: |
           status=0
           timeout --verbose --signal=TERM 5m pnpm test:sw || status=$?

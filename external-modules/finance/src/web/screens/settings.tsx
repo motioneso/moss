@@ -25,7 +25,6 @@ import {
 } from "@moss/module-web-sdk";
 import { runWrite } from "../api";
 import {
-  DEFAULT_LIMIT_DOLLARS,
   detectStep,
   fetchKeySlots,
   fetchLimit,
@@ -343,34 +342,51 @@ function BankKeys(): ReactNodeLike {
 export function SettingsScreen(): ReactNodeLike {
   const [tiers, setTiers] = useState<Tiers>(tiersForStep("routine"));
   const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [limitLoadFailed, setLimitLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [forceCustom, setForceCustom] = useState(false);
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
   const [familyError, setFamilyError] = useState<string | null>(null);
-  const [limit, setLimit] = useState(`$${DEFAULT_LIMIT_DOLLARS}`);
-  const [savedLimit, setSavedLimit] = useState(DEFAULT_LIMIT_DOLLARS);
+  const [limit, setLimit] = useState("");
+  const [savedLimit, setSavedLimit] = useState<number | null>(null);
   const [limitError, setLimitError] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetchTiers().then((found) => {
-      if (found) setTiers(found);
-      else setLoadFailed(true);
-      setLoaded(true);
-    });
-    void fetchLimit().then((found) => {
-      if (found !== null) {
-        setSavedLimit(found);
-        setLimit(`$${found}`);
+    let current = true;
+    void Promise.all([fetchTiers(), fetchLimit()]).then(([foundTiers, foundLimit]) => {
+      if (!current) return;
+      if (foundTiers !== null) {
+        setTiers(foundTiers);
+        setLoaded(true);
       }
+      if (foundLimit !== null) {
+        setSavedLimit(foundLimit);
+        setLimit(`$${foundLimit}`);
+      }
+      setLoadFailed(foundTiers === null);
+      setLimitLoadFailed(foundLimit === null);
+      setLoading(false);
     });
-  }, []);
+    return () => {
+      current = false;
+    };
+  }, [loadAttempt]);
+
+  const settingsReady = !loading && !loadFailed && !limitLoadFailed;
+  const retrySettings = (): void => {
+    setLoading(true);
+    setLoadAttempt((attempt) => attempt + 1);
+  };
 
   const detected = detectStep(tiers);
   const value = forceCustom ? "custom" : detected;
   const open = userOpen ?? value === "custom";
 
   const onStep = (next: Step | "custom"): void => {
+    if (!settingsReady) return;
     setStepError(null);
     if (next === "custom") {
       setForceCustom(true);
@@ -391,6 +407,7 @@ export function SettingsScreen(): ReactNodeLike {
   };
 
   const onFamily = (family: TaggedFamily, on: boolean): void => {
+    if (!settingsReady) return;
     setFamilyError(null);
     const before = tiers[family];
     const tier = on ? "trusted_auto" : "ask_each_time";
@@ -404,6 +421,7 @@ export function SettingsScreen(): ReactNodeLike {
   };
 
   const commitLimit = (): void => {
+    if (!settingsReady || savedLimit === null) return;
     const parsed = parseLimit(limit);
     if (parsed === null) {
       setLimitError("Enter a whole number of dollars from 0 to 100,000.");
@@ -433,10 +451,28 @@ export function SettingsScreen(): ReactNodeLike {
       </div>
       <div className="fnm-page">
         <div className="fnm-block">
-          {loadFailed ? (
-            <p className="jds-hint jds-hint--error" role="alert">
-              Couldn't load your current choices. Showing the safe defaults.
+          {loading ? (
+            <p className="jds-hint" role="status">
+              Loading your current choices and dollar limit…
             </p>
+          ) : loadFailed || limitLoadFailed ? (
+            <div className="fnm-block fnm-block--tight">
+              <div role="alert">
+                {loadFailed ? (
+                  <p className="jds-hint jds-hint--error">
+                    Couldn't load your current choices.{" "}
+                    {loaded ? "Keeping the last confirmed choices." : "Showing the safe defaults."}
+                  </p>
+                ) : null}
+                {limitLoadFailed ? (
+                  <p className="jds-hint jds-hint--error">Couldn't load your dollar limit.</p>
+                ) : null}
+                <p className="jds-hint">Your settings can't be edited until both are confirmed.</p>
+              </div>
+              <Button variant="link" onClick={retrySettings}>
+                Retry loading settings
+              </Button>
+            </div>
           ) : null}
           <section className="fnm-block fnm-block--tight">
             <SectionHead title="How much Moss does alone" rule />
@@ -444,6 +480,7 @@ export function SettingsScreen(): ReactNodeLike {
               name="moss-step"
               ariaLabel="How much Moss does on its own"
               value={loaded ? value : null}
+              disabled={!settingsReady}
               onChange={onStep}
               options={STEP_OPTIONS}
             />
@@ -462,6 +499,8 @@ export function SettingsScreen(): ReactNodeLike {
                   className="jds-input fnm-limit"
                   inputMode="numeric"
                   value={limit}
+                  disabled={!settingsReady}
+                  placeholder={loading ? "Loading…" : "Unavailable"}
                   onChange={(event) => setLimit(event.target.value)}
                   onBlur={commitLimit}
                   onKeyDown={(event) => {
@@ -482,6 +521,7 @@ export function SettingsScreen(): ReactNodeLike {
                   onClick={() => setUserOpen(!open)}
                 >
                   Customize
+                  <span className="fnm-disclosure-marker" aria-hidden="true" />
                 </DisclosureToggle>
               }
               rule
@@ -494,6 +534,7 @@ export function SettingsScreen(): ReactNodeLike {
                     <Switch
                       ariaLabel={family.label}
                       checked={tiers[family.id] === "trusted_auto"}
+                      disabled={!settingsReady}
                       onChange={(on: boolean) => onFamily(family.id, on)}
                     />
                   </div>

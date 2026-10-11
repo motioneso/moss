@@ -16,6 +16,7 @@ import type { NotificationsRepository } from "@moss/notifications";
 import type { BriefingRunKind, BriefingType } from "@moss/shared";
 
 import type { ComposeDeps } from "./compose.js";
+import { resolveOwnerLocale } from "./compose-shared.js";
 import {
   BRIEFING_RUN_DEADLINE_LABEL,
   BriefingRunDeadlineError,
@@ -25,6 +26,7 @@ import type { BriefingDayPlanAutoPort } from "./repository.js";
 import { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE } from "./identifiers.js";
 import { BriefingsRepository } from "./repository.js";
 import { withToolSavepoint } from "./savepoint.js";
+import { alignScheduledFire } from "./schedule.js";
 
 export interface BriefingRunPayload extends ActorScopedJobPayload {
   readonly definitionId: string;
@@ -193,6 +195,37 @@ export async function registerBriefingsJobWorkers(
       // the repository: scheduled cron data carries no briefingRunId, so mint one here at
       // the handler boundary. Manual runs always carry one from the route.
       const briefingRunId = job.data.briefingRunId ?? randomUUID();
+
+      // A cron registered in another zone than the owner's is re-registered in theirs here,
+      // and a fire far from the owner's target time is skipped (#3390). Only when the owner's
+      // locale is readable; without it the owner's zone is unknown.
+      if (job.data.runKind === "scheduled" && composeDeps.localePreferences) {
+        const stored = await repository.getDefinitionById(scopedDb, job.data.definitionId);
+        if (stored && stored.owner_user_id === job.data.actorUserId) {
+          const locale = await resolveOwnerLocale(scopedDb, composeDeps, stored);
+          const alignment = await alignScheduledFire(boss, stored, locale.timezone);
+          if (alignment.realigned) {
+            options.logger?.info(
+              {
+                event: "briefing_schedule_realigned",
+                definitionId: stored.id,
+                ran: alignment.run
+              },
+              "briefing schedule realigned to the owner's timezone"
+            );
+          }
+          if (!alignment.run) {
+            const skipped: BriefingRunResult = {
+              definitionId: job.data.definitionId,
+              runId: briefingRunId,
+              status: null,
+              created: false
+            };
+            options.onResult?.(job, skipped);
+            return skipped;
+          }
+        }
+      }
 
       // A run that outlives its deadline throws, which rolls back the transaction and frees its
       // locks. Only the fixed label is logged.

@@ -12,6 +12,8 @@ import {
   ctxFor,
   MORNING_MAX_OUTPUT_TOKENS,
   isOpenCommitment,
+  briefingLocale,
+  localStamp,
   type ComposeDeps,
   type ComposeRunInput,
   type ComposeResult,
@@ -111,6 +113,7 @@ export async function composeBriefing(
   // Per-user IANA tz — the SAME helper the scheduler uses, so cron fire time and the
   // local-day content window agree. No cross-user read: tz comes off this definition.
   const timeZone = timezoneFor(definition.schedule_metadata);
+  const locale = briefingLocale(input, definition);
   const actionRows = await gatherActionRows(scopedDb, definition, input, deps, gaps);
   const plan = await resolvePlanContext(scopedDb, definition, now, deps, gaps);
 
@@ -129,7 +132,7 @@ export async function composeBriefing(
         [
           sanitizeExternal(c.title),
           sanitizeExternal(c.status),
-          sanitizeExternal(c.dueAt),
+          sanitizeExternal(localStamp(c.dueAt, locale)),
           sanitizeExternal(c.counterparty)
         ]
           .filter(Boolean)
@@ -156,7 +159,9 @@ export async function composeBriefing(
           arrayKey: "events",
           metaKeys: ["accounts", "gaps"],
           format: (e) =>
-            [sanitizeExternal(e.startsAt), sanitizeExternal(e.title)].filter(Boolean).join(" · ")
+            [sanitizeExternal(localStamp(e.startsAt, locale)), sanitizeExternal(e.title)]
+              .filter(Boolean)
+              .join(" · ")
         },
         gaps,
         now,
@@ -378,7 +383,7 @@ export async function composeBriefing(
   );
 
   const calendarToday = includeCalendar
-    ? calendarTodaySection(rawCalendar.rawItems, now, timeZone)
+    ? calendarTodaySection(rawCalendar.rawItems, now, locale)
     : emptySection(CALENDAR_TODAY_SECTION_KEY, CALENDAR_TODAY_SECTION_LABEL);
   // The writer sees today's events even when no warning fires, so the source is empty only
   // when neither reached the prompt.
@@ -534,7 +539,9 @@ export async function composeBriefing(
     vault,
     chats
   ];
-  sections.push(planSection(plan.planContext, prioritizedTasks.rawItems, rawCalendar.rawItems));
+  sections.push(
+    planSection(plan.planContext, prioritizedTasks.rawItems, rawCalendar.rawItems, locale)
+  );
   if (definition.selected_tool_names.includes("goals.list")) {
     sections.push(goals);
   }
@@ -629,7 +636,8 @@ export async function composeBriefing(
       synth.text,
       (rawCalendar.rawItems ?? []).flatMap((item) =>
         typeof item["title"] === "string" ? [item["title"]] : []
-      )
+      ),
+      locale.dateFormat
     ),
     sourceMetadata: {
       commitmentCount: commitments.count,
