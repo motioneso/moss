@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { disposableStackProblems } from "../uat/specs/app-actions-real-proof.js";
 
@@ -76,3 +77,40 @@ describe("#3065 real spec only targets its own throwaway stack (#3278)", () => {
     });
   });
 });
+
+const STACK_CHECK =
+  /expect\(\s*disposableStackProblems\(\{\s*baseURL: requireUatBaseURL\(\),\s*projectName: requireUatProjectName\(\),\s*claimedWebPort: readClaimedWebPort\(\)\s*\}\),\s*"[^"]+"\s*\)\.toEqual\(\[\]\);/;
+
+/** Whether a spec checks its stack with the shared rules and nothing narrower. */
+const usesSharedStackCheck = (text: string) =>
+  STACK_CHECK.test(text) && !/UAT_PORT_RANGE_(START|SIZE)/.test(text);
+
+describe.each(["3065-app-actions-real.uat.spec.ts", "3065-app-actions.uat.spec.ts"])(
+  "%s checks its stack with the shared claimed-port rules (#3278)",
+  (file) => {
+    const source = () => readFile(new URL(`../uat/specs/${file}`, import.meta.url), "utf8");
+
+    it("uses the shared check", async () => {
+      expect(usesSharedStackCheck(await source())).toBe(true);
+    });
+
+    it("negative control: a check that ignores the claim is caught", async () => {
+      const text = await source();
+      const next = text.replace(
+        "claimedWebPort: readClaimedWebPort()",
+        "claimedWebPort: undefined"
+      );
+      expect(next).not.toBe(text);
+      expect(usesSharedStackCheck(next)).toBe(false);
+    });
+
+    it("negative control: a reserved-range-only port check is caught", async () => {
+      const text = await source();
+      expect(
+        usesSharedStackCheck(
+          `${text}\nexpect(port).toBeLessThan(UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE);`
+        )
+      ).toBe(false);
+    });
+  }
+);
