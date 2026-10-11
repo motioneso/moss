@@ -162,7 +162,7 @@ export function createAppActionResolver(deps: {
             message: validationError
           }
         };
-      const target = policy.target ? await policy.target(scopedDb, params) : null;
+      const target = policy.target ? await policy.target(scopedDb, params, ctx) : null;
       if (policy.target && target === null) return { kind: "refuse", reason: "unknown_route" };
       const label = typeof target === "object" && target ? target.label : target;
       let presented: HumanActionDetails | null;

@@ -102,6 +102,32 @@ it("treats an unusable time zone the same as no time zone at all (#1869)", () =>
   expect(context).not.toContain("User's local time:");
 });
 
+it("states the local time in the person's 12/24-hour choice (#3394)", () => {
+  const instant = new Date("2026-08-31T21:50:00.000Z");
+  const la = { timezone: "America/Los_Angeles", region: "en-US" } as const;
+  const twentyFour = renderCurrentTimeContext(instant, la.timezone, { ...la, dateFormat: "24" });
+  const twelve = renderCurrentTimeContext(instant, la.timezone, { ...la, dateFormat: "12" });
+
+  expect(twentyFour).toContain("2026-08-31 (Monday) 14:50 (America/Los_Angeles");
+  expect(twelve).toContain("2026-08-31 (Monday) 2:50 PM (America/Los_Angeles");
+});
+
+it("uses the thread context's locale for the turn's time block (#3394)", async () => {
+  const now = new Date("2026-08-31T21:50:00.000Z");
+  const locale = { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "12" } as const;
+  const result = await buildEngineText(
+    {
+      persistence: {
+        getThreadContext: async () => ({ localTimezone: locale.timezone, locale })
+      } as never,
+      now: () => now
+    },
+    "u1",
+    "hello"
+  );
+  expect(result.text).toContain("2:50 PM (America/Los_Angeles");
+});
+
 it("never injects page context into ordinary engine text (#1109 — pull-only tool replaces the turn push)", async () => {
   const now = new Date("2026-08-22T12:00:00.000Z");
   const result = await buildEngineText(

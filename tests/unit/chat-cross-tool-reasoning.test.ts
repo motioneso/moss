@@ -380,23 +380,24 @@ describe("collectCrossToolContextAndItems", () => {
   });
 });
 
-describe("normalizeCalendarResult — timezone-aware sourceLabel (#579)", () => {
+describe("normalizeCalendarResult — sourceLabel in the person's locale (#579, #3394)", () => {
   const data = {
     events: [{ title: "Standup meeting", starts_at: "2026-06-27T23:30:00.000Z" }]
   };
   const query = "meeting";
   const localNowIso = "2026-06-27T14:00:00.000Z";
+  const at = (timezone: string, dateFormat: "12" | "24") =>
+    normalizeCalendarResult(data, query, localNowIso, { timezone, region: "en-US", dateFormat })[0]
+      ?.sourceLabel;
 
-  it("renders the calendar label in the supplied timezone", () => {
-    const ny = normalizeCalendarResult(data, query, localNowIso, "America/New_York");
-    expect(ny[0]?.sourceLabel).toBe("Calendar: Jun 27, 07:30 PM");
-
-    const tokyo = normalizeCalendarResult(data, query, localNowIso, "Asia/Tokyo");
-    expect(tokyo[0]?.sourceLabel).toBe("Calendar: Jun 28, 08:30 AM");
+  it("renders the calendar label in the person's timezone and 12/24-hour choice", () => {
+    expect(at("America/New_York", "12")).toBe("Calendar: Jun 27, 7:30 PM");
+    expect(at("Asia/Tokyo", "12")).toBe("Calendar: Jun 28, 8:30 AM");
+    expect(at("America/Los_Angeles", "24")).toBe("Calendar: Jun 27, 16:30");
   });
 
-  it("defaults to UTC when no timezone is supplied", () => {
-    const utc = normalizeCalendarResult(data, query, localNowIso);
-    expect(utc[0]?.sourceLabel).toBe("Calendar: Jun 27, 11:30 PM");
+  it("defaults to the Settings default locale, never UTC", () => {
+    const fallback = normalizeCalendarResult(data, query, localNowIso);
+    expect(fallback[0]?.sourceLabel).toBe("Calendar: Jun 27, 16:30");
   });
 });

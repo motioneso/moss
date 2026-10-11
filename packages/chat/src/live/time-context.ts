@@ -1,4 +1,5 @@
 import { isValidTimeZone, localDayKey, timeZoneOffsetMinutes } from "@moss/module-sdk/time";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleTime, type LocaleSettingsDto } from "@moss/shared";
 
 /**
  * Renders the per-turn `<current_time_context>` block: the fresh UTC instant always, plus a local
@@ -9,8 +10,15 @@ import { isValidTimeZone, localDayKey, timeZoneOffsetMinutes } from "@moss/modul
  * scope for this slice, so an unknown zone must be admitted once, plainly, and never guessed at
  * from the UTC offset — the run_6 live demo had the model assert "Pacific Daylight Time", retract
  * it a turn later, infer the user's region out loud, and botch offset arithmetic mid-sentence.
+ *
+ * The local time follows the person's region and 12/24-hour choice from `locale`, so the model
+ * reads and repeats it the way the person reads clocks.
  */
-export function renderCurrentTimeContext(instant: Date, timezone: string | null): string {
+export function renderCurrentTimeContext(
+  instant: Date,
+  timezone: string | null,
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS
+): string {
   const utcWeekday = new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
     weekday: "long"
@@ -25,12 +33,7 @@ export function renderCurrentTimeContext(instant: Date, timezone: string | null)
       timeZone: timezone,
       weekday: "long"
     }).format(instant);
-    const localTime = new Intl.DateTimeFormat("en-GB", {
-      timeZone: timezone,
-      hourCycle: "h23",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(instant);
+    const localTime = formatLocaleTime(instant, { ...locale, timezone });
     const offsetMinutes = timeZoneOffsetMinutes(instant, timezone);
     lines.push(
       `User's local time: ${localDate} (${localWeekday}) ${localTime} (${timezone}, UTC offset ${offsetMinutes} minutes).`,

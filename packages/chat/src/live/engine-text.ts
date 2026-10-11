@@ -5,7 +5,12 @@
  * growing the manager class further.
  */
 import type { ConversationProvenancePort } from "@moss/ai";
-import type { AnswerSourceSupport, ChatSurface } from "@moss/shared";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  type AnswerSourceSupport,
+  type ChatSurface,
+  type LocaleSettingsDto
+} from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
 
@@ -97,6 +102,7 @@ async function retrieveTurnContext(
   const empty = { passive: "", crossTool: "", notes: "", pendingItems: [] };
   const instant = deps.now?.() ?? new Date();
   let timezone: string | null = null;
+  let locale: LocaleSettingsDto | undefined;
 
   if (!deps.passiveRetrieval && !deps.crossToolRead && !deps.notesRetrieval) {
     try {
@@ -106,10 +112,11 @@ async function retrieveTurnContext(
         binding?.threadId ?? null
       );
       timezone = threadCtx.localTimezone;
+      locale = threadCtx.locale;
     } catch {
       // keep the null default — no timezone context available
     }
-    const timeBlock = renderCurrentTimeContext(instant, timezone);
+    const timeBlock = renderCurrentTimeContext(instant, timezone, locale);
     return { ...empty, timeContext: timeBlock };
   }
   try {
@@ -123,11 +130,16 @@ async function retrieveTurnContext(
         .getThreadContext(actorUserId, surface, binding?.threadId ?? null)
         .then((context) => {
           timezone = context.localTimezone;
+          locale = context.locale;
           return context;
         })
     ]);
 
-    const timeBlock = renderCurrentTimeContext(instant, threadCtx.localTimezone);
+    const timeBlock = renderCurrentTimeContext(instant, threadCtx.localTimezone, threadCtx.locale);
+    const personLocale = threadCtx.locale ?? {
+      ...DEFAULT_LOCALE_SETTINGS,
+      timezone: threadCtx.localTimezone ?? DEFAULT_LOCALE_SETTINGS.timezone
+    };
     const localNow = instant.toISOString();
     const plan =
       deps.crossToolRead != null
@@ -169,7 +181,7 @@ async function retrieveTurnContext(
             crossToolPlan,
             deps.crossToolRead,
             localNow,
-            threadCtx.localTimezone ?? "UTC",
+            personLocale,
             binding
           ).catch(() => ({ block: "", items: [] }))
         : Promise.resolve({ block: "", items: [] }),
@@ -224,7 +236,7 @@ async function retrieveTurnContext(
       pendingItems
     };
   } catch {
-    const timeBlock = renderCurrentTimeContext(instant, timezone);
+    const timeBlock = renderCurrentTimeContext(instant, timezone, locale);
     return { ...empty, timeContext: timeBlock };
   }
 }

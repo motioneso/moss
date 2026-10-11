@@ -106,6 +106,13 @@ export interface JsonSchema {
 
 export type ToolInput = Record<string, unknown>;
 
+/** The person's saved timezone, region and 12/24-hour choice, defaults applied. */
+export interface ToolLocale {
+  readonly timezone: string;
+  readonly region: string;
+  readonly dateFormat: "12" | "24";
+}
+
 export interface ToolContext {
   readonly actorUserId: string;
   readonly requestId: string;
@@ -114,6 +121,8 @@ export interface ToolContext {
   readonly threadId?: string;
   /** IANA timezone string from the user's locale settings (e.g. "America/Chicago"). Absent when the gateway has no locale available (falls back to UTC at call site). */
   readonly localTimezone?: string;
+  /** The person's effective locale. Format every time shown to them with it; absent outside the gateway. */
+  readonly locale?: ToolLocale;
   /** Partial output while the tool runs. Set only by the MCP transport; absent elsewhere. */
   readonly reportProgress?: (message: string) => void;
 }
