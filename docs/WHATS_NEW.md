@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Clearer settings and keyboard navigation.** Settings keep useful information when a load fails, phone navigation and dialogs behave more reliably, and theme previews show clearer readability warnings. [PR #3346](https://github.com/motioneso/moss/pull/3346)
 - **More reliable keyboard controls.** Dialogs, menus and settings controls are easier to read and use with a keyboard, and narrow pages fit better when a scrollbar is present. [PR #3344](https://github.com/motioneso/moss/pull/3344)
 - **Medication times follow your clock format.** Medication times on Today now follow your 12-hour or 24-hour time setting. [PR #3337](https://github.com/motioneso/moss/pull/3337)
 - **Chat no longer flashes a connect prompt.** The chat drawer no longer briefly shows the connect-a-provider message when you open it after a model has been added. [PR #3329](https://github.com/motioneso/moss/pull/3329)
