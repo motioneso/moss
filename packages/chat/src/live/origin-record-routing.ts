@@ -80,6 +80,7 @@ export function routeLiveOriginRecord(
       sequenceBySession: input.sequenceBySession,
       turnRecords: input.turnRecords.get(key),
       actionResults: input.actionResults.get(key),
+      locale: session.locale,
       emit: (next) => input.emit(surface, next)
     });
   } else {
@@ -161,7 +162,7 @@ export async function routeOriginRecord(
       approvalSequence ??= Math.max(currentSequence, recordSequence) + 1;
       input.sequenceBySession.set(key, Math.max(currentSequence, approvalSequence));
       const pending = input.pendingBySession.get(key) ?? [];
-      pending.push({ record, recordSequence, approvalSequence });
+      pending.push({ record, recordSequence, approvalSequence, locale: session?.locale });
       input.pendingBySession.set(key, pending);
       return receipt;
     }
@@ -172,6 +173,7 @@ export async function routeOriginRecord(
       approvalSequence,
       turnRecords: input.turnRecords.get(key),
       actionResults: input.actionResults.get(key),
+      locale: session?.locale,
       emit: (next) => input.emit(origin.surface, next)
     });
     return receipt;

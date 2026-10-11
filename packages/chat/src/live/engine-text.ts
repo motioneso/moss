@@ -56,7 +56,7 @@ export async function buildEngineText(
   surface?: ChatSurface,
   binding?: CrossToolTurnBinding,
   extra?: { readonly attachmentManifest?: string; readonly moduleControl?: AdmittedContext | null }
-): Promise<PreparedTurn & { pendingItems: AnswerSourceSupport[] }> {
+): Promise<PreparedTurn & { pendingItems: AnswerSourceSupport[]; locale?: LocaleSettingsDto }> {
   const turnBinding = binding
     ? Object.freeze({ threadId: binding.threadId, chatSessionId: binding.chatSessionId })
     : undefined;
@@ -82,7 +82,8 @@ export async function buildEngineText(
       notes,
       ...extra
     }),
-    pendingItems: context.pendingItems
+    pendingItems: context.pendingItems,
+    ...(context.locale ? { locale: context.locale } : {})
   };
 }
 
@@ -98,6 +99,7 @@ async function retrieveTurnContext(
   crossTool: string;
   notes: string;
   pendingItems: AnswerSourceSupport[];
+  locale?: LocaleSettingsDto;
 }> {
   const empty = { passive: "", crossTool: "", notes: "", pendingItems: [] };
   const instant = deps.now?.() ?? new Date();
@@ -117,7 +119,7 @@ async function retrieveTurnContext(
       // keep the null default — no timezone context available
     }
     const timeBlock = renderCurrentTimeContext(instant, timezone, locale);
-    return { ...empty, timeContext: timeBlock };
+    return { ...empty, timeContext: timeBlock, locale };
   }
   try {
     const [{ recent }, threadCtx] = await Promise.all([
@@ -233,10 +235,11 @@ async function retrieveTurnContext(
       passive: passiveResult.block,
       crossTool: crossTool.block,
       notes: notesResult.block,
-      pendingItems
+      pendingItems,
+      locale: threadCtx.locale
     };
   } catch {
     const timeBlock = renderCurrentTimeContext(instant, timezone, locale);
-    return { ...empty, timeContext: timeBlock };
+    return { ...empty, timeContext: timeBlock, locale };
   }
 }

@@ -126,6 +126,8 @@ it("uses the thread context's locale for the turn's time block (#3394)", async (
     "hello"
   );
   expect(result.text).toContain("2:50 PM (America/Los_Angeles");
+  // The session keeps these settings to time-stamp approval lines.
+  expect(result.locale).toEqual(locale);
 });
 
 it("never injects page context into ordinary engine text (#1109 — pull-only tool replaces the turn push)", async () => {

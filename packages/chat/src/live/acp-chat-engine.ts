@@ -12,7 +12,12 @@ import {
   type AcpTunnel
 } from "@moss/acp";
 import { type ProviderKind, redactSecrets } from "@moss/ai";
-import type { ChatTurnUsageDto } from "@moss/shared";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  formatLocaleTime,
+  type ChatTurnUsageDto,
+  type LocaleSettingsDto
+} from "@moss/shared";
 import { recordProviderLoginRejected } from "./provider-probe.js";
 
 import { CliChatUnavailableError } from "./errors.js";
@@ -299,8 +304,9 @@ export function formatApprovalLine(opts: {
   reason?: string;
   at?: Date | string;
   durationSec?: number;
+  locale?: LocaleSettingsDto;
 }): string {
-  const timeStr = formatRecordTime(opts.at ?? new Date());
+  const timeStr = formatRecordTime(opts.at ?? new Date(), opts.locale);
   const durStr = opts.durationSec !== undefined ? ` after ${opts.durationSec} s` : "";
   if (opts.approved)
     return `${opts.toolName}, approved by ${opts.who ?? "you"} at ${timeStr}${durStr}`;
@@ -317,6 +323,7 @@ export function formatApprovalRecord(opts: {
   durationSec?: number;
   durationMs?: number | null;
   sequence?: number;
+  locale?: LocaleSettingsDto;
 }): TranscriptRecord {
   return {
     kind: opts.approved ? "approved" : "not_approved",
@@ -366,11 +373,13 @@ export function formatReplyRecord(
   };
 }
 
-function formatRecordTime(dateOrStr: Date | string): string {
+/** Wall-clock time in the person's timezone and 12/24-hour choice, never the server clock. */
+function formatRecordTime(
+  dateOrStr: Date | string,
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS
+): string {
   if (typeof dateOrStr === "string") return dateOrStr;
-  const h = String(dateOrStr.getHours()).padStart(2, "0");
-  const m = String(dateOrStr.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+  return formatLocaleTime(dateOrStr, locale);
 }
 
 /**
