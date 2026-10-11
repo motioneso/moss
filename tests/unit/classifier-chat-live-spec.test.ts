@@ -25,7 +25,14 @@ async function sources(): Promise<Sources> {
 // Every behavioural assertion the chat spec must keep, verbatim, with its count.
 const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["await expect(composer).toBeEnabled();", 1],
-  ["await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);", 1],
+  ["await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(", 1],
+  ["        freshChatRuns ? 1 : 0\n", 1],
+  ["  await askUntilCard(page, NOTIFY_TOOL, notify, false);", 2],
+  ["  await askUntilCard(page, NOTIFY_TOOL, notify, true);", 1],
+  ['"Do it now, no questions.",\n    true\n', 1],
+  ['once with door "front". Do it now, no questions.`,\n    false\n', 1],
+  ["once with no arguments. Do it now, no questions.`,\n    true\n", 1],
+  ['  await askUntilCard(page, LIGHT, "Turn the hallway light off with the hub tool.", true);', 1],
   ["await askUntilCard(", 7],
   [".toBeVisible({ timeout: 180_000 })", 1],
   ["expect((await toolServerCalls(tool)).length).toBe(before);", 1],
@@ -291,21 +298,23 @@ describe("classifier chat live journey (#3362)", () => {
       ).toContain("the live config keeps traces under the capture opt-out");
     });
 
-    it("the no-notice check dropped from an ask", async () => {
+    it("the outside-content line check dropped from an ask", async () => {
       expect(
         await mutate(
           "chat",
-          "      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);\n",
+          "      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(\n" +
+            "        freshChatRuns ? 1 : 0\n" +
+            "      );\n",
           ""
         )
       ).toContain(
-        "lost assertion: await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);"
+        "lost assertion: await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount("
       );
     });
 
     it("an ask turned back into an unchecked chat turn", async () => {
       expect(
-        await mutate("chat", "  await askUntilCard(page, NOTIFY_TOOL, notify);\n", "")
+        await mutate("chat", "  await askUntilCard(page, NOTIFY_TOOL, notify, true);\n", "")
       ).toContain("lost assertion: await askUntilCard(");
     });
 

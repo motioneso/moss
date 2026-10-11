@@ -90,8 +90,16 @@ async function askInNewChat(page: Page, message: string): Promise<void> {
 // (spec rows "Moss's own rating: classifier runsWithoutAsking on a connected tool -> asks" and
 // "outbound risk, any trust -> asks"). So every chat ask here expects a card and no call.
 
-/** Asks until an approval card shows in a marked chat. The tool server must not see the call. */
-async function askUntilCard(page: Page, tool: string, message: string): Promise<void> {
+/**
+ * Asks until an approval card shows in a marked chat. The tool server must not see the call.
+ * The card names outside content only when a fresh chat would have run the call (#3338).
+ */
+async function askUntilCard(
+  page: Page,
+  tool: string,
+  message: string,
+  freshChatRuns: boolean
+): Promise<void> {
   const before = (await toolServerCalls(tool)).length;
   for (let attempt = 1; attempt <= 2; attempt++) {
     await askInNewChat(page, message);
@@ -103,8 +111,9 @@ async function askUntilCard(page: Page, tool: string, message: string): Promise<
       .catch(() => false);
     expect((await toolServerCalls(tool)).length).toBe(before);
     if (asked) {
-      // A connected tool asks in a fresh chat too, so the card names no outside content.
-      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);
+      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(
+        freshChatRuns ? 1 : 0
+      );
       return;
     }
   }
@@ -202,14 +211,16 @@ test("8. YOLO off: a safe-rated tool and a Sensitive tool both ask in a marked c
     page,
     LIGHT,
     `Call the tool named exactly ${call(LIGHT)} once with name "Kitchen light" and on true. ` +
-      "Do it now, no questions."
+      "Do it now, no questions.",
+    true
   );
   await chatPictures(page, "r26-10-safe-asks");
 
   await askUntilCard(
     page,
     DOOR,
-    `Call the tool named exactly ${call(DOOR)} once with door "front". Do it now, no questions.`
+    `Call the tool named exactly ${call(DOOR)} once with door "front". Do it now, no questions.`,
+    false
   );
   await chatPictures(page, "r26-11-sensitive-asks");
 });
@@ -222,7 +233,7 @@ test("9. a Sends things out tool asks, still asks once allowed from the group, a
   const notify =
     `Call the tool named exactly ${call(NOTIFY_TOOL)} once with message "Hub check done". ` +
     "Do it now, no questions.";
-  await askUntilCard(page, NOTIFY_TOOL, notify);
+  await askUntilCard(page, NOTIFY_TOOL, notify, false);
   await chatPictures(page, "r26-12-sending-asks");
 
   await openConnection(page, NEW_HUB);
@@ -236,7 +247,7 @@ test("9. a Sends things out tool asks, still asks once allowed from the group, a
   expect(sortOf(allowed, EMAIL_TOOL).sendWithoutAsking).toBe(true);
 
   // Sending without asking applies to unmarked chats only ("outbound risk, any trust -> asks").
-  await askUntilCard(page, NOTIFY_TOOL, notify);
+  await askUntilCard(page, NOTIFY_TOOL, notify, true);
   await chatPictures(page, "r26-14-sending-still-asks");
 
   await openConnection(page, NEW_HUB);
@@ -245,7 +256,7 @@ test("9. a Sends things out tool asks, still asks once allowed from the group, a
   await expect(page.getByRole("button", { name: "Send all without asking" })).toBeVisible();
   expect(sortOf(await readDetail(page, NEW_HUB), NOTIFY_TOOL).sendWithoutAsking).toBe(false);
 
-  await askUntilCard(page, NOTIFY_TOOL, notify);
+  await askUntilCard(page, NOTIFY_TOOL, notify, false);
   await chatPictures(page, "r26-15-sending-asks-again");
 });
 
@@ -270,12 +281,13 @@ test("10. a kept-out tool still reaches chat and is never named in shadow record
   await askUntilCard(
     page,
     DEVICES,
-    `Call the tool named exactly ${call(DEVICES)} once with no arguments. Do it now, no questions.`
+    `Call the tool named exactly ${call(DEVICES)} once with no arguments. Do it now, no questions.`,
+    true
   );
   await chatPictures(page, "r26-17-kept-out-asks");
   // A connected look-up tool never joins the classifier's menu (its reply would only say the read
   // succeeded), so the released tool here is the light, a Changes things tool.
-  await askUntilCard(page, LIGHT, "Turn the hallway light off with the hub tool.");
+  await askUntilCard(page, LIGHT, "Turn the hallway light off with the hub tool.", true);
 
   // Every tool-name column, plus the outcome. The record keeps the message text by design, and this
   // prompt names the kept-out tool, so the text column is left out.
