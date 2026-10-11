@@ -1,3 +1,4 @@
+import * as newsFeedbackFixture from "./fixtures/news-feedback-fixture-container.js";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
@@ -232,6 +233,7 @@ export type SeedHook = (ctx: {
   /** [task:p8-briefing-writer-unreachable]: docker-reachable writer-fixture base URL. Absent unless withBriefingWriterFixture is set. */
   readonly briefingWriterAiProviderBaseUrl?: string;
   readonly classifierFixtureAiProviderBaseUrl?: string;
+  readonly newsFeedbackFixtureBaseUrl?: string;
   readonly sportsPublicSourceFixtures?: boolean;
   readonly workflowApprovalFixture?: boolean;
   /** #2175: three seeded audit-log rows (suppressed / refused / success+duration). */
@@ -264,6 +266,7 @@ export const composeSeedHook: SeedHook = async ({
   jobSearchAiProviderBaseUrl,
   briefingWriterAiProviderBaseUrl,
   classifierFixtureAiProviderBaseUrl,
+  newsFeedbackFixtureBaseUrl,
   sportsPublicSourceFixtures,
   workflowApprovalFixture,
   activityOutcomeFixture,
@@ -294,6 +297,8 @@ export const composeSeedHook: SeedHook = async ({
       `MOSS_UAT_BRIEFING_WRITER_AI_BASE_URL=${briefingWriterAiProviderBaseUrl ?? ""}`,
       "-e",
       `MOSS_UAT_CLASSIFIER_FIXTURE_AI_BASE_URL=${classifierFixtureAiProviderBaseUrl ?? ""}`,
+      "-e",
+      `MOSS_UAT_NEWS_FEEDBACK_FIXTURE_BASE_URL=${newsFeedbackFixtureBaseUrl ?? ""}`,
       "-e",
       `JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=${sportsPublicSourceFixtures === true ? "1" : "0"}`,
       "-e",
@@ -618,6 +623,7 @@ export interface UatProvisionOptions {
   readonly withBriefingWriterFixture?: boolean;
   readonly withClassifierFixture?: boolean;
   readonly withClassifierMcpFixture?: boolean;
+  readonly withNewsFeedbackFixture?: boolean;
   /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
   readonly withSportsPublicSourceFixtures?: boolean;
   /** #2015: opt-in pending workflow approval used only by its live-path spec. */
@@ -644,7 +650,8 @@ export function buildSeedHookInput(
   // UatProvisionOptions to compute a Docker bridge gateway address by hand.
   jobSearchAiProviderBaseUrl?: string,
   briefingWriterAiProviderBaseUrl?: string,
-  classifierFixtureAiProviderBaseUrl?: string
+  classifierFixtureAiProviderBaseUrl?: string,
+  newsFeedbackFixtureBaseUrl?: string
 ): {
   projectName: string;
   level: UatSeedLevel;
@@ -653,6 +660,7 @@ export function buildSeedHookInput(
   jobSearchAiProviderBaseUrl?: string;
   briefingWriterAiProviderBaseUrl?: string;
   classifierFixtureAiProviderBaseUrl?: string;
+  newsFeedbackFixtureBaseUrl?: string;
   sportsPublicSourceFixtures?: boolean;
   workflowApprovalFixture?: boolean;
   activityOutcomeFixture?: boolean;
@@ -667,6 +675,7 @@ export function buildSeedHookInput(
     jobSearchAiProviderBaseUrl,
     briefingWriterAiProviderBaseUrl,
     classifierFixtureAiProviderBaseUrl,
+    newsFeedbackFixtureBaseUrl,
     sportsPublicSourceFixtures: opts?.withSportsPublicSourceFixtures,
     workflowApprovalFixture: opts?.withWorkflowApprovalFixture,
     activityOutcomeFixture: opts?.withActivityOutcomeFixture,
@@ -751,6 +760,9 @@ export async function provisionForUat(
     const classifierFixtureBaseUrl = opts?.withClassifierFixture
       ? classifierFixtureBaseUrlFor(projectName)
       : undefined;
+    const newsFeedbackFixtureBaseUrl = opts?.withNewsFeedbackFixture
+      ? newsFeedbackFixture.newsFeedbackFixtureBaseUrlFor(projectName)
+      : undefined;
     const envFile: UatEnvFile = writeUatEnvFile({
       webPort,
       subnet: subnet.subnet,
@@ -793,6 +805,11 @@ export async function provisionForUat(
       if (classifierFixtureBaseUrl !== undefined) {
         await removeClassifierFixtureContainer(projectName, { runCommand, runCapture });
       }
+      if (newsFeedbackFixtureBaseUrl !== undefined)
+        await newsFeedbackFixture.removeNewsFeedbackFixtureContainer(projectName, {
+          runCommand,
+          runCapture
+        });
       await mcpFixture.removeClassifierMcpFixtureContainer(projectName, runCommand);
       if (jobSearchFixtureBaseUrl !== undefined) await removeJobSearchFixtureContainer(projectName);
       // The meeting-chat spec starts this third-party stand-in itself. Remove its exact
@@ -884,6 +901,11 @@ export async function provisionForUat(
         console.log(`[uat] starting classifier fixture origin at ${classifierFixtureBaseUrl}`);
         await startClassifierFixtureContainer(projectName, { runCommand, runCapture });
       }
+      if (newsFeedbackFixtureBaseUrl !== undefined)
+        await newsFeedbackFixture.startNewsFeedbackFixtureContainer(projectName, {
+          runCommand,
+          runCapture
+        });
       if (opts?.withClassifierMcpFixture) {
         await mcpFixture.startClassifierMcpFixtureContainer(projectName, {
           runCommand,
@@ -897,7 +919,8 @@ export async function provisionForUat(
           opts,
           opts?.withJobSearchFixture ? jobSearchFixtureBaseUrl : undefined,
           opts?.withBriefingWriterFixture ? briefingWriterFixtureBaseUrl : undefined,
-          opts?.withClassifierFixture ? classifierFixtureBaseUrl : undefined
+          opts?.withClassifierFixture ? classifierFixtureBaseUrl : undefined,
+          newsFeedbackFixtureBaseUrl
         )
       );
       const baseURL = `http://127.0.0.1:${webPort}`;

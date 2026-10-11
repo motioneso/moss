@@ -3,6 +3,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Headline, SportsNewsGroup } from "@moss/shared";
 import { useAutoAdvance } from "./use-auto-advance.js";
+import { RotationControl } from "./rotation-control.js";
 // Ranking now lives in a shared pure module (#857) so the server computes the SAME featured pick
 // it needs to fetch the article body for. Re-export `isFollowed` because sports-around-ticker /
 // sports-standings still import it from here.
@@ -148,10 +149,12 @@ function HeroSlide({
 export function HeroCarousel({
   headlines,
   hiddenStoryRefs,
+  degraded = false,
   onStoryChanged = () => undefined
 }: {
   readonly headlines: readonly Headline[];
   readonly hiddenStoryRefs?: ReadonlySet<string>;
+  readonly degraded?: boolean;
   readonly onStoryChanged?: StoryFeedbackChange;
 }) {
   const slides = headlines
@@ -162,7 +165,7 @@ export function HeroCarousel({
   // A refetch can shrink the pool while we're pointing past its end — clamp, don't crash.
   const active = Math.min(index, Math.max(count - 1, 0));
   const advance = useCallback(() => setIndex((current) => (current + 1) % count), [count]);
-  const pauseHandlers = useAutoAdvance(count, advance, CAROUSEL_ADVANCE_MS);
+  const rotation = useAutoAdvance(count, advance, CAROUSEL_ADVANCE_MS);
 
   if (count === 0) {
     // Same placeholder the null-headline StoryHero rendered — a quiet day with no stories
@@ -171,7 +174,9 @@ export function HeroCarousel({
       <section className="sp-hero sp-hero--story sp-hero--split" aria-label="Top story">
         <div className="sp-photo sp-photo--herostory" aria-hidden="true" />
         <div className="sp-hero__storybody">
-          <h2 className="sp-hero__headline">No followed game today</h2>
+          <h2 className="sp-hero__headline">
+            {degraded ? "Sports information is unavailable" : "No followed game today"}
+          </h2>
         </div>
       </section>
     );
@@ -182,7 +187,7 @@ export function HeroCarousel({
       className="sp-carousel"
       aria-label="Top stories"
       aria-roledescription="carousel"
-      {...pauseHandlers}
+      {...rotation.pauseHandlers}
     >
       {/* All slides render stacked in one grid cell (CSS) so the stage holds the tallest
           slide's height — no reflow jump between a dek-heavy story and a bare headline. */}
@@ -198,6 +203,11 @@ export function HeroCarousel({
       </div>
       {count > 1 ? (
         <div className="sp-carousel__ctl">
+          <RotationControl
+            paused={rotation.paused}
+            reducedMotion={rotation.reducedMotion}
+            onToggle={rotation.togglePaused}
+          />
           <IconButton
             aria-label="Previous story"
             onClick={() => setIndex((active - 1 + count) % count)}

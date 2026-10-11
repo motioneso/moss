@@ -244,6 +244,29 @@ blocking	packages/ai/src/model-activity.ts	tests/uat/specs/2956-activity-history
 blocking	packages/ai/src/adapters/http-api.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 blocking	packages/chat/src/live/cli-structured-adapter.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 blocking	packages/shared/src/app-map-core.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
+# #3397 LIFE-06..10: seeded compiler feedback UI/API and real Sports rotation controls.
+# News fixture proof excludes production AI routing and live refresh discovery.
+blocking	packages/news/src/settings/index.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/settings/story-feedback.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/news-page.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/story-feedback-menu.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/use-auto-advance.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/sports-page.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/sports-news.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/fixtures/news-feedback-fixture-cli.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/fixtures/news-feedback-fixture-container.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/fixtures/news-feedback-fixture-server.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/chunks/news-feedback-fixture.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/specs/audit-feeds.uat.spec.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/provisioner.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/run-uat.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/cli.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/levels.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/types.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/rotation-control.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/story-feedback.css	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/styles/news-2.css	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/styles/sports-5-editorial.css	tests/uat/specs/audit-feeds.uat.spec.ts
 
 # #3397 shared modal focus recovery through real task comments.
 blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
