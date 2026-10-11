@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Times follow your saved time zone everywhere in the background.** Reminders, quiet hours, medications, your day plan and what Moss tells the assistant now use the time zone you saved in Settings, or Pacific time if you have not picked one, and weather no longer guesses your city when no time zone or location is saved. [PR #3424](https://github.com/motioneso/moss/pull/3424)
 - **Calendar follows your timezone and time format.** The calendar now shows events, hours and today in the timezone and 12- or 24-hour format you chose in Settings, instead of your browser's clock; if you never chose a format, times now show in 24-hour style. [PR #3422](https://github.com/motioneso/moss/pull/3422)
 - **Approval cards no longer blame outside content by mistake.** The note saying Moss read something from outside your account now appears only when that is actually why Moss is asking for your approval. [PR #3366](https://github.com/motioneso/moss/pull/3366)
 - **Catch visual contract drift earlier.** Design checks catch unsupported or undefined class references in the audited screen modules before they reach users. [PR #3350](https://github.com/motioneso/moss/pull/3350)
