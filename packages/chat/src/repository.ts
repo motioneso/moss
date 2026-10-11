@@ -27,6 +27,14 @@ import {
   mergeTerminalAction,
   type TerminalActionRecord
 } from "./action-record-history.js";
+import {
+  claimLiveTurn,
+  claimStaleLiveTurns,
+  deleteLiveTurn,
+  hasStaleLiveTurns,
+  INTERRUPTED_REPLY_TEXT,
+  type ClaimedLiveTurn
+} from "./live-turns.js";
 
 /** Absorbed synthetic rows remain stored; only their visible replacement participates in history. */
 function visibleChatMessage(table: "app.chat_messages" | "m" = "app.chat_messages") {
@@ -68,6 +76,8 @@ export interface CompletedTurnOptions {
   readonly activityRecords?: readonly unknown[];
   readonly elapsedMs?: number;
   readonly usage?: ChatTurnUsageDto;
+  /** #3128: live turn identity; stamped on both rows and clears the in-flight record. */
+  readonly turnId?: string;
 }
 
 /**
@@ -258,6 +268,117 @@ export class ChatRepository {
     await sql`SELECT pg_advisory_xact_lock(hashtextextended(
       'chat:action-history:' || app.current_actor_user_id()::text || ':' || ${threadId}, 0
     ))`.execute(scopedDb.db);
+  }
+
+  /**
+   * #3128: stores every reply in this thread that another API boot left unfinished as its
+   * question plus an interrupted note. Nothing is resubmitted, because a tool the reply started
+   * may or may not have run.
+   */
+  async reconcileInterruptedTurns(
+    scopedDb: DataContextDb,
+    threadId: string,
+    bootId: string
+  ): Promise<number> {
+    assertDataContextDb(scopedDb);
+    if (!(await hasStaleLiveTurns(scopedDb, threadId, bootId))) return 0;
+    return this.storeInterrupted(scopedDb, threadId, (db) =>
+      claimStaleLiveTurns(db, threadId, bootId)
+    );
+  }
+
+  /** #3128: stores one reply that failed in this process after the model received it. */
+  async storeInterruptedTurn(
+    scopedDb: DataContextDb,
+    threadId: string,
+    turnId: string
+  ): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    const stored = await this.storeInterrupted(scopedDb, threadId, (db) =>
+      claimLiveTurn(db, threadId, turnId)
+    );
+    return stored > 0;
+  }
+
+  // Takes the same locks as writeCompletedTurn, so a claimed row and a completed save of the
+  // same turn never both land.
+  private async storeInterrupted(
+    scopedDb: DataContextDb,
+    threadId: string,
+    claim: (scopedDb: DataContextDb) => Promise<readonly ClaimedLiveTurn[]>
+  ): Promise<number> {
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!thread || thread.incognito) return 0;
+
+    await this.lockActionHistory(scopedDb, threadId);
+    const claimed = await claim(scopedDb);
+    const frontierAt = await this.summaryFrontierCreatedAt(scopedDb, thread);
+    for (const turn of claimed) {
+      // The pair keeps the question's place in history unless the summary already covers it.
+      const startedAt = new Date(turn.started_at);
+      const now = frontierAt && startedAt <= frontierAt ? new Date() : startedAt;
+      await this.insertMessage(scopedDb, {
+        thread,
+        role: "user",
+        status: "stored",
+        body: turn.user_text,
+        modelMetadata: {},
+        toolMetadata: {
+          selectedTools: [],
+          turnId: turn.turn_id,
+          ...(turn.attachments.length > 0 ? { attachments: turn.attachments } : {})
+        },
+        now
+      });
+      await this.insertMessage(scopedDb, {
+        thread,
+        role: "assistant",
+        status: "error",
+        body: INTERRUPTED_REPLY_TEXT,
+        modelMetadata: {},
+        toolMetadata: { selectedTools: [], turnId: turn.turn_id, interruptedTurn: true },
+        now
+      });
+    }
+    return claimed.length;
+  }
+
+  private async summaryFrontierCreatedAt(
+    scopedDb: DataContextDb,
+    thread: ChatThread
+  ): Promise<Date | undefined> {
+    if (!thread.summary_covered_through_message_id) return undefined;
+    const frontier = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .select("created_at")
+      .where("id", "=", thread.summary_covered_through_message_id)
+      .executeTakeFirst();
+    return frontier ? new Date(frontier.created_at) : undefined;
+  }
+
+  // The stored user and assistant rows of a turn id that already landed. A real reply outranks
+  // the interrupted note of the same turn.
+  private async findStoredTurn(
+    scopedDb: DataContextDb,
+    threadId: string,
+    turnId: string
+  ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
+    const rows = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .selectAll()
+      .where("thread_id", "=", threadId)
+      .where(sql<boolean>`tool_metadata @> ${JSON.stringify({ turnId })}::jsonb`)
+      .execute();
+    const userMessage = rows.find((row) => row.role === "user");
+    const assistants = rows.filter((row) => row.role === "assistant");
+    const assistantMessage =
+      assistants.find((row) => row.tool_metadata.interruptedTurn !== true) ?? assistants[0];
+    return userMessage && assistantMessage ? { userMessage, assistantMessage } : undefined;
   }
 
   async listMessages(scopedDb: DataContextDb, threadId: string): Promise<ChatMessage[]> {
@@ -509,6 +630,17 @@ export class ChatRepository {
     }
 
     await this.lockActionHistory(scopedDb, threadId);
+    // #3128: the turn lands once, and its in-flight record goes in the same transaction so a
+    // later restart can never also store it as interrupted. A turn another process already
+    // stored as interrupted keeps its question, and the real reply follows the note.
+    let landedQuestion: ChatMessage | undefined;
+    if (opts?.turnId) {
+      const landed = await this.findStoredTurn(scopedDb, threadId, opts.turnId);
+      await deleteLiveTurn(scopedDb, opts.turnId);
+      if (landed && landed.assistantMessage.tool_metadata.interruptedTurn !== true) return landed;
+      landedQuestion = landed?.userMessage;
+    }
+    const turnIdentity = opts?.turnId ? { turnId: opts.turnId } : {};
     let activity = [...(opts?.activityRecords ?? opts?.actionResults ?? [])];
     let actionResults: readonly unknown[] = [...(opts?.actionResults ?? [])];
     const actionIds = new Set(activity.map(actionRecordId).filter((id): id is string => !!id));
@@ -575,20 +707,23 @@ export class ChatRepository {
       }
     }
     const now = new Date();
-    const userMessage = await this.insertMessage(scopedDb, {
-      thread,
-      role: "user",
-      status: "stored",
-      body: userText,
-      modelMetadata: {},
-      toolMetadata: {
-        selectedTools: [],
-        ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
-        // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
-        ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
-      },
-      now
-    });
+    const userMessage =
+      landedQuestion ??
+      (await this.insertMessage(scopedDb, {
+        thread,
+        role: "user",
+        status: "stored",
+        body: userText,
+        modelMetadata: {},
+        toolMetadata: {
+          selectedTools: [],
+          ...turnIdentity,
+          ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
+          // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
+          ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
+        },
+        now
+      }));
     const assistantMessage = await this.insertMessage(scopedDb, {
       thread,
       role: "assistant",
@@ -597,6 +732,7 @@ export class ChatRepository {
       modelMetadata: assistantModelMetadata,
       toolMetadata: {
         selectedTools: [],
+        ...turnIdentity,
         ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
         ...(opts?.sourceFreshness ? { sourceFreshness: opts.sourceFreshness } : {}),
         ...(opts?.answerProvenance !== undefined

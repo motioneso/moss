@@ -62,11 +62,13 @@ import { ReminderRepository } from "../reminders/repository.js";
 import { decideReminderTurn, type ReminderTurnPlan } from "../reminders/turn.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
+import { CHAT_PROCESS_BOOT_ID, deleteLiveTurn, insertLiveTurn } from "../live-turns.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
 import { getReplayK, getReplayTokenCap, type ReplayMessage } from "./replay-window.js";
 import {
   SUMMARY_RUN_INPUT_TOKENS,
+  isInterruptedNote,
   planSummaryCoverage,
   splitAtSummaryFrontier,
   storedCoverageTurns,
@@ -95,6 +97,8 @@ export interface DataContextChatPersistenceDeps {
   readonly localePreferences?: PreferencesPort;
   /** Reads the user's saved ACP model choice for the live launch. */
   readonly chatPreferences?: PreferencesPort;
+  /** #3128 — this process's boot id; tests pass one per simulated boot. */
+  readonly bootId?: string;
 }
 
 /**
@@ -112,6 +116,7 @@ interface PersistTurnOptions {
   readonly usage?: ChatTurnUsageDto;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
   readonly acknowledgeReminderMessageIds?: readonly string[];
+  readonly turnId?: string;
 }
 
 /** #3311: at most this many delivered reminders are shown to one Main turn. */
@@ -179,6 +184,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
   private readonly localePreferences: PreferencesPort | undefined;
   private readonly chatPreferences: PreferencesPort | undefined;
+  private readonly bootId: string;
 
   constructor(deps: DataContextChatPersistenceDeps) {
     this.rootDb = deps.rootDb;
@@ -189,6 +195,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.connectorSyncAt = deps.connectorSyncAt;
     this.localePreferences = deps.localePreferences;
     this.chatPreferences = deps.chatPreferences;
+    this.bootId = deps.bootId ?? CHAT_PROCESS_BOOT_ID;
   }
 
   async resolveActiveProvider(actorUserId: string): Promise<{
@@ -262,6 +269,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         return { recent: [], oldSummary: null };
       }
 
+      // #3128: a reply an earlier boot left unfinished replays as its question plus the note.
+      await this.chat.reconcileInterruptedTurns(scopedDb, thread.id, this.bootId);
       const messages = await this.chat.listMessages(scopedDb, thread.id);
       const turns = storedCoverageTurns(messages);
 
@@ -314,6 +323,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly elapsedMs?: number;
       readonly usage?: ChatTurnUsageDto;
       readonly acknowledgeReminderMessageIds?: readonly string[];
+      readonly turnId?: string;
     },
     surface?: ChatSurface
   ): Promise<{ readonly userMessageId: string; readonly assistantMessageId: string } | undefined> {
@@ -325,6 +335,36 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       opts,
       surface,
       { executed }
+    );
+  }
+
+  async beginLiveTurn(
+    actorUserId: string,
+    turn: {
+      readonly turnId: string;
+      readonly threadId: string;
+      readonly userText: string;
+      readonly attachments?: readonly ChatAttachmentDto[];
+    }
+  ): Promise<void> {
+    await this.run(actorUserId, "begin-live-turn", (scopedDb) =>
+      insertLiveTurn(scopedDb, { ...turn, bootId: this.bootId })
+    );
+  }
+
+  async storeInterruptedLiveTurn(
+    actorUserId: string,
+    threadId: string,
+    turnId: string
+  ): Promise<void> {
+    await this.run(actorUserId, "store-interrupted-live-turn", (scopedDb) =>
+      this.chat.storeInterruptedTurn(scopedDb, threadId, turnId)
+    );
+  }
+
+  async discardLiveTurn(actorUserId: string, turnId: string): Promise<void> {
+    await this.run(actorUserId, "discard-live-turn", (scopedDb) =>
+      deleteLiveTurn(scopedDb, turnId)
     );
   }
 
@@ -470,7 +510,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         actionResults: opts?.actionResults,
         activityRecords: opts?.activityRecords,
         elapsedMs: opts?.elapsedMs,
-        usage: opts?.usage
+        usage: opts?.usage,
+        turnId: opts?.turnId
       };
       const handled =
         "reminder" in turn
@@ -525,8 +566,15 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       }
 
       const allMessages = await this.chat.listMessages(scopedDb, thread.id);
+      // #3128: an interrupted question is not a finished turn, so it never blocks the title.
+      const interruptedTurnIds = new Set(
+        allMessages.filter(isInterruptedNote).map((m) => m.tool_metadata.turnId)
+      );
       const storedTurns = allMessages.filter(
-        (m) => m.status === "stored" && (m.role === "user" || m.role === "assistant")
+        (m) =>
+          m.status === "stored" &&
+          (m.role === "user" || m.role === "assistant") &&
+          !interruptedTurnIds.has(m.tool_metadata.turnId)
       );
       // Auto-title the thread from the first user turn (#403).
       if (storedTurns.length === 2 && thread.title === DEFAULT_CONVERSATION_TITLE) {
