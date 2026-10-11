@@ -1,7 +1,7 @@
 import "../styles/wellness-1.css";
 import "../styles/wellness-2.css";
 import "../styles/wellness-3.css";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { Button, SectionHead, buttonLinkClassName } from "@moss/ui";
@@ -16,6 +16,7 @@ import {
   createWellnessCheckin,
   getLocaleSettings,
   listWellnessCheckins,
+  listWellnessCheckinsInWindow,
   updateWellnessCheckin
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
@@ -28,7 +29,12 @@ import { WellnessTherapyNotes } from "./wellness-therapy-notes";
 import { CheckinModal, type CheckinFormValue } from "./checkin-modal";
 import { ManageMedsModal } from "./manage-meds-modal";
 import { WellnessExportModal } from "./export-modal";
-import { computeStreak, recentMoodAverage } from "./wellness-date-utils";
+import {
+  checkinWindowSince,
+  computeStreak,
+  localDayOffset,
+  recentMoodAverage
+} from "./wellness-date-utils";
 import { readColorMode } from "../theme/color-mode";
 
 function useTheme(): "light" | "dark" {
@@ -70,12 +76,21 @@ export function WellnessPage() {
   });
   const localTimezone = localeQuery.data?.locale.timezone;
 
+  const today = localDay(new Date(), localTimezone);
+  const summarySince = checkinWindowSince(localDayOffset(90, localTimezone, today));
   const checkinsQuery = useQuery({
-    queryKey: queryKeys.wellness.checkins,
-    queryFn: () => listWellnessCheckins()
+    queryKey: [...queryKeys.wellness.checkins, "summary", today, localTimezone],
+    queryFn: () => listWellnessCheckinsInWindow(summarySince)
+  });
+  const historyQuery = useInfiniteQuery({
+    queryKey: [...queryKeys.wellness.checkins, "history"],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => listWellnessCheckins({ limit: 50, cursor: pageParam }),
+    getNextPageParam: (page) => page.nextCursor ?? undefined
   });
 
   const checkins = checkinsQuery.data?.checkins ?? [];
+  const historyCheckins = historyQuery.data?.pages.flatMap((page) => page.checkins) ?? [];
 
   const createCheckinMutation = useMutation({
     mutationFn: (val: CheckinFormValue) =>
@@ -111,8 +126,6 @@ export function WellnessPage() {
   });
 
   // Hero stats
-  const today = localDay(new Date(), localTimezone);
-
   const avgMood = recentMoodAverage(checkins, localTimezone);
   const avgBand = avgMood === null ? null : moodBand(avgMood);
   const streak = computeStreak(checkins, localTimezone);
@@ -130,7 +143,7 @@ export function WellnessPage() {
   };
 
   const openEdit = (id: string) => {
-    const c = checkins.find((x) => x.id === id);
+    const c = historyCheckins.find((x) => x.id === id) ?? checkins.find((x) => x.id === id);
     if (c) {
       setEditCheckin(c);
       setSeedEmotion(null);
@@ -190,7 +203,7 @@ export function WellnessPage() {
           {checkinsQuery.data ? (
             <>
               <div className="wl-herostat">
-                <div className="k">Mood · past 14 days</div>
+                <div className="k">Mood · 14 completed days</div>
                 <div className="v">
                   {avgMood === null ? (
                     <small>No check-ins in this period</small>
@@ -204,11 +217,14 @@ export function WellnessPage() {
                 </div>
               </div>
               <div className="wl-herostat wl-herostat--streak">
-                <div className="k">Check-in streak</div>
+                <div className="k">Streak · through yesterday</div>
                 <div className="v">
                   <FlameIcon size={15} />
                   {streak}
-                  <small> {streak === 1 ? "day" : "days"}</small>
+                  <small title="Consecutive completed days, up to 90">
+                    {" "}
+                    {streak === 1 ? "day" : "days"}
+                  </small>
                 </div>
               </div>
             </>
@@ -268,16 +284,41 @@ export function WellnessPage() {
       <WellnessTrends theme={theme} />
 
       <div ref={histRef}>
-        {checkinsQuery.data ? (
+        {historyQuery.data && historyQuery.isError && !historyQuery.isFetchNextPageError ? (
+          <p role="status">
+            Could not refresh check-in history. Showing the last loaded entries.{" "}
+            <Button variant="link" onClick={() => void historyQuery.refetch()}>
+              Try again
+            </Button>
+          </p>
+        ) : null}
+        {historyQuery.data ? (
           <WellnessHistory
-            checkins={checkins}
+            checkins={historyCheckins}
+            hasMore={historyQuery.hasNextPage}
+            loadingMore={historyQuery.isFetchingNextPage}
+            loadMoreError={historyQuery.isFetchNextPageError}
+            onLoadMore={() => void historyQuery.fetchNextPage()}
             theme={theme}
             filter={histFilter}
             onClearFilter={() => setHistFilter(null)}
             onEdit={openEdit}
             timezone={localTimezone}
           />
-        ) : null}
+        ) : (
+          <section className="wl-sec" aria-label="Check-in history">
+            <p role="status">
+              {historyQuery.isError
+                ? "Could not load check-in history."
+                : "Loading check-in history…"}
+            </p>
+            {historyQuery.isError ? (
+              <Button variant="link" onClick={() => void historyQuery.refetch()}>
+                Try again
+              </Button>
+            ) : null}
+          </section>
+        )}
       </div>
 
       <WellnessTherapyNotes theme={theme} />
