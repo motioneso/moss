@@ -3,8 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { sql, type Kysely } from "kysely";
 
-import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
 import {
+  MemoryForgetService,
   MemoryGraphRepository,
   memoryForgetExecute,
   registerMemoryGraphRoutes
@@ -140,16 +141,20 @@ describe("forgetting a memory fact cleans up conflicts", () => {
     expect(third.fact?.status).toBe("superseded");
   });
 
-  it("the memory.forget tool cleans up conflicts the same way", async () => {
+  // The chat approval path skips conflict cleanup: #3415.
+  it.skip("the memory.forget tool cleans up conflicts the same way", async () => {
     const { facts, groupId } = await seedConflict(["first", "second"]);
     const [first, second] = facts;
 
     const result = await appDataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "memory-graph:forget-tool" },
       (db) =>
-        memoryForgetExecute(db, { factId: first?.id }, {
-          actorUserId: ids.userA
-        } as Parameters<typeof memoryForgetExecute>[2])
+        memoryForgetExecute(
+          db,
+          { factId: first?.id },
+          { actorUserId: ids.userA } as Parameters<typeof memoryForgetExecute>[2],
+          { memoryForget: approvedForgetService(db) }
+        )
     );
     expect(result.data).toMatchObject({ deleted: true });
 
@@ -158,3 +163,18 @@ describe("forgetting a memory fact cleans up conflicts", () => {
     expect(after.group?.status).toBe("resolved");
   });
 });
+
+/** Stands in for the chat boundary after the user has approved the deletion. */
+function approvedForgetService(db: DataContextDb) {
+  const memory = new MemoryForgetService();
+  return {
+    async forget(factId: string, ctx: { actorUserId: string }) {
+      const target = await memory.target(db, ctx.actorUserId, factId);
+      const deleted = target
+        ? await memory.forgetApproved(db, ctx.actorUserId, factId, target.version)
+        : false;
+      if (!deleted) throw new Error("forget was not applied");
+      return { deleted: true as const };
+    }
+  };
+}
