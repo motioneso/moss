@@ -616,6 +616,23 @@ describe("AI read-only assistant tool execution foundation", () => {
           execute: async () => ({
             data: { visible: `${"x".repeat(MAX_SCREEN_TOOL_RESULT_CHARS)}REST_OVERSIZED_TAIL` }
           })
+        },
+        {
+          name: "security.largeUndeclared",
+          description: "Large undeclared field probe.",
+          permissionId: "security.view",
+          risk: "read",
+          outputSchema: {
+            type: "object",
+            properties: { visible: { type: "string" } },
+            required: ["visible"]
+          },
+          execute: async () => ({
+            data: {
+              visible: "kept",
+              hidden: `${"x".repeat(MAX_SCREEN_TOOL_RESULT_CHARS)}REST_UNDECLARED_TAIL`
+            }
+          })
         }
       ]
     };
@@ -629,17 +646,23 @@ describe("AI read-only assistant tool execution foundation", () => {
     );
     await app.ready();
 
-    try {
-      const response = await app.inject({
+    const invoke = (toolName: string) =>
+      app.inject({
         method: "POST",
-        url: "/api/ai/assistant-tools/security.largeOutput/invoke",
+        url: `/api/ai/assistant-tools/${toolName}/invoke`,
         headers: { "content-type": "application/json" },
         payload: { input: {} }
       });
 
-      expect(response.statusCode).toBe(413);
-      expect(response.body.length).toBeLessThan(1_000);
-      expect(response.body).not.toContain("REST_OVERSIZED_TAIL");
+    try {
+      const oversized = await invoke("security.largeOutput");
+      expect(oversized.statusCode).toBe(413);
+      expect(oversized.json()).toEqual({ error: "The tool result is too large to show." });
+
+      // Undeclared fields are stripped before the size check, so a small declared result passes.
+      const undeclared = await invoke("security.largeUndeclared");
+      expect(undeclared.statusCode).toBe(200);
+      expect(undeclared.json<InvocationResponse>().invocation.result).toEqual({ visible: "kept" });
     } finally {
       await app.close();
     }
