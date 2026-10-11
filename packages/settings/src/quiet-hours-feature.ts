@@ -3,7 +3,7 @@ import type { ModuleFeatureManifest } from "@moss/module-sdk";
 export const quietHoursFeature: ModuleFeatureManifest = {
   id: "settings.quietHours",
   description:
-    "One quiet-hours schedule for notifications, focus and alert cards, saved in Settings > Alerts & quiet hours or chat; undo reverts a chat edit. Nothing saved means off, 22:00-07:00. A differing older alert schedule is kept and named.",
+    "One quiet-hours schedule for notifications, focus and alert cards, saved in Settings > Alerts & quiet hours or chat; undo reverts a chat edit. Nothing saved means off, 22:00-07:00. A differing older alert schedule holds until picked.",
   errors: [
     {
       code: "invalid_schedule",
@@ -16,6 +16,18 @@ export const quietHoursFeature: ModuleFeatureManifest = {
       class: "transient",
       description:
         "The schedule changed somewhere else after it was loaded, or kept changing while chat saved it. Nothing is saved."
+    },
+    {
+      code: "stale_choice",
+      class: "transient",
+      description:
+        "The saved schedules changed after they were loaded, so the choice between them was not saved. Both schedules stay in force."
+    },
+    {
+      code: "choice_failed",
+      class: "transient",
+      description:
+        "The choice between differing saved schedules could not save. Both schedules stay in force and the choice can be tried again."
     },
     {
       code: "undo_cancelled",
@@ -34,6 +46,12 @@ export const quietHoursFeature: ModuleFeatureManifest = {
     {
       id: "settings.reload_quiet_hours",
       description: "Alerts & quiet hours now shows the latest schedule. Make the change again.",
+      path: "/settings?section=alerts"
+    },
+    {
+      id: "settings.choose_quiet_hours",
+      description:
+        "Alerts & quiet hours shows the differing saved schedules. Choose one again, or use Try again.",
       path: "/settings?section=alerts"
     },
     {
