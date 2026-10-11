@@ -1,4 +1,5 @@
 import {
+  DEFAULT_LOCALE_SETTINGS,
   eventCoversDay,
   localDay,
   type CalendarEventDto,
@@ -81,7 +82,11 @@ export function firstName(name: string, email: string): string {
 
 /** The hour of day on the person's clock, never the browser's (#3393). */
 function personHour(now: Date, timeZone: string): number {
-  return zonedClockParts(now, timeZone)?.hour ?? now.getUTCHours();
+  return (
+    zonedClockParts(now, timeZone)?.hour ??
+    zonedClockParts(now, DEFAULT_LOCALE_SETTINGS.timezone)?.hour ??
+    12
+  );
 }
 
 export function greeting(timeZone: string, now: Date = new Date()): string {

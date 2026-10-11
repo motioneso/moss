@@ -13,11 +13,14 @@ import type {
 
 import { buildChatSeeds } from "../../apps/web/src/chat/seeds.js";
 import { ClockTime } from "../../apps/web/src/today/clock-time.js";
-import { buildDayItems } from "../../apps/web/src/today/day-plan-view-model.js";
+import { buildScheduleGaps } from "../../apps/web/src/today/day-plan-gaps.js";
+import { conflictText } from "../../apps/web/src/today/day-plan-review-model.js";
+import { buildDayItems, type DayItem } from "../../apps/web/src/today/day-plan-view-model.js";
 import {
   EveningReviewSection,
   EveningTomorrowSection
 } from "../../apps/web/src/today/evening-mode.js";
+import { PracticalNote } from "../../apps/web/src/today/practical-note.js";
 import {
   ampm,
   briefingScheduledReason,
@@ -158,6 +161,62 @@ describe("Today clock labels honour the 24-hour choice", () => {
     const block = items.find((item) => item.key === "block:b1");
     expect(block?.label).toBe("15:35 · On calendar");
     expect(block?.reason).toBe("For Design review at 15:35");
+  });
+});
+
+describe("schedule notes and review lines honour the 24-hour choice", () => {
+  it("closes the schedule with a 24-hour time", () => {
+    const item = {
+      key: "a",
+      kind: "event",
+      kindLabel: null,
+      state: "event",
+      label: "",
+      title: "Design review",
+      startsAt: AFTERNOON,
+      endsAt: "2026-10-10T23:05:00.000Z",
+      durationMinutes: null,
+      taskId: null,
+      unavailable: false,
+      eventId: "evt-1",
+      location: null,
+      firstProposal: false,
+      tag: null,
+      reason: null
+    } satisfies DayItem;
+    expect(buildScheduleGaps([item], PACIFIC_24).closing?.text).toBe(
+      "The evening is open. No more commitments after 16:05."
+    );
+  });
+
+  it("names the practical note's event time in 24-hour time", () => {
+    const markup = render(
+      createElement(PracticalNote, {
+        events: [event({ location: "Main Street" })],
+        now: new Date("2026-10-10T16:00:00.000Z"),
+        excludeEventId: null,
+        locale: PACIFIC_24
+      })
+    );
+    expect(markup).toContain("Design review at 15:05 is at Main Street.");
+  });
+
+  it("names a review conflict's times with the person's 12/24-hour choice", () => {
+    const conflict = {
+      blockId: "b1",
+      kind: "calendar_busy",
+      withBlockId: null,
+      detail: "",
+      calendarEvent: {
+        eventKey: "k1",
+        title: "Design review",
+        startsAt: AFTERNOON,
+        endsAt: "2026-10-10T23:05:00.000Z",
+        accountLabel: "Google"
+      }
+    } as const;
+    expect(conflictText(conflict, PACIFIC_24)).toBe("Overlaps Design review, 15:05 to 16:05");
+    expect(conflictText(conflict, PACIFIC_12)).toBe("Overlaps Design review, 3:05 pm to 4:05 pm");
   });
 });
 
