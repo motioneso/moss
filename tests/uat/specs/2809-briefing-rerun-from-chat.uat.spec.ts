@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { GetChatPrivacyStateResponse } from "@moss/shared";
 
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
@@ -151,15 +152,28 @@ async function ask(dialog: Locator, message: string): Promise<{ visible: string;
   return { visible, steps };
 }
 
-async function newChat(page: Page, dialog: Locator): Promise<void> {
-  const cleared = page.waitForResponse(
-    (response) =>
+// The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
+// Sending waits until the drawer's clear is acknowledged and the old replies have left.
+async function startSideChat(page: Page, dialog: Locator): Promise<void> {
+  await dialog.getByRole("button", { name: "Open conversations" }).click();
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/chat/clear" &&
-      response.status() === 204
-  );
-  await dialog.getByRole("button", { name: "New chat" }).click();
-  await cleared;
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await dialog.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(dialog.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")).toHaveCount(0);
+}
+
+async function drawerThreadId(page: Page): Promise<string | undefined> {
+  const body = (await readUatJson(
+    await page.request.get("/api/chat/privacy?surface=drawer")
+  )) as GetChatPrivacyStateResponse;
+  return body.threadId;
 }
 
 test("chat re-runs the evening briefing once and reports it ready (#2809)", async ({
@@ -211,12 +225,18 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     const afterFirst = openRunJobs(definitionId);
     console.log(`[2809 live proof] open jobs after first ask: ${JSON.stringify(afterFirst)}`);
     expect(afterFirst).toHaveLength(1);
-    await dialog.screenshot({ path: testInfo.outputPath("b-first-rerun.png") });
+    const firstThread = await drawerThreadId(page);
+    expect(firstThread).toBeDefined();
+    if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+      await dialog.screenshot({ path: testInfo.outputPath("b-first-rerun.png") });
 
-    // c. A fresh conversation asks again while the run is still open, so the model cannot answer
+    // c. A new side chat asks again while the run is still open, so the model cannot answer
     // from memory and has to call the tool: already running, and still exactly one open job.
-    await newChat(page, dialog);
+    await startSideChat(page, dialog);
     const second = await ask(dialog, RERUN_ASK);
+    expect(await drawerThreadId(page), "the second ask must run in the new side chat").not.toBe(
+      firstThread
+    );
     await expect(rerunOutcome).toHaveCount(1);
     await expect(rerunOutcome).toBeVisible();
     await expect(
@@ -233,7 +253,8 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     const afterSecond = openRunJobs(definitionId);
     console.log(`[2809 live proof] open jobs after second ask: ${JSON.stringify(afterSecond)}`);
     expect(afterSecond.map((job) => job.id)).toEqual(afterFirst.map((job) => job.id));
-    await dialog.screenshot({ path: testInfo.outputPath("c-already-running.png") });
+    if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+      await dialog.screenshot({ path: testInfo.outputPath("c-already-running.png") });
   } finally {
     releaseRunInserts(hold);
   }
@@ -268,5 +289,6 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     .evaluate((node) => {
       (node as HTMLDetailsElement).open = true;
     });
-  await dialog.screenshot({ path: testInfo.outputPath("d-ready.png") });
+  if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+    await dialog.screenshot({ path: testInfo.outputPath("d-ready.png") });
 });

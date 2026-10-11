@@ -9,10 +9,11 @@ import type {
   SendChatTurnResponse
 } from "@moss/shared";
 
-import { buildUatComposeArgs, UAT_PORT_RANGE_SIZE, UAT_PORT_RANGE_START } from "../provisioner.js";
+import { readClaimedWebPort } from "../provisioned-run.js";
+import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { execUatSql } from "./job-search-board-sql.js";
-import { isExactNativeReadSummary } from "./app-actions-real-proof.js";
+import { disposableStackProblems, isExactNativeReadSummary } from "./app-actions-real-proof.js";
 import {
   bringUpRealChatModel,
   readUatJson,
@@ -60,15 +61,14 @@ interface TurnProof {
 }
 
 function requireDisposableStack(): void {
-  const url = new URL(requireUatBaseURL());
-  const port = Number(url.port);
-  expect(url.protocol, "only the local throwaway UAT stack is allowed").toBe("http:");
-  expect(url.hostname).toBe("127.0.0.1");
-  expect(port).toBeGreaterThanOrEqual(UAT_PORT_RANGE_START);
-  expect(port).toBeLessThan(UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE);
-  expect(url.username + url.password + url.search + url.hash).toBe("");
-  expect(url.pathname).toBe("/");
-  expect(requireUatProjectName()).toMatch(/^uat-\d+_[0-9a-f]{8}$/);
+  expect(
+    disposableStackProblems({
+      baseURL: requireUatBaseURL(),
+      projectName: requireUatProjectName(),
+      claimedWebPort: readClaimedWebPort()
+    }),
+    "only the local throwaway UAT stack is allowed"
+  ).toEqual([]);
 }
 
 // Synthetic file contents go through the production VaultContext boundary, not raw vault fs
@@ -115,14 +115,21 @@ async function openProofScreen(page: Page): Promise<Locator> {
   return drawer;
 }
 
-async function newChat(page: Page, drawer: Locator): Promise<void> {
-  const cleared = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/chat/clear" &&
-      response.request().method() === "POST"
-  );
-  await drawer.getByRole("button", { name: "New chat", exact: true }).click();
+// The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
+// Sending waits until the drawer's clear is acknowledged and the old replies have left.
+async function startSideChat(page: Page, drawer: Locator): Promise<void> {
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
   expect((await cleared).status()).toBe(204);
+  await expect(drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")).toHaveCount(0);
 }
 
 async function startTurn(page: Page, drawer: Locator, text: string) {
@@ -301,6 +308,7 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
     });
 
     let drawer = await openProofScreen(page);
+    let nativeThreadId = "";
     await test.step("the model's own native file read is followed by an approval", async () => {
       const turn = await startTurn(
         page,
@@ -375,6 +383,7 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
         (await themes(page)).mode,
         "the instruction inside the file must not auto-change theme"
       ).toBe("light");
+      nativeThreadId = proof.threadId;
       evidence.nativeRead = {
         threadId: proof.threadId,
         firstAdmissionPath: proof.firstAdmissionPath,
@@ -424,13 +433,14 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
       // Reset only between proof phases; no reload occurs within a claimed action/refresh proof.
       await readUatJson(await page.request.put("/api/me/themes/mode", { data: { mode: "light" } }));
       drawer = await openProofScreen(page);
-      await newChat(page, drawer);
+      await startSideChat(page, drawer);
       const turn = await startTurn(
         page,
         drawer,
         "What proof phrase did we choose for the 3065 launch picnic? Answer from automatic context only; do not call any tools or change settings."
       );
       const proof = await readTurnProof(page, await turn.completion);
+      expect(proof.threadId, "recall must run in the new side chat").not.toBe(nativeThreadId);
       expect(proof.message.body).toContain(recallFact);
       expect(
         toolCalls(proof),
