@@ -1,4 +1,4 @@
-import type { Kysely, sql } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 import {
   assertQualifiedTableName,
@@ -65,6 +65,7 @@ export interface NewsPersonalizationExportSection {
 
 export interface SportsSourcesExportSection {
   readonly assignments: readonly ExportRow[];
+  readonly follows: readonly ExportRow[];
   readonly sources: readonly ExportRow[];
 }
 
@@ -158,6 +159,17 @@ export interface UserDataExportTables {
   readonly jarvisActionAuditLog: readonly ExportRow[];
   readonly jarvisGoals: readonly ExportRow[];
   readonly jarvisGoalEvidence: readonly ExportRow[];
+}
+
+/** Reads the owner's key-value rows; the export flag lets the worker policy admit them. */
+async function readModuleKv(scopedDb: DataContextDb, userId: string): Promise<ExportRow[]> {
+  await sql`SELECT set_config('app.data_export', 'on', true)`.execute(scopedDb.db);
+
+  try {
+    return await readRows(scopedDb.db, moduleKvQuery(userId));
+  } finally {
+    await sql`SELECT set_config('app.data_export', '', true)`.execute(scopedDb.db);
+  }
 }
 
 export async function exportUserData(options: ExportUserDataOptions): Promise<UserDataExport> {
@@ -292,7 +304,7 @@ async function readExportTables(
     notificationReads: await readRows(scopedDb.db, notificationReadsQuery(userId)),
     connectorAccounts: await readRows(scopedDb.db, connectorAccountsQuery(userId)),
     moduleCredentials: await readRows(scopedDb.db, moduleCredentialsQuery(userId)),
-    moduleKv: await readRows(scopedDb.db, moduleKvQuery(userId)),
+    moduleKv: await readModuleKv(scopedDb, userId),
     calendarEvents: await readRows(scopedDb.db, calendarEventsQuery(userId)),
     emailMessages: await readRows(scopedDb.db, emailMessagesQuery(userId)),
     aiProviderConfigs: await readRows(scopedDb.db, aiProviderConfigsQuery(userId)),

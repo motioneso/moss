@@ -7,7 +7,7 @@ import {
   type Weekday,
   type WeekdayPosition
 } from "./occurrence-engine.js";
-import { dateKeyFromColumn, isWithinScheduleWindow } from "./schedule.js";
+import { dateKeyFromColumn, everyNHoursDoseTimes, isWithinScheduleWindow } from "./schedule.js";
 
 /**
  * #1969 — plain-language schedule summary and next-three-doses preview, for the medication
@@ -244,24 +244,6 @@ function toSummaryEngineInput(
 
   // once_daily, times_per_day
   return { schedule: { family: "daily", doseTimes }, anchor: openAnchor };
-}
-
-function everyNHoursDoseTimes(
-  intervalHours: number | null,
-  anchorTime: string | undefined
-): string[] {
-  if (!intervalHours || intervalHours <= 0) return [];
-  const [hourStr, minuteStr] = (anchorTime ?? "00:00").split(":");
-  const startMinutes = Number(hourStr ?? 0) * 60 + Number(minuteStr ?? 0);
-  const stepMinutes = intervalHours * 60;
-
-  const times: string[] = [];
-  for (let t = startMinutes; t < 24 * 60; t += stepMinutes) {
-    const hour = Math.floor(t / 60);
-    const minute = t % 60;
-    times.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
-  }
-  return times;
 }
 
 function countPhrase(count: number): string {

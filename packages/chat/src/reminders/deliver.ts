@@ -16,6 +16,7 @@ import {
 } from "@moss/jobs";
 
 import { ChatRepository } from "../repository.js";
+import { notifyReminderArrival } from "./live-arrival.js";
 import { ReminderRepository, type SavedReminder } from "./repository.js";
 import { REMINDER_LATE_AFTER_MS, reminderDeliveredMessage } from "./wording.js";
 
@@ -102,6 +103,12 @@ export async function deliverDueReminder(
     now
   });
   await deps.reminders.markDelivered(scopedDb, reminder.id, late);
+  // #3195: Postgres delivers this only if the delivery commits, so a rollback shows nothing.
+  await notifyReminderArrival(scopedDb, {
+    actorUserId: reminder.ownerUserId,
+    threadId: reminder.threadId,
+    messageId: reminder.reservedMessageId
+  });
   return "delivered";
 }
 

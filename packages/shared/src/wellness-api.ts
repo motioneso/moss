@@ -208,6 +208,12 @@ export interface ScheduleSlotDto {
    * without it are valid and consumers should treat a missing value as 0.
    */
   readonly prnCount?: number;
+  /**
+   * The dose's clock time ("HH:MM") in the medication's own time zone. `scheduledFor` is a UTC
+   * instant, so consumers show this for the label and Morning/Evening grouping. Absent on
+   * as_needed slots and on older payloads, where the UTC clock of `scheduledFor` applies.
+   */
+  readonly localTime?: string;
 }
 export interface MedicationScheduleResponse {
   readonly date: string;
@@ -761,7 +767,8 @@ export const scheduleSlotDtoSchema = {
     scheduledFor: nullableStringSchema,
     asNeeded: { type: "boolean" },
     status: { type: "string", enum: ["pending", "taken", "skipped"] },
-    prnCount: { type: "number" }
+    prnCount: { type: "number" },
+    localTime: { type: "string" }
   }
 } as const;
 

@@ -106,7 +106,6 @@ export function notificationsQuery(userId: string) {
       created_at AS "createdAt"
     FROM app.notifications
     WHERE recipient_user_id = ${userId}::uuid
-      OR actor_user_id = ${userId}::uuid
     ORDER BY created_at, id
   `;
 }

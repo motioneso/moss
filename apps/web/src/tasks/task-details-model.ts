@@ -1,5 +1,6 @@
 import type {
   CreateTaskRequest,
+  RecurrenceSpecDto,
   TaskApiStatus,
   TaskDto,
   TaskEffort,
@@ -20,7 +21,8 @@ export interface TaskDetailsFormState {
   readonly doAt: string;
   readonly effort: "" | TaskEffort;
   readonly repeat: Repeat;
-  readonly repeatEnd: string;
+  /** The stored schedule the form was seeded from; kept so an unchanged repeat is not rewritten. */
+  readonly recurrence: RecurrenceSpecDto | null;
 }
 
 export function blankTaskDetailsForm(defaultListId = "", defaultTitle = ""): TaskDetailsFormState {
@@ -34,7 +36,7 @@ export function blankTaskDetailsForm(defaultListId = "", defaultTitle = ""): Tas
     doAt: "",
     effort: "",
     repeat: "never",
-    repeatEnd: ""
+    recurrence: null
   };
 }
 
@@ -53,8 +55,8 @@ export function formFromTask(task: TaskDto, timeZone: string): TaskDetailsFormSt
     dueAt: toDateInputValue(task.dueAt, timeZone),
     doAt: toDateInputValue(task.doAt, timeZone),
     effort: task.effort ?? "",
-    repeat: "never",
-    repeatEnd: ""
+    repeat: task.recurrence?.freq ?? "never",
+    recurrence: task.recurrence ?? null
   };
 }
 
@@ -76,11 +78,13 @@ export function buildTaskFields(
     recurrence:
       form.repeat === "never"
         ? null
-        : {
-            freq: form.repeat,
-            interval: 1,
-            occurrence_date: recurrenceOccurrenceDate(dueAt)
-          }
+        : form.recurrence?.freq === form.repeat
+          ? form.recurrence
+          : {
+              freq: form.repeat,
+              interval: 1,
+              occurrence_date: recurrenceOccurrenceDate(dueAt)
+            }
   };
 }
 

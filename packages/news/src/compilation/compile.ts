@@ -128,9 +128,8 @@ export async function compilePersonalizedNews(
     for (const failure of collection.sourceFailures) {
       await deps.repo.updateSourceHealth(scopedDb, failure.sourceId, failure.reason);
     }
-    // A credentialed source that succeeded this run clears a stuck failure flag on
-    // its own: no one has to re-save a key that was always fine (#2322 slice 2).
-    for (const sourceId of collection.credentialedRecovered) {
+    // A source that succeeded this run clears its stuck failure flag on its own.
+    for (const sourceId of collection.recovered) {
       await deps.repo.updateSourceHealth(scopedDb, sourceId, "healthy");
     }
     deps.logger.info({

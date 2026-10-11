@@ -361,6 +361,9 @@ describe("planOvernightChanges (T21)", () => {
       'Overnight change: the event under "Write the draft" moved; review before accepting.'
     ]);
   });
+  it("states no event-based change when the calendar was not fetched", () => {
+    expect(planOvernightChanges(context(), undefined, tasks())).toEqual([]);
+  });
   it("names a proposed block overlapping a new event", () => {
     const withClash = [
       ...events(),

@@ -4,6 +4,8 @@ import { basename, join } from "node:path";
 
 import pg from "pg";
 
+import { LEGACY_UPGRADE_SHIMS, type LegacyUpgradeShims } from "./legacy-upgrade-shims.js";
+
 const { Client } = pg;
 
 export interface SqlMigrationRunnerOptions {
@@ -11,6 +13,8 @@ export interface SqlMigrationRunnerOptions {
   readonly migrationsDirectory: string;
   readonly migrationsSchema?: string;
   readonly migrationsTable?: string;
+  /** Test seam; defaults to the shipped shims. */
+  readonly legacyUpgradeShims?: LegacyUpgradeShims;
 }
 
 export interface AppliedMigration {
@@ -41,6 +45,7 @@ export async function runSqlMigrations(
   const migrationsTable = options.migrationsTable ?? "schema_migrations";
   const client = new Client({ connectionString: options.connectionString });
   const files = await readMigrationFiles(options.migrationsDirectory);
+  const shims = options.legacyUpgradeShims ?? LEGACY_UPGRADE_SHIMS;
   const applied: AppliedMigration[] = [];
   const skipped: AppliedMigration[] = [];
   let lockAcquired = false;
@@ -72,6 +77,8 @@ export async function runSqlMigrations(
 
       await client.query("BEGIN");
       try {
+        const shim = shims[file.name];
+        const restore = shim?.checksum === file.checksum ? await relaxForcedRls(client, shim) : [];
         await client.query(file.sql);
         if (file.backfill) {
           // Trusted first-party code, not a sandbox: globals remain available. A query-only
@@ -85,6 +92,9 @@ export async function runSqlMigrations(
             // Neither private historical payloads nor a data-URL source stack may reach logs.
             throw new Error(`Migration backfill ${file.backfill.name} failed`);
           }
+        }
+        for (const table of restore) {
+          await client.query(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
         }
         await client.query(
           `
@@ -297,4 +307,24 @@ function quoteIdentifier(value: string): string {
   }
 
   return `"${value}"`;
+}
+
+/** Lifts FORCE on the shim's tables and runs its prelude; returns the tables to re-force. */
+async function relaxForcedRls(
+  client: pg.Client,
+  shim: NonNullable<LegacyUpgradeShims[string]>
+): Promise<string[]> {
+  const restore: string[] = [];
+  for (const table of shim.relaxForcedRls) {
+    const state = await client.query<{ forced: boolean }>(
+      "SELECT relforcerowsecurity AS forced FROM pg_class WHERE oid = $1::regclass",
+      [table]
+    );
+    if (state.rows[0]?.forced) {
+      await client.query(`ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY`);
+      restore.push(table);
+    }
+  }
+  for (const statement of shim.before ?? []) await client.query(statement);
+  return restore;
 }

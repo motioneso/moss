@@ -569,3 +569,28 @@ describe("log button", () => {
     expect(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(draft)).toBe(false);
   });
 });
+
+describe("food day view - refresh after a chat write (#3230)", () => {
+  it("reloads the day when the host reports a finished chat write, without a loading flash", async () => {
+    listPayload = { meals: [], totals: null, aiEstimates: true };
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(Root, { hostActions, refreshKey: 0 }));
+    });
+    for (let i = 0; i < 3; i += 1) await act(async () => Promise.resolve());
+    const before = listCalls;
+
+    listPayload = {
+      meals: [meal({ mealId: "m9", consumedAt: "2026-08-19T12:30:00.000Z", description: "Soup" })],
+      totals: null,
+      aiEstimates: true
+    };
+    await act(async () => {
+      renderer.update(createElement(Root, { hostActions, refreshKey: 1 }));
+    });
+    expect(text(renderer)).not.toContain("Loading");
+    for (let i = 0; i < 3; i += 1) await act(async () => Promise.resolve());
+
+    expect(listCalls).toBe(before + 1);
+  });
+});

@@ -453,7 +453,8 @@ export const memoryModuleManifest: MossModuleManifest = {
       id: "memory.notes_ingest",
       description:
         "Read your linked notes into Moss by splitting each note into passages and keeping them " +
-        "with an embedding model, so you can search your notes by meaning."
+        "with an embedding model, so you can search your notes by meaning. A note you delete or " +
+        "move out of the folder is dropped from search on the next sync."
     }
   ]
 };

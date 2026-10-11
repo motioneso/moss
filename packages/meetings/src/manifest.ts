@@ -371,6 +371,19 @@ export const meetingsModuleManifest = {
         "A brief microphone timing hiccup at Start can recover without Resume. Missing startup sources are checked once; uncertain audio is dropped and marked as a gap. Real source changes still pause. The Mac log records audio gaps."
     },
     {
+      id: "meetings.native_source_recovery",
+      description:
+        "Recovering audio… retries the same sources up to 8 times per recording. macOS may show its own permission dialog. Pause and Stop cancel recovery. Repeated interruptions need Resume; missed audio is marked as a gap.",
+      remediations: [
+        {
+          id: "meetings.resume_interrupted_audio",
+          path: "/meetings",
+          description:
+            "A visible warning restores a hidden recording pill if recovery cannot finish. Check the original sources and macOS permissions before Resume, or choose Stop. Missed audio is marked as a gap."
+        }
+      ]
+    },
+    {
       id: "meetings.speaker_echo_control",
       description:
         "Mic + computer audio echo control checked on built-in Mac speakers. Headsets/Bluetooth, Zoom sharing the mic, and fallback on Macs rejecting setup are unchecked. Unsupported setup uses the same mic after cleanup; route changes need Resume."
@@ -378,7 +391,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
+        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Start or Resume begins recording; same-source recovery is automatic. A nav dot shows recording elsewhere. Mac only.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",
@@ -461,7 +474,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_recording_pill_visibility",
       description:
-        "X only hides the pill. Recording and the red Meeting menu continue, with Pause/Stop and Show recording pill available. Showing a paused pill never resumes it. Each new Start shows the pill."
+        "X hides the pill while recording continues. The red Meeting menu keeps Pause/Stop and Show recording pill. A persistent audio interruption shows it again with a warning. Showing a paused pill never resumes it. Each new Start shows the pill."
     },
     {
       id: "meetings.mac_audio_sources",

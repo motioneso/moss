@@ -276,6 +276,9 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
 | First-party (everything in this repo) | Use shared primitives and tokens fully, so every theme works. Module CSS does layout only |
 | Third-party (installed)               | May style however it likes                                                                |
 
+- A module's settings are reached by the cog icon in the page header, which the shell draws next to
+  the module title when the module declares a settings page. A module never adds its own text
+  Settings link.
 - News and Sports styling (`packages/news/src/web/styles/`, `packages/sports/src/web/styles/`,
   `components-news.css`, `components-sports-*.css`) is known debt, not precedent. Both will be
   redesigned to match Today.

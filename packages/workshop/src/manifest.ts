@@ -112,6 +112,12 @@ export const workshopModuleManifest = {
           path: "/workshop"
         },
         {
+          id: "workshop.projects.resend",
+          description:
+            "When the notice says Moss did not reply, send the message again from the box below the conversation.",
+          path: "/workshop"
+        },
+        {
           id: "workshop.projects.rename_retry",
           description: "Open the More menu and choose Rename, then enter the name again.",
           path: "/workshop"
@@ -133,6 +139,12 @@ export const workshopModuleManifest = {
           class: "transient",
           description:
             "Saving could not be confirmed. Retrying the same request does not duplicate it."
+        },
+        {
+          code: "workshop.projects.reply_failed",
+          class: "transient",
+          description:
+            "Moss did not reply within about 90 seconds. The message stays saved, marked awaiting delivery. Sending it again fixes it."
         },
         {
           code: "workshop.projects.rename_failed",

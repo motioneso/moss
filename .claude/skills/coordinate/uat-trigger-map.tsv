@@ -20,7 +20,7 @@ blocking	apps/web/src/settings/settings-module-registry-section.tsx	tests/uat/sp
 blocking	apps/web/src/external-modules/**	tests/uat/specs/module-install.uat.spec.ts
 # #1557: chat UAT fixme baseline as of 2026-08-10, so QA compares real regressions against this
 # baseline rather than assuming zero skips. 1089-1090-chat-drawer-private is fully test.fixme'd
-# (2/2, see note below); 1133-chat-attachments is 1/3 fixme (#1121, real-LLM half);
+# (2/2, see note below); 1133-chat-attachments is 1/3 fixme (#3343, scripted read turn);
 # runtime-context is 2/4 fixme (#1121, real-LLM half).
 #
 # 1089-1090-chat-drawer-private is fully test.fixme'd (both #1089 and #1090) -- it can only exit 0

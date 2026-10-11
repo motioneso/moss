@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { recordModelActivity } from "@moss/ai";
 import type { ModuleBuildStep, Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
@@ -28,7 +29,22 @@ export interface ModuleBuildLiveAgentDeps {
 const STEP_TIMEOUT_MS = 30 * 60 * 1000;
 const STEP_POLL_MS = 1000;
 const READY_TIMEOUT_MS = 30 * 1000;
-const WORKSPACE_ROOT = join(import.meta.dirname, "../../..");
+const BUILD_SCRIPT = join("scripts", "build-external-module.ts");
+
+/**
+ * Walks up from `startDir` to the directory holding the module build script. The worker runs from
+ * `apps/worker/src` in source mode and from `<root>/dist` in the production bundle.
+ */
+export function resolveWorkspaceRoot(
+  startDir: string,
+  exists: (path: string) => boolean = existsSync
+): string {
+  for (let dir = startDir; ; dir = dirname(dir)) {
+    if (exists(join(dir, BUILD_SCRIPT))) return dir;
+    if (dirname(dir) === dir) throw new Error(`Cannot find the workspace root from ${startDir}`);
+  }
+}
+
 const CLAUDE_SESSION_FILES = [
   ".jarvis-claude-permission-hook.mjs",
   ".jarvis-claude-settings.json",
@@ -126,7 +142,7 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
         const built = await deps.io.run(
           "pnpm",
           ["exec", "tsx", "scripts/build-external-module.ts", input.workingDir],
-          { cwd: WORKSPACE_ROOT }
+          { cwd: resolveWorkspaceRoot(import.meta.dirname) }
         );
         if (built.code !== 0) {
           throw new Error(`generated module did not build: ${built.stderr ?? "unknown error"}`);

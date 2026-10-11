@@ -126,14 +126,6 @@ export const DEFAULT_BRIEFINGS: BriefingsSettings = {
 
 export type NotificationSensitivity = "quiet" | "balanced" | "proactive";
 
-export interface NotificationsSettings {
-  readonly sensitivity: NotificationSensitivity;
-}
-
-export const DEFAULT_NOTIFICATIONS: NotificationsSettings = {
-  sensitivity: "balanced"
-};
-
 export function notificationSensitivityHint(
   assistantName: string
 ): Record<NotificationSensitivity, string> {

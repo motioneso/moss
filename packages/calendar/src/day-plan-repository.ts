@@ -11,7 +11,6 @@ import type {
   ApplyItemResult,
   DayPlanActualPlacement,
   DayPlanApplyBatchDto,
-  DayPlanApplyBatchInput,
   DayPlanApplySelectionEntry,
   DayPlanBlockDto,
   DayPlanBlockInput,
@@ -35,6 +34,7 @@ import {
   pendingChangesEqual,
   readBatchSnapshot,
   resolveApplySelection,
+  type ReserveApplyBatchInput,
   toBatchDto
 } from "./day-plan-apply.js";
 import {
@@ -686,7 +686,7 @@ export class DayPlanRepository {
   // partial rows. No route exposes this; execution belongs to later work.
   async reserveApplyBatch(
     scopedDb: DataContextDb,
-    input: DayPlanApplyBatchInput
+    input: ReserveApplyBatchInput
   ): Promise<DayPlanApplyBatchDto> {
     assertDataContextDb(scopedDb);
     let idempotencyKey: string;
@@ -738,7 +738,8 @@ export class DayPlanRepository {
           position: row.position,
           pendingChange: readPending(row.pending_change)
         })),
-        input.selectedBlockIds
+        input.selectedBlockIds,
+        { includePendingAdditions: input.includePendingAdditions }
       );
     } catch (error) {
       if (error instanceof DayPlanValidationError)

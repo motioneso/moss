@@ -4,15 +4,19 @@
 //
 // Run with:
 //   LIVE_BASE_URL=http://127.0.0.1:<web-port> LIVE_API_URL=http://127.0.0.1:<api-port> \
-//     LIVE_OWNER_PASSWORD=... npx playwright test --config playwright.live.config.ts pool-hang-3027
-import { expect, test, type Page } from "@playwright/test";
+//     LIVE_OWNER_EMAIL=... LIVE_OWNER_PASSWORD=... \
+//     npx playwright test --config playwright.live.config.ts pool-hang-3027
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
 const API_URL = process.env.LIVE_API_URL;
 if (!OWNER_PASSWORD || !API_URL) {
   throw new Error("Set LIVE_OWNER_PASSWORD and LIVE_API_URL for the development instance.");
 }
-const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };
+const OWNER = { email: process.env.LIVE_OWNER_EMAIL ?? "ben@ben.com", password: OWNER_PASSWORD };
+const REPLIES = ".chatd-msg:not(.chatd-msg--me) .chatd-bubble";
+// Reply source labels share the step line class, so they are excluded from the step check.
+const ACTIVITY = ".chatd-peek__line:not(.chatd-freshness__item)";
 
 // About 2,800 characters, so each recall embeds a document-sized query.
 const LONG_QUERY = Array.from(
@@ -29,6 +33,25 @@ async function signInThroughUi(page: Page) {
     .getByRole("button", { name: /sign in/i })
     .click();
   await expect(page.getByRole("navigation").first()).toBeVisible();
+}
+
+// The drawer reopens its last conversation, so a fresh chat comes from Conversations.
+// Sending waits for the drawer clear and for the old replies and steps to leave, so the
+// activity read after the turn belongs to this turn only.
+async function startSideChat(page: Page, drawer: Locator): Promise<void> {
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(drawer.locator(REPLIES)).toHaveCount(0);
+  await expect(drawer.locator(ACTIVITY)).toHaveCount(0);
 }
 
 test("an email question finishes in normal time while the API embeds and stays responsive", async ({
@@ -63,7 +86,7 @@ test("an email question finishes in normal time while the API embeds and stays r
 
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await drawer.getByRole("button", { name: "New chat" }).click();
+  await startSideChat(page, drawer);
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill(
     "List the five most recent emails in my inbox with sender and subject. Use the email listing tool."
@@ -80,7 +103,7 @@ test("an email question finishes in normal time while the API embeds and stays r
   const turnBody = (await turn.json()) as { reply?: string };
   await expect(drawer.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
   // The steps sit inside a collapsed details element, so read their text content.
-  const activity = await drawer.locator(".chatd-peek__line").allTextContents();
+  const activity = await drawer.locator(ACTIVITY).allTextContents();
 
   busy = false;
   await Promise.all([healthProbe, embedding]);
@@ -103,7 +126,8 @@ test("an email question finishes in normal time while the API embeds and stays r
 
   expect(turn.status()).toBe(200);
   expect(String(turnBody.reply ?? "").length).toBeGreaterThan(0);
-  expect(activity.some((line) => /email/i.test(line))).toBe(true);
+  // A step line reads its kind label then its text, so a tool step starts with "Tool".
+  expect(activity.some((line) => /^Tool/.test(line) && /email/i.test(line))).toBe(true);
   expect(turnMs).toBeLessThan(120_000);
   expect(recalls.length).toBeGreaterThan(0);
   expect(recalls.every((status) => status === 200)).toBe(true);

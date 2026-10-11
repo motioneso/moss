@@ -146,3 +146,14 @@ export function readEnum<T extends string>(
   }
   return value as T;
 }
+
+/**
+ * Ids of the active (not deleted or deactivated) members, host-injected into
+ * tool input next to actorUserId. A missing or malformed value yields an empty
+ * set, so household reads fail closed and drop every other owner's data.
+ */
+export function readActiveUserIds(input: Record<string, unknown>): ReadonlySet<string> {
+  const value = input.activeUserIds;
+  if (!Array.isArray(value)) return new Set();
+  return new Set(value.filter((id): id is string => typeof id === "string"));
+}

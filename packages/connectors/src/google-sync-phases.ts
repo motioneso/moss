@@ -1,3 +1,4 @@
+import { replyThreadingMetadata } from "./reply-threading.js";
 import { sql } from "kysely";
 
 import type { ConnectorSyncDeferredReason, ConnectorSyncErrorDetail } from "@moss/shared";
@@ -139,7 +140,8 @@ export function cachedEmailInput(
     externalMetadata: {
       labelIds: parsed.labelIds,
       historyId: parsed.historyId ?? null,
-      threadId: parsed.threadId ?? null
+      threadId: parsed.threadId ?? null,
+      ...replyThreadingMetadata(parsed)
     },
     summary: extracted.summary,
     signals: extracted.signals as Record<string, unknown>

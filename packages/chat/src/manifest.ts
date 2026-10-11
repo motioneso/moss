@@ -72,7 +72,8 @@ export const chatModuleManifest = {
       "sql/0306_chat_relative_reminders.sql",
       "sql/0307_chat_summary_worker_publish.sql",
       "sql/0308_chat_reminder_cancel.sql",
-      "sql/0309_chat_reminder_context_acknowledged.sql"
+      "sql/0309_chat_reminder_context_acknowledged.sql",
+      "sql/0310_chat_live_turns.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -84,7 +85,8 @@ export const chatModuleManifest = {
       "app.chat_classifier_release_eligibility",
       "app.chat_classifier_shadow_reviews",
       "app.chat_conversation_provenance",
-      "app.chat_automatic_action_reservations"
+      "app.chat_automatic_action_reservations",
+      "app.chat_live_turns"
     ]
   },
   permissions: [
@@ -186,11 +188,35 @@ export const chatModuleManifest = {
       ]
     },
     {
+      id: "chat.interrupted_reply_recovery",
+      description:
+        "If Moss restarts or its model stops mid-reply, reopening the chat keeps finished messages once and " +
+        "shows the unfinished question with an interrupted note. Moss never redoes it. " +
+        "Not in private chats or for messages with only attachments.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_reply_interrupted",
+          class: "transient",
+          description:
+            "Moss was interrupted before finishing a reply. Anything it started may not have completed, so check first, then ask again."
+        }
+      ]
+    },
+    {
       id: "chat.relative_reminders",
       description:
         "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder Moss posts once in Main, " +
         "noting if late; its next reply knows it and frees the slot. Up to 20 at once, 30 days ahead. " +
         "No clock times, repeats or private chats.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_live_arrival",
+      description:
+        "A due chat reminder appears at once in the open Main chat, even while Moss is replying; both " +
+        "stay separate after a reload. Side, private and module chats never show it. If it does not " +
+        "appear, reopen Main or reload.",
       featureFlagId: "chat.module"
     },
     {

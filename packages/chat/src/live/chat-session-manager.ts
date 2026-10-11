@@ -29,7 +29,12 @@ import {
   schedulePrivateDetachTimer,
   reconcileChatSessions
 } from "./session-runtime-helpers.js";
-import { normalizeChatSurface, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
+import {
+  DEFAULT_CHAT_SURFACE,
+  normalizeChatSurface,
+  surfaceSessionKey,
+  type ChatSurface
+} from "./chat-surface.js";
 
 export {
   combineHiddenContextBlocks,
@@ -45,6 +50,10 @@ import type {
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
+import {
+  routeMainBackgroundMessage,
+  type MainBackgroundMessage
+} from "./background-message-routing.js";
 import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 import {
   routeOriginRecord,
@@ -400,6 +409,16 @@ export class ChatSessionManager {
       originThreadId,
       record,
       surface
+    });
+  }
+
+  /** #3195: show a stored background message in the owner's open Main drawer, if any. */
+  deliverMainBackgroundMessage(message: MainBackgroundMessage): Promise<void> {
+    return routeMainBackgroundMessage({
+      ...message,
+      shown: (actorUserId) => this.getPrivacyState(actorUserId, DEFAULT_CHAT_SURFACE),
+      transitions: this.originTransitions,
+      emit: (surface, record) => this.emit(message.actorUserId, surface, record)
     });
   }
 

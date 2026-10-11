@@ -21,8 +21,9 @@ import {
 import * as mcpFixture from "./classifier-mcp-fixture-container.js";
 import {
   REAL_CHAT_CONFIGURED_ENV,
-  installUatRealChatCodexAuth,
-  type UatRealChatCodexAuth
+  installUatRealChatAuth,
+  uatRealChatProvider,
+  type UatRealChatAuth
 } from "./real-chat-env.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
@@ -700,7 +701,7 @@ export async function provisionForUat(
   opts?: UatProvisionOptions,
   dependencies: {
     readonly listLiveSubnets?: typeof listLiveDockerSubnets;
-    readonly installRealChatCodexAuth?: typeof installUatRealChatCodexAuth;
+    readonly installRealChatAuth?: typeof installUatRealChatAuth;
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
   const overallStart = Date.now();
@@ -768,7 +769,7 @@ export async function provisionForUat(
 
     // #2732: set once `jarv1s` is up and the Codex credential copy (if any) has run — read by
     // teardownCompose below, so declared before it.
-    let realChatAuth: UatRealChatCodexAuth | undefined;
+    let realChatAuth: UatRealChatAuth | undefined;
 
     // #1306: the fixture container is removed FIRST — an outside container still attached to the
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
@@ -855,16 +856,20 @@ export async function provisionForUat(
         await runCommand(step.command, step.args);
       }
       // #2732: after the plan loop, because it needs the now-running `jarv1s` container for its
-      // docker exec calls. A no-op unless the operator's own machine has a signed-in Codex CLI
-      // (see real-chat-env.ts); real chat stays opt-in without a separate on/off flag.
-      realChatAuth = (dependencies.installRealChatCodexAuth ?? installUatRealChatCodexAuth)(
+      // docker exec calls. Codex (default): a no-op unless the operator's own machine has a
+      // signed-in Codex CLI. Claude (#3361): selected explicitly; the spec signs in through Moss.
+      realChatAuth = (dependencies.installRealChatAuth ?? installUatRealChatAuth)(
         projectName,
         UAT_ADMIN_ID,
         (extra) => buildUatComposeArgs(projectName, extra)
       );
       if (realChatAuth !== undefined) {
         process.env[REAL_CHAT_CONFIGURED_ENV] = "1";
-        console.log(`[uat] host Codex login copied into ${projectName}; real chat is available`);
+        console.log(
+          uatRealChatProvider() === "claude"
+            ? `[uat] Claude sign-in selected for ${projectName}; the spec asks for a sign-in link`
+            : `[uat] host Codex login copied into ${projectName}; real chat is available`
+        );
       }
       // #1306: after the plan loop, because the Compose network it attaches to does not exist
       // until the first `up`; before the seed hook, so the fixture origin is already answering by

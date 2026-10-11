@@ -54,7 +54,9 @@ beforeAll(async () => {
   cpSync(join(sourceDir, "jarvis.module.json"), join(installedDir, "jarvis.module.json"));
   cpSync(join(sourceDir, "dist"), join(installedDir, "dist"), { recursive: true });
 
-  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+  // Two connections: a tool call on a module that declares preferences reads them in a
+  // second data context while the invoke route still holds the first.
+  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
   workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
   server = createApiServer({
     appDb,
@@ -194,7 +196,7 @@ describe("finance module surface (#1146)", () => {
     const response = await invokeTool("finance.accounts.list");
     expect(response.statusCode).toBe(200);
     const invocation = response.json<{
-      invocation: { status: string; result: { accounts: unknown[] } };
+      invocation: { status: string; result: { accounts: unknown[]; banks: unknown[] } };
     }>().invocation;
     expect(invocation.status).toBe("succeeded");
     // toEqual (not matchObject): a field silently dropped by any of the three
@@ -202,6 +204,7 @@ describe("finance module surface (#1146)", () => {
     expect(invocation.result.accounts).toEqual([
       {
         accountId: "acc-1",
+        itemId: "item-1",
         name: "Checking",
         mask: "0000",
         type: "depository",
@@ -214,6 +217,16 @@ describe("finance module surface (#1146)", () => {
         // FIN-04 (#1149): accounts.list now reports the household-share flag; an
         // unshared account defaults to false (flag key absent in KV).
         sharedToHousehold: false
+      }
+    ]);
+    expect(invocation.result.banks).toEqual([
+      {
+        itemId: "item-1",
+        institutionId: "ins_1",
+        institutionName: null,
+        status: "connected",
+        lastSyncAt: null,
+        message: null
       }
     ]);
   });
@@ -266,8 +279,8 @@ describe("finance job reconciliation (#1146)", () => {
     await reconciler.reconcileAll();
 
     // Manifest order, create-then-converge per queue (no dead-letter targets
-    // declared in FIN-01, so no reordering). storage-migrate (FIN-06b, #1166)
-    // is the manifest's last-declared queue, hence last here too.
+    // declared in FIN-01, so no reordering). review-apply (#3176)
+    // is the last-declared queue, hence last here.
     expect(calls).toEqual([
       "create:finance.sync-run",
       'update:finance.sync-run:{"retryLimit":3}',
@@ -280,7 +293,17 @@ describe("finance job reconciliation (#1146)", () => {
       "create:finance.share-apply",
       'update:finance.share-apply:{"retryLimit":1}',
       "create:finance.storage-migrate",
-      'update:finance.storage-migrate:{"retryLimit":1}'
+      'update:finance.storage-migrate:{"retryLimit":1}',
+      "create:finance.draft-build",
+      'update:finance.draft-build:{"retryLimit":1}',
+      "create:finance.draft-start",
+      'update:finance.draft-start:{"retryLimit":1}',
+      "create:finance.draft-set",
+      'update:finance.draft-set:{"retryLimit":1}',
+      "create:finance.review-apply",
+      'update:finance.review-apply:{"retryLimit":1}',
+      "create:finance.activity-undo",
+      'update:finance.activity-undo:{"retryLimit":1}'
     ]);
     // One schedule per active user; payload is metadata-only (D6) and the
     // key is the reconciler's module/schedule/user triple ("/"-separated —

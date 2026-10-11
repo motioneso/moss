@@ -52,8 +52,9 @@ export const briefingsModuleManifest = {
       id: "briefings.settings",
       label: "Briefings",
       description:
-        "Set the morning briefing time, the evening wind-down and its time, and which " +
-        "sources feed the morning briefing: news, sports, read tools, email and calendar signals.",
+        "Set the morning and evening briefing times and choose the morning sources, including " +
+        "news, sports, read tools, email and calendar signals, and a switch for each module you " +
+        "have turned on that offers a briefing source.",
       path: "/settings?section=modules&module=briefings",
       scope: "user",
       permissionId: "briefings.update"
