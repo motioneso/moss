@@ -6,6 +6,7 @@ import type { ToolContext } from "@moss/module-sdk";
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AssistantToolGatewayDependencies } from "./gateway.js";
 import { actionHoldDurationMs } from "./action-result-record.js";
+import { localeContext } from "./locale-context.js";
 import { isConversationMarked, isConversationTainted } from "./conversation-policy.js";
 import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
 import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
@@ -56,7 +57,7 @@ export async function requestNativeToolPermission(
     requestId,
     chatSessionId,
     ...(threadId ? { threadId } : {}),
-    localTimezone: (await deps.resolveLocalTimezone?.(actorUserId)) ?? undefined
+    ...localeContext((await deps.resolveLocale?.(actorUserId)) ?? undefined)
   };
 
   // A clean conversation would allow this with no card.

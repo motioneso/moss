@@ -8,6 +8,7 @@ import {
   type RouteApprovalPresentation,
   type ToolApprovalPresentation
 } from "@moss/module-sdk";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleDateTime } from "@moss/shared";
 import {
   sportsApprovalPreview,
   sportsApprovalStandings,
@@ -245,7 +246,10 @@ export const sportsResolveTeamPresentation: RouteApprovalPresentation = async (d
   return {
     target: `Saved team choice in ${competition}`,
     fields: [
-      { label: "Saved on", value: row.created_at.toISOString() },
+      {
+        label: "Saved on",
+        value: formatLocaleDateTime(row.created_at, ctx.locale ?? DEFAULT_LOCALE_SETTINGS)
+      },
       { label: "Selected team", value: team.label }
     ],
     version: JSON.stringify([row, team.version])

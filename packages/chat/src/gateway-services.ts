@@ -29,6 +29,7 @@ import { sendJob } from "@moss/jobs";
 import { NOTES_SYNC_QUEUE, type NotesSyncJobPayload, type NotesSyncToolService } from "@moss/notes";
 import { TasksCompatibilityHelper } from "@moss/tasks";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
 import {
   SettingsRepository,
   appCallActionExecute,
@@ -37,7 +38,6 @@ import {
   type NotificationPreferenceWriteService
 } from "@moss/settings";
 
-import { resolveEffectiveTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
@@ -289,15 +289,15 @@ export function buildChatGatewayDependencies(args: {
           }
         : undefined,
     webSearchEngineForActor: args.webSearchEngineForActor,
-    resolveLocalTimezone: args.localePreferences
+    resolveLocale: args.localePreferences
       ? (actorUserId) =>
           args.runner.withDataContext(
-            { actorUserId, requestId: "gateway:resolve-locale-tz" },
+            { actorUserId, requestId: "gateway:resolve-locale" },
             async (scopedDb) => {
-              const raw = await args.localePreferences!.get(scopedDb, "locale");
+              const raw = await args.localePreferences!.get(scopedDb, LOCALE_PREFERENCE_KEY);
               // #2157: match what Settings shows — never leave the tool context blank (→ UTC)
               // just because the user has not saved a locale yet.
-              return resolveEffectiveTimezone(raw);
+              return resolveEffectiveLocale(raw);
             }
           )
       : undefined

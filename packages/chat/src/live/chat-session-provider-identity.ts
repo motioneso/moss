@@ -1,4 +1,5 @@
 import type { ProviderKind } from "@moss/ai";
+import type { LocaleSettingsDto } from "@moss/shared";
 
 import type { ChatPersistencePort } from "./chat-session-ports.js";
 import { normalizeChatSurface, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
@@ -27,6 +28,8 @@ export interface UserSession {
   readonly seededContextKeys: Set<string>;
   readonly mcpToken?: string;
   readonly startsToolClientPerTurn: boolean;
+  /** The person's saved time settings, refreshed each turn; formats approval times. */
+  locale?: LocaleSettingsDto;
 }
 
 export function sameActiveChatProvider(
