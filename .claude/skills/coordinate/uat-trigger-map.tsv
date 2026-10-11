@@ -268,6 +268,13 @@ blocking	packages/news/src/web/story-feedback.css	tests/uat/specs/audit-feeds.ua
 blocking	packages/news/src/web/styles/news-2.css	tests/uat/specs/audit-feeds.uat.spec.ts
 blocking	packages/sports/src/web/styles/sports-5-editorial.css	tests/uat/specs/audit-feeds.uat.spec.ts
 
+# #3397 shell outage recovery, keyboard search and authoritative module denial.
+blocking	apps/web/src/app.tsx	tests/uat/specs/audit-shell-recovery.uat.spec.ts
+blocking	apps/web/src/onboarding/onboarding-wizard.tsx	tests/uat/specs/audit-shell-recovery.uat.spec.ts
+blocking	apps/web/src/settings/settings-search.tsx	tests/uat/specs/audit-shell-recovery.uat.spec.ts
+blocking	tests/unit/audit-shell-*.test.tsx	tests/uat/specs/audit-shell-recovery.uat.spec.ts
+blocking	tests/unit/audit-onboarding-recovery.test.tsx	tests/uat/specs/audit-shell-recovery.uat.spec.ts
+
 # #3397 complete-window Wellness history, dose and export recovery.
 blocking	apps/web/src/wellness/**	tests/uat/specs/audit-wellness.uat.spec.ts
 blocking	apps/web/src/api/client.ts	tests/uat/specs/audit-wellness.uat.spec.ts

@@ -1,9 +1,15 @@
 import { Button, RowButton } from "@moss/ui";
-import { type ReactNode, useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  useIsMutating,
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, Flag, LogIn, Minus, Play } from "lucide-react";
 
-import type { OnboardingStatusResponse, OnboardingStepsDto } from "@moss/shared";
+import type { MeResponse, OnboardingStatusResponse, OnboardingStepsDto } from "@moss/shared";
 
 import { completeOnboarding, getOnboardingStatus, skipOnboarding } from "../api/client";
 import { queryKeys } from "../api/query-keys";
@@ -18,6 +24,22 @@ import { firstIncompleteStepIndex } from "./resume";
 import { useChatAvailable } from "./chat-availability";
 import { SkipConfirmDialog, needsSkipConfirm } from "./skip-confirm";
 import { personalize, assistantName } from "../api/use-assistant-name.js";
+
+type CompletionAction = "finish" | "skip";
+interface CompletionRequest {
+  readonly action: CompletionAction;
+  readonly requestedUrl: string;
+}
+function isCompletionRequest(value: unknown): value is CompletionRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "action" in value &&
+    (value.action === "finish" || value.action === "skip") &&
+    "requestedUrl" in value &&
+    typeof value.requestedUrl === "string"
+  );
+}
 
 const FOUNDER_ORDER = ["welcome", "cliAuth", "connectors", "finish"] as const;
 const MEMBER_ORDER = ["welcome", "assistant", "accounts", "tour", "finish"] as const;
@@ -62,11 +84,13 @@ function dotContent(step: RailStep, state: string): ReactNode {
 }
 
 export function OnboardingWizard(props: {
+  readonly actorUserId: string;
   readonly onDone: () => void;
   /** The status app.tsx already fetched — seeds the query so the wizard shows NO second loader. */
   readonly initialStatus: OnboardingStatusResponse;
 }) {
   const queryClient = useQueryClient();
+  const completionKey = ["onboarding", "completion", props.actorUserId] as const;
   const statusQuery = useQuery({
     queryKey: queryKeys.onboarding.status,
     queryFn: getOnboardingStatus,
@@ -97,37 +121,56 @@ export function OnboardingWizard(props: {
   const invalidateStatus = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.status });
 
-  const finish = useMutation({
-    mutationFn: completeOnboarding,
-    onSuccess: async () => {
-      await invalidateStatus();
-    },
-    onSettled: (_data, error) => {
-      if (error) return;
-      window.location.replace("/today");
-    }
+  const completion = useMutation({
+    mutationKey: completionKey,
+    mutationFn: ({ action }: CompletionRequest) =>
+      action === "finish" ? completeOnboarding() : skipOnboarding()
   });
-  const skip = useMutation({
-    mutationFn: skipOnboarding,
-    onSuccess: async () => {
-      await invalidateStatus();
-      props.onDone();
-    }
+  const completionPending = useIsMutating({ mutationKey: completionKey }) > 0;
+  const completionStates = useMutationState({
+    filters: { mutationKey: completionKey },
+    select: (mutation) => ({
+      id: mutation.mutationId,
+      status: mutation.state.status,
+      request: isCompletionRequest(mutation.state.variables) ? mutation.state.variables : undefined
+    })
   });
+  const latestCompletion = completionStates.at(-1);
+  const reconciledCompletion = useRef<number | undefined>(undefined);
+  // Only the mounted wizard for the current actor reconciles completion. The mutation cache
+  // survives same-account re-entry, but never owns navigation or an old component's onDone.
+  useEffect(() => {
+    if (latestCompletion?.status !== "success" || !latestCompletion.request) return;
+    if (reconciledCompletion.current === latestCompletion.id) return;
+    if (queryClient.getQueryData<MeResponse>(queryKeys.auth.me)?.user.id !== props.actorUserId)
+      return;
+    reconciledCompletion.current = latestCompletion.id;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.status });
+    if (window.location.href !== latestCompletion.request.requestedUrl) return;
+    if (latestCompletion.request.action === "finish") window.location.replace("/today");
+    else props.onDone();
+  }, [latestCompletion, props.actorUserId, props.onDone, queryClient]);
+  const failedAction =
+    latestCompletion?.status === "error" ? latestCompletion.request?.action : undefined;
+  const startCompletion = (action: CompletionAction) => {
+    if (queryClient.isMutating({ mutationKey: completionKey }) > 0) return;
+    completion.mutate({ action, requestedUrl: window.location.href });
+  };
   // #369: every "Skip setup" affordance routes through here. If chat would dead-end (no provider
   // connected), open the consequence dialog instead of skipping; otherwise skip immediately. The
   // skip mutation is NEVER fired from inside a setState updater (StrictMode double-fire trap) —
   // requestSkip is an event handler and the dialog's confirm calls confirmSkip directly.
   const requestSkip = () => {
+    if (queryClient.isMutating({ mutationKey: completionKey }) > 0) return;
     if (needsSkipConfirm(statusQuery.data, chatAvailable)) {
       setSkipConfirmOpen(true);
     } else {
-      skip.mutate();
+      startCompletion("skip");
     }
   };
   const confirmSkip = () => {
     setSkipConfirmOpen(false);
-    skip.mutate();
+    startCompletion("skip");
   };
   // No isLoading branch: initialData guarantees data is present from the first render
   // (app.tsx already waited). A background refetch error never blanks the wizard.
@@ -152,7 +195,7 @@ export function OnboardingWizard(props: {
   const skipCurrentStep = () => {
     setSkippedSteps((current) => new Set(current).add(currentRailKey));
     if (isLast) {
-      finish.mutate();
+      startCompletion("finish");
     } else {
       goNext();
     }
@@ -184,8 +227,8 @@ export function OnboardingWizard(props: {
           key="finish"
           role="member"
           skippedSteps={skippedSteps}
-          onFinish={() => finish.mutate()}
-          pending={finish.isPending}
+          onFinish={() => startCompletion("finish")}
+          pending={completionPending}
         />
       ]
     : [];
@@ -254,7 +297,12 @@ export function OnboardingWizard(props: {
               ) : null}
             </div>
           ) : null}
-          <RowButton className="onb__skipall" type="button" onClick={requestSkip}>
+          <RowButton
+            className="onb__skipall"
+            type="button"
+            disabled={completionPending}
+            onClick={requestSkip}
+          >
             <LogIn size={15} /> Skip setup
           </RowButton>
           <p className="onb__skiphint">
@@ -270,7 +318,12 @@ export function OnboardingWizard(props: {
           <span className="onb__mbar-prog">
             {isLast ? "Done" : `${completedCount} / ${progressTotal}`}
           </span>
-          <RowButton className="onb__mbar-skip" type="button" onClick={requestSkip}>
+          <RowButton
+            className="onb__mbar-skip"
+            type="button"
+            disabled={completionPending}
+            onClick={requestSkip}
+          >
             Skip
           </RowButton>
         </div>
@@ -279,6 +332,19 @@ export function OnboardingWizard(props: {
           <p className="form-error">
             Couldn&apos;t refresh setup status. You can still skip and configure later.
           </p>
+        ) : null}
+
+        {failedAction !== undefined ? (
+          <div role="alert" className="form-error">
+            <p>{failedAction === "finish" ? "Could not finish setup." : "Could not skip setup."}</p>
+            <Button
+              type="button"
+              disabled={completionPending}
+              onClick={() => startCompletion(failedAction === "finish" ? "finish" : "skip")}
+            >
+              {failedAction === "finish" ? "Retry finish" : "Retry skip"}
+            </Button>
+          </div>
         ) : null}
 
         <div className="onb__content">
@@ -298,8 +364,8 @@ export function OnboardingWizard(props: {
                   role="founder"
                   skippedSteps={skippedSteps}
                   founderSteps={founderSteps}
-                  onFinish={() => finish.mutate()}
-                  pending={finish.isPending}
+                  onFinish={() => startCompletion("finish")}
+                  pending={completionPending}
                 />
               ) : null}
             </>
@@ -335,7 +401,7 @@ export function OnboardingWizard(props: {
         <SkipConfirmDialog
           onConfirm={confirmSkip}
           onCancel={() => setSkipConfirmOpen(false)}
-          pending={skip.isPending}
+          pending={completionPending}
         />
       ) : null}
     </main>
