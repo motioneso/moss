@@ -117,6 +117,12 @@ function openRunJobs(definitionId: string): Array<{ id: string; state: string }>
   ).map(([id, state]) => ({ id: id!, state: state! }));
 }
 
+function jobState(jobId: string): string | undefined {
+  return sqlRows(
+    `SELECT state FROM pgboss.job WHERE name = 'briefings-run' AND id = '${jobId}'`
+  )[0]?.[0];
+}
+
 function rerunAuditRows(): Array<{ approvalMode: string; outcome: string }> {
   return sqlRows(
     "SELECT approval_mode, outcome FROM app.moss_action_audit_log " +
@@ -210,6 +216,7 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     hasText: /^Done: Re-run (?:your evening|a) briefing\.$/
   });
 
+  let firstJobId: string | undefined;
   const hold = await holdRunInserts();
   try {
     // b. First ask: the tool runs with no approval card and Moss says it queued.
@@ -225,6 +232,7 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     const afterFirst = openRunJobs(definitionId);
     console.log(`[2809 live proof] open jobs after first ask: ${JSON.stringify(afterFirst)}`);
     expect(afterFirst).toHaveLength(1);
+    firstJobId = afterFirst[0]!.id;
     const firstThread = await drawerThreadId(page);
     expect(firstThread).toBeDefined();
     if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
@@ -274,6 +282,9 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     )
     .toEqual(["succeeded"]);
   expect(openRunJobs(definitionId)).toHaveLength(0);
+  expect(jobState(firstJobId!), "the finished run must come from the first ask's job").toBe(
+    "completed"
+  );
   console.log(
     `[2809 live proof] exactly one new evening briefing run row, succeeded; summary begins: ` +
       summaryText.slice(0, 160)

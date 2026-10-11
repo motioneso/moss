@@ -64,6 +64,12 @@ const APP_ACTIONS: SpecRules = {
     ["expect((await themes(page)).custom.some((item) => item.id === theme.id)).toBe(true);", 1],
     ["await expect(galleryCard).toHaveCount(0);", 1],
     ["expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);", 1],
+    [
+      "expect(toolCalls(proof).some((name) => /notes[._]|readAttachment/i.test(name))).toBe(false);",
+      1
+    ],
+    ['expect((await themes(page)).mode).toBe("light");', 1],
+    ["/blocked|self_authority|outside the allowed route policy/i", 1],
     ["expect(toolCalls(proof).some((name) => /app[._]callAction$/.test(name))).toBe(true);", 1],
     ['expect(await readUatJson(await page.request.get("/api/me/yolo"))).toEqual(before);', 1],
     ["await expect(pendingCard(drawer)).toHaveCount(0);", 2]
@@ -98,7 +104,13 @@ const BRIEFING: SpecRules = {
     ['.toEqual(["succeeded"]);', 1],
     ["expect(third.visible).toMatch(/ready|done|finished|complete/i);", 1],
     ["expect(third.steps).toMatch(/getRunStatus/i);", 1],
-    ["expect(rerunAuditRows()).toHaveLength(2);", 1]
+    ["expect(rerunAuditRows()).toHaveLength(2);", 1],
+    [
+      '{ approvalMode: "auto", outcome: "success" },\n      { approvalMode: "auto", outcome: "success" }',
+      1
+    ],
+    ['"the finished run must come from the first ask\'s job"', 1],
+    ["firstJobId = afterFirst[0]!.id;", 1]
   ]
 };
 
