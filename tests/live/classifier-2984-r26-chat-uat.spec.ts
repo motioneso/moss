@@ -85,10 +85,39 @@ async function askInNewChat(page: Page, message: string): Promise<void> {
   await composer.press("Enter");
 }
 
-// A Claude sign-in chat is marked from launch, because its engine can read outside data without
-// asking. In a marked chat every connected tool asks first, whatever its rating, trust or YOLO
-// (spec rows "Moss's own rating: classifier runsWithoutAsking on a connected tool -> asks" and
-// "outbound risk, any trust -> asks"). So every chat ask here expects a card and no call.
+// Claude chats are marked at launch. Connected tools still ask without YOLO, even when the
+// owner allowed sending; under YOLO they run. Destructive tools always ask (#3338, #3417).
+
+/** Restores the original proof: the tool server receives the call and no card appears. */
+async function askUntilRan(page: Page, tool: string, message: string): Promise<number> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const before = (await toolServerCalls(tool)).length;
+    await askInNewChat(page, message);
+    const ran = await expect
+      .poll(async () => (await toolServerCalls(tool)).length - before, { timeout: 150_000 })
+      .toBeGreaterThanOrEqual(1)
+      .then(() => true)
+      .catch(() => false);
+    await expect(page.locator(ACTION_CARD)).toHaveCount(0);
+    if (ran) return (await toolServerCalls(tool)).length - before;
+  }
+  throw new Error(`${tool} never ran`);
+}
+
+async function setYolo(page: Page, enabled: boolean): Promise<void> {
+  if (enabled) {
+    const ownerId = sql(`select id from app.users where email = '${R26.ownerEmail}'`);
+    for (const [route, data] of [
+      ["/api/admin/yolo/instance", { enabled: true }],
+      [`/api/admin/yolo/users/${ownerId}`, { allowed: true }]
+    ] as const) {
+      const saved = await page.request.put(route, { data });
+      expect(saved.ok(), `${route} -> ${saved.status()}`).toBe(true);
+    }
+  }
+  const saved = await page.request.put("/api/me/yolo", { data: { enabled } });
+  expect(saved.ok(), `YOLO ${enabled} -> ${saved.status()}`).toBe(true);
+}
 
 /**
  * Asks until an approval card shows in a marked chat. The tool server must not see the call.
@@ -223,6 +252,19 @@ test("8. YOLO off: a safe-rated tool and a Sensitive tool both ask in a marked c
     false
   );
   await chatPictures(page, "r26-11-sensitive-asks");
+
+  await setYolo(page, true);
+  const ran = await askUntilRan(
+    page,
+    LIGHT,
+    `Call the tool named exactly ${call(LIGHT)} once with name "Kitchen light" and on true. ` +
+      "Do it now, no questions."
+  );
+  console.log("R2.6 light calls:", ran);
+  await page.waitForTimeout(5_000);
+  await expect(page.locator(ACTION_CARD)).toHaveCount(0);
+  await chatPictures(page, "r26-10-safe-runs");
+  await setYolo(page, false);
 });
 
 test("9. a Sends things out tool asks, still asks once allowed from the group, asks after Ask first for all", async ({
@@ -246,9 +288,17 @@ test("9. a Sends things out tool asks, still asks once allowed from the group, a
   expect(sortOf(allowed, NOTIFY_TOOL).sendWithoutAsking).toBe(true);
   expect(sortOf(allowed, EMAIL_TOOL).sendWithoutAsking).toBe(true);
 
-  // Sending without asking applies to unmarked chats only ("outbound risk, any trust -> asks").
+  // Group trust alone still asks after outside content; YOLO runs the same send (#3417).
   await askUntilCard(page, NOTIFY_TOOL, notify, true);
   await chatPictures(page, "r26-14-sending-still-asks");
+
+  await setYolo(page, true);
+  const ran = await askUntilRan(page, NOTIFY_TOOL, notify);
+  expect(ran, "the notification went out exactly once").toBe(1);
+  await page.waitForTimeout(5_000);
+  await expect(page.locator(ACTION_CARD)).toHaveCount(0);
+  await chatPictures(page, "r26-14-sending-runs");
+  await setYolo(page, false);
 
   await openConnection(page, NEW_HUB);
   await page.getByRole("button", { name: "Ask first for all" }).click();
@@ -288,6 +338,17 @@ test("10. a kept-out tool still reaches chat and is never named in shadow record
   // A connected look-up tool never joins the classifier's menu (its reply would only say the read
   // succeeded), so the released tool here is the light, a Changes things tool.
   await askUntilCard(page, LIGHT, "Turn the hallway light off with the hub tool.", true);
+
+  await setYolo(page, true);
+  const devices = await askUntilRan(
+    page,
+    DEVICES,
+    `Call the tool named exactly ${call(DEVICES)} once with no arguments. Do it now, no questions.`
+  );
+  console.log("R2.6 kept-out tool calls in chat:", devices);
+  await chatPictures(page, "r26-17-kept-out-runs");
+  await askUntilRan(page, LIGHT, "Turn the hallway light off with the hub tool.");
+  await setYolo(page, false);
 
   // Every tool-name column, plus the outcome. The record keeps the message text by design, and this
   // prompt names the kept-out tool, so the text column is left out.
@@ -334,14 +395,7 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
       "on conflict do nothing"
   );
   await setGate(page, "on");
-  for (const [route, data] of [
-    ["/api/admin/yolo/instance", { enabled: true }],
-    [`/api/admin/yolo/users/${ownerId}`, { allowed: true }],
-    ["/api/me/yolo", { enabled: true }]
-  ] as const) {
-    const saved = await page.request.put(route, { data });
-    expect(saved.ok(), `${route} -> ${saved.status()}`).toBe(true);
-  }
+  await setYolo(page, true);
   // Clears any 30-second cooldown left by the shadow turns.
   await page.waitForTimeout(35_000);
 
