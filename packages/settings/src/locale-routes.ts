@@ -2,10 +2,10 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import {
-  DEFAULT_LOCALE_SETTINGS,
+  LOCALE_PREFERENCE_KEY,
   getLocaleSettingsRouteSchema,
   putLocaleSettingsRouteSchema,
-  type LocaleDateFormat,
+  resolveEffectiveLocale,
   type LocaleSettingsDto,
   type PutLocaleSettingsRequest
 } from "@moss/shared";
@@ -14,8 +14,6 @@ import { HttpError } from "@moss/module-sdk";
 import type { QuietHoursPreferencesPort } from "./preferences-port.js";
 import { freezeQuietHoursBeforeLocaleWrite } from "./quiet-hours-writer.js";
 import { handleSettingsRouteError } from "./route-error.js";
-
-const LOCALE_PREFERENCE_KEY = "locale";
 
 interface LocaleRoutesDependencies {
   readonly dataContext: DataContextRunner;
@@ -33,7 +31,7 @@ export function registerLocaleRoutes(
       const locale = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
         dependencies.preferencesRepository.get(scopedDb, LOCALE_PREFERENCE_KEY)
       );
-      return { locale: normalizeLocale(locale) };
+      return { locale: resolveEffectiveLocale(locale) };
     } catch (error) {
       return handleSettingsRouteError(error, reply);
     }
@@ -55,31 +53,10 @@ export function registerLocaleRoutes(
   });
 }
 
-function normalizeLocale(value: unknown): LocaleSettingsDto {
-  if (!value || typeof value !== "object") return DEFAULT_LOCALE_SETTINGS;
-  const record = value as Record<string, unknown>;
-  const timezone =
-    typeof record.timezone === "string" && record.timezone.length <= 100 && record.timezone.trim()
-      ? record.timezone
-      : DEFAULT_LOCALE_SETTINGS.timezone;
-  const region =
-    typeof record.region === "string" && record.region.length <= 35 && record.region.trim()
-      ? record.region
-      : DEFAULT_LOCALE_SETTINGS.region;
-  const dateFormat = isLocaleDateFormat(record.dateFormat)
-    ? record.dateFormat
-    : DEFAULT_LOCALE_SETTINGS.dateFormat;
-  return { timezone, region, dateFormat };
-}
-
 function sanitizeLocale(locale: LocaleSettingsDto): LocaleSettingsDto {
   const timezone = locale.timezone.trim();
   const region = locale.region.trim();
   if (timezone.length === 0) throw new HttpError(400, "Time zone is required");
   if (region.length === 0) throw new HttpError(400, "Language and region is required");
   return { timezone, region, dateFormat: locale.dateFormat };
-}
-
-function isLocaleDateFormat(value: unknown): value is LocaleDateFormat {
-  return value === "24" || value === "12";
 }

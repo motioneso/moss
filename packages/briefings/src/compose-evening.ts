@@ -19,6 +19,8 @@ import {
   synthesizeWithConfiguredModel,
   SECTION_CHAR_CAP,
   isOpenCommitment,
+  briefingLocale,
+  localStamp,
   SECTION_ITEM_CAP,
   type BriefingGap,
   type ComposeDeps,
@@ -146,6 +148,7 @@ export async function composeEveningBriefing(
   const gaps: BriefingGap[] = [];
   const now = input.now ?? new Date();
   const timeZone = timezoneFor(definition.schedule_metadata);
+  const locale = briefingLocale(input, definition);
   const actionRows = await gatherActionRows(scopedDb, definition, input, deps, gaps);
   const plan = await resolvePlanContext(scopedDb, definition, now, deps, gaps);
 
@@ -245,7 +248,7 @@ export async function composeEveningBriefing(
         [
           sanitizeExternal(c.title),
           sanitizeExternal(c.status),
-          sanitizeExternal(c.dueAt),
+          sanitizeExternal(localStamp(c.dueAt, locale)),
           sanitizeExternal(c.counterparty)
         ]
           .filter(Boolean)
@@ -275,7 +278,9 @@ export async function composeEveningBriefing(
           // Start at local midnight so blocks earlier today still find their events.
           toolInput: calendarStart === null ? {} : { startsAfter: calendarStart },
           format: (e) =>
-            [sanitizeExternal(e.startsAt), sanitizeExternal(e.title)].filter(Boolean).join(" · ")
+            [sanitizeExternal(localStamp(e.startsAt, locale)), sanitizeExternal(e.title)]
+              .filter(Boolean)
+              .join(" · ")
         },
         calScratch,
         now,
@@ -288,7 +293,9 @@ export async function composeEveningBriefing(
     tomorrowItems
       .slice(0, SECTION_ITEM_CAP)
       .map((e) =>
-        [sanitizeExternal(e.startsAt), sanitizeExternal(e.title)].filter(Boolean).join(" · ")
+        [sanitizeExternal(localStamp(e.startsAt, locale)), sanitizeExternal(e.title)]
+          .filter(Boolean)
+          .join(" · ")
       )
   );
   if (tomorrowItems.length > SECTION_ITEM_CAP || tomorrowCapped.truncated) {
@@ -515,7 +522,8 @@ export async function composeEveningBriefing(
     planSection(
       plan.planContext,
       tasksReconciliation.rawItems,
-      calendarLoaded ? rawCalendar.rawItems : undefined
+      calendarLoaded ? rawCalendar.rawItems : undefined,
+      locale
     )
   );
 

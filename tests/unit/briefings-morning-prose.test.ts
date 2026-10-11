@@ -135,7 +135,7 @@ describe("morning briefing prose inputs (#2766)", () => {
         allDay("Ended trip", "2026-06-10", "2026-06-13")
       ],
       now,
-      "America/Los_Angeles"
+      { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "12" }
     );
     expect(section.lines).toEqual(["All day · Conference", "All day · Today holiday"]);
   });

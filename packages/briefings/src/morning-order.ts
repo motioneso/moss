@@ -6,6 +6,8 @@
 const TIME = /\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i;
 // A range such as "2:22-2:37 PM" or "11-1 PM" shares one AM/PM at the end.
 const RANGE = /\b(\d{1,2})(?::(\d{2}))?\s*[-\u2013\u2014]\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i;
+// A 24-hour clock time such as "14:05", read only for a person who uses the 24-hour clock.
+const TIME_24 = /\b([01]?\d|2[0-3]):([0-5]\d)\b/;
 const TAIL_HEADING = /\b(news|sports?)\b/i;
 
 // Words that may surround a restated event title without adding information.
@@ -52,7 +54,7 @@ function toMinutes(hour: number, minute: number, pm: boolean): number | null {
   return ((hour % 12) + (pm ? 12 : 0)) * 60 + minute;
 }
 
-function minutesOf(section: Section): number | null {
+function minutesOf(section: Section, clock: "12" | "24"): number | null {
   const text = `${section.heading}\n${section.body}`;
   const single = TIME.exec(text);
   const range = RANGE.exec(text);
@@ -66,7 +68,10 @@ function minutesOf(section: Section): number | null {
     const startPm = crossesNoon ? !endPm : endPm;
     return toMinutes(startHour, range[2] ? Number(range[2]) : 0, startPm);
   }
-  if (!single) return null;
+  if (!single) {
+    const h24 = clock === "24" ? TIME_24.exec(text) : null;
+    return h24 ? Number(h24[1]) * 60 + Number(h24[2]) : null;
+  }
   return toMinutes(
     Number(single[1]),
     single[2] ? Number(single[2]) : 0,
@@ -99,9 +104,13 @@ function onlyRestatesTitle(section: Section, titles: readonly string[]): boolean
 /**
  * Puts timed sections in clock order, leaves untimed sections after them and News/Sports
  * last, and drops a section whose body only restates an event title. Text with no `##`
- * sections is returned unchanged.
+ * sections is returned unchanged. With `clock` "24", bare 24-hour times also order sections.
  */
-export function tidyMorningSections(text: string, eventTitles: readonly string[]): string {
+export function tidyMorningSections(
+  text: string,
+  eventTitles: readonly string[],
+  clock: "12" | "24" = "12"
+): string {
   const lines = text.split("\n");
   const first = lines.findIndex((line) => line.startsWith("## "));
   if (first === -1) return text;
@@ -128,11 +137,11 @@ export function tidyMorningSections(text: string, eventTitles: readonly string[]
   const tail = kept.filter((section) => TAIL_HEADING.test(section.heading));
   const main = kept.filter((section) => !TAIL_HEADING.test(section.heading));
   const timed = main
-    .map((section, index) => ({ section, index, at: minutesOf(section) }))
+    .map((section, index) => ({ section, index, at: minutesOf(section, clock) }))
     .filter((entry) => entry.at !== null)
     .sort((a, b) => a.at! - b.at! || a.index - b.index)
     .map((entry) => entry.section);
-  const untimed = main.filter((section) => minutesOf(section) === null);
+  const untimed = main.filter((section) => minutesOf(section, clock) === null);
 
   const ordered = [...timed, ...untimed, ...tail].map((section) => section.raw).join("\n\n");
   return preamble === "" ? ordered : `${preamble.replace(/\s+$/, "")}\n\n${ordered}`;

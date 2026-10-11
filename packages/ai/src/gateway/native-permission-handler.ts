@@ -6,7 +6,7 @@ import type { ToolContext } from "@moss/module-sdk";
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AssistantToolGatewayDependencies } from "./gateway.js";
 import { actionHoldDurationMs } from "./action-result-record.js";
-import { isConversationTainted } from "./conversation-policy.js";
+import { isConversationMarked, isConversationTainted } from "./conversation-policy.js";
 import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
 import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import { LAUNCH_REPLAY_REFUSAL } from "./session-tokens.js";
@@ -62,7 +62,8 @@ export async function requestNativeToolPermission(
     localTimezone: (await deps.resolveLocalTimezone?.(actorUserId)) ?? undefined
   };
 
-  const yoloGranted =
+  // A clean conversation would allow this with no card.
+  const yoloAllows =
     (await nativeYoloCanAutoAllow(toolName, input, request.workingDirectory)) &&
     (await (async () => {
       try {
@@ -70,8 +71,8 @@ export async function requestNativeToolPermission(
       } catch {
         return false;
       }
-    })()) &&
-    !(await isConversationTainted(deps.provenance, ctx));
+    })());
+  const yoloGranted = yoloAllows && !(await isConversationTainted(deps.provenance, ctx));
 
   if (yoloGranted) {
     // Reserve the permission decision and create its pending record. A final grant is only
@@ -148,7 +149,7 @@ export async function requestNativeToolPermission(
     actionRequestId: action.id,
     ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
     toolName,
-    outsideContentNotice: await isConversationTainted(deps.provenance, ctx),
+    outsideContentNotice: yoloAllows && (await isConversationMarked(deps.provenance, ctx)),
     summary: nativeToolSummary(toolName, input)
   });
   const holdStartedAt = Date.now();

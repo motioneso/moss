@@ -10,7 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsScreen } from "../../external-modules/finance/src/web/screens/settings";
 import { __resetStoreForTests } from "../../external-modules/finance/src/web/store";
 
-type Route = (method: string, url: string, body: unknown) => { status: number; body: unknown };
+type Reply = { status: number; body: unknown };
+type Route = (method: string, url: string, body: unknown) => Reply | Promise<Reply>;
 
 const calls: Array<{ method: string; url: string; body: unknown }> = [];
 
@@ -22,7 +23,7 @@ function install(route: Route): void {
       const method = init?.method ?? "GET";
       const body = init?.body ? JSON.parse(init.body) : undefined;
       calls.push({ method, url, body });
-      const out = route(method, url, body);
+      const out = await route(method, url, body);
       return { ok: out.status < 300, status: out.status, json: async () => out.body };
     })
   );
@@ -186,6 +187,101 @@ describe("Finance settings (#3186)", () => {
     });
     expect(text(renderer)).toContain("Enter a whole number of dollars");
     expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("keeps choices, switches and limit disabled until both settings reads settle", async () => {
+    let releaseLimit!: (reply: Reply) => void;
+    const waitingLimit = new Promise<Reply>((resolve) => {
+      releaseLimit = resolve;
+    });
+    const fallback = defaults();
+    install((method, url, body) =>
+      method === "GET" && url === "/api/modules/finance/preferences"
+        ? waitingLimit
+        : fallback(method, url, body)
+    );
+    const renderer = await render();
+    expect(text(renderer)).toContain("Loading your current choices and dollar limit");
+    expect(radio(renderer, "all").props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ id: "fnm-limit" }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ id: "fnm-limit" }).props.value).toBe("");
+    await act(async () => {
+      renderer.root.findByProps({ "aria-controls": "fnm-customize" }).props.onClick();
+    });
+    const switches = renderer.root.findAll(
+      (n) => n.type === "input" && n.props.type === "checkbox"
+    );
+    expect(switches).toHaveLength(5);
+    expect(switches.every((n) => n.props.disabled)).toBe(true);
+    // A stale event cannot write through the disabled presentation.
+    await act(async () => {
+      radio(renderer, "all").props.onChange();
+      switches[0]!.props.onChange({ target: { checked: true } });
+      renderer.root.findByProps({ id: "fnm-limit" }).props.onBlur();
+    });
+    expect(calls.some((c) => c.method === "PATCH" || c.url.endsWith("/finance/freedom"))).toBe(
+      false
+    );
+    await act(async () => {
+      releaseLimit({
+        status: 200,
+        body: { preferences: [{ key: "freedomLimitDollars", value: 250 }] }
+      });
+    });
+    expect(radio(renderer, "all").props.disabled).not.toBe(true);
+    expect(renderer.root.findByProps({ id: "fnm-limit" }).props.value).toBe("$250");
+  });
+
+  it.each([
+    { status: 503, body: {} },
+    { status: 200, body: {} },
+    { status: 200, body: { preferences: [{ key: "freedomLimitDollars", value: "unknown" }] } }
+  ])(
+    "shows an unavailable limit instead of an editable $100 after invalid reads: %j",
+    async (reply) => {
+      install(defaults({ "GET /api/modules/finance/preferences": reply }));
+      const renderer = await render();
+      expect(text(renderer)).toContain("Couldn't load your dollar limit.");
+      expect(text(renderer)).toContain("Retry loading settings");
+      expect(radio(renderer, "all").props.disabled).toBe(true);
+      expect(renderer.root.findByProps({ id: "fnm-limit" }).props.disabled).toBe(true);
+      expect(renderer.root.findByProps({ id: "fnm-limit" }).props.value).toBe("");
+      expect(text(renderer)).not.toContain("Couldn't save");
+    }
+  );
+
+  it("keeps a confirmed limit while policy defaults are unverified, then enables editing after retry", async () => {
+    const failed = defaults({ "GET /api/ai/action-policy": { status: 503, body: {} } });
+    let recovered = false;
+    install((method, url, body) => (recovered ? defaults() : failed)(method, url, body));
+    const renderer = await render();
+    expect(text(renderer)).toContain("Showing the safe defaults.");
+    expect(radio(renderer, "routine").props.checked).toBe(false);
+    expect(renderer.root.findByProps({ id: "fnm-limit" }).props.value).toBe("$100");
+    expect(renderer.root.findByProps({ id: "fnm-limit" }).props.disabled).toBe(true);
+    recovered = true;
+    await act(async () => {
+      renderer.root
+        .findAllByType("button")
+        .find((n) => collect(n.props.children).trim() === "Retry loading settings")!
+        .props.onClick();
+    });
+    expect(radio(renderer, "routine").props.checked).toBe(true);
+    expect(radio(renderer, "all").props.disabled).not.toBe(true);
+    expect(text(renderer)).not.toContain("Couldn't load");
+  });
+
+  it("renders an explicit decorative disclosure marker without consuming the shared hit target", async () => {
+    install(defaults());
+    const renderer = await render();
+    const marker = renderer.root.findByProps({ className: "fnm-disclosure-marker" });
+    expect(marker.props["aria-hidden"]).toBe("true");
+    const disclosure = renderer.root.findByProps({ "aria-controls": "fnm-customize" });
+    expect(disclosure.props["aria-expanded"]).toBe(false);
+    await act(async () => disclosure.props.onClick());
+    expect(
+      renderer.root.findByProps({ "aria-controls": "fnm-customize" }).props["aria-expanded"]
+    ).toBe(true);
   });
 
   it("shows the bank key rows to an admin and never the values", async () => {

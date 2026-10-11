@@ -148,16 +148,18 @@ async function provenance(threadId: string) {
   );
 }
 
-// The user's own trust runs writes after outside content (#3338). Turn it off so the card's
-// outside-content notice shows whether the thread is tainted.
+// The user's own trust runs writes after outside content (#3338). The thread carries a durable
+// mark, and a write the user has not trusted asks.
 async function expectThemeApproval(h: Awaited<ReturnType<typeof harness>>) {
+  expect(await store.isMarked(ids.userA, h.bound.id)).toBe(true);
   h.policy.tier = "ask_each_time";
   const pending = h.gateway.callTool(h.token, "settings.themeMode.set", { mode: "dark" });
   await vi.waitFor(() =>
     expect(h.records.some((record) => record.kind === "action_request")).toBe(true)
   );
   const card = h.records.find((record) => record.kind === "action_request")!;
-  expect(card.outsideContentNotice).toBe(true);
+  // ask_each_time asks in a clean thread too, so outside content is not the reason.
+  expect(card.outsideContentNotice).toBe(false);
   await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected");
   expect(await pending).toMatchObject({ ok: false, denied: true });
 }

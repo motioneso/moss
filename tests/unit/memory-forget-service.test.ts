@@ -80,7 +80,7 @@ describe("memory forget target version and conditional deletion", () => {
     );
     expect(h.queries[1]?.parameters).toEqual([OWNER, [SUBJECT]]);
     expect(h.queries[3]?.sql.replace(/\s+/g, " ").trim()).toBe(
-      "DELETE FROM app.memory_facts WHERE owner_user_id = $1::uuid AND id = $2::uuid AND xmin::text = $3 RETURNING id"
+      "DELETE FROM app.memory_facts WHERE owner_user_id = $1::uuid AND id = $2::uuid AND xmin::text = $3 RETURNING id, conflict_group_id"
     );
     expect(h.queries[3]?.parameters).toEqual([OWNER, FACT, "510"]);
     expect(h.queries[4]?.sql.replace(/\s+/g, " ").trim()).toBe(
