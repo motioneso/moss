@@ -267,3 +267,7 @@ blocking	packages/sports/src/web/rotation-control.tsx	tests/uat/specs/audit-feed
 blocking	packages/news/src/web/story-feedback.css	tests/uat/specs/audit-feeds.uat.spec.ts
 blocking	packages/news/src/web/styles/news-2.css	tests/uat/specs/audit-feeds.uat.spec.ts
 blocking	packages/sports/src/web/styles/sports-5-editorial.css	tests/uat/specs/audit-feeds.uat.spec.ts
+
+# #3397 shared modal focus recovery through real task comments.
+blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
+blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts
