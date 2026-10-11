@@ -527,7 +527,7 @@ function targetTimeLabel(value: string, locale: LocaleSettingsDto): string {
   const minutes = parseTargetMinutes(value) ?? 19 * 60;
   const clock = `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
   const label = formatClockTime(clock, locale);
-  return locale.dateFormat === "12" ? label.replace(":00", "") : label;
+  return locale.dateFormat === "24" ? label : label.replace(":00", "");
 }
 
 function shortDate(iso: string, locale: LocaleSettingsDto): string {

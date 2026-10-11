@@ -190,9 +190,7 @@ function TimelineTime(props: { readonly item: DayItem; readonly locale: LocaleSe
   return (
     <div className="day-ev__t tl-time">
       {item.startsAt !== null ? (
-        <>
-          <ClockTime iso={item.startsAt} locale={props.locale} />
-        </>
+        <ClockTime iso={item.startsAt} locale={props.locale} />
       ) : (
         "No time yet"
       )}
@@ -207,10 +205,6 @@ function TimelineTime(props: { readonly item: DayItem; readonly locale: LocaleSe
   );
 }
 
-function compactTime(iso: string, locale: LocaleSettingsDto): string {
-  return clockText(iso, locale, "");
-}
-
 /** Morning reader rail row: start time, then title over "end · state".
     Task rows keep their button and data-state; events stay plain. */
 export function SnapshotRow(props: {
@@ -220,8 +214,8 @@ export function SnapshotRow(props: {
 }) {
   const { item } = props;
   const endAt = rowEndAt(item);
-  const endText = endAt !== null ? compactTime(endAt, props.locale) : null;
-  const start = item.startsAt !== null ? compactTime(item.startsAt, props.locale) : "No time yet";
+  const endText = endAt !== null ? clockText(endAt, props.locale, "") : null;
+  const start = item.startsAt !== null ? clockText(item.startsAt, props.locale, "") : "No time yet";
   if (item.eventId !== null) {
     return (
       <div

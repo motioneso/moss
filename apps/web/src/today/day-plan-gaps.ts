@@ -51,10 +51,6 @@ function resolveKnownEnd(item: DayItem): number | null {
   return null;
 }
 
-function compactTime(iso: string, locale: LocaleSettingsDto): string {
-  return clockText(iso, locale, "");
-}
-
 /** An item with no computable end takes the first later start among the other items as its
     end, so it still merges into the running occupied span instead of acting as a barrier. If
     no later start exists, its end stays open (Infinity), which only matters for the closing
@@ -120,7 +116,7 @@ export function buildScheduleGaps(
     ? {
         key: `closing:${lastItem.key}`,
         afterItemKey: lastItem.key,
-        text: `The evening is open. No more commitments after ${compactTime(new Date(blockEnd).toISOString(), locale)}.`
+        text: `The evening is open. No more commitments after ${clockText(new Date(blockEnd).toISOString(), locale, "")}.`
       }
     : null;
 

@@ -112,9 +112,7 @@ function DayItemRow(props: {
     <div className="jds-task" key={item.key} data-state={item.state}>
       <div className="day-ev__t">
         {item.startsAt !== null ? (
-          <>
-            <ClockTime iso={item.startsAt} locale={props.locale} />
-          </>
+          <ClockTime iso={item.startsAt} locale={props.locale} />
         ) : (
           "No time yet"
         )}

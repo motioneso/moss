@@ -3,7 +3,13 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import type { CalendarEventDto, LocaleSettingsDto, TaskDto } from "@moss/shared";
+import type {
+  CalendarEventDto,
+  DayPlanBlockDto,
+  DayPlanDto,
+  LocaleSettingsDto,
+  TaskDto
+} from "@moss/shared";
 
 import { buildChatSeeds } from "../../apps/web/src/chat/seeds.js";
 import { ClockTime } from "../../apps/web/src/today/clock-time.js";
@@ -41,7 +47,8 @@ beforeAll(() => {
   process.env.TZ = "UTC";
 });
 afterAll(() => {
-  process.env.TZ = ambientTz;
+  if (ambientTz === undefined) delete process.env.TZ;
+  else process.env.TZ = ambientTz;
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -112,17 +119,45 @@ describe("Today clock labels honour the 24-hour choice", () => {
     );
   });
 
-  it("captions day plan items in 24-hour time", () => {
+  it("captions day plan blocks and their reasons in 24-hour time", () => {
+    // A 30-minute prep block at 15:05 ends at 15:35, when the meeting starts.
+    const prep: DayPlanBlockDto = {
+      id: "b1",
+      kind: "prep",
+      taskId: null,
+      title: "Prep",
+      position: 0,
+      actualPlacement: { startsAt: AFTERNOON, durationMinutes: 30, calendarEventRef: null },
+      pendingChange: null
+    };
+    const plan: DayPlanDto = {
+      id: "plan-1",
+      localDay: "2026-10-10",
+      timeZone: PACIFIC_24.timezone,
+      revision: 1,
+      sourceRunId: null,
+      blocks: [prep],
+      eveningIntent: {
+        priorityTaskIds: [],
+        capacity: null,
+        notes: null,
+        corrections: [],
+        commitments: []
+      }
+    };
     const items = buildDayItems({
-      plan: null,
+      plan,
       tasks: [],
       unavailableTaskIds: [],
-      events: [event()],
+      events: [event({ startsAt: "2026-10-10T22:35:00.000Z" })],
       locale: PACIFIC_24,
-      now: new Date("2026-10-10T16:00:00.000Z")
+      now: new Date("2026-10-10T16:00:00.000Z"),
+      targetDayKey: "2026-10-10",
+      proposedCaption: "short"
     });
-    const text = JSON.stringify(items);
-    expect(text).not.toMatch(/\b(am|pm)\b/i);
+    const block = items.find((item) => item.key === "block:b1");
+    expect(block?.label).toBe("15:35 · On calendar");
+    expect(block?.reason).toBe("For Design review at 15:35");
   });
 });
 
