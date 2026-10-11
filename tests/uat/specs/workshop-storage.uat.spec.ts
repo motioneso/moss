@@ -29,7 +29,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
   await page.getByLabel("Password").fill(password);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible({ timeout: 30_000 });
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -40,8 +40,8 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 }
 
 async function signOut(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Log out" }).click();
   await expect(page.locator("form.auth-form")).toBeVisible({ timeout: 30_000 });
 }
 

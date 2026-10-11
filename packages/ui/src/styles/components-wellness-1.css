@@ -30,8 +30,8 @@
 }
 .wl-title {
   font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 600;
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-black);
 }
 .wl-lede {
   font-family: var(--font-sans);
@@ -39,7 +39,7 @@
   color: var(--text-muted);
 }
 .wl-herostat .k {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -109,7 +109,7 @@
 
 .wl-medgrp__lbl {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--text-faint);
 }
@@ -149,7 +149,7 @@
   font-family: var(--font-sans);
 }
 .wl-medrow__prn {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
   border: 1px solid var(--border);
@@ -234,7 +234,7 @@
   color: var(--text-muted);
 }
 .wl-done__mood .k {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -264,9 +264,7 @@
 }
 
 .wl-insights {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  border-top: 1px solid var(--border);
 }
 .wl-insights__hd {
   border-bottom: 1px solid var(--border-subtle);
@@ -326,9 +324,7 @@
 }
 
 .wl-chartcard {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  border-top: 1px solid var(--border);
 }
 .wl-rangetoggle {
   background: var(--surface-2);
@@ -382,7 +378,7 @@
 }
 .wl-help__k {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--text-faint);
 }
@@ -414,7 +410,7 @@
 }
 .wl-chart__tip .d {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
 }
 .wl-chart__tip .big {
   font-size: 14px;
@@ -428,10 +424,10 @@
 }
 .wl-tiprow .miss {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
 }
 .wl-tiprow--more {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
 }
 .wl-chart__tip.is-pinned {
   outline: 1.5px solid var(--accent-fg);

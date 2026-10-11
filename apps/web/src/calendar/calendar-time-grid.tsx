@@ -27,13 +27,13 @@ interface EventBlockProps {
 function EventBlock({ e, hourH, dense, onPick }: EventBlockProps) {
   const ppm = hourH / 60;
   const top = e.startMin * ppm;
-  const height = Math.max((e.endMin - e.startMin) * ppm, 22);
+  const height = Math.max((e.endMin - e.startMin) * ppm, 28);
   const cols = e._cols || 1;
   const col = e._col || 0;
   const w = 100 / cols;
   const left = col * w;
   const isBlock = e.kind === "block";
-  const showTime = height >= 34;
+  const showTime = height >= 44;
   const showWhere = height >= 58 && !dense && e.where;
   const isTentative = e.status === "needsAction" || e.status === "tentative";
   const variant: EventChipVariant = isBlock ? "block" : isTentative ? "tentative" : "hard";
@@ -73,12 +73,20 @@ export function CalendarTimeGrid({ days, hourH, onPick }: TimeGridProps) {
     el.scrollTop = Math.max(0, nowPx - el.clientHeight / 2);
   }, [hourH]);
 
-  const tmpl = `60px repeat(${days.length}, minmax(0, 1fr))`;
+  const tmpl = `var(--cal-gutter, 60px) repeat(${days.length}, minmax(0, 1fr))`;
   const anyAllDay = days.some((d) => d.events.some((e) => e.allDay));
   const todayNowMin = nowMin();
 
   return (
-    <div className="cal-tg" style={{ "--cal-h": hourH + "px" } as React.CSSProperties}>
+    <div
+      className="cal-tg"
+      style={
+        {
+          "--cal-h": hourH + "px",
+          minWidth: days.length > 1 ? 60 + days.length * 144 : 0
+        } as React.CSSProperties
+      }
+    >
       <div className="cal-tg__head" style={{ gridTemplateColumns: tmpl }}>
         <div className="cal-tg__corner" />
         {days.map((d) => (

@@ -368,8 +368,8 @@ export const chatModuleManifest = {
     {
       id: "chat.conversation_write_confirmation",
       description:
-        "Every write, including installed and connected tools, asks on outside or unknown history, even in YOLO. " +
-        "Admission is recorded before exposure and survives restart. Native vault reads stop if their conversation cannot be recorded.",
+        "Outside history makes writes ask unless trusted by Auto-approve actions or a no-ask action group within its limit. " +
+        "Unknown history asks. Admission is recorded first and survives restart. Native vault reads stop if it cannot be recorded.",
       featureFlagId: "chat.module"
     },
     {
@@ -867,7 +867,7 @@ export const chatModuleManifest = {
     {
       name: "chat.readAttachment",
       description:
-        "Read a file the user attached to the current chat turn, by attachmentId from the turn's <attachments> manifest. Images return as viewable images; PDFs and text files return extracted text.",
+        "Read a file the user attached to the current chat turn, by attachmentId from the turn's <attachments> manifest. Images return as viewable images. PDFs and text files return extracted text one page at a time: each text result gives totalChars (the file's full length), the characters returned, and nextOffset when more of the file remains. When you look for a specific figure or term, pass search first: it returns up to six matches with the character offset of each and the text around it, plus nextOffset when more matches remain. Then call again with offset set to a match's offset and no search to read around it. Searching finds only the exact words, so before saying something is not in the file, keep calling with offset set to nextOffset until nextOffset is absent, reading to the end.",
       permissionId: "chat.view",
       risk: "read",
       content: "outside",
@@ -877,7 +877,23 @@ export const chatModuleManifest = {
         type: "object",
         additionalProperties: false,
         required: ["attachmentId"],
-        properties: { attachmentId: { type: "string" } }
+        properties: {
+          attachmentId: { type: "string" },
+          offset: {
+            type: "number",
+            description:
+              "Character position to start reading from, or to start searching from when search is set. Defaults to 0."
+          },
+          limit: {
+            type: "number",
+            description: "Most characters to return in this page. Capped at 12000."
+          },
+          search: {
+            type: "string",
+            description:
+              "Exact figure or words to find, ignoring capitals. Up to 100 characters. Returns matches, not a page of text."
+          }
+        }
       },
       execute: chatReadAttachmentExecute
     },

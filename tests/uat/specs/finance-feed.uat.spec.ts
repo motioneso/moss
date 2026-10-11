@@ -123,11 +123,11 @@ test("Finance feed works end-to-end on a docker-cp activated module", async ({ p
   // Scoped to the form: the auth-mode segmented control has its own "Sign in" tab button
   // with the same accessible name as the submit button (apps/web/src/auth/auth-screen.tsx).
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   const openInstanceModules = async () => {
-    await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Admin / Setup" }).click();
     await page.getByRole("button", { name: "Instance modules" }).click();
   };

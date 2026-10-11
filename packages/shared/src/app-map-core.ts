@@ -65,7 +65,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "notifications",
     label: "Notifications",
     description:
-      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the person's name and avatar only (no email line, unless no name is set) and the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label. The page header shows the title and the date under it (for example SUN · OCT 4) and has no settings cog, because this page has no settings of its own. How much Moss pushes to the phone is set in Settings under Notifications, as one saved choice per person: Quiet pushes only urgent items, Balanced (the default) pushes urgent and normal items but not low ones, and Proactive pushes everything. The same choice decides whether the summary sent when quiet hours end is sent for a deferred item. The list here and the daily briefing always show every notification whatever the level.",
+      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the person's name and avatar only (no email line, unless no name is set) and the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label. The page header shows the title and the date under it (for example SUN · OCT 4) and has no settings cog, because this page has no settings of its own. How much Moss pushes to the phone is set in Settings under Notifications, as one saved choice per person: Quiet pushes only urgent items, Balanced (the default) pushes urgent and normal items but not low ones, and Proactive pushes everything. The same choice decides whether the summary sent when quiet hours end is sent for a deferred item. The list here and the daily briefing always show every notification whatever the level. The list distinguishes loading, no notifications and no unread notifications. A failed read offers Retry without reporting unknown counts as zero; marking an item read reports progress and failure beside that item, and a failed Mark all read reports its own error.",
     path: "/notifications",
     scope: "user"
   },
@@ -114,14 +114,15 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     label: "Your assistant",
     description:
       "Change the AI model for chat: choose which model answers, change model routing and response behavior. The chat panel header and message box follow whether a chat model is available: with none, the header reads Not connected and a Connect a provider link to this screen replaces an empty message box; caller starters and unsent drafts remain editable, and with an admin-locked model that is unavailable, the header reads Model unavailable and the message box is disabled. When Auto-approve actions is on for your account, agent tool requests eligible for approval run without a confirmation card and are recorded as auto-approved in Activity. Unknown, unavailable, malformed, and forbidden-path requests remain refused. Turning Auto-approve actions off restores confirmation for the next eligible request. Also choose assistant behavior and response style (concise, balanced, or detailed, each shown with an example answer of that length) available to this user. Write the persona as free text or set it with guided dials. The preview area invites the user to press Preview until a real reply comes back, and shows the invitation again after the persona text, dials, or assistant name change. Preview a response with the selected chat provider; a CLI preview requires a supported ACP agent and a working sign-in and runner connection, which an admin can check in Admin > AI providers. Selecting a Codex model clears a saved OpenCode chat choice. The model button above the chat message box shows the selected model's readable name, falling back to the provider's model identifier and then to Instance default when no readable name is known. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > AI providers) to turn on the microphone in chat. The chat panel works with the keyboard: opening it moves focus into the message box (or onto the panel when the message box is replaced or disabled), Escape closes it and returns focus to the button that opened it, and on a phone Tab and Shift+Tab stay inside the open panel and screen readers treat it as a modal dialog, including beside a running draft. On a window 1280 pixels wide or more the chat panel sits beside the page and narrows it, so you can see the page while you chat. On narrower windows it floats over the right side of the page, except beside a running draft module, where it stays beside the page down to the phone width. Beside the page the chat panel is square-cornered and flush with the window edge, separated from the page by a single divider line, and its message box shows one outline. On a phone it is an overlay drawer that keeps its rounded floating shape. The chat panel header has four buttons: Conversations, Expand, More, and Close. Conversations opens a three-line overlay, covering the chat panel only and never the page beside it, with the durable Main chat and side chats; selecting your Main or one of your side chats activates its transcript, a chat another person shared with you is listed but does not open and the overlay stays open, and New side chat in the overlay starts a separate durable conversation. If the conversation list cannot load, it shows an error and Retry reloads it; if the selected transcript cannot load, its Retry reloads that transcript. More opens from the three-dot button and contains only Start private chat (the private chat toggle). On a desktop window with the chat docked beside the page, Expand makes the chat fill the whole main area, replacing the page header and page body while the left navigation stays, and Collapse in the same spot returns to the docked panel. Expanded chat reads in a centred column. Choosing another screen from the left navigation opens that screen and returns the chat to docked, keeping any unsent text, and closing the chat or reloading the app also returns it to docked. There is no Expand button on a phone. " +
-      "Approval cards for app actions show the server-owned action title, full resolved target and exact requested changes as readable label and value rows, with Approve and Reject controls. Approve uses the normal primary style; deleting a saved memory or a note uses red. Note deletion states that it is permanent with no trash or undo. Approval buttons have a clear keyboard focus outline. File and shell permission cards use the same layout while retaining the exact path or command needed for the decision. Connected tools without an authored readable presentation show their complete validated arguments without truncation. Cards that follow outside content show one short notice. When details are missing or cannot be fully disclosed, Approve is unavailable and Reject remains available; ask for a fresh request or use the app screen. Restored requests regain their normal card only when complete server details are available. Decided cards become one quiet result line without a selected-box outline; keyboard focus and announcements remain available. Successful chat actions refresh affected cached screens without a page reload. The assistant name set here replaces the word Moss in screen text across the app: the loading screen, the top bar, the browser tab title, settings, onboarding, Today and notifications. Text quoted in this map shows the default name Moss; a user who renamed their assistant sees that name instead. Before the name loads, screens show the last name saved in the browser, or Moss if none.",
+      "Approval cards for app actions show the server-owned action title, full resolved target and exact requested changes as readable label and value rows, with Approve and Reject controls. Approve uses the normal primary style; deleting a saved memory or a note uses red. Note deletion states that it is permanent with no trash or undo. Approval buttons have a clear keyboard focus outline. File and shell permission cards use the same layout while retaining the exact path or command needed for the decision. Connected tools without an authored readable presentation show their complete validated arguments without truncation. Cards that follow outside content show one short notice. A chat that holds outside content, which includes every chat on an outside agent such as Claude or Codex, still runs a change with no card when the user's own settings allow it: Auto-approve actions, an action group set or granted at install to run without asking (Settings preferences such as the theme are granted at install), or a module's freedom setting under its limit, such as Finance's per-move limit. In such a chat, changes allowed only by Moss's own risk sorting, general app changes without Auto-approve actions, sending or web lookups, and deletions still ask. When details are missing or cannot be fully disclosed, Approve is unavailable and Reject remains available; ask for a fresh request or use the app screen. Restored requests regain their normal card only when complete server details are available. Decided cards become one quiet result line without a selected-box outline; keyboard focus and announcements remain available. Successful chat actions refresh affected cached screens without a page reload. The assistant name set here replaces the word Moss in screen text across the app: the loading screen, the top bar, the browser tab title, settings, onboarding, Today and notifications. Text quoted in this map shows the default name Moss; a user who renamed their assistant sees that name instead. Before the name loads, screens show the last name saved in the browser, or Moss if none.",
     path: "/settings?section=assistant",
     scope: "user"
   },
   {
     id: "priorities",
     label: "Priorities",
-    description: "Set goals and commitments the assistant should prioritize.",
+    description:
+      "Set goals and commitments the assistant should prioritize. Loading and failed reads are distinct from an empty list; Try again reloads unavailable priorities and failed writes retain their draft for another attempt.",
     path: "/settings?section=priorities",
     scope: "user"
   },
@@ -131,7 +132,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     description:
       "Review and configure assistant memory behaviour, and choose the People folder. Every " +
       "folder is chosen from the same list of available folders, and People notes live inside " +
-      "the chosen notes folder.",
+      "the chosen notes folder. The dashboard distinguishes a failed read from no memories and offers Try again; previously loaded rows remain visible after a failed refresh. People folder, match-candidate and People-list reads also show failures with Try again.",
     path: "/settings?section=memory",
     scope: "user"
   },
@@ -249,7 +250,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "people",
     label: "People & access",
-    description: "Manage instance users, access, and registration policy.",
+    description:
+      "Manage instance users, access, and registration policy. Failed member-list reads show an error with Try again rather than an empty instance; previously loaded members remain available during a failed refresh.",
     path: "/settings?section=people",
     scope: "admin"
   },
@@ -380,14 +382,16 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "oversight",
     label: "Connector oversight",
-    description: "Review connector health across the instance.",
+    description:
+      "Review connector health across the instance. Loading, failed reads and an empty result are distinct; Try again reloads the report and previously loaded records remain visible after a failed refresh.",
     path: "/settings?section=oversight",
     scope: "admin"
   },
   {
     id: "audit",
     label: "Audit & operations",
-    description: "Review instance audit and operational records.",
+    description:
+      "Review instance audit and operational records. Failed reads offer Try again and do not look like an empty log; previously loaded records remain visible after a failed refresh.",
     path: "/settings?section=audit",
     scope: "admin"
   },

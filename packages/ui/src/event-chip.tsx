@@ -30,7 +30,7 @@ export function EventChip(props: EventChipProps) {
       <span className="cal-ev__body">
         <span className="cal-ev__title">
           {props.holdIcon ? <span className="cal-ev__hold">{props.holdIcon}</span> : null}
-          {props.title}
+          <span className="cal-ev__titletext">{props.title}</span>
         </span>
         {props.time ? <span className="cal-ev__meta">{props.time}</span> : null}
         {props.where ? <span className="cal-ev__where">{props.where}</span> : null}

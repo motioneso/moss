@@ -31,7 +31,7 @@ const inputTypes = [
 
 function fullWidthInputRule() {
   const rule = appCss.match(
-    /(input(?::where\([\s\S]*?\))?,\nselect,\ntextarea) \{\n {2}width: 100%;([\s\S]*?)\n\}/
+    /(:where\(\n {2}input:[\s\S]*?\n\)) \{\n {2}width: 100%;([\s\S]*?)\n\}/
   );
   expect(rule).not.toBeNull();
   return { selector: rule![1]!, declarations: `width: 100%;${rule![2]}`.trim() };
@@ -50,33 +50,35 @@ function inputWithin(type: string, meetings: boolean, radioCard: boolean) {
 }
 
 describe("Meetings CSS boundaries", () => {
-  it("preserves the original global input matching outside Meetings, including radio cards", () => {
+  it("leaves choice, range and color inputs to their controls outside Meetings", () => {
     const { selector } = fullWidthInputRule();
     for (const type of inputTypes) {
       for (const radioCard of [false, true]) {
         const input = inputWithin(type, false, radioCard);
-        expect(input.matches(selector), `${type}, radio card=${radioCard}`).toBe(true);
-      }
-    }
-  });
-
-  it("excludes only radio-card radios inside Meetings settings", () => {
-    const { selector } = fullWidthInputRule();
-    for (const type of inputTypes) {
-      for (const radioCard of [false, true]) {
-        const input = inputWithin(type, true, radioCard);
         expect(input.matches(selector), `${type}, radio card=${radioCard}`).toBe(
-          !(radioCard && type === "radio")
+          !["checkbox", "radio", "range", "color"].includes(type)
         );
       }
     }
   });
 
-  it("keeps text controls, declarations and type-selector specificity unchanged", () => {
+  it("uses the same safe input boundary inside Meetings settings", () => {
+    const { selector } = fullWidthInputRule();
+    for (const type of inputTypes) {
+      for (const radioCard of [false, true]) {
+        const input = inputWithin(type, true, radioCard);
+        expect(input.matches(selector), `${type}, radio card=${radioCard}`).toBe(
+          !["checkbox", "radio", "range", "color"].includes(type)
+        );
+      }
+    }
+  });
+
+  it("keeps text controls full width with zero-specificity defaults and token radius", () => {
     const { selector, declarations } = fullWidthInputRule();
-    // :where gives the scoped exception zero specificity; the input type remains 0-0-1.
+    // A zero-specificity default cannot override authored @moss/ui controls.
     expect(selector).toBe(
-      'input:where(:not(.meeting-settings .jds-radio-card input[type="radio"])),\nselect,\ntextarea'
+      ':where(\n  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),\n  select,\n  textarea\n)'
     );
     for (const tagName of ["input", "select", "textarea"]) {
       expect(document.createElement(tagName).matches(selector), tagName).toBe(true);
@@ -84,7 +86,7 @@ describe("Meetings CSS boundaries", () => {
     expect(declarations).toBe(`width: 100%;
   min-height: 2.5rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   color: var(--ink);
   padding: 0.6rem 0.7rem;`);

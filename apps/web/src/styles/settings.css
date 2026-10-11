@@ -410,3 +410,110 @@
 .conn__count dt {
   margin: 0;
 }
+
+/* Opt in for settings rows whose multi-action controls need the full phone width.
+   Ordinary switch rows deliberately keep their side-by-side layout. */
+@media (max-width: 620px) {
+  .set-row.set-row--stack-narrow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  .set-row--stack-narrow > .set-row__control {
+    width: 100%;
+    min-width: 0;
+  }
+  .set-row--stack-narrow > .set-row__control > span {
+    flex-wrap: wrap;
+  }
+}
+
+/* Memory dashboard: keep records ruled and metadata/action groups distinct. */
+.memdash,
+.memdash-list,
+.memdash-drawer,
+.memdash-drawer__form {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-5);
+}
+.memdash > .jds-segmented {
+  justify-self: start;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.memdash-list {
+  gap: 0;
+}
+.memdash-item {
+  min-width: 0;
+  padding: var(--space-4) 0;
+}
+.memdash-item__header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) 0;
+  text-align: left;
+}
+.memdash-item__title {
+  flex: 1 1 15rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.memdash-item__badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.memdash-item__date {
+  white-space: nowrap;
+}
+.memdash-item__summary {
+  margin: var(--space-3) 0 0;
+  overflow-wrap: anywhere;
+}
+.memdash-drawer {
+  margin-top: var(--space-5);
+}
+.memdash-drawer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  overflow-wrap: anywhere;
+}
+.memdash-drawer__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.memdash-form-check {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+.memdash-form-check input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  min-height: 0;
+  flex: none;
+  margin: 0;
+  padding: 0;
+}
+.memdash-empty {
+  margin: 0;
+  padding: var(--space-4) 0;
+}
+
+.set2-read-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+}

@@ -223,7 +223,7 @@
 }
 .provpick__hd {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -351,7 +351,7 @@
 }
 .ppl__you {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--accent-fg);
   background: var(--forest-soft);

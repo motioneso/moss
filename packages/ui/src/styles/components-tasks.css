@@ -50,7 +50,7 @@
   box-shadow: var(--shadow-lg);
 }
 .tk-tagmenu__hd {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -127,7 +127,7 @@
 }
 .tk-liststate {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   border-radius: var(--radius-pill);
 }
@@ -140,7 +140,7 @@
   color: var(--text-subtle);
 }
 .tk-tagmenu__hint {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   color: var(--text-faint);
 }
 .tk-activetags__lbl {
@@ -189,12 +189,17 @@
   color: var(--text-faint);
 }
 .tk-task {
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
-.tk-task:hover {
-  background: var(--surface-2);
-  box-shadow: var(--shadow-sm);
+.tk-task:hover,
+.tk-task:focus-within {
+  box-shadow: inset 3px 0 var(--gold);
+}
+.tk-task:hover .tk-task__title,
+.tk-task:focus-within .tk-task__title {
+  color: var(--accent-fg);
 }
 .tk-task__bar {
   border-radius: var(--radius-pill);
@@ -368,14 +373,7 @@
   font-size: 13px;
   font-weight: 600;
 }
-.tk-ava {
-  border-radius: 50%;
-  background: var(--tk-ava-bg);
-  color: var(--white);
-  font-family: var(--font-sans);
-  font-size: var(--tk-ava-fs);
-  font-weight: 700;
-}
+
 .tk-peoplefield {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
