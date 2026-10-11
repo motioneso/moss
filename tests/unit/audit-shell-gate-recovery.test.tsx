@@ -165,6 +165,29 @@ describe("audit account and module gate recovery", () => {
     );
     expect(button("Sign out")).toBeDefined();
   });
+  it("clears cached state after a successful sign out from a blocked account", async () => {
+    api.me.mockRejectedValueOnce(new ApiError(403, "pending", "account_pending_approval"));
+    api.signOut.mockResolvedValueOnce(undefined);
+    await mount("/today", false);
+    client.setQueryData(["sentinel"], "cached");
+    act(() => button("Sign out").click());
+    await settle();
+    expect(api.signOut).toHaveBeenCalledTimes(1);
+    expect(client.getQueryData(["sentinel"])).toBeUndefined();
+  });
+  it("keeps recovery controls and cached state after a failed sign out", async () => {
+    api.me.mockRejectedValueOnce(new ApiError(403, "deactivated", "account_deactivated"));
+    api.signOut.mockRejectedValueOnce(new Error("unavailable"));
+    await mount("/today", false);
+    client.setQueryData(["sentinel"], "cached");
+    act(() => button("Sign out").click());
+    await settle();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Could not sign out");
+    expect(client.getQueryData(["sentinel"])).toBe("cached");
+    expect(host.textContent).toContain("Your account has been deactivated.");
+    expect(button("Sign out").disabled).toBe(false);
+    expect(button("Check again").disabled).toBe(false);
+  });
   it("retains a Wellness deep link on unavailable module state, then mounts only after explicit enablement", async () => {
     api.myModules
       .mockRejectedValueOnce(new Error("unavailable"))

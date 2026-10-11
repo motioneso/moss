@@ -336,11 +336,7 @@ export function OnboardingWizard(props: {
 
         {failedAction !== undefined ? (
           <div role="alert" className="form-error">
-            <p>
-              {failedAction === "finish"
-                ? "Could not finish setup. Your progress is still here."
-                : "Could not skip setup. Your progress is still here."}
-            </p>
+            <p>{failedAction === "finish" ? "Could not finish setup." : "Could not skip setup."}</p>
             <Button
               type="button"
               disabled={completionPending}

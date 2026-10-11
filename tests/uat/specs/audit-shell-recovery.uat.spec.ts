@@ -18,7 +18,10 @@ test("onboarding retries an actual outage and settings keyboard selection stays 
   const control = (action: string) =>
     execFileSync(
       "docker",
-      buildUatComposeArgs(project, [action, ...(action === "start" ? ["--wait"] : []), "jarv1s"]),
+      buildUatComposeArgs(project, [
+        ...(action === "start" ? ["up", "-d", "--no-deps", "--no-recreate", "--wait"] : [action]),
+        "jarv1s"
+      ]),
       { stdio: "inherit" }
     );
   try {
