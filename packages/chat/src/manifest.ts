@@ -216,7 +216,7 @@ export const chatModuleManifest = {
       id: "chat.clock_reminders",
       description:
         "In Main chat, 'remind me tomorrow at 9am to call Sam' saves a reminder for that time in your " +
-        "time zone, today, tonight or tomorrow only. Moss confirms it in your 12- or 24-hour clock. " +
+        "time zone, today, tonight or tomorrow only. Moss confirms it in your 12- or 24-hour clock and names the time zone. " +
         "Repeats are not available.",
       featureFlagId: "chat.module",
       errors: [
@@ -230,7 +230,7 @@ export const chatModuleManifest = {
           code: "reminder_time_unclear",
           class: "validation",
           description:
-            "A request Moss cannot pin to one time, like 'tonight at 7am', 'at 3ish' or 'at 3pm or 4pm', is refused and nothing is saved."
+            "A request Moss cannot pin to one time, like 'tonight at 7am', 'tonight at 1', 'at midnight', 'at 3ish' or 'at 3pm or 4pm', is refused and nothing is saved."
         },
         {
           code: "reminder_day_unsupported",
@@ -255,7 +255,7 @@ export const chatModuleManifest = {
           class: "prerequisite",
           remediationRef: "chat.set_reminder_time_zone",
           description:
-            "Clock times use the time zone in your profile. If the confirmed time looks wrong, the profile time zone is not where you are."
+            "Clock times use the time zone in your profile. The confirmation names that zone. If it is not where you are, change the time zone in your profile."
         }
       ],
       remediations: [

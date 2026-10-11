@@ -20,12 +20,13 @@ export interface LocalClockSpec {
 }
 
 const DAY = "(today|tonight|tomorrow)";
-const TIME = "(noon|\\d{1,2}(?::\\d{2})?(?: ?(?:a\\.?m\\.?|p\\.?m\\.?))?)";
+const TIME = "(noon|midnight|\\d{1,2}(?::\\d{2})?(?: ?(?:a\\.?m\\.?|p\\.?m\\.?))?)";
 const JOINER = "(?: ?(?:,|:|to|that|about))?";
 const DEADLINE = `(?:,? (?:but )?(?:not after|no later than) ${TIME}|,? unless it(?:'s| is) (?:after|past) ${TIME}|,? skip it (?:if it(?:'s| is) )?(?:after|past) ${TIME})`;
 
-// "at 3pm" or "tomorrow at 3pm" or "at 3pm tomorrow".
+// "at 3pm" or "tomorrow at 3pm" or "at 3pm tomorrow". A set-a-reminder form also takes "for 3pm".
 const WHEN = `(?:${DAY} )?at ${TIME}(?: ${DAY})?`;
+const SET_WHEN = `(?:${DAY} )?(?:at|for) ${TIME}(?: ${DAY})?`;
 
 const FORMS: readonly { readonly form: RegExp; readonly textFirst: boolean }[] = [
   { form: new RegExp(`^remind me ${WHEN}${JOINER} (.+?)${DEADLINE}?$`), textFirst: false },
@@ -34,11 +35,11 @@ const FORMS: readonly { readonly form: RegExp; readonly textFirst: boolean }[] =
     textFirst: true
   },
   {
-    form: new RegExp(`^set (?:a|me a) reminder (?:for )?${WHEN}${JOINER} (.+?)${DEADLINE}?$`),
+    form: new RegExp(`^set (?:a|me a) reminder (?:for )?${SET_WHEN}${JOINER} (.+?)${DEADLINE}?$`),
     textFirst: false
   },
   {
-    form: new RegExp(`^set (?:a|me a) reminder (?:to|that|about) (.+?) ${WHEN}${DEADLINE}?$`),
+    form: new RegExp(`^set (?:a|me a) reminder (?:to|that|about) (.+?) ${SET_WHEN}${DEADLINE}?$`),
     textFirst: true
   }
 ];
@@ -109,7 +110,8 @@ type ParsedTime =
 
 /**
  * Reads one clock time. "3pm", "3:30 pm", "15:30", "09:00" and "noon" are clear. A bare hour
- * from 1 to 12 with no am or pm could be either, so it is refused, except "tonight" means pm.
+ * from 1 to 12 with no am or pm could be either, so it is refused, except "tonight" reads 5 to
+ * 11 as pm. "Midnight" could start or end the day, so it is refused.
  */
 function parseClockTime(raw: string, evening: boolean): ParsedTime {
   if (raw === "noon") return { kind: "time", time: { hour: 12, minute: 0 } };
@@ -134,6 +136,6 @@ function parseClockTime(raw: string, evening: boolean): ParsedTime {
     return { kind: "time", time: { hour, minute } };
   }
   if (hour === 0 || hour > 12) return { kind: "time", time: { hour, minute } };
-  if (evening && hour < 12) return { kind: "time", time: { hour: hour + 12, minute } };
+  if (evening && hour >= 5 && hour < 12) return { kind: "time", time: { hour: hour + 12, minute } };
   return { kind: "refused", reason: "needs_am_pm" };
 }

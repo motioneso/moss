@@ -37,6 +37,9 @@ describe("clock reminder recognizer", () => {
     ["remind me today at 09:05 to stand up", spec("today", 9, 5), "stand up"],
     ["set a reminder at noon to eat lunch", spec(null, 12), "eat lunch"],
     ["set me a reminder to stretch at 6 p.m.", spec(null, 18), "stretch"],
+    ["set a reminder for 3pm to call Sam", spec(null, 15), "call Sam"],
+    ["set a reminder for tomorrow at 9am to call Sam", spec("tomorrow", 9), "call Sam"],
+    ["remind me tonight at 11 to lock up", spec("tonight", 23), "lock up"],
     [
       "remind me at 3pm to call Sam, not after 4pm",
       spec(null, 15, 0, { hour: 16, minute: 0 }),
@@ -61,6 +64,10 @@ describe("clock reminder recognizer", () => {
     ["remind me tomorrow at 9 to call Sam", "needs_am_pm"],
     ["remind me at 3pm to call Sam, not after 4", "needs_am_pm"],
     ["remind me tonight at 7am to stretch", "ambiguous"],
+    ["remind me tonight at 1 to lock up", "needs_am_pm"],
+    ["remind me tonight at 3 to lock up", "needs_am_pm"],
+    ["remind me at midnight to take my pills", "ambiguous"],
+    ["remind me tomorrow morning at 9am to call Sam", "unsupported_day"],
     ["remind me at 25:00 to stretch", "ambiguous"],
     ["remind me at 3:75pm to stretch", "ambiguous"],
     ["remind me tomorrow at 3pm tomorrow to stretch", "ambiguous"],
@@ -207,14 +214,14 @@ describe("clock reminder replies", () => {
 
   it("confirms in the owner's 12-hour clock", () => {
     expect(reminderClockSavedReply(resolved(spec(null, 15)), "call Sam", "2026-10-10", "12")).toBe(
-      "Okay. I'll remind you today at 3:00 PM: call Sam"
+      "Okay. I'll remind you today at 3:00 PM Pacific Time: call Sam"
     );
   });
 
   it("confirms in the owner's 24-hour clock, with the deadline", () => {
     const clock = spec("tomorrow", 9, 0, { hour: 11, minute: 30 });
     expect(reminderClockSavedReply(resolved(clock), "call the bank", "2026-10-10", "24")).toBe(
-      "Okay. I'll remind you tomorrow at 09:00: call the bank\n" +
+      "Okay. I'll remind you tomorrow at 09:00 Pacific Time: call the bank\n" +
         "If I can't send it by 11:30, I'll skip it."
     );
   });
@@ -222,7 +229,7 @@ describe("clock reminder replies", () => {
   it("names the day of a deadline that falls after midnight", () => {
     const clock = spec(null, 23, 0, { hour: 1, minute: 0 });
     expect(reminderClockSavedReply(resolved(clock), "lock up", "2026-10-10", "12")).toBe(
-      "Okay. I'll remind you today at 11:00 PM: lock up\n" +
+      "Okay. I'll remind you today at 11:00 PM Pacific Time: lock up\n" +
         "If I can't send it by 1:00 AM tomorrow, I'll skip it."
     );
   });
@@ -304,6 +311,17 @@ describe("listing clock reminders", () => {
         "- stretch (sent late)\n" +
         "- water plants (sent)\n" +
         "- pay rent (skipped, past its deadline)"
+    );
+  });
+
+  it("says a waiting reminder past its deadline won't be sent, before the worker marks it", () => {
+    const list = {
+      now: new Date("2026-10-10T23:30:00Z"),
+      open: [owned("call Sam", { deadlineAt: new Date("2026-10-10T23:00:00Z") })],
+      finished: []
+    };
+    expect(reminderListReply(list, { timeZone: LA, clockFormat: "12" })).toBe(
+      "Chat reminders waiting:\n- call Sam, today at 3:00 PM, past its deadline, so it won't be sent"
     );
   });
 

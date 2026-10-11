@@ -243,7 +243,7 @@ describe("saving a clock reminder through chat", () => {
     const turn = await persistence.recordReminderTurn(ids.userB, words, plan!, { threadId });
     if (!turn || turn === "stopped") throw new Error("the reminder turn was not stored");
     expect(turn.reply).toBe(
-      "Okay. I'll remind you tomorrow at 9:00 AM: call the bank\n" +
+      "Okay. I'll remind you tomorrow at 9:00 AM Japan Standard Time: call the bank\n" +
         "If I can't send it by 11:30 AM, I'll skip it."
     );
     expect(turn.origin).toMatchObject({ kind: "reminder", event: "saved" });
@@ -330,12 +330,15 @@ describe("what the database accepts for a clock reminder", () => {
 
   it("refuses a time the clocks skip, even with the instant Postgres would guess", async () => {
     // 02:30 on 2027-03-14 never shows on a New York clock; Postgres still maps it to an instant.
-    const guess = await bootstrap.query<{ due: Date }>(
+    const {
+      rows: [guess]
+    } = await bootstrap.query<{ due: Date }>(
       `SELECT ('2027-03-14T02:30'::timestamp AT TIME ZONE 'America/New_York') AS due`
     );
+    if (!guess) throw new Error("expected Postgres to guess an instant");
     await expect(
       insertRaw({
-        dueAt: guess.rows[0].due,
+        dueAt: guess.due,
         localDue: "2027-03-14T02:30",
         timeZone: "America/New_York"
       })

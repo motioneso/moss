@@ -60,13 +60,23 @@ export function deadlinePhrase(
     : `${time} ${dayPhrase(deadline.localDate, today)}`;
 }
 
+/** "Pacific Time", or the zone id when the platform has no plain name for it. */
+function zoneName(timeZone: string, at: Date): string {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longGeneric" })
+    .formatToParts(at)
+    .find((part) => part.type === "timeZoneName")?.value;
+  return name === undefined || name.startsWith("GMT") ? timeZone : name;
+}
+
+/** The confirmation names the zone, so a wrong profile zone shows up before the reminder fires. */
 export function reminderClockSavedReply(
   resolved: ResolvedLocalClock,
   text: string,
   today: string,
   clockFormat: LocaleDateFormat
 ): string {
-  const saved = `Okay. I'll remind you ${whenPhrase(resolved.localDue, today, clockFormat)}: ${text}`;
+  const when = whenPhrase(resolved.localDue, today, clockFormat);
+  const saved = `Okay. I'll remind you ${when} ${zoneName(resolved.timeZone, resolved.dueAt)}: ${text}`;
   if (resolved.localDeadline === null) return saved;
   const by = deadlinePhrase(resolved.localDeadline, resolved.localDue, today, clockFormat);
   return `${saved}\nIf I can't send it by ${by}, I'll skip it.`;

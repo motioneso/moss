@@ -31,7 +31,7 @@ export function reminderRefusedReply(reason: ReminderUnsupportedReason): string 
     case "recurrence":
       return `I can only set a one-off reminder, not one that repeats, so I didn't set anything. ${tryThis}`;
     case "unsupported_day":
-      return `I can set a clock-time reminder for today or tomorrow only, so I didn't set anything. ${tryThis}`;
+      return 'I can set a clock-time reminder for today or tomorrow only, said like "tomorrow at 9am", so I didn\'t set anything.';
     case "needs_am_pm":
       return "Say am or pm, or use a 24-hour time like 15:00, so I set the right time. I didn't set anything yet.";
     case "deadline_needs_clock":
@@ -143,6 +143,10 @@ function waitingLabel(reminder: OwnedReminder, now: Date, locale: ReminderLocale
   const localDue = localWallClock(reminder.dueAt, locale.timeZone);
   const when = whenPhrase(localDue, today, locale.clockFormat);
   if (reminder.deadlineAt === null) return when;
+
+  // The worker writes the expired state when it next runs; until then the list already says so.
+  if (reminder.deadlineAt.getTime() <= now.getTime())
+    return `${when}, past its deadline, so it won't be sent`;
   const localDeadline = localWallClock(reminder.deadlineAt, locale.timeZone);
   return `${when}, skipped if not sent by ${deadlinePhrase(localDeadline, localDue, today, locale.clockFormat)}`;
 }
