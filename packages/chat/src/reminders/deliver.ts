@@ -17,7 +17,7 @@ import {
 
 import { ChatRepository } from "../repository.js";
 import { notifyReminderArrival } from "./live-arrival.js";
-import { ReminderRepository, type SavedReminder } from "./repository.js";
+import { ReminderRepository, type DueReminder, type SavedReminder } from "./repository.js";
 import { REMINDER_LATE_AFTER_MS, reminderDeliveredMessage } from "./wording.js";
 
 export const CHAT_DELIVER_REMINDER_QUEUE = "chat.deliver-reminder";
@@ -45,6 +45,7 @@ export type ReminderDeliveryOutcome =
   | "missing"
   | "already_delivered"
   | "cancelled"
+  | "expired"
   | "stale_version"
   | "not_main"
   | "failed";
@@ -88,6 +89,12 @@ export async function deliverDueReminder(
     throw new Error("chat reminder delivery ran before its due time");
   }
 
+  // #3150: past its deadline the reminder is skipped, never posted, however late the worker ran.
+  if (pastDeadline(reminder, now)) {
+    await deps.reminders.markExpired(scopedDb, reminder.id);
+    return "expired";
+  }
+
   const main = await deps.chat.getMainThread(scopedDb, reminder.ownerUserId);
   if (!main || main.id !== reminder.threadId) {
     await deps.reminders.markFailed(scopedDb, reminder.id);
@@ -112,9 +119,13 @@ export async function deliverDueReminder(
   return "delivered";
 }
 
+function pastDeadline(reminder: DueReminder, now: Date): boolean {
+  return reminder.deadlineAt !== null && now.getTime() > reminder.deadlineAt.getTime();
+}
+
 /**
- * The worker can lock only queued rows, so a delivered or cancelled row reads back unlocked.
- * A cancelled reminder ends the job with nothing posted.
+ * The worker can lock only queued rows, so a finished row reads back unlocked. A cancelled or
+ * expired reminder ends the job with nothing posted.
  */
 async function unlockedOutcome(
   scopedDb: DataContextDb,
@@ -123,7 +134,8 @@ async function unlockedOutcome(
 ): Promise<ReminderDeliveryOutcome> {
   const current = await deps.reminders.readState(scopedDb, payload.resourceId);
   if (current?.ownerUserId !== payload.actorUserId) return "missing";
-  return current.state === "cancelled" ? "cancelled" : "already_delivered";
+  if (current.state === "cancelled" || current.state === "expired") return current.state;
+  return "already_delivered";
 }
 
 /**
@@ -154,6 +166,10 @@ export async function runReminderDeliveryJob(
     const reminder = await deps.reminders.lockForDelivery(scopedDb, job.data.resourceId);
     if (!reminder) return unlockedOutcome(scopedDb, job.data, deps);
     if (reminder.ownerUserId !== job.data.actorUserId) return "missing";
+    if (pastDeadline(reminder, await deps.reminders.now(scopedDb))) {
+      await deps.reminders.markExpired(scopedDb, reminder.id);
+      return "expired";
+    }
     await deps.reminders.markFailed(scopedDb, reminder.id);
     return "failed";
   }

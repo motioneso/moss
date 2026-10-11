@@ -181,6 +181,32 @@ describe("app-map integrity and truthfulness", () => {
     }
   });
 
+  it("declares clock reminders, their deadline and every refusal Moss gives (#3150)", () => {
+    const feature = (id: string) => appMap.features.find((item) => item.id === id);
+    expect(feature("chat.clock_reminders")?.description).toContain("today, tonight or tomorrow");
+    expect(feature("chat.clock_reminders")?.description).toContain("Repeats are not available");
+    expect(feature("chat.reminder_deadline")?.description).toContain("never after the deadline");
+    expect(feature("chat.reminder_deadline")?.description).toContain("marked late");
+    expect(feature("chat.relative_reminders")?.description).not.toContain("No clock times");
+    expect(feature("chat.reminder_list")?.description).toContain("skipped past its deadline");
+
+    const codes = appMap.errors.map((error) => error.code);
+    for (const code of [
+      "reminder_needs_am_pm",
+      "reminder_time_unclear",
+      "reminder_day_unsupported",
+      "reminder_time_passed",
+      "reminder_time_changes_with_clocks",
+      "reminder_time_zone_wrong",
+      "reminder_deadline_invalid",
+      "reminder_skipped_after_deadline"
+    ]) {
+      expect(codes).toContain(code);
+    }
+    const zone = appMap.remediations.find((item) => item.id === "chat.set_reminder_time_zone");
+    expect(zone?.path).toBe("/settings?section=profile");
+  });
+
   it("every prerequisite error has a declared remediation", () => {
     const remediationIds = new Set(appMap.remediations.map((r) => r.id));
 

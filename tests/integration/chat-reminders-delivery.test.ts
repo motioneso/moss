@@ -98,7 +98,7 @@ async function save(
     const saved = await reminders.create(db, {
       threadId,
       sourceMessageId: source.id,
-      delaySeconds: 60,
+      when: { timing: "relative", delaySeconds: 60 },
       text
     });
     await enqueueReminderDelivery(appBoss, db, actorUserId, saved);
@@ -212,7 +212,7 @@ describe("saving a reminder enqueues its delivery atomically", () => {
         const saved = await reminders.create(db, {
           threadId,
           sourceMessageId: source.id,
-          delaySeconds: 60,
+          when: { timing: "relative", delaySeconds: 60 },
           text: "roll back"
         });
         reminderId = saved.id;
