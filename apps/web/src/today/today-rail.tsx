@@ -113,6 +113,7 @@ function meetingNote(event: RailNextEvent): string {
     live in TodayDock in both modes. Props only, no fetching. */
 export function TodayRail(props: TodayRailProps) {
   const { nextEvent } = props;
+  const nextPeriod = nextEvent ? ampm(nextEvent.startsAt, props.locale) : "";
   const day = props.mode === "day";
   if (!day) {
     return (
@@ -141,8 +142,13 @@ export function TodayRail(props: TodayRailProps) {
           <div className="cmd-next">
             <div className="rail-block__head">First meeting</div>
             <div className="cmd-next__v">
-              {timeLabel(nextEvent.startsAt, props.locale)}{" "}
-              <small>{ampm(nextEvent.startsAt, props.locale)}</small>
+              {timeLabel(nextEvent.startsAt, props.locale)}
+              {nextPeriod ? (
+                <>
+                  {" "}
+                  <small>{nextPeriod}</small>
+                </>
+              ) : null}
             </div>
             <div className="cmd-next__what">{nextEvent.title}</div>
             <p className="cmd-next__note">{meetingNote(nextEvent)}</p>
