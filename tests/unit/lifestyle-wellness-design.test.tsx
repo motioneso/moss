@@ -532,6 +532,11 @@ describe("Medication read-state safety", () => {
       ]
     });
     fail(queryClient, queryKeys.wellness.schedule(date));
+
+    // Dose times read the clock setting; seed it so any network call below is a write attempt.
+    queryClient.setQueryData(queryKeys.settings.locale, {
+      locale: { timezone: "UTC", region: "en-US", dateFormat: "24" }
+    });
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     let renderer!: ReactTestRenderer;
