@@ -152,7 +152,7 @@ describe("gateway content admission", () => {
 
 describe("content determines later app-action policy", () => {
   it.each([false, true])(
-    "outside reads force app writes and outbound GET approval unless YOLO trusts the write (YOLO=%s)",
+    "outside reads force app writes and outbound GET approval unless YOLO is on (YOLO=%s)",
     async (yolo) => {
       for (const outboundGet of [false, true]) {
         const read = admissionTool("example.read", { content: "outside" });
@@ -175,7 +175,7 @@ describe("content determines later app-action policy", () => {
           }
         });
         expect(await h.gateway.callTool(h.token, read.name, {})).toMatchObject({ ok: true });
-        if (yolo && !outboundGet) {
+        if (yolo) {
           expect(await h.gateway.callTool(h.token, write.name, {})).toMatchObject({ ok: true });
           expect(write.execute).toHaveBeenCalledOnce();
           expect(h.createPending).not.toHaveBeenCalled();

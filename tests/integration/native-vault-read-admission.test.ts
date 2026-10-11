@@ -104,7 +104,7 @@ const hooks = [
   ["one-shot", CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE]
 ] as const;
 describe.each(hooks)("hosted %s native admission", (_name, source) => {
-  it("records the bound thread before allow and requires approval for the following YOLO write", async () => {
+  it("records the bound thread before allow so the following YOLO write runs past the mark", async () => {
     const h = await harness();
     try {
       expect(await store.isTainted(ids.userA, h.thread.id)).toBe(false);
@@ -126,20 +126,19 @@ describe.each(hooks)("hosted %s native admission", (_name, source) => {
       expect(rows).toEqual([
         { owner_user_id: ids.userA, first_admission_path: "native_vault_read" }
       ]);
-      const write = runClaudeNativeHook(
-        source,
-        { tool_name: "Write", tool_input: { file_path: join(h.root, "output.md") }, cwd: h.root },
-        h
-      );
-      await vi.waitFor(() =>
-        expect(h.records).toContainEqual(
-          expect.objectContaining({ kind: "action_request", outsideContentNotice: true })
-        )
-      );
-      const card = h.records.find((record) => record.kind === "action_request");
-      if (!card || card.kind !== "action_request") throw new Error("Missing approval card");
-      h.confirmations.resolve(card.actionRequestId, "rejected");
-      expect((await write).permissionDecision).toBe("deny");
+      // A chat with no recorded mark would take the clean-conversation claim instead (#3417).
+      const claims = vi.spyOn(store, "runAutomatic");
+      try {
+        const write = await runClaudeNativeHook(
+          source,
+          { tool_name: "Write", tool_input: { file_path: join(h.root, "output.md") }, cwd: h.root },
+          h
+        );
+        expect(write).toMatchObject({ code: 0, permissionDecision: "allow" });
+        expect(claims).not.toHaveBeenCalled();
+      } finally {
+        claims.mockRestore();
+      }
     } finally {
       await h.close();
     }

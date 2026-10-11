@@ -17,6 +17,7 @@ import {
 import { rankPriorityCandidates } from "@moss/priority";
 import type { PriorityPreferencesRepository } from "@moss/priority";
 import {
+  DEFAULT_LOCALE_SETTINGS,
   defaultProactiveMonitoringPreference,
   type ProactiveMonitoringPreferenceV1
 } from "@moss/shared";
@@ -101,7 +102,10 @@ interface ScannerHarness {
   antiSpam: AntiSpamPolicyType;
 }
 
-function harness(pref: ProactiveMonitoringPreferenceV1): ScannerHarness {
+function harness(
+  pref: ProactiveMonitoringPreferenceV1,
+  savedLocale: unknown = { timezone: "UTC" }
+): ScannerHarness {
   const prefsRepo = {
     get: vi.fn().mockResolvedValue(pref),
     getSaved: vi.fn().mockResolvedValue(savedPreference(pref))
@@ -128,7 +132,7 @@ function harness(pref: ProactiveMonitoringPreferenceV1): ScannerHarness {
     monitorStateRepository: stateRepo,
     cardRepository: cardRepo,
     antiSpamPolicy: antiSpam,
-    getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+    getLocalePreference: vi.fn().mockResolvedValue(savedLocale),
     resolveQuietHours: async () => null
   });
   return { scanner, prefsRepo, stateRepo, cardRepo, antiSpam };
@@ -290,7 +294,7 @@ describe("scanner skip paths", () => {
     });
   });
 
-  it("falls back to UTC when no timezone preference exists", async () => {
+  it("gives an owner with no saved locale the platform default zone, not UTC", async () => {
     const prefsRepo = {
       get: vi.fn().mockResolvedValue(enabledPref("calendar")),
       getSaved: vi.fn().mockResolvedValue(savedPreference(enabledPref("calendar")))
@@ -323,7 +327,22 @@ describe("scanner skip paths", () => {
     await scanner.scan(fakeScopedDb(), OWNER_A, "calendar", provider, "source-sync", NOW);
     expect(provider.collectSignals).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ timeZone: "UTC" })
+      expect.objectContaining({
+        timeZone: DEFAULT_LOCALE_SETTINGS.timezone,
+        locale: DEFAULT_LOCALE_SETTINGS
+      })
+    );
+    expect(DEFAULT_LOCALE_SETTINGS.timezone).not.toBe("UTC");
+  });
+
+  it("hands providers the owner's saved zone, region and 12/24-hour choice", async () => {
+    const saved = { timezone: "America/New_York", region: "en-GB", dateFormat: "12" };
+    const { scanner } = harness(enabledPref("calendar"), saved);
+    const provider = providerReturning([]);
+    await scanner.scan(fakeScopedDb(), OWNER_A, "calendar", provider, "source-sync", NOW);
+    expect(provider.collectSignals).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ timeZone: "America/New_York", locale: saved })
     );
   });
 });

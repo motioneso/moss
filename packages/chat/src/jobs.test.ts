@@ -1,12 +1,16 @@
+process.env.TZ = "UTC";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { PgBoss } from "pg-boss";
 import type { DataContextDb, PreferencesPort } from "@moss/db";
 import type * as MossNotes from "@moss/notes";
 import type { ChatArchiveSession } from "@moss/notes";
+import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 import type { ChatRepository } from "./repository.js";
 
 let capturedSessions: readonly ChatArchiveSession[] | null = null;
+let capturedLocale: unknown = null;
 let writeResult: { written: boolean; path: string | null; reason?: string } = {
   written: true,
   path: "x.md"
@@ -22,9 +26,11 @@ vi.mock("@moss/notes", async () => {
       _actorUserId: string,
       _localDate: string,
       _folder: string,
-      sessions: readonly ChatArchiveSession[]
+      sessions: readonly ChatArchiveSession[],
+      locale: unknown
     ) => {
       capturedSessions = sessions;
+      capturedLocale = locale;
       if (writeThrows === "conflict") {
         throw new actual.ChatArchiveConflictError("both today's file and its fallback are taken");
       }
@@ -139,6 +145,59 @@ describe("handleArchiveDayJob", () => {
     expect(sessions.length).toBeGreaterThan(0);
     const allBodies = sessions.flatMap((session) => session.messages.map((m) => m.body));
     expect(allBodies).toEqual(["first message"]);
+  });
+
+  it("files messages under the person's local day and passes their locale when nothing is saved (#3395)", async () => {
+    capturedSessions = null;
+    capturedLocale = null;
+
+    // 03:30 UTC on Oct 10 is 20:30 on Oct 9 in the default Pacific zone.
+    const rows: StoredMessageRow[] = [
+      {
+        threadId: "thread-1",
+        threadTitle: "Late chat",
+        threadFirstMessageAt: "2026-10-10T03:30:00.000Z",
+        role: "user",
+        body: "sent late on the 9th",
+        createdAt: "2026-10-10T03:30:00.000Z"
+      }
+    ];
+    const preferencesPort = fakePreferencesPort({ "chat-archive.enabled": true });
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-10-09", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(rows),
+      boss: BOSS
+    });
+
+    const sessions: readonly ChatArchiveSession[] = capturedSessions ?? [];
+    expect(sessions.flatMap((session) => session.messages.map((m) => m.body))).toEqual([
+      "sent late on the 9th"
+    ]);
+    expect(capturedLocale).toEqual(DEFAULT_LOCALE_SETTINGS);
+  });
+
+  it("passes the person's saved region and 24-hour choice to the archive writer (#3395)", async () => {
+    capturedLocale = null;
+    const saved = { timezone: "America/Los_Angeles", region: "en-GB", dateFormat: "24" };
+    const preferencesPort = fakePreferencesPort({ "chat-archive.enabled": true, locale: saved });
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo([
+        {
+          threadId: "thread-1",
+          threadTitle: "Chat",
+          threadFirstMessageAt: "2026-08-20T19:00:00.000Z",
+          role: "user",
+          body: "hello",
+          createdAt: "2026-08-20T19:00:00.000Z"
+        }
+      ]),
+      boss: BOSS
+    });
+
+    expect(capturedLocale).toEqual(saved);
   });
 
   it("still excludes a message from a different day", async () => {

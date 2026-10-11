@@ -10,6 +10,7 @@ import {
   surfaceSessionKey,
   type ChatSurface
 } from "./chat-surface.js";
+import type { LocaleSettingsDto } from "@moss/shared";
 import type { ChatPersistencePort, ChatSessionManagerDeps } from "./chat-session-ports.js";
 import type { GateLifecycleHost } from "./classifier-gate-lifecycle.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
@@ -21,6 +22,7 @@ export interface PendingActionResult {
   readonly record: TranscriptRecord;
   readonly recordSequence: number;
   readonly approvalSequence?: number;
+  readonly locale?: LocaleSettingsDto;
 }
 
 /** Resolves after `ms` milliseconds. Used for polling backoff during turn/drain loops. */
@@ -205,6 +207,7 @@ export function injectActionResultRecord(
     readonly approvalSequence?: number;
     readonly turnRecords?: TranscriptRecord[];
     readonly actionResults?: ActionResultMetadata[];
+    readonly locale?: LocaleSettingsDto;
     readonly emit: (record: TranscriptRecord) => void;
   }
 ): void {
@@ -255,7 +258,8 @@ export function injectActionResultRecord(
           reason: record.reason,
           durationSec,
           durationMs: record.durationMs,
-          sequence: approvalSequence
+          sequence: approvalSequence,
+          locale: options.locale
         });
   if (mappedRecord) {
     const approvalRecord = {
@@ -303,6 +307,7 @@ export function flushPendingActionResults(
       approvalSequence: item.approvalSequence,
       turnRecords,
       actionResults,
+      locale: item.locale,
       emit: (next) => emit(actorUserId, surface, next)
     });
   }

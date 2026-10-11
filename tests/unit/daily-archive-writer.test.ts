@@ -1,3 +1,5 @@
+process.env.TZ = "UTC";
+
 import { mkdtemp, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +18,8 @@ vi.mock("../../packages/notes/src/write-tools.js", async (importOriginal) => {
 const { writeDailyChatArchive } = await import("../../packages/notes/src/daily-archive-writer.js");
 
 const ACTOR_ID = "11111111-1111-1111-1111-111111111111";
+const UTC_12H = { timezone: "UTC", region: "en-US", dateFormat: "12" } as const;
+const LA_12H = { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "12" } as const;
 
 function session(threadId: string, createdAt: string, body: string, title = "Chat") {
   return {
@@ -53,7 +57,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [],
-      "UTC",
+      UTC_12H,
       notesSync
     );
     expect(result).toEqual({ written: false, path: null, reason: "no-sessions" });
@@ -71,7 +75,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       sessions,
-      "UTC",
+      UTC_12H,
       notesSync
     );
     expect(result.written).toBe(true);
@@ -93,7 +97,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       sessions,
-      "UTC",
+      UTC_12H,
       notesSync
     );
     const content = await readFile(join(root, "Moss/Chats", "2026-08-25.md"), "utf-8");
@@ -108,7 +112,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       sessions,
-      "UTC",
+      UTC_12H,
       notesSync
     );
     const content = await readFile(join(root, "Moss/Chats", "2026-08-25.md"), "utf-8");
@@ -124,11 +128,26 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       sessions,
-      "America/Los_Angeles",
+      LA_12H,
       notesSync
     );
     const content = await readFile(join(root, "Moss/Chats", "2026-08-25.md"), "utf-8");
     expect(content).toContain("## 2:00 AM — Standup");
+  });
+
+  it("renders the heading in the person's timezone, region and 24-hour choice (#3395)", async () => {
+    const sessions = [session("thread-1", "2026-10-10T03:30:00.000Z", "hello", "Late call")];
+    await writeDailyChatArchive(
+      {} as never,
+      ACTOR_ID,
+      "2026-10-09",
+      "Moss/Chats",
+      sessions,
+      { timezone: "America/Los_Angeles", region: "en-GB", dateFormat: "24" },
+      notesSync
+    );
+    const content = await readFile(join(root, "Moss/Chats", "2026-10-09.md"), "utf-8");
+    expect(content).toContain("## 20:30 — Late call");
   });
 
   it("reports bad-folder without writing when the folder fails validation", async () => {
@@ -138,7 +157,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "/etc/passwd",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "hello")],
-      "UTC",
+      UTC_12H,
       notesSync
     );
     expect(result).toEqual({ written: false, path: null, reason: "bad-folder" });
@@ -153,7 +172,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "hello")],
-      "UTC",
+      UTC_12H,
       notesSync
     );
     expect(result).toEqual({ written: false, path: null, reason: "no-notes-source" });
@@ -173,7 +192,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "fresh")],
-      "UTC",
+      UTC_12H,
       notesSync
     );
     expect(result.path).toBe(join("Moss/Chats", "2026-08-25.md"));
@@ -191,7 +210,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "fresh")],
-      "UTC",
+      UTC_12H,
       notesSync
     );
     expect(result.path).toBe(join("Moss/Chats", "2026-08-25 (moss).md"));
@@ -212,7 +231,7 @@ describe("writeDailyChatArchive (#1951)", () => {
         "2026-08-25",
         "Moss/Chats",
         [session("thread-1", "2026-08-25T09:00:00.000Z", "fresh")],
-        "UTC",
+        UTC_12H,
         notesSync
       )
     ).rejects.toThrow();

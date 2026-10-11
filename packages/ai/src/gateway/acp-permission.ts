@@ -36,7 +36,8 @@ import { isConversationMarked, isConversationTainted } from "./conversation-poli
 import {
   CONTEXT_ADMISSION_UNAVAILABLE,
   recordContextAdmission,
-  runAutomaticAction
+  runAutomaticAction,
+  runTrustedAction
 } from "./content-admission.js";
 import { actionResultRecord } from "./action-result-record.js";
 import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
@@ -301,7 +302,7 @@ export async function requestAcpBuiltInPermission(
     actorUserId,
     ...(threadId ? { threadId } : {})
   });
-  const taintRequiresApproval =
+  const taintRaisesFloor =
     conversationTainted &&
     (family === "write" ||
       family === "shell" ||
@@ -317,15 +318,26 @@ export async function requestAcpBuiltInPermission(
     (classification.verdict === "allow" ||
       (classification.verdict === "ask" && (await yoloOn().catch(() => false)))) &&
     (await isConversationMarked(deps.provenance, ctx));
+  // Under YOLO a durable outside-content mark does not raise the floor (#3417). Shell and
+  // destructive requests keep it.
+  const userTrusted =
+    taintRaisesFloor &&
+    family !== "shell" &&
+    actionKind !== "destructive" &&
+    classification.verdict !== "deny" &&
+    (await yoloOn().catch(() => false)) &&
+    (await isConversationMarked(deps.provenance, ctx));
+  const taintRequiresApproval = taintRaisesFloor && !userTrusted;
   // Reuse the effective actor setting on every eligible ask; never override hard denials.
   if (
     !taintRequiresApproval &&
     classification.verdict === "ask" &&
-    (await yoloOn()) &&
-    !(await isConversationTainted(deps.provenance, {
-      actorUserId,
-      ...(threadId ? { threadId } : {})
-    }))
+    (userTrusted ||
+      ((await yoloOn()) &&
+        !(await isConversationTainted(deps.provenance, {
+          actorUserId,
+          ...(threadId ? { threadId } : {})
+        }))))
   ) {
     const auditPermission = (admitted: boolean) =>
       writeAcpAuditLine(deps, access, chatSessionId, {
@@ -341,11 +353,14 @@ export async function requestAcpBuiltInPermission(
         ),
         ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
       });
-    const automatic = await runAutomaticAction(deps.provenance, ctx, async () => {
-      // Pure write permission has no result-admission path; keep its decision audit guarded.
-      // Reads/web/shell acquire durable taint before their final audit and allow delivery.
+    // Pure write permission has no result-admission path; the grant writes its decision audit.
+    // Reads/web/shell acquire durable taint before their final audit and allow delivery.
+    const grant = async () => {
       if (!admissionPath) await auditPermission(true);
-    });
+    };
+    const automatic = userTrusted
+      ? await runTrustedAction(grant)
+      : await runAutomaticAction(deps.provenance, ctx, grant);
     if (automatic.kind === "failed")
       return {
         decision: "deny",
@@ -491,7 +506,9 @@ export async function requestAcpBuiltInPermission(
   if (classification.verdict === "allow" && (family === "write" || family === "web")) {
     const automatic = taintRequiresApproval
       ? { kind: "confirm" as const }
-      : await runAutomaticAction(deps.provenance, ctx, async () => true);
+      : userTrusted
+        ? await runTrustedAction(async () => true)
+        : await runAutomaticAction(deps.provenance, ctx, async () => true);
     if (automatic.kind === "failed")
       return {
         decision: "deny",

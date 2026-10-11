@@ -33,12 +33,20 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Chat and approvals use your time zone and clock.** Times in chat answers, approval cards and approval messages now follow the time zone, region and 12- or 24-hour clock you chose in Settings. [PR #3437](https://github.com/motioneso/moss/pull/3437)
+- **Today shows times in your own time zone and clock style.** The Today page and chat suggestions now show every time in your saved time zone and use your 12-hour or 24-hour choice, and the greeting follows your own time of day. [PR #3425](https://github.com/motioneso/moss/pull/3425)
+- **Settings times follow your time zone.** Times and dates in Settings, such as last sync, last checked and saved stories, now show in your own time zone and 12 or 24-hour clock instead of your browser's. [PR #3434](https://github.com/motioneso/moss/pull/3434)
+- **Times follow your saved time zone everywhere in the background.** Reminders, quiet hours, medications, your day plan and what Moss tells the assistant now use the time zone you saved in Settings, or Pacific time if you have not picked one, and weather no longer guesses your city when no time zone or location is saved. [PR #3424](https://github.com/motioneso/moss/pull/3424)
 - **Calendar follows your timezone and time format.** The calendar now shows events, hours and today in the timezone and 12- or 24-hour format you chose in Settings, instead of your browser's clock; if you never chose a format, times now show in 24-hour style. [PR #3422](https://github.com/motioneso/moss/pull/3422)
 - **Approval cards no longer blame outside content by mistake.** The note saying Moss read something from outside your account now appears only when that is actually why Moss is asking for your approval. [PR #3366](https://github.com/motioneso/moss/pull/3366)
 - **Catch visual contract drift earlier.** Design checks catch unsupported or undefined class references in the audited screen modules before they reach users. [PR #3350](https://github.com/motioneso/moss/pull/3350)
 - **Forgetting a memory from chat clears its conflict.** When you ask Moss in chat to forget one of two conflicting memories, the other memory now becomes active again, just like forgetting it from the Memory screen. [PR #3416](https://github.com/motioneso/moss/pull/3416)
 - **More reliable meeting and companion controls.** Meeting confirmations use consistent keyboard behavior, companion requests stay readable on phones, and Finance settings make loading and retry states clearer. [PR #3349](https://github.com/motioneso/moss/pull/3349)
 - **Briefings show times in your own time zone.** Your briefings now show event times in the time zone and 12- or 24-hour clock you chose in Settings, and arrive at the time you set in that time zone. [PR #3412](https://github.com/motioneso/moss/pull/3412)
+
+#### Changed
+
+- **Auto-approve actions no longer asks in chats that read outside content.** With Auto-approve actions on, Moss no longer stops for approval in chats that have read web pages or other outside content; deleting things in Moss and running commands still ask. [PR #3419](https://github.com/motioneso/moss/pull/3419)
 
 ### 2026-10-10
 

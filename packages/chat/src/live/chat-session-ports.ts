@@ -13,6 +13,7 @@ import type {
   ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
+  LocaleSettingsDto,
   SourceFreshnessV1
 } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
@@ -205,7 +206,13 @@ export interface ChatPersistencePort {
     actorUserId: string,
     surface?: ChatSurface,
     threadId?: string | null
-  ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }>;
+  ): Promise<{
+    threadTitle: string | null;
+    localTimezone: string | null;
+    /** The person's effective locale; absent only from callers that predate #3394. */
+    locale?: LocaleSettingsDto;
+    incognito: boolean;
+  }>;
   /**
    * Make threadId the current thread for actorUserId (for resume). Returns true if
    * the thread was found and touched; false if it does not exist or belongs to another user.

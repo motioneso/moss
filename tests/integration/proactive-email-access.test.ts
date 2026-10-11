@@ -60,6 +60,7 @@ function collect(actorUserId: string = ids.userA, monitor = provider()) {
       now: new Date().toISOString(),
       sinceCursor: {},
       timeZone: "UTC",
+      locale: { timezone: "UTC", region: "en-US", dateFormat: "24" },
       maxSignals: 20,
       priorityAnchors: []
     })

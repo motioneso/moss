@@ -125,6 +125,13 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.time_context",
+      description:
+        "Chat tool results include references giving each timestamp's date and time in the person's time zone, region and 12/24-hour choice. " +
+        "Times without a reference keep the instruction to convert them. Original timestamps stay unchanged.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.main_conversation",
       description:
         "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +

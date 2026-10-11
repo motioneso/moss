@@ -19,6 +19,7 @@ const YES = 0.9;
 const NO = 0.1;
 const UNSURE = 0.5;
 const NOW = new Date("2026-09-29T10:00:00Z");
+const PACIFIC = { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "24" } as const;
 
 function email(overrides: Partial<ParsedEmail> = {}): ParsedEmail {
   return {
@@ -43,7 +44,10 @@ function answers(overrides: Partial<Record<EmailSortingQuestionId, number>>): Em
 }
 
 function sort(ask: EmailSortingAsk, parsed = email(), userSentLast = false) {
-  return sortEmailOnSortingModel({ parsed, userSentLast, knownSender: false, now: NOW }, ask);
+  return sortEmailOnSortingModel(
+    { parsed, userSentLast, knownSender: false, now: NOW, locale: PACIFIC },
+    ask
+  );
 }
 
 describe("sortEmailOnSortingModel", () => {
@@ -132,7 +136,14 @@ describe("sortEmailOnSortingModel", () => {
       return new Promise(() => undefined);
     };
     const outcome = await sortEmailOnSortingModel(
-      { parsed: email(), userSentLast: false, knownSender: false, now: NOW, timeoutMs: 20 },
+      {
+        parsed: email(),
+        userSentLast: false,
+        knownSender: false,
+        now: NOW,
+        locale: PACIFIC,
+        timeoutMs: 20
+      },
       stalled
     );
     expect(outcome).toEqual({ kind: "general", reason: "failed" });
@@ -160,6 +171,7 @@ function pass(
     userSentLast,
     knownSender: () => false,
     now: () => NOW,
+    locale: PACIFIC,
     guard: passThrough
   });
 }

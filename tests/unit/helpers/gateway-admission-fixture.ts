@@ -44,8 +44,9 @@ export function admissionTool(
 }
 
 /**
- * A write no user setting trusts: an owned connected tool that sends data out. It runs in a
- * clean chat under fixture YOLO and asks once the chat holds outside content (#3338).
+ * A write no user setting trusts: an owned connected tool that sends data out. Under fixture YOLO
+ * it runs in a clean chat through the clean-conversation claim, and in a marked chat on the user's
+ * trust without that claim (#3417). With YOLO off it always asks.
  */
 export function untrustedWrite(name = "connected.send"): ModuleAssistantToolManifest {
   return admissionTool(name, {
@@ -189,6 +190,23 @@ export function admissionFixture(
     events,
     deps
   };
+}
+
+/**
+ * Runs `write` under fixture YOLO and checks it ran on the user's trust past a durable mark. A chat
+ * with no recorded outside content would take the clean-conversation claim instead (#3417).
+ */
+export async function expectYoloWriteRunsPastMark(
+  h: ReturnType<typeof admissionFixture>,
+  write: ModuleAssistantToolManifest,
+  pending: Promise<unknown> = h.gateway.callTool(h.token, write.name, {})
+): Promise<void> {
+  const claims = h.runAutomatic.mock.calls.length;
+  const cards = h.createPending.mock.calls.length;
+  await vi.waitFor(() => expect(write.execute).toHaveBeenCalledOnce(), { interval: 1 });
+  expect(h.runAutomatic).toHaveBeenCalledTimes(claims);
+  expect(h.createPending).toHaveBeenCalledTimes(cards);
+  expect(await pending).toMatchObject({ ok: true });
 }
 
 export async function rejectAdmissionCard(

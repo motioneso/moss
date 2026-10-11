@@ -229,6 +229,7 @@ export async function runChatTurn(
       }
     );
     const { pendingItems } = engineText;
+    if (engineText.locale) session.locale = engineText.locale;
     const currentProvider = await host.deps.persistence.resolveActiveProvider(actorUserId);
     await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
     host.emit(actorUserId, surface, { kind: "user", text });
@@ -249,6 +250,7 @@ export async function runChatTurn(
       throw err;
     }
     session = rollover.session;
+    if (engineText.locale) session.locale = engineText.locale;
     if (rollover.waited) {
       if (controller.signal.aborted)
         return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);

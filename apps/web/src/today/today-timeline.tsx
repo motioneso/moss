@@ -1,7 +1,8 @@
 import type { CalendarEventDto, LocaleSettingsDto } from "@moss/shared";
 import { RowButton } from "@moss/ui";
 
-import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
+import { ClockTime } from "./clock-time.js";
+import { clockText, eventCaptureText } from "./today-labels.js";
 import type { ScheduleClosingLine, ScheduleGapRow } from "./day-plan-gaps.js";
 import type { DayItem } from "./day-plan-view-model.js";
 import { personalize } from "../api/use-assistant-name.js";
@@ -158,11 +159,9 @@ export function ScheduleGapRowView(props: {
   return (
     <div className="tl-slot tl-slot--gap" key={row.key}>
       <div className="day-ev__t tl-time">
-        {timeLabel(row.startsAt, props.locale)}
-        <span className="ap"> {ampm(row.startsAt, props.locale)}</span>
+        <ClockTime iso={row.startsAt} locale={props.locale} />
         <small>
-          {timeLabel(row.endsAt, props.locale)}
-          <span className="ap"> {ampm(row.endsAt, props.locale)}</span>
+          <ClockTime iso={row.endsAt} locale={props.locale} />
         </small>
       </div>
       <div className="tl-body">{row.label}</div>
@@ -191,27 +190,19 @@ function TimelineTime(props: { readonly item: DayItem; readonly locale: LocaleSe
   return (
     <div className="day-ev__t tl-time">
       {item.startsAt !== null ? (
-        <>
-          {timeLabel(item.startsAt, props.locale)}
-          <span className="ap"> {ampm(item.startsAt, props.locale)}</span>
-        </>
+        <ClockTime iso={item.startsAt} locale={props.locale} />
       ) : (
         "No time yet"
       )}
       {endAt !== null ? (
         <small>
-          {timeLabel(endAt, props.locale)}
-          <span className="ap"> {ampm(endAt, props.locale)}</span>
+          <ClockTime iso={endAt} locale={props.locale} />
         </small>
       ) : item.durationMinutes !== null && item.durationMinutes > 0 ? (
         <small>{durationText(item.durationMinutes)}</small>
       ) : null}
     </div>
   );
-}
-
-function compactTime(iso: string, locale: LocaleSettingsDto): string {
-  return `${timeLabel(iso, locale)}${ampm(iso, locale)}`;
 }
 
 /** Morning reader rail row: start time, then title over "end · state".
@@ -223,8 +214,8 @@ export function SnapshotRow(props: {
 }) {
   const { item } = props;
   const endAt = rowEndAt(item);
-  const endText = endAt !== null ? compactTime(endAt, props.locale) : null;
-  const start = item.startsAt !== null ? compactTime(item.startsAt, props.locale) : "No time yet";
+  const endText = endAt !== null ? clockText(endAt, props.locale, "") : null;
+  const start = item.startsAt !== null ? clockText(item.startsAt, props.locale, "") : "No time yet";
   if (item.eventId !== null) {
     return (
       <div

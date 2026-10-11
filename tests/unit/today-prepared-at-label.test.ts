@@ -29,8 +29,8 @@ describe("preparedAtLabel", () => {
     ).toBe("Prepared at 1:00 am");
   });
 
-  it("matches in the reader for a 24-hour setting too (same label everywhere)", () => {
-    expect(preparedAtLabel("2026-09-28T08:00:00Z", locale("24"))).toBe("Prepared at 8:00 am");
+  it("follows a 24-hour setting with no am/pm (#3393)", () => {
+    expect(preparedAtLabel("2026-09-28T08:00:00Z", locale("24"))).toBe("Prepared at 08:00");
   });
 
   it("does not append an English am/pm to a non-English afternoon time", () => {

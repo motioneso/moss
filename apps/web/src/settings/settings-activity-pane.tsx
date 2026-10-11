@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { ActionAuditLogEntryDto, ActivityLineDto, LocaleSettingsDto } from "@moss/shared";
+import { localDayRange, todayLocalDayKey } from "@moss/module-sdk/time";
 import { localDay } from "@moss/shared";
 import { Button, Checklist, Eyebrow, type ChecklistItem } from "@moss/ui";
 
@@ -47,11 +48,10 @@ const RANGE_LABELS: Record<DateRange, string> = {
   "90d": "90 days"
 };
 
-function sinceForRange(range: DateRange): string {
+/** Start of the range; "today" starts at the person's midnight. */
+export function sinceForRange(range: DateRange, timeZone: string, now: Date = new Date()): string {
   if (range === "today") {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
+    return localDayRange(todayLocalDayKey(timeZone, now), timeZone).start.toISOString();
   }
   const offsets: Record<DateRange, number> = {
     today: 0,
@@ -59,7 +59,7 @@ function sinceForRange(range: DateRange): string {
     "30d": 30 * 24 * 60 * 60 * 1000,
     "90d": 90 * 24 * 60 * 60 * 1000
   };
-  return new Date(Date.now() - offsets[range]).toISOString();
+  return new Date(now.getTime() - offsets[range]).toISOString();
 }
 
 function approvalLabel(mode: ActionAuditLogEntryDto["approvalMode"]): string {
@@ -364,7 +364,10 @@ export function ActivityPane({ me }: PaneProps) {
   // sinceForRange derives from Date.now() for non-"today" ranges; unmemoized, it produced a new
   // ISO timestamp (and thus a new query key) on every render, so an abort/error re-render could
   // never settle into isError — it remounted a fresh isLoading query instead (PR #1117 CP5 RED).
-  const since = useMemo(() => sinceForRange(filters.range), [filters.range]);
+  const since = useMemo(
+    () => sinceForRange(filters.range, locale.timezone),
+    [filters.range, locale.timezone]
+  );
 
   const linesQuery = useQuery({
     queryKey: queryKeys.ai.activityLines({ since, limit: 200 }),

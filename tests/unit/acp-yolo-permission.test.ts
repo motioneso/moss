@@ -139,7 +139,7 @@ describe("ACP effective actor YOLO permission", () => {
         toolInput: { file_path: "/workspace/project/file.txt", content: "x" }
       })
     ).resolves.toMatchObject({ decision: "deny", asked: true });
-    expect(state.yoloMode).not.toHaveBeenCalled();
+    expect(state.yoloMode).toHaveBeenCalledOnce();
     expect(state.emit).toHaveBeenCalledWith(
       "chat-1",
       expect.objectContaining({ kind: "action_request", outsideContentNotice: true })

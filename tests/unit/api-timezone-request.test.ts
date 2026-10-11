@@ -1,7 +1,7 @@
-import Fastify from "fastify";
+process.env.TZ = "UTC";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { registerRequestTimeZoneHook } from "../../apps/api/src/server.js";
 import {
   beaconEndPrivateChat,
   endPrivateChat,
@@ -10,13 +10,13 @@ import {
 } from "../../apps/web/src/api/client.js";
 import { resolveRequestTimeZoneForRoute } from "../../packages/module-registry/src/index.js";
 
-describe("web API timezone header", () => {
+describe("web API client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("sends the browser timezone on central JSON requests", async () => {
+  it("does not send the browser timezone on central JSON requests (#3395)", async () => {
     vi.stubGlobal("Intl", {
       DateTimeFormat: vi.fn(() => ({
         resolvedOptions: () => ({ timeZone: "America/New_York" })
@@ -29,23 +29,7 @@ describe("web API timezone header", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Headers;
-    expect(headers.get("X-Timezone")).toBe("America/New_York");
-  });
-
-  it("keeps a caller-provided timezone header", async () => {
-    vi.stubGlobal("Intl", {
-      DateTimeFormat: vi.fn(() => ({
-        resolvedOptions: () => ({ timeZone: "America/New_York" })
-      }))
-    });
-    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await requestJson("/api/example", { headers: { "X-Timezone": "Europe/London" } });
-
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const headers = init.headers as Headers;
-    expect(headers.get("X-Timezone")).toBe("Europe/London");
+    expect(headers.get("X-Timezone")).toBeNull();
   });
 
   it("posts the private chat end endpoint", async () => {
@@ -99,72 +83,41 @@ describe("web API timezone header", () => {
   });
 });
 
-describe("API request timezone hook", () => {
-  it("stores valid IANA timezone headers on the request", async () => {
-    const app = Fastify();
-    registerRequestTimeZoneHook(app);
-    app.get("/probe", async (request) => ({ timeZone: request.timeZone ?? null }));
-    await app.ready();
-    try {
-      const res = await app.inject({ url: "/probe", headers: { "x-timezone": "America/Denver" } });
-      expect(res.json()).toEqual({ timeZone: "America/Denver" });
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("ignores invalid timezone headers", async () => {
-    const app = Fastify();
-    registerRequestTimeZoneHook(app);
-    app.get("/probe", async (request) => ({ timeZone: request.timeZone ?? null }));
-    await app.ready();
-    try {
-      const res = await app.inject({ url: "/probe", headers: { "x-timezone": "Not/AZone" } });
-      expect(res.json()).toEqual({ timeZone: null });
-    } finally {
-      await app.close();
-    }
-  });
-});
-
-describe("route timezone resolution", () => {
+describe("route timezone resolution (#3395)", () => {
   const accessContext = {
     actorUserId: "00000000-0000-4000-8000-000000000123",
     requestId: "req:test"
   };
 
-  it("uses the validated request header without reading stored locale", async () => {
-    const runner = { withDataContext: vi.fn() };
-    const preferences = { get: vi.fn() };
-
-    await expect(
-      resolveRequestTimeZoneForRoute(
-        { timeZone: "America/New_York" },
-        accessContext,
-        runner,
-        preferences
-      )
-    ).resolves.toBe("America/New_York");
-    expect(runner.withDataContext).not.toHaveBeenCalled();
-  });
-
-  it("falls back to stored locale when the request header is absent", async () => {
-    const runner = { withDataContext: vi.fn(async (_ctx, work) => work("scoped")) };
-    const preferences = {
-      get: vi.fn(async () => ({ timezone: "America/Los_Angeles" }))
+  function runnerReturning(stored: unknown) {
+    return {
+      runner: { withDataContext: vi.fn(async (_ctx, work) => work("scoped")) },
+      preferences: { get: vi.fn(async () => stored) }
     };
+  }
 
-    await expect(
-      resolveRequestTimeZoneForRoute({}, accessContext, runner, preferences)
-    ).resolves.toBe("America/Los_Angeles");
+  it("returns the person's saved zone", async () => {
+    const { runner, preferences } = runnerReturning({ timezone: "Europe/London" });
+
+    await expect(resolveRequestTimeZoneForRoute(accessContext, runner, preferences)).resolves.toBe(
+      "Europe/London"
+    );
+    expect(preferences.get).toHaveBeenCalledWith("scoped", "locale");
   });
 
-  it("falls back to UTC when neither header nor stored locale is valid", async () => {
-    const runner = { withDataContext: vi.fn(async (_ctx, work) => work("scoped")) };
-    const preferences = { get: vi.fn(async () => ({ timezone: "Not/AZone" })) };
+  it("returns the shared default zone, not UTC, when nothing is saved", async () => {
+    const { runner, preferences } = runnerReturning(null);
 
-    await expect(
-      resolveRequestTimeZoneForRoute({}, accessContext, runner, preferences)
-    ).resolves.toBe("UTC");
+    await expect(resolveRequestTimeZoneForRoute(accessContext, runner, preferences)).resolves.toBe(
+      "America/Los_Angeles"
+    );
+  });
+
+  it("returns the shared default zone when the saved zone is invalid", async () => {
+    const { runner, preferences } = runnerReturning({ timezone: "Not/AZone" });
+
+    await expect(resolveRequestTimeZoneForRoute(accessContext, runner, preferences)).resolves.toBe(
+      "America/Los_Angeles"
+    );
   });
 });

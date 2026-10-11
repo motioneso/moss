@@ -43,10 +43,14 @@ import {
   CHAT_ARCHIVE_FOLDER_PREF_KEY,
   CHAT_ARCHIVE_STATUS_PREF_KEY
 } from "@moss/settings";
-import { localDay, type ChatArchiveStatus } from "@moss/shared";
+import {
+  LOCALE_PREFERENCE_KEY,
+  localDay,
+  resolveEffectiveLocale,
+  type ChatArchiveStatus
+} from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 
-import { extractTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
 import { handleSummarizeConversationJob, type SummaryJobDeps } from "./summary-job.js";
 import {
@@ -377,8 +381,9 @@ export async function handleArchiveDayJob(
   const folder =
     typeof folderRaw === "string" && folderRaw.length > 0 ? folderRaw : CHAT_ARCHIVE_DEFAULT_FOLDER;
 
-  const localeRaw = await deps.preferencesPort.get(scopedDb, "locale");
-  const timezone = extractTimezone(localeRaw) ?? "UTC";
+  const locale = resolveEffectiveLocale(
+    await deps.preferencesPort.get(scopedDb, LOCALE_PREFERENCE_KEY)
+  );
 
   const { rangeStartUtcIso, rangeEndUtcIso } = utcRangeForLocalDate(localDate);
   const rows = await deps.chatRepo.listStoredMessagesInRange(
@@ -387,7 +392,7 @@ export async function handleArchiveDayJob(
     rangeStartUtcIso,
     rangeEndUtcIso
   );
-  const sameDay = rows.filter((row) => localDay(row.createdAt, timezone) === localDate);
+  const sameDay = rows.filter((row) => localDay(row.createdAt, locale.timezone) === localDate);
   if (sameDay.length === 0) return;
 
   const sessionsByThread = new Map<
@@ -431,7 +436,7 @@ export async function handleArchiveDayJob(
       localDate,
       folder,
       sessions,
-      timezone,
+      locale,
       notesSync
     );
   } catch (error) {
