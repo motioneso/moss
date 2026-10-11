@@ -255,3 +255,6 @@ blocking	packages/settings/src/data-export-vault.ts	tests/uat/specs/audit-source
 blocking	packages/shared/src/notes-api.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
 blocking	apps/web/src/api/client.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
 blocking	packages/vault/src/**	tests/uat/specs/audit-source-truth.uat.spec.ts
+# #3397 shared modal focus recovery through real task comments.
+blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
+blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts

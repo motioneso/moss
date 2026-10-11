@@ -167,7 +167,16 @@ export function useDialogLifecycle(options: DialogLifecycleOptions) {
     if ((!modal || topModal()?.panel === panel) && !panel.contains(document.activeElement))
       focusPanel();
     if (modal) synchronizeIsolation();
+    let lastFocused = document.activeElement as HTMLElement | null;
     const containFocus = (event: FocusEvent) => {
+      if (
+        modal &&
+        topModal()?.panel === panel &&
+        event.target instanceof HTMLElement &&
+        panel.contains(event.target)
+      ) {
+        lastFocused = event.target;
+      }
       if (
         modal &&
         topModal()?.panel === panel &&
@@ -178,7 +187,40 @@ export function useDialogLifecycle(options: DialogLifecycleOptions) {
       }
     };
     document.addEventListener("focusin", containFocus);
+    // Disabling or removing the active control can return focus to BODY without a
+    // focusin event. The top modal still owns focus until it is dismissed.
+    const recoverUnavailableFocus = () => {
+      if (!modal || topModal()?.panel !== panel) return;
+      // A closing child modal owns its own restoration. Recover only a control
+      // this modal focused that has actually become unavailable.
+      if (
+        !lastFocused ||
+        (lastFocused.isConnected &&
+          !lastFocused.matches(":disabled") &&
+          !lastFocused.closest("[hidden], [inert]"))
+      )
+        return;
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        panel.contains(active) &&
+        !active.matches(":disabled") &&
+        !active.closest("[hidden], [inert]")
+      )
+        return;
+      if (active === document.body || active === null || panel.contains(active)) panel.focus();
+    };
+    const focusObserver = modal
+      ? new MutationObserver(() => queueMicrotask(recoverUnavailableFocus))
+      : undefined;
+    focusObserver?.observe(panel, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled", "hidden", "inert"]
+    });
     return () => {
+      focusObserver?.disconnect();
       document.removeEventListener("focusin", containFocus);
       if (modal) {
         const index = modals.findIndex((entry) => entry.panel === panel);
