@@ -299,7 +299,8 @@ function prepareUatRealChatClaudeSignIn(
     const writeScript =
       "const fs=require('node:fs');const f=process.argv[1];" +
       "fs.mkdirSync(require('node:path').dirname(f),{recursive:true,mode:0o700});" +
-      "fs.writeFileSync(f+'.tmp',fs.readFileSync(0),{mode:0o600});fs.renameSync(f+'.tmp',f);";
+      "fs.writeFileSync(f+'.tmp',fs.readFileSync(0),{mode:0o600});" +
+      "fs.chmodSync(f+'.tmp',0o600);fs.renameSync(f+'.tmp',f);";
     try {
       execDockerCompose(
         buildComposeArgs,

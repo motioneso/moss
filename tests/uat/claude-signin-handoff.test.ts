@@ -209,7 +209,7 @@ describe("signInClaudeThroughMoss (#3361)", () => {
     saveClaudeToken(SAVED_TOKEN);
     const moss = fakeMoss({
       "/api/onboarding/provider-login/begin": [
-        { loginId: "L1", status: "awaiting_token", authorizationUrl: LINK }
+        { loginId: "L1", status: "awaiting_authorization", authorizationUrl: LINK }
       ],
       "/api/onboarding/provider-login/submit-token": [{ loginId: "L1", status: "ready" }]
     });

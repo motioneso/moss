@@ -40,7 +40,7 @@ If nobody answers in time the run cancels the sign-in and fails; rerun for a fre
 
 An approved sign-in makes Claude mint a long-lived token inside the stack. When the stack is torn
 down, the run saves that token to `claude-setup-token` in the same folder before deleting it from
-the stack. The file is mode 600 in a mode 700 folder. Every later run on the box puts the saved
+the stack. The file is mode 600, and a folder the run creates is mode 700. Every later run on the box puts the saved
 token into its new stack and lets Moss check it with a real Claude call.
 
 - Moss accepts it: no link, no person needed.

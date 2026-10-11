@@ -310,12 +310,13 @@ describe("installUatRealChatAuth saved Claude sign-in (#3387)", () => {
   it("falls back to a link, without the reuse signal, when seeding fails", () => {
     readSavedClaudeTokenMock.mockReturnValue(SEEDED);
     execFileSyncMock.mockReturnValueOnce("1000:1000\n").mockImplementationOnce(() => {
-      throw new Error("exec failed");
+      throw new Error(`exec failed near ${SEEDED}`);
     });
 
     expect(() => installUatRealChatAuth("uat-test", "actor-1", buildComposeArgs)).not.toThrow();
     expect(process.env.JARVIS_UAT_CLAUDE_TOKEN_REUSED).toBeUndefined();
     expect(logged()).toContain("will ask for a link");
+    expect(logged()).not.toContain(SEEDED);
   });
 
   it("cleanup saves a token this run minted, before removing it from the stack", async () => {

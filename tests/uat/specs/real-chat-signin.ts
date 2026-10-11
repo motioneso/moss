@@ -8,8 +8,8 @@
 // Every real-chat spec signs in with the provider JARVIS_UAT_REAL_CHAT_PROVIDER selects
 // (real-chat-env.ts). Codex, the default, uses the operator's own login, already copied into the
 // stack by the provisioner. Claude (#3361) signs in through Moss here, with the operator
-// approving a one-time link (claude-signin-handoff.ts) only when no saved token works (#3387). Either way the spec then discovers and
-// binds the cheapest ("economy" tier) chat-capable model Ben's ruling requires — never a
+// approving a one-time link (claude-signin-handoff.ts) only when no saved token works (#3387).
+// Either way the spec then discovers and binds the cheapest ("economy" tier) chat-capable model Ben's ruling requires — never a
 // hardcoded model name, and never a silent widen to a pricier tier when none is found.
 
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
