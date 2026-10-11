@@ -35,7 +35,7 @@ const validReport = {
 };
 const failure = { error: "Vault read admission failed closed." };
 
-async function harness(modules: readonly MossModuleManifest[] = []) {
+async function harness(modules: readonly MossModuleManifest[] = [], yolo = true) {
   let now = 0;
   const tokens = new SessionTokenRegistry({ clock: { now: () => now }, ttlMs: 1000 });
   const token = tokens.mint({
@@ -58,6 +58,7 @@ async function harness(modules: readonly MossModuleManifest[] = []) {
   const provenance: ConversationProvenancePort = {
     recordAdmission,
     isTainted: async (actor, thread) => tainted(actor, thread),
+    isMarked: async (actor, thread) => owned(actor, thread) && tainted(actor, thread) && !reserved,
     async runAutomatic(actor, thread, execute) {
       if (reserved || tainted(actor, thread)) return { kind: "confirm" };
       reserved = true;
@@ -84,7 +85,7 @@ async function harness(modules: readonly MossModuleManifest[] = []) {
     } as never,
     notifier: { emit: (_session, record) => records.push(record) },
     confirmTimeoutMs: 1000,
-    yoloMode: async () => true,
+    yoloMode: async () => yolo,
     provenance
   });
   const app = Fastify({ logger: false });
@@ -226,7 +227,7 @@ describe("native vault read report route", () => {
 
 describe.each(hooks)("%s native hook admission", (_name, source) => {
   it.each(["Read", "Glob", "Grep"])(
-    "reports %s before allowing, then a YOLO write asks",
+    "reports %s before allowing, then a YOLO write runs past the mark",
     async (toolName) => {
       const h = await harness();
       try {
@@ -243,23 +244,44 @@ describe.each(hooks)("%s native hook admission", (_name, source) => {
         expect(h.admissions).toEqual([
           { actor: "actor-a", thread: "thread-a", path: "native_vault_read" }
         ]);
-        const write = runClaudeNativeHook(
+        // The fixture's clean claim confirms on a tainted chat, so an allow proves the trusted run.
+        const write = await runClaudeNativeHook(
           source,
           { tool_name: "Write", tool_input: { file_path: join(h.root, "output.md") }, cwd: h.root },
           h
         );
-        await vi.waitFor(() =>
-          expect(h.records).toContainEqual(
-            expect.objectContaining({ kind: "action_request", outsideContentNotice: true })
-          )
-        );
-        h.confirmations.resolve("pending-a", "rejected");
-        expect((await write).permissionDecision).toBe("deny");
+        expect(write.permissionDecision).toBe("allow");
+        expect(h.records).not.toContainEqual(expect.objectContaining({ kind: "action_request" }));
       } finally {
         await h.close();
       }
     }
   );
+
+  it("a YOLO-off write after Read asks without naming outside content", async () => {
+    const h = await harness([], false);
+    try {
+      await runClaudeNativeHook(
+        source,
+        { tool_name: "Read", tool_input: { file_path: join(h.root, "fixture.md") }, cwd: h.root },
+        h
+      );
+      const write = runClaudeNativeHook(
+        source,
+        { tool_name: "Write", tool_input: { file_path: join(h.root, "output.md") }, cwd: h.root },
+        h
+      );
+      await vi.waitFor(() =>
+        expect(h.records).toContainEqual(
+          expect.objectContaining({ kind: "action_request", outsideContentNotice: false })
+        )
+      );
+      h.confirmations.resolve("pending-a", "rejected");
+      expect((await write).permissionDecision).toBe("deny");
+    } finally {
+      await h.close();
+    }
+  });
 
   it("does not allow while report persistence is pending", async () => {
     const h = await harness();

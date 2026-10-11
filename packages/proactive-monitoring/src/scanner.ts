@@ -6,7 +6,7 @@ import {
   type PriorityPreferencesRepository,
   type PrioritySource
 } from "@moss/priority";
-import type { ProactiveSource } from "@moss/shared";
+import { resolveEffectiveLocale, type ProactiveSource } from "@moss/shared";
 
 import type { AntiSpamPolicy } from "./anti-spam.js";
 import type { CardRepository } from "./card-repository.js";
@@ -24,7 +24,8 @@ interface ScanDependencies {
   readonly monitorStateRepository: MonitorStateRepository;
   readonly cardRepository: CardRepository;
   readonly antiSpamPolicy: AntiSpamPolicy;
-  readonly getLocalePreference: (scopedDb: DataContextDb) => Promise<{ timezone?: string } | null>;
+  /** Raw stored `locale` preference; the scanner resolves it to the effective locale. */
+  readonly getLocalePreference: (scopedDb: DataContextDb) => Promise<unknown>;
 }
 
 export type ScanReason = "source-sync" | "manual-refresh" | "scheduled-check";
@@ -74,10 +75,9 @@ export class ProactiveScanner {
       }
     }
 
-    // Resolve timezone.
-    const localePref = await this.deps.getLocalePreference(scopedDb);
-    const timeZone =
-      typeof localePref?.timezone === "string" && localePref.timezone ? localePref.timezone : "UTC";
+    // Resolve the owner's locale; nothing saved takes the platform default, not UTC.
+    const locale = resolveEffectiveLocale(await this.deps.getLocalePreference(scopedDb));
+    const timeZone = locale.timezone;
 
     // Load priority anchors for provider input.
     const priorityRawPref = await scopedDb.db
@@ -102,6 +102,7 @@ export class ProactiveScanner {
         sinceCursor,
         now: nowIso,
         timeZone,
+        locale,
         maxSignals: MAX_SIGNALS,
         priorityAnchors
       });
@@ -255,12 +256,10 @@ export async function resolveMonitoringConfig(
   scopedDb: DataContextDb,
   prefsRepo: ProactiveMonitoringPreferencesRepository,
   priorityPrefsRepo: PriorityPreferencesRepository,
-  getLocale: (db: DataContextDb) => Promise<{ timezone?: string } | null>
+  getLocale: (db: DataContextDb) => Promise<unknown>
 ): Promise<ResolvedMonitoringConfig> {
   const preference = await prefsRepo.get(scopedDb);
-  const localePref = await getLocale(scopedDb);
-  const timeZone =
-    typeof localePref?.timezone === "string" && localePref.timezone ? localePref.timezone : "UTC";
+  const timeZone = resolveEffectiveLocale(await getLocale(scopedDb)).timezone;
   const priorityRaw = await scopedDb.db
     .selectFrom("app.preferences")
     .select("value_json")

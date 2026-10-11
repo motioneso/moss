@@ -62,7 +62,7 @@ export function renderMemorySeedBlock(
       // Recalled text is user-influenced — neutralize any seed-framing delimiter
       // it carries so it can't break out of the <memory> block (#123).
       // `chunk.date` is system-formatted (recall-port.ts derives it via
-      // toISOString().slice(0,10), or the literal "unknown") and is therefore not
+      // localDay(), or the literal "unknown") and is therefore not
       // an attacker-controlled surface; if its provenance ever becomes free text,
       // it must be routed through neutralizeSeedFraming too.
       lines.push(`[${chunk.date}] ${neutralizeSeedFraming(chunk.text)}`);

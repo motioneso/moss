@@ -7,6 +7,7 @@ import type {
   ProactiveMonitorResult,
   ProactiveMonitorSignal
 } from "@moss/module-sdk";
+import { formatLocaleDate } from "@moss/shared";
 
 import { TaskDriftRepository } from "./drift.js";
 
@@ -43,7 +44,7 @@ export const tasksMonitorProvider: ProactiveMonitorProvider = {
         sourceRefHash: stableHash(task.id),
         signalType: "overdue_high_priority",
         title: task.title,
-        summary: `Task overdue${task.due_at ? ` since ${new Date(task.due_at as unknown as string).toLocaleDateString()}` : ""}`,
+        summary: `Task overdue${task.due_at ? ` since ${formatLocaleDate(task.due_at as unknown as string, input.locale)}` : ""}`,
         occurredAt: task.due_at ? new Date(task.due_at as unknown as string).toISOString() : now,
         priorityCandidate: {
           dueAt: task.due_at ? new Date(task.due_at as unknown as string).toISOString() : undefined,
@@ -65,7 +66,7 @@ export const tasksMonitorProvider: ProactiveMonitorProvider = {
         sourceRefHash: stableHash(task.id),
         signalType,
         title: task.title,
-        summary: `High-priority task needs attention${task.due_at ? ` — due ${new Date(task.due_at as unknown as string).toLocaleDateString()}` : ""}`,
+        summary: `High-priority task needs attention${task.due_at ? ` — due ${formatLocaleDate(task.due_at as unknown as string, input.locale)}` : ""}`,
         targetAt: task.due_at
           ? new Date(task.due_at as unknown as string).toISOString()
           : undefined,

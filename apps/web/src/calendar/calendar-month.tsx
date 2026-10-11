@@ -1,13 +1,15 @@
 import { DayCell, MonthChip, TodayPill } from "@moss/ui";
 import {
-  DOW_SHORT,
-  MONTH_NAMES,
   buildMonthCells,
   dayKey,
+  fmtMonthShort,
   fmtTime,
   isToday,
+  plainDateOf,
+  weekdayHeaders,
   type CalendarViewEvent
 } from "./calendar-model.js";
+import { useUserLocale } from "../locale/locale-format.js";
 
 interface CalendarMonthProps {
   readonly cursor: Date;
@@ -17,23 +19,24 @@ interface CalendarMonthProps {
 }
 
 export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: CalendarMonthProps) {
+  const locale = useUserLocale();
   const cells = buildMonthCells(cursor);
-  const curMonth = cursor.getMonth();
+  const curMonth = cursor.getUTCMonth();
   const rowCount = cells.length / 7;
 
   return (
     <div className="cal-month" style={{ minWidth: 7 * 144, minHeight: 42 + rowCount * 112 }}>
       <div className="cal-month__head">
-        {DOW_SHORT.map((d) => (
-          <div key={d} className="cal-month__dow">
+        {weekdayHeaders(locale).map((d, i) => (
+          <div key={i} className="cal-month__dow">
             {d}
           </div>
         ))}
       </div>
       <div className="cal-month__grid" style={{ gridTemplateRows: `repeat(${rowCount}, 1fr)` }}>
         {cells.map((date) => {
-          const out = date.getMonth() !== curMonth;
-          const today = isToday(date);
+          const out = date.getUTCMonth() !== curMonth;
+          const today = isToday(date, locale.timezone);
           const key = dayKey(date);
           const evs = (eventsByDay.get(key) ?? [])
             .slice()
@@ -43,15 +46,15 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
 
           return (
             <DayCell
-              key={key + "-" + date.getDate()}
+              key={key + "-" + date.getUTCDate()}
               out={out}
               today={today}
               onPickDate={() => onPickDay(date)}
               dateContent={
                 <>
-                  <TodayPill variant="month">{date.getDate()}</TodayPill>
-                  {date.getDate() === 1 ? (
-                    <span className="mo">{(MONTH_NAMES[date.getMonth()] ?? "").slice(0, 3)}</span>
+                  <TodayPill variant="month">{date.getUTCDate()}</TodayPill>
+                  {date.getUTCDate() === 1 ? (
+                    <span className="mo">{fmtMonthShort(date, locale)}</span>
                   ) : null}
                 </>
               }
@@ -62,8 +65,8 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
                   block={e.kind === "block"}
                   color={e.kind === "block" ? "var(--accent-fg)" : "var(--steel)"}
                   time={
-                    !e.allDay && dayKey(e.startsAt) === dayKey(e.date)
-                      ? fmtTime(e.startMin).replace(":00", "")
+                    !e.allDay && dayKey(plainDateOf(e.startsAt, locale.timezone)) === dayKey(e.date)
+                      ? fmtTime(e.startMin, locale)
                       : undefined
                   }
                   title={e.title}

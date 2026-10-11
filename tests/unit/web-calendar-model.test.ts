@@ -9,14 +9,14 @@ import {
   loadPersistedCursor,
   loadPersistedView,
   loadPersistedWorkWeek,
+  plainDate,
   type CalendarViewEvent
 } from "../../apps/web/src/calendar/calendar-model.js";
 
-// Pin a western timezone so all-day bucketing is exercised under the conditions
-// that surfaced the bug. The model reads only local Date components, and it creates
-// Dates lazily inside its functions (never at import time), so Node honours this
-// runtime TZ for every Date the tests below construct.
-process.env.TZ = "America/Los_Angeles";
+// The machine runs in UTC; the person lives in a western timezone. All-day events must
+// still land on their own date, and timed events on the person's day.
+process.env.TZ = "UTC";
+const TZ = "America/Los_Angeles";
 
 function makeDto(overrides: Partial<CalendarEventDto>): CalendarEventDto {
   return {
@@ -49,11 +49,12 @@ describe("dtoToViewEvent all-day timezone bucketing", () => {
         allDay: true,
         startsAt: "2026-06-20T00:00:00.000Z",
         endsAt: "2026-06-21T00:00:00.000Z"
-      })
+      }),
+      TZ
     );
     expect(view).not.toBeNull();
     // June is month index 5; the event must land on the 20th, not the 19th.
-    expect(dayKey(view!.date)).toBe("2026-5-20");
+    expect(dayKey(view!.date)).toBe("2026-06-20");
   });
 
   it("groups the all-day event under the Jun 20 cell key used by the day/month views", () => {
@@ -63,19 +64,20 @@ describe("dtoToViewEvent all-day timezone bucketing", () => {
         allDay: true,
         startsAt: "2026-06-20T00:00:00.000Z",
         endsAt: "2026-06-21T00:00:00.000Z"
-      })
+      }),
+      TZ
     ) as CalendarViewEvent;
-    const byDay = groupEventsByDay([view]);
-    // A visible day cell for Jun 20 is a local Date; its lookup key must match.
-    const jun20CellKey = dayKey(new Date(2026, 5, 20));
+    const byDay = groupEventsByDay([view], TZ);
+    // A visible day cell for Jun 20 is a plain date; its lookup key must match.
+    const jun20CellKey = dayKey(plainDate(2026, 5, 20));
     expect(byDay.get(jun20CellKey)).toHaveLength(1);
-    expect(byDay.get(dayKey(new Date(2026, 5, 19)))).toBeUndefined();
+    expect(byDay.get(dayKey(plainDate(2026, 5, 19)))).toBeUndefined();
   });
 
-  it("keeps timed events on their local day of the start instant", () => {
+  it("keeps timed events on the person's day of the start instant", () => {
     // 2026-06-20T16:00:00Z is Jun 20 09:00 in America/Los_Angeles.
-    const view = dtoToViewEvent(makeDto({ allDay: false })) as CalendarViewEvent;
-    expect(dayKey(view.date)).toBe("2026-5-20");
+    const view = dtoToViewEvent(makeDto({ allDay: false }), TZ) as CalendarViewEvent;
+    expect(dayKey(view.date)).toBe("2026-06-20");
     expect(view.startMin).toBe(9 * 60);
   });
 });
@@ -106,7 +108,7 @@ describe("legacy jarvis.cal.* localStorage migration", () => {
   it("migrates the legacy cursor key", () => {
     localStorage.setItem("jarvis.cal.cursor", "2030-06-06T16:00:00.000Z");
     const cursor = loadPersistedCursor();
-    expect(cursor.toISOString()).toBe("2030-06-06T16:00:00.000Z");
+    expect(cursor?.toISOString()).toBe("2030-06-06T00:00:00.000Z");
     expect(localStorage.getItem("moss.cal.cursor")).toBe("2030-06-06T16:00:00.000Z");
     expect(localStorage.getItem("jarvis.cal.cursor")).toBeNull();
   });
@@ -120,6 +122,7 @@ describe("legacy jarvis.cal.* localStorage migration", () => {
 
   it("defaults when neither key is present", () => {
     expect(loadPersistedView()).toBe("day");
+    expect(loadPersistedCursor()).toBeNull();
     expect(loadPersistedWorkWeek()).toBe(false);
   });
 });

@@ -30,7 +30,7 @@ describe("forwarded safe tool error admission", () => {
     });
     await expectYoloWriteRunsPastMark(h, write);
   });
-  it("shows the outside-content notice on the next write after forwarding safe error text", async () => {
+  it("shows no outside-content notice when Auto-approve is off and a fresh chat would ask too", async () => {
     const failed = admissionTool("example.safeError", {
       safeErrors: true,
       execute: async () => {
@@ -53,7 +53,7 @@ describe("forwarded safe tool error admission", () => {
       expect.objectContaining({
         kind: "action_request",
         toolName: write.name,
-        outsideContentNotice: true
+        outsideContentNotice: false
       })
     );
     expect(write.execute).not.toHaveBeenCalled();

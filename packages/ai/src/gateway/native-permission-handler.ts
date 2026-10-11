@@ -60,6 +60,7 @@ export async function requestNativeToolPermission(
     localTimezone: (await deps.resolveLocalTimezone?.(actorUserId)) ?? undefined
   };
 
+  // A clean conversation would allow this with no card.
   const yoloAllows =
     (await nativeYoloCanAutoAllow(toolName, input, request.workingDirectory)) &&
     (await (async () => {
@@ -150,7 +151,7 @@ export async function requestNativeToolPermission(
     actionRequestId: action.id,
     ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
     toolName,
-    outsideContentNotice: await isConversationTainted(deps.provenance, ctx),
+    outsideContentNotice: yoloAllows && (await isConversationMarked(deps.provenance, ctx)),
     summary: nativeToolSummary(toolName, input)
   });
   const holdStartedAt = Date.now();

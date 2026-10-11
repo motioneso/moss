@@ -30,6 +30,8 @@ import {
 import { DataContextRunner, createDatabase, getMossDatabaseUrls } from "@moss/db";
 import { EmailRepository } from "@moss/email";
 import { createCliStructuredAdapterFactory } from "@moss/module-registry";
+import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
+import { PreferencesRepository } from "@moss/structured-state";
 
 const CONCURRENCY = 4;
 
@@ -86,6 +88,9 @@ async function main(): Promise<void> {
     const { rows, subjects, modelIds } = await dataContext.withDataContext(
       { actorUserId: userId, requestId: randomUUID() },
       async (scopedDb) => {
+        const locale = resolveEffectiveLocale(
+          await new PreferencesRepository().get(scopedDb, LOCALE_PREFERENCE_KEY)
+        );
         const mine = new Set(
           (await emails.listFrequentRecipientAddresses(scopedDb, userId))
             .map(bareAddress)
@@ -161,7 +166,8 @@ async function main(): Promise<void> {
                 if (result.ok) models.add(result.modelId);
                 return result;
               },
-              now
+              now,
+              locale
             );
             results.push({
               ...shadow,

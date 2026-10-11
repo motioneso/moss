@@ -357,11 +357,59 @@ capture errors still fail rather than falsely claiming saved evidence. This
 bounded workload reduction is not a claim that the phase cap is resolved; the
 next exact-head CI result must establish that.
 
+## Final bounded class-guard batch
+
+The remaining F-07 module-local class coverage is now implemented after its consumer
+cleanup prerequisites. The existing UI-class gate checks direct JSX `className`
+attributes in the six audited module roots. It validates literal and supported
+finite expressions against owned styles and explicit, file-bounded contracts.
+
+The gate rejects unsupported shadowing, array aliases/escapes, closure mutation,
+unsafe coercions and arbitrary callbacks instead of silently accepting an unknown
+class. Six independent negative reproductions were repaired; the integrated
+real-tree assertion and all thirty guard tests pass with the consumer cleanup.
+Real UAT/test hooks have narrow, documented exceptions rather than wildcard skips.
+
+This is deliberately bounded static coverage. JSX spreads, other props, runtime
+`classList` changes, arbitrary external CSS and the correctness of declared finite
+runtime domains are not proved by it. It is not universal CSS or accessibility
+certification. Source review approved the full corrective sequence and the precise
+coverage documentation.
+
+The final owner freshness check keeps main at the recorded merged baseline and
+preserves active work. The new trust/approval branch overlaps only separate Finance
+UAT locator lines; its behavior assertions apply cleanly and are not imported.
+Other approved disjoint patches remain compatible, apart from the explicitly
+pre-existing assistant-name fixture conflict and the older pending Finance
+manifest version. Main’s published 0.6.8 artifact remains immutable; the reviewed
+UI/metadata repair declares the new 0.6.9 patch version. Remaining Conversations/Alerts
+replacements, Meals/Food and Job Search replacements, native branding, Reports
+retirement and real-data/native/AT
+proof are still held or unverified, not counted as completed repairs.
+
+### Complete browser CI partitions
+
+The optional-capture native head completed all 277 browser cases (276 passed and
+one known skip) in 7.5 minutes, plus its separate Service Worker regression. The
+same suite on the guard head still reached the ten-minute cap after 267 reported
+outcomes. This does not establish screenshot timing as the cause or a reliable
+single-runner budget. No further unchanged-head retry is used as a remedy.
+
+The final tooling batch partitions the complete browser suite into two jobs using
+Playwright's built-in sharding. Collection proves a disjoint union of 142 and 135
+cases, exactly the original 277 names, with no omitted or duplicated case. Each
+shard retains the ten-minute phase cap and existing worker configuration; neither
+cancels the other on failure. The production Service Worker regression runs once,
+on shard 1, with its unchanged five-minute cap. The existing required CI gate
+still waits for the full browser job matrix and rejects failure or cancellation.
+No product source, browser assertions, fixtures or runtime timeouts change. The
+new exact-head CI result must still verify both partitions and the aggregate.
+
 ## Explicit outstanding gates
 
 - The original foundation-stage requirement for consumer source/test/browser
   review and same-PR metadata is satisfied for the included batches above. The
-  bounded module-local class guard remains a separate dependent followup.
+  bounded module-local class guard is closed by the final batch described above.
 - Active PR-owned Conversations/Alerts changes are not imported or rewritten by
   this foundation batch. Relevant disjoint patch compatibility is recorded in the
   freshness handoff; overlapping future changes still need reconciliation.

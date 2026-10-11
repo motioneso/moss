@@ -5,7 +5,7 @@ import { registerDataContextWorker } from "@moss/jobs";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import { EmailRepository } from "@moss/email";
 import { PreferencesRepository } from "@moss/structured-state";
-import { localDay } from "@moss/shared";
+import { localDay, resolveEffectiveLocale } from "@moss/shared";
 
 import { EmailActionSuppressionRepository } from "./action-suppression-repository.js";
 import {
@@ -133,19 +133,7 @@ function localTomorrow(now: string, timeZone: string): string | null {
 }
 
 function parseMonitorTimeZone(value: unknown): string {
-  const candidate =
-    value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>).timezone
-      : undefined;
-  if (typeof candidate !== "string" || candidate.trim().length === 0) {
-    return "America/Los_Angeles";
-  }
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(0);
-    return candidate;
-  } catch {
-    return "America/Los_Angeles";
-  }
+  return resolveEffectiveLocale(value).timezone;
 }
 
 function hasDueTomorrow(item: EmailContextItem, now: string, timeZone: string): string | null {

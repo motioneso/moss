@@ -1,12 +1,15 @@
-import type { DataContextRunner } from "@moss/db";
+import type { DataContextRunner, PreferencesPort } from "@moss/db";
 import {
   ChatMemoryFactsRepository,
   MemoryRepository,
   type EmbeddingProvider,
   type RetrievedChunk
 } from "@moss/memory";
+import { localDay } from "@moss/shared";
+import { PreferencesRepository } from "@moss/structured-state";
 
 import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
+import { readPersonLocale } from "./person-locale.js";
 import { ChatRepository } from "./repository.js";
 import {
   applyRecencyDecay,
@@ -36,7 +39,8 @@ export class RecallService implements RecallPort {
     private readonly memoryRepo: MemoryRepository = new MemoryRepository(),
     private readonly factsRepo: ChatMemoryFactsRepository = new ChatMemoryFactsRepository(),
     private readonly settingsRepo: ChatUserMemorySettingsRepository = new ChatUserMemorySettingsRepository(),
-    private readonly chatRepo: ChatRepository = new ChatRepository()
+    private readonly chatRepo: ChatRepository = new ChatRepository(),
+    private readonly localePreferences: Pick<PreferencesPort, "get"> = new PreferencesRepository()
   ) {}
 
   async recall(actorUserId: string): Promise<RecallResult> {
@@ -79,14 +83,18 @@ export class RecallService implements RecallPort {
     if (candidates.length === 0) return [];
 
     const threadIds = [...new Set(candidates.map((c) => c.sourcePath))];
-    const threadDates = await this.dataContext.withDataContext(accessCtx, async (db) => {
-      const map = new Map<string, Date>();
-      for (const threadId of threadIds) {
-        const thread = await this.chatRepo.getThreadById(db, threadId);
-        if (thread) map.set(threadId, new Date(thread.last_active_at ?? thread.updated_at));
+    const { threadDates, timeZone } = await this.dataContext.withDataContext(
+      accessCtx,
+      async (db) => {
+        const map = new Map<string, Date>();
+        for (const threadId of threadIds) {
+          const thread = await this.chatRepo.getThreadById(db, threadId);
+          if (thread) map.set(threadId, new Date(thread.last_active_at ?? thread.updated_at));
+        }
+        const locale = await readPersonLocale(db, this.localePreferences);
+        return { threadDates: map, timeZone: locale.timezone };
       }
-      return map;
-    });
+    );
 
     const now = Date.now();
     const scored = candidates
@@ -94,7 +102,7 @@ export class RecallService implements RecallPort {
         const threadDate = threadDates.get(chunk.sourcePath);
         const daysAgo = threadDate ? (now - threadDate.getTime()) / (1000 * 60 * 60 * 24) : 365;
         const score = hybridScore(chunk.similarity, applyRecencyDecay(daysAgo));
-        const date = threadDate ? threadDate.toISOString().slice(0, 10) : "unknown";
+        const date = threadDate ? localDay(threadDate, timeZone) : "unknown";
         return { chunk, score, date };
       })
       .sort((a, b) => b.score - a.score)

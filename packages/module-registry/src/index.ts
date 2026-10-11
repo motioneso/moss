@@ -240,7 +240,7 @@ import {
   type DataContextRunner,
   type MossDatabase
 } from "@moss/db";
-import { resolveTimeZone, type ProactiveSource } from "@moss/shared";
+import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale, type ProactiveSource } from "@moss/shared";
 import {
   createEmailThreadProvider,
   emailModuleManifest,
@@ -514,23 +514,6 @@ import {
   buildCliToolVersionReader,
   buildOnboardingLogin
 } from "./onboarding-login.js";
-
-// Declared here (not `apps/api/src/server.ts`, which sets it via an onRequest hook)
-// because module-registry is the composition root every consumer of the field
-// already reaches: apps/api sets `request.timeZone` and imports this package
-// directly, and every built-in module that reads it (e.g. wellness's
-// `resolveRouteTimeZone` via `resolveRequestTimeZoneForRoute` below) is wired
-// through here. Ambient module augmentations only apply within the TS program
-// they're compiled into, so keeping the declaration next to the file everyone
-// already imports avoids "works in one tsc invocation, breaks in another" drift
-// (#801 Phase A — apps/web's isolated `tsc` once reached wellness routes through
-// a since-removed settings -> module-registry import edge and couldn't see the
-// augmentation while it lived in server.ts).
-declare module "fastify" {
-  interface FastifyRequest {
-    timeZone?: string;
-  }
-}
 
 export type { ChatEngineFactory } from "@moss/chat";
 export type { TerminalRpcConnectOptions, TerminalRpcHandle } from "@moss/ai";
@@ -2174,9 +2157,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           new BriefingsRepository().getOwnedRunById(scopedDb, runId),
         findTask: (scopedDb, taskId) => new TasksRepository().getById(scopedDb, taskId),
         findRun: (scopedDb, runId) => new BriefingsRepository().getOwnedRunById(scopedDb, runId),
-        resolveTimeZone: (request, accessContext) =>
+        resolveTimeZone: (accessContext) =>
           resolveRequestTimeZoneForRoute(
-            request,
             accessContext,
             deps.dataContext,
             new PreferencesRepository()
@@ -2605,18 +2587,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [wellnessModuleSqlMigrationDirectory],
     queueDefinitions: [...WELLNESS_EXPORT_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
-      const preferencesRepository = new PreferencesRepository();
       registerWellnessRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        resolveActiveModules: deps.resolveActiveModules,
-        resolveRequestTimeZone: (request, accessContext) =>
-          resolveRequestTimeZoneForRoute(
-            request,
-            accessContext,
-            deps.dataContext,
-            preferencesRepository
-          )
+        resolveActiveModules: deps.resolveActiveModules
       });
       registerWellnessExportRoutes(server, {
         boss: deps.boss,
@@ -2637,13 +2611,6 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         preferencesRepo: preferencesRepository,
         logger: createModuleLogger(server.log, "weather"),
-        resolveRequestTimeZone: (request, accessContext) =>
-          resolveRequestTimeZoneForRoute(
-            request,
-            accessContext,
-            deps.dataContext,
-            preferencesRepository
-          ),
         fetchFn: deps.fetchFn
       });
     }
@@ -3046,11 +3013,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const preferencesRepository = new PreferencesRepository();
       return registerProactiveMonitoringWorkers(boss, {
         dataContext: deps.dataContext,
-        getLocalePreference: async (scopedDb) => {
-          const val = await preferencesRepository.get(scopedDb, "locale");
-          if (!val || typeof val !== "object" || Array.isArray(val)) return null;
-          return val as { timezone?: string };
-        },
+        getLocalePreference: (scopedDb) =>
+          preferencesRepository.get(scopedDb, LOCALE_PREFERENCE_KEY),
         providers
       });
     }
@@ -3497,17 +3461,19 @@ type TimeZoneRunner = {
   ): Promise<T>;
 };
 
+/**
+ * The zone a route treats as the person's: their saved locale timezone, or the shared default
+ * when nothing is saved (#3395). A browser-reported zone never overrides it.
+ */
 export async function resolveRequestTimeZoneForRoute(
-  request: { readonly timeZone?: string },
   accessContext: AccessContext,
   dataContext: TimeZoneRunner,
   preferences: TimeZonePreferences
 ): Promise<string> {
-  if (request.timeZone) return resolveTimeZone(request.timeZone, undefined);
   const stored = await dataContext.withDataContext(accessContext, (scopedDb) =>
-    preferences.get(scopedDb, "locale")
+    preferences.get(scopedDb, LOCALE_PREFERENCE_KEY)
   );
-  return resolveTimeZone(undefined, extractStoredTimeZone(stored));
+  return resolveEffectiveLocale(stored).timezone;
 }
 
 /** Next local day in the zone, via a UTC-noon anchor so no DST edge flips the day. */
@@ -3522,16 +3488,13 @@ function nextLocalDay(now: Date, timeZone: string): string {
   return new Date(Date.UTC(y!, m! - 1, d! + 1, 12)).toISOString().slice(0, 10);
 }
 
-/** The user's stored timezone (locale preference), or the server default (#2274 worker path). */
+/** The user's saved timezone, or the shared default when nothing is saved (#2274 worker path). */
 async function storedTimeZoneFor(scopedDb: unknown, _actorUserId: string): Promise<string> {
-  const stored = await new PreferencesRepository().get(scopedDb as DataContextDb, "locale");
-  return resolveTimeZone(undefined, extractStoredTimeZone(stored));
-}
-
-function extractStoredTimeZone(value: unknown): string | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const timeZone = (value as Record<string, unknown>)["timezone"];
-  return typeof timeZone === "string" ? timeZone : undefined;
+  const stored = await new PreferencesRepository().get(
+    scopedDb as DataContextDb,
+    LOCALE_PREFERENCE_KEY
+  );
+  return resolveEffectiveLocale(stored).timezone;
 }
 
 /**

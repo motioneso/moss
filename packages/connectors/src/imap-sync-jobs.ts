@@ -12,7 +12,12 @@ import { EmailRepository } from "@moss/email";
 import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypto.js";
 import type { EmailExtractDeps } from "./email-extract.js";
 import { loadOwnAddressesAndSettle, ownSentResult } from "./own-sent.js";
-import { extractEmailSignals, looksLikeOneTimeCodeEmail, senderAddress } from "./email-extract.js";
+import {
+  emailPromptLocale,
+  extractEmailSignals,
+  looksLikeOneTimeCodeEmail,
+  senderAddress
+} from "./email-extract.js";
 import { userSentLastInThread } from "./email-sorting.js";
 import { runSortingModelPass, sortingSession } from "./email-sorting-live.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
@@ -183,6 +188,7 @@ export async function runImapSync(
             ),
           knownSender: () => knownSender,
           now,
+          locale: await emailPromptLocale(deps.emailExtractDeps),
           guard: (work) => withSavepoint(scopedDb, () => work())
         });
         const sorted = sentByUser ? ownSentResult() : pass.sorted[0]?.result;

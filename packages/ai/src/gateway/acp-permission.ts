@@ -306,15 +306,16 @@ export async function requestAcpBuiltInPermission(
       family === "shell" ||
       family === "web" ||
       classification.verdict === "ask");
-  let yoloSetting: boolean | undefined;
-  const yoloOn = async () =>
-    (yoloSetting ??=
-      (await deps.yoloMode?.({
-        actorUserId,
-        requestId,
-        chatSessionId,
-        ...(threadId ? { threadId } : {})
-      })) === true);
+  let yoloAnswer: Promise<boolean> | undefined;
+  const yoloOn = () =>
+    (yoloAnswer ??= Promise.resolve(
+      deps.yoloMode?.({ actorUserId, requestId, chatSessionId, ...(threadId ? { threadId } : {}) })
+    ).then((on) => on === true));
+  // The card names outside content only when a clean conversation would allow with no card.
+  const outsideContentCaused = async () =>
+    (classification.verdict === "allow" ||
+      (classification.verdict === "ask" && (await yoloOn().catch(() => false)))) &&
+    (await isConversationMarked(deps.provenance, ctx));
   // Under YOLO a durable outside-content mark does not raise the floor (#3417). Shell and
   // destructive requests keep it.
   const userTrusted =
@@ -423,7 +424,7 @@ export async function requestAcpBuiltInPermission(
       actionRequestId: action.id,
       ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName,
-      outsideContentNotice: await isConversationTainted(deps.provenance, ctx),
+      outsideContentNotice: await outsideContentCaused(),
       summary: acpCardText(builtIn)
     });
     const holdStartedAt = Date.now();
