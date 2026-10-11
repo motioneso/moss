@@ -53,6 +53,12 @@ test("posting through a real task modal keeps Escape and opener focus usable", a
       ).toBe(true);
     }
   } finally {
-    if (taskId) expect((await page.request.delete(`/api/tasks/${taskId}`)).ok()).toBe(true);
+    // Tasks have no delete route; archiving removes the synthetic task from every list.
+    if (taskId) {
+      const archived = await page.request.patch(`/api/tasks/${taskId}`, {
+        data: { status: "archived" }
+      });
+      expect(archived.ok()).toBe(true);
+    }
   }
 });
