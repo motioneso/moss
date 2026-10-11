@@ -125,13 +125,14 @@ export interface TodayHeroContent {
 /** Why the day briefing has no readable report: switched off, failed, or still to run. */
 export function morningNotReadyReason(
   run: BriefingRunDto | null,
-  schedule: TodayHeroContentInput["morningSchedule"]
+  schedule: TodayHeroContentInput["morningSchedule"],
+  locale: LocaleSettingsDto
 ): string | null {
   if (!schedule) return null;
   if (!schedule.enabled) return BRIEFING_OFF_REASON;
   if (run?.status === "failed") return BRIEFING_FAILED_REASON;
   if (run?.status === "blocked") return BRIEFING_BLOCKED_REASON;
-  return briefingScheduledReason(schedule.targetTime, schedule.pastTarget);
+  return briefingScheduledReason(schedule.targetTime, schedule.pastTarget, locale);
 }
 
 /** Assemble the hero's headline, summary, prepared line and reader control
@@ -218,7 +219,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
     notReadyReason:
       input.morningLoading || morningReadable
         ? null
-        : morningNotReadyReason(input.morningRun, input.morningSchedule)
+        : morningNotReadyReason(input.morningRun, input.morningSchedule, input.locale)
   };
 }
 

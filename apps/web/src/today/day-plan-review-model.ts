@@ -14,7 +14,7 @@ import type {
 import { localDay } from "@moss/shared";
 
 import { zonedClockParts } from "../locale/locale-format.js";
-import { REVIEW_TRANSIENT_LABELS, timeLabel } from "./today-labels.js";
+import { clockText, REVIEW_TRANSIENT_LABELS } from "./today-labels.js";
 
 export type ReviewPlacement = "add" | "keep-proposed" | "leave" | "keep" | "move" | "remove";
 
@@ -244,7 +244,7 @@ export function retryableOutcomes(outcomes: Readonly<Record<string, ApplyExecuti
 export function conflictText(conflict: DayPlanPreviewConflict, locale: LocaleSettingsDto): string {
   const event = conflict.calendarEvent;
   if (event) {
-    return `Overlaps ${event.title}, ${timeLabel(event.startsAt, locale)} to ${timeLabel(event.endsAt, locale)}`;
+    return `Overlaps ${event.title}, ${clockText(event.startsAt, locale)} to ${clockText(event.endsAt, locale)}`;
   }
   return conflict.detail || "Overlaps another selected block";
 }
