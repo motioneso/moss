@@ -333,11 +333,12 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
     }
     await composer.fill(text);
     await composer.press("Enter");
-    // Reloading the page mid-turn drops the turn, so stay put until Moss stops thinking or asks.
-    const thinking = page.getByText("Thinking", { exact: true }).last();
-    await thinking.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
+    // Reloading the page mid-turn drops the turn, so stay put until Moss stops working or asks.
+    // A finished reply keeps its "Thinking" step summary, so the Stop button marks a live turn.
+    const stop = page.getByRole("button", { name: "Stop generating" });
+    await stop.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
     await expect(async () => {
-      const busy = await thinking.isVisible();
+      const busy = await stop.isVisible();
       const asking = await card.getByRole("button", { name: "Approve" }).last().isVisible();
       expect(busy && !asking, "Moss is still working").toBe(false);
     }).toPass({ timeout: 240_000, intervals: [2_000] });
