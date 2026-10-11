@@ -35,5 +35,20 @@ describe("notes live specs (#3277)", () => {
     expect(text).toMatch(/\^Approved · Delete note\$/);
     expect(text, "note exists before the delete").toMatch(/`test -f \$\{legitFile\}`/);
     expect(text, "note is gone after the delete").toMatch(/`test ! -e \$\{legitFile\}`/);
+    expect(text).toMatch(/expect\(\(await deleteResolved\)\.status\(\)\)\.toBe\(204\)/);
+    expect(text, "old auto-run row").not.toMatch(/Done: Delete note/);
+
+    const at = (needle: string) => {
+      const index = text.indexOf(needle);
+      expect(index, needle).toBeGreaterThan(-1);
+      return index;
+    };
+    expect(at("`test -f ${legitFile}`")).toBeLessThan(at("Use the notes.delete tool"));
+    expect(at("const deleteResolved = page.waitForResponse(")).toBeLessThan(
+      at('deleteCard.getByRole("button", { name: "Approve", exact: true }).click()')
+    );
+    expect(at('expectToolOutcome(projectName, "notes.delete"')).toBeLessThan(
+      at("`test ! -e ${legitFile}`")
+    );
   });
 });

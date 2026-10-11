@@ -222,16 +222,14 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
 
   // Delete is destructive, so it always asks first, even with YOLO on (#3417).
   const legitFile = `${NOTES_ROOT}/${legitPath}`;
-  execInVaultAsOwner(projectName, `test -f ${legitFile}`);
-  const deleteCard = chatDialog
-    .locator(".action-request-card")
-    .filter({ hasText: "Delete note" })
-    .last();
+  const deleteCards = chatDialog.locator(".action-request-card").filter({ hasText: "Delete note" });
+  const deleteCard = deleteCards.last();
   const deletedNotes = chatDialog
     .getByRole("status")
     .filter({ hasText: /^Approved · Delete note$/ });
   const deleteCount = await deletedNotes.count();
   const deleteNotBefore = Date.now();
+  execInVaultAsOwner(projectName, `test -f ${legitFile}`);
   await composer.fill(
     `Use the notes.delete tool to delete path "${legitPath}". Use these exact inputs without further questions.`
   );
@@ -251,6 +249,9 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await expectToolOutcome(projectName, "notes.delete", deleteNotBefore, "success");
   execInVaultAsOwner(projectName, `test ! -e ${legitFile}`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
+  // The row reads "Approved" from the click; after the run it must not turn into a failure.
+  await expect(deletedNotes).toHaveCount(deleteCount + 1);
+  await expect(deleteCards).toHaveCount(0);
 
   // --- (b) rejectSymlinkParent: an ANCESTOR directory of the target is a symlink ----------
   // Pre-existing check (write-tools.ts:124-141), not part of #1512's fix, but in the approved
