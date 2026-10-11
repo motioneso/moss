@@ -402,7 +402,7 @@ export function NotificationSettings(props: {
   };
   const preferences = preferencesQuery.data?.preferences ?? [];
   const digest = digestQuery.data?.digest;
-  // Saves wait for the person's zone so a first save never stores a guess.
+  // Saves wait for the person's zone so a first save stores it, not the default.
   const digestBusy = digestQuery.isLoading || localeQuery.isPending || digestMutation.isPending;
   const updateDigest = (
     patch: Partial<{

@@ -3,13 +3,22 @@ import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
-import type { ConnectorAccountDto, LocaleSettingsDto, UsefulnessFeedbackDto } from "@moss/shared";
+import type {
+  ConnectorAccountDto,
+  GetNotificationDigestPreferenceResponse,
+  LocaleSettingsDto,
+  UsefulnessFeedbackDto
+} from "@moss/shared";
 import { formatTimestamp, useUserLocale } from "@moss/settings-ui";
 
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { OversightPane } from "../../apps/web/src/settings/settings-admin-panes.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
-import { digestSaveTimezone } from "../../apps/web/src/settings/settings-module-subviews.js";
+import { sinceForRange } from "../../apps/web/src/settings/settings-activity-pane.js";
+import {
+  digestSaveTimezone,
+  NotificationSettings
+} from "../../apps/web/src/settings/settings-module-subviews.js";
 import { formatLastSync } from "../../apps/web/src/settings/settings-personal-data-panes.js";
 import { defaultExportRange } from "../../apps/web/src/wellness/export-modal.js";
 import BacktrackSettings, {
@@ -47,13 +56,24 @@ afterAll(() => {
   else process.env.TZ = originalTz;
 });
 
-function render(node: ReactNode, seed: (client: QueryClient) => void): string {
+function render(
+  node: ReactNode,
+  seed: (client: QueryClient) => void,
+  { localeLoaded = true }: { localeLoaded?: boolean } = {}
+): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(queryKeys.settings.locale, { locale: LA_24 });
+  if (localeLoaded) client.setQueryData(queryKeys.settings.locale, { locale: LA_24 });
   seed(client);
   return renderToString(
     createElement(QueryClientProvider, { client }, createElement(FeedbackProvider, null, node))
   );
+}
+
+/** The opening tag of the first element whose markup up to its close contains `text`. */
+function tagAround(html: string, tag: string, text: string): string {
+  const match = new RegExp(`<${tag}[^>]*>(?:(?!</${tag}>).)*${text}`, "s").exec(html);
+  if (!match) throw new Error(`no <${tag}> containing ${text}`);
+  return match[0].slice(0, match[0].indexOf(">") + 1);
 }
 
 function feedback(overrides: Partial<UsefulnessFeedbackDto>): UsefulnessFeedbackDto {
@@ -199,7 +219,43 @@ describe("Backtrack delete ranges use the person's day", () => {
   });
 });
 
+describe("day deletes wait for the person's zone", () => {
+  function renderBacktrack(localeLoaded: boolean): string {
+    return render(
+      createElement(BacktrackSettings),
+      (client) => {
+        client.setQueryData(["backtrack", "status"], {
+          storage: "on",
+          paused: false,
+          macs: 1,
+          days: 2,
+          bytes: 2048,
+          lastReceivedAt: INSTANT
+        });
+        client.setQueryData(["settings", "sessions"], { sessions: [] });
+      },
+      { localeLoaded }
+    );
+  }
+
+  it("keeps Today and Choose a day off until the zone loads, and Last hour on", () => {
+    const loading = renderBacktrack(false);
+    expect(tagAround(loading, "button", "Today")).toContain("disabled");
+    expect(tagAround(loading, "button", "Choose a day")).toContain("disabled");
+    expect(tagAround(loading, "button", "Last hour")).not.toContain("disabled");
+
+    const loaded = renderBacktrack(true);
+    expect(tagAround(loaded, "button", "Today")).not.toContain("disabled");
+    expect(tagAround(loaded, "button", "Choose a day")).not.toContain("disabled");
+  });
+});
+
 describe("other small screens use the person's day and zone", () => {
+  it("starts the activity Today filter at the person's midnight", () => {
+    expect(sinceForRange("today", LA_24.timezone, NOW)).toBe("2026-10-09T07:00:00.000Z");
+    expect(sinceForRange("7d", LA_24.timezone, NOW)).toBe("2026-10-03T03:30:00.000Z");
+  });
+
   it("defaults the wellness export to the 90 days up to the person's today", () => {
     expect(defaultExportRange(LA_24.timezone, NOW)).toEqual({
       from: "2026-07-11",
@@ -211,5 +267,28 @@ describe("other small screens use the person's day and zone", () => {
     expect(digestSaveTimezone(undefined, LA_24.timezone)).toBe("America/Los_Angeles");
     expect(digestSaveTimezone("UTC", LA_24.timezone)).toBe("America/Los_Angeles");
     expect(digestSaveTimezone("Europe/London", LA_24.timezone)).toBe("Europe/London");
+  });
+
+  it("keeps the digest controls off until the person's zone loads", () => {
+    const digest: GetNotificationDigestPreferenceResponse = {
+      digest: {
+        enabled: true,
+        cadence: "daily",
+        scheduleMetadata: { targetTime: "08:00", timezone: "UTC" },
+        available: true,
+        unavailableReason: null
+      }
+    };
+    const renderDigest = (localeLoaded: boolean) =>
+      render(
+        createElement(NotificationSettings, { onBack: () => undefined }),
+        (client) => client.setQueryData(queryKeys.settings.notificationDigest, digest),
+        { localeLoaded }
+      );
+    const sendTime = (html: string) =>
+      /<input[^>]*aria-label="Digest send time"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(sendTime(renderDigest(false))).toContain("disabled");
+    expect(sendTime(renderDigest(true))).not.toContain("disabled");
+    expect(sendTime(renderDigest(true))).toContain('value="08:00"');
   });
 });

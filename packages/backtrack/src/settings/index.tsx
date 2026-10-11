@@ -10,7 +10,7 @@ import {
   Row,
   Switch,
   formatTimestamp,
-  useUserLocale
+  useUserLocaleStatus
 } from "@moss/settings-ui";
 import {
   formatLocaleDate,
@@ -103,7 +103,7 @@ function plural(count: number, one: string, many: string): string {
 
 export default function BacktrackSettings() {
   const queryClient = useQueryClient();
-  const locale = useUserLocale();
+  const { locale, ready: localeReady } = useUserLocaleStatus();
   const status = useQuery({
     queryKey: STATUS_KEY,
     queryFn: () => requestJson<BacktrackStatusResponse>("/api/backtrack/status")
@@ -199,7 +199,7 @@ export default function BacktrackSettings() {
             <Button
               variant="secondary"
               size="sm"
-              disabled={remove.isPending}
+              disabled={remove.isPending || !localeReady}
               onClick={() =>
                 setConfirming({
                   title: "Delete today?",
@@ -215,7 +215,7 @@ export default function BacktrackSettings() {
             <Button
               variant="secondary"
               size="sm"
-              disabled={remove.isPending}
+              disabled={remove.isPending || !localeReady}
               onClick={() => setChoosingDay((open) => !open)}
             >
               Choose a day…
@@ -242,7 +242,7 @@ export default function BacktrackSettings() {
         <Row
           className="set-row--stack-narrow"
           name="Delete one day"
-          desc="The day runs from midnight to midnight in this browser's time zone."
+          desc="The day runs from midnight to midnight in your time zone."
           control={
             <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input
@@ -256,7 +256,11 @@ export default function BacktrackSettings() {
               <Button
                 variant="danger"
                 size="sm"
-                disabled={remove.isPending || chosenDayRange(day, locale.timezone) === undefined}
+                disabled={
+                  remove.isPending ||
+                  !localeReady ||
+                  chosenDayRange(day, locale.timezone) === undefined
+                }
                 onClick={() => {
                   const range = chosenDayRange(day, locale.timezone);
                   if (!range) return;

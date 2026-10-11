@@ -4,7 +4,7 @@ import { Badge as SharedBadge } from "@moss/ui";
 export { Switch, Segmented, Avatar, Indicator } from "@moss/ui";
 import { Segmented } from "@moss/ui";
 import { formatLocaleDateTime, type LocaleSettingsDto } from "@moss/shared";
-export { useUserLocale } from "./locale.js";
+export { useUserLocale, useUserLocaleStatus } from "./locale.js";
 export type { GeneratedSettingsSurface } from "./scanner.js";
 export * from "./router.js";
 export { Select } from "@moss/ui";
