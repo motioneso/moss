@@ -5,11 +5,11 @@
 // database. Real API, real worker, real models. Nothing is intercepted.
 //
 // Extra variables: LIVE_R26_DB_CONTAINER and LIVE_R26_DB name the scratch database;
-// LIVE_R26_PROVIDER picks the sign-in, "codex" (default) or "claude".
+// JARVIS_UAT_REAL_CHAT_PROVIDER picks the sign-in, "codex" (default) or "claude".
 // Codex: LIVE_R26_CODEX_AUTH is the operator's Codex sign-in file, copied into the owner's model
 // folder (mode 600) and removed again at teardown; LIVE_R26_CLI_AUTH_BASE is the model folder base.
 // Claude: Moss's own sign-in through tests/uat/claude-signin-handoff.ts; nothing is copied in.
-// It needs MOSS_UAT_CAPTURE_OFF=1 so no trace records the code.
+// A Claude run needs MOSS_UAT_CAPTURE_OFF=1 so no trace records the code; do not pass --trace.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync } from "node:fs";
 
@@ -20,18 +20,19 @@ import {
   signInClaudeThroughMoss
 } from "../uat/claude-signin-handoff.js";
 import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../uat/model-tier.js";
+import { uatRealChatProvider, uatRealChatProviderKind } from "../uat/real-chat-env.js";
 import {
   NEW_HUB,
   R26,
   openConnection,
   r26ToolList,
   readDetail,
-  requireOwnInstance,
   setToolServerTools,
   signIn,
   connectionId,
   sortRuns
 } from "./classifier-2984-r26-helpers.js";
+import { requireOwnInstance } from "./own-instance.js";
 
 function sql(query: string): string {
   const container = process.env.LIVE_R26_DB_CONTAINER;
@@ -185,14 +186,8 @@ test("setup 2: the stand-in door takes a choice of door, re-sorted and prepared"
 
 /** Installs the chosen sign-in's command-line tool and signs the owner in. */
 async function signInChatModel(page: Page): Promise<void> {
-  const provider = process.env.LIVE_R26_PROVIDER ?? "codex";
-  if (provider !== "codex" && provider !== "claude") {
-    throw new Error('LIVE_R26_PROVIDER must be "codex" or "claude"');
-  }
-  if (provider === "claude" && process.env.MOSS_UAT_CAPTURE_OFF !== "1") {
-    throw new Error("the Claude sign-in needs MOSS_UAT_CAPTURE_OFF=1 so no trace records the code");
-  }
-  const providerKind = provider === "claude" ? "anthropic" : "openai-compatible";
+  const provider = uatRealChatProvider();
+  const providerKind = uatRealChatProviderKind();
 
   if (provider === "codex") {
     const ownerId = sql(`select id from app.users where email = '${R26.ownerEmail}'`);

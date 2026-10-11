@@ -1,5 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { requireOwnInstance } from "../live/own-instance.js";
+import { uatRealChatProvider } from "../uat/real-chat-env.js";
 
 interface Sources {
   readonly chat: string;
@@ -29,6 +32,8 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["expect(old.ok(), `switch off old hub -> ${old.status()}`).toBe(true);", 1],
   ["expect(yolo.ok() || yolo.status() === 403, `YOLO off -> ${yolo.status()}`).toBe(true);", 1],
   ['expect(classifier, "a model that can return structured answers").toBeTruthy();', 1],
+  ['expect(classifier, "the classifier model test 7 bound").toBeTruthy();', 1],
+  ["          answers(since) > 0,\n        { timeout: 180_000, intervals: [3_000] }", 1],
   ["expect(bound.ok(), `classifier model -> ${bound.status()}`).toBe(true);", 1],
   ["expect(saved.ok(), `gate ${mode} -> ${saved.status()}`).toBe(true);", 1],
   ["expect(sortOf(detail, LIGHT)).toMatchObject({ asksFirst: false });", 1],
@@ -127,14 +132,8 @@ function problems({ chat, helpers, setup, config }: Sources): string[] {
   if (!/^\s+requireOwnInstance\(\);\n\s+await setToolServerTools/m.test(setup)) {
     found.push("setup skips the own-instance check");
   }
-  if (!/new Set\(\["5173", "1533"\]\)/.test(helpers)) found.push("shared ports are not refused");
-
-  if (
-    !/provider === "claude" && process\.env\.MOSS_UAT_CAPTURE_OFF !== "1"\) \{\n\s+throw/.test(
-      setup
-    )
-  ) {
-    found.push("the Claude sign-in runs with captures on");
+  if (!/^\s+const provider = uatRealChatProvider\(\);/m.test(setup)) {
+    found.push("setup picks its sign-in without the capture refusal");
   }
   if (!/trace: process\.env\.MOSS_UAT_CAPTURE_OFF === "1" \? "off"/.test(config)) {
     found.push("the live config keeps traces under the capture opt-out");
@@ -255,14 +254,14 @@ describe("classifier chat live journey (#3362)", () => {
       );
     });
 
-    it("the Claude sign-in with captures on", async () => {
+    it("setup picking its sign-in without the capture refusal", async () => {
       expect(
         await mutate(
           "setup",
-          'provider === "claude" && process.env.MOSS_UAT_CAPTURE_OFF !== "1"',
-          'provider === "claude" && process.env.MOSS_UAT_CAPTURE_OFF === "never"'
+          "  const provider = uatRealChatProvider();",
+          '  const provider = process.env.JARVIS_UAT_REAL_CHAT_PROVIDER ?? "codex";'
         )
-      ).toContain("the Claude sign-in runs with captures on");
+      ).toContain("setup picks its sign-in without the capture refusal");
     });
 
     it("traces kept under the capture opt-out", async () => {
@@ -307,6 +306,38 @@ describe("classifier chat live journey (#3362)", () => {
       expect(
         await mutate("setup", ".toHaveCount(1, { timeout: 300_000 });", ".toBeVisible();")
       ).toContain("lost setup assertion: .toHaveCount(1, { timeout: 300_000 });");
+    });
+  });
+
+  describe("a run refuses shared instances", () => {
+    it.each([
+      ["unset", undefined],
+      ["dev's screen", "http://127.0.0.1:5173"],
+      ["dev over https", "https://dev.example.ts.net:5443"],
+      ["prod", "http://127.0.0.1:1533"],
+      ["no port", "https://moss.example.com"]
+    ])("refuses %s", (_label, baseUrl) => {
+      expect(() => requireOwnInstance(baseUrl)).toThrow(/LIVE_BASE_URL/);
+    });
+
+    it("accepts a claimed dev port", () => {
+      expect(() => requireOwnInstance("http://127.0.0.1:5187")).not.toThrow();
+    });
+  });
+
+  describe("a Claude run refuses captures", () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("throws without the capture opt-out", () => {
+      vi.stubEnv("JARVIS_UAT_REAL_CHAT_PROVIDER", "claude");
+      vi.stubEnv("MOSS_UAT_CAPTURE_OFF", "");
+      expect(() => uatRealChatProvider()).toThrow(/MOSS_UAT_CAPTURE_OFF=1/);
+    });
+
+    it("runs with the opt-out", () => {
+      vi.stubEnv("JARVIS_UAT_REAL_CHAT_PROVIDER", "claude");
+      vi.stubEnv("MOSS_UAT_CAPTURE_OFF", "1");
+      expect(uatRealChatProvider()).toBe("claude");
     });
   });
 });

@@ -136,6 +136,30 @@ async function setGate(page: Page, mode: "off" | "shadow" | "on"): Promise<void>
   expect(saved.ok(), `gate ${mode} -> ${saved.status()}`).toBe(true);
 }
 
+interface ClassifierModel {
+  id: string;
+  providerModelId: string | null;
+  capabilities: readonly string[];
+  tier: string;
+}
+
+// LIVE_R26_CLASSIFIER_MODEL_ID pins the classifier to one of the owner's configured models, by
+// its id or its provider's model name; without it the first model that returns structured
+// answers is used. Tests 7 and 11 both pick through here, so they agree on the model.
+async function findClassifierModel(page: Page): Promise<ClassifierModel | undefined> {
+  const models = (
+    (await (await page.request.get("/api/ai/models")).json()) as {
+      models: readonly ClassifierModel[];
+    }
+  ).models;
+  const pinned = process.env.LIVE_R26_CLASSIFIER_MODEL_ID;
+  return models.find((model) =>
+    pinned
+      ? model.id === pinned || model.providerModelId === pinned
+      : model.capabilities.includes("json")
+  );
+}
+
 const call = (tool: string) => `"${SLUG}.${tool}"`;
 
 test("7. setup for chat: one copy of the tools, YOLO off, a classifier model", async ({ page }) => {
@@ -152,24 +176,7 @@ test("7. setup for chat: one copy of the tools, YOLO off, a classifier model", a
   const yolo = await page.request.put("/api/me/yolo", { data: { enabled: false } });
   expect(yolo.ok() || yolo.status() === 403, `YOLO off -> ${yolo.status()}`).toBe(true);
 
-  const models = (
-    (await (await page.request.get("/api/ai/models")).json()) as {
-      models: readonly {
-        id: string;
-        providerModelId: string | null;
-        capabilities: readonly string[];
-        tier: string;
-      }[];
-    }
-  ).models;
-  // LIVE_R26_CLASSIFIER_MODEL_ID pins the classifier to one configured model, by its id or its
-  // provider's model name; without it the first model that returns structured answers is used.
-  const pinned = process.env.LIVE_R26_CLASSIFIER_MODEL_ID;
-  const classifier = models.find((model) =>
-    pinned
-      ? model.id === pinned || model.providerModelId === pinned
-      : model.capabilities.includes("json")
-  );
+  const classifier = await findClassifierModel(page);
   expect(classifier, "a model that can return structured answers").toBeTruthy();
   const bound = await page.request.put("/api/ai/services/sorting/binding", {
     data: { binding: { kind: "model", modelId: classifier!.id } }
@@ -307,18 +314,15 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
   test.setTimeout(1_200_000);
   await signIn(page);
   const ownerId = sql(`select id from app.users where email = '${R26.ownerEmail}'`);
-  const pinned = process.env.LIVE_R26_CLASSIFIER_MODEL_ID;
-  const classifier = sql(
-    "select m.id || '|' || m.provider_model_id from app.ai_configured_models m " +
-      (pinned
-        ? `where m.id::text = '${pinned}' or m.provider_model_id = '${pinned}' limit 1`
-        : "where m.capabilities @> array['json']::text[] limit 1")
-  );
-  const [modelId, providerModelId] = classifier.split("|");
+  const classifier = await findClassifierModel(page);
+  expect(classifier, "the classifier model test 7 bound").toBeTruthy();
+  const modelId = classifier!.id;
+  const providerModelId = classifier!.providerModelId;
   sql(
     "insert into app.chat_classifier_shadow_reviews " +
       "(classifier_model_id, classifier_provider_model_id, reviewed_by_user_id) values " +
-      `('${modelId}', '${providerModelId}', '${ownerId}') on conflict do nothing`
+      `('${modelId}', ${providerModelId === null ? "null" : `'${providerModelId}'`}, '${ownerId}') ` +
+      "on conflict do nothing"
   );
   await setGate(page, "on");
   for (const [route, data] of [

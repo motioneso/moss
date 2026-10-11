@@ -15,23 +15,12 @@ import {
   type FixtureCall,
   type FixtureTool
 } from "../uat/fixtures/classifier-mcp-fixture-server.js";
+import { requireOwnInstance } from "./own-instance.js";
 
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`set ${name} before running the R2.6 live proof`);
   return value;
-}
-
-/** Dev's screen and prod; this proof writes owners, connections and gate settings. */
-const SHARED_PORTS = new Set(["5173", "1533"]);
-
-/** Stops the run unless LIVE_BASE_URL names a disposable instance of the operator's own. */
-export function requireOwnInstance(): void {
-  const raw = process.env.LIVE_BASE_URL;
-  if (!raw) throw new Error("set LIVE_BASE_URL to your own disposable instance");
-  if (SHARED_PORTS.has(new URL(raw).port)) {
-    throw new Error(`LIVE_BASE_URL ${raw} is a shared instance; use your own`);
-  }
 }
 
 export const R26 = {
