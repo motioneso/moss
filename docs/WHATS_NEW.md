@@ -45,6 +45,10 @@ feature that is not present in the image you are running.
 
 - **Finance first budget, money moves in chat and Finance settings.** Finance drafts your first budget for you, Moss can move money between categories and sort transactions when you ask, and Finance has a settings page where you choose how much it does on its own. [PR #3312](https://github.com/motioneso/moss/pull/3312)
 
+#### Changed
+
+- **Chat makes small trusted changes without asking.** When you chat through Claude, Codex or another outside assistant, changes you have already allowed, such as a budget move under your Finance limit, now happen without an approval card, while anything larger or riskier still asks first. [PR #3386](https://github.com/motioneso/moss/pull/3386)
+
 ### 2026-10-09
 
 #### Fixed
