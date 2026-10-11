@@ -252,3 +252,6 @@ blocking	packages/wellness/src/**	tests/uat/specs/audit-wellness.uat.spec.ts
 blocking	packages/shared/src/wellness-api.ts	tests/uat/specs/audit-wellness.uat.spec.ts
 blocking	tests/integration/audit-wellness-checkin-pages.test.ts	tests/uat/specs/audit-wellness.uat.spec.ts
 blocking	tests/unit/audit-wellness-*.test.ts*	tests/uat/specs/audit-wellness.uat.spec.ts
+# #3397 shared modal focus recovery through real task comments.
+blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
+blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts
