@@ -150,7 +150,7 @@ async function retrieveTurnContext(
             threadTitle: threadCtx.threadTitle,
             recentTurns: recent,
             localNowIso: localNow,
-            localTimezone: threadCtx.localTimezone ?? "UTC"
+            localTimezone: personLocale.timezone
           })
         : null;
     const crossToolPlan =
@@ -215,7 +215,7 @@ async function retrieveTurnContext(
           })),
           model,
           localNow,
-          threadCtx.localTimezone ?? "UTC"
+          personLocale.timezone
         );
         const reordered = reorderByPriority(crossTool.items, ranked);
         crossTool = { block: renderCrossToolContextBlock(reordered), items: reordered };

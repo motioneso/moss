@@ -31,9 +31,9 @@ function parseInstant(value: string): Date | null {
   const match = ISO_INSTANT.exec(value);
   if (!match || match[7] === "-00:00") return null;
   const [, y, m, d, h, min, sec, zone] = match;
-  const year = Number(y),
-    month = Number(m),
-    day = Number(d);
+  const year = Number(y);
+  const month = Number(m);
+  const day = Number(d);
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   if (
@@ -61,7 +61,7 @@ function isValidRegion(region: string): boolean {
   }
 }
 
-/** Model-only references, never rewrites authoritative result data or copies arbitrary prose.
+/** Builds references for the model only. It never rewrites result data or copies arbitrary prose.
  * Only complete ISO scalar values already visible in the capped result may be referenced.
  * The supplied renderer keeps these derived values inside the existing outside-content boundary.
  * Local times follow the person's region and 12/24-hour choice; an unknown zone yields nothing.
@@ -155,22 +155,29 @@ export function renderToolTimestampContext(
   };
   // Generated lines contain only validated timestamps, computed fields and a validated zone.
   // Keep the outside-content wrapper, without JSON quotes repeated/escaped for every field.
-  const encode = () =>
+  const encode = (count: number) =>
     render(
       [
         `Account-local timestamp references: ${timezone}`,
-        ...references.map(
-          (ref) =>
-            `${ref.source} = ${ref.localDate} ${ref.localTime} (UTC${offset(ref.utcOffsetMinutes)})`
-        ),
-        `Omitted references: ${eligible - references.length}; scan limited: ${scanLimited ? "yes" : "no"}.`
+        ...references
+          .slice(0, count)
+          .map(
+            (ref) =>
+              `${ref.source} = ${ref.localDate} ${ref.localTime} (UTC${offset(ref.utcOffsetMinutes)})`
+          ),
+        `Omitted references: ${eligible - count}; scan limited: ${scanLimited ? "yes" : "no"}.`
       ].join("\n")
     );
-  const wireLength = (text: string) => JSON.stringify({ type: "text", text }).length;
-  let text = encode();
-  while (wireLength(text) > maxChars && references.length > 0) {
-    references.pop();
-    text = encode();
+  const fits = (text: string) => JSON.stringify({ type: "text", text }).length <= maxChars;
+
+  // Largest prefix of references that fits the cap, found by binary search.
+  let low = 0;
+  let high = references.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (fits(encode(mid))) low = mid;
+    else high = mid - 1;
   }
-  return wireLength(text) <= maxChars ? text : undefined;
+  const text = encode(low);
+  return fits(text) ? text : undefined;
 }

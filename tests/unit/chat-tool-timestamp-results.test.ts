@@ -4,6 +4,7 @@ import { AssistantToolGateway, SessionTokenRegistry } from "@moss/ai";
 import type { MossModuleManifest, ToolLocale } from "@moss/module-sdk";
 import { liveStreamResult, renderAndCap } from "../../packages/ai/src/gateway/output-validation.js";
 import { MAX_TIMESTAMP_CONTEXT_CHARS } from "../../packages/ai/src/gateway/tool-timestamp-context.js";
+import { formatResultRecord } from "../../packages/chat/src/live/acp-chat-engine.js";
 import { registerMcpTransportRoute } from "../../packages/chat/src/mcp-transport.js";
 
 const stamp = "2026-10-07T01:15:00.000Z";
@@ -452,4 +453,35 @@ describe("real gateway through both model transports", () => {
       }
     }
   );
+});
+
+describe("tool activity line hides timestamp references", () => {
+  function twoBlocks() {
+    const result = renderAndCap(undefined, { data: { createdAt: stamp } }, "example.read", {
+      localTimezone: zone,
+      locale: pacific24
+    });
+    expect(typeof result.timestampContext).toBe("string");
+    return [String(result.text), String(result.timestampContext)];
+  }
+
+  it("strips the reference block from ACP content blocks", () => {
+    const record = formatResultRecord({
+      toolCallId: "call-1",
+      content: twoBlocks().map((text) => ({ type: "content", content: { type: "text", text } }))
+    });
+    expect(record?.text).toContain(stamp);
+    expect(record?.text).not.toContain("Account-local timestamp references");
+    expect(record?.text).not.toContain("timestamp-reference");
+  });
+
+  it("strips the reference block from a nested MCP result", () => {
+    const record = formatResultRecord({
+      toolCallId: "call-1",
+      rawOutput: { result: { content: twoBlocks().map((text) => ({ type: "text", text })) } }
+    });
+    expect(record?.text).toContain(stamp);
+    expect(record?.text).not.toContain("Account-local timestamp references");
+    expect(record?.text).not.toContain("timestamp-reference");
+  });
 });

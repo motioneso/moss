@@ -261,6 +261,9 @@ export function formatToolRecord(toolCall: {
 }
 
 const TOOL_RESULT_ENVELOPE_RE = /^<tool_result source="[^"]*">\n([\s\S]*)\n<\/tool_result>$/;
+/** Account-local timestamp references are model-only; the activity line never shows them. */
+const TIMESTAMP_REFERENCE_RE =
+  /<tool_result source="timestamp-reference">\n[\s\S]*?\n<\/tool_result>/g;
 const HTML_ENTITY_RE = /&(?:amp|lt|gt|quot|#39);/g;
 const HTML_ENTITY_CHARS: Record<string, string> = {
   "&amp;": "&",
@@ -276,6 +279,7 @@ const HTML_ENTITY_CHARS: Record<string, string> = {
  * display only. The result stays a React text child, never markup.
  */
 function toDisplayResultText(text: string): string {
+  text = text.replace(TIMESTAMP_REFERENCE_RE, "").trim();
   const match = TOOL_RESULT_ENVELOPE_RE.exec(text);
   if (!match) return text;
   return (match[1] ?? "").replace(HTML_ENTITY_RE, (entity) => HTML_ENTITY_CHARS[entity] ?? entity);
