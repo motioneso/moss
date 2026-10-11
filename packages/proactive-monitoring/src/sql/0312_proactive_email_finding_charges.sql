@@ -1,4 +1,4 @@
--- Migration 0311: durable once-per-finding accounting for unsolicited email alerts (#3146).
+-- Migration 0312: durable once-per-finding accounting for unsolicited email alerts (#3146).
 -- One row per (owner, finding stable key), written in the scan transaction that first selects
 -- the finding. The email daily and hourly caps count these rows, so dismissal does not refill
 -- the budget and retries or later scans of the same finding never charge again.

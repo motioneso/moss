@@ -21,13 +21,21 @@ export type EmailFindingKind = "unsolicited" | "requested";
 
 export type EmailFindingRejection =
   | "automatic_email_alerts_off"
-  | "already_selected"
   | "global_daily_cap"
   | "source_daily_cap"
   | "source_hourly_cap";
 
+/**
+ * A finding charged by an earlier selection comes back selected but uncharged. Each consumer
+ * decides whether it still has something to show for it.
+ */
 export type EmailFindingSelection =
-  | { readonly selected: true; readonly charged: boolean }
+  | { readonly selected: true; readonly charged: true }
+  | {
+      readonly selected: true;
+      readonly charged: false;
+      readonly reason: "requested" | "already_selected";
+    }
   | { readonly selected: false; readonly reason: EmailFindingRejection };
 
 export interface EmailFindingInput {
@@ -60,7 +68,7 @@ export class EmailFindingPolicy {
 
   async select(scopedDb: DataContextDb, input: EmailFindingInput): Promise<EmailFindingSelection> {
     assertDataContextDb(scopedDb);
-    if (input.kind === "requested") return { selected: true, charged: false };
+    if (input.kind === "requested") return { selected: true, charged: false, reason: "requested" };
     if (!resolveAutomaticEmailAlertsEnabled(input.saved)) {
       return { selected: false, reason: "automatic_email_alerts_off" };
     }
@@ -86,7 +94,7 @@ export class EmailFindingPolicy {
     `.execute(scopedDb.db);
     const row = result.rows[0];
     if (!row) throw new Error("email budget query returned no row");
-    if (row.already) return { selected: false, reason: "already_selected" };
+    if (row.already) return { selected: true, charged: false, reason: "already_selected" };
 
     // Other sources keep their legacy rule: active cards today, so dismissal refills them.
     const active = await this.cards.getActiveCounts(
@@ -103,7 +111,10 @@ export class EmailFindingPolicy {
     if (emailToday >= resolveSourcePreference(pref, "email").dailyCardCap) {
       return { selected: false, reason: "source_daily_cap" };
     }
-    if (Number(row.email_last_hour) >= EMAIL_HOURLY_CAP) {
+
+    // An email card held by quiet hours counts at its release time, so held findings
+    // surface at most one per hour once quiet hours end.
+    if (Math.max(Number(row.email_last_hour), active.sourceLastHour) >= EMAIL_HOURLY_CAP) {
       return { selected: false, reason: "source_hourly_cap" };
     }
 
@@ -115,6 +126,6 @@ export class EmailFindingPolicy {
     `.execute(scopedDb.db);
     return charged.rows.length > 0
       ? { selected: true, charged: true }
-      : { selected: false, reason: "already_selected" };
+      : { selected: true, charged: false, reason: "already_selected" };
   }
 }

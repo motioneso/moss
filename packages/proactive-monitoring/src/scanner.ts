@@ -187,8 +187,8 @@ export class ProactiveScanner {
       let deferredUntil: string | null;
       let existing: ProactiveCardRow | undefined;
       if (source === "email") {
-        // Email findings are charged once, on selection. A charged finding only refreshes its
-        // live card; once dismissed it never resurfaces and never charges again.
+        // Email findings are charged once, on first selection. A finding charged earlier only
+        // refreshes its live card; once dismissed it never resurfaces and never charges again.
         const selection = await this.emailFindingPolicy.select(scopedDb, {
           kind: "unsolicited",
           ownerUserId,
@@ -203,11 +203,12 @@ export class ProactiveScanner {
           source,
           signal.stableKey
         );
-        if (!selection.selected && !(selection.reason === "already_selected" && existing)) {
+        const firstSelection = selection.selected && selection.charged;
+        if (!selection.selected || (!firstSelection && !existing)) {
           cardsSuppressed++;
           continue;
         }
-        deferredUntil = selection.selected
+        deferredUntil = firstSelection
           ? this.deps.antiSpamPolicy.quietDeferral(pref, nowIso, timeZone, quiet)
           : null;
       } else {

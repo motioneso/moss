@@ -56,7 +56,7 @@ function provider(source: ProactiveSource, keys: readonly string[]) {
   return { monitor, cursors };
 }
 
-function scanner() {
+function scanner(quietHoursEnabled = false) {
   return new ProactiveScanner({
     preferencesRepository: new ProactiveMonitoringPreferencesRepository(),
     priorityPreferencesRepository: new PriorityPreferencesRepository(),
@@ -65,7 +65,7 @@ function scanner() {
     antiSpamPolicy: new AntiSpamPolicy(cards),
     getLocalePreference: async () => ({ timezone: "UTC" }),
     resolveQuietHours: async () => ({
-      enabled: false,
+      enabled: quietHoursEnabled,
       startLocalTime: "22:00",
       endLocalTime: "07:00",
       timeZone: "UTC"
@@ -73,10 +73,15 @@ function scanner() {
   });
 }
 
-function scan(source: ProactiveSource, keys: readonly string[], now: Date) {
+function scan(
+  source: ProactiveSource,
+  keys: readonly string[],
+  now: Date,
+  quietHoursEnabled = false
+) {
   const { monitor } = provider(source, keys);
   return context.withDataContext(actor, (scopedDb) =>
-    scanner().scan(scopedDb, ids.userA, source, monitor, "source-sync", now)
+    scanner(quietHoursEnabled).scan(scopedDb, ids.userA, source, monitor, "source-sync", now)
   );
 }
 
@@ -268,6 +273,34 @@ describe("unsolicited email budget (#3146)", () => {
     expect(await charges()).toEqual(["e1"]);
   });
 
+  it("counts a dismissed email toward the global cap", async () => {
+    await savePreference(legacyRecord({ email: 3, notes: 3, global: 2 }));
+    expect((await scan("email", ["e1"], at(1))).cardsCreated).toBe(1);
+    await dismiss("email", "e1");
+    expect((await scan("notes", ["n1"], at(2))).cardsCreated).toBe(1);
+
+    const capped = await scan("email", ["e2"], at(4));
+
+    expect(capped.cardsCreated).toBe(0);
+    expect(await charges()).toEqual(["e1"]);
+  });
+
+  it("holds the next email until an hour after a quiet-hours release", async () => {
+    await savePreference(legacyRecord());
+    // Quiet hours run 22:00-07:00 UTC, so e1 is held until 07:00.
+    expect((await scan("email", ["e1"], at(1), true)).cardsDeferred).toBe(1);
+
+    for (const time of ["03:00", "07:30"]) {
+      const held = await scan("email", ["e2"], new Date(`${DAY}T${time}:00.000Z`), true);
+      expect(held.cardsCreated + held.cardsDeferred).toBe(0);
+    }
+    expect(await charges()).toEqual(["e1"]);
+
+    const released = await scan("email", ["e2"], new Date(`${DAY}T08:30:00.000Z`), true);
+    expect(released.cardsCreated).toBe(1);
+    expect(await charges()).toEqual(["e1", "e2"]);
+  });
+
   it("charges nothing while automatic email alerts are saved off", async () => {
     await savePreference({ ...legacyRecord(), automaticEmailAlerts: false });
 
@@ -371,7 +404,7 @@ describe("requested email responsibilities (#3146)", () => {
     });
 
     expect(requested).toEqual([
-      { selected: true, charged: false },
+      { selected: true, charged: false, reason: "requested" },
       { selected: false, reason: "automatic_email_alerts_off" }
     ]);
     expect(await charges()).toEqual([]);
@@ -392,10 +425,10 @@ describe("requested email responsibilities (#3146)", () => {
     });
 
     expect(outcomes).toEqual([
-      { selected: true, charged: false },
-      { selected: true, charged: false },
+      { selected: true, charged: false, reason: "requested" },
+      { selected: true, charged: false, reason: "requested" },
       { selected: true, charged: true },
-      { selected: false, reason: "already_selected" }
+      { selected: true, charged: false, reason: "already_selected" }
     ]);
     expect(await charges()).toEqual(["u1"]);
   });
@@ -418,16 +451,16 @@ describe("migration carry-forward (#3146)", () => {
        VALUES ($1, 'email', '{"checkedAt":"legacy-cursor"}', $2)`,
       [ids.userA, at(0).toISOString()]
     );
-    // Return the database to its pre-0311 shape, then upgrade through the real runner and the
+    // Return the database to its pre-0312 shape, then upgrade through the real runner and the
     // non-bypass migration owner, as an existing install would.
     await bootstrap.query(`DROP TABLE app.proactive_email_finding_charges;
-      DELETE FROM app.schema_migrations WHERE version = '0311'`);
+      DELETE FROM app.schema_migrations WHERE version = '0312'`);
     const upgrade = () =>
       runSqlMigrations({
         connectionString: connectionStrings.migration,
         migrationsDirectory: proactiveMonitoringSqlMigrationDirectory
       });
-    expect((await upgrade()).applied.map((item) => item.version)).toEqual(["0311"]);
+    expect((await upgrade()).applied.map((item) => item.version)).toEqual(["0312"]);
     expect((await upgrade()).applied).toEqual([]);
 
     expect(await charges()).toEqual(["legacy-active", "legacy-dismissed"]);
