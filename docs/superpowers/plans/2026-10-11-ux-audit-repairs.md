@@ -16,14 +16,14 @@ Source, planning and shell branches start there. Wellness and feeds are isolated
 artifacts are never edited. Refresh exact base/head before publication; retarget stacked drafts
 only after their base lands, and recheck affected code.
 
-| Lane | Bounded ownership | Held dependencies |
-| --- | --- | --- |
-| Source | Notes source state, resumed account export, truthful archive scope; CORE01/03/11 | Archive file scope/representation needs a decision; #1694 external-module export remains separate |
+| Lane     | Bounded ownership                                                                                             | Held dependencies                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Source   | Notes source state, resumed account export, truthful archive scope; CORE01/03/11                              | Archive file scope/representation needs a decision; #1694 external-module export remains separate                   |
 | Planning | Tasks, Calendar month stepping, Today goal contract and planner outcomes; PLAN01/02/04/05/06/13/14, CORE05/06 | PLAN03 stays with #3392/#3390; #3290 partial-save; #3234 calendar reconciliation; no new task model/bulk replanning |
-| Wellness | Reachable history/complete-window reads, dose recovery, period and export state; LIFE01–05 | Preserve #3337/#3372 clock and #3267 failed-job fix; UTC disclosure, not unapproved timezone contract |
-| Feeds | News loaded prefs/filter/refresh/feedback; Sports persistent pause; LIFE06–10 | Preserve #3227/#3241 and authored layout; no reader library |
-| Shell | Onboarding completion, account/module gates, settings search; CORE04/07/09/10 | CORE02 paging #3235 and Forget #3084; CORE08 overlaps existing FactActions owner |
-| Meetings | Honest local transcript search scope and startup feedback; MF01/08 | MF07 requires signed-Mac lifecycle proof; #2560/#3110/#3124 remain owners |
+| Wellness | Reachable history/complete-window reads, dose recovery, period and export state; LIFE01–05                    | Preserve #3337/#3372 clock and #3267 failed-job fix; UTC disclosure, not unapproved timezone contract               |
+| Feeds    | News loaded prefs/filter/refresh/feedback; Sports persistent pause; LIFE06–10                                 | Preserve #3227/#3241 and authored layout; no reader library                                                         |
+| Shell    | Onboarding completion, account/module gates, settings search; CORE04/07/09/10                                 | CORE02 paging #3235 and Forget #3084; CORE08 overlaps existing FactActions owner                                    |
+| Meetings | Honest local transcript search scope and startup feedback; MF01/08                                            | MF07 requires signed-Mac lifecycle proof; #2560/#3110/#3124 remain owners                                           |
 
 Integration owner serializes `apps/web/src/api/*`, `packages/shared/src/*`, shared query keys,
 `packages/ui/*`, root package/lock changes, app-map declarations and UAT trigger rows. Domain
