@@ -361,6 +361,12 @@ export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
   { method: "PUT", path: "/api/scratchpad", category: "module_promise", julyPrefixes: [] },
   {
     method: "POST",
+    path: "/api/me/quiet-hours/resolution",
+    category: "module_promise",
+    julyPrefixes: []
+  },
+  {
+    method: "POST",
     path: "/api/notes/sync",
     category: "external_effect",
     julyPrefixes: ["settings.notesSourceScheduling."]

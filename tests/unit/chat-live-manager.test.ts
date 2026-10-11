@@ -438,6 +438,30 @@ describe("ChatSessionManager", () => {
     expect(Object.keys(writes)).toHaveLength(2);
   });
 
+  // #3195: a stored reply replaces only the unsaved reply of its own turn in the browser, so
+  // the streamed reply and its post-store version must name the same server turn.
+  it("stamps the streamed reply and its stored version with the same turn id", async () => {
+    const { manager, persistence } = makeManager();
+    const recordTurn = persistence.recordTurn.bind(persistence);
+    persistence.recordTurn = async (...args) => ({
+      ...(await recordTurn(...args)),
+      sourceFreshness: null
+    });
+    const seen: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (r) => seen.push(r));
+
+    await manager.submitTurn("user-1", "Ben", "hello");
+    await manager.submitTurn("user-1", "Ben", "again");
+
+    const replies = seen.filter((r) => r.kind === "reply");
+    expect(replies.map((r) => Boolean(r.messageId))).toEqual([false, true, false, true]);
+    expect(replies.every((r) => typeof r.turnId === "string" && r.turnId.length > 0)).toBe(true);
+    expect(replies[0]?.turnId).toBe(replies[1]?.turnId);
+    expect(replies[2]?.turnId).toBe(replies[3]?.turnId);
+    expect(replies[0]?.turnId).not.toBe(replies[2]?.turnId);
+    expect(seen.filter((r) => r.kind !== "reply").some((r) => r.turnId)).toBe(false);
+  });
+
   it("emits records to subscribers, returns the reply, and persists the turn", async () => {
     const { manager, persistence } = makeManager();
 
@@ -451,7 +475,11 @@ describe("ChatSessionManager", () => {
     // user echo + thinking + reply all fanned out
     expect(seen).toContainEqual({ kind: "user", text: "hello" });
     expect(seen).toContainEqual({ kind: "thinking", text: "considering" });
-    expect(seen).toContainEqual({ kind: "reply", text: `reply to: ${withTime("hello")}` });
+    expect(seen).toContainEqual({
+      kind: "reply",
+      text: `reply to: ${withTime("hello")}`,
+      turnId: expect.any(String)
+    });
 
     expect(persistence.recorded).toHaveLength(1);
     expect(persistence.recorded[0]).toEqual({
@@ -459,6 +487,44 @@ describe("ChatSessionManager", () => {
       assistantReply: `reply to: ${withTime("hello")}`,
       executed: { provider: "anthropic", model: "claude-x" }
     });
+  });
+
+  // #3195: a reminder delivered mid-turn appears at once in the owner's Main drawer only, and
+  // the turn's own reply still arrives after it with its own identity.
+  it("shows a delivered reminder in the owner's Main drawer while a reply is streaming", async () => {
+    const engine = new GatedEngine("anthropic", "user-1");
+    const { manager } = makeManager({ engineFactory: () => engine });
+    const drawer: TranscriptRecord[] = [];
+    const moduleChat: TranscriptRecord[] = [];
+    const otherOwner: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (r) => drawer.push(r));
+    manager.subscribe("user-1", (r) => moduleChat.push(r), "m-1111111111111111");
+    manager.subscribe("user-2", (r) => otherOwner.push(r));
+    const turn = manager.submitTurn("user-1", "Ben", "plan my week");
+    while (engine.submitted.length === 0) await Promise.resolve();
+
+    const reminder = {
+      kind: "reply",
+      text: "Reminder: stretch",
+      messageId: "reminder-1",
+      background: true
+    } as const;
+    await manager.deliverMainBackgroundMessage({
+      actorUserId: "user-1",
+      mainThreadId: "thread-0",
+      record: reminder
+    });
+    expect(drawer.at(-1)).toEqual(reminder);
+    engine.open();
+    await turn;
+
+    expect(drawer.filter((r) => r.kind === "reply").map((r) => r.messageId)).toEqual([
+      "reminder-1",
+      undefined
+    ]);
+    expect(drawer.at(-1)?.turnId).toEqual(expect.any(String));
+    expect(moduleChat).toEqual([]);
+    expect(otherOwner).toEqual([]);
   });
 
   it("persists only capped terminal action outcomes from the live turn", async () => {
@@ -514,8 +580,16 @@ describe("ChatSessionManager", () => {
 
     await manager.submitTurn("user-1", "Ben", "hello");
 
-    expect(a).toContainEqual({ kind: "reply", text: `reply to: ${withTime("hello")}` });
-    expect(b).toContainEqual({ kind: "reply", text: `reply to: ${withTime("hello")}` });
+    expect(a).toContainEqual({
+      kind: "reply",
+      text: `reply to: ${withTime("hello")}`,
+      turnId: expect.any(String)
+    });
+    expect(b).toContainEqual({
+      kind: "reply",
+      text: `reply to: ${withTime("hello")}`,
+      turnId: expect.any(String)
+    });
   });
 
   it("caps simultaneous subscribers per actor", () => {

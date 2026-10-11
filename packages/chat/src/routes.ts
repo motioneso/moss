@@ -34,7 +34,7 @@ import {
 import { PreferencesRepository } from "@moss/structured-state";
 import type { NotesRecallPort } from "@moss/notes";
 import type { AcpPermissionDecider } from "@moss/acp";
-import { getConnectorSyncAt } from "@moss/connectors";
+import { createConnectorSecretCipher, getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
   FeatureGrantService,
@@ -51,6 +51,7 @@ import { type MossModuleManifest, type RouteCatalogHolder } from "@moss/module-s
 import { type ChatGatewayNotifier, createChatGatewayNotifier } from "./gateway-notifier.js";
 import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
 import { readRouteSurface } from "./live/chat-surface.js";
+import { CHAT_PROCESS_BOOT_ID } from "./live-turns.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { handleRouteError } from "./route-errors.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
@@ -82,6 +83,7 @@ import { VaultContextRunner, getVaultBaseDir } from "@moss/vault";
 import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
+import { registerReminderArrivalLifecycle } from "./reminders/live-arrival.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import {
   registerMeetingChatBoundary,
@@ -110,6 +112,7 @@ import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
 import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter.js";
 import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
 import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
+import { GateSpeedRecord } from "./live/classifier-gate-speed.js";
 import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
 import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
@@ -229,6 +232,8 @@ export interface ChatRoutesDependencies {
   /** #3065: the built-in route catalog; null until the server's onReady fills it. */
   readonly routeCatalog?: RouteCatalogHolder;
   readonly actAsGrants?: ActAsGrantRegistry;
+  /** #3195: where the API listens for delivered reminders; unset means none are pushed live. */
+  readonly reminderArrivalConnectionString?: string;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -339,6 +344,7 @@ export function registerChatRoutes(
                 googleConnectionService: dependencies.googleConnectionService,
                 googleApiClient: dependencies.googleApiClient,
                 connectorsRepository: dependencies.connectorsRepository,
+                cipher: createConnectorSecretCipher(),
                 boss: dependencies.boss,
                 featureGrantService: dependencies.featureGrantService,
                 sourceContextService: dependencies.sourceContextService,
@@ -401,12 +407,15 @@ export function registerChatRoutes(
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
    * `buildClassifierGateRunner` owns the session-id shape, the token lifetime and the admin mode
-   * read. `on` runs only while the current classifier selection has a shadow review.
+   * read. `on` runs only while the current classifier selection has a shadow review. #3365: both
+   * runners share one speed record, so each routing model's time limit survives a mode change.
    */
+  const classifierGateSpeed = new GateSpeedRecord();
   const classifierGate =
     wiring && readGateMode
       ? buildClassifierGateRunner({
           readMode: readGateMode,
+          speed: classifierGateSpeed,
           tokens: wiring.tokens,
           createPorts: classifierGatePorts
         })
@@ -423,6 +432,7 @@ export function registerChatRoutes(
     wiring && classifierGatePorts && readGateMode
       ? createClassifierGateShadowRunner({
           readMode: readGateMode,
+          speed: classifierGateSpeed,
           createPorts: classifierGatePorts,
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,
@@ -502,6 +512,8 @@ export function registerChatRoutes(
           },
           revoke: (chatSessionId: string) => wiring.tokens.revokeBySessionId(chatSessionId),
           touch: (chatSessionId: string) => wiring.tokens.touchBySessionId(chatSessionId),
+          beginLaunchReplay: (token: string) => wiring.tokens.beginLaunchReplay(token),
+          endLaunchReplay: (token: string) => wiring.tokens.endLaunchReplay(token),
           // #2956: the chat manager files a session's tool rows under its
           // running turn; the gateway reads the same map at tool time.
           setCurrentTurn: (chatSessionId: string, turnId: string) =>
@@ -580,6 +592,12 @@ export function registerChatRoutes(
     dependencies.dataContext,
     wiring?.aiRepository
   );
+
+  registerReminderArrivalLifecycle(server, {
+    connectionString: dependencies.reminderArrivalConnectionString,
+    dataContext: dependencies.dataContext,
+    manager: runtime.manager
+  });
 
   registerActionNotificationLifecycle(server, {
     gateway: wiring?.gateway,
@@ -692,6 +710,8 @@ export function registerChatRoutes(
             const thread = await repository.getThreadById(scopedDb, request.params.id, surface);
             if (thread?.owner_user_id !== access.actorUserId) return null;
             if (!thread) return null;
+            // #3128: reopening a chat stores any reply an earlier boot left unfinished.
+            await repository.reconcileInterruptedTurns(scopedDb, thread.id, CHAT_PROCESS_BOOT_ID);
             return repository.listMessages(scopedDb, thread.id);
           }
         );

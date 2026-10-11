@@ -52,6 +52,13 @@ describe("settings search covers module settings", () => {
     expect(items.map((item) => item.id)).not.toContain("module:job-search");
   });
 
+  it("keeps a module with its own settings page searchable even with no host settings", () => {
+    const modules: MyModuleDto[] = [fakeModule({ id: "ledger", name: "Ledger" })];
+    expect(buildModuleSettingsSearchItems(modules, [], "Moss").map((item) => item.id)).toEqual([]);
+    const items = buildModuleSettingsSearchItems(modules, [], "Moss", {}, new Set(["ledger"]));
+    expect(items.map((item) => item.id)).toEqual(["module:ledger"]);
+  });
+
   it("finds an installed module by its declared credential slot's own name", () => {
     // Mirrors what the server now computes for an installed module with a user-scope credential
     // slot and no on/off switches (Finance's Plaid tokens) — declared text only, no stored value.

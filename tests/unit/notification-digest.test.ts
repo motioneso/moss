@@ -30,7 +30,8 @@ describe("notification digest preferences", () => {
       enabled: true,
       cadence: "daily",
       scheduleMetadata: { targetTime: "09:30", timezone: "America/New_York" },
-      lastDigestSentAt: null
+      lastDigestSentAt: null,
+      lastDigestSentId: null
     });
   });
 });

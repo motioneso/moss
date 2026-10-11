@@ -235,6 +235,36 @@ describe("MemoryGraphRepository", () => {
     );
   });
 
+  it("forgets a corrected memory while its superseded predecessor remains", async () => {
+    await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "memory-graph:forget-corrected" },
+      async (db) => {
+        const self = await repo.ensureSelfEntity(db, ids.userA);
+        const original = await repo.createFact(db, ids.userA, {
+          subjectEntityId: self.id,
+          predicate: "prefers",
+          objectText: `forget corrected original ${randomUUID()}`,
+          confidence: 0.7,
+          provenance: "inferred",
+          source: { sourceKind: "manual", sourceRef: "manual:forget-corrected", excerpt: "x" }
+        });
+        const corrected = await repo.correctFact(db, ids.userA, {
+          targetFactId: original.id,
+          replacementText: `forget corrected replacement ${randomUUID()}`
+        });
+        expect(corrected).not.toBeNull();
+
+        expect(await repo.forgetFact(db, ids.userA, corrected!.id)).toBe(true);
+
+        const rows = await sql<{ status: string; superseded_by_fact_id: string | null }>`
+          SELECT status, superseded_by_fact_id FROM app.memory_facts
+          WHERE owner_user_id = ${ids.userA}::uuid AND id = ${original.id}::uuid
+        `.execute(db.db);
+        expect(rows.rows).toEqual([{ status: "superseded", superseded_by_fact_id: null }]);
+      }
+    );
+  });
+
   it("rejects generic status changes for conflict groups and resolves by confirm", async () => {
     await appDataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "memory-graph:conflict-resolution" },

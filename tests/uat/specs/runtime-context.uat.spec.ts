@@ -1,19 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
-// SCOPE NOTE (#1109 / #1121, see docs/superpowers/handoffs/2026-07-17-1109-runtime-context-relay-7.md):
-// the plan's literal spec (docs/superpowers/plans/2026-07-16-1109-runtime-context-plan.md, Task 7)
-// asserts real chat replies ("hello" back, a screenshot-refusal message, a News-error remediation
-// pulled from chat.getCurrentView + app.getMapSlice). The UAT harness has no chat-capable AI
-// provider at any seed level — confirmed by two sibling specs' own scope notes
-// (app-map-grounding.uat.spec.ts, 1089-1090-chat-drawer-private.uat.spec.ts): the only seeded
-// provider is a fake one bound solely to module.news, so no seed level can drive a real chat turn
-// to a model reply. That gap is tracked in #1121 ("UAT harness: deterministic scriptable chat
-// engine for real-LLM e2e"). This file proves everything that IS deterministically observable
-// without a real model reply — the turn-body shape (Task 5), the tool manifest (Task 3/6) — and
-// `test.fixme`s the real-LLM halves, citing #1121 and the unit coverage that already proves the
-// underlying logic (tests/unit/current-view-tool.test.ts, tests/unit/chat-runtime-persona.test.ts).
-export const uatLevel = { level: "solo-admin", without: [] } as const;
+// Chat turns here run on the harness's scripted chat model (fixture: chat-scripts/runtime-context.json).
+// Its reply is fixed text, so the check below covers only what a turn sends: the turn body carries no
+// page snapshot. Page-context pushes are not counted here. The debounced sync
+// (apps/web/src/chat/use-page-context-sync.ts) also runs on focus changes and DOM changes. Clicking
+// Send moves focus, and the sent message changes the DOM, so a push can follow a send. withoutNewsJsonBinding keeps the scripted provider the only
+// assistant provider, so it becomes the default model (see 1533-chat-surface-live-path.uat.spec.ts).
+//
+// Two behaviours need a real model to judge, so they stay test.fixme (#1121): the screenshot refusal,
+// and the News error being pulled from the map and explained. Their logic is proven at unit level by
+// tests/unit/current-view-tool.test.ts and tests/unit/chat-runtime-persona.test.ts.
+export const uatLevel = {
+  level: "admin+data",
+  without: [],
+  withoutNewsJsonBinding: true,
+  chatScript: "runtime-context"
+} as const;
 
 function requireBaseURL(): string {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
@@ -53,39 +56,25 @@ async function openChat(page: Page) {
   await page.getByRole("button", { name: "Chat with Moss" }).click();
 }
 
-test("ordinary chat turn sends no snapshot and performs no current-view pull", async ({ page }) => {
+test("ordinary chat turn sends no page snapshot", async ({ page }) => {
   await signIn(page);
 
   let turnBody: unknown;
-  let pageContextPushCount = 0;
   page.on("request", (request) => {
-    if (request.method() !== "POST" && request.method() !== "PUT") return;
-    const url = request.url();
+    if (request.method() !== "POST") return;
     // apps/web/src/api/client.ts:835-840 sendChatTurn posts only `{ text }` — proves Task 5's
     // push-deletion holds: the client no longer bundles a page-context snapshot onto the turn.
-    if (url.endsWith("/api/chat/turn")) turnBody = request.postDataJSON();
-    // apps/web/src/api/client.ts:847-849 updatePageContext is the SEPARATE, debounced push path
-    // (apps/web/src/chat/use-page-context-sync.ts) triggered by route/DOM/focus/selection changes
-    // — not by sending a turn. Counting it proves clicking Send doesn't also trigger a push.
-    if (url.endsWith("/api/chat/page-context")) pageContextPushCount += 1;
+    if (request.url().endsWith("/api/chat/turn")) turnBody = request.postDataJSON();
   });
 
   await openChat(page);
   await page.getByRole("textbox", { name: "Message Moss" }).fill("Say hello in three words.");
   await page.getByRole("button", { name: "Send" }).click();
 
-  // No chat-capable model is seeded (see file header), so the real server response is a 400
-  // ("No active chat-capable model is configured.", packages/chat/src/live-routes.ts:448). The
-  // drawer's isNoActiveChatModelError catch (apps/web/src/chat/chat-drawer.tsx:241-246) sets
-  // needsProvider, rendering ConnectProviderEmpty additively above the still-mounted composer
-  // (apps/web/src/chat/connect-provider-empty.tsx) — a deterministic terminal state we can assert
-  // against instead of a real model reply. `.first()`: the drawer renders this twice at once (the
-  // thread-area empty state, chat-drawer.tsx:493, and the composer's own copy, composer.tsx:231) —
-  // pre-existing app behavior, not something this test introduces.
-  await expect(page.getByText("Connect a provider to start chatting").first()).toBeVisible();
+  // The scripted model answers this exact prompt with fixed text.
+  await expect(page.getByText("Hello there, friend.").first()).toBeVisible();
 
   expect(turnBody).toEqual({ text: "Say hello in three words.", surface: "drawer" });
-  expect(pageContextPushCount).toBe(0);
 });
 
 test("assistant tools never expose a screenshot capability", async ({ page }) => {
@@ -101,22 +90,16 @@ test("assistant tools never expose a screenshot capability", async ({ page }) =>
   expect(JSON.stringify(body).toLowerCase()).not.toContain("screenshot");
 });
 
-// #1121: the actual refusal exchange ("Take a screenshot..." -> a reply that asks the user to
-// paste the exact text instead) needs a real, instruction-following chat model to produce the
-// reply text. The UAT harness's only seeded provider is a fake one bound solely to module.news
-// (see file header) — no seed level can drive this turn to a real reply. The persona instruction
-// that would produce this refusal is proven at the unit level by
-// tests/unit/chat-runtime-persona.test.ts (Task 6), and the tool's absence from the manifest is
-// proven for real above. Deferred until #1121's scriptable UAT chat engine exists.
+// #1121: the refusal ("Take a screenshot..." answered by a reply that asks the user to paste the
+// exact text instead) needs a real instruction-following model to write the reply. The scripted
+// model returns fixed text, so it cannot show this. The persona instruction is proven at unit level
+// by tests/unit/chat-runtime-persona.test.ts, and the tool's absence from the manifest is proven for
+// real above.
 test.fixme("chat refuses to take a screenshot and explains why instead (#1121)", async () => {});
 
-// #1121: this needs a real chat model to (a) call chat.getCurrentView + app.getMapSlice to ground
-// its answer in the actual News error, and (b) produce prose citing the "JSON-capable economy
-// model" remediation and a working Your assistant settings link. The UAT harness cannot drive this
-// (see file header). The News error's own deterministic rendering (no chat involved) is already
-// proven by app-map-grounding.uat.spec.ts's "declared prerequisite surfaces the News no-json-model
-// error" — not duplicated here. The tool-calling and grounding logic this test would exercise is
-// proven at the unit level by tests/unit/current-view-tool.test.ts (schema + read-service, Tasks
-// 4/6) and tests/unit/chat-runtime-persona.test.ts (persona instructs calling chat.getCurrentView
-// for screen-scoped questions, Task 6). Deferred until #1121's scriptable UAT chat engine exists.
+// #1121: grounding the answer in the News error (chat.getCurrentView and app.getMapSlice) and citing
+// the "JSON-capable economy model" remediation needs a real model to pick the tools and write the
+// prose. The scripted model cannot do either. The News error's own rendering is proven by
+// app-map-grounding.uat.spec.ts, and the tool logic by tests/unit/current-view-tool.test.ts and
+// tests/unit/chat-runtime-persona.test.ts.
 test.fixme("News screen error is pulled and resolved against the map (#1121)", async () => {});

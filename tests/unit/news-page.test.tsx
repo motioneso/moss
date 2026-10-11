@@ -100,6 +100,14 @@ describe("personalized News page", () => {
     expect(html).not.toContain("Choose your sources");
   });
 
+  it("matches a chip key against the display labels carried by headlines (#3227)", () => {
+    const world = story("w", { topicKey: null, topicLabel: "World", topicLabels: ["World"] });
+    const us = story("u", { topicKey: null, topicLabel: "U.S.", topicLabels: ["U.S."] });
+    expect(matchesTopic(world, "world")).toBe(true);
+    expect(matchesTopic(us, "us")).toBe(true);
+    expect(matchesTopic(world, "us")).toBe(false);
+  });
+
   it("uses null for All so a custom topic literally named All remains filterable", () => {
     const candidate = story("all", { topicLabel: "All", topicLabels: ["All"] });
     expect(matchesTopic(candidate, null)).toBe(true);

@@ -14,7 +14,10 @@ import {
 } from "@moss/db";
 import { sql, type Kysely } from "kysely";
 
-const POSTGRES_CONTAINER = "jarv1s-postgres";
+import {
+  assertContainerMatchesConnection,
+  resolvePostgresContainer
+} from "./postgres-container.js";
 
 export interface RestorePlanInput {
   readonly allowEmptyTarget?: boolean;
@@ -23,6 +26,7 @@ export interface RestorePlanInput {
   readonly confirmOwnerEmail?: string;
   readonly confirmRestore?: boolean;
   readonly connectionString?: string;
+  readonly container?: string;
   readonly execute?: boolean;
 }
 
@@ -72,6 +76,8 @@ export async function assertRestoreTargetIdentity(
 }
 
 export interface RestorePlan {
+  readonly container: string;
+  readonly username: string;
   readonly backupFile: string;
   readonly database: string;
   readonly dockerCommand: "docker";
@@ -115,6 +121,10 @@ export function createRestorePlan(input: RestorePlanInput): RestorePlan {
     );
   }
 
+  // Owners and ACLs come from the dump, so the app, auth and worker roles must already exist
+  // in the target cluster (a fresh cluster needs the bootstrap roles first).
+  const container = resolvePostgresContainer(input.container);
+
   // The dump is streamed into the container over stdin (`docker exec -i … pg_restore`
   // reading the archive from stdin), so we never stage a plaintext copy of the sensitive
   // backup inside the long-lived Postgres container. No `--file`/path arg → reads stdin.
@@ -125,8 +135,8 @@ export function createRestorePlan(input: RestorePlanInput): RestorePlan {
     database,
     "--clean",
     "--if-exists",
-    "--no-owner",
-    "--no-privileges"
+    "--single-transaction",
+    "--exit-on-error"
   ];
 
   return {
@@ -136,11 +146,13 @@ export function createRestorePlan(input: RestorePlanInput): RestorePlan {
       "-i",
       "--env",
       "PGPASSWORD",
-      POSTGRES_CONTAINER,
+      container,
       "pg_restore",
       ...dockerPgRestoreArgs
     ],
     backupFile: input.backupFile,
+    container,
+    username,
     database,
     host: url.hostname,
     env: {
@@ -172,6 +184,12 @@ async function main(): Promise<void> {
     connectionString: args.connectionString ?? getMossDatabaseUrls().bootstrap
   });
   try {
+    await assertContainerMatchesConnection(db, {
+      container: plan.container,
+      database: plan.database,
+      username: plan.username,
+      password: plan.env.PGPASSWORD
+    });
     await assertRestoreTargetIdentity(db, {
       confirmOwnerEmail: args.confirmOwnerEmail,
       allowEmptyTarget: args.allowEmptyTarget
@@ -193,6 +211,7 @@ function parseArgs(args: readonly string[]): RestorePlanInput {
     backupFile: readRequiredFlag(args, "--input"),
     confirmDatabase: readOptionalFlag(args, "--confirm-database"),
     confirmOwnerEmail: readOptionalFlag(args, "--confirm-owner-email"),
+    container: readOptionalFlag(args, "--container"),
     confirmRestore: args.includes("--confirm-restore"),
     execute: args.includes("--execute")
   };

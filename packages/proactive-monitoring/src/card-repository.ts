@@ -79,6 +79,7 @@ export class CardRepository {
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND status = 'active'
         AND (deferred_until IS NULL OR deferred_until <= now())
+        AND (expires_at IS NULL OR expires_at > now())
       ORDER BY
         CASE priority_band
           WHEN 'critical' THEN 0
@@ -150,6 +151,7 @@ export class CardRepository {
       .where("owner_user_id", "=", ownerUserId)
       .where("id", "=", id)
       .where("status", "=", "dismissed")
+      .where((eb) => eb.or([eb("expires_at", "is", null), eb("expires_at", ">", sql<Date>`now()`)]))
       .returningAll()
       .executeTakeFirst() as Promise<ProactiveCardRow | undefined>;
   }

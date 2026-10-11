@@ -1,0 +1,47 @@
+/* Preview of platform addition P6: shared @moss/ui fixes the Finance screens need.
+   These rules move into packages/ui/src/styles when P6 is built. Not module CSS. */
+
+/* Stat tile labels and selected radio card descriptions clear 4.5:1. */
+.jds-stat-tile__label {
+  color: var(--text-muted);
+}
+.jds-radio-card:has(input:checked) .jds-radio-card__description {
+  color: var(--text);
+}
+
+/* The radio sits on the title's line, not on a line of its own. */
+.jds-radio-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-3);
+}
+.jds-radio-card input {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+.jds-radio-card__label {
+  grid-column: 1;
+  grid-row: 1;
+}
+.jds-radio-card__description {
+  grid-column: 1 / -1;
+}
+
+/* Thumb-sized controls at phone width. */
+@media (max-width: 720px) {
+  .jds-btn,
+  .jds-segmented__opt,
+  .jds-input,
+  .jds-select,
+  .jds-iconbtn {
+    min-height: 44px;
+  }
+  .jds-iconbtn {
+    min-width: 44px;
+  }
+}
+
+/* Gold eyebrows on paper clear 4.5:1. */
+.jds-eyebrow--gold {
+  color: var(--gold-ink);
+}

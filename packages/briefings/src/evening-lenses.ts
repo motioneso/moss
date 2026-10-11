@@ -33,6 +33,34 @@ export function localDayKey(value: unknown, timeZone: string): string | null {
   }
 }
 
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).formatToParts(new Date(instant));
+  const n = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+  return (
+    Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - instant
+  );
+}
+
+/** ISO instant of local midnight at the start of `now`'s day, or null for an unknown tz. */
+export function localDayStartIso(now: Date, timeZone: string): string | null {
+  const key = localDayKey(now, timeZone);
+  if (key === null) return null;
+  const [y, m, d] = key.split("-").map(Number) as [number, number, number];
+  const guess = Date.UTC(y, m - 1, d);
+  let start = guess - zoneOffsetMs(guess, timeZone);
+  start = guess - zoneOffsetMs(start, timeZone);
+  return new Date(start).toISOString();
+}
+
 /** The next local day after `now`. Probes past 24h so a 25h fall-back DST day still lands tomorrow. */
 function nextLocalDayKey(now: Date, timeZone: string): string | null {
   const today = localDayKey(now, timeZone);
@@ -96,6 +124,17 @@ export function partitionEveningTasks(args: {
   return { completedToday, slipped, carryingForward };
 }
 
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+// All-day rows are UTC midnights with an exclusive end date, so they compare
+// as calendar dates, never as local instants.
+function allDayCoversDay(item: Record<string, unknown>, startsAt: string, dayKey: string): boolean {
+  const start = startsAt.slice(0, 10);
+  if (!DATE_KEY.test(start)) return false;
+  const end = typeof item.endsAt === "string" ? item.endsAt.slice(0, 10) : "";
+  return DATE_KEY.test(end) && end > start ? start <= dayKey && dayKey < end : start === dayKey;
+}
+
 export function filterEveningCalendar(
   items: readonly Record<string, unknown>[],
   now: Date,
@@ -109,6 +148,7 @@ export function filterEveningCalendar(
     if (typeof startsAt !== "string") return false;
     const start = new Date(startsAt);
     if (Number.isNaN(start.getTime())) return false;
+    if (item.allDay === true) return allDayCoversDay(item, startsAt, tomorrowKey);
     const key = localDayKey(startsAt, timeZone);
     if (key === tomorrowKey) return true;
     return key === todayKey && start.getTime() > now.getTime();

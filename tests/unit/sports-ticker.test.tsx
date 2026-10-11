@@ -58,6 +58,24 @@ function render(followed: FollowedTeamCard[]): string {
   );
 }
 
+describe("SportsTicker hook order", () => {
+  it("survives the followed list going empty and back without a hook-count change", () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const client = new QueryClient();
+    const mount = (followed: FollowedTeamCard[]) =>
+      act(() => {
+        root.render(
+          createElement(QueryClientProvider, { client }, createElement(SportsTicker, { followed }))
+        );
+      });
+    mount([]);
+    expect(() => mount([card()])).not.toThrow();
+    expect(() => mount([])).not.toThrow();
+    act(() => root.unmount());
+  });
+});
+
 describe("SportsTicker", () => {
   it("renders a live team with the score in the footer strip and news in the body (#963)", () => {
     const html = render([

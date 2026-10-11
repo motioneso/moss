@@ -72,11 +72,16 @@ function fixture() {
         const id = matching
           ? (JSON.parse(matching as string)[0] as { actionRequestId: string }).actionRequestId
           : undefined;
+        const turn = query.parameters.find(
+          (p) => typeof p === "string" && p.startsWith('{"turnId"')
+        );
+        const turnId = turn ? (JSON.parse(turn as string) as { turnId: string }).turnId : undefined;
         return {
           rows: stored.filter(
             (row) =>
               query.parameters.includes(row.thread_id) &&
-              (!id || JSON.stringify(row.tool_metadata).includes(id))
+              (!id || JSON.stringify(row.tool_metadata).includes(id)) &&
+              (!turnId || row.tool_metadata.turnId === turnId)
           )
         };
       }
@@ -109,6 +114,7 @@ function fixture() {
     db: {
       getExecutor: () => queryDb.getExecutor(),
       selectFrom: queryDb.selectFrom.bind(queryDb),
+      deleteFrom: queryDb.deleteFrom.bind(queryDb),
       insertInto: (table: string) => {
         expect(table).toBe("app.chat_messages");
         return {

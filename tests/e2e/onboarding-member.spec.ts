@@ -45,8 +45,9 @@ test("active member sees the member step array (no CLI-auth/multiplexer) and can
   await page.getByRole("button", { name: /Start setup/ }).click();
   await expect(page.getByRole("heading", { name: "Moss is ready to use." })).toBeVisible();
   await expect(page.getByRole("button", { name: /Use the shared setup/i })).toBeVisible();
-  await page.getByRole("button", { name: /Add a personal key/i }).click();
-  await expect(page.getByLabel("Personal AI key")).toBeVisible();
+  // Members inherit the shared subscription; saving a provider is admin-only, so no key box.
+  await expect(page.getByRole("button", { name: /Add a personal key/i })).toHaveCount(0);
+  await expect(page.getByLabel("Personal AI key")).toHaveCount(0);
 });
 
 test('"Skip setup" reaches the app shell', async ({ page }) => {

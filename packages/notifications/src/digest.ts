@@ -4,7 +4,11 @@ import type { DataContextDb } from "@moss/db";
 import { assertDataContextDb } from "@moss/db";
 import { cronExprFor, timezoneFor, type NotificationDto } from "@moss/shared";
 
-import { NotificationsRepository, type NotificationPreferencePort } from "./repository.js";
+import {
+  DIGEST_BATCH_SIZE,
+  NotificationsRepository,
+  type NotificationPreferencePort
+} from "./repository.js";
 import { serializeNotification } from "./routes.js";
 
 export const DIGEST_COMPOSE_QUEUE = "notifications.digest.compose";
@@ -17,6 +21,8 @@ export interface NotificationDigestPreference {
   readonly cadence: NotificationDigestCadence;
   readonly scheduleMetadata: Record<string, unknown>;
   readonly lastDigestSentAt: Date | null;
+  // Tie-break for rows sharing the watermark time; set only while a batch is unfinished.
+  readonly lastDigestSentId?: string | null;
 }
 
 export interface DigestComposeJobPayload {
@@ -79,7 +85,9 @@ export function digestPreferenceFromRaw(raw: unknown): NotificationDigestPrefere
       : DEFAULT_DIGEST_PREFERENCE.scheduleMetadata;
   const lastDigestSentAt =
     typeof value.lastDigestSentAt === "string" ? parseDate(value.lastDigestSentAt) : null;
-  return { enabled, cadence, scheduleMetadata, lastDigestSentAt };
+  const lastDigestSentId =
+    typeof value.lastDigestSentId === "string" ? value.lastDigestSentId : null;
+  return { enabled, cadence, scheduleMetadata, lastDigestSentAt, lastDigestSentId };
 }
 
 export function digestPreferenceToRaw(preference: NotificationDigestPreference) {
@@ -87,7 +95,8 @@ export function digestPreferenceToRaw(preference: NotificationDigestPreference) 
     enabled: preference.enabled,
     cadence: preference.cadence,
     scheduleMetadata: preference.scheduleMetadata,
-    lastDigestSentAt: preference.lastDigestSentAt?.toISOString() ?? null
+    lastDigestSentAt: preference.lastDigestSentAt?.toISOString() ?? null,
+    lastDigestSentId: preference.lastDigestSentId ?? null
   };
 }
 
@@ -164,9 +173,29 @@ export async function runNotificationDigestCompose(
   if (!preference.enabled) return { status: "skipped", reason: "disabled" };
 
   const repository = deps.notificationsRepository ?? new NotificationsRepository();
+  // Read before the query so rows created while the email sends stay after the watermark.
+  const startedAt = deps.now?.() ?? new Date();
   const rows = await repository.listDigestEligible(scopedDb, {
-    since: preference.lastDigestSentAt
+    since: preference.lastDigestSentAt,
+    sinceId: preference.lastDigestSentId ?? null,
+    limit: DIGEST_BATCH_SIZE
   });
+  // A full batch may leave eligible rows behind, so the watermark stops at the last row
+  // consumed instead of jumping to the current time.
+  const truncated = rows.length >= DIGEST_BATCH_SIZE;
+  const lastRow = rows[rows.length - 1];
+  const watermark = truncated && lastRow ? digestVisibleAt(lastRow) : null;
+  const advanceTo = async () => {
+    await preferencesRepository.upsert(
+      scopedDb,
+      NOTIFICATION_DIGEST_PREFERENCE_KEY,
+      digestPreferenceToRaw({
+        ...preference,
+        lastDigestSentAt: watermark ?? startedAt,
+        lastDigestSentId: watermark && lastRow ? lastRow.id : null
+      })
+    );
+  };
   const filtered = [];
   for (const row of rows) {
     if (!row.module_id) continue;
@@ -177,7 +206,10 @@ export async function runNotificationDigestCompose(
       filtered.push(row);
     }
   }
-  if (filtered.length === 0) return { status: "skipped", reason: "empty" };
+  if (filtered.length === 0) {
+    if (truncated) await advanceTo();
+    return { status: "skipped", reason: "empty" };
+  }
 
   const rendered = renderNotificationDigest({
     baseUrl: deps.baseUrl,
@@ -187,12 +219,20 @@ export async function runNotificationDigestCompose(
   const result = await deps.sender.sendDigest(scopedDb, { to, ...rendered });
   if (!result.ok) return { status: "failed" };
 
-  await preferencesRepository.upsert(
-    scopedDb,
-    NOTIFICATION_DIGEST_PREFERENCE_KEY,
-    digestPreferenceToRaw({ ...preference, lastDigestSentAt: deps.now?.() ?? new Date() })
-  );
+  await advanceTo();
   return { status: "sent", count: filtered.length };
+}
+
+// Mirrors the visible-at expression in listDigestEligible.
+function digestVisibleAt(row: {
+  created_at: Date;
+  updated_at: Date | null;
+  deferred_until: Date | null;
+}): Date {
+  const times = [row.created_at, row.updated_at, row.deferred_until]
+    .filter((value): value is Date => value instanceof Date)
+    .map((value) => value.getTime());
+  return new Date(Math.max(...times));
 }
 
 function parseDate(value: string): Date | null {

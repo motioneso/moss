@@ -69,6 +69,9 @@ export interface ParsedEmail {
    * expose headers, in which case the body word is the fallback (see email-bulk-rule.ts).
    */
   readonly hasListUnsubscribe?: boolean;
+  /** The RFC822 Message-ID and References ids, kept so a reply can join this conversation. */
+  readonly messageId?: string | null;
+  readonly references?: string[];
 }
 
 function header(part: GmailPayloadPart | undefined, name: string): string | undefined {
@@ -151,7 +154,9 @@ export function parseEmail(message: GmailMessageFull): ParsedEmail {
     bodyTruncated: truncated,
     // Presence only. Gmail returns every header with format=full, so this needs no extra call,
     // and the header's value (a mailto: or an opt-out URL) is deliberately never captured.
-    hasListUnsubscribe: header(payload, "List-Unsubscribe") !== undefined
+    hasListUnsubscribe: header(payload, "List-Unsubscribe") !== undefined,
+    messageId: header(payload, "Message-ID")?.trim() || null,
+    references: (header(payload, "References") ?? "").split(/\s+/).filter((id) => id.length > 0)
   };
 }
 

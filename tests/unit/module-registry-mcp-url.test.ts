@@ -81,4 +81,30 @@ describe("module-registry chat MCP URL wiring", () => {
       expect.objectContaining({ adoptMcpTokenRevoke })
     );
   });
+
+  it("forwards passiveMemoryRecall into registerChatRoutes", async () => {
+    const { getBuiltInModuleRegistrations } = await import("@moss/module-registry");
+    const chatRegistration = getBuiltInModuleRegistrations().find(
+      (registration) => registration.manifest.id === "chat"
+    );
+    const passiveMemoryRecall = { recall: vi.fn() };
+
+    chatRegistration?.registerRoutes?.({} as never, {
+      boss: {} as never,
+      dataContext: {} as never,
+      focusSignals: undefined,
+      listConfiguredAuthProviders: () => [],
+      listModuleManifests: () => [],
+      mcpServerUrl: "http://configured.example.test/api/mcp",
+      resolveAccessContext: async () => ({ actorUserId: "user-1", requestId: "req-1" }),
+      resolveActiveModules: async () => [],
+      rootDb: {} as never,
+      passiveMemoryRecall
+    });
+
+    expect(registerChatRoutes).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ passiveMemoryRecall })
+    );
+  });
 });

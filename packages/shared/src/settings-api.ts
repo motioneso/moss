@@ -36,6 +36,18 @@ export interface PutQuietHoursSettingsRequest {
 
 export type PutQuietHoursSettingsResponse = GetQuietHoursSettingsResponse;
 
+/** The owner's explicit pick between two differing saved schedules. */
+export interface ResolveQuietHoursConflictRequest {
+  /** "profile" keeps Profile's own schedule; "alerts" adopts the older alert schedule. */
+  readonly choice: "profile" | "alerts";
+
+  /** The chosen schedule as the owner saw it; a different current value is refused with 409. */
+  readonly quietHours: QuietHoursSettingsDto;
+  readonly expectedVersion: string | null;
+}
+
+export type ResolveQuietHoursConflictResponse = GetQuietHoursSettingsResponse;
+
 export interface NotificationPreferenceDto {
   readonly moduleId: string;
   readonly moduleName: string;
@@ -86,6 +98,18 @@ export interface PutNotificationDigestPreferenceRequest {
 }
 
 export type PutNotificationDigestPreferenceResponse = GetNotificationDigestPreferenceResponse;
+
+export type NotificationSensitivityDto = "quiet" | "balanced" | "proactive";
+
+export interface GetNotificationSensitivityResponse {
+  readonly sensitivity: NotificationSensitivityDto;
+}
+
+export interface PutNotificationSensitivityRequest {
+  readonly sensitivity: NotificationSensitivityDto;
+}
+
+export type PutNotificationSensitivityResponse = GetNotificationSensitivityResponse;
 
 const quietHoursSchema = {
   type: "object",
@@ -142,6 +166,25 @@ export const putQuietHoursSettingsRouteSchema = {
     additionalProperties: false,
     required: ["quietHours", "expectedVersion"],
     properties: { quietHours: quietHoursSchema, expectedVersion: quietHoursVersionSchema }
+  },
+  response: {
+    200: quietHoursResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    409: errorResponseSchema
+  }
+} as const;
+
+export const resolveQuietHoursConflictRouteSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["choice", "quietHours", "expectedVersion"],
+    properties: {
+      choice: { type: "string", enum: ["profile", "alerts"] },
+      quietHours: quietHoursSchema,
+      expectedVersion: quietHoursVersionSchema
+    }
   },
   response: {
     200: quietHoursResponseSchema,
@@ -283,5 +326,25 @@ export const putNotificationDigestPreferenceRouteSchema = {
     400: errorResponseSchema,
     401: errorResponseSchema,
     422: errorResponseSchema
+  }
+} as const;
+
+const notificationSensitivityResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sensitivity"],
+  properties: { sensitivity: { type: "string", enum: ["quiet", "balanced", "proactive"] } }
+} as const;
+
+export const getNotificationSensitivityRouteSchema = {
+  response: { 200: notificationSensitivityResponseSchema, 401: errorResponseSchema }
+} as const;
+
+export const putNotificationSensitivityRouteSchema = {
+  body: notificationSensitivityResponseSchema,
+  response: {
+    200: notificationSensitivityResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema
   }
 } as const;

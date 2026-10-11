@@ -53,6 +53,7 @@ import {
   getAllQueueDefinitions,
   getBuiltInModuleManifests,
   reconcileExternalModules,
+  externalAppMapItems,
   registerBuiltInApiRoutes,
   registerRouteEnablementGuard,
   assertRouteCoverage,
@@ -626,9 +627,28 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,
       listModuleManifests: getBuiltInModuleManifests,
+      listExternalBriefingToolNames: () =>
+        externalModuleHolder
+          .getDiscoveries()
+          .flatMap((d) => (d.manifest.briefing ? [d.manifest.briefing.toolName] : [])),
+      listExternalBriefingSources: async (access) => {
+        const on = new Set((await getActiveExternalModules(access)).map((m) => m.id));
+        return externalModuleHolder
+          .getDiscoveries()
+          .flatMap(({ manifest: m }) =>
+            m.briefing && on.has(m.id) ? [{ toolName: m.briefing.toolName, label: m.name }] : []
+          );
+      },
       routeCatalog,
       actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,
+      resolveExternalAppMap: async (actorUserId) =>
+        externalAppMapItems(
+          await getActiveExternalModules({
+            actorUserId,
+            requestId: `app-map:${randomUUID()}`
+          })
+        ),
       mcpServerUrl: apiServerConfig.mcpServerUrl,
       focusSignals: async (ctx) => {
         // 1) Resolve THIS actor's active manifests (honors per-user/instance disable) — its
@@ -667,6 +687,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       verifySelfPassword: authRuntime.verifySelfPassword,
       hasPasswordCredential: authRuntime.hasPasswordCredential,
       bootstrapConnectionString: ownsAppDb ? getMossDatabaseUrls().bootstrap : undefined,
+      appConnectionString: ownsAppDb ? getMossDatabaseUrls().app : undefined,
       googleConnectionService,
       googleApiClient,
       connectorsRepository,
@@ -674,10 +695,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       herdrInstall,
       hostRestart,
       externalModules: {
-        // #996/#860: always-on since the JARVIS_ENABLE_EXTERNAL_MODULES flag removal —
-        // packages/settings routes-module-registry.ts / routes-modules.ts gate on this
-        // field with `if (!ext?.enabled) throw 409`; hardcoding true here means those
-        // guards simply never fire, which is correct (verified — no change needed there).
+        // #996/#860: always-on since the JARVIS_ENABLE_EXTERNAL_MODULES flag removal. The
+        // `if (!ext?.enabled) throw 409` guards in packages/settings routes-module-registry.ts
+        // and routes-modules.ts therefore never fire, which is correct.
         // #1319 D6: options.__testExternalModulesEnabled is TEST-ONLY (undefined in
         // production, so `?? true` keeps the always-on default).
         enabled: options.__testExternalModulesEnabled ?? true,

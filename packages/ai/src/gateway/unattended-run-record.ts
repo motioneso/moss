@@ -31,8 +31,8 @@ export function recordUnattendedRun(
     ...(result.ok && audit.outcome === "success" && found.tool.affectsQueryKeys
       ? { affectsQueryKeys: found.tool.affectsQueryKeys }
       : {}),
-    ...(result.ok && audit.outcome === "success" && found.tool.risk !== "read" && found.resolution
-      ? { affectsModules: found.resolution.affectsModules }
+    ...(result.ok && audit.outcome === "success" && found.tool.risk !== "read"
+      ? { affectsModules: found.resolution?.affectsModules ?? [found.dto.moduleId] }
       : {})
   });
   void recordGatewayAudit(deps, { actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {

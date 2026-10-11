@@ -114,9 +114,9 @@ export function WellnessTherapyNotes({ theme = "light" }: Props) {
   const add = () => {
     const t = draft.trim();
     if (!t) return;
-    // Mutate outside a setState updater — never inside one (StrictMode double-fire trap)
-    addMutation.mutate(t);
-    setDraft("");
+    // Mutate outside a setState updater — never inside one (StrictMode double-fire trap).
+    // The draft clears only once the note is stored, so a failed save keeps the text.
+    addMutation.mutate(t, { onSuccess: () => setDraft("") });
   };
 
   const notes = notesQuery.data?.notes ?? [];
@@ -156,6 +156,11 @@ export function WellnessTherapyNotes({ theme = "light" }: Props) {
             </button>
           </span>
         </div>
+        {addMutation.isError ? (
+          <div className="wl-modal__note wl-modal__note--error" role="alert">
+            Couldn&apos;t save that note. It&apos;s still in the box, so try again.
+          </div>
+        ) : null}
         <div className="wl-tnotes">
           {notesQuery.isError ? (
             <div className="wl-tdone">
