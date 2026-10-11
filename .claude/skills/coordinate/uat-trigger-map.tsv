@@ -244,6 +244,29 @@ blocking	packages/ai/src/model-activity.ts	tests/uat/specs/2956-activity-history
 blocking	packages/ai/src/adapters/http-api.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 blocking	packages/chat/src/live/cli-structured-adapter.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 blocking	packages/shared/src/app-map-core.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
+# #3397 LIFE-06..10: seeded compiler feedback UI/API and real Sports rotation controls.
+# News fixture proof excludes production AI routing and live refresh discovery.
+blocking	packages/news/src/settings/index.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/settings/story-feedback.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/news-page.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/story-feedback-menu.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/use-auto-advance.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/sports-page.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/sports-news.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/fixtures/news-feedback-fixture-cli.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/fixtures/news-feedback-fixture-container.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/fixtures/news-feedback-fixture-server.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/chunks/news-feedback-fixture.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/specs/audit-feeds.uat.spec.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/provisioner.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/run-uat.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/cli.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/levels.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	tests/uat/seed/types.ts	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/rotation-control.tsx	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/story-feedback.css	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/news/src/web/styles/news-2.css	tests/uat/specs/audit-feeds.uat.spec.ts
+blocking	packages/sports/src/web/styles/sports-5-editorial.css	tests/uat/specs/audit-feeds.uat.spec.ts
 
 # #3397 bounded planning journeys and route/client goal contract.
 blocking	apps/web/src/tasks/**	tests/uat/specs/audit-planning.uat.spec.ts
@@ -257,6 +280,24 @@ blocking	apps/web/src/api/client.ts	tests/uat/specs/audit-planning.uat.spec.ts
 blocking	apps/web/src/locale/wall-time.ts	tests/uat/specs/audit-planning.uat.spec.ts
 blocking	packages/tasks/src/manifest.ts	tests/uat/specs/audit-planning.uat.spec.ts
 blocking	packages/calendar/src/manifest.ts	tests/uat/specs/audit-planning.uat.spec.ts
+
+# #3397 complete-window Wellness history, dose and export recovery.
+blocking	apps/web/src/wellness/**	tests/uat/specs/audit-wellness.uat.spec.ts
+blocking	apps/web/src/api/client.ts	tests/uat/specs/audit-wellness.uat.spec.ts
+blocking	packages/wellness/src/**	tests/uat/specs/audit-wellness.uat.spec.ts
+blocking	packages/shared/src/wellness-api.ts	tests/uat/specs/audit-wellness.uat.spec.ts
+blocking	tests/integration/audit-wellness-checkin-pages.test.ts	tests/uat/specs/audit-wellness.uat.spec.ts
+blocking	tests/unit/audit-wellness-*.test.ts*	tests/uat/specs/audit-wellness.uat.spec.ts
+# #3397 source authority and owned Markdown export truth.
+blocking	apps/web/src/settings/settings-personal-data-panes.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/settings/settings-connections-pane.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/settings/settings-profile-subviews.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/settings/settings-vault-chooser.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/settings/src/data-export-jobs.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/settings/src/data-export-vault.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/shared/src/notes-api.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/api/client.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/vault/src/**	tests/uat/specs/audit-source-truth.uat.spec.ts
 # #3397 shared modal focus recovery through real task comments.
 blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
 blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts

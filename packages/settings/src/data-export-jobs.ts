@@ -13,6 +13,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import { sql, type Kysely } from "kysely";
 
 import { exportUserData } from "./data-export.js";
+import { collectOwnedMarkdownNotes } from "./data-export-vault.js";
 import { DataExportRepository } from "./data-export-repository.js";
 import {
   EXPORT_CLEANUP_QUEUE,
@@ -86,10 +87,15 @@ export async function handleExportBuildJob(
       requestId: `export:${jobId}`
     });
 
+    const vaultRunner = new VaultContextRunner(getVaultBaseDir());
+    const accessContext = { actorUserId, requestId: `export:${jobId}` };
+    const ownedNotes = await collectOwnedMarkdownNotes(vaultRunner, accessContext);
+
     const archive = {
       format: "jarvis-archive/v1",
       exportedAt: userExport.exportedAt,
       userId: userExport.userId,
+      manifest: { vaultFiles: ownedNotes.manifest },
       sections: {
         profile: {
           user: userExport.tables.users[0] ?? null,
@@ -159,12 +165,10 @@ export async function handleExportBuildJob(
         focus_judgments: userExport.tables.focusJudgments,
         // #2638 Backtrack phase 2a: kept 37 days plus up to one hourly run, then purged.
         backtrack_segments: userExport.tables.backtrackSegments,
-        vault_files: []
+        vault_files: ownedNotes.files
       }
     };
 
-    const vaultRunner = new VaultContextRunner(getVaultBaseDir());
-    const accessContext = { actorUserId, requestId: `export:${jobId}` };
     await vaultRunner.withVaultContext(accessContext, async (vaultCtx) => {
       await writeVaultFile(vaultCtx, `exports/${jobId}.json`, JSON.stringify(archive, null, 2));
     });

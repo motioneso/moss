@@ -46,6 +46,18 @@ describe("run-uat CLI (#1027/#1047)", () => {
     vi.restoreAllMocks();
   });
 
+  it("enables the authentic News fixture only for a spec that opts in", async () => {
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+    mocks.readFile.mockResolvedValue(
+      'export const uatLevel = { level: "admin+data", without: [], withEspnFixture: true, withNewsFeedbackFixture: true } as const;'
+    );
+    await import("./run-uat.js");
+    expect(mocks.provisionForUat).toHaveBeenCalledWith(
+      "admin+data",
+      expect.objectContaining({ withEspnFixture: true, withNewsFeedbackFixture: true })
+    );
+  });
+
   it("derives provisioning from the selected spec and forwards only that spec", async () => {
     process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
 
@@ -62,6 +74,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withActivityOutcomeFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
       chatScript: undefined
     });
@@ -108,6 +121,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
       chatScript: "phase1-smoke"
     });
@@ -161,6 +175,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
       chatScript: undefined
     });
@@ -192,6 +207,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withWorkshopStorageFixture: false,
       withBriefingWriterFixture: false,
       withClassifierFixture: false,
+      withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
       chatScript: "phase1-smoke"
     });
@@ -216,6 +232,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       expect.objectContaining({
         chatScript: "classifier-shadow",
         withClassifierFixture: true,
+        withNewsFeedbackFixture: false,
         withClassifierMcpFixture: false,
         withBriefingWriterFixture: false
       })

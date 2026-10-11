@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 
 /**
  * Auto-advance + pause behaviour shared by the two hero carousels: the top-stories carousel
@@ -9,22 +9,19 @@ import { useEffect, useRef, useState } from "react";
  *
  * Pausing on focus as well as hover is the accessibility half: a keyboard user tabbing into
  * the controls would otherwise have the slide move out from under them mid-interaction.
+ * An explicit Resume overrides the hover and focus pause until the pointer or focus leaves
+ * and comes back, because the Resume button itself sits inside the carousel.
  *
  * `advance` is held in a ref rather than listed as an effect dependency — a caller that
  * rebuilds the callback each render would otherwise reset the interval every render, and the
  * slide would never advance at all.
  */
-export function useAutoAdvance(
-  count: number,
-  advance: () => void,
-  intervalMs: number
-): {
-  readonly onMouseEnter: () => void;
-  readonly onMouseLeave: () => void;
-  readonly onFocus: () => void;
-  readonly onBlur: () => void;
-} {
+export function useAutoAdvance(count: number, advance: () => void, intervalMs: number) {
   const [paused, setPaused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [resumed, setResumed] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const advanceRef = useRef(advance);
 
   useEffect(() => {
@@ -32,18 +29,40 @@ export function useAutoAdvance(
   }, [advance]);
 
   useEffect(() => {
-    if (paused || count < 2) return;
-    // Auto-advancing carousels are a classic reduced-motion offender; honour the OS setting and
-    // leave the reader on whichever slide they're on, reachable by the controls.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (count < 2) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(media.matches);
+    const changed = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    media.addEventListener?.("change", changed);
+    return () => media.removeEventListener?.("change", changed);
+  }, [count]);
+
+  useEffect(() => {
+    if (paused || (!resumed && (hovered || focused)) || reducedMotion || count < 2) return;
     const timer = window.setInterval(() => advanceRef.current(), intervalMs);
     return () => window.clearInterval(timer);
-  }, [paused, count, intervalMs]);
+  }, [paused, resumed, hovered, focused, reducedMotion, count, intervalMs]);
 
   return {
-    onMouseEnter: () => setPaused(true),
-    onMouseLeave: () => setPaused(false),
-    onFocus: () => setPaused(true),
-    onBlur: () => setPaused(false)
+    paused,
+    reducedMotion,
+    togglePaused: () => {
+      setResumed(paused);
+      setPaused(!paused);
+    },
+    pauseHandlers: {
+      onMouseEnter: () => {
+        setHovered(true);
+        setResumed(false);
+      },
+      onMouseLeave: () => setHovered(false),
+      onFocus: (event: FocusEvent<HTMLElement>) => {
+        setFocused(true);
+        if (!event.currentTarget.contains(event.relatedTarget)) setResumed(false);
+      },
+      onBlur: (event: FocusEvent<HTMLElement>) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+      }
+    }
   };
 }

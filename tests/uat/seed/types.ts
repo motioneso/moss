@@ -83,6 +83,8 @@ export interface SeedOptions {
   readonly excludeChunks?: readonly UatSeedChunk[];
   /** #1110: leave module.news unbound to a JSON-capable model, to prove the prerequisite-error path. */
   readonly withoutNewsJsonBinding?: boolean;
+  /** Opt-in local RSS/model input compiled through the real owner-scoped News repository. */
+  readonly newsFeedbackFixtureBaseUrl?: string;
   /**
    * N42/#57: absent by default (no-op — see seedJobSearchAiProviderChunk). When set, seeds a fake
    * `openai-compatible` provider/model bound to `module.job-search` pointed at this base URL (the
