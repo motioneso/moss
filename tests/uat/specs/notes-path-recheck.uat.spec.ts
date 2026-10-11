@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { captureActionAuditEvidence } from "./notes-failure-evidence.js";
+import { startNewSideChat } from "./notes-new-side-chat.js";
 import {
   bringUpRealChatProvider,
   discoverCheapestChatModel,
@@ -219,17 +220,38 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await expectToolOutcome(projectName, "notes.edit", editNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
-  const deletedNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Delete note$/ });
+  // Delete is destructive, so it always asks first, even with YOLO on (#3417).
+  const legitFile = `${NOTES_ROOT}/${legitPath}`;
+  const deleteCards = chatDialog.locator(".action-request-card").filter({ hasText: "Delete note" });
+  const deleteCard = deleteCards.last();
+  const deletedNotes = chatDialog
+    .getByRole("status")
+    .filter({ hasText: /^Approved · Delete note$/ });
   const deleteCount = await deletedNotes.count();
   const deleteNotBefore = Date.now();
+  execInVaultAsOwner(projectName, `test -f ${legitFile}`);
   await composer.fill(
     `Use the notes.delete tool to delete path "${legitPath}". Use these exact inputs without further questions.`
   );
   await composer.press("Enter");
+  await expect(deleteCard.getByRole("button", { name: "Approve", exact: true })).toBeVisible({
+    timeout: 60_000
+  });
+  const deleteResolved = page.waitForResponse(
+    (response) =>
+      /\/api\/chat\/action-requests\/[^/]+\/resolve$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "POST"
+  );
+  await deleteCard.getByRole("button", { name: "Approve", exact: true }).click();
+  expect((await deleteResolved).status()).toBe(204);
   await expect(deletedNotes).toHaveCount(deleteCount + 1, { timeout: 60_000 });
   await expect(deletedNotes.last()).toBeVisible();
   await expectToolOutcome(projectName, "notes.delete", deleteNotBefore, "success");
+  execInVaultAsOwner(projectName, `test ! -e ${legitFile}`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
+  // The row reads "Approved" from the click; after the run it must not turn into a failure.
+  await expect(deletedNotes).toHaveCount(deleteCount + 1);
+  await expect(deleteCards).toHaveCount(0);
 
   // --- (b) rejectSymlinkParent: an ANCESTOR directory of the target is a symlink ----------
   // Pre-existing check (write-tools.ts:124-141), not part of #1512's fix, but in the approved
@@ -259,15 +281,8 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   expect(await chatDialog.innerText()).not.toMatch(/\/tmp\/|\/data\/vaults/);
 
   // The safe tool error taints this conversation, so later writes correctly need approval.
-  // Exercise the second guard independently through the real New chat flow.
-  const cleared = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/chat/clear" &&
-      response.status() === 204
-  );
-  await chatDialog.getByRole("button", { name: "New chat" }).click();
-  await cleared;
+  // Exercise the second guard independently in a fresh side chat from Conversations.
+  await startNewSideChat(page, chatDialog);
   await expect(createFailures).toHaveCount(0);
 
   // --- (c') the #1512 guard itself: leaf symlink, kernel-vs-lexical ".." divergence -------
