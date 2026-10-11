@@ -1,3 +1,4 @@
+import { localDay, type LocaleSettingsDto } from "@moss/shared";
 import type { SignInCodeDecision } from "@moss/shared/email-otp-rule";
 
 /**
@@ -155,9 +156,9 @@ export interface EmailSortingInput {
   readonly body: string;
 }
 
-function calendarDate(value: string | Date): string | null {
+function receivedDay(value: string | Date, locale: LocaleSettingsDto): string | null {
   const parsed = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime()) ? null : localDay(parsed, locale.timezone);
 }
 
 function jsonBytes(value: unknown): number {
@@ -165,18 +166,20 @@ function jsonBytes(value: unknown): number {
 }
 
 /**
- * The state the questions read. Dates travel so "in the next week" has an anchor. The body is cut
- * until the whole request, questions included, fits under the provider's byte cap.
+ * The state the questions read. Dates travel so "in the next week" has an anchor, both as the
+ * person's own day. The body is cut until the whole request, questions included, fits under
+ * the provider's byte cap.
  */
 export function buildEmailSortingState(
   email: EmailSortingInput,
-  now: Date
+  now: Date,
+  locale: LocaleSettingsDto
 ): Record<string, unknown> {
   const head = {
     subject: email.subject,
     from: email.from,
-    received: calendarDate(email.receivedAt),
-    today: calendarDate(now)
+    received: receivedDay(email.receivedAt, locale),
+    today: localDay(now, locale.timezone)
   };
   const budget =
     EMAIL_SORTING_MAX_REQUEST_BYTES -

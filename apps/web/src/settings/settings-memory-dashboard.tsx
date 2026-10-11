@@ -5,6 +5,7 @@ import { Check, ChevronDown, ChevronUp, Pin, Trash2, X } from "lucide-react";
 import {
   acceptMemoryCandidate,
   deleteMemoryEntity,
+  deleteMemoryFact,
   getMemoryDashboard,
   patchMemoryEntity,
   patchMemoryFact,
@@ -234,7 +235,10 @@ function CandidateActions(props: {
 
 /* -------------------------------------------------------------------------- */
 
-function FactActions(props: { readonly item: MemoryDashboardItem; readonly onDone: () => void }) {
+export function FactActions(props: {
+  readonly item: MemoryDashboardItem;
+  readonly onDone: () => void;
+}) {
   const { item, onDone } = props;
   const locale = useUserLocale();
   const { toast, confirm } = useFeedback();
@@ -268,7 +272,7 @@ function FactActions(props: { readonly item: MemoryDashboardItem; readonly onDon
       confirmLabel: "Forget",
       danger: true,
       onConfirm: () => {
-        deleteMemoryEntity(item.id)
+        deleteMemoryFact(item.id)
           .then(() => {
             invalidate();
             toast("Memory forgotten");

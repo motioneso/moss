@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CalendarEventDto } from "@moss/shared";
 import { CalendarPage } from "../../apps/web/src/calendar/calendar-page.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
-const api = vi.hoisted(() => ({ listCalendarEvents: vi.fn() }));
+const api = vi.hoisted(() => ({
+  listCalendarEvents: vi.fn(),
+  getLocaleSettings: vi.fn(async () => ({
+    locale: { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "24" }
+  }))
+}));
 vi.mock("../../apps/web/src/api/client.js", () => api);
 vi.mock("../../apps/web/src/api/use-assistant-name.js", () => ({ useAssistantName: () => "Moss" }));
 const event: CalendarEventDto = {

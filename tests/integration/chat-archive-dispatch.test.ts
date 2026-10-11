@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
@@ -122,5 +122,41 @@ describe("chat turn-hook archive-day dispatch", () => {
       model: "claude-economy"
     });
     expect(incognitoSent).toEqual([]);
+  });
+
+  it("dates the archive in the shared default zone when no locale is saved (#3395)", async () => {
+    const sent: Array<{ readonly queue: string; readonly payload: Record<string, unknown> }> = [];
+    const store = new Map<string, unknown>([["chat-archive.enabled", true]]);
+    const persistence = new DataContextChatPersistence({
+      dataContext,
+      chatRepository: repository,
+      aiRepository,
+      localePreferences: {
+        get: async (_scopedDb: unknown, key: string) => store.get(key) ?? null,
+        getWithMetadata: async () => null,
+        upsert: async () => undefined
+      } as never,
+      boss: {
+        send: async (queue: string, payload: Record<string, unknown>) => {
+          sent.push({ queue, payload });
+          return "job-id";
+        }
+      } as never
+    });
+    await persistence.openNewConversation(ids.userA);
+
+    // 03:30 UTC on Oct 10 is still Oct 9 in Los Angeles.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-10T03:30:00Z"));
+    try {
+      await persistence.recordTurn(ids.userA, "Archive this too.", "Noted.", {
+        provider: "anthropic",
+        model: "claude-economy"
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    const archiveCall = sent.find((call) => call.queue === "chat.archive-day");
+    expect(archiveCall?.payload).toEqual(expect.objectContaining({ localDate: "2026-10-09" }));
   });
 });

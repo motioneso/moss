@@ -110,6 +110,7 @@ async function harness(
     allowedToolNames: null
   });
   const records: GatewaySessionRecord[] = [];
+  const policy: { tier: "trusted_auto" | "ask_each_time" } = { tier: "trusted_auto" };
   const gateway = new AssistantToolGateway({
     resolveActiveModules: async () => [manifest, settingsModuleManifest],
     repository: new AiRepository(),
@@ -119,11 +120,10 @@ async function harness(
     notifier: { emit: (_session, record) => records.push(record) },
     provenance: store,
     confirmTimeoutMs: 5000,
-    // This suite contrasts ordinary trusted-auto policy with tainted confirmation.
     // Keep YOLO explicitly off so the clean baseline is exactly approvalMode=auto.
     yoloMode: async () => false,
     actionPolicy: () => ({
-      getFamilyTier: async () => "trusted_auto",
+      getFamilyTier: async () => policy.tier,
       getFamilyManifest: async (_moduleId, familyId) =>
         settingsModuleManifest.assistantActionFamilies?.find((family) => family.id === familyId) ??
         null
@@ -135,7 +135,7 @@ async function harness(
     gateway,
     classifierDeps: {} as never
   })(options.factoryActorUserId ?? ids.userA, token);
-  return { ports, gateway, token, bound, source, foreign, records };
+  return { ports, gateway, token, bound, source, foreign, records, policy };
 }
 
 async function provenance(threadId: string) {
@@ -148,13 +148,18 @@ async function provenance(threadId: string) {
   );
 }
 
+// The user's own trust runs writes after outside content (#3338). The thread carries a durable
+// mark, and a write the user has not trusted asks.
 async function expectThemeApproval(h: Awaited<ReturnType<typeof harness>>) {
+  expect(await store.isMarked(ids.userA, h.bound.id)).toBe(true);
+  h.policy.tier = "ask_each_time";
   const pending = h.gateway.callTool(h.token, "settings.themeMode.set", { mode: "dark" });
   await vi.waitFor(() =>
     expect(h.records.some((record) => record.kind === "action_request")).toBe(true)
   );
   const card = h.records.find((record) => record.kind === "action_request")!;
-  expect(card.outsideContentNotice).toBe(true);
+  // ask_each_time asks in a clean thread too, so outside content is not the reason.
+  expect(card.outsideContentNotice).toBe(false);
   await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected");
   expect(await pending).toMatchObject({ ok: false, denied: true });
 }

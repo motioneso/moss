@@ -7,6 +7,7 @@ import {
   dayKey,
   dtoToViewEvent,
   groupEventsByDay,
+  plainDate,
   type CalendarViewEvent
 } from "../apps/web/src/calendar/calendar-model.js";
 
@@ -31,44 +32,54 @@ function dto(over: Partial<CalendarEventDto>): CalendarEventDto {
 }
 
 function view(over: Partial<CalendarEventDto>): CalendarViewEvent {
-  const v = dtoToViewEvent(dto(over));
+  const v = dtoToViewEvent(dto(over), TZ);
   if (!v) throw new Error("bad dto");
   return v;
 }
 
-const key = (y: number, m: number, d: number) => dayKey(new Date(y, m - 1, d));
+const TZ = "America/Los_Angeles";
+const LOCALE = { timezone: TZ, region: "en-US", dateFormat: "24" } as const;
+const key = (y: number, m: number, d: number) => dayKey(plainDate(y, m - 1, d));
 
 describe("groupEventsByDay multi-day events", () => {
   it("puts a 3-day all-day event on every day up to its exclusive end", () => {
-    const map = groupEventsByDay([
-      view({
-        allDay: true,
-        startsAt: "2026-10-05T00:00:00.000Z",
-        endsAt: "2026-10-08T00:00:00.000Z"
-      })
-    ]);
+    const map = groupEventsByDay(
+      [
+        view({
+          allDay: true,
+          startsAt: "2026-10-05T00:00:00.000Z",
+          endsAt: "2026-10-08T00:00:00.000Z"
+        })
+      ],
+      TZ
+    );
     expect([...map.keys()].sort()).toEqual(
       [key(2026, 10, 5), key(2026, 10, 6), key(2026, 10, 7)].sort()
     );
   });
 
   it("keeps a single-day all-day event on one day", () => {
-    const map = groupEventsByDay([
-      view({
-        allDay: true,
-        startsAt: "2026-10-05T00:00:00.000Z",
-        endsAt: "2026-10-06T00:00:00.000Z"
-      })
-    ]);
+    const map = groupEventsByDay(
+      [
+        view({
+          allDay: true,
+          startsAt: "2026-10-05T00:00:00.000Z",
+          endsAt: "2026-10-06T00:00:00.000Z"
+        })
+      ],
+      TZ
+    );
     expect([...map.keys()]).toEqual([key(2026, 10, 5)]);
   });
 
   it("adds a segment on each day an overnight timed event touches", () => {
-    const start = new Date(2026, 9, 5, 22, 0);
-    const end = new Date(2026, 9, 7, 8, 30);
-    const map = groupEventsByDay([
-      view({ startsAt: start.toISOString(), endsAt: end.toISOString() })
-    ]);
+    // Oct 5 22:00 to Oct 7 08:30 in Los Angeles (UTC-7).
+    const start = new Date("2026-10-06T05:00:00.000Z");
+    const end = new Date("2026-10-07T15:30:00.000Z");
+    const map = groupEventsByDay(
+      [view({ startsAt: start.toISOString(), endsAt: end.toISOString() })],
+      TZ
+    );
     const seg = (d: number) => map.get(key(2026, 10, d))?.[0];
     expect(seg(5)).toMatchObject({ startMin: 22 * 60, endMin: 1440 });
     expect(seg(6)).toMatchObject({ startMin: 0, endMin: 1440 });
@@ -78,12 +89,15 @@ describe("groupEventsByDay multi-day events", () => {
   });
 
   it("does not add a day when a timed event ends exactly at midnight", () => {
-    const map = groupEventsByDay([
-      view({
-        startsAt: new Date(2026, 9, 5, 20, 0).toISOString(),
-        endsAt: new Date(2026, 9, 6, 0, 0).toISOString()
-      })
-    ]);
+    const map = groupEventsByDay(
+      [
+        view({
+          startsAt: "2026-10-06T03:00:00.000Z",
+          endsAt: "2026-10-06T07:00:00.000Z"
+        })
+      ],
+      TZ
+    );
     expect([...map.keys()]).toEqual([key(2026, 10, 5)]);
     expect(map.get(key(2026, 10, 5))?.[0]).toMatchObject({ startMin: 20 * 60, endMin: 1440 });
   });
@@ -91,13 +105,16 @@ describe("groupEventsByDay multi-day events", () => {
 
 describe("dateRangeLabel for multi-day all-day events", () => {
   it("starts from the real start date, not the clicked day", () => {
-    const map = groupEventsByDay([
-      view({
-        allDay: true,
-        startsAt: "2026-10-05T00:00:00.000Z",
-        endsAt: "2026-10-08T00:00:00.000Z"
-      })
-    ]);
+    const map = groupEventsByDay(
+      [
+        view({
+          allDay: true,
+          startsAt: "2026-10-05T00:00:00.000Z",
+          endsAt: "2026-10-08T00:00:00.000Z"
+        })
+      ],
+      TZ
+    );
     const clicked = map.get(key(2026, 10, 7))?.[0];
     if (!clicked) throw new Error("missing segment");
     const expected = dateRangeLabel(
@@ -105,8 +122,9 @@ describe("dateRangeLabel for multi-day all-day events", () => {
         allDay: true,
         startsAt: "2026-10-05T00:00:00.000Z",
         endsAt: "2026-10-08T00:00:00.000Z"
-      })
+      }),
+      LOCALE
     );
-    expect(dateRangeLabel(clicked)).toBe(expected);
+    expect(dateRangeLabel(clicked, LOCALE)).toBe(expected);
   });
 });

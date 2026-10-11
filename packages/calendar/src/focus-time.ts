@@ -1,13 +1,15 @@
 import { createHash } from "node:crypto";
 import { resolveMossEnv } from "@moss/db";
+import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 
 /**
  * Configured default timezone for part-of-day band resolution + all-day-interval detection when
  * no per-request `ToolContext.localTimezone` is available. Single source of truth shared by
- * tools.ts (band resolution) and calendar-write-impl.ts (all-day busy-interval filtering).
+ * tools.ts (band resolution) and calendar-write-impl.ts (all-day busy-interval filtering). Without
+ * the env override it matches the default locale a person with nothing saved gets.
  */
 export const DEFAULT_TIMEZONE =
-  resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
+  resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? DEFAULT_LOCALE_SETTINGS.timezone;
 
 export type PartOfDay = "morning" | "afternoon" | "evening";
 

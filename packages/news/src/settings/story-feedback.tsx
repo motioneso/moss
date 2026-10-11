@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { ListUsefulnessFeedbackResponse, UsefulnessFeedbackDto } from "@moss/shared";
 
 import { Button } from "@moss/module-web-sdk";
-import { formatTimestamp, Note } from "@moss/settings-ui";
+import { formatTimestamp, Note, useUserLocale } from "@moss/settings-ui";
 
 import { newsQueryKeys } from "../web/query-keys.js";
 import {
@@ -26,6 +26,7 @@ function StoryFeedbackRow({
   readonly onNotice: (message: string | null) => void;
 }) {
   const queryClient = useQueryClient();
+  const locale = useUserLocale();
   const [editing, setEditing] = useState<string | null>(null);
   const headline = text(feedback.metadata, "headline") ?? "News story";
   const source = feedback.sourceLabel ?? text(feedback.metadata, "sourceLabel");
@@ -78,7 +79,7 @@ function StoryFeedbackRow({
           {feedback.kind === "less_like_this" ? "Less like this" : "More like this"}
         </div>
         <div className="nw-set__item-meta">
-          {formatTimestamp(feedback.updatedAt, "Date unavailable")}
+          {formatTimestamp(feedback.updatedAt, "Date unavailable", locale)}
         </div>
       </div>
       {feedback.kind === "less_like_this" ? (

@@ -14,7 +14,7 @@ import { formatDate } from "../locale/locale-format.js";
 
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import {
-  ampm,
+  clockText,
   EVENING_PLACEMENT_NOTES,
   EVENING_PLAN_STEPS_LABEL,
   EVENING_RAIL_HEADING,
@@ -27,8 +27,7 @@ import {
   EVENING_SNAPSHOT_REST,
   eveningBetweenBlocksNote,
   eveningMobilePlanLabel,
-  EVENING_SNAPSHOT_ROOM_NOTE,
-  timeLabel
+  EVENING_SNAPSHOT_ROOM_NOTE
 } from "./today-labels.js";
 import { personalize } from "../api/use-assistant-name.js";
 
@@ -214,7 +213,7 @@ function EveningSnapshot(props: EveningSnapshotProps & { readonly withHeading: b
                 : "evening-plan__snapshot-entry"
             }
           >
-            <span>{`${timeLabel(entry.startsAt, props.locale)}${ampm(entry.startsAt, props.locale)}`}</span>
+            <span>{clockText(entry.startsAt, props.locale, "")}</span>
             <div>
               {entry.title}
               <small>{`${entry.minutes} minutes \u00b7 ${entry.note}`}</small>
@@ -237,7 +236,7 @@ function EveningSnapshot(props: EveningSnapshotProps & { readonly withHeading: b
           <summary>{EVENING_SNAPSHOT_EXISTING_BLOCKS}</summary>
           {existing.map((event) => (
             <p key={event.id}>
-              {`${timeLabel(event.startsAt, props.locale)}${ampm(event.startsAt, props.locale)} \u00b7 ${event.title}`}
+              {`${clockText(event.startsAt, props.locale, "")} \u00b7 ${event.title}`}
             </p>
           ))}
         </details>

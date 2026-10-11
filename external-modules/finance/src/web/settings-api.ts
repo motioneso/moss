@@ -140,9 +140,10 @@ export async function fetchLimit(): Promise<number | null> {
   const body = (await readJson(response)) as {
     preferences?: Array<{ key: string; value?: unknown; default?: unknown }>;
   } | null;
-  const entry = body?.preferences?.find((p) => p.key === "freedomLimitDollars");
+  if (!body || !Array.isArray(body.preferences)) return null;
+  const entry = body.preferences.find((p) => p.key === "freedomLimitDollars");
   const value = entry?.value ?? entry?.default ?? DEFAULT_LIMIT_DOLLARS;
-  return typeof value === "number" ? value : DEFAULT_LIMIT_DOLLARS;
+  return typeof value === "number" ? parseLimit(String(value)) : null;
 }
 
 export async function saveLimit(dollars: number): Promise<boolean> {

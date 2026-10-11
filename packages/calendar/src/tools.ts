@@ -1,6 +1,11 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { ToolContext, ToolExecute, ToolResult, ToolServices } from "@moss/module-sdk";
-import { nullableStringSchema } from "@moss/shared";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  formatLocaleDateTime,
+  formatLocaleTime,
+  nullableStringSchema
+} from "@moss/shared";
 
 import type { CalendarWriteService } from "./calendar-write-service.js";
 import {
@@ -297,22 +302,15 @@ export const summarizeProposeFocusBlock = (
   // and the deterministic Google id stays stable for this proposal (Codex HIGH round 4).
   freezeRelativeDate(input, new Date(), tz);
   const resolved = resolveWindow(readInput(input), new Date(), tz);
-  const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
+  const locale = { ...(ctx.locale ?? DEFAULT_LOCALE_SETTINGS), timezone: tz };
+  const startStr = formatLocaleDateTime(resolved.start, locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
+    hour: "numeric",
+    minute: "2-digit"
   });
-  const startStr = fmt.format(resolved.start);
-  const endStr = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(resolved.end);
+  const endStr = formatLocaleTime(resolved.end, locale);
   return `Block "${resolved.title}" ${startStr}–${endStr} on your primary calendar (or the next clear slot if that window is busy).`;
 };
 

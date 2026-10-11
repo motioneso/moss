@@ -1,4 +1,5 @@
 import type { RouteApprovalPresentation } from "./action-presentation.js";
+import type { ToolContext } from "./index.js";
 
 /**
  * #3065: how Moss may call a built-in module's HTTP route from chat. Each route declares a
@@ -34,7 +35,8 @@ export type ChatContentClass = "user_authored" | "outside";
  */
 export type RouteChatTargetResolver = (
   db: unknown,
-  params: Readonly<Record<string, string>>
+  params: Readonly<Record<string, string>>,
+  ctx?: ToolContext
 ) => Promise<string | { readonly label: string; readonly version: string } | null>;
 
 export interface RouteChatPolicy {

@@ -45,19 +45,38 @@ describe("chat.getCurrentTime execute (#1869 slice 2)", () => {
     });
   });
 
-  it("falls back to UTC with zero offset when ctx.localTimezone is absent or invalid", async () => {
+  it("falls back to the Settings default, never UTC, when no zone is resolved (#3394)", async () => {
     const instant = new Date("2026-08-31T10:00:00.000Z");
     const execute = createChatGetCurrentTimeExecute(() => instant);
 
     const absent = await execute(scopedDb, {}, baseCtx);
-    expect(absent.data.timezone).toBe("UTC");
-    expect(absent.data.utcOffsetMinutes).toBe(0);
-    expect(absent.data.localDate).toBe("2026-08-31");
-    expect(absent.data.localTime).toBe("10:00:00");
+    expect(absent.data.timezone).toBe(DEFAULT_LOCALE_SETTINGS.timezone);
+    expect(absent.data.utcOffsetMinutes).toBe(-420);
+    expect(absent.data.localTime).toBe("03:00:00");
 
     const invalid = await execute(scopedDb, {}, { ...baseCtx, localTimezone: "Not/AZone" });
-    expect(invalid.data.timezone).toBe("UTC");
-    expect(invalid.data.utcOffsetMinutes).toBe(0);
+    expect(invalid.data.timezone).toBe(DEFAULT_LOCALE_SETTINGS.timezone);
+    expect(invalid.data.utcOffsetMinutes).toBe(-420);
+  });
+
+  it("formats the local time with the person's 12/24-hour choice (#3394)", async () => {
+    const instant = new Date("2026-08-31T21:05:09.000Z");
+    const execute = createChatGetCurrentTimeExecute(() => instant);
+    const la = { timezone: "America/Los_Angeles", region: "en-US" } as const;
+
+    const twentyFour = await execute(
+      scopedDb,
+      {},
+      { ...baseCtx, localTimezone: la.timezone, locale: { ...la, dateFormat: "24" } }
+    );
+    expect(twentyFour.data.localTime).toBe("14:05:09");
+
+    const twelve = await execute(
+      scopedDb,
+      {},
+      { ...baseCtx, localTimezone: la.timezone, locale: { ...la, dateFormat: "12" } }
+    );
+    expect(twelve.data.localTime).toBe("2:05:09 PM");
   });
 
   describe("with the actor's effective timezone resolved from the locale preference (#2157)", () => {

@@ -8,9 +8,9 @@ import type { AcpBuiltInPermissionRequest, AdmissionPath } from "@moss/ai";
 import { CONTEXT_ADMISSION_UNAVAILABLE } from "../../packages/ai/src/gateway/content-admission.js";
 import {
   admissionFixture,
-  admissionTool,
   deferred,
-  rejectAdmissionCard
+  expectYoloWriteRunsPastMark,
+  untrustedWrite
 } from "./helpers/gateway-admission-fixture.js";
 
 const acpBase = {
@@ -149,16 +149,15 @@ describe("outside-agent permission admission", () => {
   });
 
   it.each(acpCases.filter(({ mode }) => mode !== "person"))(
-    "$label makes a following dedicated write ask",
+    "$label marks the chat so a following YOLO write runs past the mark",
     async ({ input }) => {
-      const tool = admissionTool("settings.themeMode.set", { risk: "write" });
+      const tool = untrustedWrite();
       const h = admissionFixture([tool]);
       expect(
         await h.gateway.requestAcpBuiltInPermission(h.token, { ...acpBase, ...input })
       ).toMatchObject({ decision: "allow" });
       expect(h.state.tainted).toBe(true);
-      await rejectAdmissionCard(h, h.gateway.callTool(h.token, tool.name, {}));
-      expect(tool.execute).not.toHaveBeenCalled();
+      await expectYoloWriteRunsPastMark(h, tool);
     }
   );
 
@@ -201,7 +200,7 @@ describe("permission audit interleavings", () => {
   });
 
   it("records durable outside-agent taint before the post-admission audit wait", async () => {
-    const tool = admissionTool("settings.themeMode.set", { risk: "write" });
+    const tool = untrustedWrite();
     const h = admissionFixture([tool]);
     const audit = deferred();
     h.audit.mockImplementation(async () => {
@@ -223,15 +222,15 @@ describe("permission audit interleavings", () => {
     expect(h.state.tainted).toBe(true);
     expect(allowed).toBe(false);
     expect(h.events).toEqual(["claim", "release", "admit:outside_agent_shell"]);
-    expect(await h.gateway.callToolForGate(h.token, tool.name, {}, "execute")).toEqual({
-      kind: "declined",
-      reason: "would_confirm"
-    });
-    expect(tool.execute).not.toHaveBeenCalled();
+    // The write's own audit waits on the same gate, so settle it after the audit resolves.
+    const write = h.gateway.callTool(h.token, tool.name, {});
+    await vi.waitFor(() => expect(tool.execute).toHaveBeenCalledOnce(), { interval: 1 });
+    expect(h.runAutomatic).toHaveBeenCalledOnce();
     await h.gateway.recordContextForSession(h.token, "recall_notes");
     audit.resolve();
     expect(await pending).toMatchObject({ decision: "allow" });
-    expect(h.audit).toHaveBeenCalledOnce();
+    expect(await write).toMatchObject({ ok: true });
+    expect(h.audit).toHaveBeenCalledTimes(2);
   });
 
   it("keeps a YOLO outside-agent write audit guarded when there is no admission path", async () => {
@@ -332,7 +331,7 @@ describe("native YOLO durable permission status", () => {
   };
 
   it("creates pending under guard, then admits before confirming the permission", async () => {
-    const tool = admissionTool("settings.themeMode.set", { risk: "write" });
+    const tool = untrustedWrite();
     const h = admissionFixture([tool]);
     const admission = deferred();
     const resolution = deferred();
@@ -368,14 +367,17 @@ describe("native YOLO durable permission status", () => {
     await vi.waitFor(() => expect(resolve).toHaveBeenCalledOnce(), { interval: 1 });
     expect(resolve).toHaveBeenCalledWith({}, "action-1", { status: "confirmed" });
     expect(allowed).toBe(false);
-    expect(await h.gateway.callToolForGate(h.token, tool.name, {}, "execute")).toEqual({
-      kind: "declined",
-      reason: "would_confirm"
-    });
-    expect(tool.execute).not.toHaveBeenCalled();
+    // The write's own result admission runs after the permission resolution started.
+    h.recordAdmission.mockImplementation(record);
+    await expectYoloWriteRunsPastMark(h, tool);
     resolution.resolve();
     expect(await pending).toMatchObject({ decision: "allow" });
-    expect(h.events).toEqual(["claim", "release", "admit:native_tool_result"]);
+    expect(h.events).toEqual([
+      "claim",
+      "release",
+      "admit:native_tool_result",
+      "admit:tool_external_content"
+    ]);
     expect(h.runAutomatic).toHaveBeenCalledOnce();
   });
 

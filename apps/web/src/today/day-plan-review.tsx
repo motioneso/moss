@@ -13,11 +13,11 @@ import { DayPlanSection } from "./day-plan.js";
 import { buildDayItems } from "./day-plan-view-model.js";
 import {
   ACCEPT_ALL_LABEL,
+  clockText,
   REVIEW_NO_CHANGES_SELECTED,
   REVIEW_TITLE,
   REVIEW_WHAT_WILL_CHANGE_HEADING,
-  REVIEW_WITHOUT_TIME_BLOCK_HEADING,
-  timeLabel
+  REVIEW_WITHOUT_TIME_BLOCK_HEADING
 } from "./today-labels.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import {
@@ -201,7 +201,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
                     {change.kind === "add" ? "Add" : change.kind === "move" ? "Move" : "Remove"}{" "}
                     {name}
                     {change.kind !== "remove" && change.startsAt
-                      ? ` at ${timeLabel(change.startsAt, props.locale)}`
+                      ? ` at ${clockText(change.startsAt, props.locale)}`
                       : null}
                   </li>
                 ))}
@@ -218,7 +218,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
                   <li key={entry.blockId}>
                     {entry.kind === "add" ? "Add" : entry.kind === "move" ? "Move" : "Remove"}{" "}
                     {approvalTitle(entry.blockId, plan, props.tasks)}
-                    {entry.startsAt ? ` at ${timeLabel(entry.startsAt, props.locale)}` : null}
+                    {entry.startsAt ? ` at ${clockText(entry.startsAt, props.locale)}` : null}
                   </li>
                 ))}
               </ul>

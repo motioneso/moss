@@ -300,7 +300,10 @@ export async function seedBriefingData(): Promise<void> {
   }
 }
 
-export async function handleNextBriefingJob(workerBoss: PgBoss): Promise<BriefingRunResult> {
+export async function handleNextBriefingJob(
+  workerBoss: PgBoss,
+  composeDeps: ComposeDeps = makeComposeDeps(async () => ({ text: "synth narrative" }))
+): Promise<BriefingRunResult> {
   const scopedWorkerDb = createDatabase({
     connectionString: connectionStrings.worker,
     maxConnections: 1
@@ -318,7 +321,7 @@ export async function handleNextBriefingJob(workerBoss: PgBoss): Promise<Briefin
         moduleManifests: getBuiltInModuleManifests(),
         // Inject a fake-adapter composeDeps so the worker path is deterministic and never
         // makes a real HTTP provider call (A8 injects the registry-built deps in prod).
-        composeDeps: makeComposeDeps(async () => ({ text: "synth narrative" })),
+        composeDeps,
         workOptions: { pollingIntervalSeconds: 0.5 },
         onResult: (_job, result) => {
           clearTimeout(timeout);

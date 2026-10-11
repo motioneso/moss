@@ -5,7 +5,6 @@ export { MeetingContextUnavailableError } from "./live/meeting-context.js";
 // #1789: read by @moss/module-registry so the queued module path parses a stored locale exactly
 // the way the chat/gateway path does. Two copies of this would drift, and the symptom of drift is
 // a meal filed under the wrong calendar day with no error anywhere.
-export { extractTimezone } from "./locale-utils.js";
 export * from "./calendar-write-impl.js";
 export * from "./apply-writer-port.js";
 export * from "./apply-execution-adapters.js";

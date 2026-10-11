@@ -8,9 +8,10 @@ import {
   type QueryClient
 } from "@tanstack/react-query";
 import { Newspaper, Plus } from "lucide-react";
-import { Badge, formatTimestamp, Note, PaneHead } from "@moss/settings-ui";
+import { Badge, formatTimestamp, Note, PaneHead, useUserLocale } from "@moss/settings-ui";
 import { Button } from "@moss/module-web-sdk";
 import type {
+  LocaleSettingsDto,
   NewsCatalogSource,
   NewsSourceCredentialStatusDto,
   NewsPersonalizationAvailabilityDto,
@@ -212,9 +213,12 @@ async function runOps(ops: readonly PrefOp[]): Promise<void> {
  * #2008: "last checked" for a connected publisher, using the settings-wide timestamp helper.
  * A missing or unreadable timestamp shows nothing rather than "Invalid Date" next to a key.
  */
-export function lastCheckedLabel(isoTimestamp: string | null): string | null {
+export function lastCheckedLabel(
+  isoTimestamp: string | null,
+  locale: LocaleSettingsDto
+): string | null {
   if (!isoTimestamp) return null;
-  const formatted = formatTimestamp(isoTimestamp, "");
+  const formatted = formatTimestamp(isoTimestamp, "", locale);
   return formatted ? `Last checked ${formatted}` : null;
 }
 
@@ -255,6 +259,7 @@ function sourceHealthBadge(source: {
 }
 
 export default function NewsSettings() {
+  const locale = useUserLocale();
   const queryClient = useQueryClient();
   const catalogQuery = useQuery({ queryKey: newsQueryKeys.catalog, queryFn: getNewsCatalog });
   const prefsQuery = useQuery({ queryKey: newsQueryKeys.prefs, queryFn: listNewsPrefs });
@@ -459,7 +464,7 @@ export default function NewsSettings() {
     // #2008: present only for a source that was connected with a key.
     const credential = credentialBySourceId.get(source.id);
     const badge = credential ? credentialStatusBadge(credential.status) : null;
-    const checked = credential ? lastCheckedLabel(credential.lastValidatedAt) : null;
+    const checked = credential ? lastCheckedLabel(credential.lastValidatedAt, locale) : null;
     const isUnhealthy = source.validationStatus !== "approved" || source.healthStatus !== "healthy";
 
     return (

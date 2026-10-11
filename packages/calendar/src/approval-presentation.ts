@@ -5,10 +5,25 @@ import {
   approvalNumber,
   approvalText,
   presentApprovalFields,
-  type ToolApprovalPresentation
+  type ToolApprovalPresentation,
+  type ToolContext
 } from "@moss/module-sdk";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  formatLocaleDateTime,
+  formatLocaleInstantText,
+  type LocaleSettingsDto
+} from "@moss/shared";
 import { DEFAULT_TIMEZONE, resolveWindow, type FocusBlockInput } from "./focus-time.js";
 import { freezeRelativeDate } from "./tools.js";
+
+/** The person's region and 12/24-hour choice, in the zone the calendar tools resolve windows in. */
+function personLocale(ctx: ToolContext): LocaleSettingsDto {
+  return {
+    ...(ctx.locale ?? DEFAULT_LOCALE_SETTINGS),
+    timezone: ctx.localTimezone ?? DEFAULT_TIMEZONE
+  };
+}
 
 /** The submitted proposal and the executor share resolveWindow's normalization. */
 export const calendarCreatePresentation: ToolApprovalPresentation = async (_db, input, ctx) => {
@@ -23,7 +38,8 @@ export const calendarCreatePresentation: ToolApprovalPresentation = async (_db, 
     title: { label: "Requested title", present: approvalText }
   });
   if (!submitted) return null;
-  const zone = ctx.localTimezone ?? DEFAULT_TIMEZONE;
+  const locale = personLocale(ctx);
+  const zone = locale.timezone;
   // summarizeProposeFocusBlock stamps this on the gateway-owned input before freezing it.
   const normalized = { ...input };
   freezeRelativeDate(normalized, new Date(), zone);
@@ -34,8 +50,8 @@ export const calendarCreatePresentation: ToolApprovalPresentation = async (_db, 
       ...submitted,
       { label: "Calendar", value: "Primary calendar" },
       { label: "Time zone", value: zone },
-      { label: "Search from", value: window.start.toISOString() },
-      { label: "Search until", value: window.end.toISOString() },
+      { label: "Search from", value: formatLocaleDateTime(window.start, locale) },
+      { label: "Search until", value: formatLocaleDateTime(window.end, locale) },
       { label: "Event length", value: `${window.durationMinutes} minutes` },
       { label: "If busy", value: "Use the next clear slot" }
     ]
@@ -57,13 +73,17 @@ function eventPresentation(kind: "delete" | "reschedule"): ToolApprovalPresentat
     )
       return null;
     if (kind === "delete" ? _eventRef !== undefined : _eventId !== undefined) return null;
+    const locale = personLocale(ctx);
+    // Old and new times read in the same zone; text that is not a full instant stays exact.
+    const instant = (value: unknown) =>
+      typeof value === "string" ? formatLocaleInstantText(value, locale) : null;
     const fields = presentApprovalFields(
       changes,
       kind === "delete"
         ? {}
         : {
-            newStart: { label: "New start", present: approvalText },
-            newEnd: { label: "New end", present: approvalText }
+            newStart: { label: "New start", present: instant },
+            newEnd: { label: "New end", present: instant }
           },
       kind === "delete" ? [] : ["newStart", "newEnd"]
     );
@@ -85,8 +105,8 @@ function eventPresentation(kind: "delete" | "reschedule"): ToolApprovalPresentat
     return {
       target: event.title,
       fields: [
-        { label: "Current start", value: new Date(event.starts_at).toISOString() },
-        { label: "Current end", value: new Date(event.ends_at).toISOString() },
+        { label: "Current start", value: formatLocaleDateTime(event.starts_at, locale) },
+        { label: "Current end", value: formatLocaleDateTime(event.ends_at, locale) },
         ...fields,
         ...(kind === "delete"
           ? [

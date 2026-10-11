@@ -633,14 +633,14 @@ tests/e2e/c3-park-press-design.spec.ts,C3,registered-new,,Exact path reservation
 tests/e2e/c4-park-press-design.spec.ts,C4,registered-new,,Exact path reservation
 tests/e2e/c5-park-press-design.spec.ts,C5,registered-new,,Exact path reservation
 tests/e2e/calendar-email.spec.ts,P2,reserved,,Exact planning report ownership
-tests/e2e/companion-link.spec.ts,L5,reserved,,Companion link existing fixture regression test assigned before edit
-tests/e2e/e1-park-press-design.spec.ts,E1,registered-new,,Exact path reservation
+tests/e2e/companion-link.spec.ts,I0,scoped-test-transfer,,Parent-approved optional non-asserting capture helper only; preserve every case assertion fixture and timeout
+tests/e2e/e1-park-press-design.spec.ts,I0,scoped-test-transfer,,Parent-approved optional non-asserting capture helper only; preserve every case assertion fixture and timeout
 tests/e2e/encryption-keys.spec.ts,I0,scoped-test-transfer,,Parent-approved real shared confirmation and Today medication dialog assertion migration; preserve cancellation and outcomes
 tests/e2e/f0-park-press-design.spec.ts,F0,registered-new,,Exact path reservation
 tests/e2e/l1-park-press-design.spec.ts,L1,registered-new,,Exact path reservation
 tests/e2e/l2-park-press-design.spec.ts,L2,registered-new,,Exact path reservation
 tests/e2e/l3-park-press-design.spec.ts,L3,registered-new,,Exact path reservation
-tests/e2e/l4-park-press-design.spec.ts,L4,registered-new,,Exact path reservation
+tests/e2e/l4-park-press-design.spec.ts,I0,scoped-test-transfer,,Parent-approved optional non-asserting capture helper only; preserve every case assertion fixture and timeout
 tests/e2e/l6-park-press-design.spec.ts,L6,registered-new,,Exact path reservation
 tests/e2e/p1-park-press-design.spec.ts,P1,registered-new,,Exact path reservation
 tests/e2e/p2-park-press-design.spec.ts,P2,registered-new,,Exact path reservation
@@ -723,6 +723,20 @@ tests/uat/specs/job-search-board.uat.spec.ts,I0,scoped-test-transfer,,Parent-app
 tests/uat/specs/module-install.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/moss-assistant-name.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/no-plan-review.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
+tests/uat/specs/park-press-1-foundations.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-2-core.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-2b-core-failure.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-3-planning.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-news-sports.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-notifications.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-settings-recovery.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-sports-links.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-wellness-checkin.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-5-finance-settings.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-5-fresh-owner-companion.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-5-meetings-companion.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-6-reduced-motion.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-7-wellness-export.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
 tests/uat/specs/real-chat-signin.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/runtime-context.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/shadow-report.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
@@ -887,3 +901,7 @@ tests/unit/workflow-approval-card.test.tsx,C5,reserved,,Existing approval-card r
 tests/unit/workshop-project-pages.test.tsx,P3,reserved,,Exact planning report ownership
 tests/e2e/news-overview.spec.ts,L1,scoped-test-transfer,,Parent-approved shared empty-state accessibility assertions; preserve source settings links and unavailable states
 tests/integration/wellness-export-job.test.ts,L3,scoped-test-transfer,,Parent-approved Moss export provenance assertion only; preserve content/security/job assertions and do not run without isolated DB gate
+tests/e2e/visual-artifacts.ts,I0,registered-new,,Parent-approved opt-in visual artifact helper and focused tests before creation
+tests/unit/park-press-visual-artifacts.design.test.ts,I0,registered-new,,Parent-approved opt-in visual artifact helper and focused tests before creation
+.github/workflows/ci.yml,I0,scoped-ci-transfer,,Parent-approved two complete browser shards only; retain deadlines workers SW coverage and fail-closed aggregate
+tests/unit/ci-phase-deadlines.test.ts,I0,scoped-test-transfer,,Parent-approved regression for complete browser sharding and unchanged phase/aggregate protections
