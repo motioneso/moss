@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Calendar follows your timezone and time format.** The calendar now shows events, hours and today in the timezone and 12- or 24-hour format you chose in Settings, instead of your browser's clock; if you never chose a format, times now show in 24-hour style. [PR #3422](https://github.com/motioneso/moss/pull/3422)
 - **Approval cards no longer blame outside content by mistake.** The note saying Moss read something from outside your account now appears only when that is actually why Moss is asking for your approval. [PR #3366](https://github.com/motioneso/moss/pull/3366)
 - **Catch visual contract drift earlier.** Design checks catch unsupported or undefined class references in the audited screen modules before they reach users. [PR #3350](https://github.com/motioneso/moss/pull/3350)
 - **Forgetting a memory from chat clears its conflict.** When you ask Moss in chat to forget one of two conflicting memories, the other memory now becomes active again, just like forgetting it from the Memory screen. [PR #3416](https://github.com/motioneso/moss/pull/3416)
