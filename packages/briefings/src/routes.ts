@@ -209,18 +209,22 @@ export function registerBriefingsRoutes(
         );
         const { definition, ownerTimeZone } = await dependencies.dataContext.withDataContext(
           accessContext,
-          async (scopedDb) => ({
-            definition: await repository.updateDefinition(scopedDb, request.params.id, input),
-            ownerTimeZone: await readOwnerTimeZone(dependencies, scopedDb)
-          })
+          async (scopedDb) => {
+            const updated = await repository.updateDefinition(scopedDb, request.params.id, input);
+            return {
+              definition: updated,
+              ownerTimeZone: updated ? await readOwnerTimeZone(dependencies, scopedDb) : undefined
+            };
+          }
         );
 
         if (!definition) {
           return reply.code(404).send({ error: "Briefing definition not found" });
         }
 
-        // Reconcile the schedule for the updated definition (cadence/tz/enabled may have
-        // changed). Failure-isolated — never fails the mutation.
+        // Reconcile the schedule for the updated definition (cadence/target time/enabled may
+        // have changed); the cron runs in the owner's saved timezone. Failure-isolated — never
+        // fails the mutation.
         await reconcileScheduleSafely(dependencies.boss, definition, request.log, ownerTimeZone);
 
         return { definition: serializeDefinition(definition) };

@@ -75,13 +75,18 @@ export function millisecondsUntilNextTodayModeRefresh(
   return Math.max(1, delay);
 }
 
+/**
+ * The zone a briefing's day and evening gate are judged in. The person's saved zone wins,
+ * matching the server, which runs and writes briefings in it; the definition's stored zone
+ * is only a fallback (#3390).
+ */
 export function effectiveBriefingTimeZone(
   definition: BriefingDefinitionDto | undefined,
   locale: LocaleSettingsDto
 ): string | undefined {
+  if (isValidTimeZone(locale.timezone)) return locale.timezone;
   const raw = definition?.scheduleMetadata.timezone;
   if (typeof raw === "string" && isValidTimeZone(raw.trim())) return raw.trim();
-  if (isValidTimeZone(locale.timezone)) return locale.timezone;
   return DEFAULT_LOCALE.timezone;
 }
 

@@ -315,7 +315,11 @@ export function withTimeZone(definition: BriefingDefinition, timeZone: string): 
   };
 }
 
-/** The run's locale, or the fallback `resolveOwnerLocale` uses when none was resolved. */
+/**
+ * The run's locale, or the fallback `resolveOwnerLocale` uses when none was resolved. Production
+ * always wires a locale source; the fallback keeps the stored zone with an en-US 12-hour clock,
+ * the format briefings used before they read the owner's locale.
+ */
 export function briefingLocale(
   input: Pick<ComposeRunInput, "locale">,
   definition: BriefingDefinition
