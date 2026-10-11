@@ -8,7 +8,13 @@ import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
 import type { GenerateChatInput } from "@moss/ai";
-import type { BriefingsRepository } from "@moss/briefings";
+import {
+  BRIEFINGS_RUN_QUEUE,
+  reconcileSchedule,
+  type BriefingsRepository,
+  type ComposeDeps,
+  type GenerateChatFn
+} from "@moss/briefings";
 import type { DataContextRunner, MossDatabase } from "@moss/db";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import { strictLocalWallClockToInstant, type MossModuleManifest } from "@moss/module-sdk";
@@ -16,6 +22,7 @@ import { localDay } from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 
 import {
+  handleNextBriefingJob,
   makeComposeDeps,
   setupBriefingsHarness,
   teardownBriefingsHarness,
@@ -48,6 +55,31 @@ function manifestsWithStandup(): readonly MossModuleManifest[] {
         : tool
     )
   }));
+}
+
+/** Compose deps that read the owner's saved locale, with a fake model and no provider call. */
+function personTimeComposeDeps(
+  generateChat: GenerateChatFn,
+  moduleManifests: readonly MossModuleManifest[] = getBuiltInModuleManifests()
+): ComposeDeps {
+  const deps = {
+    ...makeComposeDeps(generateChat, moduleManifests),
+    localePreferences: new PreferencesRepository()
+  };
+  // @ts-expect-error mock
+  deps.aiRepository = {
+    selectModelForCapability: async () => ({
+      provider_config_id: "test",
+      provider_kind: "anthropic",
+      id: "test",
+      display_name: "test",
+      tier: "economy"
+    }),
+    selectProviderWithCredential: async () => ({
+      encrypted_credential: await deps.cipher.encryptJson({ apiKey: "canary-key" })
+    })
+  } as unknown;
+  return deps;
 }
 
 describe("briefing runs write times in the owner's saved locale (#3390)", () => {
@@ -91,26 +123,10 @@ describe("briefing runs write times in the owner's saved locale (#3390)", () => 
 
     const prompts: string[] = [];
     const moduleManifests = manifestsWithStandup();
-    const deps = {
-      ...makeComposeDeps(async (input: GenerateChatInput) => {
-        prompts.push(input.messages.map((m) => m.content).join("\n"));
-        return { text: "synth narrative" };
-      }, moduleManifests),
-      localePreferences: prefs
-    };
-    // @ts-expect-error mock
-    deps.aiRepository = {
-      selectModelForCapability: async () => ({
-        provider_config_id: "test",
-        provider_kind: "anthropic",
-        id: "test",
-        display_name: "test",
-        tier: "economy"
-      }),
-      selectProviderWithCredential: async () => ({
-        encrypted_credential: await deps.cipher.encryptJson({ apiKey: "canary-key" })
-      })
-    } as unknown;
+    const deps = personTimeComposeDeps(async (input: GenerateChatInput) => {
+      prompts.push(input.messages.map((m) => m.content).join("\n"));
+      return { text: "synth narrative" };
+    }, moduleManifests);
 
     const result = await dataContext.withDataContext(userAContext(), (db) =>
       repository.generateRun(db, definition.id, {
@@ -124,5 +140,44 @@ describe("briefing runs write times in the owner's saved locale (#3390)", () => 
     const prompt = prompts.join("\n");
     expect(prompt).toContain("10:15 AM-10:45 AM · Standup");
     expect(prompt).not.toMatch(/\b(17|18):15\b/);
+  });
+
+  it("re-registers a UTC cron in the owner's zone when it fires, without a screen visit", async () => {
+    await dataContext.withDataContext(userAContext(), (db) =>
+      prefs.upsert(db, "locale", { timezone: PACIFIC, region: "en-US", dateFormat: "12" })
+    );
+    const definition = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.createDefinition(db, {
+        title: "Person time realign",
+        briefingType: "morning",
+        cadence: "daily",
+        scheduleMetadata: { targetTime: "07:00", timezone: "UTC" },
+        selectedToolNames: ["calendar.listVisibleEvents"]
+      })
+    );
+    try {
+      // The cron as it stands for a briefing created before #3390: registered in UTC.
+      await reconcileSchedule(appBoss, definition);
+      expect((await appBoss.getSchedules(BRIEFINGS_RUN_QUEUE, definition.id))[0]?.timezone).toBe(
+        "UTC"
+      );
+
+      await appBoss.send(BRIEFINGS_RUN_QUEUE, {
+        actorUserId: definition.owner_user_id,
+        definitionId: definition.id,
+        runKind: "scheduled",
+        briefingType: "morning"
+      });
+      await handleNextBriefingJob(
+        workerBoss,
+        personTimeComposeDeps(async () => ({ text: "synth narrative" }))
+      );
+
+      const [schedule] = await appBoss.getSchedules(BRIEFINGS_RUN_QUEUE, definition.id);
+      expect(schedule?.timezone).toBe(PACIFIC);
+      expect(schedule?.cron).toBe("0 7 * * *");
+    } finally {
+      await appBoss.unschedule(BRIEFINGS_RUN_QUEUE, definition.id);
+    }
   });
 });

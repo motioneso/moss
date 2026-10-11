@@ -668,6 +668,78 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
     }
   });
 
+  it("uses the owner's saved timezone on update, on the list self-heal and for a create with no timezone (#3390)", async () => {
+    const prefs = new PreferencesRepository();
+    await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      prefs.upsert(scopedDb, "locale", {
+        timezone: "America/New_York",
+        region: "en-US",
+        dateFormat: "12"
+      })
+    );
+    const stored = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.createDefinition(scopedDb, {
+        title: "Owner zone wiring",
+        cadence: "daily",
+        scheduleMetadata: { targetTime: "07:00", timezone: "UTC" },
+        enabled: true,
+        selectedToolNames: ["tasks.list"]
+      })
+    );
+    const calls = spyBossSchedule(appBoss);
+    try {
+      const updated = await server.inject({
+        method: "PATCH",
+        url: `/api/briefings/definitions/${stored.id}`,
+        headers: userAHeaders(),
+        payload: { scheduleMetadata: { targetTime: "06:30", timezone: "UTC" } }
+      });
+      expect(updated.statusCode).toBe(200);
+      expect(calls.schedule.filter((c) => c.key === stored.id)).toEqual([
+        expect.objectContaining({ cron: "30 6 * * *", tz: "America/New_York" })
+      ]);
+
+      calls.schedule.length = 0;
+      const listed = await server.inject({
+        method: "GET",
+        url: "/api/briefings/definitions",
+        headers: userAHeaders()
+      });
+      expect(listed.statusCode).toBe(200);
+      await vi.waitFor(() =>
+        expect(calls.schedule.filter((c) => c.key === stored.id)).toEqual([
+          expect.objectContaining({ tz: "America/New_York" })
+        ])
+      );
+
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/briefings/definitions",
+        headers: userAHeaders(),
+        payload: {
+          title: "No zone given",
+          cadence: "daily",
+          scheduleMetadata: { targetTime: "06:00" },
+          enabled: true,
+          selectedToolNames: ["tasks.list"]
+        }
+      });
+      expect(created.statusCode).toBe(201);
+      const createdDefinition = created.json<{
+        definition: { scheduleMetadata: Record<string, unknown> };
+      }>().definition;
+      expect(createdDefinition.scheduleMetadata).toMatchObject({
+        targetTime: "06:00",
+        timezone: "America/New_York"
+      });
+    } finally {
+      calls.restore();
+      await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        prefs.delete(scopedDb, "locale")
+      );
+    }
+  });
+
   it("reconciles the pg-boss schedule on update to enabled:false (→ boss.unschedule)", async () => {
     const definition = await dataContext.withDataContext(userAContext(), (scopedDb) =>
       repository.createDefinition(scopedDb, {

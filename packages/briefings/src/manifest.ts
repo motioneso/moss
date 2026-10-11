@@ -379,8 +379,8 @@ export const briefingsModuleManifest = {
       id: "briefings.person_time",
       description:
         "Briefings write times in the person's saved time zone and 12- or 24-hour choice " +
-        "and run at their set time in that zone. After a time zone change, the next visit " +
-        "to Today or briefing settings moves the run times."
+        "and run at their set time in that zone. After a time zone change, the next run " +
+        "or visit to Today or briefing settings moves the run times."
     },
     {
       id: "briefings.ai_writing",

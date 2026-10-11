@@ -58,6 +58,59 @@ export async function reconcileSchedule(
   await boss.unschedule(BRIEFINGS_RUN_QUEUE, definition.id);
 }
 
+/** A misaligned scheduled fire still runs when it lands at most this long after the target. */
+const LATE_FIRE_GRACE_MINUTES = 180;
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export interface ScheduledFireAlignment {
+  /** The cron was registered in another zone and is now re-registered in the owner's. */
+  readonly realigned: boolean;
+  /** Whether this fire should produce a run. */
+  readonly run: boolean;
+}
+
+/**
+ * Re-register a firing cron in the owner's zone when it was registered in another one (a UTC
+ * default from before #3390, or a zone the owner has since changed), so no owner depends on
+ * opening a screen for the fix to reach them (#3390). An aligned fire always runs. A misaligned
+ * fire runs only when it lands on the target day within the grace after the target time;
+ * otherwise it is skipped and the realigned cron produces this period's run.
+ */
+export async function alignScheduledFire(
+  boss: PgBoss,
+  definition: BriefingDefinition,
+  ownerTimeZone: string,
+  now: Date = new Date()
+): Promise<ScheduledFireAlignment> {
+  const [registered] = await boss.getSchedules(BRIEFINGS_RUN_QUEUE, definition.id);
+  if (!registered || registered.timezone === ownerTimeZone) {
+    return { realigned: false, run: true };
+  }
+  await reconcileSchedule(boss, definition, ownerTimeZone);
+  return { realigned: true, run: firesWithinGrace(definition, ownerTimeZone, now) };
+}
+
+function firesWithinGrace(definition: BriefingDefinition, timeZone: string, now: Date): boolean {
+  const [minute, hour, , , dayOfWeek] = cronExprFor(
+    definition.cadence,
+    definition.schedule_metadata
+  ).split(" ");
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short"
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  if (dayOfWeek !== "*" && WEEKDAYS.indexOf(part("weekday")) !== Number(dayOfWeek)) return false;
+  const late =
+    Number(part("hour")) * 60 + Number(part("minute")) - (Number(hour) * 60 + Number(minute));
+  return late >= 0 && late <= LATE_FIRE_GRACE_MINUTES;
+}
+
 /**
  * Per-session self-heal: reconcile only the definitions the actor OWNS. `listDefinitions`
  * is owner-OR-share under RLS (verified: `briefing_definitions_select` is
