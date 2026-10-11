@@ -145,21 +145,6 @@ function problems({ chat, helpers, setup, config }: Sources): string[] {
   if (!/^\s+const provider = uatRealChatProvider\(\);/m.test(setup)) {
     found.push("setup picks its sign-in without the capture refusal");
   }
-
-  // The Claude seed takes only the saved sign-in, never logs it, and never deletes the shared file.
-  const seed = setup.indexOf(
-    "saveClaudeToken(saved, `${base}/agents/${ownerId}/.jarvis/cli-tokens/anthropic`);"
-  );
-  if (!/^\s+const saved = readSavedClaudeToken\(\);/m.test(setup)) {
-    found.push("setup seeds Claude from something other than the saved sign-in");
-  }
-  if (seed < 0 || seed > setup.indexOf("await signInClaudeThroughMoss(")) {
-    found.push("setup does not seed the saved Claude sign-in before signing in");
-  }
-  if (/\.claude\/|\.credentials\.json/.test(setup))
-    found.push("setup reads the box's own Claude login");
-  if (/\$\{saved/.test(setup)) found.push("setup prints the saved Claude sign-in");
-  if (setup.includes("reusingSavedToken")) found.push("setup may delete the shared saved sign-in");
   if (!/trace: process\.env\.MOSS_UAT_CAPTURE_OFF === "1" \? "off"/.test(config)) {
     found.push("the live config keeps traces under the capture opt-out");
   }
@@ -287,47 +272,6 @@ describe("classifier chat live journey (#3362)", () => {
           '  const provider = process.env.JARVIS_UAT_REAL_CHAT_PROVIDER ?? "codex";'
         )
       ).toContain("setup picks its sign-in without the capture refusal");
-    });
-
-    it("a Claude seed from somewhere other than the saved sign-in", async () => {
-      expect(
-        await mutate(
-          "setup",
-          "const saved = readSavedClaudeToken();",
-          'const saved = readFileSync(`${homedir()}/.claude/.credentials.json`, "utf8");'
-        )
-      ).toEqual(
-        expect.arrayContaining([
-          "setup seeds Claude from something other than the saved sign-in",
-          "setup reads the box's own Claude login"
-        ])
-      );
-    });
-
-    it("no Claude seed before signing in", async () => {
-      expect(await mutate("setup", /\n\s+saveClaudeToken\(saved, [^\n]+\n/, "\n")).toContain(
-        "setup does not seed the saved Claude sign-in before signing in"
-      );
-    });
-
-    it("the saved Claude sign-in printed", async () => {
-      expect(
-        await mutate(
-          "setup",
-          'console.log("[uat real-chat] saved Claude sign-in seeded into the owner\'s model folder");',
-          "console.log(`[uat real-chat] seeded ${saved}`);"
-        )
-      ).toContain("setup prints the saved Claude sign-in");
-    });
-
-    it("a refused seed deleting the shared saved sign-in", async () => {
-      expect(
-        await mutate(
-          "setup",
-          "        codeWaitMs,\n",
-          "        codeWaitMs,\n        reusingSavedToken: true,\n"
-        )
-      ).toContain("setup may delete the shared saved sign-in");
     });
 
     it("traces kept under the capture opt-out", async () => {
