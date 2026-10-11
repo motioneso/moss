@@ -84,6 +84,9 @@ describe("forgetting a memory fact cleans up conflicts", () => {
           WHERE owner_user_id = ${ids.userA}::uuid
             AND id IN (${sql.join(facts.map((f) => sql`${f.id}::uuid`))})
         `.execute(db.db);
+        for (const fact of facts) {
+          await repo.setSearchDocumentStatus(db, ids.userA, "fact", fact.id, "inactive");
+        }
         return { facts, groupId };
       }
     );
@@ -101,7 +104,12 @@ describe("forgetting a memory fact cleans up conflicts", () => {
           SELECT status FROM app.memory_conflict_groups
           WHERE owner_user_id = ${ids.userA}::uuid AND id = ${groupId}::uuid
         `.execute(db.db);
-        return { fact: fact.rows[0], group: group.rows[0] };
+        const search = await sql<{ status: string }>`
+          SELECT status FROM app.memory_search_documents
+          WHERE owner_user_id = ${ids.userA}::uuid AND target_kind = 'fact'
+            AND target_id = ${factId}::uuid
+        `.execute(db.db);
+        return { fact: fact.rows[0], group: group.rows[0], search: search.rows[0]?.status };
       }
     );
   }
@@ -120,6 +128,7 @@ describe("forgetting a memory fact cleans up conflicts", () => {
     const after = await readConflictState(second?.id ?? "", groupId);
     expect(after.fact).toMatchObject({ status: "active", conflict_group_id: null });
     expect(after.group?.status).toBe("resolved");
+    expect(after.search).toBe("active");
   });
 
   it("forget an overruled fact after another is confirmed", async () => {
@@ -160,6 +169,31 @@ describe("forgetting a memory fact cleans up conflicts", () => {
     const after = await readConflictState(second?.id ?? "", groupId);
     expect(after.fact).toMatchObject({ status: "active", conflict_group_id: null });
     expect(after.group?.status).toBe("resolved");
+    expect(after.search).toBe("active");
+  });
+
+  it("the memory.forget tool leaves a conflict open while two sides remain", async () => {
+    const { facts, groupId } = await seedConflict(["first", "second", "third"]);
+    const [first, ...rest] = facts;
+
+    const result = await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "memory-graph:forget-tool-three" },
+      (db) =>
+        memoryForgetExecute(
+          db,
+          { factId: first?.id },
+          { actorUserId: ids.userA } as Parameters<typeof memoryForgetExecute>[2],
+          { memoryForget: approvedForgetService(db) }
+        )
+    );
+    expect(result.data).toMatchObject({ deleted: true });
+
+    for (const fact of rest) {
+      const after = await readConflictState(fact.id, groupId);
+      expect(after.fact).toMatchObject({ status: "conflicting", conflict_group_id: groupId });
+      expect(after.group?.status).toBe("open");
+      expect(after.search).toBe("inactive");
+    }
   });
 });
 
