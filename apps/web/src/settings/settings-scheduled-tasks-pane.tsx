@@ -23,7 +23,7 @@ export function ScheduledTasksPane() {
       <PaneHead title="Scheduled tasks" desc="What Moss is keeping an eye on for you." />
       {query.isPending ? (
         <p role="status">Loading your scheduled tasks...</p>
-      ) : query.isError ? (
+      ) : !query.data ? (
         <EmptyState
           title="Couldn't load your tasks"
           description="Your saved schedules haven't changed."

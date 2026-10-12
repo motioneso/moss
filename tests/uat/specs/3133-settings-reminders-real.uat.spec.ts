@@ -1,9 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import type { ListScheduledTasksResponse } from "@moss/shared";
+import { buildUatComposeArgs } from "../provisioner.js";
 import {
   bringUpRealChatModel,
   readUatJson,
   requireUatBaseURL,
+  requireUatProjectName,
   signInUatAdmin
 } from "./real-chat-signin.js";
 export const uatLevel = { level: "solo-admin", without: [] } as const;
@@ -90,6 +93,35 @@ test("real reminder has Settings details, history and a saved result on desktop 
   await history.getByRole("button", { name: "View message" }).click();
   const result = page.getByRole("dialog", { name: "**Settings proof stretch**", exact: true });
   await expect(result.locator(".chatd-md strong")).toHaveText("Settings proof stretch");
+  const project = requireUatProjectName();
+  try {
+    const failedRefresh = page.waitForEvent("requestfailed", {
+      predicate: (request) =>
+        request.method() === "GET" &&
+        new URL(request.url()).pathname === "/api/chat/scheduled-tasks"
+    });
+    execFileSync("docker", buildUatComposeArgs(project, ["stop", "jarv1s"]));
+    await failedRefresh;
+    // Allow the real five-second refresh and its retry to finish against the stopped service.
+    await page.waitForTimeout(20_000);
+    await expect(result).toBeVisible();
+    await expect(result.locator(".chatd-md strong")).toHaveText("Settings proof stretch");
+    await expect(page.getByText("Couldn't load your tasks", { exact: true })).toHaveCount(0);
+    await result.getByRole("button", { name: "Close message", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Back to all tasks" })).toBeVisible();
+    await page.getByRole("button", { name: "Back to all tasks" }).click();
+    await expect(page.locator(`[data-task-id="${task.id}"]`)).toBeVisible();
+    await page.locator(`[data-task-id="${task.id}"]`).click();
+    await history.locator("summary").click();
+    await history.getByRole("button", { name: "View message" }).click();
+    await expect(result).toBeVisible();
+    console.log("[3133] real refresh outage preserves the message dialog, detail and cached list");
+  } finally {
+    execFileSync(
+      "docker",
+      buildUatComposeArgs(project, ["up", "-d", "--no-deps", "--no-recreate", "--wait", "jarv1s"])
+    );
+  }
   const completed = (await readUatJson(
     await page.request.get("/api/chat/scheduled-tasks")
   )) as ListScheduledTasksResponse;

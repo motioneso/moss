@@ -163,7 +163,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "scheduled",
     label: "Scheduled tasks",
     description:
-      "Inspect your chat reminders under Reminders, with instruction, state, local timing and dated run history. Completed, expired and cancelled reminders stay under collapsed Past tasks. View message opens the saved result; Open chat opens its conversation. Loading, empty and load-error states include retry. This list is read only; set or cancel reminders in Main chat.",
+      "Inspect your chat reminders under Reminders, with instruction, state, local timing and dated run history. Completed, expired and cancelled reminders stay under collapsed Past tasks. View message opens the saved result; Open chat opens its conversation. Loading and empty states are shown; a failed initial load offers Try again. A failed refresh keeps the loaded list, open details and message. Moss can read schedule facts and history dates from any chat, but saved message content stays on screen. This list is read only; set or cancel reminders in Main chat.",
     path: "/settings?section=scheduled",
     scope: "user"
   },

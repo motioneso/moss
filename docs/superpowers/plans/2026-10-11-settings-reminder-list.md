@@ -43,6 +43,11 @@ thread. History comes from real delivery/expiry timestamps; failed records get t
 failure guidance, without inventing an execution timestamp. Creation and cancellation
 are not runs. No arbitrary finished-record truncation.
 
+Moss may read instruction, status, timing and history dates from any chat. For app
+reads carrying the act-as grant, the route removes saved messages from every run.
+The browser response keeps their bodies for View message. Summaries remain fixed
+delivery/expiry descriptions and never contain saved message content.
+
 Approved View message choice: show the saved assistant body with MarkdownMessage in
 shared Dialog, without explanatory copy. Open chat selects the actual conversation
 that holds the message. This differs from the mockup, which opens the result in chat;
@@ -67,6 +72,8 @@ Selection reveals details with Back to all tasks and restores focus on return.
 Past tasks is collapsed by default. Refetch on focus and periodically while visible
 so a delivered reminder leaves the active list. Loading, retryable error and useful
 empty states use current primitives and show no fake records.
+Only a failed initial load shows the full retry screen. A failed background refresh
+keeps the cached list and any open detail or saved-message Dialog mounted.
 
 Update core settings, chat manifest feature/errors/remediations and route metadata
 in the same change. Add the UAT spec and its trigger-map row.
@@ -119,3 +126,6 @@ The coordinator owns the decision to repair or re-slice.
   explanatory copy; Open chat must open its actual thread. State the mockup deviation
   in the PR body. Prove updates through reload or periodic refresh, never fake focus.
   Declare the route in the chat manifest before starting the server.
+- QA correction: only initial load errors offer retry; background errors retain the
+  loaded screen. Moss's list reads include schedule facts, but saved message bodies
+  remain screen-only under the chat-message rule.
