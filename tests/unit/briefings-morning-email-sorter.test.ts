@@ -296,6 +296,68 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
     else expect(block).not.toContain("Contract redlines for Thursday");
   });
 
+  it("keeps actionable triage after a no_item thread judgement", async () => {
+    const seen: string[] = [];
+    const base = makeFakeDeps({
+      generateChat: async (input) => {
+        seen.push(input.messages.map((m) => m.content).join("\n"));
+        return { text: "synth narrative" };
+      }
+    });
+    const deps: ComposeDeps = {
+      ...base,
+      moduleManifests: [
+        ...base.moduleManifests.map((m) => ({
+          ...m,
+          assistantTools: m.assistantTools?.map((t) =>
+            t.name === "email.listVisibleMessages"
+              ? {
+                  ...t,
+                  execute: async () => ({
+                    data: {
+                      messages: [
+                        {
+                          id: "question",
+                          threadId: "th-question",
+                          connectorAccountId: "account",
+                          sender: "Dana",
+                          subject: "Redlines feedback",
+                          receivedAt: FIXED_NOW.toISOString(),
+                          actionability: "needs_reply",
+                          awaitingJudgement: true
+                        }
+                      ]
+                    }
+                  })
+                }
+              : t
+          )
+        })),
+        commitmentsManifest({
+          threadJudgements: async () => ({
+            data: {
+              threads: [
+                {
+                  threadRef: "th-question",
+                  judgedAt: FIXED_NOW.toISOString(),
+                  outcome: "no_item"
+                }
+              ]
+            }
+          })
+        })
+      ]
+    };
+    const result = await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["email.listVisibleMessages"] }),
+      runInput,
+      deps
+    );
+    expect(emailBlock(seen.join("\n"))).toContain("Redlines feedback");
+    expect(result.sourceMetadata.emailKept).toMatchObject({ awaitingJudgement: 0 });
+  });
+
   it("adds a short worth-knowing line from fyi mail", async () => {
     const runChat = fakeSorterModel({
       "This week in gardening": {

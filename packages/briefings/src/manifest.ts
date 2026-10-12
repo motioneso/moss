@@ -266,6 +266,12 @@ export const briefingsModuleManifest = {
   ],
   features: [
     {
+      id: "briefings.email_current_status",
+      description:
+        "Checks later payment receipts before selecting email. Old bills cannot become current " +
+        "obligations; old nonbilling reply requests are dated, unknown, and unranked. Saves owner-only email assessments."
+    },
+    {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.briefings",
       description: "Prepared a briefing"

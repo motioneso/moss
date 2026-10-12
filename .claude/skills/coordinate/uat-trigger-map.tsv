@@ -323,3 +323,10 @@ blocking	apps/web/src/settings/scheduled-task*.tsx	tests/uat/specs/3133-settings
 blocking	apps/web/src/settings/scheduled-task-details/**	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
 blocking	packages/chat/src/reminders/settings.ts	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
 blocking	packages/chat/src/reminders/routes.ts	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+
+# #3465 current email status and settlement.
+blocking	packages/briefings/src/email-evidence.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/compose.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/compose-evening.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/morning-inputs.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/signals.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts

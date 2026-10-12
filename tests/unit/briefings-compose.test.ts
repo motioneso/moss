@@ -477,7 +477,7 @@ describe("composeBriefing — local-day bounding", () => {
     expect(result.sourceMetadata.calendarSignals).toEqual([]);
   });
 
-  it("keeps an older unresolved follow-up signal under the five-signal cap", async () => {
+  it("keeps an older needs-reply report outside the current signal ranking", async () => {
     const deps = makeFakeDeps();
     const manifests = deps.moduleManifests.map((m) => ({
       ...m,
@@ -551,11 +551,18 @@ describe("composeBriefing — local-day bounding", () => {
       moduleManifests: manifests
     });
 
-    expect(result.sourceMetadata.emailSignals).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "follow_up_risk", messageIds: ["follow-1"] })
-      ])
+    expect(result.sourceMetadata.emailSignals).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ messageIds: ["follow-1"] })])
     );
+    expect(result.sourceMetadata.emailEvidence).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          messageId: "follow-1",
+          status: "current_status_unknown",
+          rank: null
+        })
+      ])
+    });
     expect((result.sourceMetadata.emailSignals as unknown[]).length).toBeLessThanOrEqual(5);
   });
 
@@ -664,6 +671,8 @@ describe("composeBriefing — prompt boundary-forgery (escaped inert data)", () 
                     data: {
                       messages: [
                         {
+                          id: "attacker-mail",
+                          receivedAt: FIXED_NOW.toISOString(),
                           connectorAccountId: "attacker-conn",
                           sender: "attacker@example.test",
                           subject: `${payload}UNIT-CANARY-LEAK`,
@@ -733,6 +742,7 @@ describe("composeBriefing — live-first source context (#729)", () => {
         messages: [
           {
             id: "msg-actionable",
+            receivedAt: FIXED_NOW.toISOString(),
             connectorAccountId: "conn-email-1",
             sender: "boss@x.com",
             subject: "Budget approval",

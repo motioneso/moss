@@ -150,6 +150,7 @@ export function cannedToolData(
             connectorAccountId: "conn-email-1",
             sender: "boss@x.com",
             subject: "Re: budget",
+            receivedAt: TODAY_ISO,
             snippet: "Can you reply today?",
             actionability: "needs_reply",
             importance: "normal",

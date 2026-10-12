@@ -1,6 +1,6 @@
 # Briefing current-status evidence and line traceability (#3465)
 
-Status: investigation complete; proposed split awaiting coordinator approval. No feature code or prompt changes have been made.
+Status: coordinator approved the split and slice 1 on October 11. Slice 1 builds against #3465; checked lines and history are #3466; one-sided messages are #3467. Approval requires owner-only saved evidence, reader audit and cross-user regression proof, and the kill gate below.
 
 Branch: scheduled/3465-briefing-grounding. Base: integration/scheduled-proactive, verified at 99b83b531. Worktree: ~/Jarv1s/.claude/worktrees/sched-3465-briefing-grounding.
 
@@ -78,7 +78,7 @@ Proposed ownership: packages/briefings/src/email-evidence.ts (new), signals.ts, 
 Contracts to decide before implementation:
 
 - BriefingEmailEvidenceV1 contains version 1, capturedAt, owner-local observation date, bounded source references, and per-message assessment: current claim supported, settled, or current status unknown. References include account and message identity, optional thread identity, receivedAt, triage label, awaiting flag, rank/reasons, and any matching contrary reference.
-- assessBriefingEmailEvidence(items, now, locale): BriefingEmailEvidenceV1 is pure. No module-table access and no provider call. Its input includes receipts and notices before they are filtered from prose/action rows.
+- assessBriefingEmailEvidence(items, now, locale) returns evidence and eligibleItems and is pure. No module-table access and no provider call. Its input includes receipts and notices before they are filtered from prose/action rows.
 - Structured invoice matching requires the same account and explicit obligation identity; a matching sender or thread alone is insufficient where multiple invoices are possible. A generic later receipt cannot settle every bill from that sender. An ambiguous match remains unknown.
 - Old due dates and absence of a receipt never prove a bill remains unpaid. A message can support what it reported at its received time; a current unpaid claim needs affirmative current evidence. Unknown current status must not become due, overdue, owed, or a must-do. Missing/invalid timestamps and incomplete source coverage fail closed for current-status claims.
 - Age is evaluated against the owner's local observation date, preserving the original receivedAt. There is no invented seven-day freshness setting. Historical messages cannot become current obligations merely because their due date passed. Explicit owner-backed open tasks and commitments remain independently actionable.
@@ -118,6 +118,16 @@ These are design choices for coordinator review, not approved code:
 
 ## Status and exclusions
 
-No migration requested or invented. No production data changed. No private source content, secrets, private hostnames, or private addresses are included in these notes. No server, browser, port, or proof image has been started. Temporary diagnostics are outside the worktree and will be removed after recording this evidence.
+No migration requested or invented. No production data changed. No private source content, secrets, private hostnames, or private addresses are included in these notes. Disposable real-model proof uses the assigned image tag and a claimed development port. Verification results and teardown are recorded on the implementation PR.
 
-This is a planning deliverable, not code-complete and not live-verified. Approval of the proposed split and the first implementation scope belongs to the coordinator. Source exclusions (#3190), Settings tasks, notification delivery, #3321, and #3026 remain outside this work.
+The implementation PR contains slice 1 and records its verification status. The coordinator approved the proposed split and first implementation scope. No planning-only PR; the plan stays with the slice 1 implementation PR. Source exclusions (#3190), Settings tasks, notification delivery, #3321, and #3026 remain outside this work.
+
+## Rulings ledger
+
+- October 11: split approved; #3465 owns slice 1, #3466 waits for slices 1/3 and the factual-writing ruling, #3467 has a separate builder.
+- Verified owner-only run RLS already exists in packages/briefings/sql/0085_briefing_runs_owner_only_select.sql:22. Earlier share-aware definition access does not grant run access. Reader audit and an explicit saved-evidence regression remain required. No privacy migration or duplicated serializer guard is needed.
+
+- October 11: older nonbilling needs-reply threads remain dated reports with current status unknown, outside all current urgency and obligation ranking. Bills retain the strict age cut-off. A no_item judgement clears awaiting status but never clears actionable triage.
+
+- Settlement requires payment confirmation in the actual subject or snippet. AI-written summaries alone cannot settle an invoice. Ambiguous invoice identifiers remain unknown.
+- Saved-evidence privacy is tested through app and worker readers and the shared-definition API list/detail paths. A disposable-database negative control removes the SELECT protection, observes the privacy assertion failing, restores migration 0085 policy text, and rechecks denial. No applied migration file is edited.
