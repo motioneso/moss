@@ -615,7 +615,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0301", name: "0301_superseded_by_set_null_on_delete.sql" },
         { version: "0302", name: "0302_module_kv_worker_export_select.sql" },
         { version: "0303", name: "0303_upgrade_check_worker_functions.sql" },
-        { version: "0304", name: "0304_module_enablement_worker_user_select.sql" }
+        { version: "0304", name: "0304_module_enablement_worker_user_select.sql" },
+        { version: "0315", name: "0315_activity_fact_images.sql" },
+        { version: "0316", name: "0316_clef_models_vision.sql" }
       ]);
     } finally {
       await client.end();

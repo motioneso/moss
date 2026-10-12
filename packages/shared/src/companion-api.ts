@@ -393,7 +393,8 @@ export const companionLogoutRouteSchema = {
 /**
  * Focus judgment (#2570). While a Moss-created calendar block is on, the Mac reports which app is
  * in front and a short, already-redacted window title. Moss judges it against the block and says
- * whether to nudge. Nothing here carries an image, a person id, or a model or provider name.
+ * whether to nudge. Nothing here carries a person id. #3067: a judge request may carry one
+ * screenshot, and the context names the judge model so the Mac can show it in the consent sentence.
  */
 export type FocusLabel = "focused" | "necessary_detour" | "distracted" | "insufficient_evidence";
 
@@ -417,6 +418,10 @@ export interface FocusContextResponse {
   } | null;
   /** An admin has explicitly bound the Trail Marker judgment model. Never defaulted. */
   readonly judgmentReady: boolean;
+  /** #3067: the bound judge can read a screenshot directly. False when nothing is bound. */
+  readonly judgeTakesImages: boolean;
+  /** #3067: the judge's model and provider, e.g. "Clef-flash (Cloudflare)"; null when unbound. */
+  readonly judgeName: string | null;
 }
 
 export interface FocusJudgeRequest {
@@ -430,8 +435,19 @@ export interface FocusJudgeRequest {
    * capture. Absent otherwise, and absent means exactly what slice 1 always meant.
    */
   readonly description?: string;
+  /**
+   * #3067: one JPEG of the foreground window as a data URL, for a judge that reads pictures. Sent
+   * instead of `description`, never with it. Held only for the request and the one provider call.
+   */
+  readonly image?: string;
   readonly observedAt: string;
 }
+
+/** #3067: the longest image data URL a judge request may carry (1 MiB of text). */
+export const FOCUS_IMAGE_MAX_CHARS = 1_048_576;
+
+/** #3067: the judge route's own body limit, the image cap plus room for the rest of the body. */
+export const FOCUS_JUDGE_BODY_LIMIT_BYTES = 1_310_720;
 
 export interface FocusJudgeResponse {
   readonly judgmentId: string;
@@ -468,6 +484,15 @@ const FOCUS_DESCRIPTION_SCHEMA = {
   pattern: "^[^\\u0000-\\u001f\\u007f]*$"
 } as const;
 
+// A JPEG data URL only. Clef also takes PNG and WebP, but the Mac sends JPEG, and a remote URL
+// would make the provider fetch something on the person's behalf.
+const FOCUS_IMAGE_SCHEMA = {
+  type: "string",
+  minLength: 1,
+  maxLength: FOCUS_IMAGE_MAX_CHARS,
+  pattern: "^data:image/jpeg;base64,[A-Za-z0-9+/=]+$"
+} as const;
+
 const FOCUS_BLOCK_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -485,10 +510,12 @@ export const focusContextRouteSchema = {
     200: {
       type: "object",
       additionalProperties: false,
-      required: ["block", "judgmentReady"],
+      required: ["block", "judgmentReady", "judgeTakesImages", "judgeName"],
       properties: {
         block: { ...FOCUS_BLOCK_SCHEMA, nullable: true },
-        judgmentReady: { type: "boolean" }
+        judgmentReady: { type: "boolean" },
+        judgeTakesImages: { type: "boolean" },
+        judgeName: { type: "string", nullable: true, maxLength: 200 }
       }
     },
     401: errorResponseSchema,
@@ -507,6 +534,7 @@ export const focusJudgeRouteSchema = {
       appName: FOCUS_APP_NAME_SCHEMA,
       windowTitle: FOCUS_WINDOW_TITLE_SCHEMA,
       description: FOCUS_DESCRIPTION_SCHEMA,
+      image: FOCUS_IMAGE_SCHEMA,
       observedAt: { type: "string", minLength: 1, maxLength: 40 }
     }
   },
@@ -525,6 +553,7 @@ export const focusJudgeRouteSchema = {
     400: errorResponseSchema,
     401: errorResponseSchema,
     403: errorResponseSchema,
+    413: errorResponseSchema,
     // 409: focus_not_ready (no judgment model bound) or focus_no_block (not the person's
     // current Moss block). Nothing is stored in either case.
     409: errorResponseSchema,
