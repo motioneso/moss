@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-12
+
+#### Added
+
+- **Judge screenshots with your decision model.** If your focus judge can read pictures, Trail Marker can show it the window directly instead of describing it first. [PR #3491](https://github.com/motioneso/moss/pull/3491)
+
 ### 2026-10-11
 
 #### Fixed
