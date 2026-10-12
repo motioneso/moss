@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import Combine
 @testable import TrailMarker
 
 @MainActor
@@ -107,6 +108,12 @@ final class JudgeSourceTests: XCTestCase {
 
     func testDirectAutomaticCaptureSkipsDescriberAndRemembersNoPicture() async {
         let h = await harness()
+        let completed = expectation(description: "Automatic picture judgment is remembered")
+        let subscription = h.focus.$lastJudgment.sink { remembered in
+            if remembered?.judgment.label == .distracted { completed.fulfill() }
+        }
+        defer { subscription.cancel() }
+        await fulfillment(of: [completed], timeout: 5)
         XCTAssertTrue(h.focus.judgeAvailable)
         XCTAssertEqual(h.transport.judgments.count, 2)
         XCTAssertNil(h.transport.judgments[0]["image"])
