@@ -26,7 +26,7 @@ async function send(page: Page, drawer: Locator, text: string) {
   await drawer.getByLabel("Message Moss").fill(text);
   await drawer.getByLabel("Message Moss").press("Enter");
   expect((await response).ok()).toBe(true);
-  await expect(drawer.getByText(text, { exact: true })).toBeVisible();
+  await expect(drawer.getByText(text, { exact: true }).last()).toBeVisible();
 }
 async function tasks(page: Page): Promise<readonly ScheduledTaskDto[]> {
   return (
@@ -52,7 +52,7 @@ test("pause, resume and confirmed deletion use the same reminder on desktop and 
   await page.getByRole("button", { name: "Scheduled tasks", exact: true }).click();
   let drawer = await openChat(page);
   await send(page, drawer, "Reply briefly: ready for reminder controls proof.");
-  await send(page, drawer, "remind me in 30 seconds to controls proof stretch");
+  await send(page, drawer, "remind me in 90 seconds to controls proof stretch");
   const saved = (await tasks(page)).find((row) => row.instruction === "controls proof stretch")!;
   expect(saved.state).toBe("active");
   await closeChat(drawer);
@@ -62,6 +62,34 @@ test("pause, resume and confirmed deletion use the same reminder on desktop and 
   await expect(page.getByText("Paused", { exact: true })).toBeVisible();
   expect((await tasks(page)).find((row) => row.id === saved.id)?.runs).toEqual([]);
   console.log("[3133B] desktop Settings paused the chat-created record; no run history was added");
+
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [mode, theme] of [
+      ["light", "forest"],
+      ["dark", "forest"],
+      ["light", "teal"]
+    ]) {
+      await page.evaluate(
+        ({ mode, theme }) => {
+          document.documentElement.dataset.colorMode = mode;
+          document.documentElement.dataset.theme = theme;
+        },
+        { mode, theme }
+      );
+      await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Delete task", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Delete task?", exact: true });
+      await expect(dialog.getByRole("button", { name: "Keep task", exact: true })).toBeFocused();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+      ).toBe(true);
+      await dialog.getByRole("button", { name: "Keep task", exact: true }).click();
+      console.log(
+        `[3133B] controls and safe confirmation fit width=${width}, mode=${mode}, theme=${theme}`
+      );
+    }
+  }
 
   await page.setViewportSize({ width: 390, height: 844 });
   drawer = await openChat(page);
