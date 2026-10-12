@@ -37,10 +37,11 @@ const REFUSED_ORIGIN: ChatReminderOriginV1 = {
 export async function tryPreModelTurn(
   ...args: Parameters<typeof tryGatedTurn>
 ): ReturnType<typeof tryGatedTurn> {
-  const [host, actorUserId, surface, text, opts, controller] = args;
+  const [host, actorUserId, surface, text, opts, controller, flushActions] = args;
   let recognition = recognizeReminderPlan(text);
   const agreement = typedDeletionAgreement(text);
   let threadState: Awaited<ReturnType<typeof selectTurnThread>>;
+  let threadRead = args[7];
   if (
     !recognition &&
     !opts?.moduleControl &&
@@ -49,7 +50,8 @@ export async function tryPreModelTurn(
     host.deps.persistence.hasPendingReminderDeletion
   ) {
     try {
-      threadState = await selectTurnThread(host, actorUserId, surface);
+      threadRead ??= selectTurnThread(host, actorUserId, surface);
+      threadState = await threadRead;
       if (
         threadState?.id &&
         !threadState.incognito &&
@@ -64,13 +66,23 @@ export async function tryPreModelTurn(
       };
     }
   }
-  if (!recognition) return tryGatedTurn(...args);
+  if (!recognition)
+    return tryGatedTurn(
+      host,
+      actorUserId,
+      surface,
+      text,
+      opts,
+      controller,
+      flushActions,
+      threadRead
+    );
   const manage =
     recognition.kind !== "request" &&
     recognition.kind !== "clock_request" &&
     recognition.kind !== "unsupported";
 
-  threadState ??= await selectTurnThread(host, actorUserId, surface);
+  threadState = await (threadRead ?? selectTurnThread(host, actorUserId, surface));
   const requestIncognito = threadState?.incognito ?? false;
   const requestThreadId = threadState?.id ?? null;
   const done = (result: Awaited<ReturnType<typeof tryGatedTurn>>["result"]) => ({

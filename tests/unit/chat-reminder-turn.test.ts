@@ -282,3 +282,18 @@ describe("reminder deletion answers before the model", () => {
     expect(recordReminderTurn).not.toHaveBeenCalled();
   });
 });
+
+it.each(["yes", "no"])(
+  "%s without a pending deletion reuses the thread read on its model fallback",
+  async (text) => {
+    const baseline = setup({});
+    const pending = vi.fn().mockResolvedValue(false);
+    const candidate = setup({ pending });
+    expect((await baseline.manager.submitTurn("u1", "Ben", text)).reply).toBe("model answer");
+    expect((await candidate.manager.submitTurn("u1", "Ben", text)).reply).toBe("model answer");
+    expect(candidate.getMainThreadState.mock.calls).toHaveLength(
+      baseline.getMainThreadState.mock.calls.length
+    );
+    expect(pending).toHaveBeenCalledTimes(1);
+  }
+);

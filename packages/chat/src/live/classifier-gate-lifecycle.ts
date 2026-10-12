@@ -66,7 +66,8 @@ export async function tryGatedTurn(
       }
     | undefined,
   controller: AbortController,
-  flushActions?: () => Promise<Pick<HandledTurnOptions, "activityRecords" | "actionResults">>
+  flushActions?: () => Promise<Pick<HandledTurnOptions, "activityRecords" | "actionResults">>,
+  threadRead?: ReturnType<typeof selectTurnThread>
 ): Promise<{
   result: GateTurnResult | undefined;
   requestIncognito: boolean;
@@ -74,7 +75,7 @@ export async function tryGatedTurn(
 }> {
   // Capture identity and privacy together BEFORE the gate-mode wait. A warm engine stays bound,
   // an explicit resume/new chat follows current state, and only a cold drawer reconnect selects Main.
-  const threadState = await selectTurnThread(host, actorUserId, surface);
+  const threadState = await (threadRead ?? selectTurnThread(host, actorUserId, surface));
   const requestIncognito = threadState?.incognito ?? false;
   const requestThreadId = threadState?.id ?? null;
   const gate = host.deps.classifierGate;
