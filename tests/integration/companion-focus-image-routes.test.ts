@@ -381,7 +381,7 @@ describe("judging a picture with a judge that reads pictures", () => {
 
     const judgments = await bootstrap.query("SELECT * FROM app.focus_judgments");
     const allActivity = await bootstrap.query("SELECT * FROM app.moss_model_activity_log");
-    const errors = await bootstrap.query("SELECT * FROM app.jarvis_error_log");
+    const errors = await bootstrap.query("SELECT * FROM app.moss_error_log");
 
     expect(logLines.length).toBeGreaterThan(0);
     for (const [sink, text] of [
@@ -408,7 +408,7 @@ describe("judging a picture with a judge that reads pictures", () => {
     });
     expect(accepted.statusCode).toBe(200);
 
-    const tooBig = await judge(credential, { image: `${prefix}${"A".repeat(1_300_000)}` });
+    const tooBig = await judge(credential, { image: `${prefix}${"A".repeat(1_400_000)}` });
     expect(tooBig.statusCode).toBe(413);
   });
 
@@ -463,7 +463,7 @@ describe("a judge that cannot read pictures", () => {
   });
 });
 
-describe("backfilling vision onto Clef rows made before this change (0286)", () => {
+describe("backfilling vision onto Clef rows made before this change (0316)", () => {
   it("adds vision to Cloudflare Clef rows only, once", async () => {
     // The Clef row is json only from the block above. A same-named model on another provider
     // must be left alone.
@@ -496,7 +496,7 @@ describe("backfilling vision onto Clef rows made before this change (0286)", () 
     expect(manual.statusCode).toBe(201);
 
     const migration = readFileSync(
-      new URL("../../packages/ai/sql/0286_clef_models_vision.sql", import.meta.url),
+      new URL("../../packages/ai/sql/0316_clef_models_vision.sql", import.meta.url),
       "utf8"
     );
     await bootstrap.query("BEGIN");
