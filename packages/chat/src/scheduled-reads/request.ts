@@ -1,4 +1,33 @@
 import { recognizeRelativeReminder } from "../reminders/recognizer.js";
+import type { StructuredFailureReason } from "@moss/ai";
+
+export type ScheduledReadFailureStage =
+  | "active_modules"
+  | "candidates"
+  | "model_route"
+  | "prepare"
+  | "generate"
+  | "request"
+  | "output_shape"
+  | "item_selection"
+  | "timing"
+  | StructuredFailureReason;
+
+export function recordScheduledReadFailure(
+  stage: ScheduledReadFailureStage,
+  errorClass:
+    | "ValidationError"
+    | "Error"
+    | "TypeError"
+    | "SyntaxError"
+    | "RangeError"
+    | "needs_config"
+    | "validation_failed"
+    | "provider_error"
+    | "aborted"
+) {
+  console.warn(JSON.stringify({ event: "chat.scheduled_read_refused", stage, errorClass }));
+}
 
 export interface ScheduledReadCandidate {
   readonly id: string;
@@ -57,24 +86,28 @@ export async function resolveScheduledReadRequest(
     title: "",
     when: null
   };
+  const refuse = (stage: ScheduledReadFailureStage) => {
+    recordScheduledReadFailure(stage, signal?.aborted ? "aborted" : "ValidationError");
+    return refused;
+  };
   if (
     signal?.aborted ||
     /\b(?:delete|remove|update|change|complete|mark|every|daily|weekly|monthly|hourly)\b/i.test(
       request
     )
   )
-    return refused;
+    return refuse("request");
   const output = await interpret();
   if (signal?.aborted || !output || typeof output !== "object" || Array.isArray(output))
-    return refused;
+    return refuse("output_shape");
   const fields = Object.entries(output);
   if (fields.length !== 2 || fields.some(([key]) => key !== "taskId" && key !== "timingRequest"))
-    return refused;
+    return refuse("output_shape");
   const taskId = fields.find(([key]) => key === "taskId")?.[1];
   const timing = fields.find(([key]) => key === "timingRequest")?.[1];
   const task = candidates.find((item) => item.id === taskId);
-  if (!task || typeof timing !== "string") return refused;
+  if (!task || typeof timing !== "string") return refuse("item_selection");
   const when = recognizeRelativeReminder(timing);
-  if (when.kind !== "request" && when.kind !== "clock_request") return refused;
+  if (when.kind !== "request" && when.kind !== "clock_request") return refuse("timing");
   return { kind: "scheduled_read", taskId: task.id, title: task.title, when };
 }

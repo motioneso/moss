@@ -1,10 +1,30 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveScheduledReadRequest } from "../../packages/chat/src/scheduled-reads/request.js";
 
 const taskId = "11111111-1111-4111-8111-111111111111";
 const candidates = [{ id: taskId, title: "Proof task" }];
+afterEach(() => vi.restoreAllMocks());
 
 describe("scheduled source request boundary", () => {
+  it.each([
+    [null, "output_shape"],
+    [{ taskId: "", timingRequest: "" }, "item_selection"],
+    [{ taskId, timingRequest: "check task in 30 seconds" }, "timing"]
+  ])("records a bounded validation reason without model content", async (output, stage) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await resolveScheduledReadRequest(
+      "Check my private task in 30 seconds",
+      candidates,
+      async () => output
+    );
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      JSON.stringify({
+        event: "chat.scheduled_read_refused",
+        stage,
+        errorClass: "ValidationError"
+      })
+    );
+  });
   it.each([
     "check the oven at 5",
     "can you check my grammar",

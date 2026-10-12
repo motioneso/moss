@@ -1,6 +1,20 @@
 import { expect, test, type Page } from "@playwright/test";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 import { execUatSql } from "./job-search-board-sql.js";
+import { spawnSync } from "node:child_process";
+
+function captureReadFailureKinds() {
+  const logs = spawnSync(
+    "docker",
+    ["logs", "--tail", "1000", `${requireUatProjectName()}-jarv1s-1`],
+    { encoding: "utf8" }
+  );
+  const records = `${logs.stdout}\n${logs.stderr}`
+    .split("\n")
+    .filter((line) => line.startsWith('{"event":"chat.scheduled_read_refused"'))
+    .slice(-10);
+  console.info(`Scheduled read failure kinds: ${JSON.stringify(records)}`);
+}
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
@@ -74,9 +88,14 @@ test("a real model saves an exact owner read, reports source status and refuses 
   expect(task.id).toMatch(/^[0-9a-f-]{36}$/);
   await expect(page.getByText(title, { exact: true })).toBeVisible();
   await sendInMain(page, `Check the status of my task ${title} in 45 seconds`);
-  await expect(page.getByText(`I'll check ${title} once`, { exact: false }).last()).toBeVisible({
-    timeout: 120_000
-  });
+  await expect(page.getByText(`I'll check ${title} once`, { exact: false }).last())
+    .toBeVisible({
+      timeout: 120_000
+    })
+    .catch((error: unknown) => {
+      captureReadFailureKinds();
+      throw error;
+    });
   await page.goto("/settings?section=scheduled");
   await page.getByRole("button", { name: `Check task status: ${title}`, exact: true }).click();
   await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
@@ -127,7 +146,12 @@ test("a real model saves an exact owner read, reports source status and refuses 
   await expect(confirmations.first()).toBeVisible();
   const savedCount = await confirmations.count();
   await sendInMain(page, `Check the status of my task ${title} in 45 seconds`);
-  await expect(confirmations).toHaveCount(savedCount + 1, { timeout: 120_000 });
+  await expect(confirmations)
+    .toHaveCount(savedCount + 1, { timeout: 120_000 })
+    .catch((error: unknown) => {
+      captureReadFailureKinds();
+      throw error;
+    });
   // Tasks is core with no disable/delete UI; remove only this disposable source as fault setup.
   execUatSql(requireUatProjectName(), `DELETE FROM app.tasks WHERE id = '${task.id}'`);
   await page.goto("/today");
