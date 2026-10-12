@@ -24,7 +24,16 @@ function fixture() {
       withDataContext: async (_ctx: unknown, work: (db: DataContextDb) => Promise<unknown>) =>
         work({} as DataContextDb)
     } as DataContextRunner,
-    resolveActiveModules: async () => [{ id: "tasks", name: "Tasks", version: "1.0.0" }],
+    resolveActiveModules: async () => [
+      {
+        id: "tasks",
+        name: "Tasks",
+        version: "1.0.0",
+        publisher: "Moss",
+        lifecycle: "required",
+        compatibility: { jarv1s: "*" }
+      }
+    ],
     createCliStructuredAdapter: vi.fn()
   });
 }
