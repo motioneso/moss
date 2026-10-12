@@ -137,8 +137,8 @@ test("an owner allowance skips only quiet hours, and removal and device mute tak
   });
   await expect(page.getByLabel("Notify from Chat")).toBeChecked();
 
-  const create = async (title: string) => {
-    await sendInMain(page, `remind me in 45 seconds to ${title}`);
+  const create = async (title: string, seconds = 45) => {
+    await sendInMain(page, `remind me in ${seconds} seconds to ${title}`);
     await expect.poll(() => reminderRows().find((row) => row.text === title)?.id).toBeTruthy();
     return reminderRows().find((row) => row.text === title)!;
   };
@@ -156,35 +156,11 @@ test("an owner allowance skips only quiet hours, and removal and device mute tak
       .toBeTruthy();
     return reminderRows().find((row) => row.id === id)!;
   };
-  const allowed = await create("check the allowed quiet kettle");
+  const allowed = await create("check the allowed quiet kettle", 90);
   await sendInMain(page, "let check the allowed quiet kettle through quiet hours");
   await expect
     .poll(async () => (await choices()).allowances.map((row) => row.id))
     .toContain(allowed.id);
-  const ordinary = await create("check the ordinary quiet timer");
-  const visible = await notified(allowed.id);
-  expect(visible.deferredUntil).toBeNull();
-  await expect
-    .poll(
-      async () =>
-        (await browserNotifications(page)).filter((row) => row.tag === visible.notificationId),
-      { timeout: 90_000 }
-    )
-    .toHaveLength(1);
-  const held = await notified(ordinary.id);
-  expect(held.deferredUntil).not.toBeNull();
-  expect((await browserNotifications(page)).some((row) => row.tag === held.notificationId)).toBe(
-    false
-  );
-  const urgency = execUatSql(
-    requireUatProjectName(),
-    `SELECT urgency FROM app.notifications WHERE id = '${visible.notificationId}'`
-  ).trim();
-  expect(urgency).toBe("normal");
-  console.log(
-    "[3145] allowed reminder displayed once during quiet hours; ordinary reminder deferred; urgency stayed normal"
-  );
-
   await page.goto("/settings?section=alerts");
   await expect(page.getByText(allowed.text, { exact: true })).toBeVisible();
   for (const width of [1280, 390]) {
@@ -231,10 +207,30 @@ test("an owner allowance skips only quiet hours, and removal and device mute tak
     "[3145] Settings lists the saved choice on desktop and phone in light, dark and Teal; Change in chat sends nothing"
   );
 
-  await sendInMain(page, `stop letting ${allowed.id} through`);
+  const ordinary = await create("check the ordinary quiet timer");
+  const visible = await notified(allowed.id);
+  expect(visible.deferredUntil).toBeNull();
   await expect
-    .poll(async () => (await choices()).allowances.map((row) => row.id))
-    .not.toContain(allowed.id);
+    .poll(
+      async () =>
+        (await browserNotifications(page)).filter((row) => row.tag === visible.notificationId),
+      { timeout: 90_000 }
+    )
+    .toHaveLength(1);
+  const held = await notified(ordinary.id);
+  expect(held.deferredUntil).not.toBeNull();
+  expect((await browserNotifications(page)).some((row) => row.tag === held.notificationId)).toBe(
+    false
+  );
+  const urgency = execUatSql(
+    requireUatProjectName(),
+    `SELECT urgency FROM app.notifications WHERE id = '${visible.notificationId}'`
+  ).trim();
+  expect(urgency).toBe("normal");
+  console.log(
+    "[3145] allowed reminder displayed once during quiet hours; ordinary reminder deferred; urgency stayed normal"
+  );
+
   const removed = await create("check the removed quiet allowance");
   await sendInMain(page, "check the removed quiet allowance can buzz me at night");
   await expect
@@ -280,7 +276,7 @@ test("an owner allowance skips only quiet hours, and removal and device mute tak
       ).trim()
     ).toBe("1");
   }
-  await sendInMain(page, `stop letting ${muted.id} through`);
+  await expect.poll(async () => (await choices()).allowances).toEqual([]);
   await page.goto("/settings?section=alerts");
   await expect(page.getByText("No tasks are allowed during quiet hours.")).toBeVisible();
   console.log(

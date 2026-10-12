@@ -1,7 +1,8 @@
 import { isUuid } from "@moss/db";
-import { matchTarget, normalizeReminderText } from "../cancel.js";
+import { normalizeReminderText } from "../cancel.js";
 import {
   clearQuietHoursProposal,
+  matchQuietHoursReminders,
   hasQuietHoursAllowance,
   readQuietHoursProposal,
   readQuietHoursReminder,
@@ -36,10 +37,7 @@ export const quietHoursAllowance: ReminderCommandHandler = async (
     allow = proposal.allow;
     expectedVersion = proposal.reminder_version;
   } else {
-    const owned = await deps.reminders.listOwned(scopedDb);
-    const candidates = isUuid(plan.target)
-      ? owned.filter((reminder) => reminder.id === plan.target)
-      : matchTarget(owned, plan.target);
+    const candidates = await matchQuietHoursReminders(scopedDb, deps.reminders, plan.target);
     if (!candidates.length)
       return refused("I couldn't find that reminder. Nothing changed during quiet hours.");
     if (candidates.length !== 1) {
@@ -62,7 +60,7 @@ export const quietHoursAllowance: ReminderCommandHandler = async (
       "That reminder changed or is no longer available. Nothing changed during quiet hours."
     );
   const active =
-    (reminder.state === "queued" || reminder.state === "delivered") &&
+    (reminder.state === "queued" || reminder.state === "paused") &&
     reminder.context_state !== "dismissed" &&
     (reminder.deadline_at === null || reminder.deadline_at >= (await deps.reminders.now(scopedDb)));
   if (allow && !active)

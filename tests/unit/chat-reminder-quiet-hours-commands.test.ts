@@ -46,6 +46,8 @@ describe("owner quiet-hours commands", () => {
     "let all reminders through quiet hours",
     "let stretch through quiet hours and mute all alerts",
     "stretch might buzz me at night",
+    "let it through quiet hours",
+    "let the it reminder through quiet hours",
     "what is the weather"
   ])("leaves %j to ordinary chat", (text) => {
     expect(recognizeReminderPlan(text)).toBeUndefined();

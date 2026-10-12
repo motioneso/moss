@@ -2,7 +2,7 @@
 CREATE TABLE app.chat_reminder_quiet_allowances (
   reminder_id uuid PRIMARY KEY REFERENCES app.chat_reminders(id) ON DELETE CASCADE,
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-  source_message_id uuid NOT NULL REFERENCES app.chat_messages(id) ON DELETE CASCADE,
+  source_message_id uuid REFERENCES app.chat_messages(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -36,7 +36,7 @@ CREATE POLICY chat_reminder_quiet_allowances_insert ON app.chat_reminder_quiet_a
       JOIN app.chat_threads t ON t.id = r.thread_id
       JOIN app.chat_messages m ON m.thread_id = t.id
       WHERE r.id = reminder_id AND r.owner_user_id = app.current_actor_user_id()
-        AND r.state IN ('queued', 'delivered') AND r.context_state <> 'dismissed'
+        AND r.state IN ('queued', 'paused', 'delivered') AND r.context_state <> 'dismissed'
         AND t.is_main AND NOT t.incognito AND t.owner_user_id = app.current_actor_user_id()
         AND m.id = chat_reminder_quiet_allowances.source_message_id
         AND m.owner_user_id = app.current_actor_user_id() AND m.role = 'user'

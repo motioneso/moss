@@ -5,6 +5,7 @@ import { typedDeletionAgreement, isDeletionNearMiss } from "../reminders/delete-
 
 import type { ChatReminderOriginV1 } from "@moss/shared";
 
+import { namesQuietHoursReminder } from "../reminders/quiet-hours-recognizer.js";
 import { recognizeReminderPlan } from "../reminders/commands.js";
 import type { ReminderTurnPlan } from "../reminders/turn.js";
 import { REMINDER_MAIN_ONLY_REPLY, REMINDER_MANAGE_MAIN_ONLY_REPLY } from "../reminders/wording.js";
@@ -39,6 +40,20 @@ export async function tryPreModelTurn(
 ): ReturnType<typeof tryGatedTurn> {
   const [host, actorUserId, surface, text, opts, controller, flushActions] = args;
   let recognition = recognizeReminderPlan(text);
+  if (recognition?.kind === "quiet_allowance" && !namesQuietHoursReminder(text)) {
+    try {
+      if (
+        !(await host.deps.persistence.hasQuietHoursReminderTarget?.(
+          actorUserId,
+          recognition.target
+        ))
+      )
+        recognition = undefined;
+    } catch {
+      recognition = undefined;
+    }
+  }
+  if (recognition?.kind === "quiet_agreement" && opts?.attachments?.length) recognition = undefined;
   const agreement = typedDeletionAgreement(text);
   let threadState: Awaited<ReturnType<typeof selectTurnThread>>;
   let threadRead = args[7];

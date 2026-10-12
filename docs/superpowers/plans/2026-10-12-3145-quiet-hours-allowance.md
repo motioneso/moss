@@ -55,7 +55,7 @@ Proposed table contracts:
 CREATE TABLE app.chat_reminder_quiet_allowances (
   reminder_id uuid PRIMARY KEY REFERENCES app.chat_reminders(id) ON DELETE CASCADE,
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-  source_message_id uuid NOT NULL REFERENCES app.chat_messages(id),
+  source_message_id uuid REFERENCES app.chat_messages(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -248,3 +248,26 @@ report the PR to the coordinator. No merge, board changes or milestone changes.
 - Added the real-model/service-worker UAT spec and trigger rows. The disposable build uses image tag uat-sched-3145 and a port claimed through devports; the harness tears down its own containers and volumes. Full foundation verification and the installed proof remain pending until their actual verdicts are recorded on the PR.
 
 - Restored focused gate passed all 54 integration/catalog/API checks. The extra push checks live in tests/unit/push-worker-quiet-hours-allowance.test.ts to preserve the 1000-line cap; both push suites passed 37 tests. Formatting, lint and typecheck passed before the test split; UI-class and file-size checks passed afterwards. The full gate verifies the final committed input.
+
+## Coordinator QA round 1 amendments
+
+The coordinator promoted the QA findings on PR 3482 into this slice. Broad allowance wording is
+handled only when it matches a live reminder, or explicitly names a reminder. Short pronouns
+fall through to normal chat. Matching and Settings exclude cancelled, delivered, dismissed,
+failed and expired reminders. A yes or no with an attachment cannot confirm an allowance.
+
+Migration 0314 remains unmerged and the coordinator authorized editing it here. Removing the
+source message nulls its audit link instead of deleting the saved allowance; saving still
+requires an owner-authored user message. Proposal owner isolation remains unchanged and now has
+a direct cross-owner/admin test. The redundant read-only settings feature was removed, with a
+manifest-wide unique feature ID check. Settings refreshes on focus/remount, without polling,
+and Change in chat remains usable after a failed read. The temporary issue test script was
+removed from the root package.
+
+The new unit regressions were observed red, then passed all 112 focused checks. The proposal
+read-policy negative control exposed cross-owner rows and failed its new test; the owner-only
+predicate was restored. Lifecycle fixtures were corrected to valid stored states, and removing
+the matching/list filters failed exactly their four lifecycle checks. Restored focused database
+verification passed all 62 checks through verify-gate. Full final-head verification and installed
+proof are still required. The intermittent 3134 browser failure is being investigated against
+an exported integration-base install before the review handoff.

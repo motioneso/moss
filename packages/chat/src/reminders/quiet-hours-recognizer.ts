@@ -36,10 +36,18 @@ export function recognizeQuietHoursCommand(raw: string): QuietHoursCommand | und
         .replace(/^(?:the|my|that|this) /, "")
         .replace(/ reminder$/, "")
         .trim();
-      if (!target || /^(?:all|every|everything|anything|reminders?)\b/.test(target))
+      if (
+        target.length < 3 ||
+        /^(?:it|them|this|that|me)$/.test(target) ||
+        /^(?:all|every|everything|anything|reminders?)\b/.test(target)
+      )
         return undefined;
       return { kind: "quiet_allowance", target, allow };
     }
   }
   return undefined;
+}
+
+export function namesQuietHoursReminder(raw: string): boolean {
+  return /\breminder\b/.test(normalizeReminderRequest(raw));
 }

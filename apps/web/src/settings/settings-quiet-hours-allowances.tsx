@@ -10,8 +10,8 @@ export function QuietHoursAllowances() {
     queryKey: queryKeys.chat.quietHoursAllowances,
     queryFn: listQuietHoursAllowances,
     retry: false,
-    retryOnMount: false,
-    refetchInterval: 5000
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always"
   });
   const { openChat, openChatThread } = useChatControls();
   const changeInChat = () => {
@@ -38,7 +38,7 @@ export function QuietHoursAllowances() {
       {query.data?.allowances.map((task) => (
         <Row key={task.id} name={task.title} />
       ))}
-      <Button variant="link" size="sm" disabled={!query.data} onClick={changeInChat}>
+      <Button variant="link" size="sm" onClick={changeInChat}>
         Change in chat
       </Button>
     </Group>

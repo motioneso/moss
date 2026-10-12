@@ -63,6 +63,7 @@ import type { ChatRepository } from "../repository.js";
 import { ReminderRepository } from "../reminders/repository.js";
 import {
   clearQuietHoursProposal,
+  matchQuietHoursReminders,
   readQuietHoursProposal
 } from "../reminders/quiet-hours-allowances.js";
 import { recognizeQuietHoursCommand } from "../reminders/quiet-hours-recognizer.js";
@@ -419,6 +420,13 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     });
   }
 
+  async hasQuietHoursReminderTarget(actorUserId: string, target: string): Promise<boolean> {
+    return this.dataContext.withDataContext(
+      { actorUserId },
+      async (db) => (await matchQuietHoursReminders(db, this.reminders, target)).length > 0
+    );
+  }
+
   async hasPendingQuietHoursProposal(actorUserId: string, threadId: string): Promise<boolean> {
     return this.dataContext.withDataContext({ actorUserId }, async (db) =>
       Boolean(await readQuietHoursProposal(db, threadId))
@@ -444,6 +452,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     if (plan.kind === "quiet_allowance" || plan.kind === "quiet_agreement") {
       const recognized = recognizeQuietHoursCommand(userText);
       if (
+        (plan.kind === "quiet_agreement" && Boolean(opts?.attachments?.length)) ||
         !recognized ||
         recognized.kind !== plan.kind ||
         (recognized.kind === "quiet_allowance" &&

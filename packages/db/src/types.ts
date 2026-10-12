@@ -1058,7 +1058,7 @@ export interface ChatRemindersTable {
 export interface ChatReminderQuietAllowancesTable {
   reminder_id: string;
   owner_user_id: string;
-  source_message_id: string;
+  source_message_id: string | null;
   created_at: TimestampColumn;
 }
 

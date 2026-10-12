@@ -1,7 +1,8 @@
 import { sql } from "kysely";
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import { assertDataContextDb, isUuid, type DataContextDb } from "@moss/db";
 import type { ListQuietHoursAllowancesResponse } from "@moss/shared";
-import { lockNotificationDelivery } from "./repository.js";
+import { matchTarget } from "./cancel.js";
+import { lockNotificationDelivery, type ReminderRepository } from "./repository.js";
 
 export async function listQuietHoursAllowances(
   scopedDb: DataContextDb
@@ -19,6 +20,14 @@ export async function listQuietHoursAllowances(
     .innerJoin("app.chat_reminders as reminder", "reminder.id", "allowance.reminder_id")
     .select(["reminder.id", "reminder.reminder_text as title"])
     .where("allowance.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+    .where("reminder.state", "in", ["queued", "paused"])
+    .where("reminder.context_state", "!=", "dismissed")
+    .where((eb) =>
+      eb.or([
+        eb("reminder.deadline_at", "is", null),
+        eb("reminder.deadline_at", ">=", sql<Date>`now()`)
+      ])
+    )
     .orderBy("allowance.created_at")
     .orderBy("reminder.id")
     .execute();
@@ -111,4 +120,21 @@ export async function saveQuietHoursProposal(
       source_message_id: input.sourceMessageId
     })
     .execute();
+}
+
+export async function matchQuietHoursReminders(
+  scopedDb: DataContextDb,
+  reminders: ReminderRepository,
+  target: string
+) {
+  const now = await reminders.now(scopedDb);
+  const live = (await reminders.listOwned(scopedDb)).filter(
+    (reminder) =>
+      (reminder.state === "queued" || reminder.state === "paused") &&
+      reminder.contextState !== "dismissed" &&
+      (reminder.deadlineAt === null || reminder.deadlineAt >= now)
+  );
+  return isUuid(target)
+    ? live.filter((reminder) => reminder.id === target)
+    : matchTarget(live, target);
 }

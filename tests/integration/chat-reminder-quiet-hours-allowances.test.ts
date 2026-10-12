@@ -9,7 +9,9 @@ import { recognizeReminderPlan } from "../../packages/chat/src/reminders/command
 import {
   readQuietHoursProposal,
   hasQuietHoursAllowance,
-  saveQuietHoursAllowance
+  saveQuietHoursAllowance,
+  listQuietHoursAllowances,
+  saveQuietHoursProposal
 } from "../../packages/chat/src/reminders/quiet-hours-allowances.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
@@ -80,6 +82,110 @@ function pending() {
 }
 
 describe("owner-typed quiet-hours agreement through real turn persistence", () => {
+  it.each(["cancelled", "delivered", "dismissed", "expired"])(
+    "ignores a %s reminder in matching and Settings",
+    async (finished) => {
+      const old = await reminder("water the plants");
+      await say("let water the plants through quiet hours");
+      await bootstrap.query("BEGIN");
+      try {
+        await bootstrap.query("SET LOCAL session_replication_role = replica");
+        await bootstrap.query(
+          `UPDATE app.chat_reminders SET
+          state=$2, context_state=$3,
+          delivered_at=CASE WHEN $2='delivered' THEN now() ELSE NULL END,
+          late=CASE WHEN $2='delivered' THEN false ELSE NULL END,
+          timing=CASE WHEN $2='expired' THEN 'local_clock' ELSE timing END,
+          delay_seconds=CASE WHEN $2='expired' THEN NULL ELSE delay_seconds END,
+          local_due=CASE WHEN $2='expired' THEN '2026-10-12T00:00' ELSE local_due END,
+          time_zone=CASE WHEN $2='expired' THEN 'UTC' ELSE time_zone END,
+          due_at=CASE WHEN $2='expired' THEN now()-interval '2 minutes' ELSE due_at END,
+          deadline_at=CASE WHEN $2='expired' THEN now()-interval '1 minute' ELSE deadline_at END,
+          expired_at=CASE WHEN $2='expired' THEN now() ELSE NULL END
+          WHERE id=$1`,
+          [
+            old,
+            finished === "dismissed" ? "delivered" : finished,
+            finished === "dismissed" ? "dismissed" : "pending"
+          ]
+        );
+        await bootstrap.query("COMMIT");
+      } catch (error) {
+        await bootstrap.query("ROLLBACK");
+        throw error;
+      }
+      const live = await reminder("water the plants");
+      expect((await say("let water the plants through quiet hours")).origin).toMatchObject({
+        event: "allowance_saved",
+        reminderId: live
+      });
+      const listed = await runner.withDataContext(
+        { actorUserId: ids.userA },
+        listQuietHoursAllowances
+      );
+      expect(listed.allowances).toEqual([{ id: live, title: "water the plants" }]);
+    }
+  );
+  it("keeps the allowance when its source chat message is deleted", async () => {
+    const target = await reminder();
+    const source = await say("let stretch through quiet hours");
+    await bootstrap.query("DELETE FROM app.chat_messages WHERE id=$1", [source.userMessageId]);
+    expect(await allowed(target)).toBe(true);
+  });
+  it.each(["yes", "no"])(
+    "rejects direct allowance agreement with an attachment: %s",
+    async (text) => {
+      const target = await reminder("water the plants");
+      await say("let plants through quiet hours");
+      await expect(
+        persistence.recordReminderTurn(
+          ids.userA,
+          text,
+          { kind: "quiet_agreement", agree: text === "yes" },
+          {
+            threadId,
+            attachments: [
+              { id: "file", fileName: "note.txt", mimeType: "text/plain", sizeBytes: 1 }
+            ]
+          }
+        )
+      ).rejects.toThrow("typed agreement");
+      expect(await allowed(target)).toBe(false);
+      expect(await pending()).toBeDefined();
+    }
+  );
+  it("blocks another owner and admin from reading, inserting or deleting proposals", async () => {
+    const target = await reminder("water the plants");
+    const source = await say("let plants through quiet hours");
+    for (const actorUserId of [ids.userB, ids.adminUser]) {
+      await runner.withDataContext({ actorUserId }, async (scoped) => {
+        expect(await readQuietHoursProposal(scoped, threadId)).toBeUndefined();
+        const deleted = await scoped.db
+          .deleteFrom("app.chat_reminder_quiet_proposals")
+          .where("thread_id", "=", threadId)
+          .executeTakeFirstOrThrow();
+        expect(deleted.numDeletedRows).toBe(0n);
+      });
+      const ownThread = await runner.withDataContext(
+        { actorUserId },
+        async (scoped) =>
+          (await chat.getMainThread(scoped, actorUserId)) ??
+          (await chat.openNewThread(scoped, { title: "Main" }))
+      );
+      await expect(
+        runner.withDataContext({ actorUserId }, (scoped) =>
+          saveQuietHoursProposal(scoped, {
+            threadId: ownThread.id,
+            reminderId: target,
+            version: 1,
+            allow: true,
+            sourceMessageId: source.userMessageId
+          })
+        )
+      ).rejects.toThrow(/row-level security/);
+    }
+    expect(await pending()).toMatchObject({ reminder_id: target });
+  });
   it("saves one exact target with its user source and removes it without altering reminders", async () => {
     const target = await reminder();
     const other = await reminder("drink water");

@@ -118,26 +118,6 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
     featureFlagId: "chat.module"
   },
   {
-    id: "chat.reminder_settings",
-    description:
-      "Inspect chat reminders in Settings, Scheduled tasks: details, dated run history and collapsed Past tasks. View message reads the saved result; Open chat opens its thread. Read only; set or cancel reminders in Main chat.",
-    featureFlagId: "chat.module",
-    errors: [
-      {
-        code: "scheduled_tasks_load_failed",
-        class: "transient",
-        description: "Could not load scheduled tasks. Choose Try again in Settings or reload."
-      }
-    ],
-    remediations: [
-      {
-        id: "chat.retry_scheduled_tasks",
-        description: "Choose Try again in Settings, Scheduled tasks, or reload the page.",
-        path: "/settings?section=scheduled"
-      }
-    ]
-  },
-  {
     id: "chat.reminder_list",
     description:
       "In Main chat, 'list my reminders' shows waiting chat reminders with time left or their clock " +
