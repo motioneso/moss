@@ -293,7 +293,11 @@ describe("evening briefing email section over the real sorter (#2770)", () => {
     const threadJudgements: ToolExecute = async (_db, input) => {
       lookups.push(input);
       return {
-        data: { threads: [{ threadRef: "th-contract", judgedAt: "2026-06-13T08:00:00.000Z" }] }
+        data: {
+          threads: [
+            { threadRef: "th-contract", outcome: "item", judgedAt: "2026-06-13T08:00:00.000Z" }
+          ]
+        }
       };
     };
     const { prompt, result } = await composeEveningWith(liveEmailDeps([CONTRACT_MAIL], runChat), [
@@ -315,7 +319,7 @@ describe("evening briefing email section over the real sorter (#2770)", () => {
       receivedAt: `2026-06-13T0${i + 1}:00:00.000Z`
     }));
     const runChat = fakeSorterModel({
-      "Quick question": { gate: "maybe_owed", category: "needs_reply", confidence: 0.6 }
+      "Quick question": { gate: "maybe_owed", category: "time_sensitive_info", confidence: 0.6 }
     });
     const { prompt, result } = await composeEveningWith(liveEmailDeps(many, runChat));
 

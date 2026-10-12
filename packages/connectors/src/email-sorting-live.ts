@@ -187,7 +187,13 @@ export function sortingModelResult(
       return marked({
         summary: null,
         gate: "maybe_owed",
-        signals: { pendingJudgement: true, confidence }
+        signals: {
+          pendingJudgement: true,
+          ...(category === "needs_reply" || category === "needs_action"
+            ? { actionability: { category } }
+            : {}),
+          confidence
+        }
       });
     case "fyi":
     case "receipt_or_notice":

@@ -5,6 +5,7 @@ import {
 } from "../../packages/commitments/src/email-judgement-worker.js";
 import type { EmailThreadMessage } from "@moss/module-sdk";
 import type { UpsertEmailCandidateInput } from "../../packages/commitments/src/types.js";
+import { applyGate } from "../../packages/connectors/src/email-gate.js";
 import { composeBriefing } from "../../packages/briefings/src/compose.js";
 import {
   definition,
@@ -141,90 +142,131 @@ describe("judgeEmailThread", () => {
     expect(await judgeEmailThread({}, payload, d)).toBe("no_item");
     expect(d.repository.upsertEmailCandidate).not.toHaveBeenCalled();
   });
-  it("keeps a needs-reply colleague question in the briefing after recording no_item", async () => {
-    const request = msg({ externalId: "question", subject: "Colleague report question" });
-    let judgedAt: string | undefined;
-    const d = deps({
-      threads: {
-        listThreadMessages: vi.fn(async () => [request]),
-        listThreadsWithNewerMessages: vi.fn()
-      },
-      repository: {
-        ...deps().repository,
-        recordThreadJudgement: vi.fn(async () => {
-          judgedAt = FIXED_NOW.toISOString();
-        })
+  it.each(["no_item", "item"] as const)(
+    "routes real needs-reply triage after a %s judgement without duplication",
+    async (outcome) => {
+      const request = msg({
+        externalId: "question",
+        subject: "Colleague report question",
+        bodyExcerpt: "Could you send the report by Friday? Please reply today."
+      });
+      const triage = applyGate(
+        {
+          gate: "maybe_owed",
+          summary: "Could you send the report by Friday?",
+          signals: { actionability: { category: "needs_reply" }, confidence: 0.9 }
+        },
+        false,
+        { subject: request.subject, body: request.bodyExcerpt }
+      );
+      let judgedAt: string | undefined;
+      const d = deps({
+        threads: {
+          listThreadMessages: vi.fn(async () =>
+            outcome === "item"
+              ? [msg({ fromIsUser: true, externalId: "owner" }), request]
+              : [request]
+          ),
+          listThreadsWithNewerMessages: vi.fn()
+        },
+        repository: {
+          ...deps().repository,
+          recordThreadJudgement: vi.fn(async () => {
+            judgedAt = FIXED_NOW.toISOString();
+          })
+        }
+      });
+      expect(await judgeEmailThread(fakeScopedDb, payload, d)).toBe(outcome);
+      expect(d.repository.upsertEmailCandidate).toHaveBeenCalledTimes(outcome === "item" ? 1 : 0);
+      const prompts: string[] = [];
+      const base = makeFakeDeps({
+        generateChat: async (input) => {
+          prompts.push(input.messages.map((message) => message.content).join("\n"));
+          return { text: "Briefing" };
+        }
+      });
+      await composeBriefing(
+        fakeScopedDb,
+        definition({ selected_tool_names: ["email.listVisibleMessages"] }),
+        runInput,
+        {
+          ...base,
+          moduleManifests: [
+            ...base.moduleManifests.map((manifest) => ({
+              ...manifest,
+              assistantTools: manifest.assistantTools?.map((tool) =>
+                tool.name === "email.listVisibleMessages"
+                  ? {
+                      ...tool,
+                      execute: async () => ({
+                        data: {
+                          messages: [
+                            {
+                              id: "question",
+                              connectorAccountId: "account",
+                              threadId: "t1",
+                              subject: request.subject,
+                              snippet: request.bodyExcerpt,
+                              summary: triage.summary,
+                              sender: request.fromAddress,
+                              receivedAt: "2026-06-13T10:00:00.000Z",
+                              awaitingJudgement: triage.signals.pendingJudgement === true,
+                              actionability: triage.signals.actionability?.category ?? "unknown",
+                              importance: "normal",
+                              confidence: 0.9
+                            }
+                          ],
+                          accounts: [],
+                          gaps: []
+                        }
+                      })
+                    }
+                  : tool
+              )
+            })),
+            {
+              id: "commitments",
+              name: "Commitments",
+              version: "0.0.0",
+              publisher: "test",
+              lifecycle: "optional",
+              compatibility: { jarv1s: ">=0.0.0" },
+              assistantTools: [
+                {
+                  name: "commitments.threadJudgements",
+                  description: "Read judgement records",
+                  permissionId: "commitments.view",
+                  risk: "read",
+                  inputSchema: { type: "object", properties: {} },
+                  execute: async () => ({
+                    data: { threads: [{ threadRef: "t1", judgedAt, outcome }] }
+                  })
+                },
+                {
+                  name: "commitments.list",
+                  description: "Read commitment suggestions",
+                  permissionId: "commitments.view",
+                  risk: "read",
+                  inputSchema: { type: "object", properties: {} },
+                  execute: async () => ({
+                    data: {
+                      items: outcome === "item" ? [{ title: "Send the colleague report" }] : []
+                    }
+                  })
+                }
+              ]
+            }
+          ]
+        }
+      );
+      const prompt = prompts.join("\n");
+      if (outcome === "no_item") expect(prompt).toContain(request.subject);
+      else {
+        expect(prompt).not.toContain(request.subject);
+        expect(prompt.match(/Send the colleague report/g)).toHaveLength(1);
       }
-    });
-    expect(await judgeEmailThread(fakeScopedDb, payload, d)).toBe("no_item");
-    expect(d.repository.upsertEmailCandidate).not.toHaveBeenCalled();
-    const prompts: string[] = [];
-    const base = makeFakeDeps({
-      generateChat: async (input) => {
-        prompts.push(input.messages.map((message) => message.content).join("\n"));
-        return { text: "Briefing" };
-      }
-    });
-    await composeBriefing(
-      fakeScopedDb,
-      definition({ selected_tool_names: ["email.listVisibleMessages"] }),
-      runInput,
-      {
-        ...base,
-        moduleManifests: [
-          ...base.moduleManifests.map((manifest) => ({
-            ...manifest,
-            assistantTools: manifest.assistantTools?.map((tool) =>
-              tool.name === "email.listVisibleMessages"
-                ? {
-                    ...tool,
-                    execute: async () => ({
-                      data: {
-                        messages: [
-                          {
-                            id: "question",
-                            threadId: "t1",
-                            subject: request.subject,
-                            summary: "Could you send the report by Friday?",
-                            sender: request.fromAddress,
-                            receivedAt: "2026-06-13T10:00:00.000Z",
-                            awaitingJudgement: true,
-                            actionability: "needs_reply",
-                            importance: "normal",
-                            confidence: 0.9
-                          }
-                        ],
-                        accounts: [],
-                        gaps: []
-                      }
-                    })
-                  }
-                : tool
-            )
-          })),
-          {
-            id: "commitments",
-            name: "Commitments",
-            version: "0.0.0",
-            publisher: "test",
-            lifecycle: "optional",
-            compatibility: { jarv1s: ">=0.0.0" },
-            assistantTools: [
-              {
-                name: "commitments.threadJudgements",
-                description: "Read judgement records",
-                permissionId: "commitments.view",
-                risk: "read",
-                inputSchema: { type: "object", properties: {} },
-                execute: async () => ({ data: { threads: [{ threadRef: "t1", judgedAt }] } })
-              }
-            ]
-          }
-        ]
-      }
-    );
-    expect(prompts.join("\n")).toContain(request.subject);
-  });
+    }
+  );
   it("writes one candidate with person link, actions and why", async () => {
     const d = deps();
     expect(await judgeEmailThread({}, payload, d)).toBe("item");

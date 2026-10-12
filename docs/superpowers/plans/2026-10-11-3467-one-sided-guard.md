@@ -1,6 +1,6 @@
 # One-sided messages do not create commitments (#3467)
 
-Status: original guard and outcome read approved. Rebased on integration/scheduled-proactive at 1c66097dc. Settlement and confirmation exclusion plan ready for coordinator approval; implementation and proof held.
+Status: original guard and outcome read approved. Rebased on integration/scheduled-proactive at 1c66097dc. Settlement and confirmation exclusion approved as c52672bbb; implementation in progress, full gate and live proof pending.
 Branch: scheduled/3467-one-sided-guard. Base: integration/scheduled-proactive.
 Worktree: ~/Jarv1s/.claude/worktrees/sched-3467-one-sided-guard.
 Part of #3467 and #3465. The parent issue correction and investigation govern this slice.
@@ -54,7 +54,7 @@ The coordinator will release morning-inputs.ts ownership after PR #3471 merges. 
 
 ## Settlement and confirmation exclusion plan after PR #3471
 
-PR #3471 merged at 1c66097dc. This branch is rebased onto it. The coordinator released morning-inputs.ts ownership and added Ben's confirmation ruling to PR #3472. No new feature implementation starts until this plan is approved.
+PR #3471 merged at 1c66097dc. This branch is rebased onto it. The coordinator released morning-inputs.ts ownership and added Ben's confirmation ruling to PR #3472. The coordinator approved this plan as c52672bbb, including everyday confirmation shapes and action overrides.
 
 ### Settlement
 

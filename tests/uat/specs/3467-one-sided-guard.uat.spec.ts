@@ -59,7 +59,7 @@ test("real mailbox notices create no commitments while an owner promise reaches 
         { encoding: "utf8" }
       ).trim()
     ) as { commitmentId: string; messagesDelivered: number };
-    expect(seeded.messagesDelivered).toBe(4);
+    expect(seeded.messagesDelivered).toBe(5);
     const connected = await page.request.post("/api/connectors/accounts", {
       data: {
         providerId: "imap-proton",
@@ -99,7 +99,7 @@ test("real mailbox notices create no commitments while an owner promise reaches 
           `SELECT count(*) FROM app.email_messages WHERE owner_user_id='${UAT_ADMIN_ID}'`
         )
       )
-    ).toBe(4);
+    ).toBe(5);
     await expect
       .poll(
         () =>
@@ -121,13 +121,14 @@ test("real mailbox notices create no commitments while an owner promise reaches 
       )
     ).toBe(0);
     console.log(
-      "[live proof] four SMTP messages synced from real IMAP; inbound-only judgement saved no candidates"
+      "[live proof] five SMTP messages synced from real IMAP; inbound-only judgement saved no candidates"
     );
     const questionCategory = execUatSql(
       project,
       `SELECT signals->'actionability'->>'category' FROM app.email_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND subject='Colleague report question'`
     ).trim();
     console.log(`[live proof] colleague question triage category: ${questionCategory}`);
+    expect(questionCategory).toBe("needs_reply");
     const created = await page.request.post("/api/briefings/definitions", {
       data: {
         title: "One-sided notice proof",
@@ -149,7 +150,13 @@ test("real mailbox notices create no commitments while an owner promise reaches 
       | {
           status: string;
           summaryText: string;
-          sourceMetadata: { commitmentCount: number; emailCount: number };
+          sourceMetadata: {
+            commitmentCount: number;
+            emailCount: number;
+            emailEvidence: {
+              items: { messageId: string; status: string; reason: string; rank: number | null }[];
+            };
+          };
         }
       | undefined;
     await expect
@@ -164,11 +171,19 @@ test("real mailbox notices create no commitments while an owner promise reaches 
         { timeout: 180_000, intervals: [1000, 2000, 4000] }
       )
       .toBe("succeeded");
+    const confirmationId = execUatSql(
+      project,
+      `SELECT id FROM app.email_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND subject='Your order is confirmed'`
+    ).trim();
+    expect(
+      run?.sourceMetadata.emailEvidence.items.find((item) => item.messageId === confirmationId)
+    ).toMatchObject({ status: "informational", reason: "no_action_confirmation", rank: null });
     expect(run?.sourceMetadata.commitmentCount).toBe(1);
     expect(run?.sourceMetadata.emailCount).toBeGreaterThan(0);
     expect(run?.summaryText).toMatch(/design draft/i);
     expect(run?.summaryText).not.toMatch(/pharmacy|prescription|pick.?up/i);
-    if (questionCategory === "needs_reply") expect(run?.summaryText).toMatch(/report/i);
+    expect(run?.summaryText).toMatch(/report/i);
+    expect(run?.summaryText).not.toMatch(/order.*confirm|confirmation #1234/i);
     await page.reload();
     const hero = page.locator(".today-hero");
     await expect(
@@ -176,10 +191,10 @@ test("real mailbox notices create no commitments while an owner promise reaches 
     ).toBeVisible();
     await hero.getByRole("button", { name: "Read the full morning briefing" }).click();
     await expect(page.getByText(/design draft/i).first()).toBeVisible();
-    if (questionCategory === "needs_reply")
-      await expect(page.getByText(/report/i).first()).toBeVisible();
+    await expect(page.getByText(/report/i).first()).toBeVisible();
+    await expect(page.getByText("Your order is confirmed", { exact: false })).toHaveCount(0);
     console.log(
-      "[live proof] real-Claude briefing kept the owner promise and omitted the pharmacy notice on Today"
+      "[live proof] real-Claude briefing kept the owner promise and omitted the pharmacy notice and no-action order confirmation on Today"
     );
   } finally {
     if (greenmail) execFileSync("docker", ["rm", "--force", greenmail]);

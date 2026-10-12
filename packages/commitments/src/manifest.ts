@@ -110,7 +110,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     {
       id: "commitments.email-owner-participation",
       description:
-        "Email commitment candidates require an owner message in the thread. Incoming-only notices and unanswered requests stay on the email path. Existing tasks and commitments remain available. Text-only email extraction cannot create candidates."
+        "Email candidates require owner participation. IMAP singleton messages cannot create inferred commitments (#3470). Needs-reply triage survives no-item; item outcomes use the commitment path. Chat and notes extraction are unchanged."
     }
   ],
   assistantActionFamilies: [
@@ -150,7 +150,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     {
       name: "commitments.threadJudgements",
       description:
-        "Check which email threads the commitments closer look has already judged, and when.",
+        "Check when email threads were judged and whether each outcome was item or no_item. Missing outcomes are unknown.",
       permissionId: "commitments.view",
       risk: "read",
       content: "outside",

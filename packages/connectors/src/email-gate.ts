@@ -148,8 +148,18 @@ export function applyGate(
       : gate;
   if (resolved === "nothing") return asNothing(result, signals, resolved);
   if (resolved === "worth_knowing") return asWorthKnowing(result, signals, resolved);
-  const { actionability: _drop, ...rest } = signals;
-  return { ...result, summary: null, signals: { ...rest, pendingJudgement: true } };
+  const { actionability, ...rest } = signals;
+  return {
+    ...result,
+    summary: null,
+    signals: {
+      ...rest,
+      ...(actionability?.category === "needs_reply" || actionability?.category === "needs_action"
+        ? { actionability }
+        : {}),
+      pendingJudgement: true
+    }
+  };
 }
 
 function asNothing(

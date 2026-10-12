@@ -1,7 +1,7 @@
 /**
  * #2763 regression: real mail goes through the real sorter, the real email read tool and the
  * real morning composer. Only the model's answers are faked. No test seeds a hand-written
- * triage label, because the sorter no longer produces the old action labels.
+ * triage label; reply and action labels are retained by the real sorter.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -258,43 +258,51 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
   });
 
   it.each([
-    ["judged after it arrived", "2026-06-13T08:00:00.000Z", false],
-    ["judged before it arrived", "2026-06-13T07:00:00.000Z", true]
-  ])("settles closer-look mail by the thread judgement (%s)", async (_label, judgedAt, kept) => {
-    const runChat = fakeSorterModel({
-      "Contract redlines": { gate: "maybe_owed", category: "needs_reply", confidence: 0.6 }
-    });
-    const seen: string[] = [];
-    const lookups: Record<string, unknown>[] = [];
-    const base = withRealEmailPath(
-      makeFakeDeps({
-        generateChat: async (input: GenerateChatInput) => {
-          seen.push(input.messages.map((m) => m.content).join("\n"));
-          return { text: "synth narrative" };
-        }
-      }),
-      liveEmailDeps([CONTRACT_MAIL], runChat)
-    );
-    const threadJudgements: ToolExecute = async (_db, input) => {
-      lookups.push(input);
-      return { data: { threads: [{ threadRef: "th-contract", judgedAt }] } };
-    };
-    const deps: ComposeDeps = {
-      ...base,
-      moduleManifests: [...base.moduleManifests, commitmentsManifest({ threadJudgements })]
-    };
-    await composeBriefing(
-      fakeScopedDb,
-      definition({ selected_tool_names: ["email.listVisibleMessages"] }),
-      runInput,
-      deps
-    );
+    ["item after arrival", "2026-06-13T08:00:00.000Z", "item", false],
+    ["item before arrival", "2026-06-13T07:00:00.000Z", "item", true],
+    ["no item retains reply", "2026-06-13T08:00:00.000Z", "no_item", true],
+    ["legacy outcome stays unknown", "2026-06-13T08:00:00.000Z", undefined, true],
+    ["invalid outcome stays unknown", "2026-06-13T08:00:00.000Z", "other", true],
+    ["invalid date stays unknown", "not-a-date", "item", true],
+    ["future judgement stays unknown", "2027-06-13T08:00:00.000Z", "item", true]
+  ])(
+    "settles closer-look mail by the thread judgement (%s)",
+    async (_label, judgedAt, outcome, kept) => {
+      const runChat = fakeSorterModel({
+        "Contract redlines": { gate: "maybe_owed", category: "needs_reply", confidence: 0.6 }
+      });
+      const seen: string[] = [];
+      const lookups: Record<string, unknown>[] = [];
+      const base = withRealEmailPath(
+        makeFakeDeps({
+          generateChat: async (input: GenerateChatInput) => {
+            seen.push(input.messages.map((m) => m.content).join("\n"));
+            return { text: "synth narrative" };
+          }
+        }),
+        liveEmailDeps([CONTRACT_MAIL], runChat)
+      );
+      const threadJudgements: ToolExecute = async (_db, input) => {
+        lookups.push(input);
+        return { data: { threads: [{ threadRef: "th-contract", judgedAt, outcome }] } };
+      };
+      const deps: ComposeDeps = {
+        ...base,
+        moduleManifests: [...base.moduleManifests, commitmentsManifest({ threadJudgements })]
+      };
+      await composeBriefing(
+        fakeScopedDb,
+        definition({ selected_tool_names: ["email.listVisibleMessages"] }),
+        runInput,
+        deps
+      );
 
-    expect(lookups).toEqual([{ threadRefs: ["th-contract"] }]);
-    const block = emailBlock(seen.join("\n"));
-    if (kept) expect(block).toContain("Contract redlines for Thursday");
-    else expect(block).not.toContain("Contract redlines for Thursday");
-  });
+      expect(lookups).toEqual([{ threadRefs: ["th-contract"] }]);
+      const block = emailBlock(seen.join("\n"));
+      if (kept) expect(block).toContain("Contract redlines for Thursday");
+      else expect(block).not.toContain("Contract redlines for Thursday");
+    }
+  );
 
   it("keeps actionable triage after a no_item thread judgement", async () => {
     const seen: string[] = [];

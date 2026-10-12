@@ -18,6 +18,24 @@ function receiptText(item: Record<string, unknown>): string {
     .join(" ");
 }
 
+/** Original mail proves completion; action requests and explicit triage always win. */
+export function isNoActionConfirmation(item: Record<string, unknown>): boolean {
+  if (item.actionability === "needs_reply" || item.actionability === "needs_action") return false;
+  const source = receiptText(item).toLowerCase().replace(/\s+/g, " ");
+  const requests = source
+    .replace(/\bno (?:further )?action (?:is )?(?:needed|required)\b/g, "")
+    .replace(/\b(?:do not|don't) reply\b/g, "");
+  if (
+    /\b(?:action (?:is )?(?:needed|required)|(?:failed|declined|unpaid|pending|outstanding)|amount due|balance due|please (?:reply|respond|confirm|review|pay|update|complete)|(?:could|can|would|will|have|are) you|you (?:must|need to)|(?:reply|respond) (?:to|with)|(?:confirm|review|pay|complete|update) your|payment due|due by|(?:amount|balance|\$[0-9])[\w $.,]*due)\b/.test(
+      requests
+    )
+  )
+    return false;
+  return /\b(?:order (?:is |has been )?(?:confirmed|confirmation|received)|(?:package|parcel|order|shipment) (?:has |was |is )?(?:been )?(?:shipped|delivered|sent|dispatched)|(?:shipping|delivery) confirmation|(?:booking|reservation) (?:is |has been )?(?:confirmed|confirmation)|payment (?:was |is |has been )?(?:received|confirmed|successful)|receipt (?:for|of)|(?:purchase|payment|order) receipt|subscription (?:has been |was |is )?renewed)\b/.test(
+    source
+  );
+}
+
 function invoiceId(item: Record<string, unknown>): string | null {
   // A sender or thread may contain several invoices; only an explicit number can match.
   const ids = new Set(
@@ -77,8 +95,9 @@ export function assessBriefingEmailEvidence(
             );
           })
         : [];
+    const confirmation = isNoActionConfirmation(item);
     const informational =
-      item.actionability === "receipt_or_notice" || item.actionability === "noise";
+      confirmation || item.actionability === "receipt_or_notice" || item.actionability === "noise";
     const status =
       receipts.length > 0
         ? "settled"
@@ -91,7 +110,9 @@ export function assessBriefingEmailEvidence(
       status === "settled"
         ? "later_matching_payment_confirmation"
         : informational
-          ? "receipt_or_noise"
+          ? confirmation
+            ? "no_action_confirmation"
+            : "receipt_or_noise"
           : !messageId || !account || !validDate
             ? "missing_identity_or_date"
             : paymentStatusUnknown

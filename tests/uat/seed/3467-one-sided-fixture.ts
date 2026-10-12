@@ -25,6 +25,12 @@ async function main() {
   });
   const messages = [
     {
+      from: "shop@example.test",
+      subject: "Your order is confirmed",
+      text: "Order confirmation #1234. Thank you for your purchase. No further action is required.",
+      messageId: "<confirmation@fixture.test>"
+    },
+    {
       from: "pharmacy@example.test",
       subject: "Pharmacy pickup",
       text: "Your prescription is ready. Pick it up by Friday.",

@@ -12,6 +12,7 @@ import {
   type Section
 } from "./compose-shared.js";
 import { DEFAULT_LOCALE_SETTINGS, type LocaleSettingsDto } from "@moss/shared";
+import { isNoActionConfirmation } from "./email-evidence.js";
 import type { EmailBriefingSignal } from "./signals.js";
 import { sanitizeExternal } from "./trust-boundary.js";
 
@@ -115,10 +116,12 @@ export function openTaskLines(lines: readonly string[]): string[] {
 
 /**
  * Email the morning briefing keeps: the old action labels, plus mail the sorter handed to
- * the Commitments closer look. The sorter no longer writes action labels on first pass.
+ * the Commitments closer look. Reply and action triage survive the first pass.
  */
 export function isBriefingEmailItem(item: Record<string, unknown>): boolean {
-  return isActionableTriage(item) || item.awaitingJudgement === true;
+  return (
+    !isNoActionConfirmation(item) && (isActionableTriage(item) || item.awaitingJudgement === true)
+  );
 }
 
 /** The closer look queues a thread by its thread id, or by the message id when it has none. */
@@ -127,12 +130,7 @@ function threadRefOf(item: Record<string, unknown>): string | null {
   return typeof ref === "string" && ref ? ref : null;
 }
 
-/**
- * Clears the awaiting flag on mail the Commitments closer look has already judged. The
- * sorter's flag is never cleared after the judgement, so a thread judged at or after the
- * message arrived is settled. Actionable triage still survives every outcome. When the
- * judgement read is missing or fails, the mail keeps its flag.
- */
+/** An item replaces its email; no-item retains triage. Unknown outcomes stay pending. */
 export async function settleJudgedEmail(
   ctx: GatherContext,
   items: readonly Record<string, unknown>[],
@@ -168,17 +166,24 @@ export async function settleJudgedEmail(
     now,
     timeZone
   );
-  const judgedAt = new Map<string, number>();
+  const judgements = new Map<string, { at: number; outcome: "item" | "no_item" }>();
   for (const row of section.rawItems ?? []) {
     const at = typeof row.judgedAt === "string" ? Date.parse(row.judgedAt) : NaN;
-    if (typeof row.threadRef === "string" && Number.isFinite(at)) judgedAt.set(row.threadRef, at);
+    if (
+      typeof row.threadRef === "string" &&
+      Number.isFinite(at) &&
+      at <= now.getTime() &&
+      (row.outcome === "item" || row.outcome === "no_item")
+    ) {
+      judgements.set(row.threadRef, { at, outcome: row.outcome });
+    }
   }
-  return items.map((item) => {
+  return items.flatMap((item) => {
     const ref = item.awaitingJudgement === true ? threadRefOf(item) : null;
-    const at = ref === null ? undefined : judgedAt.get(ref);
+    const judgement = ref === null ? undefined : judgements.get(ref);
     const received = typeof item.receivedAt === "string" ? Date.parse(item.receivedAt) : NaN;
-    const settled = at !== undefined && (!Number.isFinite(received) || at >= received);
-    return settled ? { ...item, awaitingJudgement: false } : item;
+    if (!judgement || !Number.isFinite(received) || judgement.at < received) return [item];
+    return judgement.outcome === "item" ? [] : [{ ...item, awaitingJudgement: false }];
   });
 }
 
@@ -244,9 +249,10 @@ export function buildMorningEmailLines(args: {
   readonly suggestionLines: readonly string[];
   readonly locale?: LocaleSettingsDto;
 }): MorningEmailLines {
+  const items = args.items.filter((item) => !isNoActionConfirmation(item));
   const signalLines = args.signals.map((s) => sanitizeExternal(s.summary)).filter(Boolean);
   const named = new Set(args.signals.flatMap((s) => s.messageIds));
-  const allAwaiting = args.items
+  const allAwaiting = items
     .filter(
       (item) =>
         item.awaitingJudgement === true &&
@@ -266,7 +272,7 @@ export function buildMorningEmailLines(args: {
   const awaitingLines = allAwaiting
     .slice(0, AWAITING_EMAIL_CAP)
     .map((line) => `[may need you] ${line}`);
-  const worthKnowingLines = args.items
+  const worthKnowingLines = items
     .filter((item) => item.actionability === "fyi" && !item.briefingCurrentStatusUnknown)
     .map((item) =>
       [
@@ -279,7 +285,7 @@ export function buildMorningEmailLines(args: {
     .filter(Boolean)
     .slice(0, WORTH_KNOWING_CAP)
     .map((line) => `[worth knowing] ${line}`);
-  const unknownStatusLines = args.items
+  const unknownStatusLines = items
     .filter((item) => item.briefingCurrentStatusUnknown === true)
     .slice(0, AWAITING_EMAIL_CAP)
     .map((item) =>

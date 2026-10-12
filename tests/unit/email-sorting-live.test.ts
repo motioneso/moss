@@ -62,14 +62,17 @@ describe("sortEmailOnSortingModel", () => {
     expect(outcome.result.signals.sortedBy).toBe("sorting_model");
   });
 
-  it("hands a message that asks for a reply to the thread judgement", async () => {
-    const outcome = await sort(answers({ asks_reply: YES, receipt_or_notice: YES }));
+  it.each([
+    ["asks_reply", "needs_reply"],
+    ["asks_action", "needs_action"]
+  ] as const)("keeps %s through thread judgement", async (question, category) => {
+    const outcome = await sort(answers({ [question]: YES, receipt_or_notice: YES }));
     expect(outcome.kind).toBe("sorted");
     if (outcome.kind !== "sorted") return;
-    expect(outcome.category).toBe("needs_reply");
+    expect(outcome.category).toBe(category);
     expect(outcome.result.gate).toBe("maybe_owed");
     expect(outcome.result.signals.pendingJudgement).toBe(true);
-    expect(outcome.result.signals.actionability).toBeUndefined();
+    expect(outcome.result.signals.actionability?.category).toBe(category);
   });
 
   it("stores marketing as noise with no summary", async () => {

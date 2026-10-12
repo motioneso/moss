@@ -5,8 +5,10 @@ import {
   commitmentGetExecute,
   commitmentAcceptExecute,
   commitmentRejectExecute,
-  commitmentSnoozeExecute
+  commitmentSnoozeExecute,
+  commitmentThreadJudgementsExecute
 } from "@moss/commitments/tools";
+import { makeRecordingDb } from "./helpers/recording-db.js";
 
 const ctx: ToolContext = {
   actorUserId: "user-1",
@@ -15,6 +17,19 @@ const ctx: ToolContext = {
 };
 
 describe("commitment tools", () => {
+  it.each(["item", "no_item", undefined])(
+    "exposes the recorded thread outcome %s without defaulting",
+    async (outcome) => {
+      const { scoped, queries } = makeRecordingDb({
+        rows: [{ thread_ref: "t1", judged_at: new Date("2026-10-11T12:00:00Z"), outcome }]
+      });
+      const result = await commitmentThreadJudgementsExecute(scoped, { threadRefs: ["t1"] }, ctx);
+      expect(result.data).toEqual({
+        threads: [{ threadRef: "t1", judgedAt: "2026-10-11T12:00:00.000Z", outcome }]
+      });
+      expect(queries[0]?.parameters).toEqual([ctx.actorUserId, "t1"]);
+    }
+  );
   it("exports all 5 execute functions", () => {
     expect(typeof commitmentListExecute).toBe("function");
     expect(typeof commitmentGetExecute).toBe("function");
