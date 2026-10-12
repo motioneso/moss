@@ -131,3 +131,5 @@ The implementation PR contains slice 1 and records its verification status. The 
 
 - Settlement requires payment confirmation in the actual subject or snippet. AI-written summaries alone cannot settle an invoice. Ambiguous invoice identifiers remain unknown.
 - Saved-evidence privacy is tested through app and worker readers and the shared-definition API list/detail paths. A disposable-database negative control removes the SELECT protection, observes the privacy assertion failing, restores migration 0085 policy text, and rechecks denial. No applied migration file is edited.
+
+- QA ruling: today's bills remain dated reports with payment status unknown and no unpaid claim or obligation rank. Evening prose and reply instructions cover today's mail only, while settlement evidence is reconciled over all fetched mail. Morning alone keeps older nonbilling needs-reply reports. The evidence bound matches the cache's 225-message limit; overflow truncates assessments without discarding the retained email. Add 225-message and today-bill regressions, real evening proof, and the blocking 1452 browser run. The kill gate and owner-only evidence requirements stay in force.

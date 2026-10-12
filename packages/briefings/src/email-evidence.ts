@@ -1,6 +1,7 @@
 import { localDay, type BriefingEmailEvidenceV1, type LocaleSettingsDto } from "@moss/shared";
 
-const EVIDENCE_CAP = 200;
+// The source cache returns 200 recent messages plus 25 older actionable messages.
+const EVIDENCE_CAP = 225;
 const BILLING = /\b(bills?|invoices?|payments?|statements?|past[ -]due|auto-?pay)\b/i;
 const SETTLED = /\b(paid in full|fully paid|payment (?:received|confirmed|successful))\b/i;
 const NOT_SETTLED = /\b(not|unpaid|failed|pending|partial|partially)\b/i;
@@ -81,12 +82,7 @@ export function assessBriefingEmailEvidence(
         ? "settled"
         : informational
           ? "informational"
-          : !messageId ||
-              !account ||
-              !validDate ||
-              items.length > EVIDENCE_CAP ||
-              billing ||
-              ageDays !== 0
+          : !messageId || !account || !validDate || billing || ageDays !== 0
             ? "current_status_unknown"
             : "reported_today";
     const reason =
@@ -96,13 +92,11 @@ export function assessBriefingEmailEvidence(
           ? "receipt_or_noise"
           : !messageId || !account || !validDate
             ? "missing_identity_or_date"
-            : items.length > EVIDENCE_CAP
-              ? "evidence_truncated"
-              : billing
-                ? "no_current_unpaid_evidence"
-                : ageDays !== 0
-                  ? "historical_message"
-                  : "received_on_observation_day";
+            : billing
+              ? "no_current_unpaid_evidence"
+              : ageDays !== 0
+                ? "historical_message"
+                : "received_on_observation_day";
     if (status === "reported_today") eligibleItems.push(item);
     else if (
       status === "current_status_unknown" &&
@@ -110,12 +104,14 @@ export function assessBriefingEmailEvidence(
       messageId &&
       account &&
       ageDays !== null &&
-      ageDays > 0 &&
-      !billing &&
-      items.length <= EVIDENCE_CAP &&
-      item.actionability === "needs_reply"
+      ((billing && ageDays === 0) ||
+        (!billing && ageDays > 0 && item.actionability === "needs_reply"))
     ) {
-      eligibleItems.push({ ...item, briefingCurrentStatusUnknown: true });
+      eligibleItems.push({
+        ...item,
+        briefingCurrentStatusUnknown: true,
+        ...(billing ? { briefingPaymentStatusUnknown: true } : {})
+      });
     }
     if (messageId)
       assessments.push({

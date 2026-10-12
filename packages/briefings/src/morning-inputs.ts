@@ -267,7 +267,7 @@ export function buildMorningEmailLines(args: {
     .slice(0, AWAITING_EMAIL_CAP)
     .map((line) => `[may need you] ${line}`);
   const worthKnowingLines = args.items
-    .filter((item) => item.actionability === "fyi")
+    .filter((item) => item.actionability === "fyi" && !item.briefingCurrentStatusUnknown)
     .map((item) =>
       [
         sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS)),
@@ -279,19 +279,20 @@ export function buildMorningEmailLines(args: {
     .filter(Boolean)
     .slice(0, WORTH_KNOWING_CAP)
     .map((line) => `[worth knowing] ${line}`);
-  const historicalReplyLines = args.items
+  const unknownStatusLines = args.items
     .filter((item) => item.briefingCurrentStatusUnknown === true)
     .slice(0, AWAITING_EMAIL_CAP)
-    .map(
-      (item) =>
-        `[dated report; current status unknown] Email received ${sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS))}: ${sanitizeExternal(item.sender)} asked for a reply about ${sanitizeExternal(item.subject)}.`
+    .map((item) =>
+      item.briefingPaymentStatusUnknown
+        ? `[dated report; payment status unknown] Billing email received ${sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS))} from ${sanitizeExternal(item.sender)}; subject: ${sanitizeExternal(item.subject)}.`
+        : `[dated report; current status unknown] Email received ${sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS))}: ${sanitizeExternal(item.sender)} asked for a reply about ${sanitizeExternal(item.subject)}.`
     );
   const { lines, truncated } = charCap([
     ...signalLines,
     ...awaitingLines,
     ...args.suggestionLines,
     ...worthKnowingLines,
-    ...historicalReplyLines
+    ...unknownStatusLines
   ]);
   return {
     lines,

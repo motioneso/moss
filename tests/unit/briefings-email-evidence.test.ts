@@ -83,7 +83,7 @@ describe("briefing email current-status evidence (#3465)", () => {
       );
     }
   );
-  it.each(["morning", "evening"] as const)(
+  it.each(["morning"] as const)(
     "%s keeps an old reply as a dated unknown report beside suppressed invoices",
     async (kind) => {
       const question = {
@@ -269,20 +269,88 @@ describe("briefing email current-status evidence (#3465)", () => {
     });
   });
 
-  it("fails closed when the bounded evidence overflows", () => {
-    const messages = Array.from({ length: 201 }, (_, i) => ({
+  it("retains today's email from a full 225-message cache", async () => {
+    const messages = Array.from({ length: 225 }, (_, i) => ({
       id: String(i),
       connectorAccountId: "account",
       subject: "Reply?",
       receivedAt: NOW.toISOString(),
       actionability: "needs_reply"
     }));
-    expect(
-      assessBriefingEmailEvidence(messages.slice(0, 200), NOW, LOCALE).eligibleItems
-    ).toHaveLength(200);
     const { evidence, eligibleItems } = assessBriefingEmailEvidence(messages, NOW, LOCALE);
-    expect(evidence.truncated).toBe(true);
-    expect(evidence.items).toHaveLength(200);
-    expect(eligibleItems).toEqual([]);
+    expect(evidence.truncated).toBe(false);
+    expect(evidence.items).toHaveLength(225);
+    expect(eligibleItems).toHaveLength(225);
+    const { result } = await compose(messages);
+    expect(result.sourceMetadata.emailSignals).not.toEqual([]);
+    const overflow = assessBriefingEmailEvidence(
+      [...messages, { ...messages[0], id: "extra" }],
+      NOW,
+      LOCALE
+    );
+    expect(overflow.evidence.truncated).toBe(true);
+    expect(overflow.eligibleItems).toHaveLength(225);
+  });
+  it.each(["morning", "evening"] as const)(
+    "%s reports today's bill with its date and unknown payment status",
+    async (kind) => {
+      const bill = {
+        ...bills[0],
+        id: "today-bill",
+        receivedAt: NOW.toISOString(),
+        subject: "Invoice #TODAY",
+        actionability: "needs_action"
+      };
+      const { result, prompt } = await compose([bill], kind);
+      expect(prompt).toContain("payment status unknown");
+      expect(prompt).toContain("Oct");
+      expect(prompt).toContain("Invoice #TODAY");
+      expect(prompt).not.toContain("is due September");
+      expect(result.sourceMetadata.emailSignals).toEqual([]);
+      expect(
+        (result.sourceMetadata.emailEvidence as BriefingEmailEvidenceV1).items[0]
+      ).toMatchObject({ ageDays: 0, status: "current_status_unknown", rank: null });
+    }
+  );
+  it("omits unverified FYI billing summaries", async () => {
+    const { prompt } = await compose([
+      {
+        ...bills[0],
+        receivedAt: NOW.toISOString(),
+        summary: "Seriously overdue and unpaid invoice",
+        actionability: "fyi"
+      }
+    ]);
+    expect(prompt).toContain("payment status unknown");
+    expect(prompt).not.toContain("Seriously overdue and unpaid invoice");
+  });
+  it("evening reconciles historical receipts but only shows today's mail", async () => {
+    const question = {
+      id: "old-question",
+      connectorAccountId: "account-1",
+      sender: "Historical colleague",
+      subject: "Old draft reply",
+      receivedAt: "2026-09-01T15:00:00Z",
+      actionability: "needs_reply"
+    };
+    const current = {
+      ...question,
+      id: "today-question",
+      sender: "Current colleague",
+      subject: "Today's draft reply",
+      receivedAt: NOW.toISOString()
+    };
+    const { result, prompt } = await compose([question, current, ...bills, ...receipts], "evening");
+    expect(prompt).not.toContain("Historical colleague");
+    expect(prompt).not.toContain("Old draft reply");
+    expect(prompt).toContain("Current colleague");
+    expect(result.sourceMetadata.emailMessageCount).toBe(1);
+    expect((result.sourceMetadata.emailEvidence as BriefingEmailEvidenceV1).items).toContainEqual(
+      expect.objectContaining({
+        messageId: "bill-0",
+        status: "settled",
+        contraryMessageIds: ["receipt-0"]
+      })
+    );
   });
 });
