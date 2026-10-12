@@ -529,6 +529,7 @@ function renderToday(input: {
           ChatControlsProvider,
           {
             value: {
+              openChatThread: () => undefined,
               openChat: () => undefined,
               openChatWith: () => undefined,
               openAssistantWithDraft: () => undefined

@@ -82,7 +82,8 @@ type PersonalSectionId =
   | "activity"
   | "skills"
   | "released"
-  | "alerts";
+  | "alerts"
+  | "scheduled";
 
 type AdminSectionId =
   | "people"
@@ -121,6 +122,11 @@ const SkillsPane = lazyPane(() =>
 );
 const ReleasedPane = lazyPane(() =>
   import("./settings-released-pane").then((module) => ({ default: module.ReleasedPane }))
+);
+const ScheduledTasksPane = lazyPane(() =>
+  import("./settings-scheduled-tasks-pane").then((module) => ({
+    default: module.ScheduledTasksPane
+  }))
 );
 const AlertsPane = lazyPane(() =>
   import("./settings-alerts-pane").then((module) => ({ default: module.AlertsPane }))
@@ -199,6 +205,13 @@ const PERSONAL_GROUPS = [
         label: "Your assistant",
         description: coreSettingDescription("assistant"),
         Pane: AssistantPane
+      },
+      {
+        id: "scheduled",
+        icon: Bell,
+        label: "Scheduled tasks",
+        description: coreSettingDescription("scheduled"),
+        Pane: ScheduledTasksPane
       },
       {
         id: "priorities",
@@ -374,6 +387,7 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "connected accounts"
   ],
   assistant: ["model", "ai", "provider", "assistant name", "personality", "voice"],
+  scheduled: ["reminders", "scheduled tasks", "run history", "past tasks"],
   alerts: ["email alerts", "notifications", "digest", "quiet hours", "do not disturb"],
   people: ["users", "invite", "roles", "admin", "members"],
   aiproviders: [

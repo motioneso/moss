@@ -66,6 +66,8 @@ export function ChatDrawer(props: {
   readonly isFounder: boolean;
   readonly ownerId?: string;
   readonly initialText?: string;
+  readonly threadToOpen?: string | null;
+  readonly onThreadOpenConsumed?: () => void;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
   readonly surface: ChatSurface;
@@ -666,6 +668,37 @@ export function ChatDrawer(props: {
     if (moduleIdentityPending) return;
     setQueuedSendText({ text, surface: props.surface });
   };
+  const selectThread = useCallback(
+    (id: string) => {
+      const change = props.meetingContext ? undefined : transition.begin();
+      if (!props.meetingContext && !change) return;
+      callerDraft.retire(props.surface);
+      if (isSending) void cancelChatTurn(props.surface);
+      setFallbackRecords([]);
+      setPendingUser(null);
+      setIsSending(false);
+      setQueuedSendText(null);
+      setSendError(null);
+      setReviewThreadId(id);
+      setLiveThreadId(null);
+      if (change) {
+        resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
+      }
+    },
+    [props.meetingContext, props.surface, transition, callerDraft, isSending, resumeMutation]
+  );
+  useEffect(() => {
+    if (!props.open || !props.threadToOpen || transition.pending) return;
+    props.onThreadOpenConsumed?.();
+    selectThread(props.threadToOpen);
+  }, [
+    props.open,
+    props.threadToOpen,
+    props.onThreadOpenConsumed,
+    transition.pending,
+    selectThread
+  ]);
+
   return (
     <aside
       ref={asideRef}
@@ -722,22 +755,7 @@ export function ChatDrawer(props: {
           onRetry={() => void threadsQuery.refetch()}
           onNewSideChat={startNewSideChat}
           onOpenChange={setConversationOverlayOpen}
-          onSelect={(id) => {
-            const change = props.meetingContext ? undefined : transition.begin();
-            if (!props.meetingContext && !change) return;
-            callerDraft.retire(props.surface);
-            if (isSending) void cancelChatTurn(props.surface);
-            setFallbackRecords([]);
-            setPendingUser(null);
-            setIsSending(false);
-            setQueuedSendText(null);
-            setSendError(null);
-            setReviewThreadId(id);
-            setLiveThreadId(null);
-            if (change) {
-              resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
-            }
-          }}
+          onSelect={selectThread}
         />
         <div
           className="chatd-overlay-background"

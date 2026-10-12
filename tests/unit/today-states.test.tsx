@@ -233,6 +233,7 @@ function renderPage(client: QueryClient): string {
         ChatControlsProvider,
         {
           value: {
+            openChatThread: () => undefined,
             openChat: () => undefined,
             openChatWith: () => undefined,
             openAssistantWithDraft: () => undefined
@@ -458,6 +459,7 @@ describe("TodayPage remaining progress lines", () => {
         ChatControlsProvider,
         {
           value: {
+            openChatThread: () => undefined,
             openChat: () => undefined,
             openChatWith: () => undefined,
             openAssistantWithDraft: () => undefined
@@ -629,6 +631,7 @@ describe("TodayPage background refetch", () => {
             ChatControlsProvider,
             {
               value: {
+                openChatThread: () => undefined,
                 openChat: () => undefined,
                 openChatWith: () => undefined,
                 openAssistantWithDraft: () => undefined
@@ -812,6 +815,7 @@ describe("TodayPage background refetch", () => {
               ChatControlsProvider,
               {
                 value: {
+                  openChatThread: () => undefined,
                   openChat: () => undefined,
                   openChatWith: () => undefined,
                   openAssistantWithDraft: () => undefined

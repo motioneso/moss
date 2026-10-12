@@ -160,6 +160,14 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     scope: "user"
   },
   {
+    id: "scheduled",
+    label: "Scheduled tasks",
+    description:
+      "Inspect your chat reminders under Reminders, with instruction, state, local timing and dated run history. Completed, expired and cancelled reminders stay under collapsed Past tasks. View message opens the saved result; Open chat opens its conversation. Loading, empty and load-error states include retry. This list is read only; set or cancel reminders in Main chat.",
+    path: "/settings?section=scheduled",
+    scope: "user"
+  },
+  {
     id: "alerts",
     label: "Alerts & quiet hours",
     description:

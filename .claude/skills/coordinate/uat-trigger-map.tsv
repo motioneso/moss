@@ -317,3 +317,9 @@ blocking	packages/vault/src/**	tests/uat/specs/audit-source-truth.uat.spec.ts
 # #3397 shared modal focus recovery through real task comments.
 blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
 blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts
+# #3133 slice A: real reminder list and saved result reader, no network interception.
+blocking	apps/web/src/settings/settings-scheduled-tasks-pane.tsx	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task*.tsx	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/**	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	packages/chat/src/reminders/settings.ts	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	packages/chat/src/reminders/routes.ts	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts

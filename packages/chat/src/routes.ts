@@ -83,6 +83,7 @@ import { VaultContextRunner, getVaultBaseDir } from "@moss/vault";
 import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
+import { registerScheduledTaskRoutes } from "./reminders/routes.js";
 import { registerReminderArrivalLifecycle } from "./reminders/live-arrival.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import {
@@ -670,6 +671,8 @@ export function registerChatRoutes(
     // #1133 — lets /turn resolve uploaded attachment ids to vault metadata.
     attachmentsService
   });
+
+  registerScheduledTaskRoutes(server, dependencies);
 
   registerChatSkillsRoutes(
     server,

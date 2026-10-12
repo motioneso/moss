@@ -115,4 +115,7 @@ The coordinator owns the decision to repair or re-slice.
 - Boot brief limits #3133 to read-only slice A and defers management to slice B.
 - One-time read checks belong under Reminders, titled by what they check.
 - No notification/delivery implementation edits; #3134 owns those in parallel.
-- Coordinator approval pending, including the View message proposal above.
+- Coordinator approved the plan and saved-message Dialog. Use MarkdownMessage with no
+  explanatory copy; Open chat must open its actual thread. State the mockup deviation
+  in the PR body. Prove updates through reload or periodic refresh, never fake focus.
+  Declare the route in the chat manifest before starting the server.

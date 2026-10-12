@@ -171,6 +171,7 @@ export function AppShell(props: AppShellProps) {
   const [chatOpen, setChatOpen] = useState(false);
   // #916 — a module-authored starter draft handed up via ChatControls.openAssistantWithDraft.
   const [moduleDraft, setModuleDraft] = useState<string | undefined>(undefined);
+  const [threadToOpen, setThreadToOpen] = useState<string | null>(null);
   const [focusActionRequestId, setFocusActionRequestId] = useState<string | null>(null);
   const embeddedComposerRef = useRef<((draft: string) => void) | null>(null);
   const openChatWith = useCallback(
@@ -179,6 +180,15 @@ export function AppShell(props: AppShellProps) {
       setMeetingSelection(null);
       setChatOpen(true);
       void sendChatTurn(prompt);
+    },
+    [routeMeetingId]
+  );
+  const openChatThread = useCallback(
+    (threadId: string) => {
+      setDismissedMeetingId(routeMeetingId);
+      setMeetingSelection(null);
+      setThreadToOpen(threadId);
+      setChatOpen(true);
     },
     [routeMeetingId]
   );
@@ -482,6 +492,8 @@ export function AppShell(props: AppShellProps) {
         isFounder={props.me.user.isBootstrapOwner}
         ownerId={props.me.user.id}
         initialText={moduleDraft}
+        threadToOpen={threadToOpen}
+        onThreadOpenConsumed={() => setThreadToOpen(null)}
         focusActionRequestId={focusActionRequestId}
         onActionRequestFocused={() => setFocusActionRequestId(null)}
         surface={activeSurface}
@@ -563,6 +575,7 @@ export function AppShell(props: AppShellProps) {
                 <ChatControlsProvider
                   value={{
                     openChat,
+                    openChatThread,
                     openChatWith,
                     openMeetingChat,
                     clearMeetingChat,
