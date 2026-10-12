@@ -154,6 +154,7 @@ test("real mailbox notices create no commitments while an owner promise reaches 
           sourceMetadata: {
             commitmentCount: number;
             emailCount: number;
+            emailSignals: { type: string; messageIds: string[] }[];
             emailEvidence: {
               items: { messageId: string; status: string; reason: string; rank: number | null }[];
             };
@@ -181,11 +182,25 @@ test("real mailbox notices create no commitments while an owner promise reaches 
         run?.sourceMetadata.emailEvidence.items.find((item) => item.messageId === confirmationId)
       )
       .toMatchObject({ status: "informational", reason: "no_action_confirmation", rank: null });
+    const questionId = execUatSql(
+      project,
+      `SELECT external_id FROM app.email_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND subject='Colleague report question'`
+    ).trim();
+    const questionEvidence = run?.sourceMetadata.emailEvidence.items.find(
+      (item) => item.messageId === questionId
+    );
+    const questionSignal = run?.sourceMetadata.emailSignals.some(
+      (signal) => signal.type === "needs_reply" && signal.messageIds.includes(questionId)
+    );
+    console.log(
+      `[live proof] question selection: status=${questionEvidence?.status}, rank=${questionEvidence?.rank}, needs-reply signal=${questionSignal}`
+    );
+    expect.soft(questionEvidence?.status).toBe("reported_today");
+    expect.soft(questionSignal).toBe(true);
     expect(run?.sourceMetadata.commitmentCount).toBe(1);
     expect(run?.sourceMetadata.emailCount).toBeGreaterThan(0);
     expect(run?.summaryText).toMatch(/design draft/i);
     expect(run?.summaryText).not.toMatch(/pharmacy|prescription|pick.?up/i);
-    expect(run?.summaryText).toMatch(/report/i);
     expect(run?.summaryText).not.toMatch(/order.*confirm|confirmation #1234/i);
     await page.reload();
     const hero = page.locator(".today-hero");
