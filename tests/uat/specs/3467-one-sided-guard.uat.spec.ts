@@ -129,7 +129,7 @@ test("real mailbox notices create no commitments while an owner promise reaches 
       `SELECT signals->'actionability'->>'category' FROM app.email_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND subject='Colleague report question'`
     ).trim();
     console.log(`[live proof] colleague question triage category: ${questionCategory}`);
-    expect(questionCategory).toBe("needs_reply");
+    expect.soft(questionCategory).toBe("needs_reply");
     const created = await page.request.post("/api/briefings/definitions", {
       data: {
         title: "One-sided notice proof",

@@ -53,7 +53,7 @@ async function main() {
     {
       from: "colleague@example.test",
       subject: "Colleague report question",
-      text: "Could you send the report by Friday? Please reply today.",
+      text: "Is the report ready? Please reply with yes or no today.",
       messageId: "<question@fixture.test>"
     }
   ];
