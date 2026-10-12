@@ -106,6 +106,11 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.commitments.email-judgement",
       description: "Checked what new email asks of you"
+    },
+    {
+      id: "commitments.email-owner-participation",
+      description:
+        "Email commitment candidates require an owner message in the thread. Incoming-only notices and unanswered requests stay on the email path. Existing tasks and commitments remain available. Text-only email extraction cannot create candidates."
     }
   ],
   assistantActionFamilies: [

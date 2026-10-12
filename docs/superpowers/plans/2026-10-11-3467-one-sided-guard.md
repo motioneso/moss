@@ -1,6 +1,6 @@
 # One-sided messages do not create commitments (#3467)
 
-Status: plan ready for coordinator approval. No feature code written.
+Status: coordinator approved db7fd67e5, including the conservative no-duplicate rule. Implementation and verification in progress.
 Branch: scheduled/3467-one-sided-guard. Base: integration/scheduled-proactive.
 Worktree: ~/Jarv1s/.claude/worktrees/sched-3467-one-sided-guard.
 Part of #3467 and #3465. The parent issue correction and investigation govern this slice.
@@ -28,7 +28,7 @@ No migration, source exclusion setting, chat handler, task Settings, or notifica
 
 Determinism boundary: code decides whether email has owner participation and may enter extraction; model jobs remain (1) judge eligible threads and (2) compose the briefing from eligible records. This slice introduces no new model-authored user-data contract or automatic task creation. It does not establish the parent issue's full prose-validation guarantee.
 
-Verification commands (unpiped; expected exit 0): pnpm test:unit -- tests/unit/commitment-email-judgement-worker.test.ts tests/unit/commitment-extractor.test.ts; pnpm format:check; pnpm lint; pnpm typecheck; scripts/run-gate.sh start and scripts/run-gate.sh wait --follow. Read CI after opening the PR against integration/scheduled-proactive.
+Verification commands (unpiped; expected exit 0): pnpm test:unit tests/unit/commitment-email-judgement-worker.test.ts tests/unit/commitment-extractor.test.ts; pnpm format:check; pnpm lint; pnpm typecheck; scripts/run-gate.sh start and scripts/run-gate.sh wait --follow. Read CI after opening the PR against integration/scheduled-proactive.
 
 Live proof: claim a devports port as sched-3467; build with JARVIS_IMAGE_TAG=uat-sched-3467; seed only synthetic records; post outcome and bounded evidence as a PR comment. Stop owned processes and release the port. Never copy the host Claude refresh token.
 
@@ -36,4 +36,6 @@ Kill gate: if the real briefing presents an inbound-only notice as a must-do des
 
 ## Rulings and live state
 
-Pending coordinator approval, including the conservative rule that inbound-only threads do not create duplicate inferred commitments even when an independent owner-backed task exists. Existing tasks/accepted commitments still appear from their own records. No tests, server, image or live proof started.
+Coordinator approved the conservative guard. A colleague question triaged as needs_reply must still reach the briefing after a no_item judgement. A question missed by triage is outside this slice. The existing settleJudgedEmail path clears awaitingJudgement after any judgement; an actionable needs_reply label remains independently eligible. Keep this interaction in the PR body and leave morning-inputs.ts with sched-3465.
+
+Observed red: four new guard regressions failed before the implementation. Observed green: 23 scoped worker/extractor/composer tests pass. The first full gate and disposable build failed because the new app-map description exceeded 240 characters; shortened it and restarted verification. Live fixture uses owner-scoped repositories in an ephemeral stack, invokes the actual judgement with cached thread records, and asserts original triage is preserved. The guard correctly skips the model for inbound-only threads; final briefing generation uses real Claude at economy tier.
