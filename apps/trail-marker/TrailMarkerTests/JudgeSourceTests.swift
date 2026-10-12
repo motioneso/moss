@@ -143,6 +143,44 @@ final class JudgeSourceTests: XCTestCase {
         XCTAssertFalse(h.focus.judgeAvailable)
     }
 
+    func testDisconnectClearsTestPreviewAndResult() async {
+        let h = await harness()
+        h.focus.testVision()
+        await settle()
+        XCTAssertNotNil(h.focus.visionTestCapture)
+        XCTAssertNotNil(h.focus.visionTestResult)
+        h.connection.send(.userDisconnect)
+        await settle()
+        XCTAssertNil(h.focus.visionTestCapture)
+        XCTAssertNil(h.focus.visionTestResult)
+    }
+
+    func testNetworkLossClearsTestPreviewAndResultWithoutUnpairing() async {
+        let h = await harness()
+        h.focus.testVision()
+        await settle()
+        XCTAssertNotNil(h.focus.visionTestCapture)
+        XCTAssertNotNil(h.focus.visionTestResult)
+        h.connection.send(.heartbeatFailed(.unreachable, generation: h.connection.currentGeneration))
+        await settle()
+        XCTAssertNil(h.focus.visionTestCapture)
+        XCTAssertNil(h.focus.visionTestResult)
+        XCTAssertNotNil(h.connection.identity)
+        h.connection.send(.userDisconnect)
+    }
+
+    func testLogoutClearsTestPreviewAndResult() async {
+        let h = await harness()
+        h.focus.testVision()
+        await settle()
+        XCTAssertNotNil(h.focus.visionTestCapture)
+        XCTAssertNotNil(h.focus.visionTestResult)
+        h.connection.send(.userLogout)
+        await settle()
+        XCTAssertNil(h.focus.visionTestCapture)
+        XCTAssertNil(h.focus.visionTestResult)
+    }
+
     func testClosingRetainedSettingsWindowClearsTestPreview() async {
         let h = await harness()
         let settings = SettingsWindow(
