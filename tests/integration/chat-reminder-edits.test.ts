@@ -405,6 +405,73 @@ describe("editing owner reminders", () => {
     expect(rows.find((r) => r.id === first.id)?.reminder_text).toBe("choice one");
     expect(rows.find((r) => r.id === second.id)?.reminder_text).toBe("selected revised");
   });
+  it.each(["yes", "ok"])(
+    "passes %s through Moss and refuses it as an edit choice",
+    async (selection) => {
+      const first = await save(ids.userA, "check eyes");
+      const second = await save(ids.userA, "book flight");
+      const proposal = {
+        candidates: [
+          { id: first.id, version: 1 },
+          { id: second.id, version: 1 }
+        ],
+        terms: { ...keep, text: "unwanted change" }
+      };
+      await turn(first.threadId, "change my reminder text", { kind: "edit", proposal });
+      const ai = new AiRepository();
+      const resolve = vi.spyOn(ai, "resolveModelForService");
+      const run = await asOwner(ids.userA, (db) =>
+        prepareReminderEdit(db, ai, undefined, selection, first.threadId, locale)
+      );
+      expect(await run()).toBeUndefined();
+      expect(resolve).not.toHaveBeenCalled();
+      expect(
+        (await turn(first.threadId, selection, { kind: "edit_selection", selection })).origin.event
+      ).toBe("refused");
+      const rows = await asOwner(ids.userA, (db) => readEditableReminders(db));
+      expect(rows.find((row) => row.id === first.id)?.reminder_text).toBe("check eyes");
+      expect(rows.find((row) => row.id === second.id)?.reminder_text).toBe("book flight");
+    }
+  );
+
+  it("refuses a typed number when another listed candidate changed after the question", async () => {
+    const first = await save(ids.userA, "stale choice one");
+    const second = await save(ids.userA, "stale choice two");
+    const proposal = {
+      candidates: [
+        { id: first.id, version: 1 },
+        { id: second.id, version: 1 }
+      ],
+      terms: { ...keep, text: "stale proposed text" }
+    };
+    expect(
+      (await turn(first.threadId, "change my stale choice reminder", { kind: "edit", proposal }))
+        .origin.event
+    ).toBe("edit_requested");
+    expect((await edited(ids.userA, second, { ...keep, text: "separately changed" })).kind).toBe(
+      "changed"
+    );
+    const answer = await turn(first.threadId, "1", { kind: "edit_selection", selection: "1" });
+    expect(answer.origin.event).toBe("refused");
+    expect(answer.reply).toContain("matching reminder changed");
+    const rows = await asOwner(ids.userA, (db) => readEditableReminders(db));
+    expect(rows.find((row) => row.id === first.id)?.reminder_text).toBe("stale choice one");
+    expect(rows.find((row) => row.id === second.id)?.reminder_text).toBe("separately changed");
+  });
+
+  it("rejects changing only a relative delay inconsistently with the unchanged due time", async () => {
+    const saved = await save(ids.userA, "delay consistency");
+    await expect(
+      asOwner(ids.userA, (db) =>
+        db.db
+          .updateTable("app.chat_reminders")
+          .set({ delay_seconds: 3600, version: saved.version + 1 })
+          .where("id", "=", saved.id)
+          .execute()
+      )
+    ).rejects.toThrow("delay does not match its due time");
+  });
+
   it("rechecks a queued worker after an edit commits while it is waiting for the row", async () => {
     const saved = await save(ids.userA, "race old text");
     await makeDue(saved.id);

@@ -29,7 +29,8 @@ BEGIN
         OR to_char(NEW.due_at AT TIME ZONE NEW.time_zone, 'YYYY-MM-DD"T"HH24:MI') <> NEW.local_due THEN
         RAISE EXCEPTION 'chat reminder local time does not match its due time' USING ERRCODE = 'check_violation';
       END IF;
-    ELSIF NEW.due_at IS DISTINCT FROM OLD.due_at
+    ELSIF (NEW.due_at IS DISTINCT FROM OLD.due_at
+      OR NEW.delay_seconds IS DISTINCT FROM OLD.delay_seconds)
       AND abs(extract(epoch FROM NEW.due_at - now()) - NEW.delay_seconds) > 1 THEN
       RAISE EXCEPTION 'chat reminder delay does not match its due time' USING ERRCODE = 'check_violation';
     END IF;

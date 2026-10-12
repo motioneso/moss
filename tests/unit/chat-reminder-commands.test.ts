@@ -124,6 +124,12 @@ describe("choosing the reminder to cancel", () => {
     expect(matchTarget(owned, "stretch").map((r) => r.text)).toEqual(["Stretch!"]);
   });
 
+  it.each(["yes", "ok"])("does not match letters inside a name for %s", (target) => {
+    expect(
+      matchTarget([reminder("check eyes", "queued"), reminder("book flight", "queued")], target)
+    ).toEqual([]);
+  });
+
   it("matches nothing for an empty target", () => {
     expect(matchTarget(owned, " ?! ")).toEqual([]);
   });

@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import { assertDataContextDb, isUuid, type DataContextDb } from "@moss/db";
 import type { ReminderEditProposal } from "@moss/shared";
+import { matchTarget, normalizeReminderText } from "./cancel.js";
 import { validateReminderEdit } from "./edit-interpretation.js";
 
 /** Only the last completed owner turn can offer candidates; delivered reminders are not turns. */
@@ -59,4 +60,14 @@ export async function pendingReminderEdit(
   if (!interpreted) return undefined;
   const { target: _target, unsupported: _unsupported, ...terms } = interpreted;
   return { candidates, terms };
+}
+
+/** An acknowledgment alone never identifies a reminder to edit. */
+export function matchReminderEditSelection<T extends { readonly text: string }>(
+  candidates: readonly T[],
+  selection: string
+): readonly T[] {
+  return /^(?:yes|ok|okay)$/.test(normalizeReminderText(selection))
+    ? []
+    : matchTarget(candidates, selection);
 }

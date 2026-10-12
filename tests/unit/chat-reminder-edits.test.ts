@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { matchReminderEditSelection } from "../../packages/chat/src/reminders/edit-agreement.js";
 import { recognizeReminderEdit } from "../../packages/chat/src/reminders/edit-recognizer.js";
+
+describe("typed reminder edit selection", () => {
+  it.each(["yes", "ok", "okay", "Yes!"])(
+    "rejects acknowledgment %j even as a whole name",
+    (selection) => {
+      expect(matchReminderEditSelection([{ text: selection }], selection)).toEqual([]);
+    }
+  );
+  it("selects whole words with case and punctuation normalized", () => {
+    const candidates = [{ text: "check eyes" }, { text: "book flight" }];
+    expect(matchReminderEditSelection(candidates, "EYES!")).toEqual([candidates[0]]);
+    expect(matchReminderEditSelection(candidates, "book flight")).toEqual([candidates[1]]);
+  });
+});
 
 describe("reminder edit routing", () => {
   it.each([

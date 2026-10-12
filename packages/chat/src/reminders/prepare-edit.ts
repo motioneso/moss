@@ -7,7 +7,7 @@ import {
 import type { DataContextDb } from "@moss/db";
 import type { ReminderLocale } from "./clock-wording.js";
 import { normalizeReminderText, matchTarget } from "./cancel.js";
-import { pendingReminderEdit } from "./edit-agreement.js";
+import { pendingReminderEdit, matchReminderEditSelection } from "./edit-agreement.js";
 import { readEditableReminders } from "./edit.js";
 import { recognizeReminderEdit } from "./edit-recognizer.js";
 import {
@@ -38,7 +38,7 @@ export async function prepareReminderEdit(
       .map((row) => ({ ...row, text: row.reminder_text }));
     if (
       /^(?:number |the )?\d{1,2}[.!]?$/i.test(text.trim()) ||
-      matchTarget(candidates, text).length > 0
+      matchReminderEditSelection(candidates, text).length > 0
     )
       return async () => ({ kind: "edit_selection", selection: text });
   }

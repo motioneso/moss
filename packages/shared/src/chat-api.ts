@@ -268,10 +268,6 @@ export interface ChatClassifierGateOriginV1 {
   readonly outcome: "executed-success" | "executed-failure-or-unknown";
 }
 
-/**
- * #3309 — a turn written by code for a relative reminder: the saved or refused request, or the
- * delivered reminder itself. No model ran, so there is no executed provider or usage.
- */
 /** Only inert reminder terms, never actions, recipients or attention permissions. */
 export interface ReminderEditTerms {
   readonly text: string | null;
@@ -286,6 +282,10 @@ export interface ReminderEditProposal {
   readonly terms: ReminderEditTerms;
 }
 
+/**
+ * #3309 — a turn written by code for a relative reminder: the saved or refused request, or the
+ * delivered reminder itself. No model ran, so there is no executed provider or usage.
+ */
 export interface ChatReminderOriginV1 {
   readonly version: 1;
   readonly kind: "reminder";

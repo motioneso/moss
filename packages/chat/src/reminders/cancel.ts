@@ -99,7 +99,7 @@ export async function cancelReminder(
     : { kind: "not_found" };
 }
 
-/** Exact text matches win; otherwise every reminder whose text contains the target. */
+/** Exact text matches win; otherwise match a whole word or phrase within the reminder. */
 export function matchTarget<T extends { readonly text: string }>(
   owned: readonly T[],
   target: string
@@ -108,7 +108,9 @@ export function matchTarget<T extends { readonly text: string }>(
   if (wanted.length === 0) return [];
   const exact = owned.filter((reminder) => normalizeReminderText(reminder.text) === wanted);
   if (exact.length > 0) return exact;
-  return owned.filter((reminder) => normalizeReminderText(reminder.text).includes(wanted));
+  return owned.filter((reminder) =>
+    ` ${normalizeReminderText(reminder.text)} `.includes(` ${wanted} `)
+  );
 }
 
 function bySoonest(reminders: readonly OwnedReminder[]): OwnedReminder[] {

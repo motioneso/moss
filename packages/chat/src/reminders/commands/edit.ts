@@ -1,5 +1,4 @@
-import { matchTarget } from "../cancel.js";
-import { pendingReminderEdit } from "../edit-agreement.js";
+import { pendingReminderEdit, matchReminderEditSelection } from "../edit-agreement.js";
 import { editReminderById, readEditableReminders } from "../edit.js";
 import { reminderEditedReply, reminderEditChoiceReply } from "../wording.js";
 import { controlRefused } from "./control-target.js";
@@ -31,11 +30,12 @@ export const edit: ReminderCommandHandler = async (context, plan) => {
   if (plan.kind === "edit_selection") {
     // The raw typed reply is the authority, never a model/tool-generated selection.
     if (context.userText !== plan.selection) return controlRefused();
+    chosen = undefined;
     const raw = plan.selection.trim();
     const numbered = /^(?:number |the )?(\d{1,2})[.!]?$/i.exec(raw);
     if (numbered) chosen = current[Number(numbered[1]) - 1];
     else {
-      const matches = matchTarget(current, raw);
+      const matches = matchReminderEditSelection(current, raw);
       if (matches.length === 1) chosen = matches[0];
     }
     if (!chosen)
