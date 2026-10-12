@@ -1,4 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { expect, test as base, type Page } from "@playwright/test";
 
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { execUatSql } from "./job-search-board-sql.js";
@@ -6,8 +10,26 @@ import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./r
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
-// Chrome's real push subscription and the app's existing service worker display the alerts.
-test.use({ channel: "chrome", serviceWorkers: "allow", permissions: ["notifications"] });
+// Chrome forbids push subscriptions in the default incognito test context.
+const test = base.extend({
+  context: async ({ playwright, baseURL }, use) => {
+    const profile = await mkdtemp(join(tmpdir(), "sched-3134-chrome-"));
+    const context = await playwright.chromium.launchPersistentContext(profile, {
+      channel: "chrome",
+      headless: false,
+      baseURL,
+      serviceWorkers: "allow",
+      permissions: ["notifications"],
+      ignoreDefaultArgs: ["--disable-background-networking"]
+    });
+    try {
+      await use(context);
+    } finally {
+      await context.close();
+      await rm(profile, { recursive: true, force: true });
+    }
+  }
+});
 
 function reminderRows() {
   return JSON.parse(
