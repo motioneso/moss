@@ -149,7 +149,8 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
     await expect(nav.locator(".set2__navgroup", { hasText: group })).toBeVisible();
   }
-  await expect(nav.getByRole("button")).toHaveCount(11);
+  await expect(nav.getByRole("button")).toHaveCount(12);
+  await expect(nav.getByRole("button", { name: "Scheduled tasks", exact: true })).toBeVisible();
   await expect(
     nav.getByRole("button", { name: "Alerts & quiet hours", exact: true })
   ).toBeVisible();
