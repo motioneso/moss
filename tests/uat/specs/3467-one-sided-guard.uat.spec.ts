@@ -109,7 +109,8 @@ test("real mailbox notices create no commitments while an owner promise reaches 
               `SELECT count(*) FROM app.commitment_email_thread_judgements j JOIN app.email_messages e ON e.external_id=j.last_judged_external_id AND e.owner_user_id=j.owner_user_id WHERE j.owner_user_id='${UAT_ADMIN_ID}' AND j.outcome='no_item' AND e.subject IN ('Pharmacy pickup', 'Re: Design draft promise', 'Colleague report question')`
             )
           ),
-        { timeout: 120_000, intervals: [1000, 2000, 4000] }
+        // Production defers thread judgement for three minutes after the last message.
+        { timeout: 240_000, intervals: [1000, 2000, 4000] }
       )
       .toBe(3);
     expect(
