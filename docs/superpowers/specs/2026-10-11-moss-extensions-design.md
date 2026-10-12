@@ -77,8 +77,10 @@ Ships as its own small pull request before any extension work.
   - `packages/settings/src/runtime-config-routes.ts`: drop the 409 that refuses `on` without a
     review record.
   - `packages/chat/src/classifier-shadow-review-repository.ts`: `resolveEffectiveGateMode` stops
-    downgrading `on` to `off` when no review exists, for both the saved setting and the
-    environment value. The review check is removed, not relaxed.
+    downgrading a saved `on` to `shadow` when no review exists.
+  - `packages/settings/src/runtime-config-resolver.ts`: drop the special case that turns an
+    environment `on` into `off` before the effective mode is resolved.
+  - Both review checks are removed, not relaxed.
   - Update the runtime key's description so it no longer mentions a review.
 - Settings screen
   - `apps/web/src/settings/settings-ai-sorting-row.tsx`: remove the review-dependent
@@ -90,6 +92,8 @@ Ships as its own small pull request before any extension work.
 - Tests
   - Through Settings, a person with no review record moves the gate from Off to On, and from
     Shadow to On.
+  - With no saved value, no review record and the environment value `on`, the effective mode is
+    On.
   - With the gate On and no review record, a chat request is answered through the gate.
 - Live proof on dev follows the live-path gate in `docs/DEVELOPMENT_STANDARDS.md`.
 
@@ -128,8 +132,17 @@ no invalidation beyond eviction.
 as the built-in. It receives the input and two host functions.
 
 - `builtIn()` takes no argument and resolves to the built-in's answer for the original input. The
-  host runs the built-in at most once per call and keeps the answer. A fallback reuses it, so the
-  built-in's work (for example a ranking model call) never runs twice.
+  host starts the built-in at most once per call and keeps one host-side promise for it. A
+  fallback waits on that same promise, so the built-in's work (for example a ranking model call)
+  never runs twice.
+- The built-in promise belongs to the call, not to the guest. Disposing the guest, hitting a
+  guest limit or the guest throwing never cancels it. Only the built-in deadline (section 1.5)
+  or the caller's own cancellation does. If the built-in fails or misses its deadline, the call
+  follows the caller's ordinary built-in failure path, exactly as it would with no
+  customization, and the built-in is never started again.
+- `moss.get` requests belong to the guest. Every guest exit (success, throw, invalid output or a
+  limit) aborts any that are still running, through a signal passed to the host request, not
+  only by dropping their late results.
 - `moss.get(path, query)` reads Moss's API as the person, for points that allow it, under the
   rules in section 2.2.
 
@@ -139,25 +152,56 @@ as the built-in. It receives the input and two host functions.
 - Every call creates its own runtime and context, and disposes both on every exit, together with
   every handle, result, error and pending promise. Runtimes are never shared between calls or
   people, so memory limits, interrupt handlers and pending-job queues are never shared either.
-- Host calls return promises created by the host. When a host call settles, the host resolves
-  the promise and runs the guest's pending jobs. The guest's final promise is read the same way.
+- Host calls return promises created by the host. The host runs the guest's pending jobs after
+  evaluating the module, after entering the exported function, after registering a handler on
+  its final promise, and after each host call settles. So code that only awaits its own promises
+  completes without any host call.
+- The engine is sealed to plain computation. No module loading, no timers, no network or file
+  system, and no clock beyond a frozen `Date` set to the call's start time. `Math.random` is
+  seeded per call. A test proves each is absent or frozen.
 - After a call ends, any late host result is dropped and never touches the disposed runtime.
 - Upstream reports about 0.4 ms to create a context. The plan benchmarks the pinned build under
   concurrent load before any budget below is final.
 
   1.5 Limits per call, all enforced by the host:
 
-| Limit            | Value                                                                         | What it bounds                                                                                                                               |
-| ---------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Guest time       | 5 ms for decision model points, 250 ms for news points                        | Time the guest's own code runs, added up across every entry into the engine                                                                  |
-| Elapsed time     | 50 ms for decision model points, 2 s for news points                          | Wall-clock time from start to teardown, except while `builtIn()` is running. This catches a guest that waits on a promise nobody will settle |
-| Built-in         | The built-in's own existing limit                                             | `builtIn()` runs at most once, so the hard ceiling is the built-in's limit plus the elapsed limit                                            |
-| Memory           | 16 MB engine heap, 512 KB stack                                               | Guest allocation                                                                                                                             |
-| Bytes in and out | Code 64 KB, input 256 KB, each API reply 256 KB, output 256 KB, 1 MB in total | Checked on the host before any text is copied into the engine                                                                                |
-| API calls        | 5 per call, 2 at once                                                         | Host work done for the guest                                                                                                                 |
+| Limit        | Value                                                  | What it bounds                                                                                                                     |
+| ------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Guest time   | 5 ms for decision model points, 250 ms for news points | Time the guest's own code runs, added up across every entry into the engine                                                        |
+| Elapsed time | 50 ms for decision model points, 2 s for news points   | Wall-clock time from start to teardown. The clock pauses only while the built-in is running and no `moss.get` request is in flight |
+| Built-in     | 2 s for decision model points, 60 s for news points    | A host deadline on the built-in itself, passed as a cancel signal into the model call and the reading of its reply                 |
+| Whole call   | Built-in deadline plus elapsed limit                   | A ceiling that never pauses. Nothing a customization does can make a call run longer                                               |
+| Memory       | 16 MB engine heap, 512 KB stack                        | Guest allocation                                                                                                                   |
+| Bytes        | See below                                              | Every text crossing the wall, in both directions                                                                                   |
+| API calls    | 5 per call, 2 at once                                  | Host work done for the guest                                                                                                       |
 
-When any limit is hit, the host cancels outstanding host work with one cancel signal, disposes
-the runtime and falls back.
+The built-in deadline is new for points whose built-in has none today. The news ranking model
+call, for example, passes no cancel signal. The point runner adds the deadline for every call,
+whether a customization is active or not, so a stalled model call ends the same way in both
+cases. The plan sets the final values from measured built-in times.
+
+Byte limits, all checked on the host:
+
+| Transfer                      | Each   | Counted in the 1 MB total |
+| ----------------------------- | ------ | ------------------------- |
+| Code                          | 64 KB  | No                        |
+| Input into the engine         | 256 KB | Yes                       |
+| `moss.get` path and query out | 4 KB   | Yes                       |
+| API reply in                  | 256 KB | Yes                       |
+| Built-in answer in            | 256 KB | Yes, on every copy        |
+| Error message out             | 4 KB   | Yes                       |
+| Output out                    | 256 KB | Yes                       |
+
+- Text going in is measured before it is copied into the engine.
+- Text coming out is measured inside the engine before the host copies it. Anything over the
+  limit is refused without being copied.
+- `builtIn()` may be awaited more than once, but each copy into the engine counts again.
+- Any guest code that runs while its value is turned into text (for example a `toJSON` method)
+  counts toward guest time.
+
+When any limit is hit, the host aborts the guest's `moss.get` requests, disposes the runtime and
+falls back. The fallback waits on the built-in's promise if it has started, and starts it if it
+has not.
 
 1.6 Data crosses the wall as JSON text only, in both directions. The host never hands a host
 object, function reference or handle into the engine. Identity is fixed on the host. Any user id,
@@ -190,12 +234,17 @@ path rewrite or extra header the guest tries to pass is ignored or refused.
 
 - Each stored news snapshot records the extension revisions of the news points and the instance
   switch revision it was built under.
-- The extensions module publishes one declared event when any of those revisions change. News
-  listens and bumps its existing refresh generation for that person, which stops any compile
-  that is still running from publishing its old result.
 - When reading, News asks the extensions module's public API for the person's current news point
   revisions. A snapshot built under different revisions is not served. The built-in overview is
-  served while a fresh compile runs.
+  served while a fresh compile runs. This read-time check is the guarantee. It holds whatever
+  order the commits and events arrive in.
+- A compile records the revisions it ran under. Just before publishing, it asks the public API
+  again and skips publishing if they changed. A reset that commits after this check can still
+  let one stale snapshot be written, but the read-time check never serves it.
+- The extensions module also publishes one declared event when any of those revisions change.
+  News listens and bumps its refresh generation for that person, so a running compile stops
+  early. The event only saves work. If it is lost, for example when a process dies, the
+  read-time check still catches the stale snapshot and starts a fresh compile.
 - News never reads the extensions tables, and the extensions module never reads News tables.
 
   1.10 Other modules reach the runner only through the extensions module's declared public API and
@@ -227,8 +276,9 @@ module.
   route's schema.
 - In phase 1 only news points may call it. Decision model points get no API access, so nothing
   read from outside can reach the decision model's questions through a customization.
-- News points return story ids and small labels, never instructions to a model, so outside text
-  they read cannot reach a model prompt either.
+- News points return story ids and small labels, never instructions to a model. Their errors
+  reach a model only as a host-built report (section 2.8). So outside text they read cannot reach
+  a model prompt either way.
 - When there is no chat to ask, as in a background job, anything that would need approval is
   refused.
 
@@ -272,24 +322,36 @@ module.
   2.7 Fallbacks are counted per version. Five in one hour pause it.
 
 - Pausing sends the person a notification through the notifications module.
-- Moss reads the status and the last error through its extension tools, so it can propose a fix.
-- The last error stored is the customization's own error message, capped at 500 characters, in
-  the owner-only table.
+- Moss reads the status and the last failure through its extension tools, so it can propose a
+  fix.
 
-  2.8 The owner gets a switch that turns every customization off for everyone, in its own admin
+  2.8 A customization's own error message never reaches a model. A news customization may read
+  outside text through `moss.get` and throw it as an error, so that text is treated as untrusted.
+
+- Moss's tools, Apply's check result and anything else a model reads get a failure report built
+  by the host only. It holds a failure code (threw, guest time, elapsed time, memory, bytes, API
+  calls, refused API route, output schema, output rule, incompatible), the line and column taken
+  from the engine's stack, the error's type name, and for output failures the schema path that
+  failed.
+- The raw message, capped at 500 characters, is stored in the owner-only table and shown only on
+  the person's Customizations pane. No tool returns it.
+- This holds for decision model points too, even though they cannot read the API, so there is
+  one rule and no exception to get wrong.
+
+  2.9 The owner gets a switch that turns every customization off for everyone, in its own admin
   pane (section 4.2). This is configuration power only, and the owner sees no one else's
   customizations.
 
-  2.9 Applying follows the existing gateway rules. If the requesting chat holds outside content,
+  2.10 Applying follows the existing gateway rules. If the requesting chat holds outside content,
   apply asks unless YOLO is on. Undo, reset and turn all off never ask.
 
-  2.10 Self-operation. Today Moss may never shape its own prompts, persona or skills
+  2.11 Self-operation. Today Moss may never shape its own prompts, persona or skills
   (`packages/ai/src/gateway/self-operation.ts`). Phase 1 opens one narrow door. The decision model's
   question wording and descriptions can be customized through extension points only, by the person,
   with undo. Persona, memory, chat skills and page context stay excluded. They open in the phase
   where customizations can write, when a person asks Moss for them.
 
-  2.11 No hard invariant changes. Customizations run as their owner under RLS, so the no-admin
+  2.12 No hard invariant changes. Customizations run as their owner under RLS, so the no-admin
   private-data bypass rule stands as written.
 
 ### 3. Making, checking and undoing
@@ -313,8 +375,8 @@ that point before switching it on. The sample input is used when there is no rec
   answer when one is held, so a check never repeats paid work.
 - The most recent input and built-in answer are held in process memory only, one per person and
   point, for at most 24 hours. They are never written to the database or a log.
-- If the check fails, apply refuses and returns the error to Moss, which fixes the code and
-  applies again.
+- If the check fails, apply refuses and returns the host-built failure report (section 2.8) to
+  Moss, which fixes the code and applies again.
 
   3.3 Apply records an activity record entry with the person, the point, the chat it came from and
   the code change.
@@ -347,7 +409,7 @@ that point before switching it on. The sample input is used when there is no rec
 4.1 A new Customizations pane in the person's own Settings, drawn in the mockup.
 
 - One row per customized point, with Moss's one-line name, status (Running, Paused, Needs
-  updating), fallbacks when there are some, date last changed, Reset and History.
+  updating), fallbacks when there are some, the last error message when there is one, date last changed, Reset and History.
 - History shows each version with its date and the chat it came from, a way to turn one back on,
   and the code behind a collapsed control.
 - Turn all off sits at the top.
@@ -391,15 +453,32 @@ per the security claims rule.
 - The wall
   - reading a file, reaching the network, reading an environment variable
   - returning a host object, or passing a user id, path or header to `moss.get`
-  - passing more than the byte limits
+  - passing more than the byte limits in each direction, including an oversized `moss.get` query,
+    an oversized error message, and awaiting the cached `builtIn()` answer until the total is
+    passed
+  - a `toJSON` method that loops while the output is turned into text
+  - a module import, a timer, and reading the clock (the clock reads the frozen start time)
 - Limits
   - an endless loop, allocation past the memory cap
   - a promise that never settles, top-level await, and a timeout after `builtIn()` returns
-  - more than five API calls, more than two at once, and API calls left running when the guest
-    throws
+  - code that only awaits `Promise.resolve()` completes with no host call
+  - a built-in whose model call never answers, and one whose reply body never finishes, both end
+    at the built-in deadline, with and without a customization active
+  - `builtIn()` started without being awaited, then the guest returns early. The whole call still
+    ends inside the never-pausing ceiling
+  - more than five API calls, more than two at once
+  - API calls still running when the guest returns successfully, throws, or returns invalid
+    output are aborted on the host, not just ignored
   - calling `builtIn()` several times, then throwing. The built-in runs once in total, fallback
     included
+  - `builtIn()` started without being awaited, then the guest hits guest time, memory or the API
+    count. The fallback waits on that same run, and the built-in runs once in total
   - a late host result after teardown
+- Error messages
+  - a news customization reads text through `moss.get` and throws it, during a real call and
+    during Apply's check. Neither List mine nor Apply returns that text to the model, and the
+    Customizations pane shows it
+  - the same after the person switches the news module's AI consent off
 - `moss.get`
   - the blocked news overview route is refused
   - a wellness read with its AI consent switched off is refused
@@ -421,7 +500,12 @@ per the security claims rule.
 - News recovery
   - a stored snapshot built with a customization is not served after reset, pause or the
     instance switch
-  - a compile that started before reset does not publish its result
+  - a compile that started before reset does not publish its result when the reset commits before
+    its publish check
+  - with the revision event held back until after an old compile publishes, that snapshot is still
+    not served
+  - with the revision event dropped entirely, the next read still serves the built-in overview and
+    starts a fresh compile
   - the built-in overview is served while the fresh compile runs
 - Isolation
   - two people with different customizations, called at the same time, each get their own result
@@ -453,7 +537,7 @@ to a real model.
 
 ## Review changes
 
-The 2026-10-12 outside review found these gaps. Each is closed by the section named.
+The 2026-10-12 outside review found these gaps. Each is addressed by the section named, with what remained after the first revision in the second table.
 
 | Finding                                                            | Closed by         |
 | ------------------------------------------------------------------ | ----------------- |
@@ -470,6 +554,20 @@ The 2026-10-12 outside review found these gaps. Each is closed by the section na
 | S4 no data lifecycle                                               | 3.5, 3.7          |
 | S5 build check rejected locked files instead of allowing open ones | 2.1               |
 | S6 tests and live proof did not cover each guard                   | Tests, Live proof |
+
+The 2026-10-12 re-review found these remaining gaps in the first revision.
+
+| Finding                                                                   | Closed by     |
+| ------------------------------------------------------------------------- | ------------- |
+| R1 a customization's error text could reach a model                       | 2.2, 2.8, 3.2 |
+| R2 the built-in had no deadline of its own; async code needed a host call | 1.4, 1.5      |
+| R3 cancelling everything could lose the one built-in run                  | 1.3, 1.5      |
+| R4 the news publication fence had no stated ordering                      | 1.9           |
+| R5 phase 0 named the wrong place for the environment guard                | Phase 0       |
+| R6 byte limits did not cover every transfer                               | 1.5           |
+| The sealed-engine restrictions had been dropped                           | 1.4           |
+
+These close the gaps in the written design. Each still has to be proven by its test once built.
 
 ## Roadmap
 
