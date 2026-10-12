@@ -97,7 +97,9 @@ worktree. The prior plan's :572 citation is still accurate.
    this property. Do not promise physical memory erasure from Swift Data.
 8. Coordinator ruling on October 12 supersedes the brief for Test previews:
    keep the thumbnail on screen after the call, in memory only. Clear it on
-   the next Test, pane close, disconnect and logout. Automatic rung-3 pictures
+   the next Test, leaving Focus for another settings section, Settings window
+   close, disconnect and logout. Observe native window close explicitly because
+   the app retains its Settings window after closing. Automatic rung-3 pictures
    and request bodies, data URLs and encoded JPEGs remain local to the call
    and are released on every exit. The Test preview is a separate display
    image, not the retained encoded JPEG or request. No preview reaches disk,

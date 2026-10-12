@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import TrailMarker
 
 @MainActor
@@ -140,6 +141,29 @@ final class JudgeSourceTests: XCTestCase {
         await settle()
         XCTAssertNil(h.focus.visionTestCapture)
         XCTAssertFalse(h.focus.judgeAvailable)
+    }
+
+    func testClosingRetainedSettingsWindowClearsTestPreview() async {
+        let h = await harness()
+        let settings = SettingsWindow(
+            connection: h.connection, permissions: PermissionsService(), focus: h.focus,
+            updater: UpdaterService(), loginItem: LoginItemService(), onSetUp: {}
+        )
+        let window = NSWindow(contentViewController: NSHostingController(rootView: settings))
+        window.identifier = SettingsWindow.windowIdentifier
+        window.isReleasedWhenClosed = false
+        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        await settle()
+        h.focus.testVision()
+        await settle()
+        XCTAssertNotNil(h.focus.visionTestCapture)
+        XCTAssertNotNil(h.focus.visionTestResult)
+        window.close()
+        await settle()
+        XCTAssertNil(h.focus.visionTestCapture)
+        XCTAssertNil(h.focus.visionTestResult)
+        h.connection.send(.userDisconnect)
     }
 
     func testJudgeChangeAndUnknownNameNeverSelectAnotherSourceOrCapture() async {
