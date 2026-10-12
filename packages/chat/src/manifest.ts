@@ -1,7 +1,4 @@
-import {
-  REMINDER_CONTROL_FEATURE,
-  REMINDER_CONTROL_ROUTES
-} from "./reminders/manifest.js";
+import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";

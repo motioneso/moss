@@ -16,6 +16,11 @@ export interface NotificationWithReadState extends Notification {
   readonly read_at: Date | null;
 }
 
+export type QuietHoursAllowancePolicy = (
+  scopedDb: DataContextDb,
+  notification: Pick<Notification, "module_id" | "metadata" | "event_key">
+) => Promise<boolean>;
+
 export interface ListNotificationsResult {
   readonly notifications: readonly NotificationWithReadState[];
   readonly unreadCount: number;
@@ -218,7 +223,8 @@ export class NotificationsRepository {
   constructor(
     private readonly quietHoursPort?: QuietHoursPort,
     private readonly notificationPreferencePort?: NotificationPreferencePort,
-    private readonly pushQueuePort?: PushQueuePort
+    private readonly pushQueuePort?: PushQueuePort,
+    private readonly isAllowedDuringQuietHours?: QuietHoursAllowancePolicy
   ) {}
 
   async findByEventKey(scopedDb: DataContextDb, moduleId: string, eventKey: string) {
@@ -320,7 +326,15 @@ export class NotificationsRepository {
     const href = validateHref(input.href);
 
     let deferredUntil: Date | null = null;
-    if (urgency !== "urgent" && this.quietHoursPort) {
+    if (
+      urgency !== "urgent" &&
+      this.quietHoursPort &&
+      !(await this.isAllowedDuringQuietHours?.(scopedDb, {
+        module_id: input.moduleId,
+        metadata: projectedMetadata,
+        event_key: eventKey
+      }))
+    ) {
       const raw = await this.quietHoursPort.getSettings(scopedDb);
       const settings = parseQuietHoursSettings(raw);
       if (settings?.enabled) {

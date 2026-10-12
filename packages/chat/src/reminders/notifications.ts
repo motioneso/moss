@@ -10,9 +10,11 @@ import {
 import {
   type NotificationsRepository,
   PUSH_QUEUE_RETRY_OPTIONS,
+  type QuietHoursAllowancePolicy,
   type NotificationWithReadState
 } from "@moss/notifications";
 
+import { hasQuietHoursAllowance } from "./quiet-hours-allowances.js";
 import { ReminderRepository, type DueReminder } from "./repository.js";
 
 export const CHAT_NOTIFY_REMINDER_QUEUE = "chat.notify-reminder";
@@ -88,6 +90,25 @@ export async function isReminderNotificationActive(
   const result = await new ReminderRepository().readNotificationResult(scopedDb, reminderId);
   return result?.messageId === messageId;
 }
+
+/** Only a current owner-saved allowance for this exact delivered result skips quiet hours. */
+export const isReminderNotificationAllowedDuringQuietHours: QuietHoursAllowancePolicy = async (
+  scopedDb,
+  notification
+) => {
+  if (notification.module_id !== "chat" || notification.metadata.kind !== "chat_reminder")
+    return false;
+  const { reminderId, messageId } = notification.metadata;
+  if (
+    typeof reminderId !== "string" ||
+    !isUuid(reminderId) ||
+    typeof messageId !== "string" ||
+    notification.event_key !== messageId
+  )
+    return false;
+  const result = await new ReminderRepository().readNotificationResult(scopedDb, reminderId);
+  return result?.messageId === messageId && (await hasQuietHoursAllowance(scopedDb, reminderId));
+};
 
 export function registerReminderNotificationWorker(
   boss: PgBoss,

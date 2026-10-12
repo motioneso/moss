@@ -1,6 +1,6 @@
 # Let one named reminder through quiet hours
 
-Part of #3145. Base: integration/scheduled-proactive. Status: tasks 1 and 3 implemented; delivery waits for #3479.
+Part of #3145. Base: integration/scheduled-proactive. Status: tasks 1-3 implemented after rebasing on #3479; final gate and live proof running.
 
 ## Outcome and scope
 
@@ -237,3 +237,14 @@ report the PR to the coordinator. No merge, board changes or milestone changes.
 - No delivery files changed. The app map describes saved choices and marks device delivery support pending until task 2 ships.
 - Full pre-push formatting, lint and typecheck passed (including root, test, web and external modules). UI-class and file-size checks passed. The full foundation gate, installed UI proof and delivery checks remain pending.
 - Hold task 2 until the coordinator sends the #3479 merge SHA, then rebase on integration and add the separately approved exception beside its lifecycle recheck.
+
+## Task 2 implementation and verification
+
+- Rebased on integration with #3479 merged at badae05adfe82a6064d3b81ee759760258818359. Combined both command registries, origin schemas and migration lists. A bare yes checks a pending allowance first, then preserves the existing deletion-agreement path when no allowance proposal exists.
+- Added the public chat allowance policy and wired it into notification creation and both push workers. It checks module, reminder metadata, event key and delivered result identity before reading the current owner-scoped allowance under the shared reminder lock. Urgency remains normal; no allowance or private text enters a job payload.
+- The separate lifecycle callback, module mute, sensitivity, device subscriptions and successful-send deduplication still apply. Removal before queued dispatch restores current deferral and keeps the original chat result.
+- Two new push unit cases failed before implementation; all 130 focused unit checks then passed. The initial delivery integration case failed on deferral before implementation; the 53-check focused gate passed after wiring.
+- Added an allowance-removal concurrency check. The 54-check negative-control run failed only the forged-result case after temporarily disabling the result-identity predicate; the lock-ordering check passed. Restored the predicate for final verification.
+- Added the real-model/service-worker UAT spec and trigger rows. The disposable build uses image tag uat-sched-3145 and a port claimed through devports; the harness tears down its own containers and volumes. Full foundation verification and the installed proof remain pending until their actual verdicts are recorded on the PR.
+
+- Restored focused gate passed all 54 integration/catalog/API checks. The extra push checks live in tests/unit/push-worker-quiet-hours-allowance.test.ts to preserve the 1000-line cap; both push suites passed 37 tests. Formatting, lint and typecheck passed before the test split; UI-class and file-size checks passed afterwards. The full gate verifies the final committed input.

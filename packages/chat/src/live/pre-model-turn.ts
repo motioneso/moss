@@ -46,7 +46,10 @@ export async function tryPreModelTurn(
     try {
       threadRead ??= selectTurnThread(host, actorUserId, surface);
       threadState = await threadRead;
-      if (!threadState?.id || !(await host.deps.persistence.hasPendingQuietHoursProposal?.(actorUserId, threadState.id)))
+      if (
+        !threadState?.id ||
+        !(await host.deps.persistence.hasPendingQuietHoursProposal?.(actorUserId, threadState.id))
+      )
         recognition = undefined;
     } catch {
       return {

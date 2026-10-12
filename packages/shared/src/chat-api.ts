@@ -286,7 +286,7 @@ export interface ChatReminderOriginV1 {
     | "resumed"
     | "delete_requested"
     | "deleted"
-    | "delete_declined",
+    | "delete_declined"
     | "allowance_saved"
     | "allowance_removed"
     | "allowance_proposed"

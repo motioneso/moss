@@ -3,7 +3,7 @@ import type { ModuleFeatureManifest } from "@moss/module-sdk";
 export const quietHoursAllowanceFeature: ModuleFeatureManifest = {
   id: "chat.reminder_quiet_hours_allowance",
   description:
-    "Allow one reminder during quiet hours in Main chat; partial names need typed yes, duplicate names need an ID. Settings, Alerts & quiet hours lists saved choices and opens Main to change them. Delivery support is pending.",
+    "Allow one reminder during quiet hours in Main; partial names need typed yes, duplicate names need an ID. Alerts & quiet hours lists choices and opens Main to change them. Mutes and device controls still win.",
   featureFlagId: "chat.module",
   errors: [
     {
@@ -15,7 +15,6 @@ export const quietHoursAllowanceFeature: ModuleFeatureManifest = {
     {
       code: "quiet_hours_allowances_load_failed",
       class: "transient",
-      remediationRef: "chat.change_quiet_hours_allowance",
       description:
         "The saved allowance list could not load. Choose Try again; saved choices have not changed."
     }
