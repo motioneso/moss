@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
+import { assertUnknownPaymentStatus } from "../briefing-email-status.js";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
@@ -141,10 +142,7 @@ for (const briefingType of ["morning", "evening"] as const) {
       .split(/\n|(?<=[.!?])\s+/)
       .filter((line) => /Invoice #TODAY|VendorToday|payment|bill/i.test(line))
       .join(" ");
-    expect(billSentences).toMatch(
-      /unknown|unclear|unconfirmed|not confirmed|does not show.*payment status|status (?:is )?not known/i
-    );
-    expect(billSentences).not.toMatch(/unpaid|owed|overdue|pay today/i);
+    assertUnknownPaymentStatus(billSentences);
     if (briefingType === "evening") expect(run!.summaryText).not.toMatch(/Dana|draft feedback/i);
     expect(run!.summaryText).toMatch(/Emissions/i);
     if (briefingType === "morning" && /Dana|draft|reply/i.test(run!.summaryText)) {
