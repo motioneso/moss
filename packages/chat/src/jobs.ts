@@ -1,3 +1,8 @@
+import { CHAT_SCHEDULED_READ_QUEUE_DEFINITION } from "./scheduled-reads/queue.js";
+import {
+  registerScheduledReadWorker,
+  type ScheduledReadRunnerDeps
+} from "./scheduled-reads/runner.js";
 import { createHash } from "node:crypto";
 
 import type { FastifyBaseLogger } from "fastify";
@@ -92,6 +97,7 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
     options: { retryLimit: 0, deleteAfterSeconds: 600, policy: "exclusive" }
   },
   CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
+  CHAT_SCHEDULED_READ_QUEUE_DEFINITION,
   CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION
 ];
 
@@ -478,6 +484,7 @@ export async function handleArchiveDayJob(
 // ── Worker registration ───────────────────────────────────────────────────────
 
 export interface RegisterChatJobWorkersOptions {
+  readonly scheduledReadGateway?: ScheduledReadRunnerDeps["gateway"];
   readonly reminderNotifications: NotificationsRepository;
   readonly embeddingProviderFactory: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
   /**
@@ -612,7 +619,16 @@ export async function registerChatJobWorkers(
     options.workOptions
   );
 
+  const readWorkId = options.scheduledReadGateway
+    ? await registerScheduledReadWorker(
+        boss,
+        { dataContext, gateway: options.scheduledReadGateway },
+        options.workOptions
+      )
+    : null;
+
   const workIds = [
+    ...(readWorkId ? [readWorkId] : []),
     embedWorkId,
     extractWorkId,
     archiveWorkId,

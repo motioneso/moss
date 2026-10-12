@@ -34,7 +34,9 @@ export async function decideReminderTurn(
     const manage =
       plan.kind === "main_only"
         ? plan.manage
-        : plan.kind !== "request" && plan.kind !== "clock_request";
+        : plan.kind !== "request" &&
+          plan.kind !== "clock_request" &&
+          plan.kind !== "scheduled_read";
     return refused(manage ? REMINDER_MANAGE_MAIN_ONLY_REPLY : REMINDER_MAIN_ONLY_REPLY);
   }
   return reminderCommands[plan.kind].execute(

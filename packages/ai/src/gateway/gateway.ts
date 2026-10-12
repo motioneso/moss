@@ -51,7 +51,7 @@ import {
 } from "./content-admission.js";
 import { recordGatewayAudit } from "./gateway-audit.js";
 import { prepareToolCall, servicesForTool } from "./per-call-resolution.js";
-import { liveStreamResult, renderAndCap } from "./output-validation.js";
+import { liveStreamResult, readToolResponse } from "./output-validation.js";
 import {
   createEffectivePolicyLookup,
   familyAllowsAutoRun,
@@ -563,6 +563,30 @@ export class AssistantToolGateway {
     rawInput: unknown,
     binding?: { readonly threadId: string | null; readonly chatSessionId: string }
   ): Promise<GatewayToolResponse> {
+    return this.runActorRead(actorUserId, toolName, rawInput, binding);
+  }
+
+  async runBackgroundReadForActor(
+    actorUserId: string,
+    read: { readonly operation: string; readonly itemId: string; readonly runId: string }
+  ): Promise<GatewayToolResponse> {
+    if (read.operation !== "tasks.get") return { ok: false, error: "Background operation refused" };
+    return this.runActorRead(
+      actorUserId,
+      read.operation,
+      { taskId: read.itemId },
+      { threadId: null, chatSessionId: read.runId },
+      true
+    );
+  }
+
+  private async runActorRead(
+    actorUserId: string,
+    toolName: string,
+    rawInput: unknown,
+    binding?: { readonly threadId: string | null; readonly chatSessionId: string },
+    background = false
+  ): Promise<GatewayToolResponse> {
     const bound = binding ? { ...binding } : undefined;
     const declared = (await this.executableTools(actorUserId)).find(
       (entry) => entry.tool.name === toolName
@@ -596,17 +620,18 @@ export class AssistantToolGateway {
     }
     const readServices = this.servicesFor(found);
     try {
-      const result = await this.executeTool(found, input, ctx, readServices, access);
-      return {
-        ok: true,
-        data: renderAndCap(
-          found.tool.outputSchema,
-          result,
-          toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
-          ctx
-        )
-      };
-    } catch {
+      if (background && (!found.tool.authorizeBackgroundRead || found.executePerCall))
+        return { ok: false, error: "Background source access refused" };
+      const result = await this.executeTool(found, input, ctx, readServices, access, background);
+      return readToolResponse(
+        found.tool.outputSchema,
+        result,
+        toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
+        ctx
+      );
+    } catch (error) {
+      if (error === backgroundReadRefused)
+        return { ok: false, error: "Background source access refused" };
       // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
       // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
       (this.deps.logger ?? defaultGatewayLogger).error("read_tool_handler_threw", {
@@ -760,10 +785,13 @@ export class AssistantToolGateway {
     input: Record<string, unknown>,
     ctx: ToolContext,
     services: ToolServices,
-    access: AccessContext
+    access: AccessContext,
+    background = false
   ): Promise<ToolResult> {
     if (found.executePerCall) return found.executePerCall();
-    return this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) => {
+    return this.deps.runner.withDataContext(access, async (scopedDb: DataContextDb) => {
+      if (background && !(await found.tool.authorizeBackgroundRead?.(scopedDb, input, ctx)))
+        throw backgroundReadRefused;
       const execute = () => found.execute(scopedDb, input, ctx, services);
       return found.tool.risk === "read" && this.deps.readToolTrustBoundary
         ? this.deps.readToolTrustBoundary({
@@ -969,3 +997,4 @@ export class AssistantToolGateway {
     return out;
   }
 }
+const backgroundReadRefused = new Error("Background source access refused");

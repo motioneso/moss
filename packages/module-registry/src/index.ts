@@ -1,3 +1,4 @@
+import { SessionTokenRegistry, ConfirmationRegistry } from "@moss/ai";
 import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
 export { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
 import {
@@ -96,7 +97,7 @@ import {
   registerAiRoutes,
   approveModuleBuildPlan,
   cancelModuleBuild,
-  type AssistantToolGateway,
+  AssistantToolGateway,
   type PlatformDiagnosticsService,
   type ProviderKind,
   type SortingQuestionBatch,
@@ -2336,6 +2337,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // The late-bound bridge remains available
         // only to structured/module callers through `createCliStructuredAdapter` below.
         chatEngineFactory: deps.chatEngineSelection ? undefined : deps.chatEngineFactory,
+        createCliStructuredAdapter: deps.createCliStructuredAdapter,
         engineSelection: deps.chatEngineSelection,
         adoptChatRpcConnection: deps.adoptChatRpcConnection,
         adoptAcpProviderInitialization: deps.adoptAcpProviderInitialization,
@@ -2390,6 +2392,18 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       }),
     registerWorkers: (boss, deps) =>
       registerChatJobWorkers(boss, deps.dataContext, {
+        scheduledReadGateway: new AssistantToolGateway({
+          runner: deps.dataContext,
+          repository: new AiRepository(),
+          tokens: new SessionTokenRegistry(),
+          confirmations: new ConfirmationRegistry(),
+          notifier: { emit() {} },
+          confirmTimeoutMs: 0,
+          resolveActiveModules: createActiveModulesResolver({
+            dataContext: deps.dataContext,
+            manifests: getBuiltInModuleManifests
+          })
+        }),
         reminderNotifications: new NotificationsRepository(
           quietHoursPortImpl,
           createNotificationPreferencePort(),

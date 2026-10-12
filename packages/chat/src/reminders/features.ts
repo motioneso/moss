@@ -3,6 +3,40 @@ import type { ModuleFeatureManifest } from "@moss/module-sdk";
 import { quietHoursAllowanceFeature } from "./quiet-hours-feature.js";
 
 export const reminderFeatures: readonly ModuleFeatureManifest[] = [
+  {
+    id: "chat.scheduled_owner_read",
+    description:
+      "In Main, schedule one owned Tasks status read. Your configured model selects the task and time; Moss saves directly and later posts a sourced result. Reminder controls, limits, deadlines and notification policy apply.",
+    featureFlagId: "chat.module",
+    errors: [
+      {
+        code: "scheduled_read_unresolved",
+        class: "validation",
+        description:
+          "Moss cannot save an ambiguous task or unsupported time. Name one task you own and a supported future time. A configured JSON model and enabled Tasks module are required."
+      },
+      {
+        code: "scheduled_read_access_refused",
+        class: "prerequisite",
+        remediationRef: "chat.restore_scheduled_read_access",
+        description:
+          "If the source capability or owned task is no longer accessible at run time, Moss posts a refusal without source data. Choose an accessible task and request a new check."
+      },
+      {
+        code: "scheduled_read_failed",
+        class: "transient",
+        description:
+          "A temporary source failure retries quietly twice, then posts that the check failed. Request a new check when the source is available."
+      }
+    ],
+    remediations: [
+      {
+        id: "chat.restore_scheduled_read_access",
+        description: "Choose a task you own in Tasks and request a new status check in Main.",
+        path: "/tasks"
+      }
+    ]
+  },
   quietHoursAllowanceFeature,
   {
     id: "chat.reminder_edits",

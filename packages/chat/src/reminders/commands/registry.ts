@@ -1,4 +1,5 @@
 import { edit } from "./edit.js";
+import { scheduledRead } from "./scheduled-read.js";
 import { pause, recognizePause } from "./pause.js";
 import { resume, recognizeResume } from "./resume.js";
 import { deleteRequest, recognizeDelete } from "./delete.js";
@@ -14,6 +15,7 @@ export const reminderCommands = {
   edit: { execute: edit },
   edit_selection: { execute: edit },
   edit_refused: { execute: edit },
+  scheduled_read: { execute: scheduledRead },
   pause: { execute: pause, recognize: recognizePause },
   resume: { execute: resume, recognize: recognizeResume },
   delete: { execute: deleteRequest, recognize: recognizeDelete },

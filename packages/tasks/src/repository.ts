@@ -74,6 +74,17 @@ export interface ListTasksCriteria {
 export class TasksRepository {
   private readonly listsRepository = new TaskListsRepository();
 
+  async listOwnedReadCandidates(scopedDb: DataContextDb): Promise<{ id: string; title: string }[]> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.tasks")
+      .select(["id", "title"])
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .orderBy("updated_at", "desc")
+      .limit(100)
+      .execute();
+  }
+
   async listVisible(scopedDb: DataContextDb): Promise<Task[]> {
     assertDataContextDb(scopedDb);
 

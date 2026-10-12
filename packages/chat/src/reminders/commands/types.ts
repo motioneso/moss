@@ -1,4 +1,5 @@
 import type { ReminderEditProposal } from "@moss/shared";
+import type { ScheduledReadPlan } from "../../scheduled-reads/request.js";
 import type { QuietHoursCommand } from "../quiet-hours-recognizer.js";
 import type { PgBoss } from "pg-boss";
 import type { DataContextDb } from "@moss/db";
@@ -10,6 +11,7 @@ import type { ReminderRepository } from "../repository.js";
 
 /** What the raw request asked for, before anything is checked against storage. */
 export type ReminderTurnPlan =
+  | ScheduledReadPlan
   | QuietHoursCommand
   | { readonly kind: "edit"; readonly proposal: ReminderEditProposal }
   | { readonly kind: "edit_selection"; readonly selection: string }

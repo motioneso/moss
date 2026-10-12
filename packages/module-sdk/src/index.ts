@@ -1,3 +1,4 @@
+import type { DataContextDb } from "@moss/db";
 export {
   HttpError,
   handleRouteError,
@@ -649,6 +650,12 @@ export interface ModuleAssistantToolManifest {
   readonly outputSchema?: JsonSchema;
   readonly featureFlagId?: string;
   readonly execute?: ToolExecute;
+  /** Host-only owner/access check, run in the background read's transaction before invocation. */
+  readonly authorizeBackgroundRead?: (
+    scopedDb: DataContextDb,
+    input: Record<string, unknown>,
+    ctx: ToolContext
+  ) => Promise<boolean>;
   readonly summarize?: ToolSummarize;
   /**
    * Optional human-authored label for the approval-card summary (e.g. "Update your job search

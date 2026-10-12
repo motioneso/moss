@@ -1,7 +1,7 @@
 import { recognizeReminderEdit } from "../reminders/edit-recognizer.js";
+import { namesScheduledRead } from "../scheduled-reads/request.js";
 import { typedDeletionAgreement, isDeletionNearMiss } from "../reminders/delete-agreement.js";
-// #3309: the step before the classifier gate and the model. A recognised reminder request is
-// answered by code from the user's own raw words. Edits use validated model-filled terms.
+// #3309: reminder commands run before the classifier; edits and reads use validated model terms.
 // #3310: the same holds for listing and cancelling.
 
 import type { ChatReminderOriginV1 } from "@moss/shared";
@@ -40,14 +40,30 @@ export async function tryPreModelTurn(
   ...args: Parameters<typeof tryGatedTurn>
 ): ReturnType<typeof tryGatedTurn> {
   const [host, actorUserId, surface, text, opts, controller, flushActions] = args;
-  let recognition: ReminderTurnPlan | undefined = recognizeReminderEdit(text)
-    ? undefined
-    : recognizeReminderPlan(text);
+  let recognition: ReminderTurnPlan | undefined;
+  if (!opts?.moduleControl && !opts?.attachments?.length && namesScheduledRead(text)) {
+    const thread = await (args[7] ?? selectTurnThread(host, actorUserId, surface));
+    const main = await host.deps.persistence.getMainThreadState?.(actorUserId);
+    if (!thread?.id || thread.incognito || main?.id !== thread.id)
+      recognition = { kind: "main_only" };
+    else {
+      try {
+        recognition = await host.deps.persistence.resolveScheduledReadRequest?.(
+          actorUserId,
+          text,
+          controller.signal
+        );
+      } catch {
+        recognition = { kind: "scheduled_read", taskId: null, title: "", when: null };
+      }
+    }
+  }
   if (recognizeReminderEdit(text) && (opts?.moduleControl || opts?.attachments?.length))
     recognition = {
       kind: "edit_refused",
       reply: "Type the reminder edit directly in Main chat without attachments. Nothing changed."
     };
+  if (!recognizeReminderEdit(text)) recognition ??= recognizeReminderPlan(text);
   if (recognition?.kind === "quiet_allowance" && !namesQuietHoursReminder(text)) {
     try {
       if (
@@ -143,6 +159,7 @@ export async function tryPreModelTurn(
   const manage =
     recognition.kind !== "request" &&
     recognition.kind !== "clock_request" &&
+    recognition.kind !== "scheduled_read" &&
     recognition.kind !== "unsupported";
 
   threadState = await (threadRead ?? selectTurnThread(host, actorUserId, surface));

@@ -1,3 +1,4 @@
+import type { ScheduledReadPlan } from "../scheduled-reads/request.js";
 /**
  * Persistence + passive-retrieval port interfaces for ChatSessionManager, split out of
  * chat-session-manager.ts (#1157) to keep that file under the repo's 1000-line cap. All
@@ -156,6 +157,11 @@ export interface ChatPersistencePort {
    * #3309 — persist the code-written answer to a recognised reminder request, saving and queuing
    * an accepted reminder in the same transaction. Optional: embedders without reminders omit it.
    */
+  resolveScheduledReadRequest?(
+    actorUserId: string,
+    text: string,
+    signal: AbortSignal
+  ): Promise<ScheduledReadPlan | undefined>;
   hasPendingReminderDeletion?(actorUserId: string, threadId: string): Promise<boolean>;
   hasQuietHoursReminderTarget?(actorUserId: string, target: string): Promise<boolean>;
   hasPendingQuietHoursProposal?(actorUserId: string, threadId: string): Promise<boolean>;

@@ -1,6 +1,6 @@
 # One scheduled owner-source read (#3151)
 
-Status: awaiting coordinator approval. Worktree: `~/Jarv1s/.claude/worktrees/sched-3151-scheduled-read`.
+Status: approved by coordinator on plan ef49e0361; implementation in progress. Worktree: `~/Jarv1s/.claude/worktrees/sched-3151-scheduled-read`.
 Branch: scheduled/3151-scheduled-read. Base: integration/scheduled-proactive.
 
 ## Contract and scope
@@ -46,11 +46,11 @@ These are reuse seams, not claims that scheduled-read enforcement already exists
 
 Migration 0318 belongs in packages/chat/sql/0318_chat_scheduled_reads.sql. Add an owner-only
 extension table with reminder_id (primary key, references chat_reminders with ON DELETE CASCADE),
-owner_user_id (UUID, references users), task_id (UUID), and outcome (nullable text constrained to
+owner_user_id (UUID, references users), operation (text CHECK tasks.get), item_id (UUID), and outcome (nullable text constrained to
 success/refused/failed). No foreign key to another module's table. The frozen operation is always
-tasks.get with exactly taskId; there is no stored arbitrary method, tool name, recipient or input.
+tasks.get with exactly taskId; there is no stored arbitrary method, recipient or input.
 Force RLS; insertion verifies the current actor owns the parent reminder. Worker may update outcome
-only; actor cannot change task_id or owner. Delete follows parent deletion. Declare the migration,
+only; actor cannot change operation, item_id or owner. Delete follows parent deletion. Declare the migration,
 table and DB type in chat's manifest, packages/db/src/types.ts and schema catalog coverage.
 
 Reuse reminder timing, deadline, version, reserved message, capacity, pause, resume, delete and quiet
@@ -120,7 +120,7 @@ Implement behavior-first tests before feature code. Exact test files:
 - tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts and corresponding blocking rows in
   .claude/skills/coordinate/uat-trigger-map.tsv: real UI-created disposable task; real configured
   model schedules a near-future check; close/reopen, inspect and reply to sourced result; inspect
-  Settings; disable Tasks before another run and observe honest refusal. Assert no source change.
+  Settings; remove the disposable source before another run and observe honest refusal. Tasks is a required core module with no disable or source-delete UI, so removal is explicit SQL fault setup on the disposable installation. Disabled-capability tests use the real resolver with an optional Tasks fixture.
 
 Observe the security tests failing after independently removing each risk, capability and ownership
 protection, then restore protections and observe green. Record exact mutation and failing assertion
@@ -150,4 +150,16 @@ review. No board, milestone, issue closing or merge operations.
 - Migration 0318 assigned by brief; 0317 belongs to #3135.
 - Ben's #3135 ruling permits direct save of model-filled read-only terms.
 - Existing reminder queue resumes ordinary reminders; extension routing is required for this slice.
-- Feature code has not started; coordinator approval is pending.
+- Feature implementation is present; targeted integration checks pass, and live proof is being diagnosed before closeout.
+
+## Approval notes
+
+All reminder enqueues use the shared extension-aware function, including future time edits from #3135. If that lane merges first, route its enqueue through the same function and refuse text edits on read checks. The recognizer leaves everyday oven, grammar and workload chat alone without a model call. The stored operation is explicit and constrained to tasks.get. Live proof uses the sanctioned Codex CLI subscription and cheapest configured model, per coordinator ruling.
+
+## Verification state
+
+- Focused request/gateway unit checks: 26 passed.
+- Targeted integration gate: 88 passed, including the registered queue worker with the real worker role, production built-in module resolver, and notification enqueue.
+- Security mutations were observed failing: operation allowlist (3 failures), effective read risk/plan (2), explicit Tasks ownership (foreign shared source returned success), and the real module resolver's per-user deny check (disabled source returned success). All protections were restored.
+- First disposable UI run used Codex gpt-6-luna, created the source task, saved the check and reached Settings. It timed out waiting for the sourced report. The instrumented reproduction captures job state/output and reserved-message state before teardown.
+- Full foundation gate is running; no full green result is claimed yet.
