@@ -1,5 +1,6 @@
+import type { ChatDrawerProps } from "./chat-drawer-props";
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
-import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
+import type { MeetingChatTurnResponse } from "@moss/shared";
 import { findOwnerMainThread, SideChatOverlay } from "./side-chat-overlay";
 import { loadChatDrafts, saveChatDrafts } from "./chat-draft-storage";
 import { shownMainThread } from "./drawer-main-landing";
@@ -53,26 +54,7 @@ import "../styles/kit-chat.css";
 import "../styles/kit-chat-attach.css";
 import "../styles/kit-chat-skills.css";
 const PRIVATE_DRAFT_KEY = "__private__";
-export function ChatDrawer(props: {
-  readonly meetingContext?: MeetingChatSelection & { readonly title: string };
-  readonly onMeetingUnavailable?: () => void;
-  readonly onRemoveMeetingContext?: () => void;
-  readonly open: boolean;
-  readonly onClose: () => void;
-  readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: (mainThreadId?: string) => void;
-  readonly streamErrorCount: number;
-  readonly selectionPending?: boolean;
-  readonly isFounder: boolean;
-  readonly ownerId?: string;
-  readonly initialText?: string;
-  readonly focusActionRequestId?: string | null;
-  readonly onActionRequestFocused?: () => void;
-  readonly surface: ChatSurface;
-  readonly docked?: boolean;
-  readonly expanded?: boolean;
-  readonly onToggleExpanded?: () => void;
-}) {
+export function ChatDrawer(props: ChatDrawerProps) {
   const generationRef = useRef(0);
   const transition = useChatTransition(props.surface, generationRef);
   useEffect(
@@ -529,6 +511,37 @@ export function ChatDrawer(props: {
     box.focus();
     focusComposerAfterNewSideChat.current = false;
   }, [historyActivationPending, props.open, reviewThreadId, transition.pending]);
+  const selectThread = useCallback(
+    (id: string) => {
+      const change = props.meetingContext ? undefined : transition.begin();
+      if (!props.meetingContext && !change) return;
+      callerDraft.retire(props.surface);
+      if (isSending) void cancelChatTurn(props.surface);
+      setFallbackRecords([]);
+      setPendingUser(null);
+      setIsSending(false);
+      setQueuedSendText(null);
+      setSendError(null);
+      setReviewThreadId(id);
+      setLiveThreadId(null);
+      if (change) {
+        resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
+      }
+    },
+    [props.meetingContext, props.surface, transition, callerDraft, isSending, resumeMutation]
+  );
+  useEffect(() => {
+    if (!props.open || !props.threadToOpen || transition.pending) return;
+    props.onThreadOpenConsumed?.();
+    selectThread(props.threadToOpen);
+  }, [
+    props.open,
+    props.threadToOpen,
+    props.onThreadOpenConsumed,
+    transition.pending,
+    selectThread
+  ]);
+
   if (!props.open) return null;
   const onDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape" && !event.defaultPrevented) {
@@ -666,6 +679,7 @@ export function ChatDrawer(props: {
     if (moduleIdentityPending) return;
     setQueuedSendText({ text, surface: props.surface });
   };
+
   return (
     <aside
       ref={asideRef}
@@ -722,22 +736,7 @@ export function ChatDrawer(props: {
           onRetry={() => void threadsQuery.refetch()}
           onNewSideChat={startNewSideChat}
           onOpenChange={setConversationOverlayOpen}
-          onSelect={(id) => {
-            const change = props.meetingContext ? undefined : transition.begin();
-            if (!props.meetingContext && !change) return;
-            callerDraft.retire(props.surface);
-            if (isSending) void cancelChatTurn(props.surface);
-            setFallbackRecords([]);
-            setPendingUser(null);
-            setIsSending(false);
-            setQueuedSendText(null);
-            setSendError(null);
-            setReviewThreadId(id);
-            setLiveThreadId(null);
-            if (change) {
-              resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
-            }
-          }}
+          onSelect={selectThread}
         />
         <div
           className="chatd-overlay-background"

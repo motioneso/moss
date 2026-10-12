@@ -144,6 +144,7 @@ function quietPageHtml(): string {
         ChatControlsProvider,
         {
           value: {
+            openChatThread: () => undefined,
             openChat: () => undefined,
             openChatWith: () => undefined,
             openAssistantWithDraft: () => undefined

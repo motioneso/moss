@@ -32,6 +32,7 @@ const first = historyItem({
 });
 const second = { ...first, id: "22334455-1122-4122-8122-112233445566", title: "Available review" };
 const basicControls: ChatControls = {
+  openChatThread: () => undefined,
   openChat: () => {},
   openChatWith: () => {},
   openAssistantWithDraft: () => {}

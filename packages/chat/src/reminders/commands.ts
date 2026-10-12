@@ -2,6 +2,7 @@
 // Like the save recognizer, it reads only the user's own words.
 
 import { normalizeReminderRequest, recognizeRelativeReminder } from "./recognizer.js";
+import { reminderCommands } from "./commands/registry.js";
 import type { ReminderTurnPlan } from "./turn.js";
 
 const MAX_REQUEST_LENGTH = 700;
@@ -11,31 +12,16 @@ export type ReminderCommand =
   | { readonly kind: "list" }
   | { readonly kind: "cancel"; readonly target: string | null };
 
-const LIST_FORMS: readonly RegExp[] = [
-  /^(?:list|show)(?: me)?(?: all)?(?: of)? my reminders$/,
-  /^what (?:are|is) my reminders$/,
-  /^what reminders do i have$/,
-  /^do i have any reminders$/
-];
-
-const CANCEL_VERB = "(?:cancel|delete|remove)";
-const ARTICLE = "(?: my| the| that| this)?";
-
-const CANCEL_UNTARGETED = new RegExp(`^${CANCEL_VERB}${ARTICLE} reminders?$`);
-const CANCEL_TARGET_AFTER = new RegExp(
-  `^${CANCEL_VERB}${ARTICLE} reminder (?:to|about|for|that) (.+)$`
-);
-const CANCEL_TARGET_BEFORE = new RegExp(`^${CANCEL_VERB}${ARTICLE} (.+?) reminder$`);
-
 export function recognizeReminderCommand(raw: string): ReminderCommand {
   if (raw.length > MAX_REQUEST_LENGTH) return { kind: "none" };
 
   const request = normalizeReminderRequest(raw);
-  if (LIST_FORMS.some((form) => form.test(request))) return { kind: "list" };
-  if (CANCEL_UNTARGETED.test(request)) return { kind: "cancel", target: null };
-
-  const target = CANCEL_TARGET_AFTER.exec(request)?.[1] ?? CANCEL_TARGET_BEFORE.exec(request)?.[1];
-  return target ? { kind: "cancel", target: target.trim() } : { kind: "none" };
+  for (const command of Object.values(reminderCommands)) {
+    if (!("recognize" in command)) continue;
+    const result = command.recognize(request);
+    if (result) return result;
+  }
+  return { kind: "none" };
 }
 
 /** A save request first, then list or cancel. Undefined means ordinary chat for the model. */

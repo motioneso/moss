@@ -1,3 +1,4 @@
+import type { ListScheduledTasksResponse } from "@moss/shared";
 import type { MossGoal } from "@moss/goals";
 import type {
   AddTaskActivityRequest,
@@ -1926,4 +1927,8 @@ export async function requestTerminalTicket(
 export function terminalWsUrl(ticket: string): string {
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
   return `${scheme}://${window.location.host}/api/ai/terminal?ticket=${encodeURIComponent(ticket)}`;
+}
+
+export async function listScheduledTasks(): Promise<ListScheduledTasksResponse> {
+  return requestJson<ListScheduledTasksResponse>("/api/chat/scheduled-tasks");
 }
