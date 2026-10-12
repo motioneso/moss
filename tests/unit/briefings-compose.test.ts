@@ -477,88 +477,6 @@ describe("composeBriefing — local-day bounding", () => {
     expect(result.sourceMetadata.calendarSignals).toEqual([]);
   });
 
-  it("keeps an older unresolved follow-up signal under the five-signal cap", async () => {
-    const deps = makeFakeDeps();
-    const manifests = deps.moduleManifests.map((m) => ({
-      ...m,
-      assistantTools: (m.assistantTools ?? []).map((t) =>
-        t.name === "email.listVisibleMessages"
-          ? {
-              ...t,
-              execute: (async () => ({
-                data: {
-                  messages: [
-                    {
-                      id: "bill-1",
-                      connectorAccountId: "conn-1",
-                      sender: "billing@example.test",
-                      subject: "Invoice due today",
-                      snippet: "Payment due today",
-                      actionability: "needs_action"
-                    },
-                    {
-                      id: "bill-2",
-                      connectorAccountId: "conn-1",
-                      sender: "bank@example.test",
-                      subject: "Past due statement",
-                      snippet: "Past due notice",
-                      actionability: "needs_action"
-                    },
-                    {
-                      id: "urgent-1",
-                      connectorAccountId: "conn-1",
-                      sender: "pm@example.test",
-                      subject: "Can you reply before the 3pm review?",
-                      snippet: "Need this today",
-                      receivedAt: "2026-06-13T08:30:00.000Z",
-                      actionability: "needs_reply"
-                    },
-                    {
-                      id: "plan-1",
-                      connectorAccountId: "conn-1",
-                      sender: "legal@example.test",
-                      subject: "Contract draft for meeting",
-                      snippet: "Please review before tomorrow",
-                      actionability: "time_sensitive_info"
-                    },
-                    {
-                      id: "follow-1",
-                      connectorAccountId: "conn-1",
-                      sender: "partner@example.test",
-                      subject: "Following up on the open thread",
-                      snippet: "Can you respond when you have a minute?",
-                      receivedAt: "2026-05-30T08:30:00.000Z",
-                      actionability: "needs_reply"
-                    },
-                    {
-                      id: "extra-1",
-                      connectorAccountId: "conn-1",
-                      sender: "ops@example.test",
-                      subject: "Due today",
-                      snippet: "Urgent follow up needed",
-                      actionability: "needs_action"
-                    }
-                  ]
-                }
-              })) as ToolExecute
-            }
-          : t
-      )
-    }));
-
-    const result = await composeBriefing(fakeScopedDb, definition(), runInput, {
-      ...deps,
-      moduleManifests: manifests
-    });
-
-    expect(result.sourceMetadata.emailSignals).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "follow_up_risk", messageIds: ["follow-1"] })
-      ])
-    );
-    expect((result.sourceMetadata.emailSignals as unknown[]).length).toBeLessThanOrEqual(5);
-  });
-
   it("removes create_task from email suggestedActions when createTasks is off", async () => {
     const deps = makeFakeDeps({
       preferences: {
@@ -664,6 +582,8 @@ describe("composeBriefing — prompt boundary-forgery (escaped inert data)", () 
                     data: {
                       messages: [
                         {
+                          id: "attacker-mail",
+                          receivedAt: FIXED_NOW.toISOString(),
                           connectorAccountId: "attacker-conn",
                           sender: "attacker@example.test",
                           subject: `${payload}UNIT-CANARY-LEAK`,
@@ -733,6 +653,7 @@ describe("composeBriefing — live-first source context (#729)", () => {
         messages: [
           {
             id: "msg-actionable",
+            receivedAt: FIXED_NOW.toISOString(),
             connectorAccountId: "conn-email-1",
             sender: "boss@x.com",
             subject: "Budget approval",

@@ -1,4 +1,5 @@
-import type { CalendarAutomationMode } from "@moss/shared";
+import type { CalendarAutomationMode, LocaleSettingsDto } from "@moss/shared";
+import { localStamp } from "./compose-shared.js";
 
 export interface CalendarBriefingSignal {
   readonly type:
@@ -43,6 +44,7 @@ export interface EmailBriefingSignal {
   readonly threadId?: string;
   readonly connectorAccountId: string;
   readonly connectorLabel?: string;
+  readonly receivedAt?: string;
   readonly relevanceReasons: readonly string[];
   readonly suggestedActions: readonly string[];
 }
@@ -258,6 +260,7 @@ export function deriveEmailSignals(args: {
   readonly now: Date;
   readonly context: ReadonlySet<string>;
   readonly settings: EmailSignalSettings;
+  readonly locale?: LocaleSettingsDto;
 }): EmailBriefingSignal[] {
   const scored: Array<{ score: number; signal: EmailBriefingSignal }> = [];
 
@@ -294,45 +297,38 @@ export function deriveEmailSignals(args: {
           threadId,
           connectorAccountId,
           connectorLabel,
+          ...(receivedAt ? { receivedAt } : {}),
           relevanceReasons: uniqueStrings(reasons),
           suggestedActions: actions
         }
       });
     };
 
-    if (/(bill|invoice|payment|due|past due|autopay|statement)/.test(text)) {
-      push("bill_due_or_past_due", 100, `${sender} has a billing thread that is easy to miss.`, [
-        "billing or due-date language",
-        ageDays > 0 ? "still unresolved" : ""
-      ]);
-    }
+    // Keywords and message age cannot establish current unpaid status.
+    const reportedAt = receivedAt && args.locale ? localStamp(receivedAt, args.locale) : receivedAt;
+    const dated = (line: string) => (reportedAt ? `Email received ${reportedAt}: ${line}` : line);
     if (/(urgent|today|deadline|asap|eod|before|expires|due)/.test(text)) {
-      push("time_sensitive", 90, `${subject} carries timing pressure today.`, [
+      push("time_sensitive", 90, dated(`${subject} contains deadline language.`), [
         "deadline language",
         overlap ? "connected to the current day" : ""
       ]);
     }
-    if (/\?|reply|respond|let me know|can you|please review|follow up/.test(text)) {
+    if (
+      item.actionability === "needs_reply" ||
+      /\?|reply|respond|let me know|can you|please review|follow up/.test(text)
+    ) {
       push(
         "needs_reply",
         85 - Math.min(ageDays, 5),
-        `${sender} likely still needs a reply on ${subject}.`,
+        dated(`${sender} asks for a reply on ${subject}.`),
         ["reply-shaped language", overlap ? "matches current work context" : ""]
-      );
-    }
-    if (ageDays >= 2 && (/\?|reply|follow up|review|action/.test(text) || overlap)) {
-      push(
-        "follow_up_risk",
-        75,
-        `${subject} looks like an older unresolved thread worth rescuing.`,
-        ["older unresolved obligation", overlap ? "still tied to active work" : ""]
       );
     }
     if (
       /(meeting|review|deck|draft|document|contract|prep|schedule|agenda)/.test(text) ||
       overlap
     ) {
-      push("planning_impact", 70, `${subject} changes what the day likely needs attention on.`, [
+      push("planning_impact", 70, dated(`${subject} mentions planning information.`), [
         "day-planning impact",
         overlap ? "reinforced by tasks, notes, chats, or calendar" : ""
       ]);

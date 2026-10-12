@@ -84,7 +84,8 @@ export async function signInUatAdmin(page: Page): Promise<void> {
 export async function bringUpRealChatProvider(page: Page): Promise<void> {
   const install = (await readUatJson(
     await page.request.post("/api/onboarding/provider-install", {
-      data: { providerKind: REAL_CHAT_PROVIDER_KIND }
+      data: { providerKind: REAL_CHAT_PROVIDER_KIND },
+      timeout: 180_000
     })
   )) as { installState?: string };
   expect(

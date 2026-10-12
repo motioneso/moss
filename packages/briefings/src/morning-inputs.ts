@@ -2,6 +2,7 @@ import type { BriefingDefinition, DataContextDb } from "@moss/db";
 
 import {
   SECTION_CHAR_CAP,
+  localStamp,
   findExecute,
   gatherToolSection,
   isActionableTriage,
@@ -10,6 +11,7 @@ import {
   type ComposeRunInput,
   type Section
 } from "./compose-shared.js";
+import { DEFAULT_LOCALE_SETTINGS, type LocaleSettingsDto } from "@moss/shared";
 import type { EmailBriefingSignal } from "./signals.js";
 import { sanitizeExternal } from "./trust-boundary.js";
 
@@ -128,7 +130,7 @@ function threadRefOf(item: Record<string, unknown>): string | null {
 /**
  * Clears the awaiting flag on mail the Commitments closer look has already judged. The
  * sorter's flag is never cleared after the judgement, so a thread judged at or after the
- * message arrived is settled: its outcome shows up as a suggestion or not at all. When the
+ * message arrived is settled. Actionable triage still survives every outcome. When the
  * judgement read is missing or fails, the mail keeps its flag.
  */
 export async function settleJudgedEmail(
@@ -240,29 +242,57 @@ export function buildMorningEmailLines(args: {
   readonly signals: readonly EmailBriefingSignal[];
   readonly items: readonly Record<string, unknown>[];
   readonly suggestionLines: readonly string[];
+  readonly locale?: LocaleSettingsDto;
 }): MorningEmailLines {
   const signalLines = args.signals.map((s) => sanitizeExternal(s.summary)).filter(Boolean);
   const named = new Set(args.signals.flatMap((s) => s.messageIds));
   const allAwaiting = args.items
-    .filter((item) => item.awaitingJudgement === true && !named.has(String(item.id)))
+    .filter(
+      (item) =>
+        item.awaitingJudgement === true &&
+        !item.briefingCurrentStatusUnknown &&
+        !named.has(String(item.id))
+    )
     .map((item) =>
-      [sanitizeExternal(item.sender), sanitizeExternal(item.subject)].filter(Boolean).join(" · ")
+      [
+        sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS)),
+        sanitizeExternal(item.sender),
+        sanitizeExternal(item.subject)
+      ]
+        .filter(Boolean)
+        .join(" · ")
     )
     .filter(Boolean);
   const awaitingLines = allAwaiting
     .slice(0, AWAITING_EMAIL_CAP)
     .map((line) => `[may need you] ${line}`);
   const worthKnowingLines = args.items
-    .filter((item) => item.actionability === "fyi")
-    .map((item) => sanitizeExternal(item.summary))
+    .filter((item) => item.actionability === "fyi" && !item.briefingCurrentStatusUnknown)
+    .map((item) =>
+      [
+        sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS)),
+        sanitizeExternal(item.summary)
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    )
     .filter(Boolean)
     .slice(0, WORTH_KNOWING_CAP)
     .map((line) => `[worth knowing] ${line}`);
+  const unknownStatusLines = args.items
+    .filter((item) => item.briefingCurrentStatusUnknown === true)
+    .slice(0, AWAITING_EMAIL_CAP)
+    .map((item) =>
+      item.briefingPaymentStatusUnknown
+        ? `[dated report; payment status unknown] Billing email received ${sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS))} from ${sanitizeExternal(item.sender)}; subject: ${sanitizeExternal(item.subject)}.`
+        : `[dated report; current status unknown] Email received ${sanitizeExternal(localStamp(item.receivedAt, args.locale ?? DEFAULT_LOCALE_SETTINGS))}: ${sanitizeExternal(item.sender)} asked for a reply about ${sanitizeExternal(item.subject)}.`
+    );
   const { lines, truncated } = charCap([
     ...signalLines,
     ...awaitingLines,
     ...args.suggestionLines,
-    ...worthKnowingLines
+    ...worthKnowingLines,
+    ...unknownStatusLines
   ]);
   return {
     lines,
