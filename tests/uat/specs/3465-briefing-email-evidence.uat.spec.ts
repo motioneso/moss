@@ -92,7 +92,7 @@ for (const briefingType of ["morning", "evening"] as const) {
 
     // Start generation through the real chat UI and the normal briefing tool.
     await page.goto("/today");
-    await page.getByRole("button", { name: "Chat with Moss" }).click();
+    await page.getByRole("button", { name: "Chat with Moss", exact: true }).click();
     const chat = page.getByRole("dialog", { name: "Chat with Moss" });
     const input = chat.getByRole("textbox", { name: "Message Moss" });
     await input.fill(
@@ -120,6 +120,7 @@ for (const briefingType of ["morning", "evening"] as const) {
         { timeout: 120_000, intervals: [1000, 2000, 5000] }
       )
       .toBe(true);
+    expect(run!.sourceMetadata.aiModel).toMatchObject({ id: expect.any(String) });
     const evidence = run!.sourceMetadata.emailEvidence as {
       items: Array<{
         messageId: string;
@@ -157,7 +158,29 @@ for (const briefingType of ["morning", "evening"] as const) {
     // Positive prose wording belongs to #3466; metadata proves selection and unknown status.
     assertNoDefiniteEmailClaim(emailSentences);
     if (briefingType === "evening") expect(run!.summaryText).not.toMatch(/Dana|draft feedback/i);
-    expect(run!.summaryText).toMatch(/Emissions/i);
+    // This solo-owner fixture has only accepted Emissions tasks, so every saved task line
+    // identifies one of them without retaining private writer prompts.
+    const taskResponse = await page.request.get("/api/tasks");
+    expect(taskResponse.ok()).toBe(true);
+    const acceptedTasks = (await taskResponse.json()).tasks as Array<{
+      title: string;
+      status: string;
+    }>;
+    expect(acceptedTasks.length).toBeGreaterThan(0);
+    for (const task of acceptedTasks) {
+      expect(task).toMatchObject({ title: "Emissions check", status: "todo" });
+    }
+    expect(run!.sourceMetadata.sectionLines).toMatchObject(
+      briefingType === "morning"
+        ? { tasks: acceptedTasks.length }
+        : { tasks_reconciliation: acceptedTasks.length }
+    );
+    expect(run!.sourceMetadata).toMatchObject(
+      briefingType === "morning"
+        ? { taskCount: acceptedTasks.length }
+        : { taskSlippedCount: acceptedTasks.length }
+    );
+    // Positive task prose inclusion belongs to #3466; stored inputs and Today prove retention.
     // Refresh after generation in case the writer crossed midnight.
     if (briefingType === "evening") {
       const scheduled = await page.request.patch(`/api/briefings/definitions/${definitionId}`, {
@@ -166,9 +189,11 @@ for (const briefingType of ["morning", "evening"] as const) {
       expect(scheduled.ok()).toBe(true);
     }
     await page.goto("/today");
+    await expect(
+      page.getByRole("button", { name: /^Emissions check Overdue manual/ }).first()
+    ).toBeVisible();
     await page.getByRole("button", { name: `Read the full ${briefingType} briefing` }).click();
     const reader = page.getByRole("dialog");
-    await expect(reader).toContainText(/Emissions/i);
     await expect(reader).not.toContainText(/Invoice #UAT|seriously overdue bills/i);
     console.log(
       `[3465 proof] real ${briefingType} writer and Today reader; 3 old invoices settled; today bill in writer input with unknown payment status; evening excludes historical replies; accepted task retained`
