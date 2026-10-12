@@ -310,7 +310,16 @@ export async function runPushDeliverJob(
     return NOTHING_TO_DELIVER;
   }
 
-  if (!(await canDeliverPush(scopedDb, notification, notificationsRepository, deps)))
+  if (
+    !(await canDeliverPush(
+      scopedDb,
+      notification,
+      notificationsRepository,
+      deps,
+      new Date(Math.max(Date.now(), job.data.releaseAt ? Date.parse(job.data.releaseAt) : 0)),
+      false
+    ))
+  )
     return NOTHING_TO_DELIVER;
 
   const subscriptions = await subscriptionsRepository.listActiveForDelivery(scopedDb);
@@ -348,7 +357,9 @@ async function canDeliverPush(
   scopedDb: DataContextDb,
   notification: NotificationWithReadState,
   repository: NotificationsRepository,
-  deps: PushWorkerDependencies
+  deps: PushWorkerDependencies,
+  now: Date,
+  summary: boolean
 ): Promise<boolean> {
   if (
     notification.module_id &&
@@ -366,11 +377,25 @@ async function canDeliverPush(
     (await deps.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
   if (!shouldPushImmediately(sensitivity, urgency)) return false;
   if (urgency !== "urgent" && deps.quietHoursPort) {
-    const releaseAt = await actorQuietHoursDeferredUntil(scopedDb, deps.quietHoursPort, new Date());
+    const releaseAt = await actorQuietHoursDeferredUntil(scopedDb, deps.quietHoursPort, now);
     if (releaseAt) {
       if (!deps.pushQueuePort) throw new Error("push quiet-hours queue is not configured");
-      await repository.deferDelivery(scopedDb, notification.id, releaseAt);
-      await deps.pushQueuePort.enqueueSummary(scopedDb, notification.recipient_user_id!, releaseAt);
+      if (summary) {
+        await repository.deferDelivery(scopedDb, notification.id, releaseAt);
+        await deps.pushQueuePort.enqueueSummary(
+          scopedDb,
+          notification.recipient_user_id!,
+          releaseAt
+        );
+      } else {
+        // The bell item is already visible; only its device alert waits.
+        await deps.pushQueuePort.enqueueDeliver(
+          scopedDb,
+          notification.id,
+          notification.recipient_user_id!,
+          releaseAt
+        );
+      }
       return false;
     }
   }
@@ -396,12 +421,13 @@ export async function runPushSummaryJob(
   const sendWebPush = deps.sendWebPush ?? webpush.sendNotification;
 
   const releaseAt = new Date(job.data.releaseAt);
-  if (new Date() < releaseAt) throw new Error("push summary ran before its release time");
+  // pg-boss has released the job using the database clock.
+  const now = new Date(Math.max(Date.now(), releaseAt.getTime()));
   const notificationsRepository = deps.notificationsRepository ?? new NotificationsRepository();
   const cohort = await notificationsRepository.listUnreadDeferred(scopedDb, releaseAt);
   const eligibleIds: string[] = [];
   for (const notification of cohort) {
-    if (await canDeliverPush(scopedDb, notification, notificationsRepository, deps))
+    if (await canDeliverPush(scopedDb, notification, notificationsRepository, deps, now, true))
       eligibleIds.push(notification.id);
   }
   const count = eligibleIds.length;

@@ -7,7 +7,11 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
 import { createPgBossClient, createPushQueuePort } from "@moss/jobs";
 import { createNotificationPreferencePort } from "@moss/module-registry";
-import { NotificationsRepository, type QuietHoursPort } from "@moss/notifications";
+import {
+  NotificationsRepository,
+  runPushDeliverJob,
+  type QuietHoursPort
+} from "@moss/notifications";
 import { PreferencesRepository } from "@moss/structured-state";
 
 import { ChatRepository } from "../../packages/chat/src/repository.js";
@@ -323,4 +327,62 @@ it("keeps keyed lookup, unread deferred reads and deferral inside each actor's r
     notifications.findByEventKey(db, "chat", payload.idempotencyKey)
   );
   expect(result?.deferred_until).toEqual(releaseAt);
+});
+
+it("keeps an already-visible Tasks bell item while delaying its device alert", async () => {
+  const notification = await asOwner((db) =>
+    notifications.create(db, {
+      moduleId: "tasks",
+      title: "Visible task",
+      urgency: "normal",
+      metadata: {},
+      eventKey: randomUUID()
+    })
+  );
+  expect(notification?.deferred_until).toBeNull();
+  const now = new Date();
+  const releaseAt = new Date(now);
+  releaseAt.setUTCSeconds(0, 0);
+  releaseAt.setUTCMinutes(releaseAt.getUTCMinutes() + 2);
+  const hhmm = (date: Date) => date.toISOString().slice(11, 16);
+  await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+    runPushDeliverJob(
+      {
+        data: {
+          actorUserId: ids.userA,
+          recipientUserId: ids.userA,
+          notificationId: notification!.id
+        }
+      },
+      db,
+      {
+        notificationsRepository: notifications,
+        pushQueuePort: createPushQueuePort(boss),
+        quietHoursPort: {
+          getSettings: async () => ({
+            enabled: true,
+            start: hhmm(new Date(now.getTime() - 300_000)),
+            end: hhmm(releaseAt),
+            timezone: "UTC"
+          }),
+          getLocaleTimezone: async () => null
+        }
+      }
+    )
+  );
+  const visible = await asOwner((db) => notifications.getById(db, notification!.id));
+  expect(visible?.id).toBe(notification!.id);
+  expect(visible?.deferred_until).toBeNull();
+  const jobs = await bootstrap.query(
+    "SELECT data, start_after FROM pgboss.job WHERE name = 'notifications.push.deliver' AND data->>'notificationId' = $1 AND data->>'releaseAt' = $2",
+    [notification!.id, releaseAt.toISOString()]
+  );
+  expect(jobs.rows).toHaveLength(1);
+  expect(jobs.rows[0].start_after).toEqual(releaseAt);
+  expect(jobs.rows[0].data).toEqual({
+    actorUserId: ids.userA,
+    recipientUserId: ids.userA,
+    notificationId: notification!.id,
+    releaseAt: releaseAt.toISOString()
+  });
 });

@@ -93,7 +93,8 @@ export interface PushQueuePort {
   enqueueDeliver(
     scopedDb: DataContextDb,
     notificationId: string,
-    recipientUserId: string
+    recipientUserId: string,
+    releaseAt?: Date
   ): Promise<void>;
   enqueueSummary(scopedDb: DataContextDb, recipientUserId: string, releaseAt: Date): Promise<void>;
 }

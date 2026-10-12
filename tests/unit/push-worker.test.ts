@@ -96,57 +96,60 @@ describe("runPushDeliverJob", () => {
     expect(listActiveForDelivery).not.toHaveBeenCalled();
   });
 
-  it("defers a queued normal push when quiet hours have since begun", async () => {
-    const { runPushDeliverJob } = await import("@moss/notifications");
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-11T15:00:00Z"));
-    try {
-      const notification = {
-        id: "n1",
-        module_id: "tasks",
-        recipient_user_id: "u1",
-        urgency: "normal",
-        metadata: {}
-      };
-      const listActiveForDelivery = vi.fn();
-      const deferDelivery = vi.fn();
-      const enqueueSummary = vi.fn();
-      await runPushDeliverJob(
-        deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
-        fakeScopedDb,
-        {
-          notificationsRepository: {
-            getById: vi.fn().mockResolvedValue(notification),
-            deferDelivery
-          } as never,
-          subscriptionsRepository: { listActiveForDelivery } as never,
-          quietHoursPort: {
-            getSettings: async () => ({
-              enabled: true,
-              start: "08:00",
-              end: "10:00",
-              timezone: "America/Los_Angeles"
-            }),
-            getLocaleTimezone: async () => null
-          },
-          pushQueuePort: { enqueueSummary, enqueueDeliver: vi.fn() }
-        }
-      );
-      expect(deferDelivery).toHaveBeenCalledWith(
-        fakeScopedDb,
-        "n1",
-        new Date("2026-10-11T17:00:00Z")
-      );
-      expect(enqueueSummary).toHaveBeenCalledWith(
-        fakeScopedDb,
-        "u1",
-        new Date("2026-10-11T17:00:00Z")
-      );
-      expect(listActiveForDelivery).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
+  it.each([null, new Date("2026-10-10T17:00:00Z")])(
+    "delays only the device alert when quiet hours begin after the bell item is visible (%s)",
+    async (deferred_until) => {
+      const { runPushDeliverJob } = await import("@moss/notifications");
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-10-11T15:00:00Z"));
+      try {
+        const notification = {
+          id: "n1",
+          module_id: "tasks",
+          recipient_user_id: "u1",
+          urgency: "normal",
+          metadata: {},
+          deferred_until
+        };
+        const listActiveForDelivery = vi.fn();
+        const deferDelivery = vi.fn();
+        const enqueueSummary = vi.fn();
+        const enqueueDeliver = vi.fn();
+        await runPushDeliverJob(
+          deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+          fakeScopedDb,
+          {
+            notificationsRepository: {
+              getById: vi.fn().mockResolvedValue(notification),
+              deferDelivery
+            } as never,
+            subscriptionsRepository: { listActiveForDelivery } as never,
+            quietHoursPort: {
+              getSettings: async () => ({
+                enabled: true,
+                start: "08:00",
+                end: "10:00",
+                timezone: "America/Los_Angeles"
+              }),
+              getLocaleTimezone: async () => null
+            },
+            pushQueuePort: { enqueueSummary, enqueueDeliver }
+          }
+        );
+        expect(deferDelivery).not.toHaveBeenCalled();
+        expect(enqueueSummary).not.toHaveBeenCalled();
+        expect(enqueueDeliver).toHaveBeenCalledWith(
+          fakeScopedDb,
+          "n1",
+          "u1",
+          new Date("2026-10-11T17:00:00Z")
+        );
+        expect(listActiveForDelivery).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     }
-  });
+  );
 
   it("keeps urgent push immediate inside quiet hours even at quiet sensitivity", async () => {
     const { runPushDeliverJob } = await import("@moss/notifications");

@@ -173,3 +173,16 @@ Implementation evidence: the initial scoped gate passed 18 tests, including the 
 coverage passed 23 tests. Removing the source dismissal filter made two integration tests fail;
 it was restored before the final gate. The gate runner accepts a script name, not command arguments;
 scoped runs used a temporary local test script, removed before closeout.
+
+## QA round 1 corrections
+
+The no-modules digest fixture also mutes Chat; the app map declares Chat's notification switch and
+its contribution to digest availability. Remove the unused reminder delivery error declaration.
+Dispatch-time quiet hours delay an individual device alert through the existing deliver queue,
+without changing an already-visible bell item's hold time, including an expired hold. These delayed
+alerts release individually; notifications created during quiet hours retain the existing summary.
+The delayed job carries identifiers and its release timestamp only, uses the caller's transaction,
+and has a singleton key per notification and boundary. Release checks clamp the worker clock to at
+least the queued boundary, so small database-clock differences neither throw nor repeat deferral.
+The kill gate and stop condition above remain unchanged. Splitting the dismissal lock from the
+network send is excluded by coordinator ruling and tracked separately in #3477.

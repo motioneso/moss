@@ -57,6 +57,27 @@ describe("createPushQueuePort", () => {
     expect(executeQuery).toHaveBeenCalledTimes(1);
   });
 
+  it("delays a device alert on the same transaction with a boundary-specific key", async () => {
+    const send = vi.fn().mockResolvedValue("job-delayed");
+    const { scopedDb } = fakeScopedDb();
+    const releaseAt = new Date("2026-10-12T10:00:00Z");
+    await createPushQueuePort({ send } as never).enqueueDeliver(scopedDb, "n1", "u1", releaseAt);
+    expect(send).toHaveBeenCalledWith(
+      PUSH_DELIVER_QUEUE,
+      {
+        actorUserId: "u1",
+        recipientUserId: "u1",
+        notificationId: "n1",
+        releaseAt: releaseAt.toISOString()
+      },
+      expect.objectContaining({
+        singletonKey: `n1:${releaseAt.toISOString()}`,
+        startAfter: releaseAt,
+        db: expect.any(Object)
+      })
+    );
+  });
+
   it("sends the summary job with its singleton key, release time and the transaction", async () => {
     const send = vi.fn().mockResolvedValue("job-2");
     const port = createPushQueuePort({ send } as never);

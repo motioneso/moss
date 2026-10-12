@@ -43,7 +43,8 @@ export function createPushQueuePort(boss: PgBoss): PushQueuePort {
     async enqueueDeliver(
       scopedDb: DataContextDb,
       notificationId: string,
-      recipientUserId: string
+      recipientUserId: string,
+      releaseAt?: Date
     ): Promise<void> {
       await sendJob<PushDeliverJobPayload>(
         boss,
@@ -51,9 +52,18 @@ export function createPushQueuePort(boss: PgBoss): PushQueuePort {
         {
           actorUserId: recipientUserId,
           notificationId,
-          recipientUserId
+          recipientUserId,
+          ...(releaseAt ? { releaseAt: releaseAt.toISOString() } : {})
         },
-        { db: scopedJobDatabase(scopedDb) }
+        {
+          db: scopedJobDatabase(scopedDb),
+          ...(releaseAt
+            ? {
+                startAfter: releaseAt,
+                singletonKey: `${notificationId}:${releaseAt.toISOString()}`
+              }
+            : {})
+        }
       );
     },
 

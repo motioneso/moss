@@ -88,9 +88,7 @@ export const notificationsModuleManifest = {
       id: "notifications.push",
       label: "Push notifications",
       description:
-        "Turn on push notifications for this browser and manage which devices receive them. " +
-        "Needs a secure connection, is not available in every browser, and each person can " +
-        "register up to 10 devices.",
+        "Manage push for up to 10 devices over a secure connection in supported browsers. Chat appears in the per-module notification switches and counts toward email digest availability.",
       path: "/settings?section=modules&module=notifications",
       scope: "user",
       permissionId: "notifications.update"
@@ -100,7 +98,7 @@ export const notificationsModuleManifest = {
     {
       id: "notifications.quiet_hours",
       description:
-        "Normal notifications wait for the saved local quiet-hours end. Queued normal pushes recheck the current window, including changes made while waiting. Urgent notifications still push immediately."
+        "Normal alerts recheck quiet hours and wait for the local boundary. Visible bell items stay visible; their alerts release individually. Items created during quiet hours release as a summary. Urgent alerts remain immediate."
     },
     {
       id: "notifications.push",

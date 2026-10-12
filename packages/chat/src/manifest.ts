@@ -222,7 +222,7 @@ export const chatModuleManifest = {
     {
       id: "chat.reminder_notifications",
       description:
-        "Due reminders stay readable in Main and alert enabled devices. Quiet hours hold alerts; mutes and device switches win. Delivery retries never repeat chat. Dismissing stops further alerts. Opening the notification goes to Today.",
+        "Due reminders stay in Main and alert enabled devices. Quiet hours hold alerts; mutes and device switches win. Retries never repeat chat. Dismissing stops alerts. Opening goes to Today.",
       featureFlagId: "chat.module",
       remediations: [
         {
@@ -231,15 +231,13 @@ export const chatModuleManifest = {
             "Check Chat's notification mute, delivery sensitivity and this device's push setting in Notifications settings.",
           path: "/settings?section=modules&module=notifications"
         }
-      ],
-      errors: [
-        {
-          code: "reminder_notification_delivery_failed",
-          class: "transient",
-          description:
-            "A notification could not reach a device. Delivery retries temporary failures; the reminder remains readable in Main chat."
-        }
       ]
+    },
+    {
+      id: "chat.notification_preferences",
+      description:
+        "Chat appears in the per-module notification switches and counts toward email digest availability.",
+      featureFlagId: "chat.module"
     },
     {
       id: "chat.relative_reminders",
