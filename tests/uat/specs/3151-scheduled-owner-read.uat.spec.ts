@@ -48,6 +48,11 @@ test("a real model saves an exact owner read, reports source status and refuses 
   page
 }) => {
   test.setTimeout(600_000);
+  page.on("requestfailed", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/assets/"))
+      console.info(`UAT asset request failed: ${path}: ${request.failure()?.errorText}`);
+  });
   expect(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED).toBe("1");
   expect(process.env.JARVIS_UAT_REAL_CHAT_PROVIDER ?? "codex").toBe("codex");
   await signInUatAdmin(page);
