@@ -49,3 +49,24 @@ export const REMINDER_CONTROL_ROUTES = [
     permissionId: "chat.message"
   }
 ] satisfies NonNullable<MossModuleManifest["routes"]>;
+
+export const REMINDER_SETTINGS_FEATURE = {
+  id: "chat.reminder_settings",
+  description:
+    "Settings, Scheduled tasks shows reminder details, dated history and Past tasks. View message opens the saved result; Open chat opens its thread. Pause, resume or delete here or in Main chat. Set reminders in Main chat.",
+  featureFlagId: "chat.module",
+  errors: [
+    {
+      code: "scheduled_tasks_load_failed",
+      class: "transient",
+      description: "Could not load scheduled tasks. Choose Try again in Settings or reload."
+    }
+  ],
+  remediations: [
+    {
+      id: "chat.retry_scheduled_tasks",
+      description: "Choose Try again in Settings, Scheduled tasks, or reload the page.",
+      path: "/settings?section=scheduled"
+    }
+  ]
+} satisfies NonNullable<MossModuleManifest["features"]>[number];
