@@ -192,6 +192,43 @@ describe("Main stream reconnect", () => {
     lastMessagePreview: null
   };
 
+  it.each([
+    ["plain reminder", "Reminder: stretch", undefined],
+    ["scheduled report", "I checked Proof. Its status is done.", "tasks"]
+  ] as const)(
+    "catches up a %s persisted before the first subscription, once",
+    async (_kind, body, sourceKind) => {
+      vi.stubGlobal("EventSource", FakeEventSource);
+      vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
+      vi.mocked(listChatThreadMessages).mockResolvedValueOnce({
+        messages: [message({ id: "earlier", body: "Earlier" })]
+      });
+      let renderer: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(createElement(Probe, { surface: "drawer" as ChatSurface }));
+      });
+      await vi.waitFor(() => expect(JSON.stringify(renderer!.toJSON())).toContain("Earlier"));
+      const persisted = message({
+        id: "background",
+        body,
+        origin: { version: 1, kind: "reminder", event: "delivered", reminderId: "r" },
+        ...(sourceKind ? { scheduledReadSource: sourceKind } : {})
+      });
+      vi.mocked(listChatThreadMessages).mockResolvedValue({
+        messages: [message({ id: "earlier", body: "Earlier" }), persisted]
+      });
+      const stream = FakeEventSource.instances[0]!;
+      await act(async () => stream.onopen?.());
+      await vi.waitFor(() => expect(JSON.stringify(renderer!.toJSON())).toContain(body));
+      await act(async () => {
+        stream.onmessage?.({ data: JSON.stringify(recordsFromMessages([persisted])[0]) });
+        stream.onopen?.();
+      });
+      expect(JSON.stringify(renderer!.toJSON()).split(body)).toHaveLength(2);
+      await act(async () => renderer!.unmount());
+    }
+  );
+
   it("catches up a reminder missed while disconnected, once", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
@@ -222,7 +259,7 @@ describe("Main stream reconnect", () => {
       source.onopen?.();
       source.onmessage?.({ data: JSON.stringify(reminder) });
     });
-    await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalledTimes(4));
     const text = JSON.stringify(renderer!.toJSON());
     expect(text.split("Reminder: stretch")).toHaveLength(2);
     expect(text).toContain("Earlier");
