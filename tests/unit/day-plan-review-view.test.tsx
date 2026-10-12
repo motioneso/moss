@@ -85,6 +85,7 @@ function stubController(overrides: Partial<DayPlanReviewController> = {}): DayPl
     preview: null,
     approval: null,
     outcomes: {},
+    reportVersion: 0,
     notice: null,
     busy: false,
     choiceFor: (entry) => defaultChoiceFor(entry),
@@ -389,4 +390,29 @@ describe("p6 automatic Review fail-first", () => {
     });
     expect(document.body.textContent).toMatch(/Due .*?, no time set/);
   });
+});
+
+it("keeps re-preview available after an unavailable calendar preview", async () => {
+  const saveChanges = vi.fn(async () => true);
+  await renderReview(
+    stubController({
+      touchedIds: ["b1"],
+      preview: {
+        revision: 3,
+        calendarAvailability: "unavailable",
+        calendarAsOf: null,
+        blocks: [],
+        eligibleBlockIds: [],
+        conflicts: []
+      },
+      saveChanges
+    })
+  );
+  const save = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent === "Save changes"
+  )!;
+  expect(save.disabled).toBe(false);
+  await act(async () => save.click());
+  expect(saveChanges).toHaveBeenCalledOnce();
+  expect(document.body.textContent).toContain("The calendar is unavailable.");
 });

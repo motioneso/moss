@@ -716,9 +716,7 @@ export async function listTaskActivity(taskId: string): Promise<ListTaskActivity
   return requestJson<ListTaskActivityResponse>(`/api/tasks/${encodeURIComponent(taskId)}/activity`);
 }
 
-export interface ListGoalsResponse {
-  readonly items: readonly MossGoal[];
-}
+export type ListGoalsResponse = readonly MossGoal[];
 
 export async function listGoals(): Promise<ListGoalsResponse> {
   return requestJson<ListGoalsResponse>(`/api/goals`);

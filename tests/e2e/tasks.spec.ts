@@ -239,6 +239,8 @@ test("Escape in the status menu closes only the menu and keeps unsaved edits", a
   await expect(title).toHaveValue("File taxes early");
   await expect(more).toBeFocused();
   await page.keyboard.press("Escape");
+  await expect(dialog).toContainText("Discard unsaved changes?");
+  await dialog.getByRole("button", { name: "Discard unsaved changes", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 

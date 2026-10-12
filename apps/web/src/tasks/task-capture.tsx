@@ -23,6 +23,8 @@ export function TaskCapture(props: {
       // Keep anything typed while the request was in flight.
       setTitle((current) => (current.trim() === submitted ? "" : current));
       setFormError(null);
+      // The first task can implicitly create the Personal list.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.lists });
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
     },
     onError: (error) => setFormError(error.message)

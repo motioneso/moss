@@ -146,7 +146,7 @@ describe("Today weather fetch", () => {
       client.setQueryData(queryKeys.tasks.list, { tasks: [] });
       client.setQueryData(queryKeys.tasks.lists, { lists: [] });
       client.setQueryData(queryKeys.calendar.list, { events: [] });
-      client.setQueryData(queryKeys.goals.list, { items: [] });
+      client.setQueryData(queryKeys.goals.list, []);
       let renderer: ReturnType<typeof create> | undefined;
       await act(async () => {
         renderer = create(

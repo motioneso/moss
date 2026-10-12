@@ -274,7 +274,7 @@ export async function mockApi(page: Page, state: MockApiState): Promise<void> {
   // Goals
   await page.route("**/api/goals", (route) =>
     state.authenticated
-      ? fulfillJson(route, 200, { items: [] })
+      ? fulfillJson(route, 200, [])
       : fulfillJson(route, 401, { error: "Session is missing or expired" })
   );
   // Locale settings
