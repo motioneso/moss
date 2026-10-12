@@ -155,7 +155,7 @@ export function applyGate(
     signals: {
       ...rest,
       ...(actionability?.category === "needs_reply" || actionability?.category === "needs_action"
-        ? { actionability }
+        ? { actionability: { category: actionability.category } }
         : {}),
       pendingJudgement: true
     }

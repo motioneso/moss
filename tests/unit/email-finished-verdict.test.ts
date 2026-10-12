@@ -32,10 +32,16 @@ describe("hasFinishedVerdict (#2804)", () => {
       const owed = gated({
         gate: "maybe_owed",
         summary: null,
-        signals: { actionability: { category, reason: "Asked a question." } }
+        signals: {
+          actionability: {
+            category,
+            reason: "Asked a question.",
+            suggestedTasks: [{ title: "Send the report" }]
+          }
+        }
       });
       expect(owed.summary).toBeNull();
-      expect(owed.signals.actionability?.category).toBe(category);
+      expect(owed.signals.actionability).toEqual({ category });
       expect(hasFinishedVerdict(owed.summary, owed.signals)).toBe(true);
     }
   );
