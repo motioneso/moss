@@ -312,6 +312,37 @@ describe("briefing email current-status evidence (#3465)", () => {
       ).toMatchObject({ ageDays: 0, status: "current_status_unknown", rank: null });
     }
   );
+  it.each(["statement of work", "payment proposal", "invoice details"])(
+    "keeps today's explicitly triaged reply about %s in reply ranking",
+    async (topic) => {
+      const message = {
+        id: "reply-request",
+        connectorAccountId: "account-1",
+        sender: "Colleague",
+        subject: `Can you review the ${topic}?`,
+        receivedAt: NOW.toISOString(),
+        actionability: "needs_reply"
+      };
+      for (const kind of ["morning", "evening"] as const) {
+        const { result, prompt } = await compose([message], kind);
+        expect(prompt).toContain(message.subject);
+        expect(prompt).not.toContain("payment status unknown");
+        expect(result.sourceMetadata.emailSignals).toContainEqual(
+          expect.objectContaining({ type: "needs_reply", messageIds: [message.id] })
+        );
+        expect(
+          (result.sourceMetadata.emailEvidence as BriefingEmailEvidenceV1).items[0]
+        ).toMatchObject({
+          status: "reported_today",
+          rank: expect.any(Number)
+        });
+      }
+    }
+  );
+  it("keeps the strict age cutoff for an old invoice triaged as needing a reply", async () => {
+    const { prompt } = await compose([{ ...bills[0], actionability: "needs_reply" }]);
+    expect(prompt).not.toContain("Invoice #0");
+  });
   it("omits unverified FYI billing summaries", async () => {
     const { prompt } = await compose([
       {

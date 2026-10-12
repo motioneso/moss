@@ -2,7 +2,7 @@ import { localDay, type BriefingEmailEvidenceV1, type LocaleSettingsDto } from "
 
 // The source cache returns 200 recent messages plus 25 older actionable messages.
 const EVIDENCE_CAP = 225;
-const BILLING = /\b(bills?|invoices?|payments?|statements?|past[ -]due|auto-?pay)\b/i;
+const BILLING = /\b(bills?|invoices?|past[ -]due|auto-?pay)\b/i;
 const SETTLED = /\b(paid in full|fully paid|payment (?:received|confirmed|successful))\b/i;
 const NOT_SETTLED = /\b(not|unpaid|failed|pending|partial|partially)\b/i;
 
@@ -53,6 +53,8 @@ export function assessBriefingEmailEvidence(
             (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${receivedDay}T00:00:00Z`)) / 86_400_000
           );
     const billing = BILLING.test(text(item));
+    // Explicit reply triage describes an action, not a payment obligation.
+    const paymentStatusUnknown = billing && item.actionability !== "needs_reply";
     const invoice = billing ? invoiceId(item) : null;
     const receipts =
       invoice && account
@@ -82,7 +84,7 @@ export function assessBriefingEmailEvidence(
         ? "settled"
         : informational
           ? "informational"
-          : !messageId || !account || !validDate || billing || ageDays !== 0
+          : !messageId || !account || !validDate || paymentStatusUnknown || ageDays !== 0
             ? "current_status_unknown"
             : "reported_today";
     const reason =
@@ -92,7 +94,7 @@ export function assessBriefingEmailEvidence(
           ? "receipt_or_noise"
           : !messageId || !account || !validDate
             ? "missing_identity_or_date"
-            : billing
+            : paymentStatusUnknown
               ? "no_current_unpaid_evidence"
               : ageDays !== 0
                 ? "historical_message"
