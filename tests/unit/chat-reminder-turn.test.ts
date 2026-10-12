@@ -26,6 +26,7 @@ function setup(options: {
   pending?: ReturnType<typeof vi.fn>;
   pendingProposal?: boolean;
   matchingTarget?: boolean;
+  prepareEdit?: ReturnType<typeof vi.fn>;
   record?: ReturnType<typeof vi.fn>;
   abortDuringThreadRead?: () => void;
 }) {
@@ -53,6 +54,7 @@ function setup(options: {
       getMainThreadState,
       hasPendingReminderDeletion: options.pending,
       recordReminderTurn,
+      prepareReminderEdit: options.prepareEdit,
       hasQuietHoursReminderTarget: vi.fn().mockResolvedValue(options.matchingTarget ?? false),
       hasPendingQuietHoursProposal: vi.fn().mockResolvedValue(options.pendingProposal ?? false)
     } as never
@@ -64,6 +66,27 @@ function setup(options: {
 }
 
 describe("chat reminder turn (#3309)", () => {
+  it.each([
+    "move the couch to the left",
+    "change of plans tonight",
+    "can you edit this paragraph",
+    "move my reminder to 4pm"
+  ])("passes %j unchanged when no pending reminder matches", async (text) => {
+    const prepare = vi.fn().mockResolvedValue(undefined);
+    const { manager, engine, recordReminderTurn } = setup({ prepareEdit: prepare });
+    await manager.submitTurn("u1", "Ben", text);
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(1);
+    expect(engine.submitted.join("\n")).toContain(text);
+  });
+  it("routes a validated edit before the normal model turn", async () => {
+    const prepare = vi.fn().mockResolvedValue({ kind: "edit_refused", reply: "Nothing changed." });
+    const { manager, engine, recordReminderTurn } = setup({ prepareEdit: prepare });
+    await manager.submitTurn("u1", "Ben", "move my stretch reminder to 4pm");
+    expect(prepare).toHaveBeenCalled();
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toMatchObject({ kind: "edit_refused" });
+    expect(engine.launchCount).toBe(0);
+  });
   it.each([
     "let the dog out at night",
     "let the dough rest overnight",

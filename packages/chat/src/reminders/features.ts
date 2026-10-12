@@ -4,6 +4,45 @@ import { quietHoursAllowanceFeature } from "./quiet-hours-feature.js";
 
 export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   quietHoursAllowanceFeature,
+  {
+    id: "chat.reminder_edits",
+    description:
+      "Edit pending or paused reminder text, time or deadline in Main chat; Settings shows the saved record without an editor. Old jobs cannot fire. Ambiguous targets need a typed choice. Paused reminders stay paused.",
+    featureFlagId: "chat.module",
+    errors: [
+      {
+        code: "reminder_edit_unsupported",
+        class: "validation",
+        description:
+          "Actions, recipients, destinations, recurrence and attention changes are unsupported. Nothing changed. Ask for a text, time or deadline edit instead."
+      },
+      {
+        code: "reminder_edit_unclear",
+        class: "validation",
+        description:
+          "Moss could not resolve the reminder or new terms. Nothing changed. Name the reminder and give a future time; deadlines must follow it within 12 hours."
+      },
+      {
+        code: "reminder_edit_stale",
+        class: "validation",
+        description:
+          "The reminder changed or finished before the edit. Nothing changed. Inspect the current record and ask again."
+      },
+      {
+        code: "reminder_edit_failed",
+        class: "transient",
+        description: "The model or save failed. Nothing changed. Check AI settings or retry."
+      }
+    ],
+    remediations: [
+      {
+        id: "chat.retry_reminder_edit",
+        description:
+          "Inspect the current reminder and ask in Main chat using its exact words. If asked which one, type its number or name.",
+        path: "/settings?section=scheduled"
+      }
+    ]
+  },
   REMINDER_SETTINGS_FEATURE,
   {
     id: "chat.reminder_notifications",
@@ -83,7 +122,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
       {
         id: "chat.set_reminder_time_zone",
         description:
-          "Set your time zone in Settings, Account & preferences, then cancel the reminder and set it again.",
+          "Set your time zone in Settings, Account & preferences, then ask in Main chat to move the reminder to the right time.",
         path: "/settings?section=profile"
       }
     ]

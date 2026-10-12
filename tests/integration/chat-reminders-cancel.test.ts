@@ -545,7 +545,7 @@ describe("what the database refuses", () => {
     expect((await readRow(delivered.id)).state).toBe("delivered");
   });
 
-  it("does not let the app write any column but state and context", async () => {
+  it("does not let cancellation change reminder terms", async () => {
     const saved = await save(ids.userA, "keep my words");
     await expect(
       asOwner(ids.userA, (db) =>
@@ -555,7 +555,7 @@ describe("what the database refuses", () => {
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow(/permission denied/);
+    ).rejects.toThrow(/chat reminder identity cannot be changed/);
     expect(await readRow(saved.id)).toMatchObject({
       state: "queued",
       reminder_text: "keep my words"

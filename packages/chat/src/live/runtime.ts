@@ -1,3 +1,4 @@
+import { createCliStructuredAdapterFactory } from "./cli-structured-adapter.js";
 /**
  * Live-chat runtime wiring: construct a ChatSessionManager backed by the REAL
  * adapters (tmux CLI engine, DataContext persistence, on-disk persona renderer,
@@ -406,6 +407,8 @@ export function selectEngineFactory(
       return {
         connection,
         factory: (provider, sessionKey, engineOpts) => {
+          // Structured reminder interpretation uses the one-shot profile on this same connection.
+          if (engineOpts?.needsStructuredOutput) return factory(provider, sessionKey, engineOpts);
           if (!engineOpts?.conversationId || !engineOpts.userId) {
             // Chat has no old-bridge fallback: a launch with no conversation or user id cannot
             // build the ACP session key below, so it refuses outright rather than silently
@@ -653,7 +656,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     boss: deps.boss,
     connectorSyncAt: deps.connectorSyncAt,
     chatPreferences: deps.chatPreferences,
-    localePreferences: deps.localePreferences
+    localePreferences: deps.localePreferences,
+    editCliAdapter: createCliStructuredAdapterFactory((...args) => engineFactory(...args))
   });
 
   // Late-bound manager ref so the reconcile hook (read once by RpcConnection at construction) can call

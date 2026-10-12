@@ -95,6 +95,8 @@ const ADAPTER_CONSTRUCTION_ALLOWLIST = new Set([
   // Chat composition root: builds the classifier gate's structured adapter factory. The classifier
   // calls go through generateStructured, so the adapter records them.
   "packages/chat/src/routes.ts",
+  // Reminder edits use CliStructuredAdapter's installed, owner-bound activity recorder.
+  "packages/chat/src/live/runtime.ts",
   "apps/api/src/focus-service.ts",
   "apps/api/src/server.ts",
   "apps/worker/src/external-module-ai-bridge.ts"

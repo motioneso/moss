@@ -159,6 +159,12 @@ export interface ChatPersistencePort {
   hasPendingReminderDeletion?(actorUserId: string, threadId: string): Promise<boolean>;
   hasQuietHoursReminderTarget?(actorUserId: string, target: string): Promise<boolean>;
   hasPendingQuietHoursProposal?(actorUserId: string, threadId: string): Promise<boolean>;
+  prepareReminderEdit?(
+    actorUserId: string,
+    text: string,
+    threadId: string,
+    signal?: AbortSignal
+  ): Promise<ReminderTurnPlan | undefined>;
   recordReminderTurn?(
     actorUserId: string,
     userText: string,

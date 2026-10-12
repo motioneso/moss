@@ -1,6 +1,7 @@
+import { recognizeReminderEdit } from "../reminders/edit-recognizer.js";
 import { typedDeletionAgreement, isDeletionNearMiss } from "../reminders/delete-agreement.js";
 // #3309: the step before the classifier gate and the model. A recognised reminder request is
-// answered by code from the user's own raw words, so no model output can create a reminder.
+// answered by code from the user's own raw words. Edits use validated model-filled terms.
 // #3310: the same holds for listing and cancelling.
 
 import type { ChatReminderOriginV1 } from "@moss/shared";
@@ -39,7 +40,14 @@ export async function tryPreModelTurn(
   ...args: Parameters<typeof tryGatedTurn>
 ): ReturnType<typeof tryGatedTurn> {
   const [host, actorUserId, surface, text, opts, controller, flushActions] = args;
-  let recognition = recognizeReminderPlan(text);
+  let recognition: ReminderTurnPlan | undefined = recognizeReminderEdit(text)
+    ? undefined
+    : recognizeReminderPlan(text);
+  if (recognizeReminderEdit(text) && (opts?.moduleControl || opts?.attachments?.length))
+    recognition = {
+      kind: "edit_refused",
+      reply: "Type the reminder edit directly in Main chat without attachments. Nothing changed."
+    };
   if (recognition?.kind === "quiet_allowance" && !namesQuietHoursReminder(text)) {
     try {
       if (
@@ -96,6 +104,29 @@ export async function tryPreModelTurn(
         requestIncognito: threadState?.incognito ?? false,
         requestThreadId: threadState?.id ?? null
       };
+    }
+  }
+  if (
+    !recognition &&
+    !opts?.moduleControl &&
+    !opts?.attachments?.length &&
+    host.deps.persistence.prepareReminderEdit
+  ) {
+    try {
+      threadRead ??= selectTurnThread(host, actorUserId, surface);
+      threadState = await threadRead;
+      if (threadState?.incognito && recognizeReminderEdit(text))
+        recognition = { kind: "main_only", manage: true };
+      if (threadState?.id && !threadState.incognito)
+        recognition = await host.deps.persistence.prepareReminderEdit(
+          actorUserId,
+          text,
+          threadState.id,
+          controller.signal
+        );
+    } catch {
+      if (recognizeReminderEdit(text))
+        recognition = { kind: "edit_refused", reply: REMINDER_MANAGE_FAILURE_MESSAGE };
     }
   }
   if (!recognition)

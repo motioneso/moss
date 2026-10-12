@@ -184,5 +184,8 @@ export async function bringUpRealChatModel(
   await bringUpRealChatProvider(page);
   const cheapest = await discoverCheapestChatModel(page, deadlineMs);
   await selectChatModelOverride(page, cheapest);
+  console.log(
+    `[uat real-chat] provider=${uatRealChatProvider()}, model=${cheapest.id}, tier=${cheapest.tier}`
+  );
   return cheapest;
 }

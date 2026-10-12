@@ -1,3 +1,4 @@
+import { edit } from "./edit.js";
 import { pause, recognizePause } from "./pause.js";
 import { resume, recognizeResume } from "./resume.js";
 import { deleteRequest, recognizeDelete } from "./delete.js";
@@ -10,6 +11,9 @@ import { request } from "./request.js";
 import type { ReminderCommandHandler, ReminderTurnPlan } from "./types.js";
 
 export const reminderCommands = {
+  edit: { execute: edit },
+  edit_selection: { execute: edit },
+  edit_refused: { execute: edit },
   pause: { execute: pause, recognize: recognizePause },
   resume: { execute: resume, recognize: recognizeResume },
   delete: { execute: deleteRequest, recognize: recognizeDelete },
