@@ -545,6 +545,9 @@ importers:
       '@moss/notes':
         specifier: workspace:*
         version: link:../notes
+      '@moss/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@moss/priority':
         specifier: workspace:*
         version: link:../priority

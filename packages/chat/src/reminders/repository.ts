@@ -92,6 +92,34 @@ function toOwned(row: {
 }
 
 export class ReminderRepository {
+  async readNotificationResult(scopedDb: DataContextDb, reminderId: string) {
+    assertDataContextDb(scopedDb);
+    await lockNotificationDelivery(scopedDb, reminderId);
+    const row = await scopedDb.db
+      .selectFrom("app.chat_reminders as reminder")
+      .innerJoin("app.chat_messages as message", (join) =>
+        join
+          .onRef("message.id", "=", "reminder.reserved_message_id")
+          .onRef("message.thread_id", "=", "reminder.thread_id")
+          .onRef("message.owner_user_id", "=", "reminder.owner_user_id")
+      )
+      .select(["reminder.owner_user_id", "reminder.version", "message.id", "message.body"])
+      .where("reminder.id", "=", reminderId)
+      .where("reminder.state", "=", "delivered")
+      .where("reminder.context_state", "!=", "dismissed")
+      .where("message.role", "=", "assistant")
+      .where("message.status", "=", "stored")
+      .executeTakeFirst();
+    return (
+      row && {
+        ownerUserId: row.owner_user_id,
+        version: row.version,
+        messageId: row.id,
+        body: row.body
+      }
+    );
+  }
+
   /** Takes the owner's reminder lock for this transaction and counts the slots in use. */
   async openCountLocked(scopedDb: DataContextDb, ownerUserId: string): Promise<number> {
     assertDataContextDb(scopedDb);
@@ -295,6 +323,7 @@ export class ReminderRepository {
     reminderId: string
   ): Promise<OwnedReminder | undefined> {
     assertDataContextDb(scopedDb);
+    await lockNotificationDelivery(scopedDb, reminderId);
     const row = await scopedDb.db
       .selectFrom("app.chat_reminders")
       .select(OWNED_COLUMNS)
@@ -334,4 +363,14 @@ export class ReminderRepository {
     const result = await sql<{ now: Date }>`select now() as now`.execute(scopedDb.db);
     return new Date(result.rows[0]!.now);
   }
+}
+
+// Cancellation and outward delivery must see whichever commits first, even after chat delivery.
+async function lockNotificationDelivery(
+  scopedDb: DataContextDb,
+  reminderId: string
+): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtextextended(
+    'reminder-notification:' || app.current_actor_user_id()::text || ':' || ${reminderId}, 0
+  ))`.execute(scopedDb.db);
 }

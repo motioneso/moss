@@ -25,12 +25,12 @@ vi.mock("../../packages/notifications/src/push-crypto.js", async (importOriginal
   };
 });
 
-// runPushSummaryJob issues one raw sql`` count query directly (also not injectable).
-let mockCountRows: readonly { count: string }[] = [];
+// The real deferred-cohort repository query runs through this database boundary.
+let mockDeferredRows: readonly Record<string, unknown>[] = [];
 vi.mock("kysely", () => ({
   sql: Object.assign(
     vi.fn(() => ({
-      execute: vi.fn(async () => ({ rows: mockCountRows }))
+      execute: vi.fn(async () => ({ rows: mockDeferredRows }))
     })),
     {}
   )
@@ -75,6 +75,139 @@ function fakeSubscription(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe("runPushDeliverJob", () => {
+  it("suppresses a reminder dismissed after notification creation", async () => {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    const listActiveForDelivery = vi.fn().mockResolvedValue([]);
+    const isNotificationActive = vi.fn().mockResolvedValue(false);
+    await runPushDeliverJob(
+      deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: {
+          getById: vi
+            .fn()
+            .mockResolvedValue({ id: "n1", module_id: "chat", urgency: "normal", metadata: {} })
+        } as never,
+        subscriptionsRepository: { listActiveForDelivery } as never,
+        isNotificationActive
+      }
+    );
+    expect(isNotificationActive).toHaveBeenCalled();
+    expect(listActiveForDelivery).not.toHaveBeenCalled();
+  });
+
+  it("defers a queued normal push when quiet hours have since begun", async () => {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-11T15:00:00Z"));
+    try {
+      const notification = {
+        id: "n1",
+        module_id: "tasks",
+        recipient_user_id: "u1",
+        urgency: "normal",
+        metadata: {}
+      };
+      const listActiveForDelivery = vi.fn();
+      const deferDelivery = vi.fn();
+      const enqueueSummary = vi.fn();
+      await runPushDeliverJob(
+        deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+        fakeScopedDb,
+        {
+          notificationsRepository: {
+            getById: vi.fn().mockResolvedValue(notification),
+            deferDelivery
+          } as never,
+          subscriptionsRepository: { listActiveForDelivery } as never,
+          quietHoursPort: {
+            getSettings: async () => ({
+              enabled: true,
+              start: "08:00",
+              end: "10:00",
+              timezone: "America/Los_Angeles"
+            }),
+            getLocaleTimezone: async () => null
+          },
+          pushQueuePort: { enqueueSummary, enqueueDeliver: vi.fn() }
+        }
+      );
+      expect(deferDelivery).toHaveBeenCalledWith(
+        fakeScopedDb,
+        "n1",
+        new Date("2026-10-11T17:00:00Z")
+      );
+      expect(enqueueSummary).toHaveBeenCalledWith(
+        fakeScopedDb,
+        "u1",
+        new Date("2026-10-11T17:00:00Z")
+      );
+      expect(listActiveForDelivery).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps urgent push immediate inside quiet hours even at quiet sensitivity", async () => {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    const getSettings = vi
+      .fn()
+      .mockResolvedValue({ enabled: true, start: "00:00", end: "23:59", timezone: "UTC" });
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+    await runPushDeliverJob(
+      deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: {
+          getById: vi.fn().mockResolvedValue({
+            id: "n1",
+            module_id: "tasks",
+            title: "Urgent",
+            urgency: "urgent",
+            metadata: {}
+          })
+        } as never,
+        notificationPreferencePort: {
+          isModuleEnabled: async () => true,
+          getSensitivity: async () => "quiet"
+        },
+        quietHoursPort: { getSettings, getLocaleTimezone: async () => null },
+        subscriptionsRepository: {
+          listActiveForDelivery: async () => [fakeSubscription()],
+          recordDeliverySuccess: vi.fn()
+        } as never,
+        cipher: {} as never,
+        sendWebPush
+      }
+    );
+    expect(sendWebPush).toHaveBeenCalledTimes(1);
+    expect(getSettings).not.toHaveBeenCalled();
+  });
+
+  it("rechecks a module muted after the push was queued", async () => {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    const getById = vi.fn().mockResolvedValue({
+      id: "n1",
+      module_id: "chat",
+      title: "Reminder",
+      urgency: "normal",
+      metadata: {}
+    });
+    const listActiveForDelivery = vi.fn().mockResolvedValue([]);
+    const isModuleEnabled = vi.fn().mockResolvedValue(false);
+    await runPushDeliverJob(
+      deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: { getById } as never,
+        subscriptionsRepository: { listActiveForDelivery } as never,
+        notificationPreferencePort: { isModuleEnabled }
+      }
+    );
+    expect(isModuleEnabled).toHaveBeenCalledWith(fakeScopedDb, "chat");
+    expect(listActiveForDelivery).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOrGeneratePushSigningKey.mockResolvedValue(FIXED_SIGNING_KEY);
@@ -414,15 +547,82 @@ describe("runPushDeliverJob", () => {
 });
 
 describe("runPushSummaryJob", () => {
+  it("rechecks cohort mutes and does not count a dismissed reminder", async () => {
+    const { runPushSummaryJob } = await import("@moss/notifications");
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+    const rows = [
+      { id: "n1", module_id: "chat", urgency: "normal", metadata: {} },
+      { id: "n2", module_id: "tasks", urgency: "normal", metadata: {} },
+      { id: "n3", module_id: "briefings", urgency: "normal", metadata: {} }
+    ];
+    await runPushSummaryJob(
+      summaryJob({ actorUserId: "u1", recipientUserId: "u1", releaseAt: "2026-09-04T08:00:00Z" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: { listUnreadDeferred: async () => rows } as never,
+        notificationPreferencePort: {
+          isModuleEnabled: async (_db, moduleId) => moduleId !== "tasks"
+        },
+        isNotificationActive: async (_db, notification) => notification.id !== "n1",
+        subscriptionsRepository: {
+          listActiveForDelivery: async () => [fakeSubscription()],
+          recordDeliverySuccess: vi.fn()
+        } as never,
+        cipher: {} as never,
+        sendWebPush
+      }
+    );
+    expect(JSON.parse(sendWebPush.mock.calls[0]![1]).body).toBe(
+      "1 notification while you were away"
+    );
+  });
+
+  it("does not re-alert a device that received the individual push before quiet hours began", async () => {
+    const { runPushSummaryJob } = await import("@moss/notifications");
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+    const recordDeliverySuccess = vi.fn();
+    await runPushSummaryJob(
+      summaryJob({ actorUserId: "u1", recipientUserId: "u1", releaseAt: "2026-09-04T08:00:00Z" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: {
+          listUnreadDeferred: async () => [
+            { id: "reminder-result", module_id: "chat", urgency: "normal", metadata: {} }
+          ]
+        } as never,
+        subscriptionsRepository: {
+          listActiveForDelivery: async () => [
+            fakeSubscription({ lastDeliveredKey: "reminder-result" }),
+            fakeSubscription({ id: "retry-device", endpoint: "https://push.example/retry" })
+          ],
+          recordDeliverySuccess
+        } as never,
+        cipher: {} as never,
+        sendWebPush
+      }
+    );
+    expect(sendWebPush).toHaveBeenCalledTimes(1);
+    expect(recordDeliverySuccess).toHaveBeenCalledWith(
+      fakeScopedDb,
+      "retry-device",
+      "summary:2026-09-04T08:00:00Z"
+    );
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOrGeneratePushSigningKey.mockResolvedValue(FIXED_SIGNING_KEY);
-    mockCountRows = [];
+    mockDeferredRows = [];
   });
 
   it("sends nothing when no unread notification matches this release window", async () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
-    mockCountRows = [{ count: "0" }];
+    mockDeferredRows = Array.from({ length: 0 }, (_, i) => ({
+      id: `n${i}`,
+      module_id: "tasks",
+      urgency: "normal",
+      metadata: {}
+    }));
     const listActiveForDelivery = vi.fn();
     const sendWebPush = vi.fn();
 
@@ -446,7 +646,12 @@ describe("runPushSummaryJob", () => {
 
   it("sends nothing when the count is positive but there are no active subscriptions", async () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
-    mockCountRows = [{ count: "2" }];
+    mockDeferredRows = Array.from({ length: 2 }, (_, i) => ({
+      id: `n${i}`,
+      module_id: "tasks",
+      urgency: "normal",
+      metadata: {}
+    }));
     const listActiveForDelivery = vi.fn().mockResolvedValue([]);
     const sendWebPush = vi.fn();
 
@@ -469,7 +674,12 @@ describe("runPushSummaryJob", () => {
 
   it("sends one summary payload with the singular wording for exactly one notification", async () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
-    mockCountRows = [{ count: "1" }];
+    mockDeferredRows = Array.from({ length: 1 }, (_, i) => ({
+      id: `n${i}`,
+      module_id: "tasks",
+      urgency: "normal",
+      metadata: {}
+    }));
     const subscription = fakeSubscription();
     const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const sendWebPush = vi.fn().mockResolvedValue(undefined);
@@ -502,7 +712,12 @@ describe("runPushSummaryJob", () => {
 
   it("uses plural wording and includes the release time in the payload id for multiple notifications", async () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
-    mockCountRows = [{ count: "3" }];
+    mockDeferredRows = Array.from({ length: 3 }, (_, i) => ({
+      id: `n${i}`,
+      module_id: "tasks",
+      urgency: "normal",
+      metadata: {}
+    }));
     const subscription = fakeSubscription();
     const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const sendWebPush = vi.fn().mockResolvedValue(undefined);
@@ -732,7 +947,12 @@ describe("push delivery retries (#743 security finding 8)", () => {
 
   it("the summary push records summary:<releaseAt> as the delivered key", async () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
-    mockCountRows = [{ count: "2" }];
+    mockDeferredRows = Array.from({ length: 2 }, (_, i) => ({
+      id: `n${i}`,
+      module_id: "tasks",
+      urgency: "normal",
+      metadata: {}
+    }));
     const repository = repositoryWith([fakeSubscription()]);
 
     await runPushSummaryJob(

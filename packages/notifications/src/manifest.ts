@@ -100,16 +100,12 @@ export const notificationsModuleManifest = {
     {
       id: "notifications.quiet_hours",
       description:
-        "Normal notifications created during the person's saved quiet hours stay out of the " +
-        "in-app bell until that local daily window ends. Urgent notifications keep their " +
-        "existing immediate delivery behavior."
+        "Normal notifications wait for the saved local quiet-hours end. Queued normal pushes recheck the current window, including changes made while waiting. Urgent notifications still push immediately."
     },
     {
       id: "notifications.push",
       description:
-        "Push notifications alert a registered browser or device, alongside the in-app bell. " +
-        "Needs a secure connection, is not supported everywhere, and allows up to 10 devices " +
-        "per person. A repeatedly-failing device is turned off but stays listed.",
+        "Push alerts up to 10 registered devices per person over a secure connection. Queued delivery and summaries recheck module mutes, sensitivity and active devices. Repeated failure disables a device but keeps it listed.",
       remediations: [
         {
           id: "notifications.push.manage_devices",

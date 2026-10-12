@@ -1,6 +1,5 @@
 import type https from "node:https";
 
-import { sql } from "kysely";
 import webpush from "web-push";
 
 import type { DataContextDb } from "@moss/db";
@@ -23,9 +22,24 @@ import {
   PushSubscriptionsRepository,
   type PushDeliveryTarget
 } from "./push-subscriptions-repository.js";
-import { NotificationsRepository } from "./repository.js";
+import {
+  NotificationsRepository,
+  actorQuietHoursDeferredUntil,
+  type NotificationPreferencePort,
+  type NotificationWithReadState,
+  type QuietHoursPort,
+  type PushQueuePort
+} from "./repository.js";
+import { shouldPushImmediately } from "./sensitivity.js";
 
 export interface PushWorkerDependencies {
+  readonly notificationPreferencePort?: NotificationPreferencePort;
+  readonly quietHoursPort?: QuietHoursPort;
+  readonly pushQueuePort?: PushQueuePort;
+  readonly isNotificationActive?: (
+    scopedDb: DataContextDb,
+    notification: NotificationWithReadState
+  ) => Promise<boolean>;
   readonly notificationsRepository?: NotificationsRepository;
   readonly subscriptionsRepository?: PushSubscriptionsRepository;
   readonly cipher?: ReturnType<typeof createPushSigningCipher>;
@@ -213,14 +227,24 @@ async function deliverToSubscriptions(
   subscriptions: readonly PushDeliveryTarget[],
   vapidDetails: VapidDetails,
   payload: WebPushPayload,
-  finalAttempt: boolean
+  finalAttempt: boolean,
+  summaryNotificationIds?: readonly string[]
 ): Promise<PushDeliveryOutcome> {
-  const serialized = JSON.stringify(payload);
-
   const results = await Promise.all(
     subscriptions.map(async (subscription): Promise<DeviceResult> => {
       if (subscription.lastDeliveredKey === payload.id) {
         return { kind: "alreadyDelivered" };
+      }
+      let devicePayload = payload;
+      if (summaryNotificationIds) {
+        const count = summaryNotificationIds.filter(
+          (id) => id !== subscription.lastDeliveredKey
+        ).length;
+        if (count === 0) return { kind: "alreadyDelivered" };
+        devicePayload = {
+          ...payload,
+          body: `${count} notification${count === 1 ? "" : "s"} while you were away`
+        };
       }
       try {
         // Re-check the stored address at send time so a row written before the policy
@@ -232,7 +256,7 @@ async function deliverToSubscriptions(
               endpoint,
               keys: { p256dh: subscription.p256dh, auth: subscription.auth }
             },
-            serialized,
+            JSON.stringify(devicePayload),
             { vapidDetails, timeout: PUSH_SEND_TIMEOUT_MS, agent: httpsAgent }
           ),
           PUSH_SEND_DEADLINE_MS
@@ -286,6 +310,9 @@ export async function runPushDeliverJob(
     return NOTHING_TO_DELIVER;
   }
 
+  if (!(await canDeliverPush(scopedDb, notification, notificationsRepository, deps)))
+    return NOTHING_TO_DELIVER;
+
   const subscriptions = await subscriptionsRepository.listActiveForDelivery(scopedDb);
   if (subscriptions.length === 0) {
     return NOTHING_TO_DELIVER;
@@ -317,6 +344,39 @@ const NOTHING_TO_DELIVER: PushDeliveryOutcome = {
   reasons: []
 };
 
+async function canDeliverPush(
+  scopedDb: DataContextDb,
+  notification: NotificationWithReadState,
+  repository: NotificationsRepository,
+  deps: PushWorkerDependencies
+): Promise<boolean> {
+  if (
+    notification.module_id &&
+    deps.notificationPreferencePort &&
+    !(await deps.notificationPreferencePort.isModuleEnabled(scopedDb, notification.module_id))
+  )
+    return false;
+  if (deps.isNotificationActive && !(await deps.isNotificationActive(scopedDb, notification)))
+    return false;
+  const urgency =
+    notification.urgency === "urgent" || notification.urgency === "low"
+      ? notification.urgency
+      : "normal";
+  const sensitivity =
+    (await deps.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
+  if (!shouldPushImmediately(sensitivity, urgency)) return false;
+  if (urgency !== "urgent" && deps.quietHoursPort) {
+    const releaseAt = await actorQuietHoursDeferredUntil(scopedDb, deps.quietHoursPort, new Date());
+    if (releaseAt) {
+      if (!deps.pushQueuePort) throw new Error("push quiet-hours queue is not configured");
+      await repository.deferDelivery(scopedDb, notification.id, releaseAt);
+      await deps.pushQueuePort.enqueueSummary(scopedDb, notification.recipient_user_id!, releaseAt);
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Sends one summary push, "N notifications while you were away", for every unread
  * notification whose deferred_until matches this job's release time exactly. All
@@ -335,15 +395,16 @@ export async function runPushSummaryJob(
   const cipher = deps.cipher ?? createPushSigningCipher();
   const sendWebPush = deps.sendWebPush ?? webpush.sendNotification;
 
-  const countRow = await sql<{ count: string }>`
-    SELECT count(*)::text AS count
-    FROM app.notifications n
-    LEFT JOIN app.notification_reads r ON r.notification_id = n.id
-    WHERE n.deferred_until = ${job.data.releaseAt}::timestamptz
-      AND r.notification_id IS NULL
-  `.execute(scopedDb.db);
-
-  const count = Number(countRow.rows[0]?.count ?? "0");
+  const releaseAt = new Date(job.data.releaseAt);
+  if (new Date() < releaseAt) throw new Error("push summary ran before its release time");
+  const notificationsRepository = deps.notificationsRepository ?? new NotificationsRepository();
+  const cohort = await notificationsRepository.listUnreadDeferred(scopedDb, releaseAt);
+  const eligibleIds: string[] = [];
+  for (const notification of cohort) {
+    if (await canDeliverPush(scopedDb, notification, notificationsRepository, deps))
+      eligibleIds.push(notification.id);
+  }
+  const count = eligibleIds.length;
   if (count === 0) {
     return NOTHING_TO_DELIVER;
   }
@@ -368,6 +429,7 @@ export async function runPushSummaryJob(
       body: `${count} notification${count === 1 ? "" : "s"} while you were away`,
       href: "/notifications"
     },
-    isFinalAttempt(job)
+    isFinalAttempt(job),
+    eligibleIds
   );
 }

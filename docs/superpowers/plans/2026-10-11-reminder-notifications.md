@@ -1,9 +1,15 @@
 # Reminder notifications (#3134)
 
-Status: ready for coordinator review; feature implementation has not started.
+Status: approved by the coordinator; implementation in progress.
 Branch: scheduled/3134-reminder-notifications.
 Base: integration/scheduled-proactive, inspected at 99b83b531.
 Part of #3134. Sensitive delivery behavior; live proof required.
+
+Approval conditions: keep lookups and deferral under normal per-user row security, with no
+security-definer function or bypass. Keep urgent notification behavior unchanged and prove it
+with a test. Describe every shared push behavior change in the PR. The existing shell has no URL
+that opens Main chat or selects its reminder (apps/web/src/shell/app-shell.tsx:185); use /today and
+declare that destination gap in the PR. The approved kill gate and stop condition below still apply.
 
 ## Outcome and limits
 
@@ -150,7 +156,7 @@ stop and ask the coordinator to re-slice before expanding scope. Coordinator own
 Verification commands are unpiped; expected exit is 0 for each:
 
 - pnpm exec vitest run tests/unit/push-worker.test.ts
-- scripts/run-gate.sh start --gate "test:integration tests/integration/chat-reminder-notifications.test.ts tests/integration/chat-reminders-delivery.test.ts"
+- scripts/run-gate.sh start --gate test:integration
 - scripts/run-gate.sh wait --follow (one background wait; read its terminal exit code)
 - scripts/run-gate.sh start, then one background scripts/run-gate.sh wait --follow for the full gate
 - pnpm format:check; pnpm lint; pnpm typecheck; pnpm check:file-size (each checked separately)
@@ -162,3 +168,8 @@ explicit path, push the branch and open the PR against integration/scheduled-pro
 "Part of #3134" and Release note Category: N/A. Read CI, post live proof or its honest absence,
 stop owned processes by PID, remove disposable artifacts, release the port, and report the PR to
 the coordinator. No board, milestone, merge or docs/coordination changes.
+
+Implementation evidence: the initial scoped gate passed 18 tests, including the kill gate. Later scoped
+coverage passed 23 tests. Removing the source dismissal filter made two integration tests fail;
+it was restored before the final gate. The gate runner accepts a script name, not command arguments;
+scoped runs used a temporary local test script, removed before closeout.

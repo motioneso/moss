@@ -182,6 +182,20 @@ export async function isActorInQuietHours(
   return isInQuietHours(now, settings, tz);
 }
 
+export async function actorQuietHoursDeferredUntil(
+  scopedDb: DataContextDb,
+  port: QuietHoursPort,
+  now: Date
+): Promise<Date | null> {
+  const settings = parseQuietHoursSettings(await port.getSettings(scopedDb));
+  if (!settings?.enabled) return null;
+  return computeDeferredUntil(
+    now,
+    settings,
+    await resolveTimezone(port, scopedDb, settings.timezone)
+  );
+}
+
 /**
  * Task 2b (#1283): same rule as worker-rpc-host.ts's `notifyHref` — a same-origin
  * path only, never an absolute URL, a protocol-relative URL, or a scheme. This is
@@ -205,6 +219,45 @@ export class NotificationsRepository {
     private readonly notificationPreferencePort?: NotificationPreferencePort,
     private readonly pushQueuePort?: PushQueuePort
   ) {}
+
+  async findByEventKey(scopedDb: DataContextDb, moduleId: string, eventKey: string) {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.notifications")
+      .selectAll()
+      .where("module_id", "=", moduleId)
+      .where("event_key", "=", eventKey)
+      .executeTakeFirst();
+  }
+
+  async listUnreadDeferred(
+    scopedDb: DataContextDb,
+    releaseAt: Date
+  ): Promise<readonly NotificationWithReadState[]> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<NotificationWithReadState>`
+      SELECT n.*, NULL::timestamptz AS read_at
+      FROM app.notifications n
+      LEFT JOIN app.notification_reads r ON r.notification_id = n.id
+      WHERE n.deferred_until = ${releaseAt} AND r.notification_id IS NULL
+      ORDER BY n.id
+    `.execute(scopedDb.db);
+    return result.rows;
+  }
+
+  async deferDelivery(
+    scopedDb: DataContextDb,
+    notificationId: string,
+    releaseAt: Date
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.notifications")
+      .set({ deferred_until: releaseAt })
+      .where("id", "=", notificationId)
+      .where("urgency", "!=", "urgent")
+      .execute();
+  }
 
   async listVisible(scopedDb: DataContextDb): Promise<ListNotificationsResult> {
     assertDataContextDb(scopedDb);

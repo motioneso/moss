@@ -58,6 +58,11 @@ import {
   registerReminderDeliveryWorker
 } from "./reminders/deliver.js";
 import {
+  CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION,
+  registerReminderNotificationWorker
+} from "./reminders/notifications.js";
+import type { NotificationsRepository } from "@moss/notifications";
+import {
   buildDistillationPrompt,
   containsSensitiveMemoryText,
   decideCandidatePromotion,
@@ -86,7 +91,8 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
     name: CHAT_SUMMARIZE_CONVERSATION_QUEUE,
     options: { retryLimit: 0, deleteAfterSeconds: 600, policy: "exclusive" }
   },
-  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION
+  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
+  CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION
 ];
 
 /**
@@ -472,6 +478,7 @@ export async function handleArchiveDayJob(
 // ── Worker registration ───────────────────────────────────────────────────────
 
 export interface RegisterChatJobWorkersOptions {
+  readonly reminderNotifications: NotificationsRepository;
   readonly embeddingProviderFactory: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
   /**
    * AI deps for the extract-facts worker. Optional here so the module registry can
@@ -598,8 +605,21 @@ export async function registerChatJobWorkers(
     dataContext,
     options.workOptions
   );
+  const reminderNotificationWorkId = await registerReminderNotificationWorker(
+    boss,
+    dataContext,
+    options.reminderNotifications,
+    options.workOptions
+  );
 
-  const workIds = [embedWorkId, extractWorkId, archiveWorkId, summarizeWorkId, reminderWorkId];
+  const workIds = [
+    embedWorkId,
+    extractWorkId,
+    archiveWorkId,
+    summarizeWorkId,
+    reminderWorkId,
+    reminderNotificationWorkId
+  ];
   return workIds;
 }
 
