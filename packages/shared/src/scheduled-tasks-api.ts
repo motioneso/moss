@@ -104,3 +104,29 @@ export const listScheduledTasksRouteSchema = {
     403: errorResponseSchema
   }
 } as const;
+
+export interface ScheduledTaskControlResponse {
+  readonly ok: true;
+}
+export const scheduledTaskControlRouteSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id"],
+    properties: { id: { type: "string", format: "uuid" } }
+  },
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["ok"],
+      properties: { ok: { type: "boolean", const: true } }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;

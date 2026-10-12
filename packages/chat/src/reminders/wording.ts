@@ -72,9 +72,10 @@ export function describeDelay(totalSeconds: number): string {
 }
 
 export const REMINDER_MANAGE_MAIN_ONLY_REPLY =
-  "I can only list or cancel chat reminders in your Main chat, so nothing changed.";
+  "I can only manage chat reminders in your Main chat, so nothing changed.";
 
 const FINISHED_LABEL: Readonly<Record<Exclude<ChatReminderState, "queued">, string>> = {
+  paused: "paused",
   delivered: "sent",
   cancelled: "cancelled",
   failed: "couldn't be sent",
@@ -138,6 +139,7 @@ function finishedLabel(reminder: OwnedReminder): string {
 
 /** A clock-time reminder shows its local time and deadline; a relative one shows time left. */
 function waitingLabel(reminder: OwnedReminder, now: Date, locale: ReminderLocale): string {
+  if (reminder.state === "paused") return "paused until you resume it";
   if (reminder.timing !== "local_clock") return timeLeft(reminder.dueAt, now);
   const today = localDayKey(now, locale.timeZone);
   const localDue = localWallClock(reminder.dueAt, locale.timeZone);

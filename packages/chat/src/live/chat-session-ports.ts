@@ -156,6 +156,7 @@ export interface ChatPersistencePort {
    * #3309 — persist the code-written answer to a recognised reminder request, saving and queuing
    * an accepted reminder in the same transaction. Optional: embedders without reminders omit it.
    */
+  hasPendingReminderDeletion?(actorUserId: string, threadId: string): Promise<boolean>;
   recordReminderTurn?(
     actorUserId: string,
     userText: string,

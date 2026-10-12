@@ -1,3 +1,4 @@
+import { typedDeletionAgreement, isDeletionNearMiss } from "../reminders/delete-agreement.js";
 // #3309: the step before the classifier gate and the model. A recognised reminder request is
 // answered by code from the user's own raw words, so no model output can create a reminder.
 // #3310: the same holds for listing and cancelling.
@@ -22,6 +23,9 @@ export const REMINDER_STORAGE_FAILURE_MESSAGE =
 export const REMINDER_MANAGE_FAILURE_MESSAGE =
   "I couldn't reach your reminders, so nothing changed. Try again in a moment.";
 
+export const REMINDER_AGREEMENT_FAILURE_MESSAGE =
+  "I could not check that just now. Nothing changed, ask again.";
+
 const REFUSED_ORIGIN: ChatReminderOriginV1 = {
   version: 1,
   kind: "reminder",
@@ -33,12 +37,52 @@ const REFUSED_ORIGIN: ChatReminderOriginV1 = {
 export async function tryPreModelTurn(
   ...args: Parameters<typeof tryGatedTurn>
 ): ReturnType<typeof tryGatedTurn> {
-  const [host, actorUserId, surface, text, opts, controller] = args;
-  const recognition = recognizeReminderPlan(text);
-  if (!recognition) return tryGatedTurn(...args);
-  const manage = recognition.kind === "list" || recognition.kind === "cancel";
+  const [host, actorUserId, surface, text, opts, controller, flushActions] = args;
+  let recognition = recognizeReminderPlan(text);
+  const agreement = typedDeletionAgreement(text);
+  let threadState: Awaited<ReturnType<typeof selectTurnThread>>;
+  let threadRead = args[7];
+  if (
+    !recognition &&
+    !opts?.moduleControl &&
+    !opts?.attachments?.length &&
+    (agreement !== undefined || isDeletionNearMiss(text)) &&
+    host.deps.persistence.hasPendingReminderDeletion
+  ) {
+    try {
+      threadRead ??= selectTurnThread(host, actorUserId, surface);
+      threadState = await threadRead;
+      if (
+        threadState?.id &&
+        !threadState.incognito &&
+        (await host.deps.persistence.hasPendingReminderDeletion(actorUserId, threadState.id))
+      )
+        recognition = { kind: "confirm_delete", agree: agreement ?? false };
+    } catch {
+      return {
+        result: emitUnsaved(host, actorUserId, surface, text, REMINDER_AGREEMENT_FAILURE_MESSAGE),
+        requestIncognito: threadState?.incognito ?? false,
+        requestThreadId: threadState?.id ?? null
+      };
+    }
+  }
+  if (!recognition)
+    return tryGatedTurn(
+      host,
+      actorUserId,
+      surface,
+      text,
+      opts,
+      controller,
+      flushActions,
+      threadRead
+    );
+  const manage =
+    recognition.kind !== "request" &&
+    recognition.kind !== "clock_request" &&
+    recognition.kind !== "unsupported";
 
-  const threadState = await selectTurnThread(host, actorUserId, surface);
+  threadState = await (threadRead ?? selectTurnThread(host, actorUserId, surface));
   const requestIncognito = threadState?.incognito ?? false;
   const requestThreadId = threadState?.id ?? null;
   const done = (result: Awaited<ReturnType<typeof tryGatedTurn>>["result"]) => ({
@@ -86,7 +130,12 @@ export async function tryPreModelTurn(
   }
   if (stored === "stopped") return done(cancelledTurn(host, actorUserId, surface));
   if (!stored) {
-    const reply = manage ? REMINDER_MANAGE_FAILURE_MESSAGE : REMINDER_STORAGE_FAILURE_MESSAGE;
+    const reply =
+      recognition.kind === "confirm_delete"
+        ? REMINDER_AGREEMENT_FAILURE_MESSAGE
+        : manage
+          ? REMINDER_MANAGE_FAILURE_MESSAGE
+          : REMINDER_STORAGE_FAILURE_MESSAGE;
     return done(emitUnsaved(host, actorUserId, surface, text, reply));
   }
 

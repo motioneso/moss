@@ -205,6 +205,9 @@ const EXPECTED: readonly string[] = [
   "ai POST /api/ai/module-builds/:buildId/cancel blocked external_effect",
   "ai GET /api/ai/module-builds/mine read",
   "chat GET /api/chat/scheduled-tasks read",
+  "chat POST /api/chat/scheduled-tasks/:id/pause blocked self_authority",
+  "chat POST /api/chat/scheduled-tasks/:id/resume blocked self_authority",
+  "chat DELETE /api/chat/scheduled-tasks/:id blocked self_authority",
   "chat GET /api/chat/threads blocked data_scope_consent",
   "chat GET /api/chat/threads/:id/messages blocked data_scope_consent",
   "chat GET /api/chat/meeting-context read",
@@ -266,6 +269,9 @@ const EXPECTED: readonly string[] = [
  * families, plus account exports (they bypass Wellness consent) and GETs with side effects.
  */
 const NAMED_BLOCKED: readonly (readonly [string, string, string])[] = [
+  ["POST", "/api/chat/scheduled-tasks/:id/pause", "self_authority"],
+  ["POST", "/api/chat/scheduled-tasks/:id/resume", "self_authority"],
+  ["DELETE", "/api/chat/scheduled-tasks/:id", "self_authority"],
   ...PRIVACY_NAMED_BLOCKED,
   ...SCHEDULING_NAMED_BLOCKED,
   ...FEEDS_NAMED_BLOCKED,

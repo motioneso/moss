@@ -9,8 +9,10 @@ const MAX_REQUEST_LENGTH = 700;
 
 export type ReminderCommand =
   | { readonly kind: "none" }
-  | { readonly kind: "list" }
-  | { readonly kind: "cancel"; readonly target: string | null };
+  | Exclude<
+      ReminderTurnPlan,
+      { kind: "request" | "clock_request" | "unsupported" | "main_only" | "confirm_delete" }
+    >;
 
 export function recognizeReminderCommand(raw: string): ReminderCommand {
   if (raw.length > MAX_REQUEST_LENGTH) return { kind: "none" };

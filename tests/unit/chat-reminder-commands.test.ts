@@ -64,14 +64,20 @@ describe("recognizing list and cancel", () => {
     ["remove that reminder for Mum's call", "mum's call"],
     ["cancel the stretch reminder", "stretch"],
     ["can you cancel my water the plants reminder please", "water the plants"]
-  ])("cancels %j with target %j", (say, target) => {
-    expect(recognizeReminderCommand(say)).toEqual({ kind: "cancel", target });
+  ])("recognizes cancel or deletion for %j with target %j", (say, target) => {
+    expect(recognizeReminderCommand(say)).toEqual({
+      kind: /^(delete|remove)/i.test(say) ? "delete" : "cancel",
+      target
+    });
   });
 
   it.each(["cancel my reminder", "cancel my reminders", "delete the reminder"])(
-    "cancels %j with no target",
+    "recognizes cancel or deletion for %j with no target",
     (say) => {
-      expect(recognizeReminderCommand(say)).toEqual({ kind: "cancel", target: null });
+      expect(recognizeReminderCommand(say)).toEqual({
+        kind: /^delete/i.test(say) ? "delete" : "cancel",
+        target: null
+      });
     }
   );
 

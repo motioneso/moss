@@ -275,8 +275,21 @@ export interface ChatClassifierGateOriginV1 {
 export interface ChatReminderOriginV1 {
   readonly version: 1;
   readonly kind: "reminder";
-  readonly event: "saved" | "refused" | "delivered" | "listed" | "cancelled" | "cancel_refused";
+  readonly event:
+    | "saved"
+    | "refused"
+    | "delivered"
+    | "listed"
+    | "cancelled"
+    | "cancel_refused"
+    | "paused"
+    | "resumed"
+    | "delete_requested"
+    | "deleted"
+    | "delete_declined";
   readonly reminderId: string | null;
+  readonly reminderVersion?: number;
+  readonly reminderState?: string;
   /** Set on delivery: true when the reminder arrived more than a minute after it was due. */
   readonly late?: boolean;
 }
@@ -591,9 +604,23 @@ const chatTurnOriginSchema = {
         kind: { type: "string", enum: ["reminder"] },
         event: {
           type: "string",
-          enum: ["saved", "refused", "delivered", "listed", "cancelled", "cancel_refused"]
+          enum: [
+            "saved",
+            "refused",
+            "delivered",
+            "listed",
+            "cancelled",
+            "cancel_refused",
+            "paused",
+            "resumed",
+            "delete_requested",
+            "deleted",
+            "delete_declined"
+          ]
         },
         reminderId: { anyOf: [{ type: "string" }, { type: "null" }] },
+        reminderVersion: { type: "integer", minimum: 1 },
+        reminderState: { type: "string" },
         late: { type: "boolean" }
       }
     }

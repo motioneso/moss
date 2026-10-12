@@ -340,7 +340,7 @@ export class ReminderRepository {
       .updateTable("app.chat_reminders")
       .set({ state: "cancelled" })
       .where("id", "=", reminderId)
-      .where("state", "=", "queued")
+      .where("state", "in", ["queued", "paused"])
       .executeTakeFirstOrThrow();
     if (result.numUpdatedRows !== 1n) throw new Error("chat reminder was not cancelled");
   }
@@ -366,7 +366,7 @@ export class ReminderRepository {
 }
 
 // Cancellation and outward delivery must see whichever commits first, even after chat delivery.
-async function lockNotificationDelivery(
+export async function lockNotificationDelivery(
   scopedDb: DataContextDb,
   reminderId: string
 ): Promise<void> {

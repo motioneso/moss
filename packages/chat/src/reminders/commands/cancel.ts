@@ -16,7 +16,7 @@ export const cancel: ReminderCommandHandler = async ({ scopedDb, deps }, plan) =
   };
 };
 
-const CANCEL_VERB = "(?:cancel|delete|remove)";
+const CANCEL_VERB = "cancel";
 const ARTICLE = "(?: my| the| that| this)?";
 
 const CANCEL_UNTARGETED = new RegExp(`^${CANCEL_VERB}${ARTICLE} reminders?$`);

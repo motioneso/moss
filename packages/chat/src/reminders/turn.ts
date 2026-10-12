@@ -18,7 +18,8 @@ export async function decideReminderTurn(
   deps: ReminderCommandContext["deps"],
   actorUserId: string,
   thread: ReminderCommandContext["thread"],
-  plan: ReminderTurnPlan
+  plan: ReminderTurnPlan,
+  userText?: string
 ): Promise<ReminderTurnDecision> {
   if (plan.kind === "unsupported") return refused(reminderRefusedReply(plan.reason));
   if (plan.kind === "main_only" || !thread.is_main || thread.incognito) {
@@ -28,7 +29,10 @@ export async function decideReminderTurn(
         : plan.kind !== "request" && plan.kind !== "clock_request";
     return refused(manage ? REMINDER_MANAGE_MAIN_ONLY_REPLY : REMINDER_MAIN_ONLY_REPLY);
   }
-  return reminderCommands[plan.kind].execute({ scopedDb, deps, actorUserId, thread }, plan);
+  return reminderCommands[plan.kind].execute(
+    { scopedDb, deps, actorUserId, thread, userText },
+    plan
+  );
 }
 
 function refused(reply: string): ReminderTurnDecision {

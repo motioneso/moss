@@ -13,6 +13,8 @@ export type ReminderTurnPlan =
   | { readonly kind: "unsupported"; readonly reason: ReminderUnsupportedReason }
   | { readonly kind: "list" }
   | { readonly kind: "cancel"; readonly target: string | null }
+  | { readonly kind: "pause" | "resume" | "delete"; readonly target: string | null }
+  | { readonly kind: "confirm_delete"; readonly agree: boolean }
 
   /** A save, list or cancel refused before it reaches storage. `manage` marks list or cancel. */
   | { readonly kind: "main_only"; readonly manage?: boolean };
@@ -33,6 +35,7 @@ export interface ReminderCommandContext {
     readonly locale: () => Promise<ReminderLocale>;
   };
   readonly actorUserId: string;
+  readonly userText?: string;
   readonly thread: { readonly id: string; readonly is_main: boolean; readonly incognito: boolean };
 }
 

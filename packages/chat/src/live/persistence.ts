@@ -1,3 +1,4 @@
+import { pendingReminderDeletion } from "../reminders/delete-agreement.js";
 /**
  * DataContextChatPersistence — the REAL ChatPersistencePort backing the live
  * ChatSessionManager.
@@ -405,6 +406,13 @@ export class DataContextChatPersistence implements ChatPersistencePort {
    * #3309: persist the code-written answer to a recognised reminder request. The reply and origin
    * are decided inside the turn's transaction, and an accepted reminder commits with the turn.
    */
+  async hasPendingReminderDeletion(actorUserId: string, threadId: string): Promise<boolean> {
+    return this.run(actorUserId, "reminder-deletion-agreement", async (db) => {
+      const main = await this.chat.getMainThread(db, actorUserId);
+      return main?.id === threadId && Boolean(await pendingReminderDeletion(db, threadId));
+    });
+  }
+
   async recordReminderTurn(
     actorUserId: string,
     userText: string,
@@ -531,7 +539,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               },
               actorUserId,
               thread,
-              turn.reminder
+              turn.reminder,
+              userText
             )
           : "origin" in turn
             ? { reply: assistantReply, origin: turn.origin }

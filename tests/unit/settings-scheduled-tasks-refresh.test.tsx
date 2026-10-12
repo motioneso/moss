@@ -96,3 +96,91 @@ it("keeps the loaded list, open detail and saved message when a background refre
     vi.unstubAllGlobals();
   }
 });
+
+it("deletion restores focus to a surviving control after the list refresh", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+  client.setQueryData(queryKeys.settings.locale, {
+    locale: { timezone: "UTC", region: "en-US", dateFormat: "24" }
+  });
+  client.setQueryData(queryKeys.chat.scheduledTasks, {
+    tasks: [
+      {
+        id: "delete-focus",
+        title: "Delete focus",
+        instruction: "Delete focus",
+        group: "Reminders",
+        state: "active",
+        dueAt: "2026-10-11T12:00:00Z",
+        deadlineAt: null,
+        createdAt: "2026-10-11T11:00:00Z",
+        runs: []
+      }
+    ]
+  });
+  let finishRefresh!: () => void;
+  const refreshed = new Promise<{ tasks: [] }>((resolve) => {
+    finishRefresh = () => resolve({ tasks: [] });
+  });
+  vi.spyOn(api, "listScheduledTasks").mockImplementation(() => refreshed);
+  vi.spyOn(api, "deleteScheduledTask").mockResolvedValue(undefined);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const button = (name: string) =>
+    Array.from(container.querySelectorAll("button")).find((node) => node.textContent === name)!;
+  try {
+    await act(async () =>
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(
+            ChatControlsProvider,
+            {
+              value: {
+                openChat: vi.fn(),
+                openChatThread: vi.fn(),
+                openChatWith: vi.fn(),
+                openAssistantWithDraft: vi.fn()
+              }
+            },
+            createElement(ScheduledTasksPane)
+          )
+        )
+      )
+    );
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-task-id="delete-focus"]')!.click()
+    );
+    await act(async () => button("Delete task").click());
+    await act(async () =>
+      Array.from(container.querySelectorAll('[role="dialog"] button'))
+        .find((node) => node.textContent === "Delete task")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    );
+    await act(async () => {
+      frames.splice(0).forEach((frame) => frame(0));
+    });
+    await act(async () => {
+      finishRefresh();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await act(async () => {
+      frames.splice(0).forEach((frame) => frame(0));
+    });
+    expect(container.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement?.textContent).toBe("Open chat");
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+    container.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});

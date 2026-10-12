@@ -341,3 +341,9 @@ blocking	packages/briefings/src/compose.ts	tests/uat/specs/3465-briefing-email-e
 blocking	packages/briefings/src/compose-evening.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
 blocking	packages/briefings/src/morning-inputs.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
 blocking	packages/briefings/src/signals.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+# #3133 slice B: real lifecycle controls and typed deletion agreement.
+blocking	packages/chat/src/reminders/controls.ts	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	packages/chat/src/reminders/delete-agreement.ts	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	packages/chat/src/reminders/commands/**	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/controls.tsx	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	packages/chat/sql/0313_chat_reminder_controls.sql	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
