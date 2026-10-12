@@ -35,6 +35,8 @@ import {
   deleteReminderById
 } from "../../packages/chat/src/reminders/controls.js";
 import { listScheduledReminders } from "../../packages/chat/src/reminders/settings.js";
+import { editReminderById } from "../../packages/chat/src/reminders/edit.js";
+import { readScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 let appDb: Kysely<MossDatabase>;
@@ -155,6 +157,58 @@ async function message(saved: Awaited<ReturnType<typeof save>>) {
   );
 }
 describe("scheduled reads through the actor worker and real gateway", () => {
+  it("requeues time edits on the source-read queue and refuses text edits", async () => {
+    const saved = await save();
+    const keep = {
+      text: null,
+      delaySeconds: null,
+      localDue: null,
+      deadline: "keep",
+      localDeadline: null
+    } as const;
+    const moved = await owner((db) =>
+      editReminderById(db, boss, ids.userA, saved.id, 1, { ...keep, delaySeconds: 60 }, "UTC")
+    );
+    expect(moved.kind).toBe("changed");
+    const jobs = await bootstrap.query(
+      "SELECT name, data FROM pgboss.job WHERE data->>'resourceId' = $1 AND data->>'version' = '2'",
+      [saved.id]
+    );
+    expect(jobs.rows).toEqual([
+      { name: CHAT_SCHEDULED_READ_QUEUE, data: { ...saved.data, version: 2 } }
+    ]);
+    expect(await owner((db) => readScheduledOperation(db, saved.id))).toMatchObject({
+      operation: "tasks.get",
+      item_id: saved.task.id
+    });
+    expect(
+      await runScheduledReadJob({ data: saved.data }, { dataContext: worker, gateway: gateway() })
+    ).toBe("inactive");
+    const textEdit = await owner((db) =>
+      editReminderById(
+        db,
+        boss,
+        ids.userA,
+        saved.id,
+        2,
+        { ...keep, text: "check a different task" },
+        "UTC"
+      )
+    );
+    expect(textEdit).toEqual({
+      kind: "invalid",
+      reply:
+        "A task check's source is fixed. You can change its time, but not its text. Nothing changed."
+    });
+    const row = await owner((db) =>
+      db.db
+        .selectFrom("app.chat_reminders")
+        .select(["version", "reminder_text"])
+        .where("id", "=", saved.id)
+        .executeTakeFirstOrThrow()
+    );
+    expect(row).toEqual({ version: 2, reminder_text: `Check task status: ${saved.task.title}` });
+  });
   it("keeps frozen storage immutable and hides another owner's responsibility", async () => {
     const saved = await save();
     const row = await owner((db) =>

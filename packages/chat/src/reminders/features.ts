@@ -10,6 +10,12 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
     featureFlagId: "chat.module",
     errors: [
       {
+        code: "scheduled_read_text_edit_refused",
+        class: "validation",
+        description:
+          "A saved task check keeps its source fixed. Time edits use the source-read queue; text edits change nothing. Delete the check and request a new one to choose a different task."
+      },
+      {
         code: "scheduled_read_unresolved",
         class: "validation",
         description:
