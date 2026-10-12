@@ -2,7 +2,7 @@ import type { PgBoss } from "pg-boss";
 import { sql } from "kysely";
 import { assertDataContextDb, type DataContextDb, type ChatReminderState } from "@moss/db";
 import { enqueueReminderDelivery } from "./deliver.js";
-import type { SavedReminder } from "./repository.js";
+import { lockNotificationDelivery, type SavedReminder } from "./repository.js";
 
 export interface ControlledReminder extends SavedReminder {
   readonly text: string;
@@ -20,6 +20,7 @@ export async function lockReminderControl(
   id: string
 ): Promise<ControlledReminder | undefined> {
   assertDataContextDb(scopedDb);
+  await lockNotificationDelivery(scopedDb, id);
   const row = await scopedDb.db
     .selectFrom("app.chat_reminders")
     .select(["id", "reminder_text", "state", "version", "due_at"])

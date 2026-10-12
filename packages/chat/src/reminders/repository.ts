@@ -366,7 +366,7 @@ export class ReminderRepository {
 }
 
 // Cancellation and outward delivery must see whichever commits first, even after chat delivery.
-async function lockNotificationDelivery(
+export async function lockNotificationDelivery(
   scopedDb: DataContextDb,
   reminderId: string
 ): Promise<void> {

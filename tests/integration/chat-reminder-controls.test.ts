@@ -20,8 +20,10 @@ import { createPgBossClient } from "@moss/jobs";
 
 import {
   enqueueReminderDelivery,
-  deliverDueReminder
+  deliverDueReminder,
+  runReminderDeliveryJob
 } from "../../packages/chat/src/reminders/deliver.js";
+import { enqueueReminderNotification } from "../../packages/chat/src/reminders/notifications.js";
 import {
   ReminderRepository,
   type SavedReminder,
@@ -346,7 +348,12 @@ function attempt(saved: SavedReminder, repository = reminders) {
     deliverDueReminder(
       db,
       { actorUserId: ids.userA, resourceId: saved.id, version: saved.version },
-      { reminders: repository, chat }
+      {
+        reminders: repository,
+        chat,
+        enqueueNotification: (scopedDb, reminder) =>
+          enqueueReminderNotification(appBoss, scopedDb, reminder)
+      }
     )
   );
 }
@@ -365,7 +372,7 @@ describe("reminder controls racing delivery", () => {
     await asOwner(ids.userA, (db) =>
       action === "pause" ? pauseReminderById(db, saved.id) : deleteReminderById(db, saved.id)
     );
-    expect(await attempt(saved)).not.toBe("delivered");
+    expect(await attempt(saved)).toBe(action === "pause" ? "paused" : "missing");
     expect(await deliveredCount(saved.id)).toBe(0);
   });
   it.each(["pause", "delete"] as const)(
@@ -391,7 +398,7 @@ describe("reminder controls racing delivery", () => {
       } finally {
         release.resolve();
       }
-      expect(await delivery).not.toBe("delivered");
+      expect(await delivery).toBe(action === "pause" ? "paused" : "missing");
       expect(await deliveredCount(saved.id)).toBe(0);
     }
   );
@@ -407,6 +414,11 @@ describe("reminder controls racing delivery", () => {
     const outcomes = await Promise.all([attempt(resumed.reminder), attempt(resumed.reminder)]);
     expect(outcomes.sort()).toEqual(["already_delivered", "delivered"]);
     expect(await deliveredCount(saved.id)).toBe(1);
+    const jobs = await bootstrap.query(
+      "SELECT data->>'version' AS version FROM pgboss.job WHERE name = 'chat.notify-reminder' AND data->>'resourceId' = $1",
+      [saved.id]
+    );
+    expect(jobs.rows).toEqual([{ version: "3" }]);
     await asOwner(ids.userA, (db) => deleteReminderById(db, saved.id));
     expect(await attempt(resumed.reminder)).toBe("missing");
     expect(await deliveredCount(saved.id)).toBe(1);
@@ -431,6 +443,45 @@ describe("reminder controls racing delivery", () => {
     expect(await delivery).toBe("delivered");
     expect((await pause).kind).toBe("not_pending");
     expect(await deliveredCount(saved.id)).toBe(1);
+  });
+  it("a final retry rechecks the resumed version after rolling back its delivery lock", async () => {
+    const saved = await save(ids.userA, "resume during final retry");
+    await makeDue(saved);
+    class ResumedAfterRollback extends ReminderRepository {
+      private locks = 0;
+      private clockFailed = false;
+      override async lockForDelivery(db: DataContextDb, id: string) {
+        if (++this.locks === 2)
+          await asOwner(ids.userA, async (ownerDb) => {
+            await pauseReminderById(ownerDb, id);
+            await resumeReminderById(ownerDb, appBoss, ids.userA, id);
+          });
+        return super.lockForDelivery(db, id);
+      }
+      override async now(db: DataContextDb) {
+        if (!this.clockFailed) {
+          this.clockFailed = true;
+          throw new Error("delivery failure before rollback");
+        }
+        return super.now(db);
+      }
+    }
+    const outcome = await asWorker(ids.userA, (db) =>
+      runReminderDeliveryJob(
+        db,
+        {
+          data: { actorUserId: ids.userA, resourceId: saved.id, version: saved.version },
+          retryCount: 8,
+          retryLimit: 8
+        },
+        { chat, reminders: new ResumedAfterRollback() }
+      )
+    );
+    expect(outcome).toBe("stale_version");
+    expect((await asOwner(ids.userA, (db) => reminders.lockForCancel(db, saved.id)))?.state).toBe(
+      "queued"
+    );
+    expect(await deliveredCount(saved.id)).toBe(0);
   });
   it("a resumed reminder past its explicit deadline expires without posting", async () => {
     const dueAt = new Date(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000);

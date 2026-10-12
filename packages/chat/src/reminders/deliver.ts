@@ -46,6 +46,7 @@ export type ReminderDeliveryOutcome =
   | "missing"
   | "already_delivered"
   | "cancelled"
+  | "paused"
   | "expired"
   | "stale_version"
   | "not_main"
@@ -81,6 +82,7 @@ export async function deliverDueReminder(
 
   if (!reminder) return unlockedOutcome(scopedDb, payload, deps);
   if (reminder.ownerUserId !== payload.actorUserId) return "missing";
+  if (reminder.state === "paused") return "paused";
   if (reminder.state !== "queued") return "already_delivered";
   if (reminder.version !== payload.version) return "stale_version";
 
@@ -103,6 +105,7 @@ export async function deliverDueReminder(
     return "not_main";
   }
 
+  // The row lock stays held through message persistence and notification enqueue.
   const late = now.getTime() - reminder.dueAt.getTime() > REMINDER_LATE_AFTER_MS;
   await deps.chat.insertReservedAssistantMessage(scopedDb, {
     id: reminder.reservedMessageId,
@@ -127,8 +130,8 @@ function pastDeadline(reminder: DueReminder, now: Date): boolean {
 }
 
 /**
- * The worker can lock only queued rows, so a finished row reads back unlocked. A cancelled or
- * expired reminder ends the job with nothing posted.
+ * The worker can lock only queued rows; paused and finished rows read back unlocked.
+ * A missing, paused, cancelled or expired reminder ends the job with nothing posted.
  */
 async function unlockedOutcome(
   scopedDb: DataContextDb,
@@ -137,7 +140,8 @@ async function unlockedOutcome(
 ): Promise<ReminderDeliveryOutcome> {
   const current = await deps.reminders.readState(scopedDb, payload.resourceId);
   if (current?.ownerUserId !== payload.actorUserId) return "missing";
-  if (current.state === "cancelled" || current.state === "expired") return current.state;
+  if (current.state === "paused" || current.state === "cancelled" || current.state === "expired")
+    return current.state;
   return "already_delivered";
 }
 
@@ -169,6 +173,9 @@ export async function runReminderDeliveryJob(
     const reminder = await deps.reminders.lockForDelivery(scopedDb, job.data.resourceId);
     if (!reminder) return unlockedOutcome(scopedDb, job.data, deps);
     if (reminder.ownerUserId !== job.data.actorUserId) return "missing";
+    if (reminder.state === "paused") return "paused";
+    if (reminder.state !== "queued") return "already_delivered";
+    if (reminder.version !== job.data.version) return "stale_version";
     if (pastDeadline(reminder, await deps.reminders.now(scopedDb))) {
       await deps.reminders.markExpired(scopedDb, reminder.id);
       return "expired";

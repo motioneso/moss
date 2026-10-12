@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import pg from "pg";
 import type { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -9,6 +9,7 @@ import { createPgBossClient, createPushQueuePort } from "@moss/jobs";
 import { createNotificationPreferencePort } from "@moss/module-registry";
 import {
   NotificationsRepository,
+  PushSubscriptionsRepository,
   runPushDeliverJob,
   type QuietHoursPort
 } from "@moss/notifications";
@@ -24,6 +25,7 @@ import {
   type ReminderNotificationPayload
 } from "../../packages/chat/src/reminders/notifications.js";
 import { ReminderRepository } from "../../packages/chat/src/reminders/repository.js";
+import { deleteReminderById } from "../../packages/chat/src/reminders/controls.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const chat = new ChatRepository();
@@ -129,6 +131,106 @@ function notify(payload: ReminderNotificationPayload, repository = notifications
     runReminderNotificationJob(db, payload, repository)
   );
 }
+
+function barrier() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+class UnexpectedSubscriptions extends PushSubscriptionsRepository {
+  override async listActiveForDelivery(): Promise<never> {
+    throw new Error("removed reminder reached push effects");
+  }
+}
+
+it("deletion suppresses queued notification creation while keeping the chat result", async () => {
+  const payload = await due("deleted before notification");
+  await asOwner((db) => deleteReminderById(db, payload.resourceId));
+  expect(await notify(payload)).toBe("inactive");
+  expect(
+    await asOwner((db) => notifications.findByEventKey(db, "chat", payload.idempotencyKey))
+  ).toBeUndefined();
+  const result = await bootstrap.query("SELECT id FROM app.chat_messages WHERE id = $1", [
+    payload.idempotencyKey
+  ]);
+  expect(result.rows).toHaveLength(1);
+});
+
+it("an in-flight push and later retries recheck deletion through the public lifecycle check", async () => {
+  const payload = await due("delete before push recheck");
+  await notify(payload);
+  const notification = await asOwner((db) =>
+    notifications.findByEventKey(db, "chat", payload.idempotencyKey)
+  );
+  const started = barrier();
+  const release = barrier();
+  const job = {
+    data: { actorUserId: ids.userA, recipientUserId: ids.userA, notificationId: notification!.id },
+    retryCount: 1,
+    retryLimit: 8
+  };
+  const push = worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+    runPushDeliverJob(job, db, {
+      notificationsRepository: notifications,
+      subscriptionsRepository: new UnexpectedSubscriptions(),
+      isNotificationActive: async (scopedDb, row) => {
+        started.resolve();
+        await release.promise;
+        return isReminderNotificationActive(scopedDb, row);
+      }
+    })
+  );
+  await started.promise;
+  try {
+    expect((await asOwner((db) => deleteReminderById(db, payload.resourceId))).kind).toBe(
+      "changed"
+    );
+  } finally {
+    release.resolve();
+  }
+  expect((await push).delivered).toBe(0);
+  expect(await notify(payload)).toBe("inactive");
+  const retry = await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+    runPushDeliverJob(job, db, {
+      notificationsRepository: notifications,
+      subscriptionsRepository: new UnexpectedSubscriptions(),
+      isNotificationActive: isReminderNotificationActive
+    })
+  );
+  expect(retry.delivered).toBe(0);
+});
+
+it("deletion waits for a notification admitted under the public lifecycle lock", async () => {
+  const payload = await due("notification wins deletion lock");
+  await notify(payload);
+  const notification = await asOwner((db) =>
+    notifications.findByEventKey(db, "chat", payload.idempotencyKey)
+  );
+  const locked = barrier();
+  const release = barrier();
+  const admitted = worker.withDataContext({ actorUserId: ids.userA }, async (db) => {
+    const row = await notifications.getById(db, notification!.id);
+    expect(await isReminderNotificationActive(db, row!)).toBe(true);
+    locked.resolve();
+    await release.promise;
+  });
+  await locked.promise;
+  try {
+    await expect(
+      asOwner(async (db) => {
+        await sql`SET LOCAL lock_timeout = '100ms'`.execute(db.db);
+        return deleteReminderById(db, payload.resourceId);
+      })
+    ).rejects.toThrow("lock timeout");
+  } finally {
+    release.resolve();
+    await admitted;
+  }
+  expect((await asOwner((db) => deleteReminderById(db, payload.resourceId))).kind).toBe("changed");
+});
 
 it("notification failure and concurrent retry leave the one delivered chat result intact", async () => {
   const payload = await due();
