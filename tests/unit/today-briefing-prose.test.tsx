@@ -372,7 +372,7 @@ function renderToday(input: {
         sourceRunUnavailable: false
       }
     );
-    client.setQueryData(queryKeys.goals.list, { items: [] });
+    client.setQueryData(queryKeys.goals.list, []);
     if (input.member) {
       // Member-shaped onboarding status: no connected provider on this role.
       client.setQueryData(queryKeys.onboarding.status, {

@@ -88,7 +88,7 @@ describe("Wellness observed versus unavailable data", () => {
   });
   it("shows read failure and retry without rendering zero mood, empty history or empty schedule", () => {
     const queryClient = client();
-    fail(queryClient, queryKeys.wellness.checkins);
+    fail(queryClient, [...queryKeys.wellness.checkins, "summary", localDay(new Date()), undefined]);
     const html = renderPage(queryClient);
     expect(html).toContain("Check-in statistics unavailable");
     expect(html).toContain("Could not load your check-ins");
@@ -99,8 +99,15 @@ describe("Wellness observed versus unavailable data", () => {
   });
   it("keeps confirmed data on a failed refresh with an explicit warning", () => {
     const queryClient = client();
-    queryClient.setQueryData(queryKeys.wellness.checkins, { checkins: [] });
-    fail(queryClient, queryKeys.wellness.checkins);
+    queryClient.setQueryData(
+      [...queryKeys.wellness.checkins, "summary", localDay(new Date()), undefined],
+      { checkins: [], nextCursor: null }
+    );
+    queryClient.setQueryData([...queryKeys.wellness.checkins, "history"], {
+      pages: [{ checkins: [], nextCursor: null }],
+      pageParams: [undefined]
+    });
+    fail(queryClient, [...queryKeys.wellness.checkins, "summary", localDay(new Date()), undefined]);
     const html = renderPage(queryClient);
     expect(html).toContain("Showing the last loaded entries");
     expect(html).toContain("No check-ins in this period");

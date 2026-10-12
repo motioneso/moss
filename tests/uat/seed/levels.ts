@@ -1,3 +1,4 @@
+import { seedNewsFeedbackFixture } from "./chunks/news-feedback-fixture.js";
 import { SharesRepository } from "@moss/db";
 import { WorkflowsRepository } from "@moss/workflows";
 import { createAppRuntimeRunner, createMigrationOwnerDb } from "./connections.js";
@@ -166,6 +167,8 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
       );
     }
     await seedDataChunks(runner, adminUserId, exclude);
+    if (options.newsFeedbackFixtureBaseUrl)
+      await seedNewsFeedbackFixture(runner, adminUserId, options.newsFeedbackFixtureBaseUrl);
     if (options.withWorkshopStorageFixture) {
       await installWorkshopStorageFixture(runner, adminUserId);
     }

@@ -72,10 +72,13 @@ async function main(): Promise<void> {
     resolveMossEnv(process.env, "JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""
   );
 
+  const newsFeedbackFixtureBaseUrl =
+    resolveMossEnv(process.env, "MOSS_UAT_NEWS_FEEDBACK_FIXTURE_BASE_URL") || undefined;
   await seedLevel({
     level,
     excludeChunks,
     withoutNewsJsonBinding,
+    newsFeedbackFixtureBaseUrl,
     jobSearchAiProviderBaseUrl,
     briefingWriterAiProviderBaseUrl,
     classifierFixtureAiProviderBaseUrl,

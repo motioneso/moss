@@ -29,6 +29,7 @@ import { SportsTicker } from "./sports-ticker.js";
 import { AroundLeaguesBoard, AroundLeaguesTicker } from "./sports-around-ticker.js";
 import { SOCCER_COMPETITIONS } from "./competitions.js";
 import { useAutoAdvance } from "./use-auto-advance.js";
+import { RotationControl } from "./rotation-control.js";
 import { StandingsRail } from "./sports-standings.js";
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 
@@ -224,6 +225,7 @@ export function SportsPage() {
           ) : (
             <HeroCarousel
               headlines={leadWidePhotoFirst(data.topStories)}
+              degraded={data.degraded}
               hiddenStoryRefs={hiddenStoryRefs}
               onStoryChanged={onStoryChanged}
             />
@@ -415,7 +417,7 @@ function GamedayHero(props: {
     [games, activeIndex, count, onSelect]
   );
   const advance = useCallback(() => step(1), [step]);
-  const pauseHandlers = useAutoAdvance(count, advance, GAMEDAY_ADVANCE_MS);
+  const rotation = useAutoAdvance(count, advance, GAMEDAY_ADVANCE_MS);
 
   if (count === 1) {
     return (
@@ -428,7 +430,7 @@ function GamedayHero(props: {
   }
 
   return (
-    <section aria-label="Today's games" aria-roledescription="carousel" {...pauseHandlers}>
+    <section aria-label="Today's games" aria-roledescription="carousel" {...rotation.pauseHandlers}>
       <div className="sp-gameday__stage">
         {games.map((entry) => (
           <div
@@ -453,6 +455,11 @@ function GamedayHero(props: {
         ))}
       </div>
       <div className="sp-gameday__ctl">
+        <RotationControl
+          paused={rotation.paused}
+          reducedMotion={rotation.reducedMotion}
+          onToggle={rotation.togglePaused}
+        />
         {/* Tabs, not dots: a dot says "there is more", a matchup and a score says WHAT more —
             which is the whole point of surfacing a second live game (#1386). */}
         <div className="sp-gameday__tabs" role="tablist" aria-label="Today's games">

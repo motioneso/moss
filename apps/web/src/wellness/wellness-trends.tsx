@@ -9,11 +9,11 @@ import {
   type LocaleSettingsDto
 } from "@moss/shared";
 import { queryKeys } from "../api/query-keys";
-import { listWellnessCheckins, getMedicationAdherenceSummary } from "../api/client";
+import { listWellnessCheckinsInWindow, getMedicationAdherenceSummary } from "../api/client";
 import { formatDate, useUserLocale } from "../locale/locale-format";
 import { emoColor, type Theme } from "./emotion-taxonomy";
 import { WellnessChart, type DayPoint } from "./wellness-chart";
-import { localDayOffset } from "./wellness-date-utils";
+import { checkinWindowSince, localDayOffset } from "./wellness-date-utils";
 
 function TrendingUpIcon() {
   return (
@@ -73,9 +73,11 @@ export function WellnessTrends({ theme = "light" }: Props) {
   const [range, setRange] = useState<14 | 30>(30);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  const todayStr = localDayOffset(0, locale.timezone);
+  const since = checkinWindowSince(localDayOffset(range - 1, locale.timezone, todayStr));
   const checkinsQuery = useQuery({
-    queryKey: [...queryKeys.wellness.checkins, range],
-    queryFn: () => listWellnessCheckins(range * 3) // over-fetch; we filter by date below
+    queryKey: [...queryKeys.wellness.checkins, "window", range, todayStr, locale.timezone],
+    queryFn: () => listWellnessCheckinsInWindow(since)
   });
   const adherenceQuery = useQuery({
     queryKey: queryKeys.wellness.adherenceSummary(range),
@@ -97,8 +99,6 @@ export function WellnessTrends({ theme = "light" }: Props) {
     if (!d) return;
     (checkinsByDate[d] ??= []).push(c);
   });
-
-  const todayStr = localDayOffset(0, locale.timezone);
 
   const days: DayPoint[] = Array.from({ length: range }, (_, i) => {
     const iso = localDayOffset(range - 1 - i, locale.timezone, todayStr);
@@ -135,7 +135,9 @@ export function WellnessTrends({ theme = "light" }: Props) {
         }
       />
 
-      {checkinsQuery.isError || adherenceQuery.isError ? (
+      {checkinsQuery.isPending || adherenceQuery.isPending ? (
+        <p role="status">Loading trend data…</p>
+      ) : checkinsQuery.isError || adherenceQuery.isError ? (
         <p role="status">
           Couldn&apos;t refresh trend data.{" "}
           <Button

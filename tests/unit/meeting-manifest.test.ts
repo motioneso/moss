@@ -220,6 +220,7 @@ describe("meetings composition", () => {
       "meetings.questions",
       "meetings.transcript_storage",
       "meetings.transcript_review",
+      "meetings.transcript_search",
       "meetings.capture_default",
       "meetings.notes_recovery",
       "meetings.delete_draft",

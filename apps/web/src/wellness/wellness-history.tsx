@@ -81,6 +81,10 @@ interface Props {
   onEdit: (id: string) => void;
   /** IANA timezone from user locale settings. Defaults to browser timezone when absent. */
   timezone?: string;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  loadMoreError?: boolean;
+  onLoadMore?: () => void;
 }
 
 export function WellnessHistory({
@@ -89,7 +93,11 @@ export function WellnessHistory({
   filter,
   onClearFilter,
   onEdit,
-  timezone
+  timezone,
+  hasMore = false,
+  loadingMore = false,
+  loadMoreError = false,
+  onLoadMore
 }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [limit, setLimit] = useState(8);
@@ -136,7 +144,11 @@ export function WellnessHistory({
       <div className="wl-history">
         {shown.length === 0 ? (
           <div className="wl-history__empty">
-            {filter ? "No check-ins match." : "Your check-ins will appear here."}
+            {filter
+              ? hasMore
+                ? "No matching check-ins in the loaded entries. Load older entries to keep looking."
+                : "No check-ins match."
+              : "Your check-ins will appear here."}
           </div>
         ) : null}
         {shown.map((ck) => {
@@ -241,10 +253,30 @@ export function WellnessHistory({
           );
         })}
       </div>
-      {rows.length > limit ? (
+      {loadMoreError ? (
+        <p role="alert">Could not load older check-ins. Your loaded entries are still here.</p>
+      ) : null}
+      {rows.length > limit || hasMore || loadMoreError ? (
         <div className="wl-history__more">
-          <Button variant="secondary" size="sm" onClick={() => setLimit((l) => l + 10)}>
-            Show {Math.min(10, rows.length - limit)} more
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={loadingMore}
+            onClick={() => {
+              if (rows.length > limit) setLimit((value) => value + 10);
+              else {
+                setLimit((value) => value + 10);
+                onLoadMore?.();
+              }
+            }}
+          >
+            {loadingMore
+              ? "Loading older check-ins…"
+              : loadMoreError
+                ? "Retry older entries"
+                : rows.length > limit
+                  ? `Show ${Math.min(10, rows.length - limit)} more`
+                  : "Load older check-ins"}
           </Button>
         </div>
       ) : null}

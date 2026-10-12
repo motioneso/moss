@@ -1,15 +1,47 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
 
 import { Button, Menu } from "@moss/module-web-sdk";
+import { Note } from "@moss/ui";
 
 import { newsQueryKeys } from "./query-keys.js";
 import { createNewsStoryFeedback } from "./story-feedback-client.js";
 import { markStoryDismissed } from "./dismissed-story-tracker.js";
 import { withoutDismissedStories } from "./news-overview-filters.js";
 import "./story-feedback.css";
+
+const STORY_FEEDBACK_CREATE_KEY = ["news", "story-feedback", "create"] as const;
+
+/** A dismissed story unmounts its menu. Keep its saved receipt on the current News page. */
+export function NewsStoryFeedbackReceipt() {
+  const queryClient = useQueryClient();
+  // Ignore history from an earlier page/account and reset the boundary with the client.
+  const previous = useMemo(() => new Set(queryClient.getMutationCache().getAll()), [queryClient]);
+  const results = useMutationState({
+    filters: { mutationKey: [...STORY_FEEDBACK_CREATE_KEY, "news"], exact: true },
+    select: (mutation) => {
+      const variables = mutation.state.variables;
+      return {
+        current: !previous.has(mutation),
+        status: mutation.state.status,
+        less:
+          typeof variables === "object" &&
+          variables !== null &&
+          "kind" in variables &&
+          variables.kind === "less_like_this"
+      };
+    }
+  });
+  const latest = results.at(-1);
+  if (!latest?.current || !latest.less || latest.status !== "success") return null;
+  return (
+    <Note variant="practical">
+      <span role="status">Preference saved. Manage or remove it in News settings.</span>
+    </Note>
+  );
+}
 
 export function StoryFeedbackMenu(props: {
   readonly headline: NewsHeadline;
@@ -32,6 +64,7 @@ function StoryFeedbackMenuWithTarget(props: {
   const [validationError, setValidationError] = useState<string | null>(null);
   const reasonId = useId();
   const mutation = useMutation({
+    mutationKey: [...STORY_FEEDBACK_CREATE_KEY, props.surface],
     mutationFn: (input: { kind: "more_like_this" | "less_like_this"; reason?: string }) =>
       createNewsStoryFeedback({ targetRef: targetRef!, surface: props.surface, ...input }),
     onSuccess: (_result, variables) => {
@@ -48,6 +81,7 @@ function StoryFeedbackMenuWithTarget(props: {
   });
 
   function submitReason() {
+    if (mutation.isPending) return;
     const trimmed = reason.trim();
     if (!trimmed) {
       setValidationError("Tell us why before saving.");
@@ -77,6 +111,8 @@ function StoryFeedbackMenuWithTarget(props: {
           }
         ]}
         onSelect={(id) => {
+          if (mutation.isPending) return;
+          mutation.reset();
           if (id === "less_like_this") setReasonOpen(true);
           else mutation.mutate({ kind: "more_like_this" });
         }}
@@ -90,6 +126,7 @@ function StoryFeedbackMenuWithTarget(props: {
           }}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
+              if (mutation.isPending) return;
               setReasonOpen(false);
               setValidationError(null);
             }
@@ -100,6 +137,7 @@ function StoryFeedbackMenuWithTarget(props: {
             id={reasonId}
             value={reason}
             maxLength={500}
+            disabled={mutation.isPending}
             autoFocus
             onChange={(event) => {
               setReason(event.target.value);
@@ -107,11 +145,11 @@ function StoryFeedbackMenuWithTarget(props: {
             }}
           />
           {validationError ? <span role="alert">{validationError}</span> : null}
-          {mutation.isError ? <span role="alert">Could not save that feedback.</span> : null}
           <div className="nw-feedback__actions">
             <Button
               variant="quiet"
               size="sm"
+              disabled={mutation.isPending}
               onClick={() => {
                 setReasonOpen(false);
                 setValidationError(null);
@@ -124,6 +162,19 @@ function StoryFeedbackMenuWithTarget(props: {
             </Button>
           </div>
         </form>
+      ) : null}
+      {mutation.isPending || mutation.isError || mutation.isSuccess ? (
+        <div className="nw-feedback__receipt">
+          <Note variant="practical">
+            <span role={mutation.isError ? "alert" : "status"}>
+              {mutation.isPending
+                ? "Saving feedback…"
+                : mutation.isError
+                  ? "Could not save that feedback. Try again."
+                  : "Preference saved. Manage or remove it in News settings."}
+            </span>
+          </Note>
+        </div>
       ) : null}
     </div>
   );

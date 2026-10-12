@@ -5,16 +5,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CalendarEventDto, DayPlanBlockDto, DayPlanDto, TaskDto } from "@moss/shared";
+import type { CalendarEventDto, DayPlanDto } from "@moss/shared";
 
-import {
-  commitmentRowsFor,
-  effortMinutes,
-  eveningIntentPatchFor,
-  proposeTomorrowBlocks,
-  saveStatusLine,
-  tomorrowPlanMissing
-} from "../../apps/web/src/today/evening-planning-model.js";
 import {
   useEveningPlanning,
   type EveningPlanningController
@@ -29,341 +21,24 @@ import {
   localTimeToIso
 } from "../../apps/web/src/today/day-plan-review-model.js";
 
+import {
+  TMO,
+  TODAY,
+  TZ,
+  block,
+  taskDto,
+  taskDtos,
+  todayPlan,
+  tomorrowPlan
+} from "./evening-planning-fixtures.js";
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-const TZ = "America/Los_Angeles";
-const TODAY = "2026-09-10";
-const TMO = "2026-09-11";
-
-function taskDto(id: string, title: string, overrides: Partial<TaskDto> = {}): TaskDto {
-  return {
-    id,
-    title,
-    status: "todo",
-    dueAt: null,
-    effort: null,
-    ...overrides
-  } as unknown as TaskDto;
-}
-
-function block(id: string, overrides: Partial<DayPlanBlockDto> = {}): DayPlanBlockDto {
-  return {
-    id,
-    kind: "focus",
-    taskId: null,
-    title: null,
-    position: 0,
-    actualPlacement: null,
-    pendingChange: null,
-    ...overrides
-  };
-}
-
-function taskDtos(): TaskDto[] {
-  return [
-    taskDto("t1", "Write the launch brief", { dueAt: `${TMO}T12:00:00.000Z` }),
-    taskDto("t2", "Call the vendor", { dueAt: `${TODAY}T12:00:00.000Z` }),
-    taskDto("t3", "File the report"),
-    taskDto("t4", "Water the plants", { status: "done" }),
-    taskDto("t-cal", "Dentist", { effort: "medium" })
-  ];
-}
-
-function todayPlan(): DayPlanDto {
-  return {
-    id: "plan-today",
-    localDay: TODAY,
-    timeZone: TZ,
-    revision: 2,
-    sourceRunId: null,
-    eveningIntent: null,
-    blocks: [
-      block("bt1", { taskId: "t1", position: 0 }),
-      block("bt2", { taskId: "t2", position: 1 })
-    ]
-  };
-}
-
-function tomorrowPlan(): DayPlanDto {
-  return {
-    id: "plan-tmo",
-    localDay: TMO,
-    timeZone: TZ,
-    revision: 4,
-    sourceRunId: null,
-    eveningIntent: {
-      priorityTaskIds: [],
-      capacity: null,
-      notes: null,
-      corrections: [],
-      commitments: []
-    },
-    blocks: [
-      block("b-cal", {
-        taskId: "t-cal",
-        position: 0,
-        actualPlacement: {
-          startsAt: `${TMO}T14:00:00.000Z`,
-          durationMinutes: 60,
-          calendarEventRef: "ev-0"
-        }
-      }),
-      block("b-p1", {
-        taskId: "t1",
-        position: 1,
-        pendingChange: { kind: "add", startsAt: `${TMO}T16:00:00.000Z`, durationMinutes: 30 }
-      }),
-      block("b-p2", {
-        taskId: "t2",
-        position: 2,
-        pendingChange: { kind: "add", startsAt: `${TMO}T18:00:00.000Z`, durationMinutes: 30 }
-      })
-    ]
-  };
-}
-
-function events(): CalendarEventDto[] {
-  return [
-    {
-      id: "ev-morn",
-      title: "Standup",
-      startsAt: `${TMO}T16:00:00.000Z`,
-      endsAt: `${TMO}T17:00:00.000Z`,
-      allDay: false,
-      isMossBlock: false,
-      attendeeCount: 0
-    } as unknown as CalendarEventDto
-  ];
-}
-
-describe("commitmentRowsFor", () => {
-  const rows = () => commitmentRowsFor(todayPlan(), tomorrowPlan(), taskDtos(), [], TMO, TZ);
-  const byId = (list: ReturnType<typeof rows>) => new Map(list.map((row) => [row.task.id, row]));
-
-  it("derives rows from today blocks and due dates, decided by tomorrow due or saved intent", () => {
-    const found = byId(rows());
-    expect(found.get("t1")?.decided).toBe("tomorrow");
-    expect(found.get("t2")?.decided).toBe(null);
-    expect(found.get("t3")?.decided).toBe(undefined);
-  });
-
-  it("dedupes tasks shared by blocks and due lists", () => {
-    const ids = rows().map((row) => row.task.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it("marks done, archived and unavailable tasks with no choice", () => {
-    const plan = todayPlan();
-    plan.blocks = [
-      block("bx", { taskId: "t4" }),
-      block("by", { taskId: "t9" }),
-      block("bz", { taskId: "t2" })
-    ];
-    const archived = taskDto("t9", "Old", { status: "archived" });
-    const tasks = [archived, ...taskDtos()];
-    const found = byId(commitmentRowsFor(plan, tomorrowPlan(), tasks, ["t2"], TMO, TZ));
-    expect(found.get("t4")?.marked).toBe("done");
-    expect(found.get("t9")?.marked).toBe("archived");
-    expect(found.get("t2")?.marked).toBe("unavailable");
-  });
-
-  it("prefers saved commitments over undecided", () => {
-    const plan = tomorrowPlan();
-    plan.eveningIntent = {
-      priorityTaskIds: [],
-      capacity: null,
-      notes: null,
-      corrections: [],
-      commitments: [{ taskId: "t2", decision: "defer" }]
-    };
-    const found = byId(commitmentRowsFor(todayPlan(), plan, taskDtos(), [], TMO, TZ));
-    expect(found.get("t2")?.decided).toBe("another-date");
-    for (const [decision, decided] of [
-      ["commit", "tomorrow"],
-      ["drop", "unscheduled"]
-    ] as const) {
-      plan.eveningIntent = {
-        priorityTaskIds: [],
-        capacity: null,
-        notes: null,
-        corrections: [],
-        commitments: [{ taskId: "t2", decision }]
-      };
-      const rows = byId(commitmentRowsFor(todayPlan(), plan, taskDtos(), [], TMO, TZ));
-      expect(rows.get("t2")?.decided).toBe(decided);
-    }
-  });
-});
-
-describe("proposeTomorrowBlocks", () => {
-  const tasks = taskDtos();
-  const propose = (
-    blocks: DayPlanBlockDto[],
-    committed: string[],
-    priority: string[],
-    capacity: "light" | "normal" | "full",
-    start: string,
-    evts = events()
-  ) => proposeTomorrowBlocks(blocks, committed, priority, capacity, start, tasks, evts, TMO, TZ);
-
-  it("keeps placed blocks and saved moves, replaces only proposed additions", () => {
-    const out = propose(tomorrowPlan().blocks, ["t1"], [], "normal", "09:00");
-    expect(out.find((row) => row.id === "b-cal")?.pendingChange ?? null).toBe(null);
-    expect(out.some((row) => row.id === "b-p2")).toBe(false);
-    expect(out.filter((row) => row.taskId === "t1").length).toBe(1);
-  });
-
-  it("lighter day proposes only the priority task and drops the rest", () => {
-    expect(propose([], ["t1", "t2"], ["t1"], "light", "09:00").map((row) => row.taskId)).toEqual([
-      "t1"
-    ]);
-  });
-
-  it("places the proposal after the overlapping event", () => {
-    expect(propose([], ["t3"], [], "normal", "09:00")[0]?.pendingChange).toMatchObject({
-      kind: "add",
-      startsAt: `${TMO}T17:00:00.000Z`,
-      durationMinutes: 60
-    });
-  });
-
-  it("yields a timeless proposal when the day has no room", () => {
-    const morning = events()[0] as CalendarEventDto;
-    const full = [
-      { ...morning, startsAt: `${TMO}T07:00:00.000Z`, endsAt: "2026-09-12T07:00:00.000Z" }
-    ];
-    expect(propose([], ["t3"], [], "normal", "09:00", full)[0]?.pendingChange ?? null).toBe(null);
-  });
-
-  it("uses the effort duration and falls back to 60 minutes", () => {
-    expect(effortMinutes("quick")).toBe(30);
-    expect(effortMinutes("large")).toBe(120);
-    expect(effortMinutes(null)).toBe(60);
-    expect(propose([], ["t-cal"], [], "normal", "11:00", [])[0]?.pendingChange).toMatchObject({
-      durationMinutes: 60
-    });
-  });
-
-  it("keeps placed blocks by id and covers no task twice", () => {
-    const out = propose(tomorrowPlan().blocks, ["t1", "t-cal"], [], "normal", "09:00", []);
-    expect(out.find((row) => row.id === "b-cal")?.taskId).toBe("t-cal");
-    expect(out.filter((row) => row.taskId === "t-cal").length).toBe(1);
-    expect(out.filter((row) => row.taskId === "t1").length).toBe(1);
-  });
-
-  it("lighter day keeps placed blocks and the priority commitment, drops the rest", () => {
-    const out = propose(tomorrowPlan().blocks, ["t1", "t2"], ["t1"], "light", "09:00", []);
-    expect(out.find((row) => row.id === "b-cal")?.taskId).toBe("t-cal");
-    expect(out.filter((row) => row.taskId === "t1").length).toBe(1);
-    expect(out.some((row) => row.taskId === "t2")).toBe(false);
-  });
-
-  it("lighter day proposes only the first priority when two tasks are committed (T22, T20 follow-up)", () => {
-    const light = propose([], ["t1", "t2"], ["t1", "t2"], "light", "09:00", []).map(
-      (row) => row.taskId
-    );
-    expect(light).toEqual(["t1"]);
-    const normal = propose([], ["t1", "t2"], ["t1", "t2"], "normal", "09:00", []).map(
-      (row) => row.taskId
-    );
-    expect(normal).toEqual(["t1", "t2"]);
-  });
-
-  it("full day uses open time for every selected commitment beyond the steady-day pair", () => {
-    const commitments = ["t1", "t2", "t3"];
-    const normal = propose([], commitments, ["t1"], "normal", "09:00", []);
-    const full = propose([], commitments, ["t1"], "full", "09:00", []);
-    expect(
-      normal.filter((row) => row.pendingChange?.kind === "add").map((row) => row.taskId)
-    ).toEqual(["t1", "t2"]);
-    expect(
-      full.filter((row) => row.pendingChange?.kind === "add").map((row) => row.taskId)
-    ).toEqual(commitments);
-  });
-
-  it("emits placeable rows only, and zero blocks is valid", () => {
-    const out = propose([], ["t1"], [], "normal", "09:00", []);
-    expect(out.length).toBe(1);
-    for (const row of out) {
-      expect("actualPlacement" in row).toBe(false);
-      expect("position" in row).toBe(false);
-    }
-    expect(propose([], [], [], "normal", "09:00", [])).toEqual([]);
-  });
-});
-
-describe("eveningIntentPatchFor", () => {
-  it("sends only changed fields and appends corrections as actor notes", () => {
-    const unchanged = {
-      corrections: [],
-      commitments: [],
-      capacity: null,
-      priorityTaskIds: null,
-      notes: null
-    };
-    expect(eveningIntentPatchFor(tomorrowPlan().eveningIntent, unchanged)).toEqual({});
-    const patch = eveningIntentPatchFor(tomorrowPlan().eveningIntent, {
-      corrections: [{ taskId: "t1", note: "Scope slipped" }],
-      commitments: [{ taskId: "t2", decision: "another-date" }],
-      capacity: "light",
-      priorityTaskIds: ["t1"],
-      notes: "Ship it"
-    });
-    expect(patch.corrections).toEqual([{ taskId: "t1", note: "Scope slipped", source: "actor" }]);
-    expect(patch.commitments).toEqual([{ taskId: "t2", decision: "defer" }]);
-    expect(patch.capacity).toBe("light");
-  });
-
-  it("merges commitments by task over the saved list", () => {
-    const saved = tomorrowPlan().eveningIntent!;
-    saved.commitments = [{ taskId: "t2", decision: "commit" }];
-    const patch = eveningIntentPatchFor(saved, {
-      corrections: [],
-      commitments: [{ taskId: "t2", decision: "unscheduled" }],
-      capacity: null,
-      priorityTaskIds: null,
-      notes: null
-    });
-    expect(patch.commitments).toEqual([{ taskId: "t2", decision: "drop" }]);
-  });
-});
-
-describe("tomorrowPlanMissing", () => {
-  it("treats a loaded null plan as missing without a 404", () => {
-    expect(tomorrowPlanMissing({ plan: null }, null)).toBe(true);
-    expect(tomorrowPlanMissing({ plan: tomorrowPlan() }, null)).toBe(false);
-    expect(tomorrowPlanMissing(undefined, { status: 404 })).toBe(true);
-    expect(tomorrowPlanMissing(undefined, null)).toBe(false);
-    expect(tomorrowPlanMissing(undefined, { status: 500 })).toBe(false);
-  });
-});
-
-describe("saveStatusLine", () => {
-  const line = (overrides: object) =>
-    saveStatusLine({
-      mode: "suggest",
-      saved: true,
-      applied: 0,
-      failed: 0,
-      pending: 0,
-      deniedReason: null,
-      needsConfirm: false,
-      ...overrides
-    });
-  it("names each outcome without claiming readiness early", () => {
-    expect(line({ saved: false })).toBe("Not saved yet.");
-    expect(line({})).toBe("Saved. The blocks are proposed for the morning.");
-    expect(line({ mode: "off" })).toContain("nothing was written");
-    expect(line({ mode: "auto", applied: 1 })).toBe("Tomorrow is ready.");
-    expect(line({ mode: "auto", pending: 1 })).toContain("1 pending");
-    expect(line({ mode: "auto", deniedReason: "busy" })).toContain("busy");
-    expect(line({ mode: "auto", needsConfirm: true })).toContain("Confirm");
-  });
-});
 
 describe("useEveningPlanning", () => {
   const liveRoots: { unmount(): void }[] = [];
   let draftMode = "ok";
+  let applyOutcome: "applied" | "failed" = "applied";
+  let previewMode: "available" | "conflict" | "unavailable" = "available";
   let policyNow: "off" | "suggest" | "auto" = "suggest";
   let savedPlan: DayPlanDto;
   let calls: { method: string; url: string; body: unknown }[] = [];
@@ -401,13 +76,25 @@ describe("useEveningPlanning", () => {
         return json({ plan: savedPlan });
       }
       if (href.endsWith("/preview") && method === "POST") {
+        const unavailable = previewMode === "unavailable";
         return json({
           revision: savedPlan.revision,
-          calendarAvailability: "available",
-          calendarAsOf: `${TMO}T00:00:00.000Z`,
+          calendarAvailability: unavailable ? "unavailable" : "available",
+          calendarAsOf: unavailable ? null : `${TMO}T00:00:00.000Z`,
           blocks: [],
-          eligibleBlockIds: ["b-p1", "b-p2"],
-          conflicts: []
+          eligibleBlockIds: unavailable ? [] : ["b-p1", "b-p2"],
+          conflicts:
+            previewMode === "conflict"
+              ? [
+                  {
+                    blockId: "b-p2",
+                    kind: "calendar_busy",
+                    withBlockId: null,
+                    detail: "Overlaps Standup",
+                    calendarEvent: null
+                  }
+                ]
+              : []
         });
       }
       if (href.endsWith("/apply") && method === "POST") {
@@ -419,7 +106,7 @@ describe("useEveningPlanning", () => {
           items: selected.map((blockId) => ({
             itemId: `item-${blockId}`,
             blockId,
-            outcome: "applied",
+            outcome: applyOutcome,
             result: null
           }))
         });
@@ -524,6 +211,8 @@ describe("useEveningPlanning", () => {
   beforeEach(() => {
     savedPlan = tomorrowPlan();
     draftMode = "ok";
+    applyOutcome = "applied";
+    previewMode = "available";
     policyNow = "suggest";
     calls = [];
     stubFetch();
@@ -583,6 +272,28 @@ describe("useEveningPlanning", () => {
     expect(applies()).toBe(1);
     expect(m.current().status).toBe("Tomorrow is ready.");
   });
+  it("auto mode reports an addition held back by a preview conflict as not applied", async () => {
+    policyNow = "auto";
+    previewMode = "conflict";
+    const m = await mount(tomorrowPlan());
+    await act(async () => expect(await m.current().save()).toBe(true));
+    await m.rerender(savedPlan);
+    expect(applies()).toBe(1);
+    expect(calls.find((c) => c.url.endsWith("/apply"))?.body).toMatchObject({
+      selectedBlockIds: ["b-p1"]
+    });
+    expect(m.current().status).toBe("Saved. Applied 1; 0 failed; 0 pending; 1 not applied.");
+  });
+  it("auto mode reports every addition as not applied when the calendar is unavailable", async () => {
+    policyNow = "auto";
+    previewMode = "unavailable";
+    const m = await mount(tomorrowPlan());
+    await act(async () => expect(await m.current().save()).toBe(true));
+    await m.rerender(savedPlan);
+    expect(previews()).toBe(1);
+    expect(applies()).toBe(0);
+    expect(m.current().status).toBe("Saved. Applied 0; 0 failed; 0 pending; 2 not applied.");
+  });
   it("switching auto to suggest keeps committed blocks and emits no removal", async () => {
     policyNow = "auto";
     const m = await mount(tomorrowPlan());
@@ -622,6 +333,55 @@ describe("useEveningPlanning", () => {
     expect(ok).toBe(true);
     expect(m.current().status).toBe("Saved. The blocks are proposed for the morning.");
   });
+  it.each(["applied", "failed", "unknown"] as const)(
+    "old %s move outcome cannot settle a new activation",
+    async (outcome) => {
+      policyNow = "auto";
+      savedPlan.blocks = [
+        block("b-cal", {
+          taskId: "t-cal",
+          actualPlacement: {
+            startsAt: `${TMO}T14:00:00.000Z`,
+            durationMinutes: 60,
+            calendarEventRef: "ev-0"
+          },
+          pendingChange: { kind: "move", startsAt: `${TMO}T15:00:00.000Z`, durationMinutes: 60 }
+        })
+      ];
+      const stub = {
+        revision: 5,
+        choiceFor: defaultChoiceFor,
+        touchedIds: ["b-cal"],
+        outcomes: {
+          "b-cal": { itemId: "old-operation-item", blockId: "b-cal", outcome, result: null }
+        },
+        notice: null,
+        approval: null,
+        expectOwnWrite: vi.fn(),
+        apply: vi.fn(() => new Promise(() => undefined)),
+        confirm: vi.fn(),
+        acceptAllAdditions: vi.fn(),
+        dismissApproval: vi.fn()
+      } as unknown as DayPlanReviewController;
+      const m = await mount(savedPlan, { stub });
+      await act(async () => {
+        await m.current().save();
+      });
+      expect(stub.apply).toHaveBeenCalledOnce();
+      expect(m.current().status).toContain("1 pending");
+      expect(m.current().status).not.toBe("Tomorrow is ready.");
+      stub.outcomes = {
+        "b-cal": {
+          itemId: "new-operation-item",
+          blockId: "b-cal",
+          outcome: "applied",
+          result: null
+        }
+      };
+      await m.rerender(savedPlan);
+      expect(m.current().status).toBe("Tomorrow is ready.");
+    }
+  );
   it("marks its own draft save so the review does not call it a stale plan", async () => {
     const expectOwnWrite = vi.fn();
     const stub = {
@@ -679,33 +439,15 @@ describe("useEveningPlanning", () => {
     expect(rows.some((row) => row.taskId === "t2")).toBe(false);
     expect(rows.filter((row) => row.taskId === "t1").length).toBe(1);
   });
-  it("a failed move blocks the ready line", async () => {
+  it("a failed move from this activation blocks the ready line", async () => {
     policyNow = "auto";
-    const stub = {
-      revision: 5,
-      choiceFor: (block: DayPlanBlockDto) =>
-        block.id === "b-cal"
-          ? { placement: "move", startsAt: `${TMO}T15:00:00.000Z` }
-          : defaultChoiceFor(block),
-      touchedIds: ["b-cal"],
-      outcomes: {
-        "b-cal": { itemId: "item-b-cal", blockId: "b-cal", outcome: "failed", result: null }
-      },
-      notice: null,
-      approval: null,
-      expectOwnWrite: vi.fn(),
-      apply: vi.fn(),
-      confirm: vi.fn(),
-      acceptAllAdditions: vi.fn(),
-      dismissApproval: vi.fn()
-    } as unknown as DayPlanReviewController;
-    const m = await mount(tomorrowPlan(), { stub });
-    let ok = false;
-    await act(async () => {
-      ok = await m.current().save();
-    });
-    expect(ok).toBe(true);
-    expect(m.current().status).toBe("Saved. Applied 0; 1 failed; 0 pending.");
+    applyOutcome = "failed";
+    const m = await mount(tomorrowPlan());
+    await act(async () => m.review().setPlacement("b-cal", "move", `${TMO}T15:00:00.000Z`));
+    await act(async () => expect(await m.current().save()).toBe(true));
+    await m.rerender(savedPlan);
+    expect(applies()).toBe(1);
+    expect(m.current().status).toBe("Saved. Applied 0; 1 failed; 0 pending; 2 not applied.");
   });
   it("keeps a review-edited proposal time through the save", async () => {
     const m = await mount(tomorrowPlan());

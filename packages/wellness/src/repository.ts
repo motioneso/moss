@@ -15,6 +15,7 @@ import type {
   WellnessEmotionCore as WellnessFeelingCore
 } from "@moss/shared";
 import { isValidFeelingPath, localDay } from "@moss/shared";
+import { encodeCheckinCursor, parseCheckinCursor } from "./checkin-pagination.js";
 
 export interface CreateCheckinInput {
   readonly feelingCore: WellnessFeelingCore;
@@ -182,6 +183,50 @@ export class WellnessRepository {
     query = query.limit(options.limit ?? 50);
     const rows = await query.execute();
     return rows as WellnessCheckin[];
+  }
+
+  async listCheckinsPage(
+    scopedDb: DataContextDb,
+    options: ListCheckinsOptions & { readonly cursor?: string } = {}
+  ): Promise<{ readonly checkins: WellnessCheckin[]; readonly nextCursor: string | null }> {
+    assertDataContextDb(scopedDb);
+    const limit = options.limit ?? 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+      throw new HttpError(400, "limit must be 1–500");
+    }
+    const cursor = parseCheckinCursor(options.cursor, options.since);
+    let query = scopedDb.db
+      .selectFrom("app.wellness_checkins")
+      .selectAll()
+      .select(
+        sql<string>`to_char(checked_in_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
+          "cursor_checked_in_at"
+        )
+      );
+    if (options.since) query = query.where("checked_in_at", ">=", options.since);
+    if (cursor) {
+      const at = sql<Date>`${cursor.checkedInAt}::timestamptz`;
+      query = query.where((eb) =>
+        eb.or([
+          eb("checked_in_at", "<", at),
+          eb.and([eb("checked_in_at", "=", at), eb("id", "<", cursor.id)])
+        ])
+      );
+    }
+    const rows = await query
+      .orderBy("checked_in_at", "desc")
+      .orderBy("id", "desc")
+      .limit(limit + 1)
+      .execute();
+    const checkins = rows.slice(0, limit);
+    const last = checkins.at(-1);
+    return {
+      checkins: checkins as WellnessCheckin[],
+      nextCursor:
+        rows.length > limit && last
+          ? encodeCheckinCursor(last.cursor_checked_in_at, last.id, options.since)
+          : null
+    };
   }
 
   // ── Medications ────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -350,6 +350,8 @@ export function formatLastSync(
   return lastError ? `Last sync failed: ${relative}` : `Last sync: ${relative}`;
 }
 
+const NOTES_SOURCE_WRITE_KEY = ["settings", "notes-source", "write"] as const;
+
 function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
   const queryClient = useQueryClient();
   const { toast, confirm } = useFeedback();
@@ -363,9 +365,20 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
     queryFn: getNotesSource,
     retry: false
   });
+  // Mutation-cache authority survives pane navigation and is shared by this QueryClient.
+  const pendingSourceWrites = useMutationState({
+    filters: { mutationKey: NOTES_SOURCE_WRITE_KEY, status: "pending", exact: true },
+    select: (mutation) => mutation.state.variables as PutNotesSourceRequest
+  });
   const putNotesSourceMutation = useMutation({
+    mutationKey: NOTES_SOURCE_WRITE_KEY,
     mutationFn: (body: PutNotesSourceRequest) => putNotesSource(body),
-    onSuccess: (data) => {
+    onMutate: () =>
+      queryClient.cancelQueries({ queryKey: queryKeys.settings.notesSource, exact: true }),
+    onSuccess: async (data) => {
+      // Reads started during the PUT may still contain the old source. Cancel before applying
+      // its authoritative result; a late resolution cannot put that older path back in cache.
+      await queryClient.cancelQueries({ queryKey: queryKeys.settings.notesSource, exact: true });
       queryClient.setQueryData(queryKeys.settings.notesSource, data);
       // Clear the stale last-sync read so it refetches after the next sync.
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.notesLastSync });
@@ -411,20 +424,34 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
   }, [recentlySynced, syncTick]);
 
   const linkedPath = notesSourceQuery.data?.path ?? null;
+  const sourceUnavailable = notesSourceQuery.isError;
+  const sourceKnown = notesSourceQuery.data !== undefined && !sourceUnavailable;
+  const sourceWritePending = pendingSourceWrites.length > 0;
+  const sourceBusy = !sourceKnown || notesSourceQuery.isFetching || sourceWritePending;
+  const unlinking = sourceWritePending && pendingSourceWrites.some((write) => write.path === null);
   const lastSync = notesLastSyncQuery.data?.lastSync ?? null;
   const [choosing, setChoosing] = useState(false);
   useEffect(() => onFlowChange?.(choosing), [choosing, onFlowChange]);
 
-  const choose = (folder: string) => {
-    putNotesSourceMutation.mutate(
-      { path: folder },
-      {
-        onSuccess: () => {
-          setChoosing(false);
-          toast(`Linked ${folder}`, { icon: <FolderCheck size={17} /> });
-        }
-      }
+  // Recheck at submission: a chooser/confirmation may outlive a failed refresh, and
+  // two queued events can precede the render that disables their controls.
+  const sourceCanChange = () => {
+    const state = queryClient.getQueryState(queryKeys.settings.notesSource);
+    return (
+      queryClient.isMutating({ mutationKey: NOTES_SOURCE_WRITE_KEY, exact: true }) === 0 &&
+      state?.status === "success" &&
+      state.fetchStatus === "idle"
     );
+  };
+  const saveSource = (body: PutNotesSourceRequest, onSuccess: () => void) => {
+    if (!sourceCanChange()) return;
+    putNotesSourceMutation.mutate(body, { onSuccess });
+  };
+  const choose = (folder: string) => {
+    saveSource({ path: folder }, () => {
+      setChoosing(false);
+      toast(`Linked ${folder}`, { icon: <FolderCheck size={17} /> });
+    });
   };
   const unlink = () =>
     confirm({
@@ -433,18 +460,33 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
       confirmLabel: "Unlink",
       danger: true,
       onConfirm: () => {
-        putNotesSourceMutation.mutate({ path: null });
-        toast("Folder unlinked", { tone: "drift", icon: <Unlink size={17} /> });
+        saveSource({ path: null }, () =>
+          toast("Folder unlinked", { tone: "drift", icon: <Unlink size={17} /> })
+        );
       }
     });
 
   if (choosing) {
     return (
-      <VaultChooser
-        current={linkedPath ?? ""}
-        onCancel={() => setChoosing(false)}
-        onChoose={choose}
-      />
+      <>
+        <VaultChooser
+          current={linkedPath ?? ""}
+          disabled={sourceBusy}
+          onCancel={() => setChoosing(false)}
+          onChoose={choose}
+        />
+        {sourceBusy ? (
+          <div role="status">
+            <Note>
+              {sourceUnavailable
+                ? "Couldn't check linked folder. Cancel to retry before saving a folder."
+                : sourceWritePending
+                  ? "Linking folder…"
+                  : "Checking linked folder…"}
+            </Note>
+          </div>
+        ) : null}
+      </>
     );
   }
 
@@ -469,16 +511,24 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
               <FolderOpen size={18} aria-hidden="true" />
             )}
           </span>
-          <div className="vault__main">
-            {linkedPath ? (
+          <div className="vault__main" role="status">
+            {!sourceKnown && !linkedPath ? (
+              <>
+                <div className="vault__path vault__path--empty">
+                  {sourceUnavailable ? "Couldn't check linked folder" : "Checking linked folder…"}
+                </div>
+              </>
+            ) : linkedPath ? (
               <>
                 <div className="vault__path">{linkedPath}</div>
                 <div className="vault__meta">
-                  {lastSync
-                    ? lastSync.lastError
-                      ? formatLastSync(lastSync.at, locale, lastSync.lastError)
-                      : `${lastSync.ingested} ingested · ${lastSync.skipped} unchanged · ${lastSync.errors} errors · ${formatLastSync(lastSync.at, locale)}`
-                    : "Linked — run Sync now to ingest."}
+                  {sourceUnavailable
+                    ? "Couldn't check linked folder"
+                    : lastSync
+                      ? lastSync.lastError
+                        ? formatLastSync(lastSync.at, locale, lastSync.lastError)
+                        : `${lastSync.ingested} ingested · ${lastSync.skipped} unchanged · ${lastSync.errors} errors · ${formatLastSync(lastSync.at, locale)}`
+                      : "Linked — run Sync now to ingest."}
                 </div>
               </>
             ) : (
@@ -491,11 +541,21 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
             )}
           </div>
           <div className="vault__act">
+            {sourceUnavailable ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void notesSourceQuery.refetch()}
+                disabled={notesSourceQuery.isFetching}
+              >
+                {notesSourceQuery.isFetching ? "Checking…" : "Try again"}
+              </Button>
+            ) : null}
             <Button
               variant="secondary"
               size="sm"
               onClick={() => setChoosing(true)}
-              disabled={putNotesSourceMutation.isPending}
+              disabled={sourceBusy}
               icon={<FolderSearch size={15} />}
             >
               {linkedPath ? "Change folder" : "Browse…"}
@@ -505,19 +565,16 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => syncMutation.mutate()}
-                  disabled={syncMutation.isPending}
+                  onClick={() => {
+                    if (sourceCanChange()) syncMutation.mutate();
+                  }}
+                  disabled={sourceBusy || syncMutation.isPending}
                   icon={<RefreshCw size={15} className={syncMutation.isPending ? "spin" : ""} />}
                 >
                   {syncMutation.isPending ? "Syncing…" : "Sync now"}
                 </Button>
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  onClick={unlink}
-                  disabled={putNotesSourceMutation.isPending}
-                >
-                  Unlink
+                <Button variant="quiet" size="sm" onClick={unlink} disabled={sourceBusy}>
+                  {unlinking ? "Unlinking…" : "Unlink"}
                 </Button>
               </>
             ) : null}

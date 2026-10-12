@@ -1,5 +1,5 @@
 import { Button } from "@moss/ui";
-import type { DayPlanBlockInput, TaskDto } from "@moss/shared";
+import type { DayPlanBlockDto, TaskDto } from "@moss/shared";
 
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import {
@@ -23,7 +23,7 @@ export function EveningDoneStrip(props: { readonly dateLabel: string }) {
   );
 }
 
-function blockTitle(block: DayPlanBlockInput, tasks: readonly TaskDto[]): string | null {
+function blockTitle(block: DayPlanBlockDto, tasks: readonly TaskDto[]): string | null {
   if (block.taskId === null) return block.title ?? null;
   return tasks.find((task) => task.id === block.taskId)?.title ?? block.title ?? null;
 }
@@ -74,23 +74,19 @@ export function EveningHandoffStep(props: {
 }) {
   const { evening } = props;
   const light = evening.activeCapacity === "light";
-  const first = evening.proposals
+  const first = (evening.plan?.blocks ?? [])
+    .filter((block) => block.taskId !== null)
     .map((block) => blockTitle(block, props.tasks))
     .find((title) => title !== null);
   const prose =
     first !== undefined && first !== null
-      ? `You chose ${first.toLowerCase()} as the place to start. ${
+      ? `Your saved plan includes ${first.toLowerCase()}. ${
           light
             ? "You asked to keep the rest of the day deliberately light."
             : "You allowed room to follow through in the afternoon."
         }`
-      : "You left the task list unscheduled. Your calendar holds the only fixed commitments.";
-  const detail =
-    first === undefined || first === null
-      ? "No task blocks were added."
-      : evening.policyMode === "auto"
-        ? "Task blocks are scheduled."
-        : "Task blocks still await your acceptance.";
+      : "The saved plan has no task blocks.";
+  const detail = evening.status;
   return (
     <section className="evening-plan__section" id="evening-handoff" aria-label="Morning handoff">
       <span className="evening-plan__handoff-date">{`${props.dateLabel} / Morning`}</span>

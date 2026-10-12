@@ -221,7 +221,9 @@ for (const width of [1440, 1080, 768, 390, 320]) {
     await page.goto(`/meetings?id=${meeting.id}`);
     const workspace = page.getByRole("region", { name: "Meeting workspace" });
     await expect(workspace).toBeVisible();
-    const settings = workspace.getByRole("link", { name: "Settings", exact: true });
+    const settings = workspace
+      .locator("header")
+      .getByRole("link", { name: "Settings", exact: true });
     await expect(settings).toHaveClass(/jds-btn--link/);
     await expect(settings).toHaveAttribute("href", "/settings?section=modules&module=meetings");
     await expect(page.getByRole("tab", { name: "Summary", exact: true })).toHaveCount(0);

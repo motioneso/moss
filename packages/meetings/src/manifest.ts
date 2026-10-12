@@ -823,6 +823,11 @@ export const meetingsModuleManifest = {
         "Transcript timestamps and sources sit beside notes or in phone tabs. Gaps under 250ms and exact duplicates hide; same-second gaps say under a second. Diagnostics stay intact. Chat links scroll to cited evidence, including older text."
     },
     {
+      id: "meetings.transcript_search",
+      description:
+        "Search transcript timeline filters loaded timeline lines only; separate cited excerpts aren’t searched. Cited timestamps can open other retained text; meeting chat needs a ready configured model."
+    },
+    {
       id: "meetings.capture_default",
       description:
         "New recordings use the sole available Mac’s default microphone and system audio. Settings can switch to microphone-only. Existing exact source choices are preserved; missing or ambiguous sources never broaden capture."
