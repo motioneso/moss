@@ -483,6 +483,7 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
       background: parsed.background === true ? true : undefined,
+      scheduledReadSource: parsed.scheduledReadSource === "tasks" ? "tasks" : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
       workflowApprovalId:

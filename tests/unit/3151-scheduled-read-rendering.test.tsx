@@ -2,6 +2,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MarkdownMessage, safeUrl } from "../../apps/web/src/chat/markdown-message.js";
 import { scheduledReadReport } from "../../packages/chat/src/scheduled-reads/report.js";
+import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
 import { readScheduledReadSource } from "../../packages/chat/src/route-serializers.js";
 
 const delivered = { version: 1, kind: "reminder", event: "delivered", reminderId: "read" };
@@ -13,12 +14,19 @@ describe("scheduled report source rendering", () => {
     const text = scheduledReadReport(
       {
         ok: true,
+        data: {},
         structuredData: { task: { id: "item", title, status: "done" } }
       },
       "item"
     );
     expect(text).not.toBeNull();
-    const html = renderToString(<MarkdownMessage text={text!} scheduledReadSource="tasks" />);
+    const record = parseRecord(
+      JSON.stringify({ kind: "reply", text, scheduledReadSource: "tasks" })
+    );
+    expect(record?.scheduledReadSource).toBe("tasks");
+    const html = renderToString(
+      <MarkdownMessage text={record!.text} scheduledReadSource={record?.scheduledReadSource} />
+    );
     expect(html.match(/<a /g)).toHaveLength(1);
     expect(html).toContain('<a href="/tasks">Source: Tasks</a>');
     expect(html).toContain(title);
