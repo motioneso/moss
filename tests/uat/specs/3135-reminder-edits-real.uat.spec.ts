@@ -76,7 +76,9 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
     await page.setViewportSize({ width, height: 900 });
     await page.reload();
     await page.locator(`[data-task-id="${original.id}"]`).click();
-    await expect(page.getByText("edit proof revised", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "edit proof revised", exact: true, level: 3 })
+    ).toBeVisible();
     expect((await tasks(page)).find((row) => row.id === original.id)?.dueAt).toBe(revised.dueAt);
     await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
     expect(
