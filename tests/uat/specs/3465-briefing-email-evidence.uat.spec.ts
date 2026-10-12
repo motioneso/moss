@@ -178,7 +178,7 @@ for (const briefingType of ["morning", "evening"] as const) {
     expect(run!.sourceMetadata).toMatchObject(
       briefingType === "morning"
         ? { taskCount: acceptedTasks.length }
-        : { taskSlippedCount: acceptedTasks.length }
+        : { taskCarryCount: acceptedTasks.length }
     );
     // Positive task prose inclusion belongs to #3466; stored inputs and Today prove retention.
     // Refresh after generation in case the writer crossed midnight.
