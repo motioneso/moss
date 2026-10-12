@@ -16,6 +16,6 @@ Open `index.html` to see every state. `screen.html?state=` loads one state on it
 - Customization row: name, fallbacks line, status badge, changed date, Reset and History
 - History list: versions with date, chat link and `Turn on`
 - Code block behind a `Show code` toggle
-- Admin switch row at the top of Instance modules
+- Admin pane "Customizations" after Instance modules, holding one switch for everyone
 
 Each belongs in `@moss/ui` or the settings UI kit before the pane uses it.

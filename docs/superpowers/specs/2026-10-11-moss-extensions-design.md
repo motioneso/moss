@@ -178,8 +178,8 @@ after the customization:
 - The last error stored is the customization's own error message, capped at 500 characters, in the
   owner-only table.
 
-2.7 The owner gets an instance-wide kill switch in instance settings. It turns every
-customization off for everyone. This is configuration power only, and the owner sees no one
+2.7 The owner gets an instance-wide kill switch in its own admin pane (section 4.2). It turns
+every customization off for everyone. This is configuration power only, and the owner sees no one
 else's customizations.
 
 2.8 Applying follows the existing gateway rules. If the requesting chat holds outside content,
@@ -240,14 +240,17 @@ the ones each active customization was written against.
 - Turn all off sits at the top.
 - No explanatory or reassurance copy (screen copy ruling).
 
-4.2 The owner's instance settings get one row, the kill switch.
+4.2 The owner gets a Customizations pane of their own in Admin / Setup, in the "AI & extensions"
+group next to Instance modules (Ben, 2026-10-11). It holds the kill switch only. Counts of who has
+customizations would need a cross-person read, which the no-admin-bypass rule forbids, so they
+are left out.
 
 4.3 The pane uses the design system and existing Settings pane structure.
 
 4.4 App map updates in the same pull request:
 
 - the Customizations pane and its actions in `packages/shared/src/app-map-core.ts`
-- the kill switch row
+- the admin Customizations pane and its kill switch
 - the extensions module's features and tools in its manifest
 
 ### 5. The trial points
