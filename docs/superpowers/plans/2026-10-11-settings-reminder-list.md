@@ -43,11 +43,10 @@ thread. History comes from real delivery/expiry timestamps; failed records get t
 failure guidance, without inventing an execution timestamp. Creation and cancellation
 are not runs. No arbitrary finished-record truncation.
 
-View message proposal for coordinator approval: show the saved assistant body in the
-shared Dialog, with a normal Open chat action. This keeps slice A out of the live chat
-selection state machine while allowing direct inspection of the exact recorded result.
-The accepted mockup instead opens the result in chat; if exact drawer navigation is
-required, coordinator decides before implementation and the plan is amended.
+Approved View message choice: show the saved assistant body with MarkdownMessage in
+shared Dialog, without explanatory copy. Open chat selects the actual conversation
+that holds the message. This differs from the mockup, which opens the result in chat;
+the PR must say so.
 
 Keep Reminders as a group identity independent of delivery type, so later one-time
 read checks use the same rows and group without a restructuring. Do not advertise
@@ -56,8 +55,9 @@ Display saved local timing using the user's current clock/timezone preferences.
 
 Split turn handling into commands/request.ts, commands/clock-request.ts,
 commands/list.ts and commands/cancel.ts with a shared command context and one-line
-registry entries in turn.ts. Unsupported/main-only guard behaviour remains centralized.
-Keep recognition, wording, validation, capacity lock and transaction timing unchanged.
+registry entries in commands/registry.ts. Unsupported/main-only guard behaviour remains centralized.
+Move list/cancel recognition into their command files and reuse the same registry
+for recognition and execution. Keep recognition behaviour, wording, validation, capacity lock and transaction timing unchanged.
 
 Add apps/web/src/settings/settings-scheduled-tasks-pane.tsx, task list and detail
 components, with detail pieces in scheduled-task-details/instruction.tsx, timing.tsx,
