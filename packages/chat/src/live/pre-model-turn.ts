@@ -42,6 +42,20 @@ export async function tryPreModelTurn(
   const agreement = typedDeletionAgreement(text);
   let threadState: Awaited<ReturnType<typeof selectTurnThread>>;
   let threadRead = args[7];
+  if (recognition?.kind === "quiet_agreement") {
+    try {
+      threadRead ??= selectTurnThread(host, actorUserId, surface);
+      threadState = await threadRead;
+      if (!threadState?.id || !(await host.deps.persistence.hasPendingQuietHoursProposal?.(actorUserId, threadState.id)))
+        recognition = undefined;
+    } catch {
+      return {
+        result: emitUnsaved(host, actorUserId, surface, text, REMINDER_AGREEMENT_FAILURE_MESSAGE),
+        requestIncognito: threadState?.incognito ?? false,
+        requestThreadId: threadState?.id ?? null
+      };
+    }
+  }
   if (
     !recognition &&
     !opts?.moduleControl &&

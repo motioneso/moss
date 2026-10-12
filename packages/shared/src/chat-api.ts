@@ -286,7 +286,11 @@ export interface ChatReminderOriginV1 {
     | "resumed"
     | "delete_requested"
     | "deleted"
-    | "delete_declined";
+    | "delete_declined",
+    | "allowance_saved"
+    | "allowance_removed"
+    | "allowance_proposed"
+    | "allowance_refused";
   readonly reminderId: string | null;
   readonly reminderVersion?: number;
   readonly reminderState?: string;
@@ -615,7 +619,11 @@ const chatTurnOriginSchema = {
             "resumed",
             "delete_requested",
             "deleted",
-            "delete_declined"
+            "delete_declined",
+            "allowance_saved",
+            "allowance_removed",
+            "allowance_proposed",
+            "allowance_refused"
           ]
         },
         reminderId: { anyOf: [{ type: "string" }, { type: "null" }] },

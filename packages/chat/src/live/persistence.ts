@@ -61,6 +61,11 @@ import type {
 import { selectSummaryRoute } from "../summary-job.js";
 import type { ChatRepository } from "../repository.js";
 import { ReminderRepository } from "../reminders/repository.js";
+import {
+  clearQuietHoursProposal,
+  readQuietHoursProposal
+} from "../reminders/quiet-hours-allowances.js";
+import { recognizeQuietHoursCommand } from "../reminders/quiet-hours-recognizer.js";
 import { decideReminderTurn, type ReminderTurnPlan } from "../reminders/turn.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
@@ -349,9 +354,10 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly attachments?: readonly ChatAttachmentDto[];
     }
   ): Promise<void> {
-    await this.run(actorUserId, "begin-live-turn", (scopedDb) =>
-      insertLiveTurn(scopedDb, { ...turn, bootId: this.bootId })
-    );
+    await this.run(actorUserId, "begin-live-turn", async (scopedDb) => {
+      await clearQuietHoursProposal(scopedDb, turn.threadId);
+      await insertLiveTurn(scopedDb, { ...turn, bootId: this.bootId });
+    });
   }
 
   async storeInterruptedLiveTurn(
@@ -413,6 +419,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     });
   }
 
+  async hasPendingQuietHoursProposal(actorUserId: string, threadId: string): Promise<boolean> {
+    return this.dataContext.withDataContext({ actorUserId }, async (db) =>
+      Boolean(await readQuietHoursProposal(db, threadId))
+    );
+  }
+
   async recordReminderTurn(
     actorUserId: string,
     userText: string,
@@ -429,6 +441,21 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     | "stopped"
     | undefined
   > {
+    if (plan.kind === "quiet_allowance" || plan.kind === "quiet_agreement") {
+      const recognized = recognizeQuietHoursCommand(userText);
+      if (
+        !recognized ||
+        recognized.kind !== plan.kind ||
+        (recognized.kind === "quiet_allowance" &&
+          plan.kind === "quiet_allowance" &&
+          (recognized.target !== plan.target || recognized.allow !== plan.allow)) ||
+        (recognized.kind === "quiet_agreement" &&
+          plan.kind === "quiet_agreement" &&
+          recognized.agree !== plan.agree)
+      ) {
+        throw new Error("quiet-hours command needs the owner's typed agreement");
+      }
+    }
     const { stopSignal, ...turnOpts } = opts ?? {};
     let stored: Awaited<ReturnType<typeof this.persistCompletedTurn>>;
     try {
@@ -505,6 +532,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         await this.chat.touchCurrentThread(scopedDb, thread.id, chatSurface);
       }
 
+      if (!("reminder" in turn)) await clearQuietHoursProposal(scopedDb, thread.id);
       const capturedAt = new Date();
       const sourceFreshness = opts?.invokedToolNames
         ? await resolveChatFreshness(scopedDb, opts.invokedToolNames, capturedAt, {

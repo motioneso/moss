@@ -24,6 +24,7 @@ const SAVED = {
 function setup(options: {
   incognito?: boolean;
   pending?: ReturnType<typeof vi.fn>;
+  pendingProposal?: boolean;
   record?: ReturnType<typeof vi.fn>;
   abortDuringThreadRead?: () => void;
 }) {
@@ -50,7 +51,8 @@ function setup(options: {
       touchExistingThread: vi.fn().mockResolvedValue(true),
       getMainThreadState,
       hasPendingReminderDeletion: options.pending,
-      recordReminderTurn
+      recordReminderTurn,
+      hasPendingQuietHoursProposal: vi.fn().mockResolvedValue(options.pendingProposal ?? false)
     } as never
   });
   const manager = new ChatSessionManager(deps);
@@ -60,6 +62,28 @@ function setup(options: {
 }
 
 describe("chat reminder turn (#3309)", () => {
+  it("leaves a bare yes to ordinary chat when there is no saved allowance proposal", async () => {
+    const { manager, engine, recordReminderTurn } = setup({});
+    await manager.submitTurn("u1", "Ben", "yes");
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(1);
+  });
+
+  it("routes an owner typed yes for a stored proposal before the model", async () => {
+    const { manager, engine, recordReminderTurn } = setup({ pendingProposal: true });
+    await manager.submitTurn("u1", "Ben", "yes");
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toEqual({ kind: "quiet_agreement", agree: true });
+    expect(engine.launchCount).toBe(0);
+  });
+
+  it("refuses a module-controlled allowance turn without owner authority", async () => {
+    const { manager, recordReminderTurn } = setup({});
+    await manager.submitTurn("u1", "Ben", "let stretch through quiet hours", {
+      moduleControl: "some-module"
+    });
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toEqual({ kind: "main_only", manage: true });
+  });
+
   it("sends ordinary text to the gate and the model, never to the reminder store", async () => {
     const { manager, engine, gate, recordReminderTurn } = setup({});
     const result = await manager.submitTurn("u1", "Ben", "what is the weather");

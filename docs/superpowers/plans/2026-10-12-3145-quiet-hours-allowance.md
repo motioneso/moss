@@ -1,6 +1,6 @@
 # Let one named reminder through quiet hours
 
-Part of #3145. Base: integration/scheduled-proactive. Status: awaiting coordinator approval.
+Part of #3145. Base: integration/scheduled-proactive. Status: task 1 kill gate passed; task 3 next; delivery waits for #3479.
 
 ## Outcome and scope
 
@@ -213,4 +213,19 @@ report the PR to the coordinator. No merge, board changes or milestone changes.
 - Migration 0314 is assigned by the brief; 0313 belongs to the parallel task-control lane.
 - Canonical quiet-hours storage is already settled by the approved migration decisions.
 - Task lifecycle policy will be rebased onto #3479 if it lands before delivery edits.
-- No feature implementation has started.
+- Coordinator approved commit 714e14fc1. Accept everyday allowance phrasings, leave unmatched requests to normal chat, and rebase on integration before task 2 regardless of #3479 status. If #3479 is not merged, request sequencing before delivery edits.
+
+## Task 1 evidence and review ledger
+
+- The command wording tests were observed red before implementation (15 failures), then green.
+- Focused unit checks passed 108 tests, including bare yes falling through without a proposal and module-control refusal.
+- The isolated task 1 gate passed 32 integration/catalog tests before the final extra edge cases were added.
+- Negative control: disabling the raw typed-command guard and removing the source user-role predicate produced exactly two failing integration tests. Both protections were restored before further work.
+- The initial app-map declaration exceeded the 240-character description limit; it was shortened. Adding the declaration also crossed the 1000-line manifest limit. Reminder feature declarations now live together in packages/chat/src/reminders/features.ts; the original values are preserved.
+- Added test:integration:3145 to package.json so the prescribed isolated gate can run this phase's named kill gate without running unrelated integration suites.
+- A final fresh task 1 gate and static checks are required after the remaining version/removal assertions; the full foundation gate and live proof remain required for the finished slice.
+
+> 🧠 **From Hindsight memory (Conventions and patterns)** — hidden UPDATE/DELETE operations may affect zero rows rather than throw; the owner-isolation check therefore asserts zero deleted rows and unchanged owner data. The isolated integration run verified that behavior here.
+
+- Final task 1 isolated gate passed 34 tests on restored protections. Root and test TypeScript checks and file-size check passed.
+- Coordinator ordering ruling: commit task 1, build task 3, and hold delivery files until the coordinator reports #3479 merged. Rebase on integration before task 2.

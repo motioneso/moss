@@ -1,3 +1,4 @@
+import type { QuietHoursCommand } from "../quiet-hours-recognizer.js";
 import type { PgBoss } from "pg-boss";
 import type { DataContextDb } from "@moss/db";
 import type { ChatReminderOriginV1 } from "@moss/shared";
@@ -8,6 +9,7 @@ import type { ReminderRepository } from "../repository.js";
 
 /** What the raw request asked for, before anything is checked against storage. */
 export type ReminderTurnPlan =
+  | QuietHoursCommand
   | { readonly kind: "request"; readonly delaySeconds: number; readonly text: string }
   | { readonly kind: "clock_request"; readonly clock: LocalClockSpec; readonly text: string }
   | { readonly kind: "unsupported"; readonly reason: ReminderUnsupportedReason }

@@ -1,6 +1,7 @@
 // #3310: bounded recognizer for listing and cancelling reminders in a raw Main chat request.
 // Like the save recognizer, it reads only the user's own words.
 
+import { recognizeQuietHoursCommand } from "./quiet-hours-recognizer.js";
 import { normalizeReminderRequest, recognizeRelativeReminder } from "./recognizer.js";
 import { reminderCommands } from "./commands/registry.js";
 import type { ReminderTurnPlan } from "./turn.js";
@@ -28,6 +29,8 @@ export function recognizeReminderCommand(raw: string): ReminderCommand {
 
 /** A save request first, then list or cancel. Undefined means ordinary chat for the model. */
 export function recognizeReminderPlan(raw: string): ReminderTurnPlan | undefined {
+  const quiet = recognizeQuietHoursCommand(raw);
+  if (quiet) return quiet;
   const save = recognizeRelativeReminder(raw);
   if (save.kind !== "none") return save;
   const command = recognizeReminderCommand(raw);
