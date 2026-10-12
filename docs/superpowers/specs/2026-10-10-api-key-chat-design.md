@@ -77,27 +77,27 @@ closure of issue #307. Ben's ruling, 2026-10-10: "yes, it will override intentio
 
 ## Current state (verified on origin/main, 2026-10-10)
 
-| Concern | Location | Today |
-| --- | --- | --- |
-| Launch refusal | `packages/chat/src/live/chat-session-provider-identity.ts:55-60` | `assertLiveCliProvider` throws `ApiKeyLiveChatUnavailableError` for any `api_key` row |
-| Refusal message | `packages/chat/src/live/errors.ts:138-146` | "Live chat does not support API-key providers yet..." |
-| Route mapping | `packages/chat/src/live-routes.ts:766-768` | Maps the refusal to HTTP 400 with that message |
-| Replay retry guard | `packages/chat/src/live/chat-session-manager.ts:313-319` | Rethrows the refusal instead of retrying |
-| Agent routing | `packages/chat/src/live/acp-chat-engine.ts:47-59` | `toAcpProviderKind`: `openai-compatible` with no agent id maps to Codex |
-| Unsupported kinds | `packages/chat/src/live/persistence.ts:652-663` | `toLiveProvider` throws a plain `Error` for `ollama`/`custom` |
-| Spawn request | `packages/chat/src/live/rpc-contract.ts:633-652` | `acpSpawn` carries project, kind, user, profile. No credential |
-| Agent env | `packages/cli-runner/src/acp-host.ts:370-379` | Sanitized env, `HOME`, and `CLAUDE_CODE_OAUTH_TOKEN` from the sidecar's own token store |
-| OpenCode settings | `packages/cli-runner/src/acp-host.ts:386-392`, `agent-home-prepare.mjs:211-233` | Writes `opencode.json` in the agent home with shell and edit denied |
-| Codex login copy | `packages/cli-runner/src/acp-host.ts:400-430` | Copies a login file into the person's agent home, 0600, as their account |
-| Anthropic HTTP URL | `packages/ai/src/adapters/http-api.ts:220-223` | Fixed to `https://api.anthropic.com/v1/messages`. `base_url` ignored |
-| Anthropic model discovery | `packages/ai/src/model-discovery.ts:198-202` | Fixed to `https://api.anthropic.com/v1/models` |
-| Background jobs | `packages/ai/src/generate-text.ts:166-182` | Already decrypts the key and passes `base_url` to the HTTP adapter |
-| Admin add menu | `apps/web/src/settings/settings-ai-provider-catalog.ts:27-43` | Anthropic is offered as CLI only |
-| Admin edit form | `apps/web/src/settings/settings-ai-admin-pane.tsx:333-341` | Shows "Base URL" for every API-key row, including Anthropic, where it is ignored |
-| Readiness probe | `packages/chat/src/live/provider-probe.ts:32-41`, `:273-298` | Runs `claude --print`; cache keyed on the OAuth token |
-| Model list (CLI) | `packages/cli-runner/src/model-list-adapters.ts:213-216` | Reads the sidecar's stored OAuth token |
-| Dev seeding | `scripts/dev-instance/config.ts:40-55`, `provision.ts:88-128` | CLI provider row plus a GPG-encrypted Claude OAuth token |
-| UAT compose | `tests/uat/compose.override.yml`, `tests/uat/env-file.ts:30-40` | No host-gateway entry. Test-only settings come from the generated env file |
+| Concern                   | Location                                                                        | Today                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Launch refusal            | `packages/chat/src/live/chat-session-provider-identity.ts:55-60`                | `assertLiveCliProvider` throws `ApiKeyLiveChatUnavailableError` for any `api_key` row   |
+| Refusal message           | `packages/chat/src/live/errors.ts:138-146`                                      | "Live chat does not support API-key providers yet..."                                   |
+| Route mapping             | `packages/chat/src/live-routes.ts:766-768`                                      | Maps the refusal to HTTP 400 with that message                                          |
+| Replay retry guard        | `packages/chat/src/live/chat-session-manager.ts:313-319`                        | Rethrows the refusal instead of retrying                                                |
+| Agent routing             | `packages/chat/src/live/acp-chat-engine.ts:47-59`                               | `toAcpProviderKind`: `openai-compatible` with no agent id maps to Codex                 |
+| Unsupported kinds         | `packages/chat/src/live/persistence.ts:652-663`                                 | `toLiveProvider` throws a plain `Error` for `ollama`/`custom`                           |
+| Spawn request             | `packages/chat/src/live/rpc-contract.ts:633-652`                                | `acpSpawn` carries project, kind, user, profile. No credential                          |
+| Agent env                 | `packages/cli-runner/src/acp-host.ts:370-379`                                   | Sanitized env, `HOME`, and `CLAUDE_CODE_OAUTH_TOKEN` from the sidecar's own token store |
+| OpenCode settings         | `packages/cli-runner/src/acp-host.ts:386-392`, `agent-home-prepare.mjs:211-233` | Writes `opencode.json` in the agent home with shell and edit denied                     |
+| Codex login copy          | `packages/cli-runner/src/acp-host.ts:400-430`                                   | Copies a login file into the person's agent home, 0600, as their account                |
+| Anthropic HTTP URL        | `packages/ai/src/adapters/http-api.ts:220-223`                                  | Fixed to `https://api.anthropic.com/v1/messages`. `base_url` ignored                    |
+| Anthropic model discovery | `packages/ai/src/model-discovery.ts:198-202`                                    | Fixed to `https://api.anthropic.com/v1/models`                                          |
+| Background jobs           | `packages/ai/src/generate-text.ts:166-182`                                      | Already decrypts the key and passes `base_url` to the HTTP adapter                      |
+| Admin add menu            | `apps/web/src/settings/settings-ai-provider-catalog.ts:27-43`                   | Anthropic is offered as CLI only                                                        |
+| Admin edit form           | `apps/web/src/settings/settings-ai-admin-pane.tsx:333-341`                      | Shows "Base URL" for every API-key row, including Anthropic, where it is ignored        |
+| Readiness probe           | `packages/chat/src/live/provider-probe.ts:32-41`, `:273-298`                    | Runs `claude --print`; cache keyed on the OAuth token                                   |
+| Model list (CLI)          | `packages/cli-runner/src/model-list-adapters.ts:213-216`                        | Reads the sidecar's stored OAuth token                                                  |
+| Dev seeding               | `scripts/dev-instance/config.ts:40-55`, `provision.ts:88-128`                   | CLI provider row plus a GPG-encrypted Claude OAuth token                                |
+| UAT compose               | `tests/uat/compose.override.yml`, `tests/uat/env-file.ts:30-40`                 | No host-gateway entry. Test-only settings come from the generated env file              |
 
 ## Design
 
@@ -116,11 +116,11 @@ closure of issue #307. Ben's ruling, 2026-10-10: "yes, it will override intentio
 
 ### 2. Agent routing per kind
 
-| Row | Agent program | Address and key reach it as | Model reaches it as |
-| --- | --- | --- | --- |
-| `anthropic` + `api_key` | claude agent (`claude-acp`) | `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY` in the agent env | Existing `setModelForChat` with the row's model id |
-| `openai-compatible` + `api_key` | OpenCode (`opencode`) | Provider entry in `opencode.json`. Key as an env reference, value in the agent env | `acpModel` = `<moss provider id>/<row model id>` |
-| `openai-compatible` + `cli` | unchanged | unchanged | unchanged |
+| Row                             | Agent program               | Address and key reach it as                                                        | Model reaches it as                                |
+| ------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `anthropic` + `api_key`         | claude agent (`claude-acp`) | `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY` in the agent env                         | Existing `setModelForChat` with the row's model id |
+| `openai-compatible` + `api_key` | OpenCode (`opencode`)       | Provider entry in `opencode.json`. Key as an env reference, value in the agent env | `acpModel` = `<moss provider id>/<row model id>`   |
+| `openai-compatible` + `cli`     | unchanged                   | unchanged                                                                          | unchanged                                          |
 
 - `toAcpProviderKind` takes the auth method. For `api_key` it maps `anthropic` to the claude agent
   and `openai-compatible` to OpenCode. It never falls through to Codex.
@@ -212,11 +212,11 @@ Address format:
 
 - `scripts/dev-instance` can register an API-key provider as the default, from env:
 
-| Variable | Meaning |
-| --- | --- |
-| `MOSS_DEV_INSTANCE_PROVIDER_KIND` | Existing. `anthropic` or `openai-compatible` |
-| `MOSS_DEV_INSTANCE_PROVIDER_AUTH` | New. `cli` (default) or `api_key` |
-| `MOSS_DEV_INSTANCE_PROVIDER_BASE_URL` | New. Optional address, e.g. `http://127.0.0.1:<port>` |
+| Variable                              | Meaning                                                     |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `MOSS_DEV_INSTANCE_PROVIDER_KIND`     | Existing. `anthropic` or `openai-compatible`                |
+| `MOSS_DEV_INSTANCE_PROVIDER_AUTH`     | New. `cli` (default) or `api_key`                           |
+| `MOSS_DEV_INSTANCE_PROVIDER_BASE_URL` | New. Optional address, e.g. `http://127.0.0.1:<port>`       |
 | `MOSS_DEV_INSTANCE_PROVIDER_KEY_FILE` | New. Path to a file holding the key. Required for `api_key` |
 
 - The provider-rows step creates the API-key row through the same repository path the admin route
@@ -266,17 +266,17 @@ Address format:
 
 ### Key path (traced)
 
-| Step | Where | Holds the key |
-| --- | --- | --- |
-| At rest | `app.ai_provider_configs.encrypted_credential` | AES-256-GCM, key `JARVIS_AI_SECRET_KEY` (api only) |
-| Decrypt | api process, chat launch | In memory for the launch call |
-| Transit | `acpSpawn` over the private Unix socket | Socket mode 0600, mounted in api and cli-runner only, auth hello with `JARVIS_CLI_RUNNER_RPC_SECRET` (ADR 0010 section 3) |
-| Sidecar | `acp-host.ts` spawn | In the child env object only. Never in cli-runner's own `process.env` |
-| Agent | adapter process, then its children | Process env of the person's slot account (`setpriv`, `acp-host.ts:466-500`) |
-| claude CLI | grandchild of the claude adapter | Adapter passes `...process.env` to the CLI (vendor `claude-agent-acp` 0.75.1, `dist/acp-agent.js` around line 5944) |
-| OpenCode | `opencode acp` process | Env value. `opencode.json` holds only the reference |
-| Disk | none written by Moss | `opencode.json` (0600, owned by the slot account) holds address, model id, env reference |
-| Removal | process exit | Kill, idle reap, provider switch, or session replacement end the process |
+| Step       | Where                                          | Holds the key                                                                                                             |
+| ---------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| At rest    | `app.ai_provider_configs.encrypted_credential` | AES-256-GCM, key `JARVIS_AI_SECRET_KEY` (api only)                                                                        |
+| Decrypt    | api process, chat launch                       | In memory for the launch call                                                                                             |
+| Transit    | `acpSpawn` over the private Unix socket        | Socket mode 0600, mounted in api and cli-runner only, auth hello with `JARVIS_CLI_RUNNER_RPC_SECRET` (ADR 0010 section 3) |
+| Sidecar    | `acp-host.ts` spawn                            | In the child env object only. Never in cli-runner's own `process.env`                                                     |
+| Agent      | adapter process, then its children             | Process env of the person's slot account (`setpriv`, `acp-host.ts:466-500`)                                               |
+| claude CLI | grandchild of the claude adapter               | Adapter passes `...process.env` to the CLI (vendor `claude-agent-acp` 0.75.1, `dist/acp-agent.js` around line 5944)       |
+| OpenCode   | `opencode acp` process                         | Env value. `opencode.json` holds only the reference                                                                       |
+| Disk       | none written by Moss                           | `opencode.json` (0600, owned by the slot account) holds address, model id, env reference                                  |
+| Removal    | process exit                                   | Kill, idle reap, provider switch, or session replacement end the process                                                  |
 
 ### Env allowlists
 
@@ -323,14 +323,14 @@ Address format:
 
 ## Rollout phases
 
-| Phase | Content | Gates open? |
-| --- | --- | --- |
-| 0 | Proofs on a dev instance against the local proxy (see below) | No |
-| 1 | Anthropic base URL in HTTP adapter and model discovery; "Anthropic (API key)" add entry; app map for these | No |
-| 2 | Key on `acpSpawn`; per-kind env and OpenCode entry; routing by auth method; tests | No |
-| 3 | Gates open; readiness and model list for API-key rows; app map; ADR 0003 amendment; release note; live-path proof | Yes |
-| 4 | Dev-instance API-key seeding | Yes |
-| 5 | UAT host-gateway entry and env-file values | Yes |
+| Phase | Content                                                                                                           | Gates open? |
+| ----- | ----------------------------------------------------------------------------------------------------------------- | ----------- |
+| 0     | Proofs on a dev instance against the local proxy (see below)                                                      | No          |
+| 1     | Anthropic base URL in HTTP adapter and model discovery; "Anthropic (API key)" add entry; app map for these        | No          |
+| 2     | Key on `acpSpawn`; per-kind env and OpenCode entry; routing by auth method; tests                                 | No          |
+| 3     | Gates open; readiness and model list for API-key rows; app map; ADR 0003 amendment; release note; live-path proof | Yes         |
+| 4     | Dev-instance API-key seeding                                                                                      | Yes         |
+| 5     | UAT host-gateway entry and env-file values                                                                        | Yes         |
 
 Phase 0 proves:
 

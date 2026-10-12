@@ -70,57 +70,57 @@ Expected: 997, 984, 983, 978, 946 (or close, if main moved). If any is already a
 
 Checked against the code on 2026-10-10. Line numbers are on the planning branch.
 
-| Fact | Where |
-| --- | --- |
-| Chat refuses API-key rows | `assertLiveCliProvider`, `packages/chat/src/live/chat-session-provider-identity.ts:55-60` |
-| Routing never sees the auth method | `toAcpProviderKind`, `packages/chat/src/live/acp-chat-engine.ts:47-59` |
-| Anthropic address hardcoded in three places | `packages/ai/src/adapters/http-api.ts` (anthropic `buildRequest`), `packages/ai/src/model-discovery.ts:194` `doFetch`, `packages/ai/src/provider-validation.ts:146` `fetchModels` |
-| Structured adapter already honours a base URL, without stripping `/v1` | `packages/ai/src/adapters/http-api-structured.ts:127` |
-| Spawn env built after the sanitizer; login token added for anthropic | `packages/cli-runner/src/acp-host.ts:370-379`, token read at `:988-996` |
-| OpenCode deny settings written per chat spawn | `acp-host.ts:387-395`, `packages/cli-runner/src/agent-home-prepare.mjs` |
-| `acpSpawn` RPC params | `packages/chat/src/live/rpc-contract.ts:633-652`, validated in `packages/cli-runner/src/connection.ts:630-657` |
-| Chat persistence has no secret cipher | `packages/chat/src/live/persistence.ts:71-86` |
-| Meeting chat already decrypts API keys under the user's data context | `packages/chat/src/live/meeting-chat-runtime.ts:73` |
-| Discovery helper not exported from `@moss/ai` | `packages/ai/src/index.ts` |
-| A second auth-failure mapping at prompt time | `acp-chat-engine.ts:658-664` |
-| Add form labels the address field "Base URL" | `apps/web/src/settings/settings-ai-provider-picker.tsx` |
-| OpenAI-compatible discovery and key test append `/v1/models` without stripping a saved `/v1` | `model-discovery.ts:217-218`, `provider-validation.ts:146-170` |
-| Anthropic discovery keeps only ids with `claude-` and without `:` | `model-discovery.ts:258-261` `extractModelEntries` |
-| Capability inference tags every non-transcription id as chat and tool-use | `model-discovery.ts:373-414` `inferModel` |
-| OpenAI HTTP adapters use the row address without stripping `/v1` | `http-api.ts:241`, `http-api-structured.ts:159` |
-| Moss's client substitutes an advertised model when the requested id is not advertised | `packages/acp/src/client.ts:472-489` `setModelForChat` |
-| Adapter stderr is redacted per chunk only | `acp-host.ts:582-587` |
-| Non-auth launch errors are rethrown raw | `acp-chat-engine.ts:607-619` |
-| Active-provider identity has no config revision | `sameActiveChatProvider`, `chat-session-provider-identity.ts:33-44` |
-| Provider save and revoke invalidate discovery but no live chat | `packages/ai/src/routes.ts:422-424`, `:451` |
-| Drop-by-kind seam already published from chat to the onboarding route | `packages/chat/src/routes.ts:205-207`, `:573-575`; `packages/module-registry/src/index.ts:3604-3607`, `:3852` |
+| Fact                                                                                         | Where                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat refuses API-key rows                                                                    | `assertLiveCliProvider`, `packages/chat/src/live/chat-session-provider-identity.ts:55-60`                                                                                         |
+| Routing never sees the auth method                                                           | `toAcpProviderKind`, `packages/chat/src/live/acp-chat-engine.ts:47-59`                                                                                                            |
+| Anthropic address hardcoded in three places                                                  | `packages/ai/src/adapters/http-api.ts` (anthropic `buildRequest`), `packages/ai/src/model-discovery.ts:194` `doFetch`, `packages/ai/src/provider-validation.ts:146` `fetchModels` |
+| Structured adapter already honours a base URL, without stripping `/v1`                       | `packages/ai/src/adapters/http-api-structured.ts:127`                                                                                                                             |
+| Spawn env built after the sanitizer; login token added for anthropic                         | `packages/cli-runner/src/acp-host.ts:370-379`, token read at `:988-996`                                                                                                           |
+| OpenCode deny settings written per chat spawn                                                | `acp-host.ts:387-395`, `packages/cli-runner/src/agent-home-prepare.mjs`                                                                                                           |
+| `acpSpawn` RPC params                                                                        | `packages/chat/src/live/rpc-contract.ts:633-652`, validated in `packages/cli-runner/src/connection.ts:630-657`                                                                    |
+| Chat persistence has no secret cipher                                                        | `packages/chat/src/live/persistence.ts:71-86`                                                                                                                                     |
+| Meeting chat already decrypts API keys under the user's data context                         | `packages/chat/src/live/meeting-chat-runtime.ts:73`                                                                                                                               |
+| Discovery helper not exported from `@moss/ai`                                                | `packages/ai/src/index.ts`                                                                                                                                                        |
+| A second auth-failure mapping at prompt time                                                 | `acp-chat-engine.ts:658-664`                                                                                                                                                      |
+| Add form labels the address field "Base URL"                                                 | `apps/web/src/settings/settings-ai-provider-picker.tsx`                                                                                                                           |
+| OpenAI-compatible discovery and key test append `/v1/models` without stripping a saved `/v1` | `model-discovery.ts:217-218`, `provider-validation.ts:146-170`                                                                                                                    |
+| Anthropic discovery keeps only ids with `claude-` and without `:`                            | `model-discovery.ts:258-261` `extractModelEntries`                                                                                                                                |
+| Capability inference tags every non-transcription id as chat and tool-use                    | `model-discovery.ts:373-414` `inferModel`                                                                                                                                         |
+| OpenAI HTTP adapters use the row address without stripping `/v1`                             | `http-api.ts:241`, `http-api-structured.ts:159`                                                                                                                                   |
+| Moss's client substitutes an advertised model when the requested id is not advertised        | `packages/acp/src/client.ts:472-489` `setModelForChat`                                                                                                                            |
+| Adapter stderr is redacted per chunk only                                                    | `acp-host.ts:582-587`                                                                                                                                                             |
+| Non-auth launch errors are rethrown raw                                                      | `acp-chat-engine.ts:607-619`                                                                                                                                                      |
+| Active-provider identity has no config revision                                              | `sameActiveChatProvider`, `chat-session-provider-identity.ts:33-44`                                                                                                               |
+| Provider save and revoke invalidate discovery but no live chat                               | `packages/ai/src/routes.ts:422-424`, `:451`                                                                                                                                       |
+| Drop-by-kind seam already published from chat to the onboarding route                        | `packages/chat/src/routes.ts:205-207`, `:573-575`; `packages/module-registry/src/index.ts:3604-3607`, `:3852`                                                                     |
 
 ## File Structure
 
-| File | Status | Responsibility |
-| --- | --- | --- |
-| `packages/ai/src/provider-base-url.ts` | Create | Normalize a stored address; the one place holding the default Anthropic and OpenAI addresses |
-| `packages/ai/src/adapters/http-api.ts`, `http-api-structured.ts` | Modify | Use the row's Anthropic address |
-| `packages/ai/src/model-discovery.ts`, `provider-validation.ts` | Modify | Same, for `/v1/models`; export the fixed result messages |
-| `packages/ai/src/api-key-chat-readiness.ts` | Create | Readiness check for API-key chat rows, cached by row id plus update time |
-| `packages/ai/src/provider-validation-routes.ts` | Modify | `GET /api/ai/providers/:id/chat-readiness` |
-| `packages/shared/src/ai-chat-readiness-api.ts` | Create | Readiness statuses, response type and route schema (kept out of `ai-api.ts`, which is at 984 lines) |
-| `packages/acp/src/opencode-provider.ts` | Create | The OpenCode provider id and key variable name shared by sidecar and app |
-| `packages/chat/src/live/rpc-contract.ts` | Modify | Optional `credential` on `acpSpawn` |
-| `packages/cli-runner/src/acp-spawn-credential.ts` | Create | Validate the RPC credential; value-free errors |
-| `packages/cli-runner/src/acp-launch-credential.ts` | Create | Put credential or CLI login token into the agent env; build the OpenCode entry request |
-| `packages/cli-runner/src/acp-host.ts` | Modify | Call the helper; net line count goes down |
-| `packages/cli-runner/src/stderr-redactor.ts` | Create | Mask a key across stderr chunk boundaries with a bounded holdback |
-| `packages/ai/src/routes.ts`, `packages/chat/src/routes.ts`, `packages/module-registry/src/index.ts` | Modify | Drop live chat sessions for one provider row on save or revoke |
-| `packages/cli-runner/src/agent-home-prepare.mjs`, `agent-home-prepare-run.ts` | Modify | Write or remove the OpenCode provider entry |
-| `packages/chat/src/live/api-key-launch.ts` | Create | Decrypt the chat credential; pick the OpenCode model value |
-| `packages/chat/src/live/acp-chat-engine.ts` | Modify | Route by auth method; API-key auth failures; tunnel carries the credential |
-| `packages/chat/src/live/chat-session-provider-identity.ts`, `chat-session-launch.ts`, `errors.ts`, `auth-errors.ts`, `persistence.ts`, `runtime.ts`, `chat-session-ports.ts`, `chat-session-manager.ts`, `../live-routes.ts` | Modify | Open the gate, pass the credential, new errors |
-| `apps/web/src/settings/settings-ai-provider-catalog.ts` | Modify | "Anthropic (API key)" add entry |
-| `apps/web/src/settings/settings-ai-chat-readiness.ts` | Create | Readiness status to display text |
-| `apps/web/src/settings/settings-ai-provider-models.tsx`, `apps/web/src/api/client.ts`, `apps/web/src/api/query-keys.ts` | Modify | Show readiness on API-key cards |
-| `packages/shared/src/app-map-core.ts` | Modify | Describe the new behaviour |
-| `docs/architecture/decisions/0003-interactive-chat-is-cli-transport.md` | Modify | Status line |
+| File                                                                                                                                                                                                                         | Status | Responsibility                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| `packages/ai/src/provider-base-url.ts`                                                                                                                                                                                       | Create | Normalize a stored address; the one place holding the default Anthropic and OpenAI addresses        |
+| `packages/ai/src/adapters/http-api.ts`, `http-api-structured.ts`                                                                                                                                                             | Modify | Use the row's Anthropic address                                                                     |
+| `packages/ai/src/model-discovery.ts`, `provider-validation.ts`                                                                                                                                                               | Modify | Same, for `/v1/models`; export the fixed result messages                                            |
+| `packages/ai/src/api-key-chat-readiness.ts`                                                                                                                                                                                  | Create | Readiness check for API-key chat rows, cached by row id plus update time                            |
+| `packages/ai/src/provider-validation-routes.ts`                                                                                                                                                                              | Modify | `GET /api/ai/providers/:id/chat-readiness`                                                          |
+| `packages/shared/src/ai-chat-readiness-api.ts`                                                                                                                                                                               | Create | Readiness statuses, response type and route schema (kept out of `ai-api.ts`, which is at 984 lines) |
+| `packages/acp/src/opencode-provider.ts`                                                                                                                                                                                      | Create | The OpenCode provider id and key variable name shared by sidecar and app                            |
+| `packages/chat/src/live/rpc-contract.ts`                                                                                                                                                                                     | Modify | Optional `credential` on `acpSpawn`                                                                 |
+| `packages/cli-runner/src/acp-spawn-credential.ts`                                                                                                                                                                            | Create | Validate the RPC credential; value-free errors                                                      |
+| `packages/cli-runner/src/acp-launch-credential.ts`                                                                                                                                                                           | Create | Put credential or CLI login token into the agent env; build the OpenCode entry request              |
+| `packages/cli-runner/src/acp-host.ts`                                                                                                                                                                                        | Modify | Call the helper; net line count goes down                                                           |
+| `packages/cli-runner/src/stderr-redactor.ts`                                                                                                                                                                                 | Create | Mask a key across stderr chunk boundaries with a bounded holdback                                   |
+| `packages/ai/src/routes.ts`, `packages/chat/src/routes.ts`, `packages/module-registry/src/index.ts`                                                                                                                          | Modify | Drop live chat sessions for one provider row on save or revoke                                      |
+| `packages/cli-runner/src/agent-home-prepare.mjs`, `agent-home-prepare-run.ts`                                                                                                                                                | Modify | Write or remove the OpenCode provider entry                                                         |
+| `packages/chat/src/live/api-key-launch.ts`                                                                                                                                                                                   | Create | Decrypt the chat credential; pick the OpenCode model value                                          |
+| `packages/chat/src/live/acp-chat-engine.ts`                                                                                                                                                                                  | Modify | Route by auth method; API-key auth failures; tunnel carries the credential                          |
+| `packages/chat/src/live/chat-session-provider-identity.ts`, `chat-session-launch.ts`, `errors.ts`, `auth-errors.ts`, `persistence.ts`, `runtime.ts`, `chat-session-ports.ts`, `chat-session-manager.ts`, `../live-routes.ts` | Modify | Open the gate, pass the credential, new errors                                                      |
+| `apps/web/src/settings/settings-ai-provider-catalog.ts`                                                                                                                                                                      | Modify | "Anthropic (API key)" add entry                                                                     |
+| `apps/web/src/settings/settings-ai-chat-readiness.ts`                                                                                                                                                                        | Create | Readiness status to display text                                                                    |
+| `apps/web/src/settings/settings-ai-provider-models.tsx`, `apps/web/src/api/client.ts`, `apps/web/src/api/query-keys.ts`                                                                                                      | Modify | Show readiness on API-key cards                                                                     |
+| `packages/shared/src/app-map-core.ts`                                                                                                                                                                                        | Modify | Describe the new behaviour                                                                          |
+| `docs/architecture/decisions/0003-interactive-chat-is-cli-transport.md`                                                                                                                                                      | Modify | Status line                                                                                         |
 
 ---
 
@@ -336,7 +336,13 @@ const tunnel = {
   },
   async read(_sessionKey: string, afterSeq: number) {
     const fresh = lines.slice(afterSeq);
-    return { lines: fresh, firstSeq: afterSeq + 1, nextSeq: lines.length, exited, truncated: false };
+    return {
+      lines: fresh,
+      firstSeq: afterSeq + 1,
+      nextSeq: lines.length,
+      exited,
+      truncated: false
+    };
   },
   async kill() {
     child?.kill();
@@ -407,10 +413,12 @@ export PROOF_BASE_URL="http://127.0.0.1:$RECORDER_PORT"
 ### Task 1: Prove the claude agent answers through the proxy
 
 **Files:**
+
 - Create (not committed): `/tmp/acp-proof/acp-proof.mjs`
 - Uses (not committed): `/tmp/acp-proof/key-scan.mjs`, `/tmp/acp-proof/model-recorder.mjs`, `/tmp/acp-proof/moss-client-proof.ts` from the shared setup
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: the go/no-go facts for Task 3, the value of `$PROXY_ANTHROPIC_MODEL`, and the mechanism that carries the model (Step 7).
 
@@ -467,9 +475,13 @@ if (agent === "claude") {
     options: { baseURL: `${base}/v1`, apiKey: "{env:MOSS_OPENCODE_API_KEY}" },
     models: { [model]: {} }
   };
-  writeFileSync(join(dir, "opencode.json"), JSON.stringify({ provider: { moss: entry } }, null, 2), {
-    mode: 0o600
-  });
+  writeFileSync(
+    join(dir, "opencode.json"),
+    JSON.stringify({ provider: { moss: entry } }, null, 2),
+    {
+      mode: 0o600
+    }
+  );
   modelValue = `moss/${model}`;
 }
 
@@ -582,6 +594,7 @@ node /tmp/acp-proof/acp-proof.mjs claude "$PROXY_ANTHROPIC_MODEL"
 ```
 
 Expected:
+
 - `AUTH_METHODS [...]` printed, then no `RPC_ERROR` from `initialize` (no login asked for).
 - `MODEL_OPTION model values=[...]`. Record whether the proxy id is in the list.
 - `MODEL_SET <id>` with no error. This proves the raw set call only; Step 7 proves the model Moss's own client ends up using.
@@ -654,9 +667,11 @@ Expected: `REPLAYED`, then `TURN 1 STOP end_turn REPLY` containing "kestrel".
 ### Task 2: Prove OpenCode answers through the proxy with an env-referenced key
 
 **Files:**
+
 - Uses: `/tmp/acp-proof/acp-proof.mjs` from Task 1.
 
 **Interfaces:**
+
 - Consumes: shared setup.
 - Produces: the go/no-go facts for Task 3, and `$PROXY_OPENAI_MODEL`.
 
@@ -746,6 +761,7 @@ PROOF_HOME="$(mktemp -d /tmp/acp-proof-home.XXXXXX)" \
 ```
 
 Expected:
+
 - First run: `REPLAYED`, then a reply containing "kestrel".
 - Near-limit run: five `TURN` lines, each a `STOP` or an `ERROR`, within the 180-second turn timeout. The conversation passes the context size by the fourth part, so at least one `ERROR` naming the context length is expected. A turn that never returns is a hang; stop and report to Ben.
 - Last run: a fresh session with the bounded replay answers "kestrel".
@@ -772,11 +788,13 @@ rm -rf /tmp/acp-proof /tmp/acp-proof-home.*
 All proofs pass: continue to Phase 1. Any proof fails: stop and wait for Ben.
 
 ---
+
 ## Phase 1: Anthropic address and the add entry (gates stay shut)
 
 ### Task 4: One normalizer for provider addresses and one model id policy, used by the HTTP adapters
 
 **Files:**
+
 - Create: `packages/ai/src/provider-base-url.ts`
 - Modify: `packages/ai/src/index.ts` (add the export)
 - Modify: `packages/ai/src/adapters/http-api.ts:223` (anthropic `buildRequest` url), `:176` (transcription) and `:241` (OpenAI requests)
@@ -784,6 +802,7 @@ All proofs pass: continue to Phase 1. Any proof fails: stop and wait for Ben.
 - Test: `tests/unit/ai-provider-base-url.test.ts` (create), `tests/unit/ai-http-api.test.ts`, `tests/unit/ai-http-api-structured.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com"`, `OPENAI_DEFAULT_BASE_URL = "https://api.openai.com"`
@@ -831,7 +850,7 @@ describe("PROVIDER_MODEL_ID_PATTERN", () => {
     expect(PROVIDER_MODEL_ID_PATTERN.test(id)).toBe(true);
   });
 
-  it.each(["", "has space", "semi;colon", "quote\"", "new\nline", "x".repeat(201)])(
+  it.each(["", "has space", "semi;colon", 'quote"', "new\nline", "x".repeat(201)])(
     "refuses %j",
     (id) => {
       expect(PROVIDER_MODEL_ID_PATTERN.test(id)).toBe(false);
@@ -892,65 +911,68 @@ Expected: PASS.
 Append inside `describe("HttpApiAdapter — anthropic", ...)` in `tests/unit/ai-http-api.test.ts`:
 
 ```ts
-  it("sends Anthropic requests to the row's address, with one /v1", async () => {
-    const urls: string[] = [];
-    const fakeFetch = async (url: string | URL | Request) => {
-      urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
-      return new Response(JSON.stringify({ content: [{ type: "text", text: "ok" }] }), {
-        status: 200
-      });
-    };
-    const adapter = new HttpApiAdapter("anthropic", "sk-test-anthropic", {
-      fetch: fakeFetch as typeof fetch,
-      baseUrl: "http://proxy.test/v1/"
+it("sends Anthropic requests to the row's address, with one /v1", async () => {
+  const urls: string[] = [];
+  const fakeFetch = async (url: string | URL | Request) => {
+    urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+    return new Response(JSON.stringify({ content: [{ type: "text", text: "ok" }] }), {
+      status: 200
     });
-
-    await adapter.generateChat({ model: anthropicModel, messages: [{ role: "user", content: "yo" }] });
-
-    expect(urls).toEqual(["http://proxy.test/v1/messages"]);
+  };
+  const adapter = new HttpApiAdapter("anthropic", "sk-test-anthropic", {
+    fetch: fakeFetch as typeof fetch,
+    baseUrl: "http://proxy.test/v1/"
   });
+
+  await adapter.generateChat({
+    model: anthropicModel,
+    messages: [{ role: "user", content: "yo" }]
+  });
+
+  expect(urls).toEqual(["http://proxy.test/v1/messages"]);
+});
 ```
 
 Append inside `describe("HttpApiAdapter — openai-compatible", ...)` in the same file:
 
 ```ts
-  it("sends OpenAI-compatible requests to the row's address, with one /v1", async () => {
-    const urls: string[] = [];
-    const fakeFetch = async (url: string | URL | Request) => {
-      urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
-      return new Response(
-        JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
-        { status: 200 }
-      );
-    };
-    const adapter = new HttpApiAdapter("openai-compatible", "sk-test-openai", {
-      fetch: fakeFetch as typeof fetch,
-      baseUrl: "http://proxy.test/v1/"
-    });
-
-    await adapter.generateChat({ model: openaiModel, messages: [{ role: "user", content: "yo" }] });
-
-    expect(urls).toEqual(["http://proxy.test/v1/chat/completions"]);
+it("sends OpenAI-compatible requests to the row's address, with one /v1", async () => {
+  const urls: string[] = [];
+  const fakeFetch = async (url: string | URL | Request) => {
+    urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+    return new Response(
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+      { status: 200 }
+    );
+  };
+  const adapter = new HttpApiAdapter("openai-compatible", "sk-test-openai", {
+    fetch: fakeFetch as typeof fetch,
+    baseUrl: "http://proxy.test/v1/"
   });
+
+  await adapter.generateChat({ model: openaiModel, messages: [{ role: "user", content: "yo" }] });
+
+  expect(urls).toEqual(["http://proxy.test/v1/chat/completions"]);
+});
 ```
 
 Append to the structured test file, inside the describe that holds `"anthropic: forced tool call, x-api-key header, versioned"`:
 
 ```ts
-  it("anthropic: uses the row's address without doubling /v1", () => {
-    expect(buildStructuredRequest("anthropic", "sk-a", "http://proxy.test/v1/", makeInput()).url).toBe(
-      "http://proxy.test/v1/messages"
-    );
-    expect(buildStructuredRequest("anthropic", "sk-a", null, makeInput()).url).toBe(
-      "https://api.anthropic.com/v1/messages"
-    );
-  });
+it("anthropic: uses the row's address without doubling /v1", () => {
+  expect(
+    buildStructuredRequest("anthropic", "sk-a", "http://proxy.test/v1/", makeInput()).url
+  ).toBe("http://proxy.test/v1/messages");
+  expect(buildStructuredRequest("anthropic", "sk-a", null, makeInput()).url).toBe(
+    "https://api.anthropic.com/v1/messages"
+  );
+});
 
-  it("openai-compatible: uses the row's address without doubling /v1", () => {
-    expect(
-      buildStructuredRequest("openai-compatible", "sk-o", "http://proxy.test/v1", makeInput()).url
-    ).toBe("http://proxy.test/v1/chat/completions");
-  });
+it("openai-compatible: uses the row's address without doubling /v1", () => {
+  expect(
+    buildStructuredRequest("openai-compatible", "sk-o", "http://proxy.test/v1", makeInput()).url
+  ).toBe("http://proxy.test/v1/chat/completions");
+});
 ```
 
 - [ ] **Step 6: Run them and watch the first fail**
@@ -981,13 +1003,13 @@ with
 and replace both occurrences (transcription at `:176`, OpenAI requests at `:241`) of
 
 ```ts
-        const base = this._baseUrl ?? "https://api.openai.com";
+const base = this._baseUrl ?? "https://api.openai.com";
 ```
 
 with
 
 ```ts
-        const base = providerBaseUrl("openai-compatible", this._baseUrl);
+const base = providerBaseUrl("openai-compatible", this._baseUrl);
 ```
 
 In `packages/ai/src/adapters/http-api-structured.ts`, add after line 3:
@@ -999,25 +1021,25 @@ import { providerBaseUrl } from "../provider-base-url.js";
 and replace
 
 ```ts
-      const base = baseUrl ?? "https://api.anthropic.com";
+const base = baseUrl ?? "https://api.anthropic.com";
 ```
 
 with
 
 ```ts
-      const base = providerBaseUrl("anthropic", baseUrl);
+const base = providerBaseUrl("anthropic", baseUrl);
 ```
 
 and in the `openai-compatible` case replace
 
 ```ts
-      const base = baseUrl ?? "https://api.openai.com";
+const base = baseUrl ?? "https://api.openai.com";
 ```
 
 with
 
 ```ts
-      const base = providerBaseUrl("openai-compatible", baseUrl);
+const base = providerBaseUrl("openai-compatible", baseUrl);
 ```
 
 - [ ] **Step 8: Run all three files and watch them pass**
@@ -1038,11 +1060,13 @@ git commit -m "feat(ai): normalize provider base URLs in HTTP adapters, add mode
 ### Task 5: Model discovery and key test share the address and model id policy; fixed messages become constants
 
 **Files:**
+
 - Modify: `packages/ai/src/model-discovery.ts:199` and `:216-219` (`doFetch` anthropic and openai-compatible cases), `:179` and `:246-277` (`extractModelEntries`), `:373-414` (`inferModel`)
 - Modify: `packages/ai/src/provider-validation.ts:34,50,60,97,111`, `:150` and `:164-168` (`fetchModels` anthropic and openai-compatible cases)
 - Test: `tests/unit/ai-model-discovery.test.ts`, `tests/unit/ai-provider-validation.test.ts`, `tests/unit/ai-discover-and-persist-models.test.ts`
 
 **Interfaces:**
+
 - Consumes: `providerBaseUrl`, `ANTHROPIC_DEFAULT_BASE_URL`, `PROVIDER_MODEL_ID_PATTERN` (Task 4).
 - Behaviour after this task:
   - Discovery and the key test call `providerBaseUrl` for anthropic, openai-compatible, ollama and custom rows, so `/v1` and `/v1/` addresses give exactly one `/v1/models`.
@@ -1140,21 +1164,26 @@ Append to `tests/unit/ai-provider-validation.test.ts`:
 
 ```ts
 describe("OpenAI-compatible key test uses the normalized address", () => {
-  it.each(["http://proxy.test/v1", "http://proxy.test/v1/"])("%s gives one /v1", async (baseUrl) => {
-    const urls: string[] = [];
-    const fetch = (async (url: string | URL | Request) => {
-      urls.push(String(url));
-      return new Response(JSON.stringify({ data: [{ id: "org/model:tag@v2" }] }), { status: 200 });
-    }) as typeof globalThis.fetch;
-    await testProviderCredential({
-      providerKind: "openai-compatible",
-      authMethod: "api_key",
-      baseUrl,
-      credential: { apiKey: "sk-test" },
-      fetch
-    });
-    expect(urls).toEqual(["http://proxy.test/v1/models"]);
-  });
+  it.each(["http://proxy.test/v1", "http://proxy.test/v1/"])(
+    "%s gives one /v1",
+    async (baseUrl) => {
+      const urls: string[] = [];
+      const fetch = (async (url: string | URL | Request) => {
+        urls.push(String(url));
+        return new Response(JSON.stringify({ data: [{ id: "org/model:tag@v2" }] }), {
+          status: 200
+        });
+      }) as typeof globalThis.fetch;
+      await testProviderCredential({
+        providerKind: "openai-compatible",
+        authMethod: "api_key",
+        baseUrl,
+        credential: { apiKey: "sk-test" },
+        fetch
+      });
+      expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    }
+  );
 });
 ```
 
@@ -1315,21 +1344,20 @@ with
 and in the `openai-compatible` / `ollama` / `custom` case replace
 
 ```ts
-      const base = (input.baseUrl ?? "https://api.openai.com").replace(/\/+$/, "");
+const base = (input.baseUrl ?? "https://api.openai.com").replace(/\/+$/, "");
 ```
 
 with
 
 ```ts
-      const base = providerBaseUrl("openai-compatible", input.baseUrl);
+const base = providerBaseUrl("openai-compatible", input.baseUrl);
 ```
 
 Change the import to `import { ANTHROPIC_DEFAULT_BASE_URL, PROVIDER_MODEL_ID_PATTERN, providerBaseUrl } from "./provider-base-url.js";`. In `fetchApiKeyModels` (`:179`) pass whether an Anthropic row points somewhere other than the public address:
 
 ```ts
-    const customAddress =
-      providerBaseUrl("anthropic", input.baseUrl) !== ANTHROPIC_DEFAULT_BASE_URL;
-    const models = extractModelEntries(input.providerKind, await response.json(), customAddress)
+const customAddress = providerBaseUrl("anthropic", input.baseUrl) !== ANTHROPIC_DEFAULT_BASE_URL;
+const models = extractModelEntries(input.providerKind, await response.json(), customAddress);
 ```
 
 Give `extractModelEntries` the parameter and replace its anthropic filter:
@@ -1343,23 +1371,23 @@ function extractModelEntries(
 ```
 
 ```ts
-    if (providerKind === "anthropic") {
-      // The public API lists current claude- models plus legacy ":" snapshots. A custom address
-      // (proxy, router) names models freely, so keep every id the model id policy accepts.
-      entries = customAddress
-        ? entries.filter((entry) => PROVIDER_MODEL_ID_PATTERN.test(entry.id))
-        : entries.filter((entry) => entry.id.includes("claude-") && !entry.id.includes(":"));
-    }
+if (providerKind === "anthropic") {
+  // The public API lists current claude- models plus legacy ":" snapshots. A custom address
+  // (proxy, router) names models freely, so keep every id the model id policy accepts.
+  entries = customAddress
+    ? entries.filter((entry) => PROVIDER_MODEL_ID_PATTERN.test(entry.id))
+    : entries.filter((entry) => entry.id.includes("claude-") && !entry.id.includes(":"));
+}
 ```
 
 In `inferModel`, directly after the transcription early return, add:
 
 ```ts
-  // Chat is the supported model contract: embedding, moderation, rerank, text-to-speech and
-  // image-generation models have no chat capability, so discovery drops them.
-  if (NON_CHAT_MODEL_ID.test(lower)) {
-    return null;
-  }
+// Chat is the supported model contract: embedding, moderation, rerank, text-to-speech and
+// image-generation models have no chat capability, so discovery drops them.
+if (NON_CHAT_MODEL_ID.test(lower)) {
+  return null;
+}
 ```
 
 and above `inferModel`:
@@ -1392,13 +1420,13 @@ with
 and in the `openai-compatible` / `ollama` / `custom` case replace
 
 ```ts
-      const base = (input.baseUrl ?? "https://api.openai.com").replace(/\/+$/, "");
+const base = (input.baseUrl ?? "https://api.openai.com").replace(/\/+$/, "");
 ```
 
 with
 
 ```ts
-      const base = providerBaseUrl("openai-compatible", input.baseUrl);
+const base = providerBaseUrl("openai-compatible", input.baseUrl);
 ```
 
 - [ ] **Step 4: Run them and watch them pass**
@@ -1418,11 +1446,13 @@ git commit -m "feat(ai): discovery and key test share base URL and model id poli
 ### Task 6: "Anthropic (API key)" add entry and its app-map sentence
 
 **Files:**
+
 - Modify: `apps/web/src/settings/settings-ai-provider-catalog.ts:28` (insert after the Anthropic CLI entry)
 - Modify: `packages/shared/src/app-map-core.ts:283`
 - Test: `tests/unit/settings-ai-provider-catalog.test.ts` (create); `tests/unit/app-map-build.test.ts`, `tests/unit/app-map-contract.test.ts`, `tests/unit/app-map-integrity.test.ts` (run only)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: catalog entry `{ label: "Anthropic (API key)", kind: "anthropic", authMethod: "api_key" }`. The existing generic API-key form shows the "Base URL" and "API key" fields for it. The server route already accepts this pair.
 
@@ -1509,6 +1539,7 @@ git commit -m "feat(settings): add Anthropic (API key) to the provider catalog (
 Phase 1 is shippable on its own: background jobs can use an Anthropic-compatible service at a custom address. Chat still refuses API-key rows.
 
 ---
+
 ## Phase 2: Key delivery and routing (gates stay shut)
 
 Nothing in this phase is reachable by a person until Task 12 opens the gate. Each task still ships with its own tests.
@@ -1516,6 +1547,7 @@ Nothing in this phase is reachable by a person until Task 12 opens the gate. Eac
 ### Task 7: The `acpSpawn` RPC carries an optional, validated credential
 
 **Files:**
+
 - Modify: `packages/chat/src/live/rpc-contract.ts:633-652`
 - Create: `packages/cli-runner/src/acp-spawn-credential.ts`
 - Modify: `packages/cli-runner/src/connection.ts:630-657` (`acpSpawn` case) and `:737` (`errorCode`)
@@ -1524,6 +1556,7 @@ Nothing in this phase is reachable by a person until Task 12 opens the gate. Eac
 - Test: `tests/unit/cli-runner-protocol.test.ts`
 
 **Interfaces:**
+
 - Consumes: `PROVIDER_MODEL_ID_PATTERN` from `@moss/ai` (Task 4). `@moss/cli-runner` already depends on `@moss/ai`.
 - Produces:
   - `interface RpcAcpSpawnCredential { readonly baseUrl: string | null; readonly apiKey: string; readonly model: string }` and `RpcAcpSpawnParams.credential?: RpcAcpSpawnCredential` (exported from `@moss/chat/live`).
@@ -1536,83 +1569,85 @@ Nothing in this phase is reachable by a person until Task 12 opens the gate. Eac
 In `tests/unit/cli-runner-protocol.test.ts`, change the existing expectation in the "acpSpawn" success test (around line 332) to include the new seventh argument:
 
 ```ts
-    expect(host.acpSpawn).toHaveBeenCalledWith(
-      "workshop:u:p",
-      "p",
-      "anthropic",
-      "user-1",
-      "chat",
-      false,
-      null
-    );
+expect(host.acpSpawn).toHaveBeenCalledWith(
+  "workshop:u:p",
+  "p",
+  "anthropic",
+  "user-1",
+  "chat",
+  false,
+  null
+);
 ```
 
 Then add, next to the "refuses acpSpawn without a provider kind" test:
 
 ```ts
-  const credential = {
-    baseUrl: "http://proxy.test",
-    apiKey: "sk-test-never-echo-0001",
-    model: "org/model:tag@v2"
-  };
+const credential = {
+  baseUrl: "http://proxy.test",
+  apiKey: "sk-test-never-echo-0001",
+  model: "org/model:tag@v2"
+};
 
-  it("passes a valid chat credential through to the host", async () => {
-    const host = fakeHost();
-    const spawn = vi.spyOn(host, "acpSpawn").mockResolvedValue({
-      cwd: "/tmp/neutral-base/chat:u:p/acp/p",
-      generation: 1,
-      home: null,
-      pid: null,
-      uid: 2001,
-      gid: 2001
-    });
-    const channel = new FakeChannel();
-    serveConnection(channel, deps(host));
-    authenticate(channel);
-
-    channel.feed(
-      encodeFrame({
-        t: "req",
-        id: 41,
-        method: "acpSpawn",
-        sessionKey: "chat:u:p",
-        params: { projectId: "p", providerKind: "opencode", userId: "u", profile: "chat", credential }
-      })
-    );
-    await new Promise((r) => setTimeout(r, 5));
-    const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 41) as RpcOk;
-    expect(ok.t).toBe("ok");
-    expect(spawn).toHaveBeenCalledWith("chat:u:p", "p", "opencode", "u", "chat", false, credential);
+it("passes a valid chat credential through to the host", async () => {
+  const host = fakeHost();
+  const spawn = vi.spyOn(host, "acpSpawn").mockResolvedValue({
+    cwd: "/tmp/neutral-base/chat:u:p/acp/p",
+    generation: 1,
+    home: null,
+    pid: null,
+    uid: 2001,
+    gid: 2001
   });
+  const channel = new FakeChannel();
+  serveConnection(channel, deps(host));
+  authenticate(channel);
 
-  // The last column is the exact value submitted in the bad field, so each case asserts against
-  // what was actually sent, plus the fragment every case shares.
-  it.each([
-    ["a credential on a workshop spawn", "anthropic", "workshop", credential, credential.apiKey],
-    ["a credential for Codex", "openai", "chat", credential, credential.apiKey],
-    ["an extra field", "anthropic", "chat", { ...credential, extra: "x" }, credential.apiKey],
-    [
-      "a key with a space",
-      "anthropic",
-      "chat",
-      { ...credential, apiKey: "sk-test never-echo-0001" },
-      "sk-test never-echo-0001"
-    ],
-    [
-      "a non-http address",
-      "anthropic",
-      "chat",
-      { ...credential, baseUrl: "file:///sk-test-never-echo-0001" },
-      "file:///sk-test-never-echo-0001"
-    ],
-    [
-      "a model with a space",
-      "anthropic",
-      "chat",
-      { ...credential, model: "a b sk-test-never-echo-0001" },
-      "a b sk-test-never-echo-0001"
-    ]
-  ])("refuses %s without echoing any value (stays open)", async (_label, providerKind, profile, value, submitted) => {
+  channel.feed(
+    encodeFrame({
+      t: "req",
+      id: 41,
+      method: "acpSpawn",
+      sessionKey: "chat:u:p",
+      params: { projectId: "p", providerKind: "opencode", userId: "u", profile: "chat", credential }
+    })
+  );
+  await new Promise((r) => setTimeout(r, 5));
+  const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 41) as RpcOk;
+  expect(ok.t).toBe("ok");
+  expect(spawn).toHaveBeenCalledWith("chat:u:p", "p", "opencode", "u", "chat", false, credential);
+});
+
+// The last column is the exact value submitted in the bad field, so each case asserts against
+// what was actually sent, plus the fragment every case shares.
+it.each([
+  ["a credential on a workshop spawn", "anthropic", "workshop", credential, credential.apiKey],
+  ["a credential for Codex", "openai", "chat", credential, credential.apiKey],
+  ["an extra field", "anthropic", "chat", { ...credential, extra: "x" }, credential.apiKey],
+  [
+    "a key with a space",
+    "anthropic",
+    "chat",
+    { ...credential, apiKey: "sk-test never-echo-0001" },
+    "sk-test never-echo-0001"
+  ],
+  [
+    "a non-http address",
+    "anthropic",
+    "chat",
+    { ...credential, baseUrl: "file:///sk-test-never-echo-0001" },
+    "file:///sk-test-never-echo-0001"
+  ],
+  [
+    "a model with a space",
+    "anthropic",
+    "chat",
+    { ...credential, model: "a b sk-test-never-echo-0001" },
+    "a b sk-test-never-echo-0001"
+  ]
+])(
+  "refuses %s without echoing any value (stays open)",
+  async (_label, providerKind, profile, value, submitted) => {
     const host = fakeHost();
     const spawn = vi.spyOn(host, "acpSpawn");
     const channel = new FakeChannel();
@@ -1638,7 +1673,8 @@ Then add, next to the "refuses acpSpawn without a provider kind" test:
     expect(JSON.stringify(frames)).not.toContain("proxy.test");
     expect(spawn).not.toHaveBeenCalled();
     expect(channel.closed).toBe(false);
-  });
+  }
+);
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -1746,31 +1782,27 @@ import { AcpCredentialBadRequestError, readAcpSpawnCredential } from "./acp-spaw
 In the `acpSpawn` case, after the profile check and before `const spawned = ...`, add:
 
 ```ts
-      const credential = readAcpSpawnCredential(
-        params.credential,
-        params.providerKind,
-        params.profile
-      );
+const credential = readAcpSpawnCredential(params.credential, params.providerKind, params.profile);
 ```
 
 and pass it as the seventh argument:
 
 ```ts
-      const spawned = await host.acpSpawn(
-        key,
-        params.projectId,
-        params.providerKind as AcpProviderKind,
-        params.userId,
-        params.profile,
-        params.useCandidate === true,
-        credential
-      );
+const spawned = await host.acpSpawn(
+  key,
+  params.projectId,
+  params.providerKind as AcpProviderKind,
+  params.userId,
+  params.profile,
+  params.useCandidate === true,
+  credential
+);
 ```
 
 In `errorCode`, after the `BadRequestError` line:
 
 ```ts
-  if (err instanceof AcpCredentialBadRequestError) return "bad_request";
+if (err instanceof AcpCredentialBadRequestError) return "bad_request";
 ```
 
 `packages/cli-runner/src/engine-host.ts:145-162`: add `credential: RpcAcpSpawnCredential | null = null` after `useCandidate = false`, pass it as the seventh argument to `this.acp.spawn(...)`, and add `type RpcAcpSpawnCredential` to the existing multi-line `@moss/chat/live` import (lines 14-55; keep it sorted as the block is).
@@ -1803,7 +1835,9 @@ Expected: PASS.
 Temporarily change the apiKey message in `acp-spawn-credential.ts` to
 
 ```ts
-    throw new AcpCredentialBadRequestError(`acpSpawn.credential.apiKey is malformed: ${String(apiKey)}`);
+throw new AcpCredentialBadRequestError(
+  `acpSpawn.credential.apiKey is malformed: ${String(apiKey)}`
+);
 ```
 
 Run: `pnpm test:unit tests/unit/cli-runner-protocol.test.ts`
@@ -1823,6 +1857,7 @@ git commit -m "feat(cli-runner): accept a validated API-key credential on acpSpa
 ### Task 8: The home-preparation script writes or removes the OpenCode provider entry
 
 **Files:**
+
 - Create: `packages/acp/src/opencode-provider.ts`
 - Modify: `packages/acp/src/index.ts` (add the export)
 - Modify: `packages/cli-runner/src/agent-home-prepare-run.ts:12-15`
@@ -1831,6 +1866,7 @@ git commit -m "feat(cli-runner): accept a validated API-key credential on acpSpa
 - Test: `tests/unit/cli-runner-opencode-provider-entry.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `MOSS_OPENCODE_PROVIDER_ID = "moss"`, `MOSS_OPENCODE_API_KEY_ENV = "MOSS_OPENCODE_API_KEY"` (from `@moss/acp`).
@@ -1915,7 +1951,13 @@ describe("agent-home-prepare OpenCode provider entry", () => {
       path,
       JSON.stringify({ permission: { bash: "deny" }, provider: { moss: {}, other: { name: "x" } } })
     );
-    expect(run({ dirs: [configDir], denyFile: null, opencodeProvider: { path, id: "moss", entry: null } }).status).toBe(0);
+    expect(
+      run({
+        dirs: [configDir],
+        denyFile: null,
+        opencodeProvider: { path, id: "moss", entry: null }
+      }).status
+    ).toBe(0);
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
       permission: { bash: "deny" },
       provider: { other: { name: "x" } }
@@ -1950,7 +1992,9 @@ describe("agent-home-prepare OpenCode provider entry", () => {
     });
     expect(result.status).toBe(1);
     expect(result.stderr).not.toContain("sk-test-never-land-0002");
-    expect(existsSync(path) ? readFileSync(path, "utf8") : "").not.toContain("sk-test-never-land-0002");
+    expect(existsSync(path) ? readFileSync(path, "utf8") : "").not.toContain(
+      "sk-test-never-land-0002"
+    );
   });
 
   it.each([
@@ -1959,7 +2003,10 @@ describe("agent-home-prepare OpenCode provider entry", () => {
     ["a model with a space", { ...entry, model: "a b" }]
   ])("refuses %s", (_label, bad) => {
     const { configDir, path } = setup();
-    expect(run({ dirs: [configDir], denyFile: null, opencodeProvider: { path, id: "moss", entry: bad } }).status).toBe(1);
+    expect(
+      run({ dirs: [configDir], denyFile: null, opencodeProvider: { path, id: "moss", entry: bad } })
+        .status
+    ).toBe(1);
   });
 
   it("replaces a planted symlink instead of writing through it", () => {
@@ -1968,7 +2015,10 @@ describe("agent-home-prepare OpenCode provider entry", () => {
     const outside = join(dir, "outside.json");
     writeFileSync(outside, "{}");
     symlinkSync(outside, path);
-    expect(run({ dirs: [configDir], denyFile: null, opencodeProvider: { path, id: "moss", entry } }).status).toBe(0);
+    expect(
+      run({ dirs: [configDir], denyFile: null, opencodeProvider: { path, id: "moss", entry } })
+        .status
+    ).toBe(0);
     expect(readFileSync(outside, "utf8")).toBe("{}");
     expect(lstatSync(path).isSymbolicLink()).toBe(false);
   });
@@ -2139,25 +2189,25 @@ with
 In `tests/unit/cli-runner-acp-host.test.ts`, at the end of `fakeAgentHomePrepare` (after the `denyFile` block), add:
 
 ```ts
-  const spec = request.opencodeProvider;
-  if (spec) {
-    if (!existsSync(spec.path) && spec.entry === null) return;
-    const config: Record<string, unknown> = existsSync(spec.path)
-      ? (JSON.parse(readFileSync(spec.path, "utf8")) as Record<string, unknown>)
-      : {};
-    const provider = { ...((config.provider as Record<string, unknown> | undefined) ?? {}) };
-    if (spec.entry === null) delete provider[spec.id];
-    else
-      provider[spec.id] = {
-        npm: "@ai-sdk/openai-compatible",
-        name: "Moss",
-        options: { baseURL: spec.entry.baseUrl, apiKey: `{env:${spec.entry.apiKeyEnv}}` },
-        models: { [spec.entry.model]: {} }
-      };
-    if (Object.keys(provider).length > 0) config.provider = provider;
-    else delete config.provider;
-    writeFileSync(spec.path, JSON.stringify(config, null, 2), { mode: 0o600 });
-  }
+const spec = request.opencodeProvider;
+if (spec) {
+  if (!existsSync(spec.path) && spec.entry === null) return;
+  const config: Record<string, unknown> = existsSync(spec.path)
+    ? (JSON.parse(readFileSync(spec.path, "utf8")) as Record<string, unknown>)
+    : {};
+  const provider = { ...((config.provider as Record<string, unknown> | undefined) ?? {}) };
+  if (spec.entry === null) delete provider[spec.id];
+  else
+    provider[spec.id] = {
+      npm: "@ai-sdk/openai-compatible",
+      name: "Moss",
+      options: { baseURL: spec.entry.baseUrl, apiKey: `{env:${spec.entry.apiKeyEnv}}` },
+      models: { [spec.entry.model]: {} }
+    };
+  if (Object.keys(provider).length > 0) config.provider = provider;
+  else delete config.provider;
+  writeFileSync(spec.path, JSON.stringify(config, null, 2), { mode: 0o600 });
+}
 ```
 
 - [ ] **Step 7: Run both tests and watch them pass**
@@ -2180,16 +2230,17 @@ git add packages/acp/src/opencode-provider.ts packages/acp/src/index.ts \
 git commit -m "feat(cli-runner): write and remove the OpenCode API-key provider entry (#3410)"
 ```
 
-
 ### Task 9: The sidecar puts the credential in the agent env and builds the OpenCode entry
 
 **Files:**
+
 - Create: `packages/cli-runner/src/acp-launch-credential.ts`
 - Create: `packages/cli-runner/src/stderr-redactor.ts`
 - Modify: `packages/cli-runner/src/acp-host.ts` (imports at `:14`, `:70`, `:79`; the token block in `spawn` at about `:377-380`; the prepare call; the stderr line at about `:586`; delete `readLoginToken` at about `:989-997`)
 - Test: `tests/unit/cli-runner-acp-host-api-key.test.ts` (create), `tests/unit/cli-runner-stderr-redactor.test.ts` (create); `tests/unit/cli-runner-acp-host.test.ts` (run only)
 
 **Interfaces:**
+
 - Consumes: `RpcAcpSpawnCredential` and the seventh `spawn` parameter (Task 7); `MOSS_OPENCODE_PROVIDER_ID`, `MOSS_OPENCODE_API_KEY_ENV`, `AgentHomeOpencodeProvider`, `AgentHomePrepareRequest.opencodeProvider` (Task 8); `providerBaseUrl` (Task 4); `redactSecrets(text)` (already exported from `@moss/ai`).
 - Produces:
   - `type AcpCredential = RpcAcpSpawnCredential`
@@ -2387,7 +2438,8 @@ describe("AcpHost API-key launches", () => {
   });
 });
 ```
-```
+
+````
 
 `tests/unit/cli-runner-stderr-redactor.test.ts`:
 
@@ -2446,7 +2498,7 @@ describe("createStreamRedactor", () => {
     expect(run(KEY, [bytes.subarray(0, 4), bytes.subarray(4)])).toBe("café\n");
   });
 });
-```
+````
 
 - [ ] **Step 2: Run them and watch them fail**
 
@@ -2626,28 +2678,28 @@ import { applyAgentCredential, type AcpCredential } from "./acp-launch-credentia
 6. In the `setup` block, replace
 
 ```ts
-        if (providerKind === "anthropic") {
-          const token = await this.readLoginToken(homeBase);
-          if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
-        }
+if (providerKind === "anthropic") {
+  const token = await this.readLoginToken(homeBase);
+  if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+}
 ```
 
 with
 
 ```ts
-        const opencodeProvider = await applyAgentCredential(env, {
-          agentHome,
-          homeBase,
-          providerKind,
-          credential,
-          readTokenFile: this.deps.readTokenFile
-        });
+const opencodeProvider = await applyAgentCredential(env, {
+  agentHome,
+  homeBase,
+  providerKind,
+  credential,
+  readTokenFile: this.deps.readTokenFile
+});
 ```
 
 7. Replace `if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));` with
 
 ```ts
-        if (denyFile || opencodeProvider) prepareDirs.push(join(agentHome, ".config", "opencode"));
+if (denyFile || opencodeProvider) prepareDirs.push(join(agentHome, ".config", "opencode"));
 ```
 
 8. In the `runAgentHomePrepare(...)` call, replace the first argument `{ dirs: prepareDirs, denyFile }` with
@@ -2659,11 +2711,11 @@ with
 9. Replace the whole `child.stderr.on("data", ...)` handler, comment included, with
 
 ```ts
-      // Adapter diagnostics ride stderr by design (stdout is protocol). Keep the
-      // tail in the runner log, truncated and masked across chunk boundaries.
-      logRedactedStderr(child.stderr, credential?.apiKey, (text) =>
-        console.warn(`[acp-host] ${key} stderr: ${text}`)
-      );
+// Adapter diagnostics ride stderr by design (stdout is protocol). Keep the
+// tail in the runner log, truncated and masked across chunk boundaries.
+logRedactedStderr(child.stderr, credential?.apiKey, (text) =>
+  console.warn(`[acp-host] ${key} stderr: ${text}`)
+);
 ```
 
 and add `import { logRedactedStderr } from "./stderr-redactor.js";` with the other local imports.
@@ -2687,16 +2739,16 @@ Expected: PASS. The "passes the Claude token to Claude alone" test still proves 
 
 Make each change alone, run the named test's file, see the named test fail, record the failing test name and assertion in the PR body, then undo it.
 
-| Temporary change | Test that must fail |
-| --- | --- |
-| In `applyAgentCredential`, add `apiKey: credential.apiKey` to the OpenCode `entry` object (cast as needed) | "writes an OpenCode entry with one /v1..." |
-| In `acp-host.ts`, build `env` from `...process.env` instead of `...buildSanitizedCliEnv(process.env)` | "keeps server-level key variables away..." |
-| In `applyAgentCredential`, read the login token before the `if (credential)` check and always set `CLAUDE_CODE_OAUTH_TOKEN` | "gives the claude agent the row's address..." |
-| In `logRedactedStderr`, pass `null` instead of `secret` to `createStreamRedactor` | "masks the key in the adapter's logged error output" and "masks a key split across stderr chunks..." |
-| In `push`, return the whole masked text and hold nothing (per-chunk masking) | "masks a key split after its character %i" (every split), "masks a key split across stderr chunks..." |
-| In `flush`, return `text` without masking the held tail | "masks a stream that ends after %i characters of the key", "masks a key split across stderr chunks..." (at `fatal: [redacted]`) |
-| In `logRedactedStderr`, drop the `stream.on("end", ...)` line | "masks a key split across stderr chunks..." (at `fatal: [redacted]`) |
-| In `applyAgentCredential`, return `undefined` for OpenCode when there is no credential | "removes the OpenCode entry on every CLI-login OpenCode spawn..." |
+| Temporary change                                                                                                            | Test that must fail                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| In `applyAgentCredential`, add `apiKey: credential.apiKey` to the OpenCode `entry` object (cast as needed)                  | "writes an OpenCode entry with one /v1..."                                                                                      |
+| In `acp-host.ts`, build `env` from `...process.env` instead of `...buildSanitizedCliEnv(process.env)`                       | "keeps server-level key variables away..."                                                                                      |
+| In `applyAgentCredential`, read the login token before the `if (credential)` check and always set `CLAUDE_CODE_OAUTH_TOKEN` | "gives the claude agent the row's address..."                                                                                   |
+| In `logRedactedStderr`, pass `null` instead of `secret` to `createStreamRedactor`                                           | "masks the key in the adapter's logged error output" and "masks a key split across stderr chunks..."                            |
+| In `push`, return the whole masked text and hold nothing (per-chunk masking)                                                | "masks a key split after its character %i" (every split), "masks a key split across stderr chunks..."                           |
+| In `flush`, return `text` without masking the held tail                                                                     | "masks a stream that ends after %i characters of the key", "masks a key split across stderr chunks..." (at `fatal: [redacted]`) |
+| In `logRedactedStderr`, drop the `stream.on("end", ...)` line                                                               | "masks a key split across stderr chunks..." (at `fatal: [redacted]`)                                                            |
+| In `applyAgentCredential`, return `undefined` for OpenCode when there is no credential                                      | "removes the OpenCode entry on every CLI-login OpenCode spawn..."                                                               |
 
 To prove the key never reaches the command line, temporarily change `args: target.args` in the `spawnChild({...})` call to `args: [...target.args, credential?.apiKey ?? ""]`. The first test must fail. Undo it.
 
@@ -2712,12 +2764,14 @@ git commit -m "feat(cli-runner): launch chat agents with an API-key credential (
 ### Task 10: The chat engine routes API-key rows, names a rejected key and masks launch errors
 
 **Files:**
+
 - Modify: `packages/chat/src/live/auth-errors.ts`
 - Modify: `packages/chat/src/live/acp-chat-engine.ts` (options at `:32-44`, `toAcpProviderKind` at `:47-60`, constructor default at `:433`, launch catch at `:607-612`, prompt catch at `:661-666`, `RpcAcpTunnel` at `:723-745`, `isAuthRequired` at `:782`)
 - Modify: `packages/chat/src/live/runtime.ts` (`ChatEngineFactory` opts at `:143-161`, the two non-ACP factories at `:236` and `:309`, the ACP factory at `:416-421`)
 - Test: `packages/chat/src/live/acp-chat-engine.test.ts`, `tests/unit/chat-runtime-selection.test.ts`, `tests/unit/chat-auth-remediation-routes.test.ts`
 
 **Interfaces:**
+
 - Consumes: `RpcAcpSpawnCredential` (Task 7).
 - Produces:
   - `API_KEY_REJECTED_MESSAGE = "The provider rejected the API key. An admin can check it under Settings, AI providers."` and `API_KEY_UNREADABLE_MESSAGE = "The API key for this provider could not be read. An admin can enter it again under Settings, AI providers."`, both in `auth-errors.ts` and both allowed through `knownAuthFailureMessage`, so the live route shows them with a 503.
@@ -2808,7 +2862,10 @@ describe("API-key chat", () => {
 
   it("treats a provider 401 during an API-key prompt as a rejected key", async () => {
     const engine = new AcpChatEngine("openai-compatible", "chat:u1:api-key-401", {
-      tunnel: new PromptErrorTunnel(false, { code: -32603, message: "Upstream 401: invalid api key" }),
+      tunnel: new PromptErrorTunnel(false, {
+        code: -32603,
+        message: "Upstream 401: invalid api key"
+      }),
       authMethod: "api_key",
       userId: "u1",
       projectId: "api-key-401"
@@ -2821,7 +2878,13 @@ describe("API-key chat", () => {
   });
 
   it("sends the credential with the spawn request, and only when one is given", async () => {
-    const acpSpawn = vi.fn(async () => ({ cwd: "/tmp/acp", home: "/tmp/home", pid: 1, uid: 1, gid: 1 }));
+    const acpSpawn = vi.fn(async () => ({
+      cwd: "/tmp/acp",
+      home: "/tmp/home",
+      pid: 1,
+      uid: 1,
+      gid: 1
+    }));
     const connection = { acpSpawn } as unknown as RpcConnection;
     const credential = { baseUrl: null, apiKey: "sk-test-never-echo-0002", model: "org/model" };
     await new RpcAcpTunnel(connection, "chat:u1:a", { credential }).spawn(
@@ -2831,7 +2894,13 @@ describe("API-key chat", () => {
       "u1",
       "chat"
     );
-    await new RpcAcpTunnel(connection, "chat:u1:b").spawn("chat:u1:b", "b", "anthropic", "u1", "chat");
+    await new RpcAcpTunnel(connection, "chat:u1:b").spawn(
+      "chat:u1:b",
+      "b",
+      "anthropic",
+      "u1",
+      "chat"
+    );
     expect(acpSpawn.mock.calls[0]?.[1]).toEqual({
       projectId: "a",
       providerKind: "anthropic",
@@ -2879,26 +2948,28 @@ describe("API-key chat", () => {
 In `tests/unit/chat-runtime-selection.test.ts`, inside the `selectEngineFactory` describe block, add:
 
 ```ts
-  it("refuses API-key rows outside the ACP chat path", async () => {
-    const inProcess = selectEngineFactory({ env: {} as NodeJS.ProcessEnv });
-    await expect(
-      Promise.resolve().then(() => inProcess.factory("anthropic", "user-a", { authMethod: "api_key" }))
-    ).rejects.toBeInstanceOf(CliChatUnavailableError);
+it("refuses API-key rows outside the ACP chat path", async () => {
+  const inProcess = selectEngineFactory({ env: {} as NodeJS.ProcessEnv });
+  await expect(
+    Promise.resolve().then(() =>
+      inProcess.factory("anthropic", "user-a", { authMethod: "api_key" })
+    )
+  ).rejects.toBeInstanceOf(CliChatUnavailableError);
 
-    const rpc = selectEngineFactory({
-      env: {
-        JARVIS_CLI_RUNNER_SOCKET: SOCKET,
-        JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
-      } as NodeJS.ProcessEnv
-    });
-    try {
-      await expect(
-        Promise.resolve().then(() => rpc.factory("anthropic", "user-a", { authMethod: "api_key" }))
-      ).rejects.toBeInstanceOf(CliChatUnavailableError);
-    } finally {
-      rpc.connection?.close();
-    }
+  const rpc = selectEngineFactory({
+    env: {
+      JARVIS_CLI_RUNNER_SOCKET: SOCKET,
+      JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
+    } as NodeJS.ProcessEnv
   });
+  try {
+    await expect(
+      Promise.resolve().then(() => rpc.factory("anthropic", "user-a", { authMethod: "api_key" }))
+    ).rejects.toBeInstanceOf(CliChatUnavailableError);
+  } finally {
+    rpc.connection?.close();
+  }
+});
 ```
 
 In `tests/unit/chat-auth-remediation-routes.test.ts`, extend the `auth-errors.js` import with `API_KEY_REJECTED_MESSAGE` and `API_KEY_UNREADABLE_MESSAGE`, and change line 25 to:
@@ -3019,21 +3090,21 @@ export function toAcpProviderKind(
 8. In `launch`'s catch, replace the `isAuthRequired` block with:
 
 ```ts
-      if (this.isAuthFailure(error)) {
-        const failure = this.authFailure(kind, error);
-        await this.closeQuietly();
-        throw failure;
-      }
+if (this.isAuthFailure(error)) {
+  const failure = this.authFailure(kind, error);
+  await this.closeQuietly();
+  throw failure;
+}
 ```
 
-   At the end of the same catch, replace `await this.closeQuietly(); throw error;` with:
+At the end of the same catch, replace `await this.closeQuietly(); throw error;` with:
 
 ```ts
-      await this.closeQuietly();
-      throw this.opts.authMethod === "api_key" ? maskedLaunchError(error, this.opts.apiKey) : error;
+await this.closeQuietly();
+throw this.opts.authMethod === "api_key" ? maskedLaunchError(error, this.opts.apiKey) : error;
 ```
 
-   Line 14 becomes `import { type ProviderKind, redactExact, redactSecrets } from "@moss/ai";`, and add `AcpSessionOpenError` to the `@moss/acp` import at lines 2-13. Add at the end of the file:
+Line 14 becomes `import { type ProviderKind, redactExact, redactSecrets } from "@moss/ai";`, and add `AcpSessionOpenError` to the `@moss/acp` import at lines 2-13. Add at the end of the file:
 
 ```ts
 /**
@@ -3129,9 +3200,9 @@ In `packages/chat/src/live/runtime.ts`:
 3. In both non-ACP factories (the `return async (provider, sessionKey, engineOpts) => {` at `:235` and `const factory: ChatEngineFactory = ...` at `:308`), right after the OpenCode refusal add:
 
 ```ts
-    if (engineOpts?.authMethod === "api_key") {
-      throw new CliChatUnavailableError("API-key chat requires an ACP chat session.");
-    }
+if (engineOpts?.authMethod === "api_key") {
+  throw new CliChatUnavailableError("API-key chat requires an ACP chat session.");
+}
 ```
 
 4. In the ACP chat factory, change the engine options to:
@@ -3179,6 +3250,7 @@ git commit -m "feat(chat): route API-key rows to their agent and name a rejected
 ### Task 11: Chat persistence decrypts the row's key, stamps a launch revision and picks the OpenCode model value
 
 **Files:**
+
 - Create: `packages/chat/src/live/api-key-launch.ts`
 - Modify: `packages/chat/src/live/persistence.ts` (import at `:11`, deps at `:71-85`, constructor at `:165-174`, `resolveActiveProvider` at `:176-213`)
 - Modify: `packages/chat/src/live/chat-session-ports.ts:39-50` (`ChatPersistencePort`)
@@ -3186,6 +3258,7 @@ git commit -m "feat(chat): route API-key rows to their agent and name a rejected
 - Test: `tests/unit/chat-api-key-launch.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `MOSS_OPENCODE_PROVIDER_ID` (Task 8).
 - Produces:
   - `interface ChatCredential { readonly apiKey: string; readonly baseUrl: string | null; readonly revision: string }`
@@ -3262,10 +3335,16 @@ describe("chatAcpModel", () => {
   });
 
   it("keeps the saved choice for CLI OpenCode rows only", () => {
-    const cliOpencode = { ...apiKeyRow, provider_auth_method: "cli", provider_acp_agent_id: "opencode" } as const;
+    const cliOpencode = {
+      ...apiKeyRow,
+      provider_auth_method: "cli",
+      provider_acp_agent_id: "opencode"
+    } as const;
     expect(chatAcpModel(cliOpencode, "muse-spark-1.3-free")).toBe("muse-spark-1.3-free");
     expect(chatAcpModel(cliOpencode, undefined)).toBeUndefined();
-    expect(chatAcpModel({ ...cliOpencode, provider_acp_agent_id: "codex-acp" }, "default")).toBeUndefined();
+    expect(
+      chatAcpModel({ ...cliOpencode, provider_acp_agent_id: "codex-acp" }, "default")
+    ).toBeUndefined();
   });
 });
 
@@ -3524,30 +3603,27 @@ import {
 4. In `resolveActiveProvider`, add `providerConfigRevision?: string;` to the return type after `acpModel?`, and replace the `this.run(...)` block with:
 
 ```ts
-    const { model, openCodeModel, revision } = await this.run(
-      actorUserId,
-      "resolve-provider",
-      async (scopedDb) => {
-        // Sequential: model selection can write through a savepoint.
-        const model = await this.ai.selectChatModelForUser(scopedDb);
-        const rawChatSettings = await this.chatPreferences?.get(
-          scopedDb,
-          CHAT_SETTINGS_PREFERENCE_KEY
-        );
-        const sealed =
-          model?.provider_auth_method === "api_key"
-            ? await this.ai.selectProviderWithCredential(scopedDb, model.provider_config_id)
-            : undefined;
-        return {
-          model,
-          openCodeModel: normalizeChatSettings(rawChatSettings).openCodeModel,
-          revision: sealed ? providerLaunchRevision(sealed) : undefined
-        };
-      }
-    );
+const { model, openCodeModel, revision } = await this.run(
+  actorUserId,
+  "resolve-provider",
+  async (scopedDb) => {
+    // Sequential: model selection can write through a savepoint.
+    const model = await this.ai.selectChatModelForUser(scopedDb);
+    const rawChatSettings = await this.chatPreferences?.get(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY);
+    const sealed =
+      model?.provider_auth_method === "api_key"
+        ? await this.ai.selectProviderWithCredential(scopedDb, model.provider_config_id)
+        : undefined;
+    return {
+      model,
+      openCodeModel: normalizeChatSettings(rawChatSettings).openCodeModel,
+      revision: sealed ? providerLaunchRevision(sealed) : undefined
+    };
+  }
+);
 ```
 
-   Then replace the returned object with:
+Then replace the returned object with:
 
 ```ts
     const provider = toLiveProvider(model);
@@ -3625,6 +3701,7 @@ git commit -m "feat(chat): read the API-key chat credential inside the user's da
 ### Task 12: Chat accepts Anthropic and OpenAI-compatible API-key rows and follows their key and address
 
 **Files:**
+
 - Modify: `packages/chat/src/live/errors.ts:138-146` (replace the old refusal)
 - Modify: `packages/chat/src/live/chat-session-provider-identity.ts:1-11` (imports) and `:55-60` (the gate); add `resolveApiKeyLaunchCredential`
 - Modify: `packages/chat/src/live/chat-session-launch.ts:11-16`, `:56-57`, `:81-90`
@@ -3638,6 +3715,7 @@ git commit -m "feat(chat): read the API-key chat credential inside the user's da
 - Test: `tests/unit/chat-session-manager-provider-identity.test.ts`, `tests/unit/chat-auth-remediation-routes.test.ts`, `tests/unit/chat-api-key-launch.test.ts`, `tests/unit/chat-session-manager-provider-drop.test.ts`, `tests/unit/ai-provider-config-update-route.test.ts`
 
 **Interfaces:**
+
 - Consumes: `API_KEY_UNREADABLE_MESSAGE` and the factory's `authMethod` and `credential` options (Task 10); `ChatPersistencePort.resolveChatCredential`, `ChatCredential.revision` and `providerConfigRevision` (Task 11).
 - Produces:
   - `UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE = "Chat supports API-key providers of type Anthropic or OpenAI-compatible. Choose one of those, or a CLI provider, in Admin > AI providers."` and `class UnsupportedApiKeyChatProviderError extends CliChatUnavailableError` (live route: 400 with that message).
@@ -3670,182 +3748,185 @@ import { assertProviderIdentityForPendingTurn } from "../../packages/chat/src/li
 Replace the first test ("rejects API-key live chat before creating or launching an engine") with:
 
 ```ts
-  const KEY = "sk-test-never-echo-0004";
-  const NEW_KEY = "localproxy0006neverlog";
-  const apiKeyProvider = {
-    provider: "anthropic",
-    model: "claude-test-model",
-    providerConfigId: "provider-1",
-    authMethod: "api_key",
-    acpAgentId: null,
-    providerConfigRevision: "rev-1"
-  } as const;
-  type TestCredential = { apiKey: string; baseUrl: string | null; revision: string };
+const KEY = "sk-test-never-echo-0004";
+const NEW_KEY = "localproxy0006neverlog";
+const apiKeyProvider = {
+  provider: "anthropic",
+  model: "claude-test-model",
+  providerConfigId: "provider-1",
+  authMethod: "api_key",
+  acpAgentId: null,
+  providerConfigRevision: "rev-1"
+} as const;
+type TestCredential = { apiKey: string; baseUrl: string | null; revision: string };
 
-  function apiKeyManager(credential: TestCredential | null) {
-    const engine = new FakeEngine(0);
-    const engineFactory = vi.fn(() => engine);
-    const deps = makeMinimalDeps({ engineFactory });
-    const resolveChatCredential = vi.fn().mockResolvedValue(credential);
-    const persistence = {
-      ...deps.persistence,
-      resolveChatCredential,
-      getCurrentThreadState: vi.fn().mockResolvedValue(null)
-    };
-    vi.mocked(persistence.resolveActiveProvider).mockResolvedValue(apiKeyProvider);
-    const manager = new ChatSessionManager({ ...deps, persistence });
-    return { manager, engine, engineFactory, persistence, resolveChatCredential };
-  }
+function apiKeyManager(credential: TestCredential | null) {
+  const engine = new FakeEngine(0);
+  const engineFactory = vi.fn(() => engine);
+  const deps = makeMinimalDeps({ engineFactory });
+  const resolveChatCredential = vi.fn().mockResolvedValue(credential);
+  const persistence = {
+    ...deps.persistence,
+    resolveChatCredential,
+    getCurrentThreadState: vi.fn().mockResolvedValue(null)
+  };
+  vi.mocked(persistence.resolveActiveProvider).mockResolvedValue(apiKeyProvider);
+  const manager = new ChatSessionManager({ ...deps, persistence });
+  return { manager, engine, engineFactory, persistence, resolveChatCredential };
+}
 
-  it("refuses an API-key row whose key cannot be read, before any conversation or engine", async () => {
-    const { manager, engineFactory, persistence } = apiKeyManager(null);
-    await expect(manager.ensureSession("u1", "Ada")).rejects.toBeInstanceOf(ApiKeyUnreadableError);
-    expect(engineFactory).not.toHaveBeenCalled();
-    expect(persistence.openNewConversation).not.toHaveBeenCalled();
+it("refuses an API-key row whose key cannot be read, before any conversation or engine", async () => {
+  const { manager, engineFactory, persistence } = apiKeyManager(null);
+  await expect(manager.ensureSession("u1", "Ada")).rejects.toBeInstanceOf(ApiKeyUnreadableError);
+  expect(engineFactory).not.toHaveBeenCalled();
+  expect(persistence.openNewConversation).not.toHaveBeenCalled();
+});
+
+it("launches an API-key row with its key, address and model", async () => {
+  const { manager, engineFactory, resolveChatCredential } = apiKeyManager({
+    apiKey: KEY,
+    baseUrl: "http://proxy.test",
+    revision: "rev-1"
   });
+  await manager.ensureSession("u1", "Ada");
+  expect(resolveChatCredential).toHaveBeenCalledWith("u1", "provider-1");
+  expect(engineFactory).toHaveBeenCalledWith(
+    "anthropic",
+    "u1:drawer",
+    expect.objectContaining({
+      authMethod: "api_key",
+      credential: { apiKey: KEY, baseUrl: "http://proxy.test", model: "claude-test-model" }
+    })
+  );
+});
 
-  it("launches an API-key row with its key, address and model", async () => {
-    const { manager, engineFactory, resolveChatCredential } = apiKeyManager({
+it("keeps the key out of logs, stored calls and the agent's input", async () => {
+  const logged: unknown[] = [];
+  for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+    vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+      logged.push(args);
+    });
+  }
+  try {
+    const { manager, engine, persistence } = apiKeyManager({
       apiKey: KEY,
-      baseUrl: "http://proxy.test",
+      baseUrl: null,
       revision: "rev-1"
     });
     await manager.ensureSession("u1", "Ada");
-    expect(resolveChatCredential).toHaveBeenCalledWith("u1", "provider-1");
-    expect(engineFactory).toHaveBeenCalledWith(
-      "anthropic",
-      "u1:drawer",
-      expect.objectContaining({
-        authMethod: "api_key",
-        credential: { apiKey: KEY, baseUrl: "http://proxy.test", model: "claude-test-model" }
-      })
-    );
-  });
+    const storedCalls = Object.entries(persistence)
+      .filter(([name]) => name !== "resolveChatCredential")
+      .map(([, fn]) => vi.mocked(fn).mock.calls);
+    expect(JSON.stringify(logged)).not.toContain(KEY);
+    expect(JSON.stringify(storedCalls)).not.toContain(KEY);
+    expect(JSON.stringify(engine.submitted)).not.toContain(KEY);
+    expect(JSON.stringify(engine.launchOpts)).not.toContain(KEY);
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
 
-  it("keeps the key out of logs, stored calls and the agent's input", async () => {
-    const logged: unknown[] = [];
-    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
-      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
-        logged.push(args);
-      });
-    }
-    try {
-      const { manager, engine, persistence } = apiKeyManager({
-        apiKey: KEY,
-        baseUrl: null,
-        revision: "rev-1"
-      });
-      await manager.ensureSession("u1", "Ada");
-      const storedCalls = Object.entries(persistence)
-        .filter(([name]) => name !== "resolveChatCredential")
-        .map(([, fn]) => vi.mocked(fn).mock.calls);
-      expect(JSON.stringify(logged)).not.toContain(KEY);
-      expect(JSON.stringify(storedCalls)).not.toContain(KEY);
-      expect(JSON.stringify(engine.submitted)).not.toContain(KEY);
-      expect(JSON.stringify(engine.launchOpts)).not.toContain(KEY);
-    } finally {
-      vi.restoreAllMocks();
-    }
+it.each([
+  ["a new key", { apiKey: NEW_KEY, baseUrl: "http://proxy.test" }],
+  ["a new address", { apiKey: KEY, baseUrl: "http://proxy.test/other" }]
+])("discards the engine and relaunches when the same row gets %s", async (_label, next) => {
+  const engines: FakeEngine[] = [];
+  const engineFactory = vi.fn(() => {
+    const engine = new FakeEngine(0);
+    engines.push(engine);
+    return engine;
   });
+  const deps = makeMinimalDeps({ engineFactory });
+  let revision = "rev-1";
+  let credential: TestCredential = { apiKey: KEY, baseUrl: "http://proxy.test", revision };
+  const persistence = {
+    ...deps.persistence,
+    resolveChatCredential: vi.fn(async () => credential),
+    getCurrentThreadState: vi.fn().mockResolvedValue(null)
+  };
+  vi.mocked(persistence.resolveActiveProvider).mockImplementation(async () => ({
+    ...apiKeyProvider,
+    providerConfigRevision: revision
+  }));
+  const manager = new ChatSessionManager({ ...deps, persistence });
 
-  it.each([
-    ["a new key", { apiKey: NEW_KEY, baseUrl: "http://proxy.test" }],
-    ["a new address", { apiKey: KEY, baseUrl: "http://proxy.test/other" }]
-  ])("discards the engine and relaunches when the same row gets %s", async (_label, next) => {
-    const engines: FakeEngine[] = [];
-    const engineFactory = vi.fn(() => {
-      const engine = new FakeEngine(0);
-      engines.push(engine);
-      return engine;
-    });
-    const deps = makeMinimalDeps({ engineFactory });
-    let revision = "rev-1";
-    let credential: TestCredential = { apiKey: KEY, baseUrl: "http://proxy.test", revision };
-    const persistence = {
-      ...deps.persistence,
-      resolveChatCredential: vi.fn(async () => credential),
-      getCurrentThreadState: vi.fn().mockResolvedValue(null)
-    };
-    vi.mocked(persistence.resolveActiveProvider).mockImplementation(async () => ({
+  await manager.ensureSession("u1", "Ada");
+  revision = "rev-2";
+  credential = { ...next, revision };
+  await manager.ensureSession("u1", "Ada");
+
+  expect(engines).toHaveLength(2);
+  expect(engines[0]?.killed).toBe(true);
+  expect(engineFactory).toHaveBeenLastCalledWith(
+    "anthropic",
+    "u1:drawer",
+    expect.objectContaining({ credential: { ...next, model: "claude-test-model" } })
+  );
+});
+
+it("retries with the new row when the key changes between the provider read and the key read", async () => {
+  const { manager, engineFactory, persistence, resolveChatCredential } = apiKeyManager(null);
+  vi.mocked(persistence.resolveActiveProvider)
+    .mockResolvedValueOnce(apiKeyProvider)
+    .mockResolvedValue({ ...apiKeyProvider, providerConfigRevision: "rev-2" });
+  resolveChatCredential.mockResolvedValue({ apiKey: NEW_KEY, baseUrl: null, revision: "rev-2" });
+
+  await manager.ensureSession("u1", "Ada");
+
+  expect(engineFactory).toHaveBeenCalledTimes(1);
+  expect(engineFactory).toHaveBeenCalledWith(
+    "anthropic",
+    "u1:drawer",
+    expect.objectContaining({
+      credential: { apiKey: NEW_KEY, baseUrl: null, model: "claude-test-model" }
+    })
+  );
+});
+
+it("refuses a pending turn once the row's key or address changed", async () => {
+  await expect(
+    assertProviderIdentityForPendingTurn(apiKeyProvider, {
       ...apiKeyProvider,
-      providerConfigRevision: revision
-    }));
-    const manager = new ChatSessionManager({ ...deps, persistence });
-
-    await manager.ensureSession("u1", "Ada");
-    revision = "rev-2";
-    credential = { ...next, revision };
-    await manager.ensureSession("u1", "Ada");
-
-    expect(engines).toHaveLength(2);
-    expect(engines[0]?.killed).toBe(true);
-    expect(engineFactory).toHaveBeenLastCalledWith(
-      "anthropic",
-      "u1:drawer",
-      expect.objectContaining({ credential: { ...next, model: "claude-test-model" } })
-    );
-  });
-
-  it("retries with the new row when the key changes between the provider read and the key read", async () => {
-    const { manager, engineFactory, persistence, resolveChatCredential } = apiKeyManager(null);
-    vi.mocked(persistence.resolveActiveProvider)
-      .mockResolvedValueOnce(apiKeyProvider)
-      .mockResolvedValue({ ...apiKeyProvider, providerConfigRevision: "rev-2" });
-    resolveChatCredential.mockResolvedValue({ apiKey: NEW_KEY, baseUrl: null, revision: "rev-2" });
-
-    await manager.ensureSession("u1", "Ada");
-
-    expect(engineFactory).toHaveBeenCalledTimes(1);
-    expect(engineFactory).toHaveBeenCalledWith(
-      "anthropic",
-      "u1:drawer",
-      expect.objectContaining({
-        credential: { apiKey: NEW_KEY, baseUrl: null, model: "claude-test-model" }
-      })
-    );
-  });
-
-  it("refuses a pending turn once the row's key or address changed", async () => {
-    await expect(
-      assertProviderIdentityForPendingTurn(apiKeyProvider, {
-        ...apiKeyProvider,
-        providerConfigRevision: "rev-2"
-      })
-    ).rejects.toBeInstanceOf(ChatProviderChangedError);
-  });
+      providerConfigRevision: "rev-2"
+    })
+  ).rejects.toBeInstanceOf(ChatProviderChangedError);
+});
 ```
 
 Replace the third test ("evicts a cached CLI engine when the provider changes to API-key auth") with:
 
 ```ts
-  it("evicts a cached CLI engine when the provider changes to an unsupported API-key kind", async () => {
-    const oldEngine = new FakeEngine(0);
-    const engineFactory = vi.fn(() => oldEngine);
-    const deps = makeMinimalDeps({ engineFactory });
-    const cliProvider = {
-      provider: "openai-compatible",
-      model: "gpt-5.6",
-      providerConfigId: "provider-1",
-      authMethod: "cli",
-      acpAgentId: "codex-acp",
-      executionMode: "non_interactive"
-    } as const;
-    const googleKey = { ...cliProvider, provider: "google", authMethod: "api_key", acpAgentId: null } as const;
-    let activeProvider: typeof cliProvider | typeof googleKey = cliProvider;
-    vi.mocked(deps.persistence.resolveActiveProvider).mockImplementation(
-      async () => activeProvider
-    );
-    const manager = new ChatSessionManager(deps);
+it("evicts a cached CLI engine when the provider changes to an unsupported API-key kind", async () => {
+  const oldEngine = new FakeEngine(0);
+  const engineFactory = vi.fn(() => oldEngine);
+  const deps = makeMinimalDeps({ engineFactory });
+  const cliProvider = {
+    provider: "openai-compatible",
+    model: "gpt-5.6",
+    providerConfigId: "provider-1",
+    authMethod: "cli",
+    acpAgentId: "codex-acp",
+    executionMode: "non_interactive"
+  } as const;
+  const googleKey = {
+    ...cliProvider,
+    provider: "google",
+    authMethod: "api_key",
+    acpAgentId: null
+  } as const;
+  let activeProvider: typeof cliProvider | typeof googleKey = cliProvider;
+  vi.mocked(deps.persistence.resolveActiveProvider).mockImplementation(async () => activeProvider);
+  const manager = new ChatSessionManager(deps);
 
-    await manager.ensureSession("u1", "Ada");
-    activeProvider = googleKey;
-    await expect(manager.ensureSession("u1", "Ada")).rejects.toBeInstanceOf(
-      UnsupportedApiKeyChatProviderError
-    );
+  await manager.ensureSession("u1", "Ada");
+  activeProvider = googleKey;
+  await expect(manager.ensureSession("u1", "Ada")).rejects.toBeInstanceOf(
+    UnsupportedApiKeyChatProviderError
+  );
 
-    expect(oldEngine.killed).toBe(true);
-    expect(engineFactory).toHaveBeenCalledTimes(1);
-  });
+  expect(oldEngine.killed).toBe(true);
+  expect(engineFactory).toHaveBeenCalledTimes(1);
+});
 ```
 
 - [ ] **Step 2: Update the route and persistence tests**
@@ -3859,32 +3940,32 @@ In `tests/unit/chat-auth-remediation-routes.test.ts`, replace `API_KEY_LIVE_CHAT
 and add after that `it.each`:
 
 ```ts
-  it("tells the user an API-key row's key could not be read", async () => {
-    const app = buildLiveApp(new ApiKeyUnreadableError());
-    apps.push(app);
-    await assertSerializedError(
-      app,
-      { method: "POST", url: "/api/chat/turn", payload: { text: "hello" } },
-      503,
-      API_KEY_UNREADABLE_MESSAGE
-    );
-  });
+it("tells the user an API-key row's key could not be read", async () => {
+  const app = buildLiveApp(new ApiKeyUnreadableError());
+  apps.push(app);
+  await assertSerializedError(
+    app,
+    { method: "POST", url: "/api/chat/turn", payload: { text: "hello" } },
+    503,
+    API_KEY_UNREADABLE_MESSAGE
+  );
+});
 ```
 
 In `tests/unit/chat-api-key-launch.test.ts`, add `import { UnsupportedApiKeyChatProviderError } from "../../packages/chat/src/live/errors.js";` and, inside the "DataContextChatPersistence API-key launch" describe, add:
 
 ```ts
-  it("names the supported API-key kinds when the row has another kind", async () => {
-    const { persistence, ai } = fixture(() => cipher);
-    vi.spyOn(ai, "selectChatModelForUser").mockResolvedValue({
-      ...apiKeyRow,
-      provider_kind: "ollama",
-      provider_config_id: "provider-1"
-    } as unknown as AiConfiguredModelSafeRow);
-    await expect(persistence.resolveActiveProvider("user-1")).rejects.toBeInstanceOf(
-      UnsupportedApiKeyChatProviderError
-    );
-  });
+it("names the supported API-key kinds when the row has another kind", async () => {
+  const { persistence, ai } = fixture(() => cipher);
+  vi.spyOn(ai, "selectChatModelForUser").mockResolvedValue({
+    ...apiKeyRow,
+    provider_kind: "ollama",
+    provider_config_id: "provider-1"
+  } as unknown as AiConfiguredModelSafeRow);
+  await expect(persistence.resolveActiveProvider("user-1")).rejects.toBeInstanceOf(
+    UnsupportedApiKeyChatProviderError
+  );
+});
 ```
 
 - [ ] **Step 3: Run them and watch them fail**
@@ -3960,8 +4041,7 @@ export async function resolveApiKeyLaunchCredential(
 In the same file, in `sameActiveChatProvider`, replace the last compared line, `left.acpModel === right.acpModel`, with:
 
 ```ts
-    left.acpModel === right.acpModel &&
-    left.providerConfigRevision === right.providerConfigRevision
+left.acpModel === right.acpModel && left.providerConfigRevision === right.providerConfigRevision;
 ```
 
 If `CliChatUnavailableError` is no longer used in the file after this change, drop it from the import.
@@ -3972,12 +4052,12 @@ In `packages/chat/src/live/chat-session-launch.ts`:
 2. Replace line 57, `assertLiveCliProvider(providerIdentity);`, with:
 
 ```ts
-  assertLiveChatProvider(providerIdentity);
-  const credential = await resolveApiKeyLaunchCredential(
-    actorUserId,
-    providerIdentity,
-    deps.persistence
-  );
+assertLiveChatProvider(providerIdentity);
+const credential = await resolveApiKeyLaunchCredential(
+  actorUserId,
+  providerIdentity,
+  deps.persistence
+);
 ```
 
 3. In the `deps.engineFactory(provider, sessionKey, { ... })` call, after `acpAgentId,` add:
@@ -3990,7 +4070,7 @@ In `packages/chat/src/live/chat-session-launch.ts`:
 In `packages/chat/src/live/persistence.ts`, change line 55 to `import { UnsupportedApiKeyChatProviderError, UnsupportedLegacyCliProviderError } from "./errors.js";`, and in `toLiveProvider` add, before the legacy CLI check:
 
 ```ts
-  if (model.provider_auth_method === "api_key") throw new UnsupportedApiKeyChatProviderError();
+if (model.provider_auth_method === "api_key") throw new UnsupportedApiKeyChatProviderError();
 ```
 
 In `packages/chat/src/live/chat-session-manager.ts`, in the errors import replace `ApiKeyLiveChatUnavailableError,` with `ApiKeyUnreadableError,` and `UnsupportedApiKeyChatProviderError,`. In the retry guard at `:313-317`, replace `err instanceof ApiKeyLiveChatUnavailableError ||` with:
@@ -4005,9 +4085,9 @@ Run `wc -l packages/chat/src/live/chat-session-manager.ts` (must stay at or unde
 In `packages/chat/src/live-routes.ts`, in the errors import replace `API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE,` and `ApiKeyLiveChatUnavailableError,` with `UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE,` and `UnsupportedApiKeyChatProviderError,` (keep the block's order), and replace the mapping at `:766-768` with:
 
 ```ts
-  if (error instanceof UnsupportedApiKeyChatProviderError) {
-    return reply.code(400).send({ error: UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE });
-  }
+if (error instanceof UnsupportedApiKeyChatProviderError) {
+  return reply.code(400).send({ error: UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE });
+}
 ```
 
 `ApiKeyUnreadableError` needs no route change: it is a `CliChatUnavailableError` whose message is on the auth allowlist.
@@ -4041,18 +4121,18 @@ In `tests/unit/chat-session-manager-provider-drop.test.ts`, inside `makeMultiPro
 and add, after the first `it`:
 
 ```ts
-  it("drops only the sessions bound to the given provider row", async () => {
-    const { manager, engines } = makeMultiProviderManager();
-    await manager.ensureSession("u-claude-1", "Alice");
-    await manager.ensureSession("u-claude-2", "Bob");
-    await manager.ensureSession("u-codex", "Cara");
+it("drops only the sessions bound to the given provider row", async () => {
+  const { manager, engines } = makeMultiProviderManager();
+  await manager.ensureSession("u-claude-1", "Alice");
+  await manager.ensureSession("u-claude-2", "Bob");
+  await manager.ensureSession("u-codex", "Cara");
 
-    await manager.dropSessionsForProvider({ providerConfigId: "row-u-claude-1" });
+  await manager.dropSessionsForProvider({ providerConfigId: "row-u-claude-1" });
 
-    expect(engines.get("u-claude-1:drawer")?.kill).toHaveBeenCalledTimes(1);
-    expect(engines.get("u-claude-2:drawer")?.kill).not.toHaveBeenCalled();
-    expect(engines.get("u-codex:drawer")?.kill).not.toHaveBeenCalled();
-  });
+  expect(engines.get("u-claude-1:drawer")?.kill).toHaveBeenCalledTimes(1);
+  expect(engines.get("u-claude-2:drawer")?.kill).not.toHaveBeenCalled();
+  expect(engines.get("u-codex:drawer")?.kill).not.toHaveBeenCalled();
+});
 ```
 
 Both Anthropic sessions share a kind, so only a match on the row id passes.
@@ -4085,7 +4165,9 @@ describe("provider saves drop the row's live chats", () => {
       getUserById: vi.fn().mockResolvedValue({ is_instance_admin: true }),
       listProviders: vi.fn().mockResolvedValue([provider]),
       updateProvider: vi.fn().mockResolvedValue(provider),
-      revokeProvider: vi.fn().mockResolvedValue({ ...provider, status: "revoked", revoked_at: now }),
+      revokeProvider: vi
+        .fn()
+        .mockResolvedValue({ ...provider, status: "revoked", revoked_at: now }),
       selectProviderWithCredential: vi.fn().mockResolvedValue(undefined)
     };
     const server = Fastify();
@@ -4187,11 +4269,11 @@ export type ChatSessionDropTarget = ProviderKind | { readonly providerConfigId: 
 and replace `dropSessionsForProvider`'s input field `readonly provider: ProviderKind;` with `readonly target: ChatSessionDropTarget;` and its `if (session.provider !== input.provider) continue;` line with:
 
 ```ts
-    const matches =
-      typeof input.target === "string"
-        ? session.provider === input.target
-        : session.providerIdentity.providerConfigId === input.target.providerConfigId;
-    if (!matches) continue;
+const matches =
+  typeof input.target === "string"
+    ? session.provider === input.target
+    : session.providerIdentity.providerConfigId === input.target.providerConfigId;
+if (!matches) continue;
 ```
 
 In `packages/chat/src/live/chat-session-manager.ts`, add `type ChatSessionDropTarget,` to the `./chat-session-provider-identity.js` import after `dropSessionsForProvider,` (line 15), and replace `:797-806` with:
@@ -4214,7 +4296,7 @@ Run `wc -l packages/chat/src/live/chat-session-manager.ts` (must stay at or unde
 In `packages/chat/src/routes.ts`, replace line 206 in place, keeping one line so the file stays at 1000 lines:
 
 ```ts
-    dropSessionsForProvider: (target: ProviderKind | { providerConfigId: string }) => Promise<void>
+dropSessionsForProvider: (target: ProviderKind | { providerConfigId: string }) => Promise<void>;
 ```
 
 The publisher at `:573-575` passes its argument through unchanged and needs no edit.
@@ -4229,13 +4311,13 @@ In `packages/ai/src/routes.ts`, add to `AiRoutesDependencies` after `modelDiscov
 In the PATCH handler, after the `if (!reconnectChanged) { ... }` block at `:422-424`, add:
 
 ```ts
-        if (reconnectChanged) await dropLiveChatSessions(dependencies, request.params.id);
+if (reconnectChanged) await dropLiveChatSessions(dependencies, request.params.id);
 ```
 
 In the revoke handler, after `modelDiscovery.invalidate(accessContext.actorUserId, request.params.id);` at `:451`, add:
 
 ```ts
-        await dropLiveChatSessions(dependencies, request.params.id);
+await dropLiveChatSessions(dependencies, request.params.id);
 ```
 
 At the end of the file, add:
@@ -4270,8 +4352,8 @@ type DropChatSessions = Parameters<
 2. Replace `:3607-3609` (the `dropSessionsForProvider` variable and its getter) with:
 
 ```ts
-  let dropSessionsForProvider: DropChatSessions | undefined;
-  const getDropSessionsForProvider = (): DropChatSessions | undefined => dropSessionsForProvider;
+let dropSessionsForProvider: DropChatSessions | undefined;
+const getDropSessionsForProvider = (): DropChatSessions | undefined => dropSessionsForProvider;
 ```
 
 3. At `:3854`, change `adoptDropSessionsForProvider: (fn: (provider: ProviderKind) => Promise<void>) => {` to `adoptDropSessionsForProvider: (fn: DropChatSessions) => {`.
@@ -4309,22 +4391,22 @@ Expected: exit 0.
 
 - [ ] **Step 11: Removal steps**
 
-| Temporary change | Test that must fail |
-| --- | --- |
-| In `chat-session-launch.ts`, move the `resolveApiKeyLaunchCredential` call to just before `deps.engineFactory(...)` | "refuses an API-key row whose key cannot be read..." (`openNewConversation` was called) |
-| In `chat-session-launch.ts`, add `console.info("[chat] launch", credential);` after the credential is resolved | "keeps the key out of logs, stored calls and the agent's input" |
-| In `assertLiveChatProvider`, replace the kind check with a bare `return;` | "evicts a cached CLI engine when the provider changes to an unsupported API-key kind" |
-| In `sameActiveChatProvider`, delete the `providerConfigRevision` line (and the `&&` before it) | "discards the engine and relaunches when the same row gets a new key" and "...a new address" (one engine), and "refuses a pending turn once the row's key or address changed" |
-| In `resolveApiKeyLaunchCredential`, delete the revision check | "retries with the new row when the key changes between the provider read and the key read" (two engines launched) |
+| Temporary change                                                                                                    | Test that must fail                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In `chat-session-launch.ts`, move the `resolveApiKeyLaunchCredential` call to just before `deps.engineFactory(...)` | "refuses an API-key row whose key cannot be read..." (`openNewConversation` was called)                                                                                       |
+| In `chat-session-launch.ts`, add `console.info("[chat] launch", credential);` after the credential is resolved      | "keeps the key out of logs, stored calls and the agent's input"                                                                                                               |
+| In `assertLiveChatProvider`, replace the kind check with a bare `return;`                                           | "evicts a cached CLI engine when the provider changes to an unsupported API-key kind"                                                                                         |
+| In `sameActiveChatProvider`, delete the `providerConfigRevision` line (and the `&&` before it)                      | "discards the engine and relaunches when the same row gets a new key" and "...a new address" (one engine), and "refuses a pending turn once the row's key or address changed" |
+| In `resolveApiKeyLaunchCredential`, delete the revision check                                                       | "retries with the new row when the key changes between the provider read and the key read" (two engines launched)                                                             |
 
 Run `pnpm test:unit tests/unit/chat-session-manager-provider-identity.test.ts` after each, see the named test fail, record the failure in the PR body, then undo it.
 
-| Temporary change | Test that must fail | Run |
-| --- | --- | --- |
-| In `dropSessionsForProvider`, replace the row branch with `true` | "drops only the sessions bound to the given provider row" | `pnpm test:unit tests/unit/chat-session-manager-provider-drop.test.ts` |
-| In the PATCH handler, delete the `dropLiveChatSessions` line | "drops them after saving a new key" | `pnpm test:unit tests/unit/ai-provider-config-update-route.test.ts` |
-| In the revoke handler, delete the `dropLiveChatSessions` line | "drops them after revoke" | `pnpm test:unit tests/unit/ai-provider-config-update-route.test.ts` |
-| In `dropLiveChatSessions`, remove the `try`/`catch` and keep the call | "still saves when the drop fails" | `pnpm test:unit tests/unit/ai-provider-config-update-route.test.ts` |
+| Temporary change                                                      | Test that must fail                                       | Run                                                                    |
+| --------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| In `dropSessionsForProvider`, replace the row branch with `true`      | "drops only the sessions bound to the given provider row" | `pnpm test:unit tests/unit/chat-session-manager-provider-drop.test.ts` |
+| In the PATCH handler, delete the `dropLiveChatSessions` line          | "drops them after saving a new key"                       | `pnpm test:unit tests/unit/ai-provider-config-update-route.test.ts`    |
+| In the revoke handler, delete the `dropLiveChatSessions` line         | "drops them after revoke"                                 | `pnpm test:unit tests/unit/ai-provider-config-update-route.test.ts`    |
+| In `dropLiveChatSessions`, remove the `try`/`catch` and keep the call | "still saves when the drop fails"                         | `pnpm test:unit tests/unit/ai-provider-config-update-route.test.ts`    |
 
 Run the named file after each, see the named test fail, record it in the PR body, then undo it.
 
@@ -4345,6 +4427,7 @@ git commit -m "feat(chat): open live chat to API-key rows; relaunch on same-row 
 ### Task 13: Readiness check for API-key chat rows
 
 **Files:**
+
 - Create: `packages/shared/src/ai-chat-readiness-api.ts`
 - Modify: `packages/shared/src/index.ts:11` (export the new file)
 - Create: `packages/ai/src/api-key-chat-readiness.ts`
@@ -4354,6 +4437,7 @@ git commit -m "feat(chat): open live chat to API-key rows; relaunch on same-row 
 - Test: `tests/unit/ai-api-key-chat-readiness.test.ts`
 
 **Interfaces:**
+
 - Consumes: `testProviderCredential`, `PROVIDER_CREDENTIAL_MISSING_MESSAGE`, `PROVIDER_REJECTED_CREDENTIAL_MESSAGE` (Task 5); `providerBaseUrl` (Task 4); `readCliToolVersions`, `CliToolVersionReader`, `CliToolVersions` (already in `packages/ai/src/cli-tool-versions.ts`).
 - Produces:
   - `@moss/shared`: `API_KEY_CHAT_READINESS_STATUSES`, `type ApiKeyChatReadinessStatus = "ready" | "rejected_key" | "unreachable" | "needs_key" | "agent_missing" | "runner_unavailable"`, `interface ApiKeyChatReadinessResponse { readonly status: ApiKeyChatReadinessStatus }`, `apiKeyChatReadinessRouteSchema`.
@@ -4406,7 +4490,10 @@ function input(overrides: Partial<ApiKeyChatReadinessInput> = {}): ApiKeyChatRea
 describe("ApiKeyChatReadiness", () => {
   it("is ready when the claude agent is installed and the models list answers", async () => {
     const fetch = fakeFetch();
-    const readiness = new ApiKeyChatReadiness({ cliToolVersionReader: async () => INSTALLED, fetch });
+    const readiness = new ApiKeyChatReadiness({
+      cliToolVersionReader: async () => INSTALLED,
+      fetch
+    });
 
     await expect(readiness.check(input())).resolves.toBe("ready");
     expect(fetch).toHaveBeenCalledWith(
@@ -4422,10 +4509,14 @@ describe("ApiKeyChatReadiness", () => {
     });
 
     await expect(
-      new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: fakeFetch(401) }).check(input())
+      new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: fakeFetch(401) }).check(
+        input()
+      )
     ).resolves.toBe("rejected_key");
     await expect(
-      new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: fakeFetch(500) }).check(input())
+      new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: fakeFetch(500) }).check(
+        input()
+      )
     ).resolves.toBe("unreachable");
     await expect(
       new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: refused }).check(input())
@@ -4434,10 +4525,15 @@ describe("ApiKeyChatReadiness", () => {
 
   it("checks OpenCode for OpenAI-compatible rows and sends exactly one /v1", async () => {
     const fetch = fakeFetch();
-    const readiness = new ApiKeyChatReadiness({ cliToolVersionReader: async () => INSTALLED, fetch });
+    const readiness = new ApiKeyChatReadiness({
+      cliToolVersionReader: async () => INSTALLED,
+      fetch
+    });
 
     await expect(
-      readiness.check(input({ providerKind: "openai-compatible", baseUrl: "http://proxy.test/v1/" }))
+      readiness.check(
+        input({ providerKind: "openai-compatible", baseUrl: "http://proxy.test/v1/" })
+      )
     ).resolves.toBe("ready");
     expect(fetch).toHaveBeenCalledWith(
       "http://proxy.test/v1/models",
@@ -4476,7 +4572,9 @@ describe("ApiKeyChatReadiness", () => {
     });
 
     await expect(
-      new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: fakeFetch() }).check(unreadable)
+      new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: fakeFetch() }).check(
+        unreadable
+      )
     ).resolves.toBe("needs_key");
     await expect(
       new ApiKeyChatReadiness({ cliToolVersionReader: reader, fetch: fakeFetch() }).check(
@@ -4814,42 +4912,42 @@ const CHAT_READINESS_NOT_APPLICABLE_MESSAGE =
 5. At the top of `registerAiProviderValidationRoutes`, before the first route:
 
 ```ts
-  const chatReadiness =
-    dependencies.chatReadiness ??
-    new ApiKeyChatReadiness({ cliToolVersionReader: dependencies.cliToolVersionReader });
+const chatReadiness =
+  dependencies.chatReadiness ??
+  new ApiKeyChatReadiness({ cliToolVersionReader: dependencies.cliToolVersionReader });
 ```
 
 6. Add the route after the `/test` route:
 
 ```ts
-  server.get<{ Params: IdParams }>(
-    "/api/ai/providers/:id/chat-readiness",
-    { schema: apiKeyChatReadinessRouteSchema },
-    async (request, reply) => {
-      try {
-        const accessContext = await dependencies.resolveAccessContext(request);
-        const provider = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          loadTestableProvider(dependencies, scopedDb, accessContext, request.params.id)
-        );
-        const providerKind = provider.provider_kind;
-        if (provider.auth_method !== "api_key" || !isApiKeyChatProviderKind(providerKind)) {
-          throw new HttpError(400, CHAT_READINESS_NOT_APPLICABLE_MESSAGE);
-        }
-
-        // The provider call runs outside the database transaction.
-        const status = await chatReadiness.check({
-          providerId: provider.id,
-          providerKind,
-          baseUrl: provider.base_url,
-          updatedAt: provider.updated_at,
-          openCredential: () => dependencies.secretCipher.decryptJson(provider.encrypted_credential)
-        });
-        return { status };
-      } catch (error) {
-        return handleRouteError(error, reply);
+server.get<{ Params: IdParams }>(
+  "/api/ai/providers/:id/chat-readiness",
+  { schema: apiKeyChatReadinessRouteSchema },
+  async (request, reply) => {
+    try {
+      const accessContext = await dependencies.resolveAccessContext(request);
+      const provider = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+        loadTestableProvider(dependencies, scopedDb, accessContext, request.params.id)
+      );
+      const providerKind = provider.provider_kind;
+      if (provider.auth_method !== "api_key" || !isApiKeyChatProviderKind(providerKind)) {
+        throw new HttpError(400, CHAT_READINESS_NOT_APPLICABLE_MESSAGE);
       }
+
+      // The provider call runs outside the database transaction.
+      const status = await chatReadiness.check({
+        providerId: provider.id,
+        providerKind,
+        baseUrl: provider.base_url,
+        updatedAt: provider.updated_at,
+        openCredential: () => dependencies.secretCipher.decryptJson(provider.encrypted_credential)
+      });
+      return { status };
+    } catch (error) {
+      return handleRouteError(error, reply);
     }
-  );
+  }
+);
 ```
 
 In `packages/ai/src/routes.ts`, add one line to the `registerAiProviderValidationRoutes(server, { ... })` call at `:493-499`:
@@ -4867,11 +4965,11 @@ Expected: PASS (unchanged behaviour).
 
 - [ ] **Step 7: Removal steps**
 
-| Temporary change | Test that must fail |
-| --- | --- |
+| Temporary change                                                                                                                                                              | Test that must fail                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | In the route, return `{ status, credential: dependencies.secretCipher.decryptJson(provider.encrypted_credential) }` and set the 200 schema's `additionalProperties` to `true` | "returns only the status, never the key". Then restore `additionalProperties: false` but keep the leaking return: the test passes again, which shows the closed schema strips extra fields. Undo both. |
-| In `check`, change the cache key to `` `${input.providerId}:${JSON.stringify(input.openCredential())}` `` | "caches by row and update time, and a cache hit opens no key" |
-| In `check`, delete the `if (status !== "runner_unavailable")` guard (cache every status) | "never caches a runner outage" |
+| In `check`, change the cache key to `` `${input.providerId}:${JSON.stringify(input.openCredential())}` ``                                                                     | "caches by row and update time, and a cache hit opens no key"                                                                                                                                          |
+| In `check`, delete the `if (status !== "runner_unavailable")` guard (cache every status)                                                                                      | "never caches a runner outage"                                                                                                                                                                         |
 
 Run `pnpm test:unit tests/unit/ai-api-key-chat-readiness.test.ts` after each, see the named test fail, then undo it.
 
@@ -4888,6 +4986,7 @@ git commit -m "feat(ai): chat readiness check for API-key provider rows (#3410)"
 ### Task 14: API-key provider cards show chat readiness
 
 **Files:**
+
 - Create: `apps/web/src/settings/settings-ai-chat-readiness.ts`
 - Modify: `apps/web/src/api/client.ts` (after `testAiProvider`, about `:1267-1272`; add the response type to the `@moss/shared` import list near `:182`)
 - Modify: `apps/web/src/api/query-keys.ts:59-60`
@@ -4895,6 +4994,7 @@ git commit -m "feat(ai): chat readiness check for API-key provider rows (#3410)"
 - Test: `tests/unit/settings-ai-chat-readiness.test.ts` (create), `tests/unit/settings-ai-provider-models.test.tsx`, `tests/unit/settings-ai-admin-pane.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `ApiKeyChatReadinessResponse`, `ApiKeyChatReadinessStatus` (Task 13); `GET /api/ai/providers/:id/chat-readiness` (Task 13).
 - Produces: `getAiProviderChatReadiness(id: string): Promise<ApiKeyChatReadinessResponse>`; `queryKeys.ai.providerChatReadiness(providerId: string, updatedAt: string)`; `showsChatReadiness(provider)`, `describeChatReadiness(status): string | null`.
 
@@ -4946,29 +5046,29 @@ In `tests/unit/settings-ai-provider-models.test.tsx`, add to the `client.js` moc
 and append inside the top-level `describe`:
 
 ```ts
-  it("shows a rejected API key on an API-key chat row", async () => {
-    const clientModule = await import("../../apps/web/src/api/client.js");
-    vi.mocked(clientModule.getAiProviderChatReadiness).mockResolvedValueOnce({
-      status: "rejected_key"
-    });
-    const { renderer } = await render([]);
-
-    expect(clientModule.getAiProviderChatReadiness).toHaveBeenCalledWith("p1");
-    expect(
-      renderer.root
-        .findAllByProps({ role: "status" })
-        .map((node) => node.children.join(" "))
-        .some((text) => text === "The provider rejected the API key")
-    ).toBe(true);
+it("shows a rejected API key on an API-key chat row", async () => {
+  const clientModule = await import("../../apps/web/src/api/client.js");
+  vi.mocked(clientModule.getAiProviderChatReadiness).mockResolvedValueOnce({
+    status: "rejected_key"
   });
+  const { renderer } = await render([]);
 
-  it("does not check chat readiness for a CLI row", async () => {
-    const clientModule = await import("../../apps/web/src/api/client.js");
-    vi.mocked(clientModule.getAiProviderChatReadiness).mockClear();
-    await render([], vi.fn(), { ...provider, authMethod: "cli" } as AiProviderConfigDto);
+  expect(clientModule.getAiProviderChatReadiness).toHaveBeenCalledWith("p1");
+  expect(
+    renderer.root
+      .findAllByProps({ role: "status" })
+      .map((node) => node.children.join(" "))
+      .some((text) => text === "The provider rejected the API key")
+  ).toBe(true);
+});
 
-    expect(clientModule.getAiProviderChatReadiness).not.toHaveBeenCalled();
-  });
+it("does not check chat readiness for a CLI row", async () => {
+  const clientModule = await import("../../apps/web/src/api/client.js");
+  vi.mocked(clientModule.getAiProviderChatReadiness).mockClear();
+  await render([], vi.fn(), { ...provider, authMethod: "cli" } as AiProviderConfigDto);
+
+  expect(clientModule.getAiProviderChatReadiness).not.toHaveBeenCalled();
+});
 ```
 
 In `tests/unit/settings-ai-admin-pane.test.tsx`, add the same line to the `client.js` mock factory (next to `refreshAiProviderModels` at `:49`):
@@ -5048,32 +5148,34 @@ In `apps/web/src/settings/settings-ai-provider-models.tsx`:
 2. Add after the `initializationQuery` declaration:
 
 ```ts
-  const chatReadinessQuery = useQuery({
-    queryKey: queryKeys.ai.providerChatReadiness(provider.id, provider.updatedAt),
-    queryFn: () => getAiProviderChatReadiness(provider.id),
-    enabled: showsChatReadiness(provider),
-    staleTime: 60_000,
-    retry: false
-  });
+const chatReadinessQuery = useQuery({
+  queryKey: queryKeys.ai.providerChatReadiness(provider.id, provider.updatedAt),
+  queryFn: () => getAiProviderChatReadiness(provider.id),
+  enabled: showsChatReadiness(provider),
+  staleTime: 60_000,
+  retry: false
+});
 ```
 
 3. Add after the `initializationOutcome` declaration:
 
 ```ts
-  const chatReadinessOutcome = chatReadinessQuery.data
-    ? describeChatReadiness(chatReadinessQuery.data.status)
-    : null;
-  const statusLine = initializationOutcome ?? chatReadinessOutcome;
+const chatReadinessOutcome = chatReadinessQuery.data
+  ? describeChatReadiness(chatReadinessQuery.data.status)
+  : null;
+const statusLine = initializationOutcome ?? chatReadinessOutcome;
 ```
 
 4. In the JSX, replace `initializationOutcome` with `statusLine` in both places of the `prov__synced` block:
 
 ```tsx
-      {statusLine !== null ? (
-        <div className="prov__synced" role="status">
-          {statusLine}
-        </div>
-      ) : null}
+{
+  statusLine !== null ? (
+    <div className="prov__synced" role="status">
+      {statusLine}
+    </div>
+  ) : null;
+}
 ```
 
 The two queries never run for the same row (one needs a CLI row, the other an API-key row), so `??` only picks whichever applies.
@@ -5098,6 +5200,7 @@ git commit -m "feat(web): show chat readiness on API-key provider cards (#3410)"
 ### Task 15: App map and ADR 0003
 
 **Files:**
+
 - Modify: `packages/shared/src/app-map-core.ts` (the Task 6 sentence near `:283-285`; chat sentence near `:299-300` after Task 6 shifts it; error entry near `:476-481`; remediation near `:559-564`)
 - Modify: `docs/architecture/decisions/0003-interactive-chat-is-cli-transport.md:3`
 - Test: `tests/unit/app-map-api-key-chat.test.ts` (create)
@@ -5105,6 +5208,7 @@ git commit -m "feat(web): show chat readiness on API-key provider cards (#3410)"
 Find each anchor by its text, not its line number. Task 6 added two lines above the later anchors.
 
 **Interfaces:**
+
 - Consumes: the error class names from Task 12 (the app map names the error by code, not by class).
 - Produces: error code `core.ai.api_key_chat_provider_unsupported`; remediation id `core.ai.connect_cli_provider` is kept, with new text.
 
@@ -5284,15 +5388,15 @@ Through the real UI, signed in as the dev admin, set up the row:
 
 Then run each case in the chat drawer and record its evidence. Every case must pass.
 
-| Case | Do | Expect |
-| --- | --- | --- |
-| A. Deny, no write | Ask "Add a task called Deny check". Press Deny on the confirmation card. | The turn ends with a reply. No "Deny check" task on the Tasks screen. |
-| B. Cancel, no write | Ask "Add a task called Cancel check". Before answering the card, press the drawer's stop control. | The turn ends. No "Cancel check" task. The next message gets a normal reply. |
-| C. Approve, then another turn | Ask "Add a task called Ada's test task". Approve. Then ask "What task did you just add?" | The task exists on the Tasks screen. The second reply names it. |
-| D. Streamed tool result | Ask "List my open tasks." | The reply streams after the tool result, names "Ada's test task", and the turn completes with no spinner left. |
-| E. Cancel and retry | Ask "Count slowly from one to forty, one number per line." Press stop part-way. Send the same message again. | The first turn stops. The second runs to forty. |
-| F. Provider switch with replay | Make a different chat-capable row the default (the CLI row, or the other API-key row once Step 5 has added it). Ask "What task did I ask you to add earlier?" Then switch back. | The other provider names "Ada's test task", so history was replayed into the new session. |
-| G. Same-row key rotation | Run `pgrep -fn claude-agent-acp` and note the pid. Edit this row and save the same key again (a fresh save re-seals it). Ask "What task did I ask you to add earlier?" Run `pgrep -fn claude-agent-acp` again. | The pid changed, so the old session was dropped. The reply names "Ada's test task". |
+| Case                           | Do                                                                                                                                                                                                             | Expect                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| A. Deny, no write              | Ask "Add a task called Deny check". Press Deny on the confirmation card.                                                                                                                                       | The turn ends with a reply. No "Deny check" task on the Tasks screen.                                          |
+| B. Cancel, no write            | Ask "Add a task called Cancel check". Before answering the card, press the drawer's stop control.                                                                                                              | The turn ends. No "Cancel check" task. The next message gets a normal reply.                                   |
+| C. Approve, then another turn  | Ask "Add a task called Ada's test task". Approve. Then ask "What task did you just add?"                                                                                                                       | The task exists on the Tasks screen. The second reply names it.                                                |
+| D. Streamed tool result        | Ask "List my open tasks."                                                                                                                                                                                      | The reply streams after the tool result, names "Ada's test task", and the turn completes with no spinner left. |
+| E. Cancel and retry            | Ask "Count slowly from one to forty, one number per line." Press stop part-way. Send the same message again.                                                                                                   | The first turn stops. The second runs to forty.                                                                |
+| F. Provider switch with replay | Make a different chat-capable row the default (the CLI row, or the other API-key row once Step 5 has added it). Ask "What task did I ask you to add earlier?" Then switch back.                                | The other provider names "Ada's test task", so history was replayed into the new session.                      |
+| G. Same-row key rotation       | Run `pgrep -fn claude-agent-acp` and note the pid. Edit this row and save the same key again (a fresh save re-seals it). Ask "What task did I ask you to add earlier?" Run `pgrep -fn claude-agent-acp` again. | The pid changed, so the old session was dropped. The reply names "Ada's test task".                            |
 
 Record bounded evidence per case: the request id from the api log for the turn, the tool name from any confirmation card, the task titles from the UI as text, and the two pids for case G. Never record a log line, only ids, names and titles.
 
@@ -5341,29 +5445,29 @@ Stop it and run `devports release <port>`.
 
 ### Spec coverage
 
-| Spec requirement | Task |
-| --- | --- |
-| Phase 0 proofs, stop on failure | 1, 2, 3 |
-| Anthropic address in the HTTP adapter, model discovery and key test | 4, 5 |
-| "Anthropic (API key)" add entry, app map for it | 6 |
-| Key crosses into the sidecar on `acpSpawn` only, value-free errors | 7 |
-| OpenCode provider entry with an env reference, removed on CLI spawns | 8, 9 |
-| Agent env for the claude agent, no OAuth token on API-key spawns | 9 |
+| Spec requirement                                                                                                              | Task                                        |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Phase 0 proofs, stop on failure                                                                                               | 1, 2, 3                                     |
+| Anthropic address in the HTTP adapter, model discovery and key test                                                           | 4, 5                                        |
+| "Anthropic (API key)" add entry, app map for it                                                                               | 6                                           |
+| Key crosses into the sidecar on `acpSpawn` only, value-free errors                                                            | 7                                           |
+| OpenCode provider entry with an env reference, removed on CLI spawns                                                          | 8, 9                                        |
+| Agent env for the claude agent, no OAuth token on API-key spawns                                                              | 9                                           |
 | Key never in argv, logs, RPC errors, browser or `opencode.json`, including a key split across stderr chunks and launch errors | 7, 9, 10, 12, 13 (removal steps), 16 Step 7 |
-| Leak scans read the key file themselves | 1, 2, 16 Step 7 |
-| Effective model proved through Moss's client; history replay and a near-limit OpenCode conversation | 1, 2 |
-| Routing by auth method, never to Codex | 10 |
-| A 401 names the rejected key, not a CLI sign-in | 10, 14, 16 Step 6 |
-| Chat persistence decrypts the key | 11 |
-| Same-row key or address change relaunches the session; drop by provider row | 11, 12, 16 Step 4 case G |
-| Gate opens for Anthropic and OpenAI-compatible; other kinds get the new error and a 400 | 12 |
-| Readiness: agent installed plus `/v1/models`, cached by id plus update time | 13, 14 |
-| Discovery and the key test use the launch address normalizer and one model id policy; chat models only | 4, 5 |
-| OpenAI-compatible bounded to Chat Completions | Global Constraints, 16 Step 2 |
-| UI proof cases A to G for both agents | 16 Steps 4-5 |
-| App map, ADR 0003, release note, live-path proof | 15, 16 |
-| Dev-instance seeding | seeding plan, Tasks 17-18 |
-| UAT | seeding plan, Tasks 19-21 |
+| Leak scans read the key file themselves                                                                                       | 1, 2, 16 Step 7                             |
+| Effective model proved through Moss's client; history replay and a near-limit OpenCode conversation                           | 1, 2                                        |
+| Routing by auth method, never to Codex                                                                                        | 10                                          |
+| A 401 names the rejected key, not a CLI sign-in                                                                               | 10, 14, 16 Step 6                           |
+| Chat persistence decrypts the key                                                                                             | 11                                          |
+| Same-row key or address change relaunches the session; drop by provider row                                                   | 11, 12, 16 Step 4 case G                    |
+| Gate opens for Anthropic and OpenAI-compatible; other kinds get the new error and a 400                                       | 12                                          |
+| Readiness: agent installed plus `/v1/models`, cached by id plus update time                                                   | 13, 14                                      |
+| Discovery and the key test use the launch address normalizer and one model id policy; chat models only                        | 4, 5                                        |
+| OpenAI-compatible bounded to Chat Completions                                                                                 | Global Constraints, 16 Step 2               |
+| UI proof cases A to G for both agents                                                                                         | 16 Steps 4-5                                |
+| App map, ADR 0003, release note, live-path proof                                                                              | 15, 16                                      |
+| Dev-instance seeding                                                                                                          | seeding plan, Tasks 17-18                   |
+| UAT                                                                                                                           | seeding plan, Tasks 19-21                   |
 
 ### Deviations from the spec, found in the code
 

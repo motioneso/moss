@@ -44,42 +44,42 @@
 
 Checked against the code on 2026-10-10. Line numbers are on the planning branch.
 
-| Fact | Where |
-| --- | --- |
-| Dev config type and reader, 67 lines, no auth or address fields | `scripts/dev-instance/config.ts:12-20`, `:40-67` |
-| Provision steps: admin account, provider rows (CLI auto-register only), cli-runner, cli token | `scripts/dev-instance/provision.ts:88-137` |
-| Entry point builds `cipher`, `repository`, `autoRegister` and `ProvisionDeps` | `scripts/dev-instance.ts:86-124` |
-| `readSecretFile(path)` refuses group- or other-readable files | `scripts/dev-instance/secrets.ts:13` |
-| `discoverAndPersistModels` exists but is not exported from `@moss/ai` | `packages/ai/src/discover-and-persist-models.ts:31`, `packages/ai/src/index.ts` |
-| Three test helpers build a full `DevInstanceConfig` | `tests/unit/dev-instance-cli-runner.test.ts:88-97`, `tests/integration/dev-instance-doctor.test.ts:78-89`, `tests/integration/dev-instance-provision.test.ts:54-65` |
-| `uatLevel` keys parsed by one regex, 13 groups | `tests/uat/run-uat.ts:75`, mapped at `:109-128` |
-| Seed hook passes values with `-e NAME=value`; `runCommand` puts every arg in its error text | `tests/uat/provisioner.ts:259-312`, `:543-575` |
-| Seed CLI reads env and calls `seedLevel` | `tests/uat/seed/cli.ts:48-87` |
-| AI seed chunks run after `seedAiProviderChunk` in the admin+data block | `tests/uat/seed/levels.ts:136-170` |
-| No `extra_hosts` anywhere in UAT compose | `tests/uat/compose.override.yml` |
-| Discovery outcome is `{ reason?, message? }`; API-key rows are insert-only, so older model rows survive a new list | `packages/ai/src/discover-and-persist-models.ts:8-11`, `:54-66` |
-| The CLI ok case asserts `toEqual({})` on the discovery outcome | `tests/unit/ai-discover-and-persist-models.test.ts:68` |
-| `listProviders` selects no `encrypted_credential`; `selectProviderWithCredential` does | `packages/ai/src/repository.ts` |
-| `parseAiApiKeyCredential` is exported from `@moss/ai` | `packages/ai/src/credentials.ts:5` |
+| Fact                                                                                                               | Where                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dev config type and reader, 67 lines, no auth or address fields                                                    | `scripts/dev-instance/config.ts:12-20`, `:40-67`                                                                                                                    |
+| Provision steps: admin account, provider rows (CLI auto-register only), cli-runner, cli token                      | `scripts/dev-instance/provision.ts:88-137`                                                                                                                          |
+| Entry point builds `cipher`, `repository`, `autoRegister` and `ProvisionDeps`                                      | `scripts/dev-instance.ts:86-124`                                                                                                                                    |
+| `readSecretFile(path)` refuses group- or other-readable files                                                      | `scripts/dev-instance/secrets.ts:13`                                                                                                                                |
+| `discoverAndPersistModels` exists but is not exported from `@moss/ai`                                              | `packages/ai/src/discover-and-persist-models.ts:31`, `packages/ai/src/index.ts`                                                                                     |
+| Three test helpers build a full `DevInstanceConfig`                                                                | `tests/unit/dev-instance-cli-runner.test.ts:88-97`, `tests/integration/dev-instance-doctor.test.ts:78-89`, `tests/integration/dev-instance-provision.test.ts:54-65` |
+| `uatLevel` keys parsed by one regex, 13 groups                                                                     | `tests/uat/run-uat.ts:75`, mapped at `:109-128`                                                                                                                     |
+| Seed hook passes values with `-e NAME=value`; `runCommand` puts every arg in its error text                        | `tests/uat/provisioner.ts:259-312`, `:543-575`                                                                                                                      |
+| Seed CLI reads env and calls `seedLevel`                                                                           | `tests/uat/seed/cli.ts:48-87`                                                                                                                                       |
+| AI seed chunks run after `seedAiProviderChunk` in the admin+data block                                             | `tests/uat/seed/levels.ts:136-170`                                                                                                                                  |
+| No `extra_hosts` anywhere in UAT compose                                                                           | `tests/uat/compose.override.yml`                                                                                                                                    |
+| Discovery outcome is `{ reason?, message? }`; API-key rows are insert-only, so older model rows survive a new list | `packages/ai/src/discover-and-persist-models.ts:8-11`, `:54-66`                                                                                                     |
+| The CLI ok case asserts `toEqual({})` on the discovery outcome                                                     | `tests/unit/ai-discover-and-persist-models.test.ts:68`                                                                                                              |
+| `listProviders` selects no `encrypted_credential`; `selectProviderWithCredential` does                             | `packages/ai/src/repository.ts`                                                                                                                                     |
+| `parseAiApiKeyCredential` is exported from `@moss/ai`                                                              | `packages/ai/src/credentials.ts:5`                                                                                                                                  |
 
 ## File Structure
 
-| File | Change | Responsibility |
-| --- | --- | --- |
-| `scripts/dev-instance/config.ts` | Modify | Read and validate the three new settings |
-| `scripts/dev-instance/api-key-provider.ts` | Create | Create or update the dev API-key row, discover models, make it default |
-| `scripts/dev-instance/provision.ts` | Modify | Branch the provider-rows and cli-token steps on auth |
-| `scripts/dev-instance.ts` | Modify | Wire the real repository, cipher, discovery and key reader |
-| `packages/ai/src/index.ts` | Modify | Export the discovery helper |
-| `packages/ai/src/discover-and-persist-models.ts` | Modify | Report the chat model ids the provider listed on this run |
-| `tests/uat/compose.override.yml` | Modify | `host.docker.internal` on the `jarv1s` service |
-| `tests/uat/api-key-chat-env.ts` | Create | Host-side settings, seed args and seed child env |
-| `tests/uat/seed/types.ts` | Modify | Seed-container variable names and the seed value type |
-| `tests/uat/provisioner.ts` | Modify | Opt-in option, child env on `runCommand`, seed hook threading |
-| `tests/uat/run-uat.ts` | Modify | Parse `withApiKeyChatProvider` |
-| `tests/uat/seed/chunks/api-key-chat.ts` | Create | Parse the seed env and seed the provider, model and default |
-| `tests/uat/seed/cli.ts`, `tests/uat/seed/levels.ts` | Modify | Read and apply the seed value |
-| `tests/uat/specs/3410-api-key-chat.uat.spec.ts` | Create | Drawer chat, confirmation card, task exists |
+| File                                                | Change | Responsibility                                                         |
+| --------------------------------------------------- | ------ | ---------------------------------------------------------------------- |
+| `scripts/dev-instance/config.ts`                    | Modify | Read and validate the three new settings                               |
+| `scripts/dev-instance/api-key-provider.ts`          | Create | Create or update the dev API-key row, discover models, make it default |
+| `scripts/dev-instance/provision.ts`                 | Modify | Branch the provider-rows and cli-token steps on auth                   |
+| `scripts/dev-instance.ts`                           | Modify | Wire the real repository, cipher, discovery and key reader             |
+| `packages/ai/src/index.ts`                          | Modify | Export the discovery helper                                            |
+| `packages/ai/src/discover-and-persist-models.ts`    | Modify | Report the chat model ids the provider listed on this run              |
+| `tests/uat/compose.override.yml`                    | Modify | `host.docker.internal` on the `jarv1s` service                         |
+| `tests/uat/api-key-chat-env.ts`                     | Create | Host-side settings, seed args and seed child env                       |
+| `tests/uat/seed/types.ts`                           | Modify | Seed-container variable names and the seed value type                  |
+| `tests/uat/provisioner.ts`                          | Modify | Opt-in option, child env on `runCommand`, seed hook threading          |
+| `tests/uat/run-uat.ts`                              | Modify | Parse `withApiKeyChatProvider`                                         |
+| `tests/uat/seed/chunks/api-key-chat.ts`             | Create | Parse the seed env and seed the provider, model and default            |
+| `tests/uat/seed/cli.ts`, `tests/uat/seed/levels.ts` | Modify | Read and apply the seed value                                          |
+| `tests/uat/specs/3410-api-key-chat.uat.spec.ts`     | Create | Drawer chat, confirmation card, task exists                            |
 
 ---
 
@@ -88,6 +88,7 @@ Checked against the code on 2026-10-10. Line numbers are on the planning branch.
 ### Task 17: Dev-instance config reads the API-key settings
 
 **Files:**
+
 - Modify: `scripts/dev-instance/config.ts`
 - Modify: `tests/unit/dev-instance-config.test.ts`
 - Modify: `tests/unit/dev-instance-cli-runner.test.ts:88-97`
@@ -95,6 +96,7 @@ Checked against the code on 2026-10-10. Line numbers are on the planning branch.
 - Modify: `tests/integration/dev-instance-provision.test.ts:54-65`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `DevInstanceProviderAuth = "cli" | "api_key"`; `DevInstanceConfig` gains `providerAuth: DevInstanceProviderAuth`, `providerBaseUrl: string | null`, `providerKeyFilePath: string | null`. Task 18 relies on these three names.
 
@@ -310,6 +312,7 @@ git commit -m "feat(dev-instance): read API-key provider auth, address and key f
 ### Task 18: Provision registers the API-key provider as the default
 
 **Files:**
+
 - Create: `scripts/dev-instance/api-key-provider.ts`
 - Modify: `scripts/dev-instance/provision.ts`
 - Modify: `scripts/dev-instance.ts:15`, `:86-89`, `:110-124`
@@ -320,6 +323,7 @@ git commit -m "feat(dev-instance): read API-key provider auth, address and key f
 - Test: `tests/integration/dev-instance-provision.test.ts` (three new cases, database)
 
 **Interfaces:**
+
 - Consumes: Task 17's `providerAuth`, `providerBaseUrl`, `providerKeyFilePath`. From `@moss/ai`: `AiRepository`, `AiSecretCipher`, `discoverAndPersistModels(scopedDb, input, { repository, modelDiscovery })`, `DiscoverAndPersistModelsInput`, `DiscoverAndPersistModelsOutcome`, `ModelDiscoveryService`.
 - Produces:
   - `DiscoverAndPersistModelsOutcome.discoveredModelIds?: readonly string[]`, the chat-capable ids the provider listed on this run. Set only when `reason` is absent.
@@ -334,43 +338,43 @@ git commit -m "feat(dev-instance): read API-key provider auth, address and key f
 In `tests/unit/ai-discover-and-persist-models.test.ts`, change the CLI ok case's `expect(outcome).toEqual({});` (line 68) to:
 
 ```ts
-    expect(outcome).toEqual({
-      discoveredModelIds: ["claude-fable-5-1", "claude-haiku-4-5-20251001"]
-    });
+expect(outcome).toEqual({
+  discoveredModelIds: ["claude-fable-5-1", "claude-haiku-4-5-20251001"]
+});
 ```
 
 and add, after "never deletes rows for an API-key provider":
 
 ```ts
-  it("reports only the chat ids the provider listed on this run", async () => {
-    const repository = fakeRepository();
-    const modelDiscovery = new ModelDiscoveryService();
-    modelDiscovery.discoverModels = async () => ({
-      models: [
-        {
-          providerModelId: "org/model:tag@v2",
-          displayName: "org/model:tag@v2",
-          capabilities: ["chat", "tool-use"],
-          tier: "interactive"
-        },
-        {
-          providerModelId: "org/vision-only",
-          displayName: "org/vision-only",
-          capabilities: ["vision"],
-          tier: "interactive"
-        }
-      ],
-      fromCache: false,
-      fromFallback: false,
-      cacheExpiresAt: null
-    });
-    const outcome = await discoverAndPersistModels(
-      scopedDb,
-      { ...input, providerKind: "openai-compatible", acpAgentId: null, authMethod: "api_key" },
-      { repository: repository as never, modelDiscovery }
-    );
-    expect(outcome).toEqual({ discoveredModelIds: ["org/model:tag@v2"] });
+it("reports only the chat ids the provider listed on this run", async () => {
+  const repository = fakeRepository();
+  const modelDiscovery = new ModelDiscoveryService();
+  modelDiscovery.discoverModels = async () => ({
+    models: [
+      {
+        providerModelId: "org/model:tag@v2",
+        displayName: "org/model:tag@v2",
+        capabilities: ["chat", "tool-use"],
+        tier: "interactive"
+      },
+      {
+        providerModelId: "org/vision-only",
+        displayName: "org/vision-only",
+        capabilities: ["vision"],
+        tier: "interactive"
+      }
+    ],
+    fromCache: false,
+    fromFallback: false,
+    cacheExpiresAt: null
   });
+  const outcome = await discoverAndPersistModels(
+    scopedDb,
+    { ...input, providerKind: "openai-compatible", acpAgentId: null, authMethod: "api_key" },
+    { repository: repository as never, modelDiscovery }
+  );
+  expect(outcome).toEqual({ discoveredModelIds: ["org/model:tag@v2"] });
+});
 ```
 
 Create `tests/unit/dev-instance-api-key-provider.test.ts`:
@@ -655,13 +659,13 @@ export interface DiscoverAndPersistModelsOutcome {
 and replace the last two lines of `discoverAndPersistModels` (`await deps.repository.upsertDiscoveredModels(...)` and `return {};`) with:
 
 ```ts
-  await deps.repository.upsertDiscoveredModels(scopedDb, input.providerId, models);
-  // API-key rows are insert-only, so older rows outlive the list; callers check against this.
-  return {
-    discoveredModelIds: models
-      .filter((model) => model.capabilities.includes("chat"))
-      .map((model) => model.providerModelId)
-  };
+await deps.repository.upsertDiscoveredModels(scopedDb, input.providerId, models);
+// API-key rows are insert-only, so older rows outlive the list; callers check against this.
+return {
+  discoveredModelIds: models
+    .filter((model) => model.capabilities.includes("chat"))
+    .map((model) => model.providerModelId)
+};
 ```
 
 Run: `rg -n "toEqual\(\{\}\)" tests/unit | rg -i discover`
@@ -816,8 +820,8 @@ Expected: PASS for both; the second reports 10 tests.
 Temporarily change the discovery error to append the provider's message:
 
 ```ts
-      `Listing models for "${DEV_API_KEY_PROVIDER_NAME}" failed (${discovery.reason}). ` +
-        `${discovery.message ?? ""} Check MOSS_DEV_INSTANCE_PROVIDER_BASE_URL and the key file.`
+`Listing models for "${DEV_API_KEY_PROVIDER_NAME}" failed (${discovery.reason}). ` +
+  `${discovery.message ?? ""} Check MOSS_DEV_INSTANCE_PROVIDER_BASE_URL and the key file.`;
 ```
 
 Run: `pnpm test:unit tests/unit/dev-instance-api-key-provider.test.ts`
@@ -832,120 +836,120 @@ Expected: FAIL on "refuses a stale model the provider no longer lists". Record i
 In `tests/integration/dev-instance-provision.test.ts`, add `import type { AiAutoRegisterPort } from "@moss/ai";`, `import { ModelDiscoveryService, discoverAndPersistModels } from "@moss/ai";` and `import { ensureApiKeyProvider, type EnsureApiKeyProviderDeps } from "../../scripts/dev-instance/api-key-provider.js";` to the imports, then add a new `describe` block inside the top-level `describe`, after the last existing block:
 
 ```ts
-  describe("API-key provider (#3410)", () => {
-    const ADMIN_ID = "33333333-3333-4333-8333-333333333333";
-    const refuseAutoRegister = {
-      ensureDefaultChatModel: async () => {
-        throw new Error("auto-register must not run for an API-key config");
-      }
-    } as unknown as AiAutoRegisterPort;
+describe("API-key provider (#3410)", () => {
+  const ADMIN_ID = "33333333-3333-4333-8333-333333333333";
+  const refuseAutoRegister = {
+    ensureDefaultChatModel: async () => {
+      throw new Error("auto-register must not run for an API-key config");
+    }
+  } as unknown as AiAutoRegisterPort;
 
-    it("registers through ensureApiKeyProvider and skips the CLI token", async () => {
-      await insertActiveAdmin(ADMIN_ID, "ada@example.com");
-      const seen: string[] = [];
-      let tokenCalls = 0;
+  it("registers through ensureApiKeyProvider and skips the CLI token", async () => {
+    await insertActiveAdmin(ADMIN_ID, "ada@example.com");
+    const seen: string[] = [];
+    let tokenCalls = 0;
 
-      const outcomes = await runProvision(
+    const outcomes = await runProvision(
+      deps({
+        autoRegister: refuseAutoRegister,
+        config: fakeConfig({
+          providerKind: "openai-compatible",
+          providerAuth: "api_key",
+          providerBaseUrl: "http://proxy.test",
+          providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
+        }),
+        ensureApiKeyProvider: async (_scopedDb, adminUserId) => {
+          seen.push(adminUserId);
+          return { changed: true, providerId: "provider-1", chatModelId: "model-1" };
+        },
+        persistCliToken: async () => {
+          tokenCalls += 1;
+          return true;
+        }
+      })
+    );
+
+    expect(seen).toEqual([ADMIN_ID]);
+    expect(tokenCalls).toBe(0);
+    expect(outcomes.find((outcome) => outcome.id === "provider-rows")).toEqual({
+      id: "provider-rows",
+      changed: true,
+      detail: "registered API-key provider provider-1 as default"
+    });
+    expect(outcomes.find((outcome) => outcome.id === "cli-token")).toEqual({
+      id: "cli-token",
+      changed: false,
+      detail: "skipped: API-key provider"
+    });
+  });
+
+  it("refuses an API-key config when the registration step is not wired", async () => {
+    await insertActiveAdmin(ADMIN_ID, "ada@example.com");
+
+    await expect(
+      runProvision(
         deps({
           autoRegister: refuseAutoRegister,
           config: fakeConfig({
-            providerKind: "openai-compatible",
             providerAuth: "api_key",
-            providerBaseUrl: "http://proxy.test",
             providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
-          }),
-          ensureApiKeyProvider: async (_scopedDb, adminUserId) => {
-            seen.push(adminUserId);
-            return { changed: true, providerId: "provider-1", chatModelId: "model-1" };
-          },
-          persistCliToken: async () => {
-            tokenCalls += 1;
-            return true;
-          }
-        })
-      );
-
-      expect(seen).toEqual([ADMIN_ID]);
-      expect(tokenCalls).toBe(0);
-      expect(outcomes.find((outcome) => outcome.id === "provider-rows")).toEqual({
-        id: "provider-rows",
-        changed: true,
-        detail: "registered API-key provider provider-1 as default"
-      });
-      expect(outcomes.find((outcome) => outcome.id === "cli-token")).toEqual({
-        id: "cli-token",
-        changed: false,
-        detail: "skipped: API-key provider"
-      });
-    });
-
-    it("refuses an API-key config when the registration step is not wired", async () => {
-      await insertActiveAdmin(ADMIN_ID, "ada@example.com");
-
-      await expect(
-        runProvision(
-          deps({
-            autoRegister: refuseAutoRegister,
-            config: fakeConfig({
-              providerAuth: "api_key",
-              providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
-            })
           })
-        )
-      ).rejects.toThrow(/ensureApiKeyProvider is not wired/);
-    });
-
-    it("refuses a re-run whose list no longer has the model, though the old row remains", async () => {
-      await insertActiveAdmin(ADMIN_ID, "ada@example.com");
-      const repository = new AiRepository();
-      const modelDiscovery = new ModelDiscoveryService();
-      let listed: readonly string[] = ["org/model:tag@v2"];
-      modelDiscovery.discoverModels = async () => ({
-        models: listed.map((id) => ({
-          providerModelId: id,
-          displayName: id,
-          capabilities: ["chat" as const],
-          tier: "interactive" as const
-        })),
-        fromCache: false,
-        fromFallback: false,
-        cacheExpiresAt: null
-      });
-      const ensureDeps: EnsureApiKeyProviderDeps = {
-        repository,
-        cipher: createAiSecretCipher(),
-        discoverModels: (scopedDb, input) =>
-          discoverAndPersistModels(scopedDb, input, { repository, modelDiscovery }),
-        readKeyFile: async () => "ada-dev-instance-key-0002\n"
-      };
-      const config = fakeConfig({
-        providerKind: "openai-compatible",
-        providerAuth: "api_key",
-        providerBaseUrl: "http://proxy.test",
-        providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
-      });
-      const context = { actorUserId: ADMIN_ID, requestId: "request:dev-api-key" };
-      const ensure = () =>
-        runner.withDataContext(context, (scopedDb) =>
-          ensureApiKeyProvider(scopedDb, ADMIN_ID, config, ensureDeps)
-        );
-
-      const first = await ensure();
-      listed = [];
-      await expect(ensure()).rejects.toThrow(/listed no chat model/);
-
-      const models = await runner.withDataContext(context, (scopedDb) =>
-        repository.listModels(scopedDb)
-      );
-      expect(
-        models.some(
-          (model) =>
-            model.provider_config_id === first.providerId &&
-            model.provider_model_id === "org/model:tag@v2"
-        )
-      ).toBe(true);
-    });
+        })
+      )
+    ).rejects.toThrow(/ensureApiKeyProvider is not wired/);
   });
+
+  it("refuses a re-run whose list no longer has the model, though the old row remains", async () => {
+    await insertActiveAdmin(ADMIN_ID, "ada@example.com");
+    const repository = new AiRepository();
+    const modelDiscovery = new ModelDiscoveryService();
+    let listed: readonly string[] = ["org/model:tag@v2"];
+    modelDiscovery.discoverModels = async () => ({
+      models: listed.map((id) => ({
+        providerModelId: id,
+        displayName: id,
+        capabilities: ["chat" as const],
+        tier: "interactive" as const
+      })),
+      fromCache: false,
+      fromFallback: false,
+      cacheExpiresAt: null
+    });
+    const ensureDeps: EnsureApiKeyProviderDeps = {
+      repository,
+      cipher: createAiSecretCipher(),
+      discoverModels: (scopedDb, input) =>
+        discoverAndPersistModels(scopedDb, input, { repository, modelDiscovery }),
+      readKeyFile: async () => "ada-dev-instance-key-0002\n"
+    };
+    const config = fakeConfig({
+      providerKind: "openai-compatible",
+      providerAuth: "api_key",
+      providerBaseUrl: "http://proxy.test",
+      providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
+    });
+    const context = { actorUserId: ADMIN_ID, requestId: "request:dev-api-key" };
+    const ensure = () =>
+      runner.withDataContext(context, (scopedDb) =>
+        ensureApiKeyProvider(scopedDb, ADMIN_ID, config, ensureDeps)
+      );
+
+    const first = await ensure();
+    listed = [];
+    await expect(ensure()).rejects.toThrow(/listed no chat model/);
+
+    const models = await runner.withDataContext(context, (scopedDb) =>
+      repository.listModels(scopedDb)
+    );
+    expect(
+      models.some(
+        (model) =>
+          model.provider_config_id === first.providerId &&
+          model.provider_model_id === "org/model:tag@v2"
+      )
+    ).toBe(true);
+  });
+});
 ```
 
 These are database tests. Do not run them directly; they run under verify-gate in Task 21. The removal step for the real-repository case runs one database gate now:
@@ -1002,19 +1006,19 @@ async function ensureApiKeyProviderRowsStep(
 At the top of `ensureProviderRowsStep`, before `const context = ...`:
 
 ```ts
-  if (deps.config.providerAuth === "api_key") {
-    return ensureApiKeyProviderRowsStep(deps, adminUserId);
-  }
+if (deps.config.providerAuth === "api_key") {
+  return ensureApiKeyProviderRowsStep(deps, adminUserId);
+}
 ```
 
 At the top of `ensureCliTokenStep`:
 
 ```ts
-  if (deps.config.providerAuth === "api_key") {
-    const detail = "skipped: API-key provider";
-    deps.log(`cli-token: ${detail}`);
-    return { id: "cli-token", changed: false, detail };
-  }
+if (deps.config.providerAuth === "api_key") {
+  const detail = "skipped: API-key provider";
+  deps.log(`cli-token: ${detail}`);
+  return { id: "cli-token", changed: false, detail };
+}
 ```
 
 - [ ] **Step 9: Wire the entry point**
@@ -1038,20 +1042,20 @@ import { ensureApiKeyProvider } from "./dev-instance/api-key-provider.js";
 After `const autoRegister = new AiAutoRegisterService({ repository, cipher });` add:
 
 ```ts
-  const modelDiscovery = new ModelDiscoveryService();
+const modelDiscovery = new ModelDiscoveryService();
 ```
 
 In the `provisionDeps` object, after `log: (line) => console.log(line)` add a comma and:
 
 ```ts
-          ensureApiKeyProvider: (scopedDb, adminUserId) =>
-            ensureApiKeyProvider(scopedDb, adminUserId, config, {
-              repository,
-              cipher,
-              discoverModels: (db, input) =>
-                discoverAndPersistModels(db, input, { repository, modelDiscovery }),
-              readKeyFile: readSecretFile
-            })
+ensureApiKeyProvider: (scopedDb, adminUserId) =>
+  ensureApiKeyProvider(scopedDb, adminUserId, config, {
+    repository,
+    cipher,
+    discoverModels: (db, input) =>
+      discoverAndPersistModels(db, input, { repository, modelDiscovery }),
+    readKeyFile: readSecretFile
+  });
 ```
 
 - [ ] **Step 10: Type-check and rerun the unit tests**
@@ -1083,16 +1087,17 @@ The UAT stack runs in containers on a bridge network, so `127.0.0.1` on the host
 
 Host variables (set by whoever runs the UAT):
 
-| Variable | Meaning |
-| --- | --- |
-| `MOSS_UAT_CHAT_PROVIDER_KIND` | `anthropic` or `openai-compatible` |
+| Variable                          | Meaning                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| `MOSS_UAT_CHAT_PROVIDER_KIND`     | `anthropic` or `openai-compatible`                                                         |
 | `MOSS_UAT_CHAT_PROVIDER_BASE_URL` | Address as the `jarv1s` container sees it, e.g. `http://host.docker.internal:<relay port>` |
-| `MOSS_UAT_CHAT_PROVIDER_MODEL` | Model id to seed |
-| `MOSS_UAT_CHAT_PROVIDER_KEY_FILE` | Path to a 0600 file holding the key |
+| `MOSS_UAT_CHAT_PROVIDER_MODEL`    | Model id to seed                                                                           |
+| `MOSS_UAT_CHAT_PROVIDER_KEY_FILE` | Path to a 0600 file holding the key                                                        |
 
 ### Task 19: Host-gateway name and key-safe seed plumbing
 
 **Files:**
+
 - Modify: `tests/uat/compose.override.yml`
 - Create: `tests/uat/api-key-chat-env.ts`
 - Test: `tests/uat/api-key-chat-env.test.ts` (create)
@@ -1103,6 +1108,7 @@ Host variables (set by whoever runs the UAT):
 - Test: `tests/uat/run-uat.test.ts` (one new case; four exact objects gain a field)
 
 **Interfaces:**
+
 - Consumes: `readSecretFile(path)` from `scripts/dev-instance/secrets.ts`.
 - Produces:
   - In `tests/uat/seed/types.ts`: `API_KEY_CHAT_SEED_ENV = { kind: "MOSS_UAT_API_KEY_CHAT_KIND", baseUrl: "MOSS_UAT_API_KEY_CHAT_BASE_URL", model: "MOSS_UAT_API_KEY_CHAT_MODEL", key: "MOSS_UAT_API_KEY_CHAT_KEY" }` and `ApiKeyChatSeed { providerKind: "anthropic" | "openai-compatible"; baseUrl: string; model: string; apiKey: string }`.
@@ -1115,9 +1121,9 @@ Host variables (set by whoever runs the UAT):
 In `tests/uat/compose.override.yml`, under `services.jarv1s`, after `pids_limit: 512`:
 
 ```yaml
-    # Test-only: lets the opt-in API-key chat UAT reach a relay on the host's bridge gateway.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+# Test-only: lets the opt-in API-key chat UAT reach a relay on the host's bridge gateway.
+extra_hosts:
+  - "host.docker.internal:host-gateway"
 ```
 
 The api and the cli-runner both run in the `jarv1s` container, so this one entry covers model discovery and the chat agents.
@@ -1461,10 +1467,10 @@ function runCommand(
 and change its spawn call to:
 
 ```ts
-    const child = spawn(command, args, {
-      stdio: ["inherit", "inherit", "pipe"],
-      ...(env ? { env } : {})
-    });
+const child = spawn(command, args, {
+  stdio: ["inherit", "inherit", "pipe"],
+  ...(env ? { env } : {})
+});
 ```
 
 In `UatProvisionOptions`, after `withClassifierMcpFixture`:
@@ -1485,23 +1491,21 @@ In `buildSeedHookInput`, add a seventh parameter after `classifierFixtureAiProvi
 ```
 
 ```ts
-    chatScript: opts?.chatScript,
-    apiKeyChat
+chatScript: (opts?.chatScript, apiKeyChat);
 ```
 
 In `provisionForUat`, directly after `const overallStart = Date.now();`, read the host settings once, before any container starts:
 
 ```ts
-  const apiKeyChatSeed = opts?.withApiKeyChatProvider
-    ? await readApiKeyChatUatProvider(process.env)
-    : undefined;
+const apiKeyChatSeed = opts?.withApiKeyChatProvider
+  ? await readApiKeyChatUatProvider(process.env)
+  : undefined;
 ```
 
 At the `composeSeedHook(buildSeedHookInput(...))` call, add `apiKeyChatSeed` as the last argument after the classifier argument:
 
 ```ts
-          opts?.withClassifierFixture ? classifierFixtureBaseUrl : undefined,
-          apiKeyChatSeed
+(opts?.withClassifierFixture ? classifierFixtureBaseUrl : undefined, apiKeyChatSeed);
 ```
 
 - [ ] **Step 10: Run the tests and check the line count**
@@ -1517,7 +1521,7 @@ Expected: under 1000 (about 985).
 Temporarily change the last entry of `apiKeyChatSeedArgs` to carry the value:
 
 ```ts
-    `${API_KEY_CHAT_SEED_ENV.key}=${seed?.apiKey ?? ""}`
+`${API_KEY_CHAT_SEED_ENV.key}=${seed?.apiKey ?? ""}`;
 ```
 
 Run: `pnpm test:unit tests/uat/provisioner.test.ts`
@@ -1528,7 +1532,7 @@ Expected: FAIL on "passes the key by name only" and "keeps the key out of the fa
 Temporarily swap the spread order in `apiKeyChatSeedProcessEnv` so the base env wins:
 
 ```ts
-  return { [API_KEY_CHAT_SEED_ENV.key]: seed?.apiKey ?? "", ...base };
+return { [API_KEY_CHAT_SEED_ENV.key]: seed?.apiKey ?? "", ...base };
 ```
 
 Run: `pnpm test:unit tests/uat/provisioner.test.ts`
@@ -1539,23 +1543,23 @@ Expected: FAIL on "sends an empty key when the spec did not opt in". Revert and 
 In `tests/uat/run-uat.test.ts`, add `withApiKeyChatProvider: false,` after `withClassifierMcpFixture: false,` in the four exact `toHaveBeenCalledWith` objects (lines 65, 111, 164 and 195; leave the `expect.objectContaining` one at line 219 alone). Then add a case next to "threads the classifier fixture origin flag after the briefing-writer flag":
 
 ```ts
-  it("#3410: threads the API-key chat provider flag as the last key", async () => {
-    mocks.readFile.mockResolvedValue(
-      `export const uatLevel = {
+it("#3410: threads the API-key chat provider flag as the last key", async () => {
+  mocks.readFile.mockResolvedValue(
+    `export const uatLevel = {
         level: "admin+data",
         without: [],
         withApiKeyChatProvider: true
       } as const;`
-    );
-    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+  );
+  process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
 
-    await import("./run-uat.js");
+  await import("./run-uat.js");
 
-    expect(mocks.provisionForUat).toHaveBeenCalledWith(
-      "admin+data",
-      expect.objectContaining({ withApiKeyChatProvider: true, withClassifierMcpFixture: false })
-    );
-  });
+  expect(mocks.provisionForUat).toHaveBeenCalledWith(
+    "admin+data",
+    expect.objectContaining({ withApiKeyChatProvider: true, withClassifierMcpFixture: false })
+  );
+});
 ```
 
 Run: `pnpm test:unit tests/uat/run-uat.test.ts`
@@ -1591,6 +1595,7 @@ git commit -m "test(uat): opt-in API-key chat seed plumbing with name-only key p
 ### Task 20: Seed the API-key chat provider and the live UAT spec
 
 **Files:**
+
 - Create: `tests/uat/seed/chunks/api-key-chat.ts`
 - Test: `tests/uat/seed/chunks/api-key-chat-parse.test.ts` (create, pure)
 - Test: `tests/uat/seed/chunks/api-key-chat.test.ts` (create, database, verify-gate only)
@@ -1600,6 +1605,7 @@ git commit -m "test(uat): opt-in API-key chat seed plumbing with name-only key p
 - Create: `tests/uat/specs/3410-api-key-chat.uat.spec.ts`
 
 **Interfaces:**
+
 - Consumes: Task 19's `API_KEY_CHAT_SEED_ENV`, `ApiKeyChatSeed`, `apiKeyChatUatConfigured`, the `withApiKeyChatProvider` key. Main plan Task 12 (chat accepts API-key rows).
 - Produces: `parseApiKeyChatSeed(env): ApiKeyChatSeed | undefined`, `seedApiKeyChatProviderChunk(runner, actorUserId, seed): Promise<void>`, `UAT_API_KEY_CHAT_PROVIDER_NAME = "UAT API-key chat provider"`, `SeedOptions.apiKeyChat?: ApiKeyChatSeed`.
 
@@ -1736,7 +1742,7 @@ Expected: PASS, 4 tests.
 Temporarily change the partial-set error to include the values:
 
 ```ts
-    throw new Error(`API-key chat seed is partial: ${values.join(", ")}`);
+throw new Error(`API-key chat seed is partial: ${values.join(", ")}`);
 ```
 
 Run: `pnpm test:unit tests/uat/seed/chunks/api-key-chat-parse.test.ts`
@@ -1833,8 +1839,8 @@ import { parseApiKeyChatSeed } from "./chunks/api-key-chat.js";
 After the `chatScript` constant:
 
 ```ts
-  // #3410: all four empty (composeSeedHook always passes them) reads as absent.
-  const apiKeyChat = parseApiKeyChatSeed(process.env);
+// #3410: all four empty (composeSeedHook always passes them) reads as absent.
+const apiKeyChat = parseApiKeyChatSeed(process.env);
 ```
 
 Add `apiKeyChat` to the `seedLevel({...})` call after `chatScript`.
@@ -1850,10 +1856,10 @@ import { seedApiKeyChatProviderChunk } from "./chunks/api-key-chat.js";
 Directly after the `await seedAiProviderChunk(runner, adminUserId, { ... });` call:
 
 ```ts
-    // #3410: opt-in. Runs after the default AI chunk so its instance default wins.
-    if (options.apiKeyChat) {
-      await seedApiKeyChatProviderChunk(runner, adminUserId, options.apiKeyChat);
-    }
+// #3410: opt-in. Runs after the default AI chunk so its instance default wins.
+if (options.apiKeyChat) {
+  await seedApiKeyChatProviderChunk(runner, adminUserId, options.apiKeyChat);
+}
 ```
 
 - [ ] **Step 8: Write the UAT spec**
@@ -2023,18 +2029,18 @@ Say that the proof used a stand-in local proxy that speaks Chat Completions. Nev
 
 ### Spec coverage
 
-| Spec requirement (sections 6 and 7) | Task |
-| --- | --- |
-| `MOSS_DEV_INSTANCE_PROVIDER_AUTH`, `_BASE_URL`, `_KEY_FILE`; `api_key` needs a key file | 17 |
-| Dev instance registers the API-key provider as the default | 18 |
-| CLI login step not needed for API-key dev instances | 18 |
-| UAT `extra_hosts` host-gateway entry, test-only | 19 |
-| UAT seed gets the address and the key; production compose never sees them | 19, 20 |
-| UAT proof of chat with a confirmation card | 20, 21 |
-| Seeding uses a model from this run's list; an empty or stale list refuses | 18 |
-| Seeded key is stored sealed and opens to the same key | 20 |
-| Leak searches read the key file themselves | 21 Step 2 |
-| Phase 5 closes only on a relay-backed UAT pass; seeding reported separately | 21 Steps 3-5 |
+| Spec requirement (sections 6 and 7)                                                     | Task         |
+| --------------------------------------------------------------------------------------- | ------------ |
+| `MOSS_DEV_INSTANCE_PROVIDER_AUTH`, `_BASE_URL`, `_KEY_FILE`; `api_key` needs a key file | 17           |
+| Dev instance registers the API-key provider as the default                              | 18           |
+| CLI login step not needed for API-key dev instances                                     | 18           |
+| UAT `extra_hosts` host-gateway entry, test-only                                         | 19           |
+| UAT seed gets the address and the key; production compose never sees them               | 19, 20       |
+| UAT proof of chat with a confirmation card                                              | 20, 21       |
+| Seeding uses a model from this run's list; an empty or stale list refuses               | 18           |
+| Seeded key is stored sealed and opens to the same key                                   | 20           |
+| Leak searches read the key file themselves                                              | 21 Step 2    |
+| Phase 5 closes only on a relay-backed UAT pass; seeding reported separately             | 21 Steps 3-5 |
 
 ### Deviations from the spec, found in the code
 
