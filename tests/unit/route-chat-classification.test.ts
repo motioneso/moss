@@ -204,6 +204,7 @@ const EXPECTED: readonly string[] = [
   "ai POST /api/ai/module-builds/:buildId/approve blocked self_authority",
   "ai POST /api/ai/module-builds/:buildId/cancel blocked external_effect",
   "ai GET /api/ai/module-builds/mine read",
+  "chat GET /api/chat/scheduled-tasks read",
   "chat GET /api/chat/threads blocked data_scope_consent",
   "chat GET /api/chat/threads/:id/messages blocked data_scope_consent",
   "chat GET /api/chat/meeting-context read",
