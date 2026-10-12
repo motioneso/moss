@@ -351,6 +351,19 @@ describe("the focus context names the judge", () => {
 });
 
 describe("judging a picture with a judge that reads pictures", () => {
+  it("tests a picture without saving a judgment or changing nudge history", async () => {
+    const before = await bootstrap.query("SELECT count(*) FROM app.focus_judgments");
+    const res = await judge(credential, { image: IMAGE, test: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ judgmentId: "", label: "distracted", nudge: false });
+    expect(res.json().reason).toContain("89% sure");
+    expect(cloudflareCalls).toHaveLength(1);
+    const after = await bootstrap.query("SELECT count(*) FROM app.focus_judgments");
+    expect(after.rows).toEqual(before.rows);
+    expect(logLines.join("\n")).not.toContain(MARKER);
+    expect(res.body).not.toContain(MARKER);
+  });
+
   it("sends the picture to Clef beside the state and returns its judgment", async () => {
     const res = await judge(credential, { image: IMAGE });
 

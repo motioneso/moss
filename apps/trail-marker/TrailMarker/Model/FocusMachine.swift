@@ -182,7 +182,7 @@ struct FocusMachine {
             effects.append(.fetchContext(generation: generation))
 
         case .judged(let judgment, let eventGeneration):
-            guard eventGeneration == generation, isActive else { return [] }
+            guard eventGeneration == generation, isActive, !judgment.judgmentId.isEmpty else { return [] }
             failed = false
             effects.append(.rememberJudgment(judgment))
             if judgment.nudge, let block {

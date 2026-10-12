@@ -317,3 +317,7 @@ blocking	packages/vault/src/**	tests/uat/specs/audit-source-truth.uat.spec.ts
 # #3397 shared modal focus recovery through real task comments.
 blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
 blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts
+blocking	apps/trail-marker/TrailMarker/**	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
+blocking	packages/shared/src/companion-api.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
+blocking	apps/api/src/companion-routes.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
+blocking	packages/focus-judgment/src/judgment-service.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts

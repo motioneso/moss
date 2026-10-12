@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The one new settings pane (spec §9). Off until the person turns it on; nothing is watched
-/// until they also choose at least one app. There is no image model here in slice 1.
+/// until they choose an app or opt into watching the entire desktop.
 struct FocusPane: View {
     @ObservedObject var focus: FocusRuntime
     @ObservedObject var permissions: PermissionsService
@@ -160,7 +160,7 @@ struct FocusPane: View {
                             SystemSettingsLinks.openScreenRecording()
                         }
                     } else if focus.rung3Enabled {
-                        Text(rung3ConsentSentence)
+                        Text(focus.rung3ConsentSentence)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -171,6 +171,11 @@ struct FocusPane: View {
                         ) {
                             Text("An API key").tag(VisionSource.apiKey)
                             Text("Claude Code, signed in on this Mac").tag(VisionSource.cli)
+                            if focus.judgeAvailable || focus.visionSource == .judge {
+                                Text("Your focus judge in Moss: " + (focus.judgeName ?? "Unavailable"))
+                                    .tag(VisionSource.judge)
+                                    .disabled(!focus.judgeAvailable)
+                            }
                         }
                         .pickerStyle(.radioGroup)
 
@@ -191,10 +196,15 @@ struct FocusPane: View {
                             Text(focus.hasVisionAPIKey ? "A key is stored." : "No key stored yet.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                        } else {
+                        } else if focus.visionSource == .cli {
                             Text("Uses whatever session Claude Code is signed into on this Mac. No key is stored here.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                        }
+
+                        if focus.visionSource == .judge {
+                            Text("Uses the judge set in Moss. No key is stored on this Mac.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
 
                         // A key still sitting in the field, not yet saved, is tested too — the
@@ -203,11 +213,11 @@ struct FocusPane: View {
                         // What was actually captured, shown so the description can be checked
                         // against it rather than trusted on its own — this view only, never sent
                         // or saved anywhere but the vision source itself.
-                        if let capture = focus.visionTestCapture, let nsImage = NSImage(data: capture.image) {
+                        if let capture = focus.visionTestCapture {
                             Text("Captured from \(capture.appName):")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Image(nsImage: nsImage)
+                            Image(nsImage: capture.image)
                                 .resizable()
                                 .scaledToFit()
                                 .frame(maxWidth: 360)
@@ -242,6 +252,7 @@ struct FocusPane: View {
             }
         }
         .formStyle(.grouped)
+        .onDisappear { focus.clearVisionTest() }
         .onAppear {
             permissions.refresh()
             apps = InstalledApps.list()
@@ -291,29 +302,16 @@ struct FocusPane: View {
         }
     }
 
-    /// Rung 3 spec §5: must be literally true for the build running, in the person's chosen
-    /// source's own terms — never a generic "an AI model" sentence.
-    private var rung3ConsentSentence: String {
-        let destination: String
-        switch focus.visionSource {
-        case .apiKey:
-            let host = focus.visionBaseURL.isEmpty ? "the endpoint you set below" : focus.visionBaseURL
-            destination = host
-        case .cli:
-            destination = "Claude Code, signed in on this Mac"
-        }
-        let scope = focus.watchEntireDesktop ? "the app in front" : "an allowed app"
-        return "When Trail Marker can't tell from the window title alone, it will take one picture "
-            + "of \(scope) and send it to \(destination) to describe. The picture is never "
-            + "saved and never sent anywhere else."
-    }
-
     private func visionErrorMessage(_ error: VisionError) -> String {
         switch error {
         case .notConfigured:
             return focus.visionSource == .cli
                 ? "Claude Code wasn't found or isn't signed in on this Mac."
                 : "Enter a base URL, model and API key first."
+        case .judgeUnavailable:
+            return "Your focus judge in Moss no longer reads pictures. Choose another way to describe the screen."
+        case .noBlock:
+            return "Start a calendar block in Moss before testing the focus judge."
         case .unreachable:
             return "Couldn't reach the vision source. Try again."
         case .rejected:

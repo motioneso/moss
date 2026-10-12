@@ -82,6 +82,7 @@ final class CardHarness {
             )
             let window = NSWindow(contentViewController: NSHostingController(rootView: settings))
             window.title = "Settings"
+            window.identifier = SettingsWindow.windowIdentifier
             Self.placeOnScreen(window)
             window.makeKeyAndOrderFront(nil)
             windows.append(window)

@@ -106,6 +106,25 @@ struct FocusBlock: Decodable, Equatable {
 struct FocusContext: Decodable, Equatable {
     let block: FocusBlock?
     let judgmentReady: Bool
+    let judgeTakesImages: Bool
+    let judgeName: String?
+
+    init(block: FocusBlock?, judgmentReady: Bool, judgeTakesImages: Bool = false, judgeName: String? = nil) {
+        self.block = block
+        self.judgmentReady = judgmentReady
+        self.judgeTakesImages = judgeTakesImages
+        self.judgeName = judgeName
+    }
+
+    private enum CodingKeys: String, CodingKey { case block, judgmentReady, judgeTakesImages, judgeName }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        block = try values.decodeIfPresent(FocusBlock.self, forKey: .block)
+        judgmentReady = try values.decode(Bool.self, forKey: .judgmentReady)
+        judgeTakesImages = try values.decodeIfPresent(Bool.self, forKey: .judgeTakesImages) ?? false
+        judgeName = try values.decodeIfPresent(String.self, forKey: .judgeName)
+    }
 }
 
 struct FocusJudgeRequest: Encodable, Equatable {
@@ -116,10 +135,12 @@ struct FocusJudgeRequest: Encodable, Equatable {
     /// insufficient_evidence and a capture was allowed and taken. Omitted, not null, when absent —
     /// the server schema types this field as a plain string, so a JSON `null` would fail it.
     var description: String? = nil
+    var image: String? = nil
+    var test: Bool? = nil
     let observedAt: String
 
     private enum CodingKeys: String, CodingKey {
-        case blockId, appName, windowTitle, description, observedAt
+        case blockId, appName, windowTitle, description, image, test, observedAt
     }
 
     func encode(to encoder: Encoder) throws {
@@ -128,6 +149,8 @@ struct FocusJudgeRequest: Encodable, Equatable {
         try container.encode(appName, forKey: .appName)
         try container.encode(windowTitle, forKey: .windowTitle)
         try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(image, forKey: .image)
+        try container.encodeIfPresent(test, forKey: .test)
         try container.encode(observedAt, forKey: .observedAt)
     }
 }
@@ -361,6 +384,8 @@ struct CompanionClient {
             path: "/api/companion/focus/judge", method: "POST", body: body, credential: credential
         )
         request.timeoutInterval = Self.focusJudgeTimeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        defer { request.httpBody = nil }
         let (data, _) = try await sendChecked(request)
         return try decode(FocusJudgment.self, from: data)
     }

@@ -128,6 +128,7 @@ export interface FocusJudgeInput {
   readonly description?: string;
   /** #3067: one JPEG data URL of the window, instead of `description`. Never stored or logged. */
   readonly image?: string;
+  readonly test?: boolean;
   readonly observedAt: Date;
 }
 
@@ -288,6 +289,8 @@ export function buildFocusJudgmentService(
 
       const label: FocusLabel = answer?.label ?? "insufficient_evidence";
       const reason = answer?.reason ?? "";
+
+      if (input.test === true) return { judgmentId: "", label, reason, nudge: false };
 
       // Read, decide and insert under the person's lock, so an overlapping judgment waits and then
       // sees this one's nudge. Taken only now, so the slow model call above never holds it.

@@ -5,6 +5,7 @@ import Foundation
 enum VisionSource: String, Equatable, Hashable {
     case apiKey
     case cli
+    case judge
 }
 
 /// The fixed instruction every vision call sends, in both sources. Never model output, never
@@ -19,6 +20,8 @@ enum VisionError: Error, Equatable {
     /// The API key was empty, or the CLI is not installed or not signed in. Reads as "vision
     /// unavailable", never as a silent fallback to the other source (rung3 spec §5).
     case notConfigured
+    case judgeUnavailable
+    case noBlock
     case unreachable
     case rejected
     /// `detail` is diagnostic only — the provider's own error message, or a short note on what

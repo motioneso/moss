@@ -182,6 +182,36 @@ describe("the block must be the person's current block", () => {
   });
 });
 
+describe("test judgments", () => {
+  it("calls the model without reading nudge history or storing a judgment", async () => {
+    const h = harness();
+    const result = await h.service.judge(
+      DB,
+      { ...observation(), test: true },
+      T0,
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ judgmentId: "", label: "distracted", nudge: false });
+    expect(h.calls).toEqual(["model"]);
+    expect(h.rows).toHaveLength(0);
+    expect(h.generateCalls).toHaveLength(1);
+    const normal = await judgeAt(h, 1);
+    expect(normal.judgmentId).not.toBe("");
+    expect(normal.nudge).toBe(false);
+    expect(h.rows).toHaveLength(1);
+  });
+
+  it("still requires a current owned block before a test model call", async () => {
+    const h = harness();
+    h.setBlock(null);
+    await expect(
+      h.service.judge(DB, { ...observation(), test: true }, T0, new AbortController().signal)
+    ).rejects.toMatchObject({ code: "focus_no_block" });
+    expect(h.calls).toEqual([]);
+    expect(h.rows).toHaveLength(0);
+  });
+});
+
 describe("judging and nudging", () => {
   it("nudges on the second distracted judgment and not the first or a third inside the cap", async () => {
     const h = harness();
