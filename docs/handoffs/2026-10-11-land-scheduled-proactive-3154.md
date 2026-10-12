@@ -22,19 +22,19 @@ handoff you write.
 
 Merged into the branch on 2026-10-10 and 2026-10-11:
 
-| PR | What it did |
-| --- | --- |
-| 3333 | One quiet-hours editor on Alerts & quiet hours (#3130) |
-| 3385 | Choose between differing saved quiet hours (#3131) |
-| 3370 | Return safely to an interrupted conversation (#3128) |
-| 3363 | A due reminder appears at once in the open Main chat (#3195) |
-| 3391 | Reminders at a local clock time with a deadline and late recovery (#3150) |
-| 3398 | Legacy email monitoring kept under combined alert settings (#3146) |
-| 3341, 3381 | Chat fixes: launch replay never runs a tool; gate time limit per model |
-| 3364-3371, 3388, 3420 | Live and browser tests moved onto Conversations > New side chat |
-| 3389 | One approved Claude sign-in reused across installed test runs |
-| 3455 | Classifier chat journey proves the run-without-asking side again (#3362) |
-| 3374, 3402, 3431, 3443, 3454, 3461 | Syncs from main |
+| PR                                 | What it did                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| 3333                               | One quiet-hours editor on Alerts & quiet hours (#3130)                    |
+| 3385                               | Choose between differing saved quiet hours (#3131)                        |
+| 3370                               | Return safely to an interrupted conversation (#3128)                      |
+| 3363                               | A due reminder appears at once in the open Main chat (#3195)              |
+| 3391                               | Reminders at a local clock time with a deadline and late recovery (#3150) |
+| 3398                               | Legacy email monitoring kept under combined alert settings (#3146)        |
+| 3341, 3381                         | Chat fixes: launch replay never runs a tool; gate time limit per model    |
+| 3364-3371, 3388, 3420              | Live and browser tests moved onto Conversations > New side chat           |
+| 3389                               | One approved Claude sign-in reused across installed test runs             |
+| 3455                               | Classifier chat journey proves the run-without-asking side again (#3362)  |
+| 3374, 3402, 3431, 3443, 3454, 3461 | Syncs from main                                                           |
 
 ## What is not known yet
 
@@ -47,6 +47,7 @@ Merged into the branch on 2026-10-10 and 2026-10-11:
   - live proof
 
   Later PRs above may have done some of this. Nobody has checked item by item.
+
 - Issue state cannot tell you what is done. All 40 issues PR 3154 closes stay open until it
   merges.
 - CI never ran on the last commit of PR 3461 (4080104759d). That commit only adds a wait to one
@@ -60,6 +61,7 @@ Merged into the branch on 2026-10-10 and 2026-10-11:
    - the proof, which must be live proof for anything a user sees
 
    Anything without proof is not done. Keep the list in a state file outside the transcript.
+
 2. Ask Ben early whether PR 3154 should wait for every issue, or merge with unfinished issues
    moved out of its "Closes" list into follow-ups. This is his decision. Use `needs-ben` and
    the AWAITING-BEN file if one exists.
