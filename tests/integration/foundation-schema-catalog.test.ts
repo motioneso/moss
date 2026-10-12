@@ -627,7 +627,8 @@ describe("MVP foundation schema catalog", () => {
         // #3146 — once-per-finding accounting for unsolicited email alerts.
         { version: "0312", name: "0312_proactive_email_finding_charges.sql" },
         { version: "0313", name: "0313_chat_reminder_controls.sql" },
-        { version: "0314", name: "0314_chat_quiet_hours_allowances.sql" }
+        { version: "0314", name: "0314_chat_quiet_hours_allowances.sql" },
+        { version: "0317", name: "0317_chat_reminder_edits.sql" }
       ]);
     } finally {
       await client.end();

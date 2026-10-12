@@ -315,7 +315,7 @@ describe("what the database accepts for a clock reminder", () => {
     await expect(saveClock("check", 0)).rejects.toThrow(/chat_reminders_deadline_after_due/);
   });
 
-  it("never lets the owner move the deadline", async () => {
+  it("never lets cancellation move the deadline", async () => {
     const saved = await saveClock("water plants", 3600_000);
     await expect(
       asOwner(ids.userA, (db) =>
@@ -325,7 +325,7 @@ describe("what the database accepts for a clock reminder", () => {
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow(/permission denied for table chat_reminders/);
+    ).rejects.toThrow(/chat reminder identity cannot be changed/);
   });
 
   it("refuses a time the clocks skip, even with the instant Postgres would guess", async () => {
