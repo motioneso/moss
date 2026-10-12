@@ -105,6 +105,8 @@ const SANCTIONED_FEATURE_COUPLINGS = [
   "@moss/chat -> @moss/connectors",
   "@moss/chat -> @moss/email",
   "@moss/chat -> @moss/notes",
+  // #3134: due reminders create owner notifications through the public Notifications API.
+  "@moss/chat -> @moss/notifications",
   "@moss/chat -> @moss/tasks",
   // #1888: chat is the composition host for workshop.buildModule. Workshop declares the service it
   // needs (`ModuleBuildStartService`) in its public API and never constructs it; chat implements

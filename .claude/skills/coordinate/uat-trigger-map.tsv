@@ -14,6 +14,8 @@
 blocking	packages/module-registry/**	tests/uat/specs/module-install.uat.spec.ts
 blocking	scripts/module-reconcile.ts	tests/uat/specs/module-install.uat.spec.ts
 # #1974: chat archive settings screen (switch + folder field), backend from #1951/#1963.
+blocking	packages/chat/src/reminders/**	tests/uat/specs/3134-reminder-notifications.uat.spec.ts
+blocking	packages/notifications/src/push-worker.ts	tests/uat/specs/3134-reminder-notifications.uat.spec.ts
 blocking	apps/web/src/settings/settings-ai-pane.tsx	tests/uat/specs/1974-chat-archive-settings.uat.spec.ts
 blocking	scripts/start-jarv1s.ts	tests/uat/specs/module-install.uat.spec.ts
 blocking	apps/web/src/settings/settings-module-registry-section.tsx	tests/uat/specs/module-install.uat.spec.ts

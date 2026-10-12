@@ -177,6 +177,7 @@ import {
   selectEngineFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
+  isReminderNotificationActive,
   registerChatRoutes,
   type ChatEngineFactory,
   type ChatRoutesDependencies,
@@ -2122,7 +2123,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         boss,
         PUSH_DELIVER_QUEUE,
         deps.dataContext,
-        (job, scopedDb) => runPushDeliverJob(job, scopedDb),
+        (job, scopedDb) =>
+          runPushDeliverJob(job, scopedDb, {
+            notificationPreferencePort: createNotificationPreferencePort(),
+            quietHoursPort: quietHoursPortImpl,
+            pushQueuePort: createPushQueuePort(boss),
+            isNotificationActive: isReminderNotificationActive
+          }),
         PUSH_WORK_OPTIONS,
         { afterCommit: throwIfPushRetryNeeded }
       ),
@@ -2130,7 +2137,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         boss,
         PUSH_SUMMARY_QUEUE,
         deps.dataContext,
-        (job, scopedDb) => runPushSummaryJob(job, scopedDb),
+        (job, scopedDb) =>
+          runPushSummaryJob(job, scopedDb, {
+            notificationPreferencePort: createNotificationPreferencePort(),
+            quietHoursPort: quietHoursPortImpl,
+            pushQueuePort: createPushQueuePort(boss),
+            isNotificationActive: isReminderNotificationActive
+          }),
         PUSH_WORK_OPTIONS,
         { afterCommit: throwIfPushRetryNeeded }
       )
@@ -2374,6 +2387,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       }),
     registerWorkers: (boss, deps) =>
       registerChatJobWorkers(boss, deps.dataContext, {
+        reminderNotifications: new NotificationsRepository(
+          quietHoursPortImpl,
+          createNotificationPreferencePort(),
+          createPushQueuePort(boss)
+        ),
         embeddingProviderFactory: createRuntimeEmbeddingProvider,
         extractFactsDeps: {
           aiRepository: new AiRepository(),

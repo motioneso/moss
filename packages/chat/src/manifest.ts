@@ -43,6 +43,7 @@ export const chatModuleManifest = {
     defaultEnabled: true,
     required: true
   },
+  notifications: { supported: true },
   database: {
     migrations: [
       "sql/0014_chat_module.sql",
@@ -217,6 +218,26 @@ export const chatModuleManifest = {
             "Moss was interrupted before finishing a reply. Anything it started may not have completed, so check first, then ask again."
         }
       ]
+    },
+    {
+      id: "chat.reminder_notifications",
+      description:
+        "Due reminders stay in Main and alert enabled devices. Quiet hours hold alerts; mutes and device switches win. Retries never repeat chat. Dismissing stops alerts. Opening goes to Today.",
+      featureFlagId: "chat.module",
+      remediations: [
+        {
+          id: "chat.enable_reminder_notifications",
+          description:
+            "Check Chat's notification mute, delivery sensitivity and this device's push setting in Notifications settings.",
+          path: "/settings?section=modules&module=notifications"
+        }
+      ]
+    },
+    {
+      id: "chat.notification_preferences",
+      description:
+        "Chat appears in the per-module notification switches and counts toward email digest availability.",
+      featureFlagId: "chat.module"
     },
     {
       id: "chat.relative_reminders",

@@ -11,6 +11,7 @@ export * from "./apply-execution-adapters.js";
 export * from "./email-write-impl.js";
 export * from "./module-build-start-impl.js";
 export * from "./jobs.js";
+export { isReminderNotificationActive } from "./reminders/notifications.js";
 export * from "./classifier-shadow-repository.js";
 export * from "./classifier-shadow-review-repository.js";
 export * from "./live-routes.js";

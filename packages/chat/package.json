@@ -23,6 +23,7 @@
     "@moss/memory": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/notes": "workspace:*",
+    "@moss/notifications": "workspace:*",
     "@moss/priority": "workspace:*",
     "@moss/settings": "workspace:*",
     "@moss/shared": "workspace:*",

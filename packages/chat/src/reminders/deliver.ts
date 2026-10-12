@@ -17,6 +17,7 @@ import {
 
 import { ChatRepository } from "../repository.js";
 import { notifyReminderArrival } from "./live-arrival.js";
+import { enqueueReminderNotification } from "./notifications.js";
 import { ReminderRepository, type DueReminder, type SavedReminder } from "./repository.js";
 import { REMINDER_LATE_AFTER_MS, reminderDeliveredMessage } from "./wording.js";
 
@@ -53,6 +54,7 @@ export type ReminderDeliveryOutcome =
 type ReminderDeliveryDeps = {
   readonly reminders: ReminderRepository;
   readonly chat: ChatRepository;
+  readonly enqueueNotification?: (scopedDb: DataContextDb, reminder: DueReminder) => Promise<void>;
 };
 
 /** Enqueues delivery inside the caller's transaction, so a rollback drops the job too. */
@@ -116,6 +118,7 @@ export async function deliverDueReminder(
     threadId: reminder.threadId,
     messageId: reminder.reservedMessageId
   });
+  await deps.enqueueNotification?.(scopedDb, reminder);
   return "delivered";
 }
 
@@ -189,7 +192,12 @@ export async function registerReminderDeliveryWorker(
   dataContext: DataContextRunner,
   workOptions?: WorkOptions
 ): Promise<string> {
-  const deps = { reminders: new ReminderRepository(), chat: new ChatRepository() };
+  const deps = {
+    reminders: new ReminderRepository(),
+    chat: new ChatRepository(),
+    enqueueNotification: (scopedDb: DataContextDb, reminder: DueReminder) =>
+      enqueueReminderNotification(boss, scopedDb, reminder)
+  };
   return registerDataContextWorker<DeliverReminderJobPayload, ReminderDeliveryOutcome>(
     boss,
     CHAT_DELIVER_REMINDER_QUEUE,
