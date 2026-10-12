@@ -1,6 +1,6 @@
 # Let one named reminder through quiet hours
 
-Part of #3145. Base: integration/scheduled-proactive. Status: task 1 kill gate passed; task 3 next; delivery waits for #3479.
+Part of #3145. Base: integration/scheduled-proactive. Status: tasks 1 and 3 implemented; delivery waits for #3479.
 
 ## Outcome and scope
 
@@ -229,3 +229,11 @@ report the PR to the coordinator. No merge, board changes or milestone changes.
 
 - Final task 1 isolated gate passed 34 tests on restored protections. Root and test TypeScript checks and file-size check passed.
 - Coordinator ordering ruling: commit task 1, build task 3, and hold delivery files until the coordinator reports #3479 merged. Rebase on integration before task 2.
+
+## Task 3 evidence and current hold
+
+- Settings tests first failed on the missing component; endpoint tests first failed with 404s before route wiring. With wiring present, six Settings unit tests and the 40-test isolated integration/catalog/API gate passed.
+- The read response includes the owner Main thread ID alongside saved task IDs and titles, so Change in chat can open Main explicitly without sending a message or inheriting an active side chat.
+- No delivery files changed. The app map describes saved choices and marks device delivery support pending until task 2 ships.
+- Full pre-push formatting, lint and typecheck passed (including root, test, web and external modules). UI-class and file-size checks passed. The full foundation gate, installed UI proof and delivery checks remain pending.
+- Hold task 2 until the coordinator sends the #3479 merge SHA, then rebase on integration and add the separately approved exception beside its lifecycle recheck.

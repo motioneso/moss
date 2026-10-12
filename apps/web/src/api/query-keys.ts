@@ -101,6 +101,7 @@ export const queryKeys = {
   },
   chat: {
     scheduledTasks: ["chat", "scheduled-tasks"] as const,
+    quietHoursAllowances: ["chat", "quiet-hours-allowances"] as const,
     settings: ["chat", "settings"] as const,
     threads: (surface?: string) => ["chat", "threads", surface ?? "drawer"] as const,
     privacy: (surface?: string) => ["chat", "privacy", surface ?? "drawer"] as const,

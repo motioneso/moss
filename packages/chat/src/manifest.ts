@@ -8,6 +8,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   getChatPrivacyStateResponseSchema,
   listScheduledTasksResponseSchema,
+  listQuietHoursAllowancesResponseSchema,
   listChatThreadMessagesResponseSchema,
   listChatThreadsResponseSchema,
   listMemoryCorrectionsResponseSchema
@@ -473,6 +474,13 @@ export const chatModuleManifest = {
   ],
   routes: [
     ...REMINDER_CONTROL_ROUTES,
+    {
+      method: "GET",
+      path: "/api/chat/quiet-hours-allowances",
+      chat: { access: "read" },
+      responseSchema: listQuietHoursAllowancesResponseSchema,
+      permissionId: "chat.view"
+    },
     {
       method: "GET",
       path: "/api/chat/scheduled-tasks",

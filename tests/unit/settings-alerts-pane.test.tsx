@@ -1,9 +1,13 @@
 import { createElement, type ReactElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { defaultProactiveMonitoringPreference } from "@moss/shared";
+
+vi.mock("../../apps/web/src/shell/chat-controls-context.js", () => ({
+  useChatControls: () => ({ openChat: vi.fn(), openChatThread: vi.fn() })
+}));
 
 describe("AlertsPane", () => {
   it("keeps automatic email alerts separate from delivery and quiet-hours controls", async () => {
@@ -33,6 +37,8 @@ describe("AlertsPane", () => {
     );
     expect(html).toContain("Notifications and email digest");
     expect(html).toContain("Quiet hours");
+    expect(html).toContain("Allowed during quiet hours");
+    expect(html).toContain("Change in chat");
     expect(html).toContain("Save quiet hours");
     expect(html).toContain('aria-label="Quiet hours from"');
     expect(html).not.toContain("Open quiet hours");

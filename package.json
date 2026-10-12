@@ -73,7 +73,7 @@
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
     "test:integration": "tsx scripts/test-integration.ts",
-    "test:integration:3145": "tsx scripts/test-integration.ts tests/integration/chat-reminder-quiet-hours-allowances.test.ts tests/integration/chat-reminders-cancel-turn.test.ts tests/integration/foundation-schema-catalog.test.ts",
+    "test:integration:3145": "tsx scripts/test-integration.ts tests/integration/chat-reminder-quiet-hours-allowances.test.ts tests/integration/chat-reminders-cancel-turn.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/settings-reminders.test.ts",
     "test:meeting-link-security": "node node_modules/vitest/vitest.mjs run tests/integration/meeting-link-security.test.ts tests/integration/meeting-link-races.test.ts tests/integration/meeting-link-maintenance.test.ts tests/integration/companion-logout-idempotent.test.ts",
     "test:meeting-link-negative": "python3 scripts/check-meeting-link-negative-controls.py --hosted",
     "test:meeting-source-negative": "python3 scripts/check-meeting-source-negative-controls.py --unit",

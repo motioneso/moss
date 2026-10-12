@@ -1,6 +1,29 @@
 import { sql } from "kysely";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import type { ListQuietHoursAllowancesResponse } from "@moss/shared";
 import { lockNotificationDelivery } from "./repository.js";
+
+export async function listQuietHoursAllowances(
+  scopedDb: DataContextDb
+): Promise<ListQuietHoursAllowancesResponse> {
+  assertDataContextDb(scopedDb);
+  const main = await scopedDb.db
+    .selectFrom("app.chat_threads")
+    .select("id")
+    .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+    .where("is_main", "=", true)
+    .where("incognito", "=", false)
+    .executeTakeFirst();
+  const allowances = await scopedDb.db
+    .selectFrom("app.chat_reminder_quiet_allowances as allowance")
+    .innerJoin("app.chat_reminders as reminder", "reminder.id", "allowance.reminder_id")
+    .select(["reminder.id", "reminder.reminder_text as title"])
+    .where("allowance.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+    .orderBy("allowance.created_at")
+    .orderBy("reminder.id")
+    .execute();
+  return { mainThreadId: main?.id ?? null, allowances };
+}
 
 export async function readQuietHoursProposal(scopedDb: DataContextDb, threadId: string) {
   assertDataContextDb(scopedDb);
