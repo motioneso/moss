@@ -9,7 +9,9 @@ export const scheduledRead: ReminderCommandHandler = async (context, plan) => {
   if (plan.kind !== "scheduled_read") throw new Error("invalid scheduled read plan");
   const refused = {
     reply:
-      "I didn't set a check. Name one task you own and one time; I can only read its status once.",
+      plan.failure === "unavailable"
+        ? "I couldn't set that check right now, so nothing is set. Try again in a moment."
+        : "I didn't set a check. Name one task you own and one time; I can only read its status once.",
     origin: {
       version: 1 as const,
       kind: "reminder" as const,

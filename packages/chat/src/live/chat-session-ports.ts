@@ -153,10 +153,7 @@ export interface ChatPersistencePort {
       }
     | undefined
   >;
-  /**
-   * #3309 — persist the code-written answer to a recognised reminder request, saving and queuing
-   * an accepted reminder in the same transaction. Optional: embedders without reminders omit it.
-   */
+  /** Resolve an explicit scheduled Tasks check; unmatched selections leave the turn unchanged. */
   resolveScheduledReadRequest?(
     actorUserId: string,
     text: string,
@@ -171,6 +168,10 @@ export interface ChatPersistencePort {
     threadId: string,
     signal?: AbortSignal
   ): Promise<ReminderTurnPlan | undefined>;
+  /**
+   * #3309 — persist the code-written answer to a recognised reminder request, saving and queuing
+   * an accepted reminder in the same transaction. Optional: embedders without reminders omit it.
+   */
   recordReminderTurn?(
     actorUserId: string,
     userText: string,

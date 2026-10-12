@@ -1,4 +1,4 @@
-import { recognizeRelativeReminder } from "../reminders/recognizer.js";
+import { normalizeReminderRequest, recognizeRelativeReminder } from "../reminders/recognizer.js";
 import type { StructuredFailureReason } from "@moss/ai";
 
 export type ScheduledReadFailureStage =
@@ -35,6 +35,7 @@ export interface ScheduledReadCandidate {
 }
 export interface ScheduledReadPlan {
   readonly kind: "scheduled_read";
+  readonly failure?: "unavailable";
   readonly taskId: string | null;
   readonly title: string;
   readonly when: Extract<
@@ -44,8 +45,11 @@ export interface ScheduledReadPlan {
 }
 
 export function namesScheduledRead(request: string): boolean {
+  const normalized = normalizeReminderRequest(request);
   return (
     request.length <= 700 &&
+    /^check\b/.test(normalized) &&
+    !/^check\s+(?:which|what|how|why|where|when)\b/.test(normalized) &&
     /\b(?:check|status)\b/i.test(request) &&
     /\btask\b/i.test(request) &&
     /\b(?:(?:in|after)\s+(?:\d+|an?|one|two|three|five|ten|half)\b|at\s+\d|tomorrow|tonight|every|daily|weekly)\b/i.test(
@@ -105,8 +109,13 @@ export async function resolveScheduledReadRequest(
     return refuse("output_shape");
   const taskId = fields.find(([key]) => key === "taskId")?.[1];
   const timing = fields.find(([key]) => key === "timingRequest")?.[1];
-  const task = candidates.find((item) => item.id === taskId);
-  if (!task || typeof timing !== "string") return refuse("item_selection");
+  const matches = candidates.filter((item) => item.id === taskId);
+  if (matches.length !== 1) {
+    recordScheduledReadFailure("item_selection", "ValidationError");
+    return undefined;
+  }
+  const task = matches[0]!;
+  if (typeof timing !== "string") return refuse("output_shape");
   const when = recognizeRelativeReminder(timing);
   if (when.kind !== "request" && when.kind !== "clock_request") return refuse("timing");
   return { kind: "scheduled_read", taskId: task.id, title: task.title, when };

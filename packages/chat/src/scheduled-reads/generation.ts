@@ -16,6 +16,15 @@ import {
   type ScheduledReadFailureStage
 } from "./request.js";
 
+class ScheduledReadGenerationError extends Error {
+  constructor(
+    readonly stage: ScheduledReadFailureStage,
+    readonly errorClass: Parameters<typeof recordScheduledReadFailure>[1]
+  ) {
+    super("Scheduled read generation failed");
+  }
+}
+
 export function createScheduledReadResolver(deps: {
   readonly dataContext: DataContextRunner;
   readonly resolveActiveModules: ActiveModulesResolver;
@@ -30,6 +39,7 @@ export function createScheduledReadResolver(deps: {
     if (!namesScheduledRead(request)) return undefined;
     const refused: ScheduledReadPlan = {
       kind: "scheduled_read",
+      failure: "unavailable",
       taskId: null,
       title: "",
       when: null
@@ -59,8 +69,7 @@ export function createScheduledReadResolver(deps: {
                     tierHint: "economy"
                   });
                   if (!model) {
-                    recordScheduledReadFailure(stage, "needs_config");
-                    return null;
+                    throw new ScheduledReadGenerationError(stage, "needs_config");
                   }
                   stage = "prepare";
                   return prepareStructuredGeneration(
@@ -81,25 +90,29 @@ export function createScheduledReadResolver(deps: {
                   );
                 }
               );
-              if (!run) return null;
               stage = "generate";
               const result = await run();
-              if (!result.ok) recordScheduledReadFailure(result.reason ?? stage, result.error);
-              return result.ok ? result.object : null;
+              if (!result.ok)
+                throw new ScheduledReadGenerationError(result.reason ?? stage, result.error);
+              return result.object;
             },
             signal
           )
         );
     } catch (error) {
       recordScheduledReadFailure(
-        stage,
-        error instanceof SyntaxError
-          ? "SyntaxError"
-          : error instanceof TypeError
-            ? "TypeError"
-            : error instanceof RangeError
-              ? "RangeError"
-              : "Error"
+        error instanceof ScheduledReadGenerationError ? error.stage : stage,
+        signal.aborted
+          ? "aborted"
+          : error instanceof ScheduledReadGenerationError
+            ? error.errorClass
+            : error instanceof SyntaxError
+              ? "SyntaxError"
+              : error instanceof TypeError
+                ? "TypeError"
+                : error instanceof RangeError
+                  ? "RangeError"
+                  : "Error"
       );
       return refused;
     }

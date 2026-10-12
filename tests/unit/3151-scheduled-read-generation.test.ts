@@ -49,7 +49,7 @@ it("records the structured failure class and stage without provider content", as
   expect(
     await resolve("owner", "Check my private task in 30 seconds", new AbortController().signal)
   ).toMatchObject({ taskId: null });
-  expect(warn).toHaveBeenCalledWith(
+  expect(warn).toHaveBeenCalledExactlyOnceWith(
     JSON.stringify({
       event: "chat.scheduled_read_refused",
       stage: "json_parse",
@@ -72,3 +72,39 @@ it("records the stage of an exception without its message or arbitrary name", as
     JSON.stringify({ event: "chat.scheduled_read_refused", stage: "prepare", errorClass: "Error" })
   );
 });
+
+it("records cancellation during candidate lookup as aborted", async () => {
+  const resolve = fixture();
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const controller = new AbortController();
+  mocks.candidates.mockImplementation(async () => {
+    controller.abort();
+    throw new Error("PRIVATE CANCELLATION");
+  });
+  await resolve("owner", "Check my private task in 30 seconds", controller.signal);
+  expect(warn).toHaveBeenCalledExactlyOnceWith(
+    JSON.stringify({
+      event: "chat.scheduled_read_refused",
+      stage: "candidates",
+      errorClass: "aborted"
+    })
+  );
+});
+
+it.each(["missing model", "provider down"])(
+  "reports availability for %s instead of blaming task selection",
+  async (scenario) => {
+    const resolve = fixture();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    if (scenario === "missing model") mocks.route.mockResolvedValue({ model: null });
+    else
+      mocks.prepare.mockResolvedValue(async () => ({
+        ok: false,
+        error: "provider_error",
+        reason: "cli_execution"
+      }));
+    expect(
+      await resolve("owner", "Check my private task in 30 seconds", new AbortController().signal)
+    ).toMatchObject({ failure: "unavailable" });
+  }
+);

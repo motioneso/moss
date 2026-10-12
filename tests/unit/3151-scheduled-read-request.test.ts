@@ -30,7 +30,11 @@ describe("scheduled source request boundary", () => {
     "can you check my grammar",
     "tasks for today look heavy",
     "check the task in this essay",
-    "I check task status at home"
+    "I check task status at home",
+    "Remind me in 20 minutes to check the laundry task",
+    "remind me in 10 minutes to check if the task is complete",
+    "What's the status of the task due tomorrow?",
+    "Can you check which task I should do tomorrow?"
   ])("leaves everyday chat alone: %s", async (request) => {
     const interpret = vi.fn();
     expect(await resolveScheduledReadRequest(request, candidates, interpret)).toBeUndefined();
@@ -50,11 +54,30 @@ describe("scheduled source request boundary", () => {
       when: { kind: "request", delaySeconds: 30 }
     });
   });
+  it("leaves an unresolved owned task to the reminder or normal turn", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(
+      await resolveScheduledReadRequest(
+        "Check the status of my laundry task in 20 minutes",
+        candidates,
+        async () => ({ taskId: "", timingRequest: "" })
+      )
+    ).toBeUndefined();
+  });
   it.each([
-    {
-      taskId: "22222222-2222-4222-8222-222222222222",
-      timingRequest: "remind me in 30 seconds to check task"
-    },
+    { owned: [] },
+    { owned: [candidates[0]!, candidates[0]!] },
+    { owned: [{ id: "foreign-item", title: "Foreign item" }] }
+  ])("requires exactly one owned candidate", async ({ owned }) => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(
+      await resolveScheduledReadRequest("Check my task in 30 seconds", owned, async () => ({
+        taskId,
+        timingRequest: "remind me in 30 seconds to check task"
+      }))
+    ).toBeUndefined();
+  });
+  it.each([
     { taskId, timingRequest: "remind me every day to check task" },
     { taskId, timingRequest: "remind me in 30 seconds to check task", operation: "tasks.update" },
     { taskId, timingRequest: "remind me in 30 seconds to check task", recipient: "someone else" }

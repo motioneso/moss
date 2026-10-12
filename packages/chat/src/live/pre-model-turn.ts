@@ -53,8 +53,20 @@ export async function tryPreModelTurn(
           text,
           controller.signal
         );
+        if (
+          recognition?.kind === "scheduled_read" &&
+          (!recognition.taskId || !recognition.when) &&
+          !recognition.failure
+        )
+          recognition = undefined;
       } catch {
-        recognition = { kind: "scheduled_read", taskId: null, title: "", when: null };
+        recognition = {
+          kind: "scheduled_read",
+          failure: "unavailable",
+          taskId: null,
+          title: "",
+          when: null
+        };
       }
     }
   }

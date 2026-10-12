@@ -6,14 +6,20 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.scheduled_owner_read",
     description:
-      "In Main, schedule one owned Tasks status read. Your configured model selects the task and time; Moss saves directly and later posts a sourced result. Reminder controls, limits, deadlines and notification policy apply.",
+      "In Main, ask Moss to check one owned Tasks item at a future time. Your configured model selects the task and time; Moss saves directly and later posts a sourced result. Plain reminder wording stays a reminder, and questions stay in chat. Reminder controls, limits, deadlines and notification policy apply.",
     featureFlagId: "chat.module",
     errors: [
       {
         code: "scheduled_read_unresolved",
         class: "validation",
         description:
-          "Moss cannot save an ambiguous task or unsupported time. Name one task you own and a supported future time. A configured JSON model and enabled Tasks module are required."
+          "An unresolved task stays in ordinary chat instead of saving a check. Name one task you own and a supported future time."
+      },
+      {
+        code: "scheduled_read_unavailable",
+        class: "transient",
+        description:
+          "If the model or Tasks module is unavailable, Moss says it could not set the check and saves nothing. Check the configured JSON model and enabled Tasks module, then try again."
       },
       {
         code: "scheduled_read_access_refused",
