@@ -30,22 +30,20 @@
         type="button"
         class="prototype-menu"
         id="review-open"
-        aria-label="Open prototype menu"
+        aria-label="Review tools"
+        title="Review tools"
       >
-        Prototype <span aria-hidden="true">···</span>
+        <span aria-hidden="true">···</span>
       </button>
     </header>
     <div id="app"></div>
-    <footer class="site-footer">
-      <span class="small-dot" aria-hidden="true"></span
-      ><span>Repository review · simulated setup · choices last only in this tab.</span>
-    </footer>
+
     <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
     <dialog id="review-dialog" aria-labelledby="review-title">
       <div class="dialog-head">
         <div>
           <p class="eyebrow">PROTOTYPE ONLY</p>
-          <h2 id="review-title">Prototype menu.</h2>
+          <h2 id="review-title">Review tools</h2>
         </div>
         <button class="icon-button" id="review-close" aria-label="Close review controls">×</button>
       </div>
@@ -58,12 +56,11 @@
     <dialog id="detail-dialog" aria-labelledby="detail-title"></dialog>
     <noscript
       ><main class="noscript">
-        <h1>This prototype needs JavaScript.</h1>
+        <h1>Turn on JavaScript to continue.</h1>
         <p>
           Enable JavaScript to explore the locally simulated setup. No integrations or credentials
           are used.
         </p>
-        <a href="README.md">Read the review guide instead</a>
       </main></noscript
     >
   </body>

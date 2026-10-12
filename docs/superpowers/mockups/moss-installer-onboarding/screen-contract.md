@@ -46,21 +46,25 @@ A replacement draft or failed write check does not erase the saved source.
 ## Access revision proposal
 
 The direction is approved; the new screens and precise copy remain a visual
-revision proposal. Access lives in the Ready recap and a focused optional
+revision proposal recorded in the review documentation and tucked-away review
+controls. Product-facing screens omit prototype labels and implementation
+explainers while retaining actionable warnings, errors and consent. Access lives in the Ready recap and a focused optional
 subpanel. It does not add a numbered browser stage.
 
 - Fresh installs start at **This computer only**. Existing installations show
   their actual saved mode; onboarding must not silently change it.
 - Choices: **Keep local**, **Home network (HTTP, unencrypted)**, **HTTPS**.
-- HTTP disclosure: “People or software on this network may read or alter your
-  credentials and content. Some device features need HTTPS.”
+- HTTP disclosure: “Other people or software on this network may be able to read
+  or change your passwords and content. Some device features need HTTPS.”
 - LAN HTTP can serve ordinary phone/computer browsers. Remote companions require
   HTTPS; these are different compatibility constraints.
 - HTTPS is recommended, but a domain, new certificate flow, or Tailscale cannot
   become a requirement to finish onboarding.
 - Changing the selection does not apply it. Review the exact host, bind interface,
   ports and resulting address, and disclose any widening or disconnection before
-  host-side action. Mockup placeholders are not inspected infrastructure values.
+  host-side action. Mockup addresses use the documentation range `192.0.2.10`, reserved
+  example domain `moss.example`, and generic label `moss-host`. They are not
+  inspected infrastructure values and are never contacted.
 - New first-owner claiming remains loopback, SSH tunnel, or verified HTTPS. Close
   the claim before widening access. This is not a new blanket ban on existing
   HTTP browser sessions.

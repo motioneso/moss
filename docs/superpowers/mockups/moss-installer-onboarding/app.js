@@ -1083,7 +1083,7 @@
   function summary(s) {
     const aiStates = {
       "integration-needed": ["Saved selection · chat capability unverified", "attention"],
-      connected: ["Demo model ready", "connected"],
+      connected: ["Model ready", "connected"],
       "no-chat": ["Background configured · chat unavailable", "attention"],
       awaiting: ["Awaiting provider sign-in", "pending"],
       failed: ["Connection failed · needs attention", "attention"],
@@ -1105,7 +1105,7 @@
     const emailStates = {
       unavailable: ["Email service unreachable · needs attention", "attention"],
       connected: [
-        s.emailSync === "ready" ? "Demo connected · sync ready" : "Demo connected · sync pending",
+        s.emailSync === "ready" ? "Connected · sync ready" : "Connected · sync pending",
         "connected"
       ],
       awaiting: ["Awaiting email sign-in", "pending"],
@@ -1120,7 +1120,7 @@
       notes = noteStates[s.notes],
       email = emailStates[s.email];
     if (s.providers?.length && s.ai === "connected")
-      ai = [s.providers.map((p) => p.name).join(", ") + " · demo ready", "connected"];
+      ai = [s.providers.map((p) => p.name).join(", ") + " ready", "connected"];
     if (s.savedAi && s.ai !== "connected")
       ai = [
         `${s.savedAi.provider} remains ready · replacement ${s.ai === "awaiting" ? "pending" : s.ai === "failed" ? "failed" : "not applied"}`,
@@ -1133,7 +1133,7 @@
     if (s.savedEmail && s.email !== "connected")
       email = [`${s.savedEmail} remains connected · replacement not applied`, "attention"];
     return [
-      row("Your account", s.account ? ["Demo owner created", "connected"] : null, [
+      row("Your account", s.account ? ["Account created", "connected"] : null, [
         "Not created",
         "later"
       ]),
@@ -1224,7 +1224,8 @@
     document
       .querySelectorAll(".save-label")
       .forEach(
-        (el) => (el.textContent = saved ? "Demo choices kept in this tab" : "Simulated save failed")
+        (el) =>
+          (el.textContent = saved ? "Progress saved" : "Your latest changes couldn’t be saved")
       );
     return saved;
   }
@@ -1244,7 +1245,7 @@
     if (fault === "offline" || fault === "save") {
       error =
         fault === "offline"
-          ? "You’re offline in this scenario. Your earlier choices are still here. Reconnect and try saving again."
+          ? "You’re offline. Your earlier choices are still here. Reconnect and try saving again."
           : "That save didn’t go through. Your choices are still here. Try again when you’re ready.";
       render();
       return false;
@@ -1316,11 +1317,11 @@
     const index = stages.findIndex(([step]) => step === state.step),
       number = index + 1;
     const storageLabel = saved
-      ? "Demo choices kept in this tab"
+      ? "Progress saved"
       : saveFailed
-        ? "Latest demo changes are not saved"
-        : "Demo choices last only in this tab";
-    return `<details class="setup-progress"><summary><span>${index >= 0 ? `<b>${String(number).padStart(2, "0")}</b> / 06 <span class="progress-name">${stages[index][1]}</span>` : "Your setup"}</span><span class="progress-ticks" aria-hidden="true">${stages.map(([step]) => `<i class="${state.furthest >= step ? "passed" : ""} ${state.step === step ? "active" : ""}"></i>`).join("")}</span><span class="sr-only">Open setup progress</span></summary><div class="progress-body"><p class="install-saved">Moss prepared · demo</p><ol>${stages.map(([step, label], i) => `<li><button type="button" class="step-link" data-step="${step}" ${state.step === step ? 'aria-current="step"' : ""} ${Math.max(state.step, state.furthest || 0) < step ? "disabled" : ""}><span>${String(i + 1).padStart(2, "0")} · ${label}</span><small>${progressStatus(step)}</small></button></li>`).join("")}</ol><p class="save-label">${storageLabel}</p>${state.account ? `<div class="progress-options"><button class="text-button" data-action="save-leave">Save and leave</button><button class="text-button" data-action="finish-early">Finish with these choices</button></div>` : ""}</div></details>`;
+        ? "Latest changes are not saved"
+        : "Your progress is kept";
+    return `<details class="setup-progress"><summary><span>${index >= 0 ? `<b>${String(number).padStart(2, "0")}</b> / 06 <span class="progress-name">${stages[index][1]}</span>` : "Your setup"}</span><span class="progress-ticks" aria-hidden="true">${stages.map(([step]) => `<i class="${state.furthest >= step ? "passed" : ""} ${state.step === step ? "active" : ""}"></i>`).join("")}</span><span class="sr-only">Open setup progress</span></summary><div class="progress-body"><p class="install-saved">Moss prepared</p><ol>${stages.map(([step, label], i) => `<li><button type="button" class="step-link" data-step="${step}" ${state.step === step ? 'aria-current="step"' : ""} ${Math.max(state.step, state.furthest || 0) < step ? "disabled" : ""}><span>${String(i + 1).padStart(2, "0")} · ${label}</span><small>${progressStatus(step)}</small></button></li>`).join("")}</ol><p class="save-label">${storageLabel}</p>${state.account ? `<div class="progress-options"><button class="text-button" data-action="save-leave">Save and leave</button><button class="text-button" data-action="finish-early">Finish with these choices</button></div>` : ""}</div></details>`;
   }
 
   function footer(
@@ -1338,13 +1339,13 @@
         : state.transport === "certificate"
           ? "The browser reports a certificate problem. Don’t bypass its warning."
           : "The first-owner claim uses a protected local route, SSH tunnel, or verified HTTPS. Set up wider browser access after the owner claim is closed.";
-    return `${intro("CONNECTION CHECK", "Protect the first-owner setup.", copy)}<div class="stacked-choices">${button("I’m on the Moss computer", "host-local", "secondary")}${button("Moss runs on another device", "remote-help", "secondary")}</div>${help("Already using trusted HTTPS?", `<p>A trusted local certificate or private network route can work too. A domain is optional.</p>${button("Simulate a verified secure connection", "secure", "secondary")}`)}${help("Why setup is paused", "<p>A private network and Docker do not encrypt this browser connection. The new-owner claim stays blocked until the protected bootstrap route is verified. Existing LAN browser access is a separate, explicit choice near the end.</p><p>This is a simulated gate. Never bypass a browser certificate warning.</p>")}${footer("Check connection again", "recheck")}`;
+    return `${intro("CONNECTION CHECK", "Protect the first-owner setup.", copy)}<div class="stacked-choices">${button("I’m on the Moss computer", "host-local", "secondary")}${button("Moss runs on another device", "remote-help", "secondary")}</div>${help("Already using trusted HTTPS?", `<p>A trusted local certificate or private network route can work too. A domain is optional.</p>${button("Verify connection", "secure", "secondary")}`)}${help("Why setup is paused", "<p>A private network and Docker do not encrypt this browser connection. The new-owner claim stays blocked until the protected bootstrap route is verified. Existing LAN browser access is a separate, explicit choice near the end.</p><p>Never bypass a browser certificate warning.</p>")}${footer("Check connection again", "recheck")}`;
   }
   const routeNames = {
     local: "This computer",
     remote: "Another computer or home server",
     manual: "I’ll manage Docker myself",
-    legacy: "Existing Moss demo"
+    legacy: "Existing Moss"
   };
   const platformNames = { macos: "Mac", windows: "Windows", linux: "Linux" };
   function installerPanel(panel) {
@@ -1379,16 +1380,14 @@
     }
   }
   function hostFolderFixture() {
-    return state.setupRoute === "local"
-      ? "Sample notes folder on this computer"
-      : "Sample notes folder on the Linux host";
+    return state.setupRoute === "local" ? "Documents / Notes" : "Notes";
   }
   function hostNotes() {
     const local = state.setupRoute === "local",
       native = local && state.hostPlatform !== "linux";
     const choices = `<div class="notes-choice"><button class="choice" data-host-notes="existing" aria-pressed="${state.hostNotesChoice === "existing"}">${icon("folder")}<span><strong>Use my existing notes</strong><small>Obsidian or Markdown folder</small></span></button><button class="choice" data-host-notes="managed" aria-pressed="${state.hostNotesChoice === "managed"}">${icon("note")}<span><strong>Start a private Moss folder</strong><small>Created on the chosen host</small></span></button></div>`;
     const existing = state.hostNotesChoice === "existing";
-    return `${intro("INSTALL · YOUR NOTES", "Your notes, already at home.", "Keep your notes in the apps you already use. Use this to give Moss more context about you if you have it.")}${choices}${existing ? `<p class="hint">${native ? "The real installer opens a native folder picker on this computer." : local ? "The Linux helper asks for a path on this computer. A desktop is not required." : "Choose a path in the helper on your Linux server. A picker on this laptop cannot select that folder."}</p>${state.hostFolder ? `<p class="host-path">${esc(state.hostFolder)} · demo folder</p>` : ""}${button(native ? "Choose a folder · demo" : local ? "Choose Linux host folder · demo" : "Choose server folder · demo", "host-pick", "secondary")}` : '<p class="hint">A private folder is prepared on the Moss host.</p>'}<p class="hint">Only this folder becomes available after account setup for owner-scoped reading and writing. This preview opens no files.</p>${footer("Continue", "host-notes-next", { secondary: state.installReturnStep ? (!state.hostApplyStarted ? button("Keep current folder", "host-change-cancel", "quiet") : "") : button("Set up notes later", "host-notes-skip", "quiet") })}`;
+    return `${intro("INSTALL · YOUR NOTES", "Your notes, already at home.", "Keep your notes in the apps you already use. Use this to give Moss more context about you if you have it.")}${choices}${existing ? `<p class="hint">${native ? "Choose the folder on this computer." : local ? "Choose a folder on this computer." : "Choose the folder on your Moss server."}</p>${state.hostFolder ? `<p class="host-path">${esc(state.hostFolder)}</p>` : ""}${button(native ? "Choose a folder" : local ? "Choose Linux host folder" : "Choose server folder", "host-pick", "secondary")}` : '<p class="hint">A private folder is prepared on the Moss host.</p>'}<p class="hint">Moss can read and write only in the folder you choose.</p>${footer("Continue", "host-notes-next", { secondary: state.installReturnStep ? (!state.hostApplyStarted ? button("Keep current folder", "host-change-cancel", "quiet") : "") : button("Set up notes later", "host-notes-skip", "quiet") })}`;
   }
   function welcome() {
     if (state.transport !== "secure") return connection();
@@ -1427,24 +1426,15 @@
       const status = state.dockerStatus;
       const info =
         status === "ready"
-          ? note(
-              "Docker is ready in this demo.",
-              "Selected host, context and runtime checked.",
-              "",
-              "check"
-            )
+          ? note("Docker is ready.", "", "", "check")
           : status === "missing"
             ? note(
-                "Docker is missing in this scenario.",
+                "Docker needs to be installed.",
                 "Review official setup and any terms before choosing to install it.",
                 "warn"
               )
             : status === "stopped"
-              ? note(
-                  "Docker is installed but stopped.",
-                  "Start it deliberately, then check the same host again.",
-                  "warn"
-                )
+              ? note("Docker is installed but stopped.", "Start Docker, then check again.", "warn")
               : status === "wrong-context"
                 ? note(
                     "This Docker context points elsewhere.",
@@ -1468,23 +1458,23 @@
           : status === "missing"
             ? "Review Docker setup"
             : status === "stopped"
-              ? "Simulate starting Docker"
+              ? "Start Docker"
               : status === "wrong-context"
-                ? "Simulate correct host selected"
+                ? "Use this host"
                 : remote
-                  ? "Simulate running host helper"
-                  : "Check Docker · demo";
-      return `${intro("INSTALL · YOUR HOST", local ? "Let’s get this computer ready." : remote ? "Start on the Moss server." : "Bring your Docker setup.", local ? "Moss runs in Docker on this computer." : remote ? "The proposed helper runs on the Linux host, even when it has no screen." : "Review a template, then prepare the real Docker host.")}${platforms}${info}${remote ? '<p class="hint">Host helper concept only. Nothing is downloaded or run here.</p>' : ""}${!local && !remote ? button("Review demo template", "manual-template", "quiet") : ""}${footer(label, action)}`;
+                  ? "Check host"
+                  : "Check Docker";
+      return `${intro("INSTALL · YOUR HOST", local ? "Let’s get this computer ready." : remote ? "Start on the Moss server." : "Bring your Docker setup.", local ? "Moss runs in Docker on this computer." : remote ? "Prepare Moss on your Linux server." : "Review the configuration for your host.")}${platforms}${info}${remote ? "" : ""}${!local && !remote ? button("Review configuration", "manual-template", "quiet") : ""}${footer(label, action)}`;
     }
     if (panel === "prepare")
-      return `${art("trail")}${intro("INSTALL · READY TO PREPARE", "A home for Moss.", state.account ? "Review this scoped folder change before applying it." : "Review these choices before services start.")}<div class="install-recap"><p><strong>${esc(routeNames[state.setupRoute] || routeNames.legacy)}</strong> · ${esc(platformNames[state.hostPlatform] || "Linux")}</p><p class="host-path">${state.hostNotesChoice === "skip" ? "Notes: set up later" : state.hostNotesChoice === "managed" ? "Notes: private Moss folder" : esc(state.hostFolder)}</p><p>Docker ready · protected connection next</p></div><p class="hint">${state.setupRoute === "manual" ? "The real manual route applies the reviewed template on your host." : "The proposed installer prepares configuration, starts services, then checks health."} Demo only; no installation runs.</p>${state.setupRoute === "manual" ? button("Review demo template", "manual-template", "quiet") : ""}${footer(state.account ? "Prepare folder change · demo" : "Prepare Moss · demo", "install-start")}`;
+      return `${art("trail")}${intro("INSTALL · READY TO PREPARE", "A home for Moss.", state.account ? "Review this scoped folder change before applying it." : "Review these choices before services start.")}<div class="install-recap"><p><strong>${esc(routeNames[state.setupRoute] || routeNames.legacy)}</strong> · ${esc(platformNames[state.hostPlatform] || "Linux")}</p><p class="host-path">${state.hostNotesChoice === "skip" ? "Notes: set up later" : state.hostNotesChoice === "managed" ? "Notes: private Moss folder" : esc(state.hostFolder)}</p><p>Docker ready · protected connection next</p></div><p class="hint">${state.setupRoute === "manual" ? "Apply the configuration on your host." : ""}</p>${state.setupRoute === "manual" ? button("Review configuration", "manual-template", "quiet") : ""}${footer(state.account ? "Prepare folder change" : "Prepare Moss", "install-start")}`;
     if (panel === "prepare-results")
-      return `${intro("INSTALL · HEALTH CHECK", state.installStatus === "failed" ? "Moss needs another check." : "Checking the prepared host.", state.installStatus === "failed" ? "Your host and folder choices are kept. Retry the same installation." : "Services must be healthy before account or provider setup.")}<div class="install-checks"><p>${state.installStatus === "failed" ? "Needs attention" : "Awaiting simulated result"} · application and database</p><p>Same deployment identity, configuration and data volumes</p></div><p class="hint">No timer stands in for a health check. No real processes are started.</p>${footer(state.installStatus === "failed" ? "Retry demo preparation" : "Simulate health checks passed", state.installStatus === "failed" ? "install-start" : "install-health")}`;
-    return `${art("trail")}${intro("INSTALL · MOSS IS RUNNING", "Now, make it yours.", state.protectedContinuation ? "Your protected demo connection is ready." : "Continue through a protected browser connection.")}<p class="hint">${local ? "The installer opens its verified local browser route." : "The real host helper continues through trusted HTTPS or your existing SSH local forward. It does not collect SSH credentials or expose setup over LAN HTTP."}</p>${!state.protectedContinuation ? help("What is being verified?", "<p>The same installation, a healthy backend and a protected connection. A proposed one-use owner claim stays bound to that installation. This is a simulation, not a generated claim or running helper.</p>") : ""}${footer(state.protectedContinuation ? "Continue setup" : "Continue in this browser · demo", "install-continue", { back: false })}`;
+      return `${intro("INSTALL · HEALTH CHECK", state.installStatus === "failed" ? "Moss needs another check." : "Checking the prepared host.", state.installStatus === "failed" ? "Your host and folder choices are kept. Retry the same installation." : "Services must be healthy before account or provider setup.")}<div class="install-checks"><p>${state.installStatus === "failed" ? "Needs attention" : "Checking"} · application and database</p><p>Your settings and data are kept</p></div>${footer(state.installStatus === "failed" ? "Try again" : "Continue", state.installStatus === "failed" ? "install-start" : "install-health")}`;
+    return `${art("trail")}${intro("INSTALL · MOSS IS RUNNING", "Now, make it yours.", state.protectedContinuation ? "Your connection is ready." : "Continue through a protected browser connection.")}<p class="hint">${local ? "" : "Use trusted HTTPS or an SSH local forward to open Moss safely."}</p>${footer(state.protectedContinuation ? "Continue setup" : "Continue in this browser", "install-continue", { back: false })}`;
   }
 
   function account() {
-    return `${intro("YOUR ACCOUNT", "What should I call you?", "")}<div class="field"><label class="sr-only" for="owner-name">What should I call you?</label><input id="owner-name" data-field="name" value="${esc(state.name)}" maxlength="40" autocomplete="off" aria-describedby="owner-hint"><p class="hint" id="owner-hint">Use a made-up name for this demo.</p></div><div class="field"><span class="field-label" id="password-label">Password</span><div class="mock-password" role="img" aria-labelledby="password-label password-hint"><span aria-hidden="true">••••••••••••</span><span class="badge">Demo only</span></div><p class="hint" id="password-hint">A pretend password is supplied. This preview cannot accept a real one.</p></div>${state.account ? note("Demo owner created.", "", "", "check") : ""}${footer(state.account ? "Save name and continue" : "Create demo owner account", "account")}`;
+    return `${intro("YOUR ACCOUNT", "What should I call you?", "")}<div class="field"><label class="sr-only" for="owner-name">What should I call you?</label><input id="owner-name" data-field="name" value="${esc(state.name)}" maxlength="40" autocomplete="off"></div><div class="field"><span class="field-label" id="password-label">Password</span><div class="mock-password" role="img" aria-labelledby="password-label"><span aria-hidden="true">••••••••••••</span></div></div>${state.account ? note("Account created.", "", "", "check") : ""}${footer(state.account ? "Save name and continue" : "Create account", "account")}`;
   }
 
   function cityResults(query = "") {
@@ -1499,7 +1489,7 @@
               `<button type="button" class="city-result" data-city="${c.id}" aria-pressed="${state.cityId === c.id}"><span><strong>${esc(c.name)}</strong><small>${esc(c.region)}</small></span><span aria-hidden="true">${state.cityId === c.id ? "✓" : "→"}</span></button>`
           )
           .join("")
-      : '<p class="hint" role="status">No sample city found. Try London, New York, Seattle or Sydney.</p>';
+      : '<p class="hint" role="status">No cities found. Try another search.</p>';
   }
   function localTimeLabel(zone) {
     try {
@@ -1516,7 +1506,7 @@
     if (state.personalPanel !== "location")
       return `${intro("A LITTLE ABOUT YOU", `Hi, ${esc(state.name || "Alex")}, I’m Moss. But you can change my name if you want. What would you like to call me?`, "")}<div class="field"><label class="sr-only" for="assistant-name">Your assistant’s name</label><input id="assistant-name" data-field="assistant" value="${esc(state.assistant)}" maxlength="40" autocomplete="off"></div>${footer("Continue", "personal-location")}`;
     const zones = [...new Set([...CITIES.map((c) => c.timezone), "Etc/UTC"])];
-    return `${intro("YOUR DAY", "Where does your day begin?", "Find your city for weather and local time.")}<div class="field search-field"><label for="city">Find your city</label><input type="search" id="city" data-city-search value="${esc(state.cityQuery || "")}" placeholder="Search a city" autocomplete="off" maxlength="60" aria-describedby="city-hint"><p class="hint" id="city-hint">Sample cities only. No device location is requested.</p></div><div class="city-results" id="city-results" aria-label="Sample city results">${cityResults(state.cityQuery || "")}</div><p class="location-summary" id="location-summary" role="status">${state.city ? `${esc(state.city)} · Weather in ${state.units === "celsius" ? "°C" : "°F"} · ${esc(state.timezone)} · ${esc(localTimeLabel(state.timezone))}${state.timezoneSource === "manual" ? " (manual)" : ""}` : `${esc(state.timezone)} · ${state.timezoneSource === "manual" ? "Manual time zone" : "Sample time zone"}`}</p>${help("Time zone & weather units", `<div class="field"><label for="timezone">Time zone override</label><select id="timezone" data-field="timezone">${!zones.includes(state.timezone) ? `<option selected value="${esc(state.timezone)}">${esc(state.timezone)}</option>` : ""}${zones.map((z) => `<option value="${z}" ${state.timezone === z ? "selected" : ""}>${z.replaceAll("_", " ")}</option>`).join("")}</select><p class="hint">${state.timezoneSource === "manual" ? "Your manual choice stays when you change cities." : state.cityId ? "Set from your chosen city. You can override it." : "Sample time zone until you choose a city."}</p>${state.timezoneSource === "manual" && state.cityId ? button("Use city time zone", "city-timezone", "quiet") : ""}</div><div class="field"><label for="units">Weather units</label><select id="units" data-field="units"><option value="fahrenheit" ${state.units !== "celsius" ? "selected" : ""}>Fahrenheit · °F</option><option value="celsius" ${state.units === "celsius" ? "selected" : ""}>Celsius · °C</option></select></div>`)}${footer("Continue", "personal", { skip: true })}`;
+    return `${intro("YOUR DAY", "Where does your day begin?", "Find your city for weather and local time.")}<div class="field search-field"><label for="city">Find your city</label><input type="search" id="city" data-city-search value="${esc(state.cityQuery || "")}" placeholder="Search a city" autocomplete="off" maxlength="60"></div><div class="city-results" id="city-results" aria-label="City results">${cityResults(state.cityQuery || "")}</div><p class="location-summary" id="location-summary" role="status">${state.city ? `${esc(state.city)} · Weather in ${state.units === "celsius" ? "°C" : "°F"} · ${esc(state.timezone)} · ${esc(localTimeLabel(state.timezone))}${state.timezoneSource === "manual" ? " (manual)" : ""}` : `${esc(state.timezone)} · ${state.timezoneSource === "manual" ? "Manual time zone" : "Time zone"}`}</p>${help("Time zone & weather units", `<div class="field"><label for="timezone">Time zone override</label><select id="timezone" data-field="timezone">${!zones.includes(state.timezone) ? `<option selected value="${esc(state.timezone)}">${esc(state.timezone)}</option>` : ""}${zones.map((z) => `<option value="${z}" ${state.timezone === z ? "selected" : ""}>${z.replaceAll("_", " ")}</option>`).join("")}</select><p class="hint">${state.timezoneSource === "manual" ? "Your manual choice stays when you change cities." : state.cityId ? "Set from your chosen city. You can override it." : "Time zone until you choose a city."}</p>${state.timezoneSource === "manual" && state.cityId ? button("Use city time zone", "city-timezone", "quiet") : ""}</div><div class="field"><label for="units">Weather units</label><select id="units" data-field="units"><option value="fahrenheit" ${state.units !== "celsius" ? "selected" : ""}>Fahrenheit · °F</option><option value="celsius" ${state.units === "celsius" ? "selected" : ""}>Celsius · °C</option></select></div>`)}${footer("Continue", "personal", { skip: true })}`;
   }
 
   const providerNames = {
@@ -1535,7 +1525,7 @@
       name,
       chat: true,
       method: state.aiMethod,
-      model: state.model || "Demo chat model"
+      model: state.model || "Chat model"
     };
     state.providers = [...(state.providers || []).filter((p) => p.id !== entry.id), entry];
   }
@@ -1582,24 +1572,19 @@
       const status = registryStatus(entry),
         support = ACP_SUPPORT[entry.id],
         provider = Object.keys(providerRegistry).find((k) => providerRegistry[k] === entry.id);
-      return `${intro("ACP AGENT", esc(entry.name), esc(entry.description))}${note(status.label, status.kind === "supported" ? `Moss uses tested adapter ${esc(support.testedVersion)}. Installation, sign-in and model availability still need a check.` : status.kind === "platform" ? `No binary is listed for the demo runtime ${esc(state.runtimeTarget)}.` : "A registry listing does not establish a supported Moss chat route.", status.kind === "supported" ? "" : "warn")}<p class="hint">Registry version ${esc(entry.version)} · discovery only. Selecting this entry never upgrades Moss.</p>${entry.id === "opencode" ? '<p class="hint">OpenCode account-login reuse remains unverified.</p>' : ""}${entry.id === "gemini" || entry.id === "antigravity-acp" ? '<p class="hint">Gemini CLI and Antigravity are separate entries. Neither is verified as a ready Moss chat path.</p>' : ""}<div class="registry-links">${entry.website ? `<span>Official project reference in attribution</span>` : ""}${entry.license ? `<span>License: ${esc(entry.license)}</span>` : ""}</div>${footer(status.kind === "supported" ? "Use tested route · demo" : "Browse other agents", status.kind === "supported" ? "registry-use" : "registry-back", { secondary: button("Featured providers", "registry-close", "quiet"), extra: provider ? "" : status.kind === "supported" ? "disabled" : "" })}`;
+      return `${intro("ACP AGENT", esc(entry.name), esc(entry.description))}${note(status.label, status.kind === "supported" ? `Adapter ${esc(support.testedVersion)} · sign-in and model check required.` : status.kind === "platform" ? `Not available for ${esc(state.runtimeTarget)}.` : "Chat is not available with this agent yet.", status.kind === "supported" ? "" : "warn")}<p class="hint">Version ${esc(entry.version)}</p>${entry.id === "opencode" ? '<p class="hint">OpenCode account-login reuse remains unverified.</p>' : ""}${entry.id === "gemini" || entry.id === "antigravity-acp" ? '<p class="hint">Gemini CLI and Antigravity are separate entries. Neither is verified as a ready Moss chat path.</p>' : ""}<div class="registry-links">${entry.website ? `<span>Official project reference in attribution</span>` : ""}${entry.license ? `<span>License: ${esc(entry.license)}</span>` : ""}</div>${footer(status.kind === "supported" ? "Connect provider" : "Browse other agents", status.kind === "supported" ? "registry-use" : "registry-back", { secondary: button("Featured providers", "registry-close", "quiet"), extra: provider ? "" : status.kind === "supported" ? "disabled" : "" })}`;
     }
-    return `${intro("ACP DISCOVERY", "Find an agent.", "Registry entries are discovery, not a promise of Moss compatibility.")}<div class="field search-field"><label class="sr-only" for="agent-search">Search all ACP agents</label><input type="search" id="agent-search" data-field="registryQuery" value="${esc(state.registryQuery || "")}" placeholder="Search agents" autocomplete="off" maxlength="100"></div><p class="hint">${ACP_REGISTRY.length} agents · pinned ${esc(ACP_SOURCE.retrievedAt.slice(0, 10))} · runtime ${esc(state.runtimeTarget)}</p><div id="registry-results" class="registry-results">${registryRows()}</div><p class="hint"><a href="provenance.json">Snapshot sources and capability limits</a></p>${footer("Back to featured", "registry-close", { back: false })}`;
+    return `${intro("ACP DISCOVERY", "Find an agent.", "Find a provider that works with Moss.")}<div class="field search-field"><label class="sr-only" for="agent-search">Search all ACP agents</label><input type="search" id="agent-search" data-field="registryQuery" value="${esc(state.registryQuery || "")}" placeholder="Search agents" autocomplete="off" maxlength="100"></div><p class="hint">${ACP_REGISTRY.length} agents · runtime ${esc(state.runtimeTarget)}</p><div id="registry-results" class="registry-results">${registryRows()}</div>${footer("Back to featured", "registry-close", { back: false })}`;
   }
   function ai() {
     if (state.registryOpen) return registryView();
     const local = state.aiMethod === "local",
       name = providerNames[state.provider] || "Claude";
     let panel = "",
-      label = local ? "Explore local setup · demo" : `Connect ${name} · demo`,
+      label = local ? "Set up local model" : `Connect ${name}`,
       action = "ai-connect";
     if (state.ai === "connected") {
-      panel = note(
-        `${name} is ready in this demo.`,
-        "Model capability verified only in the simulation.",
-        "",
-        "check"
-      );
+      panel = note(`${name} is ready.`, "", "", "check");
       label = "Continue";
       action = "next";
     } else if (state.ai === "no-chat") {
@@ -1613,8 +1598,8 @@
     } else if (state.ai === "awaiting") {
       panel = local
         ? note(
-            "Proposed local chat setup.",
-            "A compatible local endpoint through OpenCode, or a separately implemented Ollama route, needs runtime proof. Inside Docker, localhost means the container. No endpoint is contacted.",
+            "Connect a local model.",
+            "Use an endpoint reachable from the Moss host. Inside Docker, localhost means the container.",
             "info",
             "clock"
           )
@@ -1623,17 +1608,17 @@
               ? "Check OpenCode setup."
               : `Waiting for ${name} sign-in.`,
             state.provider === "opencode"
-              ? "The tested adapter exists; account-login reuse is unverified. The demo supplies model readiness."
-              : "The real authorization opens your system browser. The demo supplies installed-adapter and sign-in checks.",
+              ? "Check your provider account and model."
+              : "Finish signing in, then return here.",
             "info",
             "clock"
           );
-      panel += button("Cancel demo setup", "ai-cancel", "quiet");
+      panel += button("Cancel", "ai-cancel", "quiet");
       label = local
-        ? "Simulate proposed local readiness"
+        ? "Check connection"
         : state.provider === "opencode"
-          ? "Simulate verified model"
-          : "Simulate approved sign-in";
+          ? "Check model"
+          : "Check sign-in";
       action = "ai-approved";
     } else if (state.ai === "failed") {
       panel = note(
@@ -1641,7 +1626,7 @@
         "Your other providers are kept. Try again or continue later.",
         "error"
       );
-      label = "Retry demo connection";
+      label = "Try again";
     } else if (state.ai === "integration-needed") {
       panel = note(
         "This saved provider needs integration review.",
@@ -1656,21 +1641,20 @@
         "We haven’t treated it as an empty list.",
         "error"
       );
-      label = "Reload demo catalog";
+      label = "Try again";
       action = "ai-reload";
     } else if (local)
-      panel =
-        '<p class="hint local-capability">Ollama or a compatible local endpoint. Chat is proposed work, not verified current capability.</p>';
+      panel = '<p class="hint local-capability">Ollama or a compatible local endpoint.</p>';
     const chooser = `<div class="choice-grid provider-grid" aria-label="Featured AI providers">${Object.entries(
       providerNames
     )
       .map(
         ([id, n]) =>
-          `<button type="button" class="choice provider-choice" aria-pressed="${state.provider === id}" data-provider="${id}"><span class="choice-icon provider-logo" aria-hidden="true"><img src="assets/providers/${id === "codex" ? "openai" : id === "local" ? "ollama" : id}.svg" alt="" width="30" height="30"></span><strong>${n}</strong>${id === "local" ? "<small>Proposed chat path</small>" : ""}</button>`
+          `<button type="button" class="choice provider-choice" aria-pressed="${state.provider === id}" data-provider="${id}"><span class="choice-icon provider-logo" aria-hidden="true"><img src="assets/providers/${id === "codex" ? "openai" : id === "local" ? "ollama" : id}.svg" alt="" width="30" height="30"></span><strong>${n}</strong>${id === "local" ? "" : ""}</button>`
       )
       .join("")}</div>`;
     const savedList = state.providers.length
-      ? `<p class="provider-summary">Saved in this demo: ${state.providers.map((p) => esc(p.name) + (p.chat ? "" : " · capability unverified")).join(", ")}</p>`
+      ? `<p class="provider-summary">Connected: ${state.providers.map((p) => esc(p.name) + (p.chat ? "" : " · capability unverified")).join(", ")}</p>`
       : "";
     return `${intro("AI ASSISTANCE", `Give ${esc(state.assistant || "Moss")} a little brainpower.`, "Choose a featured provider, or explore the agent registry.")}${["connected", "awaiting", "no-chat"].includes(state.ai) ? help("Choose another provider", chooser) : chooser}${button("Browse all ACP agents", "registry-open", "quiet")}${savedList}${state.savedAi && state.ai !== "connected" ? `<p class="saved-draft">Your saved ${esc(state.savedAi.provider)} connection remains ready until another is verified.</p>` : ""}${panel}${footer(label, action, { skip: state.ai !== "connected", secondary: state.ai === "connected" ? button("Add another AI provider", "ai-add", "quiet") : "" })}`;
   }
@@ -1688,8 +1672,8 @@
     const choices = `<div class="notes-choice"><button class="choice" aria-pressed="${state.notesChoice === "existing"}" data-notes-choice="existing"><span class="choice-icon">${icon("folder")}</span><span><strong>Use my existing notes</strong><small>Obsidian or Markdown · read & write</small></span><span class="choice-check" aria-hidden="true">${state.notesChoice === "existing" ? "✓" : ""}</span></button><button class="choice" aria-pressed="${state.notesChoice === "managed"}" data-notes-choice="managed"><span class="choice-icon">${icon("note")}</span><span><strong>Start a Moss folder</strong><small>A private place for your notes</small></span><span class="choice-check" aria-hidden="true">${state.notesChoice === "managed" ? "✓" : ""}</span></button></div>`;
     if (state.notes === "ready") {
       area = note(
-        "Your notes folder is ready in this demo.",
-        `${esc(state.notesRoot || "Personal vault")} · simulated read-and-write check passed.`,
+        "Your notes folder is ready.",
+        `${esc(state.notesRoot || "Personal vault")} · Read & write`,
         "",
         "check"
       );
@@ -1706,7 +1690,7 @@
       action = "notes-host";
     } else if (state.notes === "browse") {
       area = `<p class="hint">Choose an existing folder available to Moss. Your notes stay in your current app.</p><div class="tree"><button class="folder-row ${state.notesRoot === "Personal vault" ? "selected" : ""}" data-root="Personal vault">${icon("folder")}<span>Personal vault<small>Markdown + Obsidian</small></span><span class="badge">Read & write</span></button><button class="folder-row ${state.notesRoot === "Reference archive" ? "selected" : ""}" data-root="Reference archive">${icon("folder")}<span>Reference archive<small>Markdown</small></span><span class="badge warn">Read only</span></button></div><button class="text-button" data-action="notes-host">Connect a folder not listed</button>`;
-      label = "Use this demo folder";
+      label = "Use this folder";
       action = "notes-use";
       extra = state.notesRoot ? "" : "disabled";
     } else if (state.notes === "read-only") {
@@ -1724,28 +1708,28 @@
       );
       label = "Retry folder list";
     } else if (state.notesChoice === "managed") {
-      label = "Create my demo notes folder";
+      label = "Create my notes folder";
       action = "notes-managed";
     }
     const initial = ["idle", "read-only", "browse-error"].includes(state.notes);
-    return `${intro("YOUR NOTES", state.notes === "browse" ? "Where are your notes?" : "Your notes, already at home.", "Keep your notes in the apps you already use. Use this to give Moss more context about you if you have it.")}${initial ? choices : help("Change notes source", choices)}${state.savedNotes && state.notes !== "ready" ? `<p class="saved-draft">${esc(state.savedNotes.root)} remains the saved source until a replacement is verified.</p>` : ""}${area}${help("What can Moss access?", "<p>Only your configured folder. Existing notes stay in place and support reading and writing. Selecting a source doesn’t authorize arbitrary edits or deletion.</p><p>The picker lists server-mounted folders, not files on this browser’s device. A Moss-managed folder is private to this account on the Moss host. The demo doesn’t access any files.</p>")}${footer(label, action, { skip: true, extra })}`;
+    return `${intro("YOUR NOTES", state.notes === "browse" ? "Where are your notes?" : "Your notes, already at home.", "Keep your notes in the apps you already use. Use this to give Moss more context about you if you have it.")}${initial ? choices : help("Change notes source", choices)}${state.savedNotes && state.notes !== "ready" ? `<p class="saved-draft">${esc(state.savedNotes.root)} remains the saved source until a replacement is verified.</p>` : ""}${area}${help("What can Moss access?", "<p>Only your configured folder. Existing notes stay in place and support reading and writing. Selecting a source doesn’t authorize arbitrary edits or deletion.</p><p>The picker lists server-mounted folders, not files on this browser’s device. A Moss-managed folder is private to this account on the Moss host.</p>")}${footer(label, action, { skip: true, extra })}`;
   }
   function notesHost() {
     const panel =
       state.notes === "recreate-failed"
         ? note(
             "Moss hasn’t come back after the host step.",
-            "Check the instance on the Moss computer, then retry. This is a simulated recreate failure.",
+            "Check the instance on the Moss computer, then retry.",
             "error"
           )
         : state.notes === "verify-failed"
           ? note(
               "The folder isn’t ready yet.",
-              "The simulated write check failed. Check its mount and permissions, then retry.",
+              "The write check failed. Check its mount and permissions, then retry.",
               "error"
             )
           : "";
-    return `${intro("YOUR NOTES · CONNECT A FOLDER", "Connect your existing folder.", "Your notes stay where they are. Moss gets access to this folder only.")}${panel}<ol class="host-steps"><li><strong>Find the folder on the Moss computer.</strong><p>It may be a different device from this browser.</p></li><li><strong>Make that folder available to Moss.</strong><p>A trusted host helper would add a scoped mount. This helper is proposed, not installed by this preview.</p></li><li><strong>Return and check access.</strong><p>Verify reading and writing before saving the connection.</p></li></ol>${help("Host setup details", "<p>An installed, trusted helper must verify the same owner and instance and preserve configuration, keys and data volumes. Never run a helper from an untrusted LAN page.</p><p>A Docker mount change requires container recreation; restart alone won’t apply it. A browser file picker cannot add the server mount. No secrets belong in commands or URLs.</p>")}<p class="hint">Demo only. No folder is opened and no command runs.</p><div class="contextual-actions">${button("Simulate restart & resume", "restart", "quiet")}${button("Continue without notes", "notes-later", "quiet")}</div>${footer(state.notes === "recreate-failed" ? "Retry simulated server & folder check" : state.notes === "verify-failed" ? "Retry simulated verification" : "Simulate host setup and return", "notes-verify")}`;
+    return `${intro("YOUR NOTES · CONNECT A FOLDER", "Connect your existing folder.", "Your notes stay where they are. Moss gets access to this folder only.")}${panel}<ol class="host-steps"><li><strong>Find the folder on the Moss computer.</strong><p>It may be a different device from this browser.</p></li><li><strong>Make that folder available to Moss.</strong><p>Connect only the folder you want Moss to use.</p></li><li><strong>Return and check access.</strong><p>Verify reading and writing before saving the connection.</p></li></ol>${help("Host setup details", "<p>An installed, trusted helper must verify the same owner and instance and preserve configuration, keys and data volumes. Never run a helper from an untrusted LAN page.</p><p>A Docker mount change requires container recreation; restart alone won’t apply it. A browser file picker cannot add the server mount. No secrets belong in commands or URLs.</p>")}<div class="contextual-actions">${button("Restart and resume", "restart", "quiet")}${button("Continue without notes", "notes-later", "quiet")}</div>${footer(state.notes === "recreate-failed" ? "Check server and folder again" : state.notes === "verify-failed" ? "Check folder again" : "Check folder", "notes-verify")}`;
   }
 
   const emailProviders = ["Google", "Yahoo", "Proton Bridge", "iCloud", "Fastmail"];
@@ -1753,19 +1737,17 @@
     const p = state.emailProvider || "Google";
     const info =
       p === "Google"
-        ? "Google currently needs your own Desktop OAuth app setup and a manual return-URL step. Requested scopes include Gmail modify and Calendar access. Review them in the real consent screen."
+        ? "Google currently needs your own Desktop OAuth app setup and a manual return-URL step. Requested scopes include Gmail modify and Calendar access. Review them before approving."
         : p === "Proton Bridge"
-          ? "Proton Bridge must be reachable from the Moss host. Localhost inside its container is not this browser’s computer. Use the credentials shown by Bridge only in the real, protected setup."
-          : `${p} uses its supported account or app-password setup. The real flow must use a verified secure connection.`;
+          ? "Proton Bridge must be reachable from the Moss host. Localhost inside its container is not this browser’s computer. Use the credentials shown by Bridge over a protected connection."
+          : `${p} uses its supported account or app-password setup. Use a protected connection.`;
     let panel = "",
-      label = state.email === "failed" ? "Retry demo email connection" : "Connect email · demo",
+      label = state.email === "failed" ? "Try again" : "Connect email",
       action = "email-connect";
     if (state.email === "connected") {
       panel = note(
-        "Your demo inbox is connected.",
-        state.emailSync === "ready"
-          ? "Simulated sync ready. No actual mail was read."
-          : "Initial sync pending. No actual mail was read.",
+        "Your inbox is connected.",
+        state.emailSync === "ready" ? "Sync ready." : "Initial sync pending.",
         "",
         "check"
       );
@@ -1773,9 +1755,9 @@
       action = "next";
     } else if (state.email === "awaiting") {
       panel =
-        note("Waiting for the demo sign-in.", "No real provider was opened.", "info", "clock") +
+        note("Waiting for sign-in.", "Finish signing in, then return here.", "info", "clock") +
         button("Cancel", "email-cancel", "quiet");
-      label = "Simulate approved access";
+      label = "Check connection";
       action = "email-approved";
     } else if (state.email === "unavailable")
       panel = note(
@@ -1789,7 +1771,7 @@
         "Your other choices are still saved.",
         "error"
       );
-    return `${intro("EMAIL · OPTIONAL", "Bring your inbox along.", "Connect email for a little more context in your day.")}<div class="field"><label for="email-provider">Email provider</label><select id="email-provider" data-field="emailProvider">${emailProviders.map((x) => `<option ${p === x ? "selected" : ""}>${x}</option>`).join("")}</select><p class="hint permission-summary">${p === "Google" ? "Requested access: Gmail modify and Calendar." : "Review the requested mailbox access before approving."} Sending email is a separate action.</p></div>${state.savedEmail && state.email !== "connected" ? `<p class="saved-draft">${esc(state.savedEmail)} remains connected until a replacement is verified.</p>` : ""}${panel}${help("Setup and permissions", `<p>${info}</p><p>Review the requested access before authorizing. Connecting email does not grant permission to send messages. This preview simulates every step and never accepts credentials.</p>`)}${footer(label, action, { skip: state.email !== "connected" })}`;
+    return `${intro("EMAIL · OPTIONAL", "Bring your inbox along.", "Connect email for a little more context in your day.")}<div class="field"><label for="email-provider">Email provider</label><select id="email-provider" data-field="emailProvider">${emailProviders.map((x) => `<option ${p === x ? "selected" : ""}>${x}</option>`).join("")}</select><p class="hint permission-summary">${p === "Google" ? "Requested access: Gmail modify and Calendar." : "Review the requested mailbox access before approving."} Sending email is a separate action.</p></div>${state.savedEmail && state.email !== "connected" ? `<p class="saved-draft">${esc(state.savedEmail)} remains connected until a replacement is verified.</p>` : ""}${panel}${help("Setup and permissions", `<p>${info}</p><p>Review the requested access before authorizing. Connecting email does not grant permission to send messages.</p>`)}${footer(label, action, { skip: state.email !== "connected" })}`;
   }
 
   const topics = [
@@ -1804,10 +1786,10 @@
   ];
   function news() {
     if (fault === "news-read")
-      return `${intro("NEWS · OPTIONAL", "Your news choices are still here.", "We couldn’t refresh the sample topic catalog.")}${note("Catalog status is unverified.", `Saved topics: ${state.news.length ? esc(state.news.join(", ")) : "none selected before this attempt"}. A failed read has not cleared them.`, "error")}${footer("Retry demo catalog", "clear-fault", { skip: true })}`;
+      return `${intro("NEWS · OPTIONAL", "Your news choices are still here.", "We couldn’t load topics.")}${note("Catalog status is unverified.", `Saved topics: ${state.news.length ? esc(state.news.join(", ")) : "none selected before this attempt"}. A failed read has not cleared them.`, "error")}${footer("Try again", "clear-fault", { skip: true })}`;
     if (state.topicEditing)
-      return `${intro("NEWS · YOUR OWN TOPIC", "What would you like to follow?", "A subject, a place, or something you’re curious about.")}<div class="field"><label for="topic-label">Topic</label><input id="topic-label" data-field="topicLabel" value="${esc(state.topicLabel || "")}" maxlength="80" autocomplete="off" placeholder="For example, urban gardening"></div><div class="field"><label for="topic-guidance">What should we include or leave out? <span class="optional-label">Optional</span></label><textarea id="topic-guidance" data-field="topicGuidance" maxlength="1000" rows="3">${esc(state.topicGuidance || "")}</textarea></div>${!newsTopicsReady(state) ? note("Topic setup needs a check.", "Custom topics need both a structured-output AI model and working web search. Chat alone doesn’t prove those are ready.", "warn") : '<p class="hint">AI and web-search readiness are simulated. No search or topic check runs here.</p>'}${footer(newsTopicsReady(state) ? "Add demo topic" : "Check topic setup · demo", newsTopicsReady(state) ? "topic-add" : "news-check", { secondary: button("Cancel", "topic-cancel", "quiet"), back: false })}`;
-    return `${intro("NEWS · OPTIONAL", "What would you like to read?", "Pick a few topics, or add one of your own.")}<div class="topic-list news-topics" aria-label="News topics">${topics.map(([title]) => `<button class="topic" type="button" aria-pressed="${state.news.includes(title)}" data-topic="${title}"><strong>${title}</strong><span class="select-check" aria-hidden="true">✓</span></button>`).join("")}</div>${state.newsCustom.length ? `<div class="custom-topics">${state.newsCustom.map((t) => `<div class="custom-topic"><p class="custom-topic-copy" data-topic-id="${esc(t.id)}"><strong>${esc(t.label)}</strong>${t.guidance ? `<span>${esc(t.guidance)}</span>` : ""}</p><button class="text-button" data-remove-topic="${esc(t.id)}" aria-label="Remove custom topic">Remove</button></div>`).join("")}</div>` : ""}${button("Add another topic", "topic-open", "quiet", state.newsCustom.length >= 10 ? "disabled" : "")}<p class="preview-line">${state.news.length} suggested topics · ${state.newsCustom.length}/10 custom topics</p>${help("What happens if I skip?", "<p>Default sources stay on: BBC News, The Guardian, AP News, and NPR. Refine sources later in News. This prototype doesn’t fetch stories.</p>")}${footer("Continue", "next", { skip: true })}`;
+      return `${intro("NEWS · YOUR OWN TOPIC", "What would you like to follow?", "A subject, a place, or something you’re curious about.")}<div class="field"><label for="topic-label">Topic</label><input id="topic-label" data-field="topicLabel" value="${esc(state.topicLabel || "")}" maxlength="80" autocomplete="off" placeholder="For example, urban gardening"></div><div class="field"><label for="topic-guidance">What should we include or leave out? <span class="optional-label">Optional</span></label><textarea id="topic-guidance" data-field="topicGuidance" maxlength="1000" rows="3">${esc(state.topicGuidance || "")}</textarea></div>${!newsTopicsReady(state) ? note("Topic setup needs a check.", "Custom topics need a structured-output AI model and web search. Connect both to continue.", "warn") : ""}${footer(newsTopicsReady(state) ? "Add topic" : "Check topic setup", newsTopicsReady(state) ? "topic-add" : "news-check", { secondary: button("Cancel", "topic-cancel", "quiet"), back: false })}`;
+    return `${intro("NEWS · OPTIONAL", "What would you like to read?", "Pick a few topics, or add one of your own.")}<div class="topic-list news-topics" aria-label="News topics">${topics.map(([title]) => `<button class="topic" type="button" aria-pressed="${state.news.includes(title)}" data-topic="${title}"><strong>${title}</strong><span class="select-check" aria-hidden="true">✓</span></button>`).join("")}</div>${state.newsCustom.length ? `<div class="custom-topics">${state.newsCustom.map((t) => `<div class="custom-topic"><p class="custom-topic-copy" data-topic-id="${esc(t.id)}"><strong>${esc(t.label)}</strong>${t.guidance ? `<span>${esc(t.guidance)}</span>` : ""}</p><button class="text-button" data-remove-topic="${esc(t.id)}" aria-label="Remove custom topic">Remove</button></div>`).join("")}</div>` : ""}${button("Add another topic", "topic-open", "quiet", state.newsCustom.length >= 10 ? "disabled" : "")}<p class="preview-line">${state.news.length} suggested topics · ${state.newsCustom.length}/10 custom topics</p>${help("What happens if I skip?", "<p>Default sources stay on: BBC News, The Guardian, AP News, and NPR. Refine sources later in News.</p>")}${footer("Continue", "next", { skip: true })}`;
   }
 
   const teams = [
@@ -1820,10 +1802,10 @@
   ];
   function sports() {
     if (fault === "sports-read")
-      return `${intro("SPORTS · OPTIONAL", "Your teams are still here.", "We couldn’t refresh the sample team catalog.")}${note("Team catalog status is unverified.", `Saved teams: ${state.sports.length ? esc(state.sports.join(", ")) : "none selected before this attempt"}. Retry without replacing saved follows.`, "error")}${footer("Retry demo catalog", "clear-fault", { skip: true })}`;
+      return `${intro("SPORTS · OPTIONAL", "Your teams are still here.", "We couldn’t load teams.")}${note("Team catalog status is unverified.", `Saved teams: ${state.sports.length ? esc(state.sports.join(", ")) : "none selected before this attempt"}. Retry without replacing saved follows.`, "error")}${footer("Try again", "clear-fault", { skip: true })}`;
     const query = state.teamQuery || "";
     const shown = teams.filter((x) => x.join(" ").toLowerCase().includes(query.toLowerCase()));
-    return `${intro("SPORTS · OPTIONAL", "Who do you follow?", "Keep a place for the teams you care about.")}<div class="field search-field"><label class="sr-only" for="team-search">Find a team</label><input type="search" id="team-search" data-field="teamQuery" value="${esc(query)}" placeholder="Find a team" autocomplete="off" maxlength="50"></div><div class="topic-list team-list" id="team-results" aria-label="Sports teams">${teamResults(shown)}</div><p class="preview-line" id="team-count">${state.sports.length} teams selected</p>${help("About this team list", "<p>This small sample catalog shows league context. No live scores or team data are requested.</p>")}${footer("Review my setup", "next", { skip: true })}`;
+    return `${intro("SPORTS · OPTIONAL", "Who do you follow?", "Keep a place for the teams you care about.")}<div class="field search-field"><label class="sr-only" for="team-search">Find a team</label><input type="search" id="team-search" data-field="teamQuery" value="${esc(query)}" placeholder="Find a team" autocomplete="off" maxlength="50"></div><div class="topic-list team-list" id="team-results" aria-label="Sports teams">${teamResults(shown)}</div><p class="preview-line" id="team-count">${state.sports.length} teams selected</p>${footer("Review my setup", "next", { skip: true })}`;
   }
   function teamResults(items) {
     return items.length
@@ -1833,10 +1815,10 @@
               `<button type="button" class="topic" aria-pressed="${state.sports.includes(title)}" data-team="${title}"><span><strong>${title}</strong><small>${league}</small></span><span class="select-check" aria-hidden="true">✓</span></button>`
           )
           .join("")
-      : '<p class="muted" role="status">No demo teams found. Try “Arsenal”, “NBA”, or “Cowboys”.</p>';
+      : '<p class="muted" role="status">No teams found. Try another search.</p>';
   }
   function setupSummary() {
-    return `<p class="deployment-summary">Moss running · ${esc(routeNames[state.setupRoute] || "Existing demo")} · ${state.browserConnection === "http" ? "HTTP browser connection (unencrypted)" : "protected browser connection"}</p><div class="profile-summary"><strong>${esc(state.name || "Alex")} + ${esc(state.assistant || "Moss")}</strong><span>${esc(weatherLabel(state))} · Weather ${state.units === "celsius" ? "°C" : "°F"}</span><span>${esc(state.timezone)} · ${state.timezoneSource === "manual" ? "manual time zone" : state.cityId ? "city time zone" : "sample time zone"}</span><button class="text-button" data-step="2">Edit assistant & location</button></div>${accessRecap()}${summary(
+    return `<p class="deployment-summary">Moss running · ${esc(routeNames[state.setupRoute] || "Existing Moss")} · ${state.browserConnection === "http" ? "HTTP browser connection (unencrypted)" : "protected browser connection"}</p><div class="profile-summary"><strong>${esc(state.name || "Alex")} + ${esc(state.assistant || "Moss")}</strong><span>${esc(weatherLabel(state))} · Weather ${state.units === "celsius" ? "°C" : "°F"}</span><span>${esc(state.timezone)} · ${state.timezoneSource === "manual" ? "manual time zone" : state.cityId ? "city time zone" : "time zone"}</span><button class="text-button" data-step="2">Edit assistant & location</button></div>${accessRecap()}${summary(
       state
     )
       .map(
@@ -1851,8 +1833,7 @@
     "lan-http": "Home network (HTTP, unencrypted)",
     https: "HTTPS"
   };
-  const accessBadge = () =>
-    '<p class="revision-note">Revision proposal · visual review pending</p>';
+  const accessBadge = () => "";
   function accessRecap() {
     return `<div class="summary-row access-recap"><div><strong>Access</strong><p>${esc(accessNames[state.accessMode] || accessNames.local)}</p>${state.accessStatus === "pending" || state.accessStatus === "failed" ? "<p>Requested change is not verified; previous access is kept.</p>" : ""}</div><button class="text-button" data-action="access-open">Use Moss from other devices</button></div>`;
   }
@@ -1870,14 +1851,18 @@
     const mode = state.accessDraft || "local",
       current = state.accessMode || "local";
     if (state.accessPanel === "choose")
-      return `${accessBadge()}${intro("ACCESS · OPTIONAL", "Use Moss from other devices", "Choose how you’ll open Moss on your other devices.")}<div class="route-choices">${[
+      return `${intro("ACCESS · OPTIONAL", "Use Moss from other devices", "Choose how you’ll open Moss on your other devices.")}<div class="route-choices">${[
         ["local", "Keep local", "Continue on this computer."],
         [
           "lan-http",
           "Home network (HTTP, unencrypted)",
-          "Use a phone or computer browser on your network."
+          "Other devices on your home network can connect. This connection isn’t encrypted."
         ],
-        ["https", "HTTPS", "Recommended for other devices and required for a remote companion."]
+        [
+          "https",
+          "HTTPS",
+          "Recommended for other devices. Required for connecting the Mac companion."
+        ]
       ]
         .map(
           ([id, name, body]) =>
@@ -1885,10 +1870,10 @@
         )
         .join(
           ""
-        )}</div>${mode === "lan-http" ? note("HTTP is unencrypted.", "People or software on this network may read or alter your credentials and content. Some device features need HTTPS.", "warn") : ""}${mode === "https" ? '<p class="hint">Choose a trusted HTTPS route when you’re ready. A domain, certificate setup, or Tailscale is not required to finish onboarding.</p>' : ""}<p class="hint">Current access: ${esc(accessNames[current])}. Existing deployments keep this unless you explicitly change it. A remote companion requires HTTPS; an ordinary browser can use the disclosed LAN HTTP mode.</p>${footer(mode === current ? "Continue" : "Review access change", "access-review")}`;
+        )}</div>${mode === "lan-http" ? note("HTTP is unencrypted.", "Other people or software on this network may be able to read or change your passwords and content. Some device features need HTTPS.", "warn") : ""}<p class="hint">Current access: ${esc(accessNames[current])}.${state.setupRoute === "legacy" ? " Your existing access stays as it is until you choose a change." : ""}</p>${footer(mode === current ? "Continue" : "Review access change", "access-review")}`;
     if (state.accessPanel === "plan")
-      return `${accessBadge()}${intro("ACCESS · REVIEW HOST PLAN", "Review the access change.", "The real installer must show the exact host, interface, port, and resulting address before asking you to apply it.")}<div class="install-recap"><p><strong>${esc(accessNames[current])} → ${esc(accessNames[mode])}</strong></p><p>Host: &lt;chosen Moss host&gt;</p><p>Bind: ${mode === "local" ? "loopback only, port 3000" : mode === "lan-http" ? "&lt;selected home-network interface&gt;, port 3000" : "&lt;reviewed HTTPS proxy interface&gt;, port 443"}</p><p class="host-path">${mode === "local" ? "http://localhost:3000" : mode === "lan-http" ? "http://&lt;moss-host&gt;:3000" : "https://&lt;trusted-moss-address&gt;"}</p><p>First-owner claim: closed before widening access.</p></div>${note("Illustrative placeholders only.", "No host, address, port, firewall rule, certificate, or account is changed by this review.", "info")}<p class="hint">${mode === "https" ? "The host plan must verify certificate trust and the selected HTTPS route. No tunnel or network service is silently installed." : mode === "lan-http" ? "The reviewed host plan must warn before widening any interface or port. Remote companions remain unavailable over this HTTP address." : "Returning to local-only access may disconnect remote browsers or companions; the real host plan must explain this before applying."}</p>${footer("Simulate applying reviewed plan", "access-apply", { secondary: button("Keep current access", "access-cancel", "quiet") })}`;
-    return `${accessBadge()}${intro("ACCESS · CHECK CONNECTION", state.accessStatus === "failed" ? "The access check needs another try." : "Return through the chosen connection.", state.accessStatus === "failed" ? "The saved access mode has not been replaced. Check the same host and retry." : "Verify the same instance and owner before marking the new route ready.")}<div class="install-checks"><p>Saved checkpoint: same owner, instance, configuration, keys, and data.</p><p>Requested: ${esc(accessNames[mode])}</p><p>Previous verified access: ${esc(accessNames[current])}</p><p>${mode === "https" ? "Check HTTPS trust, host health, and same-owner session." : mode === "lan-http" ? "Check the reviewed LAN address and same-owner browser session. The connection remains unencrypted." : "Check the host-local route and same-owner session."}</p></div><p class="hint">A host-side change and connection check are required in the product. This tab only simulates their results. Get started never opens a port.</p>${footer("Simulate connection verified", "access-verify", { secondary: button("Simulate failed check", "access-fail", "quiet") })}`;
+      return `${intro("ACCESS", "Review the access change.", "Check where other devices will connect.")}<div class="install-recap"><p><strong>${esc(accessNames[current])} → ${esc(accessNames[mode])}</strong></p><p>Host: moss-host</p><p>Bind: ${mode === "local" ? "127.0.0.1:3000" : mode === "lan-http" ? "192.0.2.10:3000" : "192.0.2.10:443"}</p><p class="host-path">${mode === "local" ? "http://localhost:3000" : mode === "lan-http" ? "http://192.0.2.10:3000" : "https://moss.example"}</p></div><p class="hint">${mode === "https" ? "Use a trusted HTTPS certificate." : mode === "lan-http" ? "This allows browser access from your home network. The Mac companion requires HTTPS." : "Other browsers and companions will disconnect when you return to local-only access."}</p>${footer("Apply change", "access-apply", { secondary: button("Keep current access", "access-cancel", "quiet") })}`;
+    return `${intro("ACCESS · CHECK CONNECTION", state.accessStatus === "failed" ? "The access check needs another try." : "Return through the chosen connection.", state.accessStatus === "failed" ? "The saved access mode has not been replaced. Check the same host and retry." : "Open Moss at the new address and sign in to check the connection.")}<div class="install-checks"><p>Your account, settings and data are kept.</p><p>Requested: ${esc(accessNames[mode])}</p><p>Previous verified access: ${esc(accessNames[current])}</p><p>${mode === "https" ? "Check the certificate and sign in to the same Moss account." : mode === "lan-http" ? "Open the address on your home network and sign in. This connection is unencrypted." : "Open Moss on this computer and sign in."}</p></div>${footer("Check connection", "access-verify", {})}`;
   }
   function reviewAccess() {
     if (state.accessDraft === state.accessMode) {
@@ -1897,7 +1882,7 @@
       return;
     }
     if (!save()) {
-      error = "The checkpoint was not saved in this scenario. Retry before reviewing the change.";
+      error = "Your choices couldn’t be saved. Try again.";
       render();
       return;
     }
@@ -1908,7 +1893,7 @@
   function applyAccess() {
     if (state.accessPanel !== "plan" || !state.account || !installationReady(state)) return;
     if (!save()) {
-      error = "The checkpoint was not saved. No host change is assumed.";
+      error = "Your choices couldn’t be saved. Try again before applying this change.";
       render();
       return;
     }
@@ -1930,7 +1915,7 @@
     state.accessStatus = "idle";
     state.accessPanel = "";
     go(state.accessReturnStep || 8);
-    announce("Access check simulated. No real network settings changed.");
+    announce("Access updated.");
   }
 
   function ready() {
@@ -1959,7 +1944,7 @@
       formatted = "Your first day";
       hello = "Welcome";
     }
-    return `<main class="main today-welcome" id="main" tabindex="-1"><div class="content">${art("trail")}${intro(esc(formatted), `${hello}, ${esc(state.name || "Alex")}.`, "Make yourself at home.")}<div class="welcome-action">${button(`${aiReady(state) ? "Start a chat" : "Connect AI"} <span aria-hidden="true">→</span>`, "today-start")}</div>${help("Your setup", setupSummary() + `<p class="hint">${esc(weatherLabel(state))} · Live weather is not loaded in this demo.</p><p class="hint">No messages, note editor or live briefing are shown in this preview.</p>`)}</div></main>`;
+    return `<main class="main today-welcome" id="main" tabindex="-1"><div class="content">${art("trail")}${intro(esc(formatted), `${hello}, ${esc(state.name || "Alex")}.`, "Make yourself at home.")}<div class="welcome-action">${button(`${aiReady(state) ? "Start a chat" : "Connect AI"} <span aria-hidden="true">→</span>`, "today-start")}</div>${help("Your setup", setupSummary() + `<p class="hint">${esc(weatherLabel(state))}</p>`)}</div></main>`;
   }
 
   function resumeGate() {
@@ -1968,32 +1953,32 @@
         "This is a different Moss instance.",
         "Your saved setup belongs to another installation. We haven’t copied any settings here.",
         "Return to the original instance before continuing.",
-        "Simulate returning to the right instance"
+        "Return to your Moss"
       ],
       "signed-out": [
         "Welcome back. Sign in to continue.",
-        "The secure address has changed in this example. Sign back in to the same instance and account to resume your saved step.",
-        "No real credentials are requested. Your saved progress is checked after the demo session is restored.",
-        "Simulate same-owner sign-in"
+        "The secure address has changed. Sign back in to the same instance and account to resume your saved step.",
+        "",
+        "Sign in"
       ],
       "claim-expired": [
         "This setup invitation has expired.",
         "Start again from the trusted host setup to get a fresh invitation. Your instance is not opened for anyone else to claim.",
-        "The protected first-owner claim is a proposed product requirement. This demo never creates a real claim token.",
-        "Simulate a fresh host invitation"
+        "",
+        "Request a new invitation"
       ],
       "claim-used": [
         "This Moss already has an owner.",
         "This invitation has already been used. Sign in as the existing owner to continue, rather than making another owner account.",
-        "This is a simulated already-used claim. No ownership, session, or access is changed.",
-        "Simulate existing-owner sign-in"
+        "",
+        "Sign in"
       ]
     };
     const [title, body, help, label] = gates[state.resumeGate] || gates["signed-out"];
-    return `${intro("RESUMING YOUR SETUP", title, body)}${note("Demo access check", help, "info")}${button(label, "resume-gate", "secondary")}`;
+    return `${intro("RESUMING YOUR SETUP", title, body)}${note("Connection check", help, "info")}${button(label, "resume-gate", "secondary")}`;
   }
   function leave() {
-    return `${art("trail")}${intro("SEE YOU SOON", "Your place is kept.", "Your demo choices are kept in this tab. Refreshing resets them.")}<p class="quiet-status">Next up: ${esc(STEPS[state.step])}</p><div class="welcome-action">${button("Resume setup", "resume")}</div>${help("About saving", "<p>The real product needs durable, owner-specific progress. This review keeps choices in memory only until refresh.</p>")}`;
+    return `${art("trail")}${intro("SEE YOU SOON", "Your place is kept.", "Your progress is saved.")}<p class="quiet-status">Next up: ${esc(STEPS[state.step])}</p><div class="welcome-action">${button("Resume setup", "resume")}</div>`;
   }
   function render(focus = true) {
     const active = document.activeElement;
@@ -2021,9 +2006,9 @@
       state.transport === "secure" &&
       installationReady(state)
         ? today()
-        : `<div class="wizard ${state.step === 0 ? "welcome-stage" : ""}">${state.step > 0 && !exitMode ? rail() : ""}<main id="main" class="main" tabindex="-1"><div class="content">${state.transport !== "secure" ? connection() : state.resumeGate ? resumeGate() : exitMode ? leave() : state.step > 0 && !installationReady(state) ? welcome() : views[state.step]()}${error ? `<div class="status-note error" role="alert">${icon("info")}<div><strong>${error}</strong><div class="transport-actions">${button("Retry with a working connection", "clear-fault", "secondary")}</div></div></div>` : ""}${saveFailed ? '<p class="save-error" role="status">Latest demo changes are not saved</p>' : ""}</div></main></div>`;
+        : `<div class="wizard ${state.step === 0 ? "welcome-stage" : ""}">${state.step > 0 && !exitMode ? rail() : ""}<main id="main" class="main" tabindex="-1"><div class="content">${state.transport !== "secure" ? connection() : state.resumeGate ? resumeGate() : exitMode ? leave() : state.step > 0 && !installationReady(state) ? welcome() : views[state.step]()}${error ? `<div class="status-note error" role="alert">${icon("info")}<div><strong>${error}</strong><div class="transport-actions">${button("Try again", "clear-fault", "secondary")}</div></div></div>` : ""}${saveFailed ? '<p class="save-error" role="status">Latest changes are not saved</p>' : ""}</div></main></div>`;
     $("#app").innerHTML = body;
-    document.title = `${STEPS[state.step]} · Moss setup prototype`;
+    document.title = `${STEPS[state.step]} · Moss setup`;
     const brand = $(".brand-name");
     if (brand) brand.textContent = state.account ? state.assistant || "Moss" : "Moss";
     if (!focus) {
@@ -2267,14 +2252,12 @@
         break;
       case "owner-switch":
         state = { ...initialState(), name: "Jamie", step: 1 };
-        error =
-          "Demo owner changed. Previous-owner responses were discarded; no choices were copied into this owner.";
+        error = "You’ve switched accounts. Your setup belongs to this account.";
         break;
       case "navigation":
         state.step = 6;
         state.ai = "awaiting";
-        error =
-          "Demo navigation changed while sign-in was pending. The old result cannot move you away from News.";
+        error = "Sign-in is still pending. Your current step is kept.";
         break;
     }
     if (state.step > 0) {
@@ -2345,7 +2328,7 @@
         .map(([id, label]) => button(label, "scenario", "secondary", `data-scenario="${id}"`))
         .join(
           ""
-        )}</div></div><div class="review-group"><h3>Access revision proposal</h3><div class="review-buttons">${[
+        )}</div></div><div class="review-group"><h3>Access revision proposal</h3><p class="hint">Visual review of the revised screens is pending. All actions remain simulated.</p>${state.accessPanel === "verify" ? button("Show failed connection check", "review-access-fail", "secondary") : ""}<div class="review-buttons">${[
         ["access", "Use other devices"],
         ["access-http", "Home network disclosure"],
         ["access-https", "HTTPS choice"],
@@ -2366,7 +2349,7 @@
   function detail(title, body, actionLabel, action) {
     lastFocus = document.activeElement;
     $("#detail-dialog").innerHTML =
-      `<div class="dialog-head"><div><p class="eyebrow">DESIGN SIMULATION</p><h2 id="detail-title">${title}</h2></div><button class="icon-button" data-action="detail-close" aria-label="Close dialog">×</button></div><div class="muted">${body}</div><div class="transport-actions">${actionLabel ? button(actionLabel, action) : ""}${button("Close", "detail-close", "quiet")}</div>`;
+      `<div class="dialog-head"><div><h2 id="detail-title">${title}</h2></div><button class="icon-button" data-action="detail-close" aria-label="Close dialog">×</button></div><div class="muted">${body}</div><div class="transport-actions">${actionLabel ? button(actionLabel, action) : ""}${button("Close", "detail-close", "quiet")}</div>`;
     $("#detail-dialog").showModal();
   }
   function closeDetail() {
@@ -2402,6 +2385,10 @@
         break;
       case "access-verify":
         verifyAccess();
+        break;
+      case "review-access-fail":
+        closeReview();
+        dispatch("access-fail");
         break;
       case "access-fail":
         state.accessStatus = "failed";
@@ -2471,8 +2458,7 @@
           break;
         }
         if (state.transport !== "secure") {
-          error =
-            "This route is still unencrypted. Choose a simulated verified connection to continue.";
+          error = "This route is still unencrypted. Choose a protected connection to continue.";
           render();
         } else go(Math.max(0, state.step - 1));
         break;
@@ -2480,7 +2466,7 @@
         if (state.step === 2) {
           detail(
             "Keep this time zone for now?",
-            `<p class="location-summary">${esc(state.timezone)}. ${esc(weatherLabel(state))}.</p><p>You can choose a city later; no location lookup runs in this demo.</p>`,
+            `<p class="location-summary">${esc(state.timezone)}. ${esc(weatherLabel(state))}.</p><p>You can choose a city later.</p>`,
             "Keep and continue",
             "location-skip"
           );
@@ -2491,7 +2477,7 @@
         break;
       case "account":
         if (!state.name.trim()) {
-          error = "Add a demo name to continue.";
+          error = "Add your name to continue.";
           render();
           $("#owner-name")?.focus();
           break;
@@ -2512,7 +2498,7 @@
               }
             }, 2)
           )
-            announce(existed ? "Demo name saved." : "Demo owner created.");
+            announce(existed ? "Name saved." : "Account created.");
         }
         break;
       case "personal-location":
@@ -2537,7 +2523,7 @@
         break;
       case "personal":
         if (!state.cityId) {
-          error = "Choose a demo city from the results to continue.";
+          error = "Choose a city from the results to continue.";
           render();
           $("#city")?.focus();
           break;
@@ -2566,17 +2552,16 @@
         break;
       case "ai-approved":
         if (!providerNames[state.provider]) {
-          error = "Choose a supported or explicitly proposed demo route first.";
+          error = "Choose a supported provider first.";
           render();
           break;
         }
         state.ai = "connected";
-        state.model =
-          state.aiMethod === "local" ? "Proposed local model · demo" : "Demo chat model";
+        state.model = state.aiMethod === "local" ? "Local model" : "Chat model";
         preserveAi();
         save();
         render();
-        announce("Demo chat-capable model ready.");
+        announce("Model ready.");
         break;
       case "ai-choose":
         chooseProvider("claude");
@@ -2669,7 +2654,7 @@
         state.savedNotes = { root: "Personal vault", choice: "existing" };
         save();
         render();
-        announce("Simulated read-and-write verification passed.");
+        announce("Folder connected.");
         break;
       case "notes-later":
         go(5);
@@ -2686,7 +2671,7 @@
         state.savedEmail = state.emailProvider || "Google";
         save();
         render();
-        announce("Demo mailbox connected. No mail has been read.");
+        announce("Mailbox connected.");
         break;
       case "email-cancel":
         state.email = "idle";
@@ -2739,7 +2724,7 @@
         save();
         exitMode = false;
         render();
-        announce("Restart simulated within this tab. Refreshing the page resets the review.");
+        announce("Your setup is ready to resume.");
         break;
       case "scenario":
         closeReview();
@@ -2751,27 +2736,27 @@
         state.sportsUnverified = false;
         save();
         render();
-        announce("Demo connection restored. You can try again.");
+        announce("Connection restored. You can try again.");
         break;
       case "secure":
         state.transport = "secure";
         save();
         render();
-        announce("Secure connection check simulated.");
+        announce("Connection checked.");
         break;
       case "host-local":
         detail(
-          "A browser on the Moss computer.",
-          "The proposed setup uses a protected host-local bootstrap. On a remote laptop, localhost means that laptop, not the Moss server. Current main does not yet provide the protected first-owner claim described in this design.",
-          "Simulate verified host-local access",
+          "Open Moss on this computer.",
+          "Use the protected local connection. On another device, localhost refers to that device, not the Moss host.",
+          "Continue",
           "confirm-secure"
         );
         break;
       case "remote-help":
         detail(
           "Moss is on another computer.",
-          "A domain-free route is an SSH local forward from your browser’s computer to the Moss host, or trusted HTTPS configured for your network. The real setup must verify the route and protect the first-owner claim. This prototype does not run SSH, change networking, or open a server.",
-          "Simulate verified secure route",
+          "Use trusted HTTPS or an SSH local forward to your Moss host. A domain is optional.",
+          "Continue",
           "confirm-secure"
         );
         break;
@@ -2782,17 +2767,11 @@
         render();
         break;
       case "recheck":
-        error =
-          "Still blocked in this scenario. Simulate a verified route above to continue; no safety checkbox overrides this gate.";
+        error = "The connection is still unverified. Choose a protected connection to continue.";
         render();
         break;
       case "sign-in":
-        detail(
-          "Welcome back.",
-          "This is a simulated existing-owner session. No credentials are requested, and no real account is signed in.",
-          "Use demo session",
-          "signed-in"
-        );
+        detail("Welcome back.", "Sign in to your existing Moss account.", "Continue", "signed-in");
         break;
       case "signed-in":
         closeDetail();
@@ -2803,25 +2782,16 @@
         go(2);
         break;
       case "demo-chat":
-        detail(
-          "Ready for a real conversation.",
-          "In the product, this opens chat with the verified provider and selected model. The prototype does not generate a pretend conversation."
-        );
+        detail("Ready for a real conversation.", "Your assistant is ready.");
         break;
       case "today-start":
         if (aiReady(state))
-          detail(
-            "Your Moss is ready.",
-            "The product continues into the assistant with your verified provider. This preview ends here."
-          );
+          detail("Your Moss is ready.", "Start a conversation with your assistant.");
         else go(3);
         break;
       case "chat-email":
         if (aiReady(state) && emailContextReady(state))
-          detail(
-            "Summarize your email.",
-            "This proposed starter opens assistant chat with a connected, synced mailbox. Readiness is simulated here; no messages are read and no summary is invented."
-          );
+          detail("Summarize your email.", "Open a conversation about your connected mailbox.");
         break;
       case "edit-host-notes":
         state.installReturnStep = state.step;
@@ -2868,8 +2838,8 @@
       case "docker-help":
         detail(
           "Review Docker setup.",
-          `<p>${state.hostPlatform === "linux" ? "Use Docker’s official Engine instructions for your supported Linux distribution. System and group changes require deliberate permission." : "Use the official Docker Desktop installer. Review its terms and licensing before accepting; Windows prerequisites may require administrator action or a restart."}</p><p>Official Docker installation guidance${state.hostPlatform === "linux" ? "" : " · Docker Desktop terms"}</p><p>This preview installs nothing and accepts no terms.</p>`,
-          "Simulate reviewed setup complete",
+          `<p>${state.hostPlatform === "linux" ? "Use Docker’s official Engine instructions for your supported Linux distribution. System and group changes require deliberate permission." : "Use the official Docker Desktop installer. Review its terms and licensing before accepting; Windows prerequisites may require administrator action or a restart."}</p><p>Official Docker installation guidance${state.hostPlatform === "linux" ? "" : " · Docker Desktop terms"}</p>`,
+          "Continue",
           "docker-approved"
         );
         break;
@@ -2895,10 +2865,10 @@
         }
         detail(
           state.setupRoute === "local" && state.hostPlatform !== "linux"
-            ? "Native folder picker · simulation"
-            : "Host folder selection · simulation",
-          `<p>${state.setupRoute === "local" && state.hostPlatform !== "linux" ? "The real installer asks the operating system to choose a folder on this computer." : state.setupRoute === "local" ? "The real Linux helper asks for an existing path on this computer, including on headless systems." : "The real Linux helper asks for a path on the server. This browser cannot mount a folder from your laptop."}</p><p class="host-path">Demo folder: ${esc(hostFolderFixture())}</p><p>No file picker, upload or mount runs in this preview.</p>`,
-          "Use this demo folder",
+            ? "Choose a folder"
+            : "Choose a host folder",
+          `<p>${state.setupRoute === "local" && state.hostPlatform !== "linux" ? "Choose the folder you want Moss to use." : state.setupRoute === "local" ? "Choose an existing folder on this computer." : "Choose an existing folder on your Moss server."}</p><p class="host-path">Folder: ${esc(hostFolderFixture())}</p>`,
+          "Use this folder",
           "host-picked"
         );
         break;
@@ -2911,7 +2881,7 @@
         break;
       case "host-notes-next":
         if (state.hostNotesChoice === "existing" && !state.hostFolder) {
-          error = "Choose a demo folder, or set up notes later.";
+          error = "Choose a folder, or set up notes later.";
           render();
           break;
         }
@@ -2976,7 +2946,7 @@
         break;
       case "install-continue":
         if (state.installStatus !== "running") {
-          error = "Moss has not passed the simulated health check.";
+          error = "Moss has not passed its health check.";
           render();
           break;
         }
@@ -3000,7 +2970,7 @@
       case "manual-template":
         detail(
           "Review the host configuration.",
-          `<p>Illustrative template only. The real release must supply verified image pins and full configuration.</p><pre class="template-preview">services:
+          `<p>Review the configuration before applying it to your host.</p><pre class="template-preview">services:
   moss:
     image: &lt;verified-release-digest&gt;
     ports: ["127.0.0.1:3000:3000"]
@@ -3009,7 +2979,7 @@
         source: &lt;existing-path-on-Docker-host&gt;
         target: /notes
         bind: { create_host_path: false }
-</pre><p>Boot secrets are generated once in protected storage on the host. Preserve the same keys, volumes and deployment identity on retry. This sketch contains no secrets and is not a runnable installer.</p>`
+</pre><p>Boot secrets are generated once in protected storage on the host. Preserve the same keys, volumes and deployment identity on retry. </p>`
         );
         break;
       case "topic-open":
@@ -3025,8 +2995,8 @@
       case "news-check":
         detail(
           "Custom topics need AI and search.",
-          "The product verifies a structured-output model and working web search before checking and saving a topic. In this preview you can simulate that prerequisite check.",
-          "Simulate prerequisites ready",
+          "Connect a structured-output AI model and web search to add custom topics.",
+          "Check connections",
           "news-ready"
         );
         break;
@@ -3074,13 +3044,12 @@
         state.topicEditing = false;
         if (!save()) {
           state = previous;
-          error =
-            "Your topic was not saved. Your draft is still here; retry when the simulated save works.";
+          error = "Your topic was not saved. Your draft is still here; try again.";
           render();
           break;
         }
         render();
-        announce("Demo topic saved. No live search was run.");
+        announce("Topic saved.");
         break;
       }
       case "detail-close":
@@ -3184,7 +3153,7 @@
       save();
       render(false);
       announce(
-        "Demo city and weather set. " +
+        "City and weather set. " +
           (state.timezoneSource === "manual"
             ? "Your manual time zone is kept."
             : "Time zone set from your city.")
@@ -3239,7 +3208,7 @@
       state.news = toggleItem(state.news, target.dataset.topic);
       save();
       target.setAttribute("aria-pressed", String(state.news.includes(target.dataset.topic)));
-      $(".preview-line").textContent = `${state.news.length} topics selected · sample catalog`;
+      $(".preview-line").textContent = `${state.news.length} topics selected`;
       return;
     }
     if (target.dataset.team) {

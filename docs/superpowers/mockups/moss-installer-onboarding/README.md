@@ -5,7 +5,7 @@ onboarding design in PR #3464. It is **a mockup, not an installer**.
 
 Open `index.html` in a browser. The bundle uses a deferred classic script and
 relative assets, so no build, package install, local server, or backend is needed.
-Use **Prototype** in the upper-right corner to choose review scenarios and switch
+Use the discreet **Review tools** icon in the upper-right corner to choose review scenarios and switch
 Forest/Teal or light/dark appearance. Refreshing resets all choices. Only
 predefined scenario names appear in deep links; form values never do.
 
@@ -20,8 +20,8 @@ Suggested repository location:
   Linux, manual Docker, notes before startup, and protected browser account handoff.
 - The near-end **Use Moss from other devices** flow is a **revision proposal**.
   The access-choice direction is approved; these newly composed subpanels and
-  exact copy have not received rendered visual review. The on-screen badge makes
-  that distinction explicit.
+  exact copy have not received rendered visual review. That distinction remains in this guide, validation record, and tucked-away
+  review controls; it is intentionally absent from the product-facing screens.
 - Existing HTTP browser access is now represented separately from the protected
   first-owner bootstrap gate. Existing deployments retain their current access.
 - Repository-specific adaptations are in-memory-only interaction, generic sample
@@ -79,20 +79,22 @@ access is an optional near-end subpanel, never a seventh numbered stage.
 
 ### Revision proposal: near-end access
 
-| Screen or state            | Entry point                                                                          | What to review                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| Access chooser             | [Use other devices](index.html#review=access) or Ready → Use Moss from other devices | Keep local / Home network HTTP / HTTPS                                  |
-| HTTP disclosure            | [HTTP choice](index.html#review=access-http)                                         | Unencrypted credentials/content and HTTPS-only feature warning          |
-| HTTPS choice               | [HTTPS choice](index.html#review=access-https)                                       | Recommended; no domain/certificate/Tailscale requirement to finish      |
-| Host-plan review           | Choose changed mode → Review access change                                           | Explicit illustrative host/interface/port/address; no browser autoapply |
-| Saved checkpoint / pending | Host plan → Simulate applying reviewed plan                                          | Previous verified access remains current until verification             |
-| Connection failure / retry | Pending → Simulate failed check                                                      | Same deployment and owner, no fabricated success                        |
-| Connection verified        | Pending → Simulate connection verified                                               | Update only the mock access recap                                       |
-| Existing LAN browser       | [Legacy HTTP](index.html#review=legacy-lan)                                          | Keep current HTTP access; remote companion still needs HTTPS            |
-| Existing HTTPS             | [Legacy HTTPS](index.html#review=legacy-https)                                       | Keep current saved HTTPS access                                         |
+| Screen or state            | Entry point                                                                          | What to review                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Access chooser             | [Use other devices](index.html#review=access) or Ready → Use Moss from other devices | Keep local / Home network HTTP / HTTPS                             |
+| HTTP disclosure            | [HTTP choice](index.html#review=access-http)                                         | Unencrypted credentials/content and HTTPS-only feature warning     |
+| HTTPS choice               | [HTTPS choice](index.html#review=access-https)                                       | Recommended; no domain/certificate/Tailscale requirement to finish |
+| Host-plan review           | Choose changed mode → Review access change                                           | Host/interface/port/address fixtures; no browser autoapply         |
+| Saved checkpoint / pending | Host plan → Apply change                                                             | Previous verified access remains current until verification        |
+| Connection failure / retry | Pending → Review tools → Show failed connection check                                | Same deployment and owner, no fabricated success                   |
+| Connection verified        | Pending → Check connection                                                           | Update only the mock access recap                                  |
+| Existing LAN browser       | [Legacy HTTP](index.html#review=legacy-lan)                                          | Keep current HTTP access; remote companion still needs HTTPS       |
+| Existing HTTPS             | [Legacy HTTPS](index.html#review=legacy-https)                                       | Keep current saved HTTPS access                                    |
 
-A real host plan must substitute exact inspected values for the clearly marked
-placeholders before asking for approval. **Get started never widens access.**
+The addresses and host labels shown in the review are fixed documentation
+fixtures: `moss-host`, `192.0.2.10`, and `moss.example` (plus localhost). They are
+never contacted. A real host plan must substitute exact inspected values before
+asking for approval. **Get started never widens access.**
 A phone/computer browser can use an explicitly selected LAN HTTP route. The
 remote companion has a separate HTTPS requirement. New owner claiming remains
 loopback, SSH tunnel, or verified HTTPS and closes before access widens.

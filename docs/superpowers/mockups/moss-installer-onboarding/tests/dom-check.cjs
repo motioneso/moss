@@ -122,7 +122,7 @@ for (const [route, platform] of [
     assert.equal(s.state().step, 1);
     assert.equal(s.state().account, false);
     assert.equal(s.state().protectedContinuation, true);
-    assert.match(s.state().hostFolder, /Sample notes folder/);
+    assert.equal(s.state().hostFolder, route === "local" ? "Documents / Notes" : "Notes");
     assert.equal(s.d.querySelectorAll(".setup-progress .step-link").length, 6);
     s.action("account");
     assert.equal(s.state().notes, "ready");
@@ -190,7 +190,7 @@ test("Access is an optional subpanel with local default and no seventh stage", (
   s.action("access-open");
   assert.equal(s.state().step, 8);
   assert.equal(s.d.querySelectorAll(".setup-progress .step-link").length, 6);
-  assert.match(s.text(), /Revision proposal/);
+  assert.doesNotMatch(s.text(), /Revision proposal/);
   assert.equal(s.state().accessDraft, "local");
   s.action("access-review");
   assert.equal(s.state().accessPanel, "");
@@ -202,17 +202,17 @@ for (const mode of ["lan-http", "https"])
     const identity = s.state().installIdentity;
     s.action("access-open");
     s.click('[data-access-mode="' + mode + '"]');
-    if (mode === "lan-http") assert.match(s.text(), /read or alter your credentials and content/);
-    else assert.match(s.text(), /not required to finish/);
+    if (mode === "lan-http") assert.match(s.text(), /read or change your passwords and content/);
+    else assert.match(s.text(), /Recommended for other devices/);
     assert.equal(s.state().accessMode, "local");
     s.action("access-review");
     assert.equal(s.state().accessPanel, "plan");
     assert.match(s.text(), /interface|Bind/);
-    assert.match(s.text(), /First-owner claim: closed/);
+    assert.equal(s.state().account, true);
     s.action("access-apply");
     assert.equal(s.state().accessMode, "local");
     assert.equal(s.state().accessStatus, "pending");
-    s.action("access-fail");
+    s.t.dispatch("access-fail");
     assert.equal(s.state().accessMode, "local");
     s.action("back");
     assert.equal(s.state().accessPanel, "");
@@ -260,10 +260,51 @@ test("Access save failure and stale actions cannot fabricate readiness", (s) => 
 });
 test("HTTP browser and remote companion constraints stay distinct", (s) => {
   s.t.scenario("access-http");
-  assert.match(s.text(), /phone or computer browser/);
-  assert.match(s.text(), /remote companion requires HTTPS/);
+  assert.match(
+    s.text(),
+    /Other devices on your home network can connect\. This connection isn’t encrypted\./
+  );
+  assert.match(
+    s.text(),
+    /Recommended for other devices\. Required for connecting the Mac companion\./
+  );
   s.action("access-review");
-  assert.match(s.text(), /Remote companions remain unavailable/);
+  assert.match(s.text(), /The Mac companion requires HTTPS/);
+});
+test("Access copy is concise for fresh setup and retains the legacy reminder", (s) => {
+  s.t.scenario("access-http");
+  assert.equal(
+    s.d.querySelector('[data-access-mode="lan-http"] small').textContent,
+    "Other devices on your home network can connect. This connection isn’t encrypted."
+  );
+  assert.equal(
+    s.d.querySelector('[data-access-mode="https"] small').textContent,
+    "Recommended for other devices. Required for connecting the Mac companion."
+  );
+  assert.equal(
+    s.d.querySelector(".status-note.warn p").textContent,
+    "Other people or software on this network may be able to read or change your passwords and content. Some device features need HTTPS."
+  );
+  const currentAccess = () =>
+    [...s.d.querySelectorAll("p.hint")].find((p) => p.textContent.startsWith("Current access:"))
+      .textContent;
+  assert.equal(currentAccess(), "Current access: This computer only.");
+  assert.doesNotMatch(
+    s.text(),
+    /Existing deployments keep|A remote companion requires HTTPS; an ordinary browser/
+  );
+  assert.doesNotMatch(s.text(), /Revision proposal · visual review pending/);
+  for (const [scenario, mode] of [
+    ["legacy-lan", "Home network (HTTP, unencrypted)"],
+    ["legacy-https", "HTTPS"]
+  ]) {
+    s.t.scenario(scenario);
+    s.action("access-open");
+    assert.equal(
+      currentAccess(),
+      `Current access: ${mode}. Your existing access stays as it is until you choose a change.`
+    );
+  }
 });
 test("Browser history, Close and same-tab restart preserve expected mock state", (s) => {
   s.t.scenario("access");
@@ -327,6 +368,121 @@ test("Themes and reset are tab-local, not storage changes", (s) => {
   assert.equal(s.state().step, 0);
   assert.equal(s.state().theme, "forest");
 });
+test("Normal journey copy is product-facing across every review fixture", (s) => {
+  const forbidden =
+    /\b(?:prototype|demo|simulat(?:e|ed|ion)|revision proposal|illustrative|real installer|real product|real flow|this preview|this review|in the product)\b/i;
+  const inspect = (name) => {
+    const nodes = [
+      s.d.querySelector(".site-header"),
+      s.d.querySelector("#app"),
+      s.d.querySelector(".site-footer")
+    ].filter(Boolean);
+    const text = [s.d.title, ...nodes.map((node) => node.textContent)].join(" ");
+    assert.doesNotMatch(text, forbidden, name);
+    assert.equal(s.d.querySelectorAll("#app .revision-note").length, 0, name);
+  };
+  s.click("#review-open");
+  const fixtures = [...s.d.querySelectorAll("[data-scenario]")].map(
+    (node) => node.dataset.scenario
+  );
+  s.click("#review-close");
+  for (const id of fixtures) {
+    s.t.scenario("fresh");
+    s.t.scenario(id);
+    inspect(id);
+  }
+  s.t.scenario("fresh");
+  inspect("fresh route");
+  for (const action of [
+    "next",
+    "install-check",
+    "install-notes",
+    "host-notes-skip",
+    "install-start",
+    "install-health",
+    "install-continue",
+    "account",
+    "personal-location"
+  ]) {
+    s.action(action);
+    inspect(action);
+  }
+  s.click('[data-city="london"]');
+  for (const action of [
+    "personal",
+    "ai-connect",
+    "ai-approved",
+    "next",
+    "email-connect",
+    "email-approved",
+    "next",
+    "next",
+    "next",
+    "finish"
+  ]) {
+    s.action(action);
+    inspect(action);
+  }
+  s.t.scenario("access-http");
+  for (const action of ["access-review", "access-apply", "access-verify"]) {
+    s.action(action);
+    inspect(action);
+  }
+});
+test("Normal detail dialogs omit design-review chatter and keep inert inputs", (s) => {
+  const forbidden =
+    /\b(?:prototype|demo|simulat(?:e|ed|ion)|revision proposal|illustrative|real installer|real product|real flow|this preview|this review|in the product)\b/i;
+  for (const [fixture, action] of [
+    ["fresh", "sign-in"],
+    ["http", "host-local"],
+    ["http", "remote-help"],
+    ["install-missing", "docker-help"],
+    ["manual-docker", "manual-template"],
+    ["fresh", "host-pick"]
+  ]) {
+    s.t.scenario("fresh");
+    s.t.scenario(fixture);
+    s.t.dispatch(action);
+    assert.doesNotMatch(s.d.querySelector("#detail-dialog").textContent, forbidden, action);
+    assert.equal(
+      s.d.querySelectorAll('input[type="password"],input[type="email"],input[type="file"]').length,
+      0
+    );
+    s.t.dispatch("detail-close");
+  }
+  s.t.scenario("happy");
+  s.t.go(2);
+  s.action("personal-location");
+  s.action("skip");
+  assert.doesNotMatch(s.d.querySelector("#detail-dialog").textContent, forbidden, "location skip");
+  assert.match(s.d.querySelector("#detail-dialog").textContent, /You can choose a city later\./);
+});
+test("Review context stays in discreet controls and genuine warnings remain", (s) => {
+  assert.equal(s.d.querySelector("#review-open").getAttribute("aria-label"), "Review tools");
+  assert.doesNotMatch(s.d.querySelector("#review-open").textContent, /prototype|review|demo/i);
+  s.click("#review-open");
+  assert.match(s.d.querySelector("#review-dialog").textContent, /inert|simulat|mock|demo/i);
+  s.click("#review-close");
+  s.t.scenario("access-http");
+  assert.match(
+    s.text(),
+    /Other people or software on this network may be able to read or change your passwords and content\. Some device features need HTTPS\./
+  );
+  s.t.scenario("certificate");
+  assert.match(s.text(), /Don’t bypass|Never bypass/);
+  s.t.scenario("email-failed");
+  assert.match(s.text(), /Gmail modify and Calendar/);
+  assert.match(s.text(), /Sending email is a separate action/);
+  s.t.scenario("access-http");
+  s.action("access-review");
+  s.action("access-apply");
+  assert.equal(s.d.querySelector('#app [data-action="access-fail"]'), null);
+  s.click("#review-open");
+  s.action("review-access-fail");
+  assert.equal(s.state().accessStatus, "failed");
+  assert.equal(s.d.querySelector("#review-dialog").open, false);
+});
+
 for (const id of ["fresh", "access", "access-http", "access-https", "legacy-lan", "legacy-https"]) {
   const s = setup("#review=" + id);
   try {

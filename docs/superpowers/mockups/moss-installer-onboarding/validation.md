@@ -8,7 +8,7 @@ bundle, not production installer behavior.
 - `node --check app.js`: JavaScript syntax.
 - `node tests/verify.mjs`: complete file inventory, relative HTML/CSS asset
   resolution, CSP, safe SVG markup, six local font weights and privacy scan.
-- `node tests/dom-check.cjs` with an existing jsdom installation: **24/24 checks**.
+- `node tests/dom-check.cjs` with an existing jsdom installation: **28/28 checks**.
   These include all **42 selectable review scenarios** within a fixture-loop test.
 - Five host routes: local Mac, local Windows, local Linux, remote/headless Linux,
   manual Docker. Each keeps notes selection before startup and requires health
@@ -25,9 +25,10 @@ bundle, not production installer behavior.
 - Six predefined deep links, including every new access entrypoint.
 - Test-time traps recorded zero network, new-window, native-picker or persistent
   storage calls. No password, email-address, or file-upload input is present.
-- All 20 selected source files were hash-checked after export and remained
-  byte-identical to their pre-export values. Original source and data were never
-  written. Feedback records or exports were not used as export inputs.
+- At the initial export, all 20 selected source files were hash-checked and
+  remained byte-identical to their pre-export values. Subsequent public-copy
+  revisions were staged separately. This export work did not write the original
+  source or data; feedback records or exports were never export inputs.
 
 ## Privacy and network review
 
@@ -44,11 +45,38 @@ license/copyright notices remain. No user identity/contact data, private links,
 Library references, hosting identifiers, owner-specific paths, private IPs,
 credentials or tokens were found by the source scan.
 
-The only address-like UI fixtures are clearly illustrative placeholders and
-standard localhost/loopback technical labels. No address is contacted. Runtime
+Address-like UI fixtures use the reserved documentation address `192.0.2.10`,
+example domain `moss.example`, generic label `moss-host`, and standard
+localhost/loopback technical labels. No address is contacted. Runtime
 assets are local and `connect-src 'none'`, `worker-src 'none'`, `frame-src 'none'`,
 `object-src 'none'`, and `form-action 'none'` are set. External source URLs in
 attribution and provenance are documentation, not requests made by the mockup.
+
+## Copy-only follow-up
+
+The access chooser uses the revised LAN, HTTPS and HTTP-warning wording. Fresh
+setup shows only the current mode; existing-deployment scenarios also show the
+explicit access-retention reminder. A new DOM assertion checks the exact copy,
+conditional reminder and removed repetition. Review status is retained outside
+the product-facing screen copy. No mock
+state transition, transport gate or access behavior was changed.
+
+The user reported viewing the earlier access screen on a phone and requested
+this clearer wording. That user-supplied review applies to the prior screen;
+it is not rendered-browser verification of this revised copy. Visual review of the revised screens remains pending; this status is recorded
+in the review documentation and tucked-away controls, not product-facing copy.
+
+## Product-facing copy cleanup
+
+The ordinary screen journey omits prototype/demo labels, implementation
+explainers and simulated-action wording. The header uses a discreet icon with
+an accessible “Review tools” label. Review-only context and controls stay in
+that separate dialog and this documentation. Genuine warnings, failures,
+permissions and consent requirements remain. Underlying actions are still
+inert, no credential input was added, and no host/network integration was added.
+Three additional DOM checks cover all 42 fixtures and the normal journey,
+active detail dialogs, the tucked-away failed-check control, and preservation
+of real HTTP/certificate warnings and email-consent copy.
 
 ## Not run / not established
 
