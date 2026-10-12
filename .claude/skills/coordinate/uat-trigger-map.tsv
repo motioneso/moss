@@ -358,3 +358,12 @@ blocking	packages/module-registry/src/index.ts	tests/uat/specs/3145-quiet-hours-
 blocking	apps/web/src/settings/settings-quiet-hours-allowances.tsx	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
 blocking	apps/web/src/settings/settings-alerts-pane.tsx	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
 blocking	packages/chat/sql/0314_chat_quiet_hours_allowances.sql	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+
+# #3135: real model-filled reminder edits and stale queued-work suppression.
+blocking	packages/chat/src/reminders/edit*.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/reminders/prepare-edit.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/reminders/commands/edit.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/live/pre-model-turn.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/live/persistence.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/live/runtime.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/sql/0317_chat_reminder_edits.sql	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts

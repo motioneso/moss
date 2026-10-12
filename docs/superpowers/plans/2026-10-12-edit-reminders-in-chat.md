@@ -1,6 +1,6 @@
 # Edit saved reminders in chat - #3135
 
-Status: awaiting coordinator approval. Branch: scheduled/3135-edit-reminders.
+Status: approved by coordinator; implementation in progress. Branch: scheduled/3135-edit-reminders.
 Base: integration/scheduled-proactive, verified at 97f776fbd.
 Worktree: ~/Jarv1s/.claude/worktrees/sched-3135-edit-reminders.
 Risk: sensitive. Assigned migration: 0317.
@@ -143,12 +143,14 @@ Add tests/uat/specs/3135-reminder-edits-real.uat.spec.ts and blocking rows in
 .claude/skills/coordinate/uat-trigger-map.tsv for the edit files, migration,
 pre-model turn and persistence wiring. Use the disposable install recipe in
 ~/.config/moss-proof/README.md, a claimed port and JARVIS_IMAGE_TAG=uat-sched-3135.
-Use real Claude CLI sign-in and the cheapest configured model for proof only.
+Use the sanctioned real-chat Codex login path and its cheapest economy model
+for proof, per the coordinator's later ruling. Credentials enter the disposable
+install over stdin and are removed at teardown; never copy host Claude login.
 Through the real UI, create a near-future queued reminder, change its text
 and move its time in chat, inspect Settings and reload, then prove no original
 text at the old time and exactly one revised message at the new time. Exercise
 ambiguous selection and unsupported edits. Record assertions across desktop
-and phone, light/dark/Teal where the existing UAT helpers support them. No
+and phone in light mode. No
 network response interception and no screenshots. Post bounded proof on PR.
 
 Verification commands (all expected exit 0; never pipe them):
@@ -181,3 +183,19 @@ Do not modify the board, milestones, docs/coordination or merge anything.
   predictable, but does not implement the accepted ordinary-chat model-filled
   terms. Keep recognizers for routing and validators for authority instead.
 - No unresolved product fork. Coordinator owns plan approval and kill gate.
+
+- Coordinator approval: interpret only explicit edit wording when queued/paused
+  reminders exist; everyday sentence negatives must reach Moss unchanged.
+- Existing structured parser already unwraps fenced JSON. Test the actual edit
+  schema through that parser, rather than adding another unwrap implementation.
+- Live proof allows one prompt tuning at most; if the cheapest configured model
+  still misreads an ordinary edit, stop and send evidence to the coordinator.
+- Coordinator note: edits call the existing shared enqueueReminderDelivery seam,
+  not sendJob directly. The second merging lane wires extension-aware routing
+  for scheduled source reads from #3151.
+- First Codex economy proof selected gpt-5.6-luna and refused the ordinary edit
+  before launching a model. The structured adapter received the ACP chat factory,
+  which requires a conversation ID. A red regression reproduced that exact
+  refusal. Explicit structured launches now use the existing one-shot RPC factory
+  on the same connection. All 176 targeted tests pass; live rerun is pending.
+- No prompt tuning used. Full final foundation gate and live proof remain required.

@@ -1,3 +1,6 @@
+import { recognizeReminderEdit } from "../reminders/edit-recognizer.js";
+import { prepareReminderEdit as prepareEdit } from "../reminders/prepare-edit.js";
+import type { GenerateStructuredDeps } from "@moss/ai";
 import { pendingReminderDeletion } from "../reminders/delete-agreement.js";
 /**
  * DataContextChatPersistence — the REAL ChatPersistencePort backing the live
@@ -107,6 +110,7 @@ export interface DataContextChatPersistenceDeps {
   readonly chatPreferences?: PreferencesPort;
   /** #3128 — this process's boot id; tests pass one per simulated boot. */
   readonly bootId?: string;
+  readonly editCliAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
 }
 
 /**
@@ -193,6 +197,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly localePreferences: PreferencesPort | undefined;
   private readonly chatPreferences: PreferencesPort | undefined;
   private readonly bootId: string;
+  private readonly editCliAdapter: GenerateStructuredDeps["createCliStructuredAdapter"];
 
   constructor(deps: DataContextChatPersistenceDeps) {
     this.rootDb = deps.rootDb;
@@ -204,6 +209,35 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.localePreferences = deps.localePreferences;
     this.chatPreferences = deps.chatPreferences;
     this.bootId = deps.bootId ?? CHAT_PROCESS_BOOT_ID;
+    this.editCliAdapter = deps.editCliAdapter;
+  }
+
+  async prepareReminderEdit(
+    actorUserId: string,
+    text: string,
+    threadId: string,
+    signal?: AbortSignal
+  ): Promise<ReminderTurnPlan | undefined> {
+    const run = await this.run(actorUserId, "prepare-reminder-edit", async (db) => {
+      const thread = await this.chat.getThreadById(db, threadId);
+      if (!thread || thread.owner_user_id !== actorUserId || !thread.is_main || thread.incognito)
+        return async () =>
+          recognizeReminderEdit(text) ? { kind: "main_only" as const, manage: true } : undefined;
+      const raw = await this.localePreferences?.get(db, "locale");
+      return prepareEdit(
+        db,
+        this.ai,
+        this.editCliAdapter,
+        text,
+        threadId,
+        {
+          timeZone: resolveEffectiveTimezone(raw),
+          clockFormat: resolveClockFormat(raw)
+        },
+        signal
+      );
+    });
+    return run();
   }
 
   async resolveActiveProvider(actorUserId: string): Promise<{

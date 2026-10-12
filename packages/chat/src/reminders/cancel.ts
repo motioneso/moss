@@ -100,10 +100,10 @@ export async function cancelReminder(
 }
 
 /** Exact text matches win; otherwise every reminder whose text contains the target. */
-export function matchTarget(
-  owned: readonly OwnedReminder[],
+export function matchTarget<T extends { readonly text: string }>(
+  owned: readonly T[],
   target: string
-): readonly OwnedReminder[] {
+): readonly T[] {
   const wanted = normalizeReminderText(target);
   if (wanted.length === 0) return [];
   const exact = owned.filter((reminder) => normalizeReminderText(reminder.text) === wanted);

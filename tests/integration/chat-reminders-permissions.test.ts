@@ -292,10 +292,10 @@ describe("chat reminder row security", () => {
     ).rejects.toMatchObject({ code: "23505" });
   });
 
-  it("does not let the app change reminder instructions, or the worker create one", async () => {
+  it("refuses an unversioned instruction edit, and worker creation", async () => {
     const reminder = await createReminder(ids.userA);
 
-    // #3310: the app may write only state and context, so a text change is refused outright.
+    // #3135: terms can change only with a new version while the reminder is pending.
     await expect(
       runner.withDataContext({ actorUserId: ids.userA }, (db) =>
         db.db
@@ -304,7 +304,7 @@ describe("chat reminder row security", () => {
           .where("id", "=", reminder.id)
           .execute()
       )
-    ).rejects.toThrow(/permission denied/);
+    ).rejects.toThrow(/identity cannot be changed/);
     await expect(createReminder(ids.userA, {}, workerRunner)).rejects.toMatchObject({
       code: "42501"
     });

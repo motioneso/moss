@@ -1,3 +1,4 @@
+import type { EditableReminder } from "./edit.js";
 // #3309: every reminder reply is written by code, so the wording here is the whole contract.
 
 import type { ChatReminderState } from "@moss/db";
@@ -156,4 +157,36 @@ function waitingLabel(reminder: OwnedReminder, now: Date, locale: ReminderLocale
 function timeLeft(dueAt: Date, now: Date): string {
   const seconds = Math.ceil((dueAt.getTime() - now.getTime()) / 1000);
   return seconds > 0 ? `in ${describeDelay(seconds)}` : "due now";
+}
+
+function editTimeLabel(at: Date, locale: ReminderLocale): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: locale.timeZone,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: locale.clockFormat !== "24",
+    timeZoneName: "short"
+  }).format(new Date(at));
+}
+
+export function reminderEditedReply(
+  reminder: EditableReminder,
+  locale: ReminderLocale,
+  unchanged: boolean
+): string {
+  const deadline =
+    reminder.deadline_at === null
+      ? ""
+      : `, not after ${editTimeLabel(reminder.deadline_at, locale)}`;
+  const paused = reminder.state === "paused" ? " It stays paused until you resume it." : "";
+  return `${unchanged ? "Already saved" : "Updated"}: ${reminder.reminder_text}. I'll remind you ${editTimeLabel(reminder.due_at, locale)}${deadline}.${paused}`;
+}
+
+export function reminderEditChoiceReply(
+  reminders: readonly EditableReminder[],
+  locale: ReminderLocale
+): string {
+  return `Which reminder should I change? Reply with its number or exact words. Nothing changed.\n${reminders.map((row, index) => `${index + 1}. ${row.reminder_text} - ${editTimeLabel(row.due_at, locale)}${row.state === "paused" ? " (paused)" : ""}`).join("\n")}`;
 }

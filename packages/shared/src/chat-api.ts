@@ -272,6 +272,20 @@ export interface ChatClassifierGateOriginV1 {
  * #3309 — a turn written by code for a relative reminder: the saved or refused request, or the
  * delivered reminder itself. No model ran, so there is no executed provider or usage.
  */
+/** Only inert reminder terms, never actions, recipients or attention permissions. */
+export interface ReminderEditTerms {
+  readonly text: string | null;
+  readonly delaySeconds: number | null;
+  readonly localDue: string | null;
+  readonly deadline: "keep" | "set" | "remove";
+  readonly localDeadline: string | null;
+}
+
+export interface ReminderEditProposal {
+  readonly candidates: readonly { readonly id: string; readonly version: number }[];
+  readonly terms: ReminderEditTerms;
+}
+
 export interface ChatReminderOriginV1 {
   readonly version: 1;
   readonly kind: "reminder";
@@ -290,10 +304,13 @@ export interface ChatReminderOriginV1 {
     | "allowance_saved"
     | "allowance_removed"
     | "allowance_proposed"
-    | "allowance_refused";
+    | "allowance_refused"
+    | "edited"
+    | "edit_requested";
   readonly reminderId: string | null;
   readonly reminderVersion?: number;
   readonly reminderState?: string;
+  readonly editProposal?: ReminderEditProposal;
   /** Set on delivery: true when the reminder arrived more than a minute after it was due. */
   readonly late?: boolean;
 }
