@@ -25,6 +25,7 @@ export interface DueReminder {
   readonly id: string;
   readonly ownerUserId: string;
   readonly threadId: string;
+  readonly destinationTitle: string | null;
   readonly reservedMessageId: string;
   readonly text: string;
   readonly state: ChatReminderState;
@@ -168,6 +169,7 @@ export class ReminderRepository {
       readonly id?: string;
       readonly threadId: string;
       readonly sourceMessageId: string;
+      readonly destinationTitle?: string | null;
       readonly when: ReminderTimingInput;
       readonly text: string;
     }
@@ -180,6 +182,7 @@ export class ReminderRepository {
         id: input.id ?? randomUUID(),
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         thread_id: input.threadId,
+        destination_title: input.destinationTitle ?? null,
         source_message_id: input.sourceMessageId,
         reserved_message_id: randomUUID(),
         reminder_text: input.text,
@@ -214,6 +217,7 @@ export class ReminderRepository {
         "id",
         "owner_user_id",
         "thread_id",
+        "destination_title",
         "reserved_message_id",
         "reminder_text",
         "state",
@@ -233,6 +237,7 @@ export class ReminderRepository {
       id: row.id,
       ownerUserId: row.owner_user_id,
       threadId: row.thread_id,
+      destinationTitle: row.destination_title,
       reservedMessageId: row.reserved_message_id,
       text: row.reminder_text,
       state: row.state,
@@ -295,7 +300,7 @@ export class ReminderRepository {
   }
 
   /**
-   * #3311: delivered reminders whose context is pending in this exact Main chat, oldest first.
+   * #3311: delivered reminders whose context is pending in this exact owned drawer chat, oldest first.
    * The body is the reserved assistant message the owner saw.
    */
   async listPendingMain(
@@ -318,7 +323,8 @@ export class ReminderRepository {
       .where("reminder.state", "=", "delivered")
       .where("reminder.repeat_kind", "is", null)
       .where("reminder.context_state", "=", "pending")
-      .where("thread.is_main", "=", true)
+      .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("thread.surface", "=", "drawer")
       .where("thread.incognito", "=", false)
       .orderBy("reminder.delivered_at")
       .orderBy("reminder.id")
@@ -364,7 +370,7 @@ export class ReminderRepository {
       .map(({ reservedMessageId, body }) => ({ reservedMessageId, body }));
   }
 
-  /** #3311: acknowledges exactly the shown reminders that are still pending in this Main chat. */
+  /** #3311: acknowledges exactly the shown reminders that are still pending in this owned drawer chat. */
   async acknowledgeMain(
     scopedDb: DataContextDb,
     threadId: string,

@@ -61,7 +61,8 @@ export const edit: ReminderCommandHandler = async (context, plan) => {
     chosen.id,
     chosen.version,
     proposal.terms,
-    locale.timeZone
+    locale.timeZone,
+    context.thread.id
   );
   if (result.kind === "invalid") return controlRefused(result.reply);
   if (result.kind !== "changed" && result.kind !== "unchanged")

@@ -121,7 +121,7 @@ export function useChatStream(
   enabled = true
 ): {
   readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: (mainThreadId?: string) => void;
+  readonly clearRecords: (threadId?: string) => void;
   readonly streamErrorCount: number;
   readonly selectionPending: boolean;
 } {
@@ -130,25 +130,24 @@ export function useChatStream(
   const [streamGeneration, setStreamGeneration] = useState(0);
   const [hydratedSurface, setHydratedSurface] = useState<ChatSurface>();
   const hydrationGeneration = useRef(0);
-  // The owned Main thread this drawer hydrated, so a reconnect can catch up its reminders.
-  const hydratedMainThread = useRef<string | undefined>(undefined);
-  // A side or module chat never shows a background message, even one sent before a switch.
+  // The exact owned drawer thread this browser shows, for background arrival and catch-up.
+  const hydratedDrawerThread = useRef<string | undefined>(undefined);
+  // Private and module chats do not accept reminder arrivals.
   const hydratedSideThread = useRef(false);
-  // Reminders Main already held when a switch landed there, so a reconnect never re-adds them.
-  const knownMainReminders = useRef<Promise<ReadonlySet<string>>>(Promise.resolve(new Set()));
+  // Messages already hydrated at selection are not re-added by catch-up.
+  const knownDrawerReminders = useRef<Promise<ReadonlySet<string>>>(Promise.resolve(new Set()));
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
-  // A switch clears the log without re-hydrating, so the caller names Main when it lands there.
-  // Any other chat drops background messages and never catches up Main's reminders.
-  const clearRecords = useCallback((mainThreadId?: string) => {
-    const onMain =
-      mainThreadId !== undefined &&
+  // Bind a confirmed drawer selection before accepting arrivals or catch-up.
+  const clearRecords = useCallback((threadId?: string) => {
+    const onDrawer =
+      threadId !== undefined &&
       (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
-    hydratedMainThread.current = onMain ? mainThreadId : undefined;
-    hydratedSideThread.current = !onMain;
-    knownMainReminders.current = onMain
-      ? readBackgroundMessageIds(mainThreadId, streamScope.current.surface)
+    hydratedDrawerThread.current = onDrawer ? threadId : undefined;
+    hydratedSideThread.current = !onDrawer;
+    knownDrawerReminders.current = onDrawer
+      ? readBackgroundMessageIds(threadId, streamScope.current.surface)
       : Promise.resolve(new Set());
     hydrationGeneration.current += 1;
     setRecords([]);
@@ -170,19 +169,22 @@ export function useChatStream(
       streamScope.current.enabled &&
       streamScope.current.surface === surface;
 
-    // Subscribe first, then catch up on every open, including results saved before first connection.
-    // Merge only unseen message ids; a result arriving in both history and SSE appears once.
-    const catchUpMain = () => {
-      const threadId = hydratedMainThread.current;
+    // Subscribe first, then catch up on every open; merge unseen message ids once.
+    const catchUpDrawer = () => {
+      const threadId = hydratedDrawerThread.current;
       if (!threadId) return;
-      void Promise.all([knownMainReminders.current, listChatThreadMessages(threadId, surface)])
+      void Promise.all([knownDrawerReminders.current, listChatThreadMessages(threadId, surface)])
         .then(([known, { messages }]) => {
-          if (!isCurrent() || hydratedMainThread.current !== threadId) return;
+          if (!isCurrent() || hydratedDrawerThread.current !== threadId) return;
           const missed = recordsFromMessages(messages).filter(
-            (record) => !record.messageId || !known.has(record.messageId)
+            (record) =>
+              record.backgroundThreadId === threadId &&
+              (!record.messageId || !known.has(record.messageId))
           );
           setRecords((current) =>
-            isCurrent() ? mergeBackgroundRecords(current, missed) : current
+            isCurrent() && hydratedDrawerThread.current === threadId
+              ? mergeBackgroundRecords(current, missed)
+              : current
           );
         })
         .catch(() => undefined);
@@ -198,14 +200,19 @@ export function useChatStream(
         if (!isCurrent()) return;
         retries = 0;
         setStreamErrorCount(0);
-        catchUpMain();
+        catchUpDrawer();
       };
       stream.onmessage = (event) => {
         if (!isCurrent()) return;
         // #1135 — reset error count on successful message so transient errors don't lock private chat
         setStreamErrorCount(0);
         const record = parseRecord(event.data);
-        if (record && !(record.background && hydratedSideThread.current)) {
+        if (
+          record &&
+          (!record.background ||
+            (!hydratedSideThread.current &&
+              record.backgroundThreadId === hydratedDrawerThread.current))
+        ) {
           setRecords((current) => (isCurrent() ? applyStreamRecord(current, record) : current));
         }
       };
@@ -232,9 +239,9 @@ export function useChatStream(
 
   useEffect(() => {
     setHydratedSurface(undefined);
-    hydratedMainThread.current = undefined;
+    hydratedDrawerThread.current = undefined;
     hydratedSideThread.current = false;
-    knownMainReminders.current = Promise.resolve(new Set());
+    knownDrawerReminders.current = Promise.resolve(new Set());
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -286,8 +293,8 @@ export function useChatStream(
         const { messages } = await listChatThreadMessages(thread.id, surface);
         if (!active || generation !== hydrationGeneration.current) return;
         const history = recordsFromMessages(messages);
-        if (isDrawer && thread.isMain) hydratedMainThread.current = thread.id;
-        hydratedSideThread.current = !(isDrawer && thread.isMain);
+        if (isDrawer) hydratedDrawerThread.current = thread.id;
+        hydratedSideThread.current = !isDrawer;
         // #1253 — re-hydrate pending action request cards (only "pending" status; others already resolved)
         const pendingActions = actionsResult.actions.filter((a) => a.status === "pending");
         const actionRecords: TranscriptRecord[] = pendingActions.map((action) => {
@@ -424,7 +431,9 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
               text: message.body,
               scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
-              ...(isDeliveredReminder(message) ? { background: true as const } : {}),
+              ...(isDeliveredReminder(message)
+                ? { background: true as const, backgroundThreadId: message.threadId }
+                : {}),
               sourceFreshness: message.sourceFreshness,
               meetingContext: message.meetingContext,
               answerProvenance: message.answerProvenance,
@@ -484,6 +493,8 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
       background: parsed.background === true ? true : undefined,
       scheduledReadSource: parsed.scheduledReadSource === "tasks" ? "tasks" : undefined,
+      backgroundThreadId:
+        typeof parsed.backgroundThreadId === "string" ? parsed.backgroundThreadId : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
       workflowApprovalId:

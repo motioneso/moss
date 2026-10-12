@@ -353,7 +353,9 @@ describe("delivering a due reminder", () => {
     await setMain(ids.userB, saved.threadId, false);
 
     try {
-      await expect(deliver(saved, payload(saved, ids.userB))).resolves.toBe("not_main");
+      await expect(deliver(saved, payload(saved, ids.userB))).resolves.toBe(
+        "destination_unavailable"
+      );
       expect((await readRow(saved.id)).state).toBe("failed");
       expect(await deliveredMessages(saved.id)).toHaveLength(0);
     } finally {
@@ -369,7 +371,9 @@ describe("delivering a due reminder", () => {
     await setMain(ids.userB, other.id, true);
 
     try {
-      await expect(deliver(saved, payload(saved, ids.userB))).resolves.toBe("not_main");
+      await expect(deliver(saved, payload(saved, ids.userB))).resolves.toBe(
+        "destination_unavailable"
+      );
       expect((await readRow(saved.id)).state).toBe("failed");
       expect(await deliveredMessages(saved.id)).toHaveLength(0);
     } finally {

@@ -23,7 +23,11 @@ import {
   type MossDatabase,
   type PreferencesPort
 } from "@moss/db";
-import { CHAT_SETTINGS_PREFERENCE_KEY, normalizeChatSettings } from "@moss/shared";
+import {
+  CHAT_SETTINGS_PREFERENCE_KEY,
+  DEFAULT_CHAT_SURFACE,
+  normalizeChatSettings
+} from "@moss/shared";
 import type {
   AnswerProvenanceMetadataV1,
   AiAuthMethod,
@@ -223,7 +227,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   ): Promise<ReminderTurnPlan | undefined> {
     const run = await this.run(actorUserId, "prepare-reminder-edit", async (db) => {
       const thread = await this.chat.getThreadById(db, threadId);
-      if (!thread || thread.owner_user_id !== actorUserId || !thread.is_main || thread.incognito)
+      if (
+        !thread ||
+        thread.owner_user_id !== actorUserId ||
+        thread.surface !== DEFAULT_CHAT_SURFACE ||
+        thread.incognito
+      )
         return async () =>
           recognizeReminderEdit(text) ? { kind: "main_only" as const, manage: true } : undefined;
       const raw = await this.localePreferences?.get(db, "locale");

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DataContextDb, DataContextRunner, OwnedPgClient } from "@moss/db";
 
-import type { MainBackgroundMessage } from "../../packages/chat/src/live/background-message-routing.js";
+import type { BackgroundMessage } from "../../packages/chat/src/live/background-message-routing.js";
 import type { ChatRepository } from "../../packages/chat/src/repository.js";
 import {
   parseReminderArrival,
@@ -52,10 +52,10 @@ class FakeClient extends EventEmitter {
   }
 }
 
-function message(arrival: ReminderArrival): MainBackgroundMessage {
+function message(arrival: ReminderArrival): BackgroundMessage {
   return {
     actorUserId: arrival.actorUserId,
-    mainThreadId: arrival.threadId,
+    threadId: arrival.threadId,
     record: { kind: "reply", text: "Reminder", messageId: arrival.messageId, background: true }
   };
 }
@@ -99,7 +99,7 @@ describe("parseReminderArrival", () => {
 });
 
 describe("readReminderArrival", () => {
-  const main = { id: ids.threadId, incognito: false };
+  const main = { id: ids.threadId, incognito: false, surface: "drawer" };
   const stored = {
     id: ids.messageId,
     owner_user_id: ids.actorUserId,
@@ -118,7 +118,7 @@ describe("readReminderArrival", () => {
 
   function read(over: { main?: object | undefined; message?: object | undefined }) {
     const chat = {
-      getMainThread: async () => ("main" in over ? over.main : main),
+      getOwnedThreadById: async () => ("main" in over ? over.main : main),
       getMessageById: async () => ("message" in over ? over.message : stored)
     } as unknown as ChatRepository;
     return readReminderArrival(asOwner, ids, chat);
@@ -127,12 +127,13 @@ describe("readReminderArrival", () => {
   it("accepts a stored delivered reminder in the owner's own Main", async () => {
     expect(await read({})).toEqual({
       actorUserId: ids.actorUserId,
-      mainThreadId: ids.threadId,
+      threadId: ids.threadId,
       record: {
         kind: "reply",
         text: "Reminder: stretch",
         messageId: ids.messageId,
-        background: true
+        background: true,
+        backgroundThreadId: ids.threadId
       }
     });
   });

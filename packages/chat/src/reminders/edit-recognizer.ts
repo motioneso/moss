@@ -6,7 +6,7 @@ export function recognizeReminderEdit(raw: string): boolean {
   if (raw.length > 700 || !namesQuietHoursReminder(raw)) return false;
   const text = normalizeReminderRequest(raw);
   return (
-    /^(?:move|change|edit|update|reschedule|postpone|push back|rename|remove the deadline|clear the deadline)\b/.test(
+    /^(?:move|change|edit|update|reschedule|postpone|push back|rename|send|deliver|post|remove the deadline|clear the deadline)\b/.test(
       text
     ) && !/\breminder (?:app|application|subscription)\b/.test(text)
   );

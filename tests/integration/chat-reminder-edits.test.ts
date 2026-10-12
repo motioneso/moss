@@ -115,6 +115,7 @@ async function save(
 
 const keep: ReminderEditTerms = {
   repeat: null,
+  destination: null,
   text: null,
   delaySeconds: null,
   localDue: null,

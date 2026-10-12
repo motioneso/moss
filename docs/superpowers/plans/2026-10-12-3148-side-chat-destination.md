@@ -1,7 +1,7 @@
 # Send saved task results to a named side chat
 
 Part of #3148. Base: integration/scheduled-proactive. Risk: sensitive.
-Status: plan ready; awaiting coordinator approval before feature code.
+Status: tasks 1 and 2 implemented; draft PR checkpoint under coordinator fit condition. Tasks 3 and 4 remain open.
 Worktree: ~/Jarv1s/.claude/worktrees/sched-3148-side-chat-dest.
 Migration assignment: 0320, in packages/chat/sql.
 
@@ -215,4 +215,37 @@ read CI, stop all session-owned servers by PID, tear down credentials/containers
 release the claimed port, and leave this worktree clean. Report the PR and precise
 verification status to coordinator. Never merge or change board/milestones.
 
-Coordinator approval and review rulings: pending.
+Coordinator approval: plan commit 185e8dc31 approved. Conditions:
+
+- Preserve the owner_user_id ON DELETE CASCADE reference; integration test owner deletion with both live and already-deleted destinations.
+- After #3151 lands, retain subscribe-then-catch-up and dedupe; escalate conflicting routing changes before resolving.
+- Rebuild 0320 from #3136 migration 0319 when it lands, retaining queued advancement and runs-table rules; destination checks apply on every firing.
+- If context runs short, stop after tasks 1 and 2 with an open PR and state note. No handoff.
+- Coordinator messages use pane w1:p19D; the inherited environment's w3:p6 value was stale.
+
+## Draft checkpoint state
+
+Tasks 1 and 2 now include destination resolution, creation/edit persistence, owner-only
+worker routing, unavailable-destination failure, committed arrival identity, and
+browser selection filtering. The app map describes the implemented behavior without
+claiming a Settings destination row. Account deletion retains its cascade and has
+an integration test with both a live and already-deleted destination.
+
+Do not merge this checkpoint. Remaining work within #3148:
+
+- After #3151 / PR #3497 lands, rebase on integration/scheduled-proactive. Preserve
+  subscribe-then-catch-up and dedupe, and message coordinator before resolving any
+  routing conflict. Current browser code still starts from the earlier catch-up implementation.
+- After #3136 lands, rebuild migration 0320's update trigger and worker insert policy
+  from migration 0319. The current draft is based on 0317. Preserve queued-to-queued
+  advancement and per-firing runs rules; destination validation must apply to every firing.
+- Implement Settings destination DTO/schema/detail and actionable failed-destination
+  guidance using current design primitives, without changing #3136's list grouping.
+- Add the real-chat UAT spec and trigger-map rows, then run disposable Codex economy
+  model proof and post it on the PR. No UI instance has been started and no live proof exists.
+  In particular, #3126 navigation acceptance has not been exercised.
+- Run final gates after those changes and upstream integration. The scoped test evidence
+  recorded on the PR applies only to this checkpoint.
+
+No successor agent was spawned. The fit condition authorizes this partial checkpoint;
+it does not mark #3148 complete. Pane: w1:p19D.

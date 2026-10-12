@@ -19,6 +19,7 @@ import {
   type QueueDefinition
 } from "@moss/jobs";
 
+import { lockReminderDestination } from "./destination.js";
 import { ChatRepository } from "../repository.js";
 import { notifyReminderArrival } from "./live-arrival.js";
 import { enqueueReminderNotification } from "./notifications.js";
@@ -53,7 +54,7 @@ export type ReminderDeliveryOutcome =
   | "paused"
   | "expired"
   | "stale_version"
-  | "not_main"
+  | "destination_unavailable"
   | "failed";
 
 type ReminderDeliveryDeps = {
@@ -109,10 +110,15 @@ export async function deliverDueReminder(
     return "expired";
   }
 
-  const main = await deps.chat.getMainThread(scopedDb, reminder.ownerUserId);
-  if (!main || main.id !== reminder.threadId) {
+  const target = await lockReminderDestination(
+    scopedDb,
+    reminder.ownerUserId,
+    reminder.threadId,
+    reminder.destinationTitle
+  );
+  if (!target) {
     await deps.reminders.markFailed(scopedDb, reminder.id);
-    return "not_main";
+    return "destination_unavailable";
   }
 
   return persistReminderResult(

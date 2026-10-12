@@ -60,7 +60,8 @@ const reminder: TranscriptRecord = {
   kind: "reply",
   text: "Reminder: stretch",
   messageId: "reminder-1",
-  background: true
+  background: true,
+  backgroundThreadId: "main-thread"
 };
 
 function message(overrides: Partial<ChatMessageDto> & { id: string }): ChatMessageDto {
@@ -265,7 +266,7 @@ describe("Main stream reconnect", () => {
     expect(text).toContain("Earlier");
   });
 
-  it("never shows a reminder on a drawer that hydrated a side chat", async () => {
+  it("shows only reminders addressed to the hydrated side chat", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const side = { ...mainThread, id: "side-thread", isMain: false };
     vi.mocked(listChatThreads).mockResolvedValue({ threads: [side] });
@@ -282,9 +283,18 @@ describe("Main stream reconnect", () => {
       source.onopen?.();
       source.onmessage?.({ data: JSON.stringify(reminder) });
       source.onmessage?.({ data: JSON.stringify(liveReply) });
+      source.onmessage?.({
+        data: JSON.stringify({
+          ...reminder,
+          messageId: "side-reminder",
+          text: "Reminder: pack bags",
+          backgroundThreadId: "side-thread"
+        })
+      });
     });
     const text = JSON.stringify(renderer!.toJSON());
     expect(text).toContain("Working on it");
+    expect(text).toContain("Reminder: pack bags");
     expect(text).not.toContain("Reminder: stretch");
   });
 

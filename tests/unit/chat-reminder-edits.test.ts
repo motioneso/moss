@@ -62,6 +62,8 @@ it("keeps worked combined text/time and time-only edits within the guidance budg
 const NOW = new Date("2026-10-12T12:00:00Z");
 const current: EditableReminder = {
   id: "reminder",
+  thread_id: "main",
+  destination_title: null,
   version: 1,
   reminder_text: "call Sam",
   state: "queued",
@@ -75,6 +77,7 @@ const current: EditableReminder = {
   repeat_seconds: null
 };
 const keep: ReminderEditTerms = {
+  destination: null,
   text: null,
   delaySeconds: null,
   localDue: null,

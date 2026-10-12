@@ -30,7 +30,19 @@ export async function decideReminderTurn(
   )
     await clearQuietHoursProposal(scopedDb, thread.id);
   if (plan.kind === "unsupported") return refused(reminderRefusedReply(plan.reason));
-  if (plan.kind === "main_only" || !thread.is_main || thread.incognito) {
+  const sideAllowed = [
+    "request",
+    "clock_request",
+    "edit",
+    "edit_selection",
+    "edit_refused"
+  ].includes(plan.kind);
+  if (
+    plan.kind === "main_only" ||
+    (!thread.is_main && !sideAllowed) ||
+    thread.incognito ||
+    (thread.surface !== undefined && thread.surface !== "drawer")
+  ) {
     const manage =
       plan.kind === "main_only"
         ? plan.manage
