@@ -36,7 +36,7 @@ describe("hasFinishedVerdict (#2804)", () => {
           actionability: {
             category,
             reason: "Asked a question.",
-            suggestedTasks: [{ title: "Send the report" }]
+            suggestedTasks: [{ text: "Send the report" }]
           }
         }
       });
