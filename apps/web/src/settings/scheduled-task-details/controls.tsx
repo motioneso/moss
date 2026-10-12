@@ -18,11 +18,11 @@ export function TaskControls({ task, onDeleted }: TaskDetailProps) {
       return action;
     },
     onSuccess: async (action) => {
+      await client.invalidateQueries({ queryKey: queryKeys.chat.scheduledTasks });
       if (action === "delete") {
         setConfirming(false);
         onDeleted?.();
       }
-      await client.invalidateQueries({ queryKey: queryKeys.chat.scheduledTasks });
     }
   });
   const close = () => {

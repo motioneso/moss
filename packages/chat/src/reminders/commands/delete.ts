@@ -1,3 +1,4 @@
+import type { ControlledReminder } from "../controls.js";
 import { controlTarget, controlRefused } from "./control-target.js";
 import type { ReminderCommandHandler, ReminderTurnPlan } from "./types.js";
 
@@ -19,8 +20,13 @@ export function recognizeDelete(
 
 export const deleteRequest: ReminderCommandHandler = async (context, plan) => {
   if (plan.kind !== "delete") throw new Error("invalid reminder delete plan");
-  const reminder = await controlTarget(context, plan.target, false);
-  if (!reminder) return controlRefused();
+  const reminder = await controlTarget(context, plan.target, true);
+  if (!reminder || (reminder.state !== "queued" && reminder.state !== "paused"))
+    return controlRefused();
+  return deletionQuestion(reminder);
+};
+
+export function deletionQuestion(reminder: ControlledReminder) {
   return {
     reply: `Delete this reminder: ${reminder.text}? Earlier messages will stay. Type yes to delete it, or no to keep it.`,
     origin: {
@@ -31,5 +37,5 @@ export const deleteRequest: ReminderCommandHandler = async (context, plan) => {
       reminderVersion: reminder.version,
       reminderState: reminder.state
     }
-  };
-};
+  } as const;
+}

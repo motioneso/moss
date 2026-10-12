@@ -7,6 +7,7 @@ import { lockNotificationDelivery, type SavedReminder } from "./repository.js";
 export interface ControlledReminder extends SavedReminder {
   readonly text: string;
   readonly state: ChatReminderState;
+  readonly deadlineAt: Date | null;
 }
 export type ReminderControlResult =
   | {
@@ -23,7 +24,7 @@ export async function lockReminderControl(
   await lockNotificationDelivery(scopedDb, id);
   const row = await scopedDb.db
     .selectFrom("app.chat_reminders")
-    .select(["id", "reminder_text", "state", "version", "due_at"])
+    .select(["id", "reminder_text", "state", "version", "due_at", "deadline_at"])
     .where("id", "=", id)
     .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
     .forUpdate()
@@ -34,7 +35,8 @@ export async function lockReminderControl(
       text: row.reminder_text,
       state: row.state,
       version: row.version,
-      dueAt: new Date(row.due_at)
+      dueAt: new Date(row.due_at),
+      deadlineAt: row.deadline_at === null ? null : new Date(row.deadline_at)
     }
   );
 }

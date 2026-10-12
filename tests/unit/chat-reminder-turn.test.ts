@@ -23,6 +23,7 @@ const SAVED = {
 
 function setup(options: {
   incognito?: boolean;
+  pending?: ReturnType<typeof vi.fn>;
   record?: ReturnType<typeof vi.fn>;
   abortDuringThreadRead?: () => void;
 }) {
@@ -48,13 +49,14 @@ function setup(options: {
       getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
       touchExistingThread: vi.fn().mockResolvedValue(true),
       getMainThreadState,
+      hasPendingReminderDeletion: options.pending,
       recordReminderTurn
     } as never
   });
   const manager = new ChatSessionManager(deps);
   const records: TranscriptRecord[] = [];
   manager.subscribe("u1", (record) => records.push(record));
-  return { manager, engine, gate, recordReminderTurn, records };
+  return { manager, engine, gate, recordReminderTurn, records, getMainThreadState };
 }
 
 describe("chat reminder turn (#3309)", () => {
@@ -226,5 +228,57 @@ describe("chat reminder list and cancel turn (#3310)", () => {
     const result = await manager.submitTurn("u1", "Ben", "list my reminders");
     expect(result.reply).toBe(REMINDER_MANAGE_FAILURE_MESSAGE);
     expect(engine.launchCount).toBe(0);
+  });
+});
+
+describe("reminder deletion answers before the model", () => {
+  it.each(["what is the weather", "maybe later", "yes please tell me about tomorrow"])(
+    "ordinary text %s reaches the model without pending-question reads",
+    async (text) => {
+      const pending = vi.fn().mockRejectedValue(new Error("offline"));
+      const { manager, engine, recordReminderTurn } = setup({ pending });
+      expect((await manager.submitTurn("u1", "Ben", text)).reply).toBe("model answer");
+      expect(engine.launchCount).toBe(1);
+      expect(pending).not.toHaveBeenCalled();
+      expect(recordReminderTurn).not.toHaveBeenCalled();
+    }
+  );
+  it("an attachment reaches the model while a deletion question is open", async () => {
+    const pending = vi.fn().mockResolvedValue(true);
+    const { manager, engine, recordReminderTurn } = setup({ pending });
+    await manager.submitTurn("u1", "Ben", "yes", {
+      attachments: [
+        {
+          id: "file",
+          fileName: "note.txt",
+          mimeType: "text/plain",
+          sizeBytes: 1,
+          createdAt: "2026-10-12T10:00:00Z"
+        }
+      ]
+    });
+    expect(engine.launchCount).toBe(1);
+    expect(pending).not.toHaveBeenCalled();
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+  });
+  it.each(["yes", "no", "yeah", "yep", "sure", "ok", "nope", "keep it"])(
+    "%s checks the pending question once and reuses its thread lookup",
+    async (text) => {
+      const pending = vi.fn().mockResolvedValue(true);
+      const { manager, engine, getMainThreadState } = setup({ pending });
+      await manager.submitTurn("u1", "Ben", text);
+      expect(engine.launchCount).toBe(0);
+      expect(pending).toHaveBeenCalledTimes(1);
+      expect(getMainThreadState).toHaveBeenCalledTimes(1);
+    }
+  );
+  it.each(["yes", "no"])("%s never reaches the model after lookup failure", async (text) => {
+    const pending = vi.fn().mockRejectedValue(new Error("offline"));
+    const { manager, engine, recordReminderTurn } = setup({ pending });
+    expect((await manager.submitTurn("u1", "Ben", text)).reply).toBe(
+      "I could not check that just now. Nothing changed, ask again."
+    );
+    expect(engine.launchCount).toBe(0);
+    expect(recordReminderTurn).not.toHaveBeenCalled();
   });
 });

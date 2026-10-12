@@ -31,6 +31,17 @@ export const resume: ReminderCommandHandler = async (context, plan) => {
   );
   if (result.kind === "missing" || result.kind === "not_pending" || result.kind === "stale")
     return controlRefused("That reminder is no longer waiting. Nothing changed.");
+  if (result.kind === "unchanged")
+    return controlRefused(`Already waiting. Nothing changed: ${result.reminder.text}`);
+  if (
+    result.reminder.deadlineAt !== null &&
+    result.reminder.deadlineAt.getTime() <
+      (await context.deps.reminders.now(context.scopedDb)).getTime()
+  )
+    return {
+      reply: `Its deadline has passed. This reminder will be skipped: ${result.reminder.text}`,
+      origin: { version: 1, kind: "reminder", event: "resumed", reminderId: result.reminder.id }
+    };
   return {
     reply: `Resumed. I'll send this reminder once: ${result.reminder.text}`,
     origin: { version: 1, kind: "reminder", event: "resumed", reminderId: result.reminder.id }

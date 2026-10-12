@@ -3,7 +3,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const REMINDER_CONTROL_FEATURE = {
   id: "chat.reminder_controls",
   description:
-    "Pause/resume pending reminders in Settings or Main chat. Resume keeps timing and fires once. Delete keeps messages; Settings confirms, while chat delete/remove needs typed yes. Cancel stays immediate; controls are not runs.",
+    "Pause/resume pending reminders in Settings or Main chat. Resume keeps timing; past deadlines are skipped. Delete keeps messages; Settings confirms, while chat delete/remove needs typed yes. Cancel stays immediate; controls are not runs.",
   featureFlagId: "chat.module",
   errors: [
     {
@@ -23,7 +23,7 @@ export const REMINDER_CONTROL_FEATURE = {
     {
       id: "chat.review_reminder",
       description:
-        "Review the reminder's current state in Settings, then retry or name one reminder in Main chat.",
+        "Review the current reminder. Answer yes or no; short near-misses repeat the question. Other chat closes it, so ask to delete again. Stale questions also need a new delete request.",
       path: "/settings?section=scheduled"
     }
   ]

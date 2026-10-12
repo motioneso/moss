@@ -158,6 +158,8 @@ test("pause, resume and confirmed deletion use the same reminder on desktop and 
   await send(page, drawer, "no");
   expect((await tasks(page)).some((row) => row.id === chatDelete.id)).toBe(true);
   await send(page, drawer, "remove my reminder to controls proof chat delete");
+  await send(page, drawer, "yeah");
+  expect((await tasks(page)).some((row) => row.id === chatDelete.id)).toBe(true);
   await send(page, drawer, "yes");
   expect((await tasks(page)).some((row) => row.id === chatDelete.id)).toBe(false);
   await send(page, drawer, "remind me in 5 minutes to controls proof settings delete");
@@ -178,6 +180,6 @@ test("pause, resume and confirmed deletion use the same reminder on desktop and 
     .toBe(false);
   expect((await tasks(page)).find((row) => row.id === saved.id)?.runs).toHaveLength(1);
   console.log(
-    "[3133B] chat delete waited for typed yes; Settings deletion used Keep task focus and retained earlier result/history"
+    "[3133B] near-miss reasked and chat delete waited for typed yes; Settings deletion used Keep task focus and retained earlier result/history"
   );
 });

@@ -305,6 +305,70 @@ describe("reminder controls through owner transactions", () => {
     expect(await asOwner(ids.userC, (db) => reminders.openCountLocked(db, ids.userC))).toBe(20);
     await expect(save(ids.userC, "over capacity")).rejects.toThrow();
   });
+  it.each(["yeah", "yep", "sure", "ok", "nope", "keep it"])(
+    "near-miss %s reasks the same question and a following yes deletes",
+    async (text) => {
+      const saved = await save(ids.userA, `near miss ${text}`);
+      const request = await controlTurn(saved, "delete reminder", {
+        kind: "delete",
+        target: `near miss ${text}`
+      });
+      const answer = await controlTurn(saved, text, { kind: "confirm_delete", agree: false });
+      expect(answer.reply).toBe(request.reply);
+      expect(answer.origin).toEqual(request.origin);
+      expect(await asOwner(ids.userA, (db) => pendingReminderDeletion(db, saved.threadId))).toEqual(
+        { id: saved.id, version: saved.version, state: "queued" }
+      );
+      expect(
+        (await controlTurn(saved, "yes", { kind: "confirm_delete", agree: true })).origin.event
+      ).toBe("deleted");
+    }
+  );
+  it.each([null, "only waiting target"])(
+    "delete target %s ignores finished history",
+    async (target) => {
+      // Leave one changeable owner reminder beside history, including an identical finished name.
+      await bootstrap.query(
+        "UPDATE app.chat_reminders SET state = 'cancelled' WHERE owner_user_id = $1 AND state IN ('queued', 'paused')",
+        [ids.userA]
+      );
+      const finished = await save(ids.userA, "only waiting target");
+      await asOwner(ids.userA, (db) => reminders.markCancelled(db, finished.id));
+      const saved = await save(ids.userA, "only waiting target");
+      expect(
+        (await controlTurn(saved, "delete my reminder", { kind: "delete", target })).origin
+      ).toMatchObject({ event: "delete_requested", reminderId: saved.id });
+      await asOwner(ids.userA, (db) => deleteReminderById(db, saved.id));
+    }
+  );
+  it("repeated pause and resume say nothing changed", async () => {
+    const saved = await save(ids.userA, "truthful controls");
+    expect(
+      (await controlTurn(saved, "resume", { kind: "resume", target: "truthful controls" })).reply
+    ).toContain("Nothing changed");
+    await controlTurn(saved, "pause", { kind: "pause", target: "truthful controls" });
+    expect(
+      (await controlTurn(saved, "pause", { kind: "pause", target: "truthful controls" })).reply
+    ).toContain("Nothing changed");
+  });
+  it.each([ids.userB, ids.adminUser])(
+    "actor %s cannot pause or resume another owner's reminder",
+    async (actor) => {
+      const saved = await save(ids.userA, "owner only pause resume");
+      expect((await asOwner(actor, (db) => pauseReminderById(db, saved.id))).kind).toBe("missing");
+      expect((await asOwner(ids.userA, (db) => reminders.lockForCancel(db, saved.id)))?.state).toBe(
+        "queued"
+      );
+      await asOwner(ids.userA, (db) => pauseReminderById(db, saved.id));
+      expect(
+        (await asOwner(actor, (db) => resumeReminderById(db, appBoss, actor, saved.id))).kind
+      ).toBe("missing");
+      expect((await asOwner(ids.userA, (db) => reminders.lockForCancel(db, saved.id)))?.state).toBe(
+        "paused"
+      );
+      await asOwner(ids.userA, (db) => deleteReminderById(db, saved.id));
+    }
+  );
   it("an ambiguous typed reply closes the old deletion question without deleting", async () => {
     const saved = await save(ids.userA, "ambiguous agreement");
     await controlTurn(saved, "delete reminder", { kind: "delete", target: "ambiguous agreement" });
@@ -505,11 +569,11 @@ describe("reminder controls racing delivery", () => {
       await bootstrap.query("ROLLBACK");
       throw error;
     }
-    const resumed = await asOwner(ids.userA, (db) =>
-      resumeReminderById(db, appBoss, ids.userA, saved.id)
-    );
-    if (resumed.kind !== "changed") throw new Error("expected resume");
-    expect(await attempt(resumed.reminder)).toBe("expired");
+    const reply = await controlTurn(saved, "resume", { kind: "resume", target: "expired resume" });
+    expect(reply.reply).toContain("deadline");
+    expect(reply.reply).not.toContain("I'll send");
+    const resumed = { ...saved, version: 3 };
+    expect(await attempt(resumed)).toBe("expired");
     expect(await deliveredCount(saved.id)).toBe(0);
   });
 });

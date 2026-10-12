@@ -54,3 +54,7 @@ export function typedDeletionAgreement(text: string): boolean | undefined {
   if (/^no[.!]?$/i.test(text.trim())) return false;
   return undefined;
 }
+
+export function isDeletionNearMiss(text: string): boolean {
+  return /^(yeah|yep|sure|ok|nope|keep it)[.!]?$/i.test(text.trim());
+}

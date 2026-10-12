@@ -54,7 +54,9 @@ export function ScheduledTasksPane() {
                   (
                     list.current?.querySelector<HTMLButtonElement>(
                       `[data-task-id="${selected.id}"]`
-                    ) ?? list.current
+                    ) ??
+                    list.current?.querySelector<HTMLButtonElement>("button") ??
+                    list.current
                   )?.focus()
                 );
               }}
