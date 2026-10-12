@@ -53,6 +53,12 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
   await page.getByRole("button", { name: "Scheduled tasks", exact: true }).click();
   let drawer = await openChat(page);
   await send(page, drawer, "Reply briefly: ready for reminder edit proof.");
+  console.log(
+    "[3135] " +
+      (await drawer
+        .getByRole("button", { name: /^Chat model:/ })
+        .evaluate((button) => button.getAttribute("aria-label") ?? button.textContent))
+  );
   await send(page, drawer, "remind me in 120 seconds to edit proof original");
   const original = (await tasks(page)).find((row) => row.instruction === "edit proof original")!;
   expect(original.state).toBe("active");
@@ -88,6 +94,27 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
       `[3135] width=${width} Settings shows the revised record after reload; no Edit button`
     );
   }
+  drawer = await openChat(page);
+  await send(page, drawer, "remind me in 10 minutes to choice proof one");
+  await send(page, drawer, "remind me in 10 minutes to choice proof two");
+  const before = (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"));
+  await send(page, drawer, "change my choice proof reminder text to chosen proof revised");
+  expect(
+    (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"))
+  ).toHaveLength(2);
+  await expect(drawer.getByText(/Which reminder should I change/).last()).toBeVisible();
+  await send(page, drawer, "2");
+  const selected = (await tasks(page)).find((row) => row.id === before[1]!.id)!;
+  expect(selected.instruction).toBe("chosen proof revised");
+  await send(page, drawer, "change my chosen proof revised reminder to repeat daily");
+  expect((await tasks(page)).find((row) => row.id === selected.id)?.dueAt).toBe(selected.dueAt);
+  await expect(
+    drawer.getByText(/I can edit a reminder's text, time or deadline only/).last()
+  ).toBeVisible();
+  console.log(
+    "[3135] ambiguous edits waited for a typed numbered choice; recurrence was refused unchanged"
+  );
+  await close(drawer);
   // Wait once across the old due time, then observe the real queue's state.
   await page.waitForTimeout(Math.max(0, Date.parse(original.dueAt) - Date.now()) + 12_000);
   const atOldTime = (await tasks(page)).find((row) => row.id === original.id)!;
@@ -116,24 +143,4 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
   expect(firings[0]!.body).toContain("edit proof revised");
   expect(firings[0]!.body).not.toContain("edit proof original");
   console.log("[3135] exactly one persisted revised message fired at the new time");
-  drawer = await openChat(page);
-  await send(page, drawer, "remind me in 10 minutes to choice proof one");
-  await send(page, drawer, "remind me in 10 minutes to choice proof two");
-  const before = (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"));
-  await send(page, drawer, "change my choice proof reminder text to chosen proof revised");
-  expect(
-    (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"))
-  ).toHaveLength(2);
-  await expect(drawer.getByText(/Which reminder should I change/).last()).toBeVisible();
-  await send(page, drawer, "2");
-  const selected = (await tasks(page)).find((row) => row.id === before[1]!.id)!;
-  expect(selected.instruction).toBe("chosen proof revised");
-  await send(page, drawer, "change my chosen proof revised reminder to repeat daily");
-  expect((await tasks(page)).find((row) => row.id === selected.id)?.dueAt).toBe(selected.dueAt);
-  await expect(
-    drawer.getByText(/I can edit a reminder's text, time or deadline only/).last()
-  ).toBeVisible();
-  console.log(
-    "[3135] ambiguous edits waited for a typed numbered choice; recurrence was refused unchanged"
-  );
 });

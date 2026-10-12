@@ -141,7 +141,21 @@ export async function editReminderById(
   if (!changed) return { kind: "unchanged", reminder: current };
   const row = await scopedDb.db
     .updateTable("app.chat_reminders")
-    .set({ ...values, version: current.version + 1 })
+    .set({
+      reminder_text: values.reminder_text,
+      // Preserve omitted timestamps in PostgreSQL, including their microseconds.
+      ...(terms.delaySeconds !== null || terms.localDue !== null
+        ? {
+            timing: values.timing,
+            delay_seconds: values.delay_seconds,
+            due_at: values.due_at,
+            local_due: values.local_due,
+            time_zone: values.time_zone
+          }
+        : {}),
+      ...(terms.deadline !== "keep" ? { deadline_at: values.deadline_at } : {}),
+      version: current.version + 1
+    })
     .where("id", "=", id)
     .returningAll()
     .executeTakeFirstOrThrow();

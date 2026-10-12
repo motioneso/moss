@@ -127,13 +127,13 @@ async function edited(actor: string, saved: SavedReminder, terms: ReminderEditTe
     editReminderById(db, appBoss, actor, saved.id, saved.version, terms, "UTC")
   );
 }
-async function makeDue(id: string) {
+async function makeDue(id: string, offset = "-1 second") {
   await bootstrap.query("BEGIN");
   try {
     await bootstrap.query("SET LOCAL session_replication_role = replica");
     await bootstrap.query(
-      "UPDATE app.chat_reminders SET due_at = now() - interval '1 second' WHERE id = $1",
-      [id]
+      "UPDATE app.chat_reminders SET due_at = date_trunc('milliseconds', now()) + $2::interval WHERE id = $1",
+      [id, offset]
     );
     await bootstrap.query("COMMIT");
   } catch (error) {
@@ -177,6 +177,24 @@ async function turn(threadId: string, text: string, plan: ReminderTurnPlan) {
 }
 
 describe("editing owner reminders", () => {
+  it("preserves a relative due time's microseconds when only its text changes later", async () => {
+    const saved = await save(ids.userA, "precision original");
+    await makeDue(saved.id, "60 seconds 123 microseconds");
+    const readDue = async () =>
+      (
+        await bootstrap.query("SELECT due_at::text FROM app.chat_reminders WHERE id = $1", [
+          saved.id
+        ])
+      ).rows[0].due_at;
+    const originalDue = await readDue();
+    await bootstrap.query("SELECT pg_sleep(1.1)");
+    expect(await edited(ids.userA, saved, { ...keep, text: "precision revised" })).toMatchObject({
+      kind: "changed",
+      reminder: { reminder_text: "precision revised", version: 2 }
+    });
+    expect(await readDue()).toBe(originalDue);
+  });
+
   it("invalidates old work and delivers only the revised text once", async () => {
     const saved = await save(ids.userA, "old edit text");
     const result = await edited(ids.userA, saved, {
