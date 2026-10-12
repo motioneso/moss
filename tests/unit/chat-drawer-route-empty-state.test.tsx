@@ -144,7 +144,8 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     const view = await mountDrawer({ cached: lockedModel, fresh: lockedModel });
     await view.settle("The locked chat model is unavailable");
 
-    expect(view.container.textContent).toContain("Model unavailable");
+    // The header's connection recheck can finish after the body under load.
+    await view.settle("Model unavailable");
     expect(view.container.textContent).not.toContain("Here when you need me");
     expect(view.container.textContent).not.toContain("Connect a provider to start chatting");
   });
