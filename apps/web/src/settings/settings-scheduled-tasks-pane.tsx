@@ -32,7 +32,7 @@ export function ScheduledTasksPane() {
         </EmptyState>
       ) : (
         <>
-          <div ref={list} hidden={Boolean(selected)}>
+          <div ref={list} tabIndex={-1} hidden={Boolean(selected)}>
             {query.data.tasks.length === 0 ? (
               <EmptyState
                 title="Nothing scheduled yet"
@@ -51,9 +51,11 @@ export function ScheduledTasksPane() {
               onBack={() => {
                 setSelectedId(null);
                 requestAnimationFrame(() =>
-                  list.current
-                    ?.querySelector<HTMLButtonElement>(`[data-task-id="${selected.id}"]`)
-                    ?.focus()
+                  (
+                    list.current?.querySelector<HTMLButtonElement>(
+                      `[data-task-id="${selected.id}"]`
+                    ) ?? list.current
+                  )?.focus()
                 );
               }}
             />

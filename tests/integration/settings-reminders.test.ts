@@ -1,3 +1,5 @@
+import type { PgBoss } from "pg-boss";
+import { createPgBossClient } from "@moss/jobs";
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import pg from "pg";
@@ -19,6 +21,7 @@ let db: Kysely<MossDatabase>;
 let runner: DataContextRunner;
 let server: FastifyInstance;
 let bootstrap: pg.Client;
+let boss: PgBoss;
 const chat = new ChatRepository();
 const reminders = new ReminderRepository();
 const grants = createActAsGrantRegistry();
@@ -29,9 +32,12 @@ beforeAll(async () => {
   runner = new DataContextRunner(db);
   bootstrap = new pg.Client({ connectionString: connectionStrings.bootstrap });
   await bootstrap.connect();
+  boss = createPgBossClient(connectionStrings.app);
+  await boss.start();
   server = Fastify();
   registerScheduledTaskRoutes(server, {
     dataContext: runner,
+    boss,
     resolveAccessContext: async (request) => {
       const grant = request.headers[ACT_AS_GRANT_HEADER];
       if (typeof grant === "string") {
@@ -47,7 +53,12 @@ beforeAll(async () => {
   await server.ready();
 });
 afterAll(async () => {
-  await Promise.allSettled([server?.close(), db?.destroy(), bootstrap?.end()]);
+  await Promise.allSettled([
+    server?.close(),
+    boss?.stop({ graceful: false }),
+    db?.destroy(),
+    bootstrap?.end()
+  ]);
 });
 
 async function save(actorUserId: string, text: string) {
@@ -187,4 +198,55 @@ describe("read-only Settings reminders", () => {
     });
     expect(JSON.stringify(moss.body)).not.toContain(body);
   });
+});
+
+it("pauses an owner reminder through Settings and keeps earlier messages on deletion", async () => {
+  const saved = await save(ids.userA, "Settings controls path");
+  const paused = await server.inject({
+    method: "POST",
+    url: `/api/chat/scheduled-tasks/${saved.id}/pause`,
+    headers: { "x-test-actor": ids.userA }
+  });
+  expect(paused.statusCode).toBe(200);
+  expect((await list(ids.userA)).tasks.find((task) => task.id === saved.id)?.state).toBe("paused");
+  const resumed = await server.inject({
+    method: "POST",
+    url: `/api/chat/scheduled-tasks/${saved.id}/resume`,
+    headers: { "x-test-actor": ids.userA }
+  });
+  expect(resumed.statusCode).toBe(200);
+  expect((await list(ids.userA)).tasks.find((task) => task.id === saved.id)?.state).toBe("active");
+  const denied = await server.inject({
+    method: "DELETE",
+    url: `/api/chat/scheduled-tasks/${saved.id}`,
+    headers: { "x-test-actor": ids.userB }
+  });
+  expect(denied.statusCode).toBe(404);
+  const removed = await server.inject({
+    method: "DELETE",
+    url: `/api/chat/scheduled-tasks/${saved.id}`,
+    headers: { "x-test-actor": ids.userA }
+  });
+  expect(removed.statusCode).toBe(200);
+  expect((await list(ids.userA)).tasks.some((task) => task.id === saved.id)).toBe(false);
+  const messages = await runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+    chat.listMessages(db, saved.threadId)
+  );
+  expect(messages.some((row) => row.body.includes("Settings controls path"))).toBe(true);
+});
+
+it("never exposes Settings controls to model app-action grants", async () => {
+  const saved = await save(ids.userA, "model control boundary");
+  const grant = grants.mint({
+    actorUserId: ids.userA,
+    chatSessionId: randomUUID(),
+    turnId: randomUUID()
+  });
+  const response = await server.inject({
+    method: "DELETE",
+    url: `/api/chat/scheduled-tasks/${saved.id}`,
+    headers: { [ACT_AS_GRANT_HEADER]: grant }
+  });
+  expect(response.statusCode).toBe(403);
+  expect((await list(ids.userA)).tasks.some((task) => task.id === saved.id)).toBe(true);
 });

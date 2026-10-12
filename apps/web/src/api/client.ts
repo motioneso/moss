@@ -1932,3 +1932,17 @@ export function terminalWsUrl(ticket: string): string {
 export async function listScheduledTasks(): Promise<ListScheduledTasksResponse> {
   return requestJson<ListScheduledTasksResponse>("/api/chat/scheduled-tasks");
 }
+
+export async function pauseScheduledTask(id: string): Promise<void> {
+  await requestJson(`/api/chat/scheduled-tasks/${encodeURIComponent(id)}/pause`, {
+    method: "POST"
+  });
+}
+export async function resumeScheduledTask(id: string): Promise<void> {
+  await requestJson(`/api/chat/scheduled-tasks/${encodeURIComponent(id)}/resume`, {
+    method: "POST"
+  });
+}
+export async function deleteScheduledTask(id: string): Promise<void> {
+  await requestJson(`/api/chat/scheduled-tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+}

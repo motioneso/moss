@@ -159,7 +159,12 @@ const REMINDER_ORIGIN_EVENTS: ReadonlySet<string> = new Set<ChatReminderOriginV1
   "delivered",
   "listed",
   "cancelled",
-  "cancel_refused"
+  "cancel_refused",
+  "paused",
+  "resumed",
+  "delete_requested",
+  "deleted",
+  "delete_declined"
 ]);
 
 function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 | undefined {
@@ -170,6 +175,10 @@ function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 |
     kind: "reminder",
     event: event as ChatReminderOriginV1["event"],
     reminderId: typeof record.reminderId === "string" ? record.reminderId : null,
+    ...(typeof record.reminderVersion === "number"
+      ? { reminderVersion: record.reminderVersion }
+      : {}),
+    ...(typeof record.reminderState === "string" ? { reminderState: record.reminderState } : {}),
     ...(typeof record.late === "boolean" ? { late: record.late } : {})
   };
 }

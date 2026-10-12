@@ -1,3 +1,4 @@
+import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -76,7 +77,8 @@ export const chatModuleManifest = {
       "sql/0308_chat_reminder_cancel.sql",
       "sql/0309_chat_reminder_context_acknowledged.sql",
       "sql/0310_chat_live_turns.sql",
-      "sql/0311_chat_local_clock_reminders.sql"
+      "sql/0311_chat_local_clock_reminders.sql",
+      "sql/0313_chat_reminder_controls.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -126,6 +128,7 @@ export const chatModuleManifest = {
     }
   ],
   features: [
+    REMINDER_CONTROL_FEATURE,
     {
       id: "chat.stream_reconnect",
       description:
@@ -609,6 +612,7 @@ export const chatModuleManifest = {
     }
   ],
   routes: [
+    ...REMINDER_CONTROL_ROUTES,
     {
       method: "GET",
       path: "/api/chat/scheduled-tasks",

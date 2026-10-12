@@ -1,3 +1,4 @@
+import { typedDeletionAgreement } from "../reminders/delete-agreement.js";
 // #3309: the step before the classifier gate and the model. A recognised reminder request is
 // answered by code from the user's own raw words, so no model output can create a reminder.
 // #3310: the same holds for listing and cancelling.
@@ -34,9 +35,22 @@ export async function tryPreModelTurn(
   ...args: Parameters<typeof tryGatedTurn>
 ): ReturnType<typeof tryGatedTurn> {
   const [host, actorUserId, surface, text, opts, controller] = args;
-  const recognition = recognizeReminderPlan(text);
+  let recognition = recognizeReminderPlan(text);
+  const agreement = typedDeletionAgreement(text);
+  if (!recognition && !opts?.moduleControl && host.deps.persistence.hasPendingReminderDeletion) {
+    const current = await selectTurnThread(host, actorUserId, surface);
+    if (
+      current?.id &&
+      !current.incognito &&
+      (await host.deps.persistence.hasPendingReminderDeletion?.(actorUserId, current.id))
+    )
+      recognition = { kind: "confirm_delete", agree: agreement ?? false };
+  }
   if (!recognition) return tryGatedTurn(...args);
-  const manage = recognition.kind === "list" || recognition.kind === "cancel";
+  const manage =
+    recognition.kind !== "request" &&
+    recognition.kind !== "clock_request" &&
+    recognition.kind !== "unsupported";
 
   const threadState = await selectTurnThread(host, actorUserId, surface);
   const requestIncognito = threadState?.incognito ?? false;

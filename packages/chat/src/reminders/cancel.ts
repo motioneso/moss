@@ -43,9 +43,11 @@ export async function listReminders(
   const now = await reminders.now(scopedDb);
   return {
     now,
-    open: bySoonest(owned.filter((reminder) => reminder.state === "queued")),
+    open: bySoonest(
+      owned.filter((reminder) => reminder.state === "queued" || reminder.state === "paused")
+    ),
     finished: owned
-      .filter((reminder) => reminder.state !== "queued")
+      .filter((reminder) => reminder.state !== "queued" && reminder.state !== "paused")
       .slice(0, REMINDER_LIST_FINISHED_LIMIT)
   };
 }
@@ -60,7 +62,9 @@ export async function cancelReminder(
   target: string | null
 ): Promise<ReminderCancelResult> {
   const owned = await reminders.listOwned(scopedDb);
-  const waiting = bySoonest(owned.filter((reminder) => reminder.state === "queued"));
+  const waiting = bySoonest(
+    owned.filter((reminder) => reminder.state === "queued" || reminder.state === "paused")
+  );
 
   if (target === null) {
     if (waiting.length > 1) return { kind: "needs_target", open: waiting };
@@ -87,7 +91,7 @@ export async function cancelReminder(
 
   // Newest first, so a finished match reports the latest reminder with those words.
   const finishedMatches = matchTarget(
-    owned.filter((reminder) => reminder.state !== "queued"),
+    owned.filter((reminder) => reminder.state !== "queued" && reminder.state !== "paused"),
     target
   );
   return finishedMatches.length > 0
@@ -134,6 +138,7 @@ async function settle(
 
   switch (locked.state) {
     case "queued":
+    case "paused":
       await reminders.markCancelled(scopedDb, locked.id);
       return { kind: "cancelled", reminder: { ...locked, state: "cancelled" }, alike: 0 };
     case "delivered":

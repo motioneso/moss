@@ -57,11 +57,11 @@ test("real reminder has Settings details, history and a saved result on desktop 
   await expect(page.getByText("Active", { exact: true })).toBeVisible();
   await expect(page.getByText("Schedule", { exact: true })).toBeVisible();
   await expect(page.getByText(/Hasn't run yet/)).toBeVisible();
-  await expect(page.getByRole("button", { name: /^(Pause|Resume|Delete task|Edit)$/ })).toHaveCount(
-    0
-  );
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete task", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
   console.log(
-    "[3133] chat-created reminder shows active instruction/timing, no made-up runs or mutation controls"
+    "[3133] chat-created reminder shows active instruction/timing, no made-up runs and available lifecycle controls"
   );
   // Real worker time: wait for the real record to change, not a fake window focus event.
   await expect

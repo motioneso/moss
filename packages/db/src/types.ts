@@ -1019,7 +1019,13 @@ export interface ChatMessagesTable {
   updated_at: TimestampColumn;
 }
 
-export type ChatReminderState = "queued" | "delivered" | "failed" | "cancelled" | "expired";
+export type ChatReminderState =
+  | "queued"
+  | "paused"
+  | "delivered"
+  | "failed"
+  | "cancelled"
+  | "expired";
 export type ChatReminderTiming = "relative" | "local_clock";
 export type ChatReminderContextState = "pending" | "dismissed" | "acknowledged";
 

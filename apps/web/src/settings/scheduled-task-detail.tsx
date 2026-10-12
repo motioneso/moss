@@ -1,3 +1,4 @@
+import { TaskControls } from "./scheduled-task-details/controls";
 import { useEffect, useRef } from "react";
 import { Button } from "@moss/ui";
 import type { ScheduledTaskDto } from "@moss/shared";
@@ -10,7 +11,8 @@ const pieces = [
   { id: "status", Component: TaskStatus },
   { id: "instruction", Component: TaskInstruction },
   { id: "timing", Component: TaskTiming },
-  { id: "history", Component: TaskHistory }
+  { id: "history", Component: TaskHistory },
+  { id: "controls", Component: TaskControls }
 ];
 export function ScheduledTaskDetail({
   task,
@@ -33,7 +35,7 @@ export function ScheduledTaskDetail({
         {task.title}
       </h3>
       {pieces.map(({ id, Component }) => (
-        <Component key={id} task={task} locale={locale} />
+        <Component key={id} task={task} locale={locale} onDeleted={onBack} />
       ))}
     </div>
   );

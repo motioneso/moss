@@ -19,6 +19,7 @@ interface ScheduledReminderRow {
 
 const STATES: Record<ChatReminderState, ScheduledTaskState> = {
   queued: "active",
+  paused: "paused",
   delivered: "completed",
   expired: "expired",
   failed: "failed",
