@@ -1,6 +1,6 @@
 # One-sided messages do not create commitments (#3467)
 
-Status: original guard and outcome read approved. Rebased on integration/scheduled-proactive at 1c66097dc. Settlement and confirmation exclusion approved as c52672bbb; implementation in progress, full gate and live proof pending.
+Status: original guard and outcome read approved. Rebased on integration/scheduled-proactive at 7ffd41835. Settlement and confirmation exclusion approved as c52672bbb and implemented; live GreenMail proof posted on PR #3472. See the PR for final gate and CI results.
 Branch: scheduled/3467-one-sided-guard. Base: integration/scheduled-proactive.
 Worktree: ~/Jarv1s/.claude/worktrees/sched-3467-one-sided-guard.
 Part of #3467 and #3465. The parent issue correction and investigation govern this slice.
