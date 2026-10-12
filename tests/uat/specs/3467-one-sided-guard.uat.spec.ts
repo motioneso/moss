@@ -174,11 +174,13 @@ test("real mailbox notices create no commitments while an owner promise reaches 
       .toBe("succeeded");
     const confirmationId = execUatSql(
       project,
-      `SELECT id FROM app.email_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND subject='Your order is confirmed'`
+      `SELECT external_id FROM app.email_messages WHERE owner_user_id='${UAT_ADMIN_ID}' AND subject='Your order is confirmed'`
     ).trim();
-    expect(
-      run?.sourceMetadata.emailEvidence.items.find((item) => item.messageId === confirmationId)
-    ).toMatchObject({ status: "informational", reason: "no_action_confirmation", rank: null });
+    expect
+      .soft(
+        run?.sourceMetadata.emailEvidence.items.find((item) => item.messageId === confirmationId)
+      )
+      .toMatchObject({ status: "informational", reason: "no_action_confirmation", rank: null });
     expect(run?.sourceMetadata.commitmentCount).toBe(1);
     expect(run?.sourceMetadata.emailCount).toBeGreaterThan(0);
     expect(run?.summaryText).toMatch(/design draft/i);
