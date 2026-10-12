@@ -165,15 +165,15 @@ as the built-in. It receives the input and two host functions.
 
   1.5 Limits per call, all enforced by the host:
 
-| Limit        | Value                                                  | What it bounds                                                                                                                     |
-| ------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Guest time   | 5 ms for decision model points, 250 ms for news points | Time the guest's own code runs, added up across every entry into the engine                                                        |
-| Elapsed time | 50 ms for decision model points, 2 s for news points   | Wall-clock time from start to teardown. The clock pauses only while the built-in is running and no `moss.get` request is in flight |
-| Built-in     | 2 s for decision model points, 60 s for news points    | A host deadline on the built-in itself, passed as a cancel signal into the model call and the reading of its reply                 |
-| Whole call   | Built-in deadline plus elapsed limit                   | A ceiling that never pauses. Nothing a customization does can make a call run longer                                               |
-| Memory       | 16 MB engine heap, 512 KB stack                        | Guest allocation                                                                                                                   |
-| Bytes        | See below                                              | Every text crossing the wall, in both directions                                                                                   |
-| API calls    | 5 per call, 2 at once                                  | Host work done for the guest                                                                                                       |
+| Limit        | Value                                                  | What it bounds                                                                                                                                                                                            |
+| ------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Guest time   | 5 ms for decision model points, 250 ms for news points | Time the guest's own code runs, added up across every entry into the engine                                                                                                                               |
+| Elapsed time | 50 ms for decision model points, 2 s for news points   | Wall-clock time from start to teardown. The clock pauses only while the built-in is running and no `moss.get` request is in flight                                                                        |
+| Built-in     | 2 s for decision model points, 60 s for news points    | A host deadline on the built-in itself, passed as a cancel signal into the model call and the reading of its reply                                                                                        |
+| Whole call   | Built-in deadline plus elapsed limit                   | A ceiling that never pauses. Nothing a customization does can make a call run longer                                                                                                                      |
+| Memory       | About 34 MB per engine, 32 KB engine stack             | Guest allocation. Each engine gets its own capped WebAssembly memory, because the engine's own heap limit does not count allocations in this build. A stack above 48 KB crashed the host in the prototype |
+| Bytes        | See below                                              | Every text crossing the wall, in both directions                                                                                                                                                          |
+| API calls    | 5 per call, 2 at once                                  | Host work done for the guest                                                                                                                                                                              |
 
 The built-in deadline is new for points whose built-in has none today. The news ranking model
 call, for example, passes no cancel signal. The point runner adds the deadline for every call,
@@ -281,6 +281,12 @@ module.
   a model prompt either way.
 - When there is no chat to ask, as in a background job, anything that would need approval is
   refused.
+- In phase 1, `moss.get` refuses every request in background jobs and in the worker process. The
+  bridge reuses the API server's app-action machinery, and the worker has no server to run it on.
+  News compilation runs in the worker, so choosing sources, filtering and ranking get no API
+  reads in phase 1. Grouping and the featured story run on the API server and can use it. A
+  worker-side bridge would need a second sign-in path or a new credential, so it waits for its
+  own design.
 
   2.3 Points never receive or return secrets. Where a built-in needs to know about a secret, the
   point gets a yes or no instead (for example "key saved").
