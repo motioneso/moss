@@ -1,5 +1,6 @@
+import type { ChatDrawerProps } from "./chat-drawer-props";
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
-import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
+import type { MeetingChatTurnResponse } from "@moss/shared";
 import { findOwnerMainThread, SideChatOverlay } from "./side-chat-overlay";
 import { loadChatDrafts, saveChatDrafts } from "./chat-draft-storage";
 import { shownMainThread } from "./drawer-main-landing";
@@ -53,28 +54,7 @@ import "../styles/kit-chat.css";
 import "../styles/kit-chat-attach.css";
 import "../styles/kit-chat-skills.css";
 const PRIVATE_DRAFT_KEY = "__private__";
-export function ChatDrawer(props: {
-  readonly meetingContext?: MeetingChatSelection & { readonly title: string };
-  readonly onMeetingUnavailable?: () => void;
-  readonly onRemoveMeetingContext?: () => void;
-  readonly open: boolean;
-  readonly onClose: () => void;
-  readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: (mainThreadId?: string) => void;
-  readonly streamErrorCount: number;
-  readonly selectionPending?: boolean;
-  readonly isFounder: boolean;
-  readonly ownerId?: string;
-  readonly initialText?: string;
-  readonly threadToOpen?: string | null;
-  readonly onThreadOpenConsumed?: () => void;
-  readonly focusActionRequestId?: string | null;
-  readonly onActionRequestFocused?: () => void;
-  readonly surface: ChatSurface;
-  readonly docked?: boolean;
-  readonly expanded?: boolean;
-  readonly onToggleExpanded?: () => void;
-}) {
+export function ChatDrawer(props: ChatDrawerProps) {
   const generationRef = useRef(0);
   const transition = useChatTransition(props.surface, generationRef);
   useEffect(
