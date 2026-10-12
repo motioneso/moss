@@ -9,6 +9,7 @@ export type ScheduledTaskState =
   | "cancelled";
 
 export interface ScheduledTaskMessageDto {
+  readonly scheduledReadSource?: "tasks";
   readonly id: string;
   readonly threadId: string;
   readonly body: string;
@@ -72,7 +73,12 @@ const messageSchema = {
   type: "object",
   additionalProperties: false,
   required: ["id", "threadId", "body"],
-  properties: { id: { type: "string" }, threadId: { type: "string" }, body: { type: "string" } }
+  properties: {
+    id: { type: "string" },
+    threadId: { type: "string" },
+    body: { type: "string" },
+    scheduledReadSource: { type: "string", enum: ["tasks"] }
+  }
 } as const;
 
 export const listScheduledTasksResponseSchema = {

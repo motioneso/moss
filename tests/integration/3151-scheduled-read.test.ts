@@ -224,8 +224,11 @@ describe("scheduled reads through the actor worker and real gateway", () => {
       )
     ).toHaveLength(1);
     expect(
-      (await owner(listScheduledReminders)).find((r) => r.id === saved.id)?.runs[0]?.message?.body
-    ).toContain("Its status is done");
+      (await owner(listScheduledReminders)).find((r) => r.id === saved.id)?.runs[0]?.message
+    ).toMatchObject({
+      body: expect.stringContaining("Its status is done"),
+      scheduledReadSource: "tasks"
+    });
   });
   it("reports disabled capability as refusal without disclosing source data", async () => {
     const saved = await save();

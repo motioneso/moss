@@ -42,7 +42,12 @@ export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
           : "Reminder delivered",
       message:
         row.message_id !== null && row.message_body !== null
-          ? { id: row.message_id, threadId: row.thread_id, body: row.message_body }
+          ? {
+              id: row.message_id,
+              threadId: row.thread_id,
+              body: row.message_body,
+              ...(row.read_outcome === "success" ? { scheduledReadSource: "tasks" as const } : {})
+            }
           : null
     });
   }

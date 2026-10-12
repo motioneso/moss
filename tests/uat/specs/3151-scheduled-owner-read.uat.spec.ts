@@ -118,6 +118,11 @@ test("a real model saves an exact owner read, reports source status and refuses 
   await expect(
     page.getByText(`I checked ${title}. Its status is done.`, { exact: false }).last()
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Source: Tasks" }).last()).toHaveAttribute(
+    "href",
+    "/tasks"
+  );
+  await page.getByRole("button", { name: "Open chat", exact: true }).click();
   const confirmations = page.getByText(`I'll check ${title} once`, { exact: false });
   await expect(confirmations.first()).toBeVisible();
   const savedCount = await confirmations.count();
