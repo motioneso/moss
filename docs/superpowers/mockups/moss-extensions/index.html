@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-color-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customizations - mockup</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  /* Review page only. Each frame loads screen.html in one state. */
+  body { padding: var(--space-8) var(--space-7); background: var(--bg); }
+  .gal { display: flex; flex-direction: column; gap: var(--space-9); }
+  .gal h1 { font-family: var(--font-display); font-size: var(--text-2xl); margin: 0; }
+  .gal h2 { font-size: var(--text-md); margin: 0 0 var(--space-3); }
+  .gal iframe { display: block; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); }
+  .gal__phones { display: flex; flex-wrap: wrap; gap: var(--space-7); }
+</style>
+</head>
+<body>
+<main class="gal">
+  <h1>Customizations</h1>
+
+  <section><h2>Desktop, list</h2><iframe title="Desktop list" src="screen.html?state=list" width="1440" height="960"></iframe></section>
+  <section><h2>Desktop, history open</h2><iframe title="Desktop history" src="screen.html?state=history" width="1440" height="1020"></iframe></section>
+  <section><h2>Desktop, history with code shown</h2><iframe title="Desktop history with code" src="screen.html?state=history-code" width="1440" height="1260"></iframe></section>
+  <section><h2>Desktop, nothing customized</h2><iframe title="Desktop empty" src="screen.html?state=empty" width="1440" height="600"></iframe></section>
+  <section><h2>Desktop, dark</h2><iframe title="Desktop dark" src="screen.html?state=history-code&amp;mode=dark" width="1440" height="1260"></iframe></section>
+  <section><h2>Admin switch</h2><iframe title="Admin switch" src="screen.html?state=admin" width="1440" height="700"></iframe></section>
+
+  <section>
+    <h2>Phone</h2>
+    <div class="gal__phones">
+      <iframe title="Phone list" src="screen.html?state=list" width="390" height="1340"></iframe>
+      <iframe title="Phone history" src="screen.html?state=history-code" width="390" height="1910"></iframe>
+      <iframe title="Phone empty" src="screen.html?state=empty" width="390" height="844"></iframe>
+    </div>
+  </section>
+</main>
+</body>
+</html>
