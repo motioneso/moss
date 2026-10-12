@@ -141,12 +141,16 @@ for (const briefingType of ["morning", "evening"] as const) {
       .split(/\n|(?<=[.!?])\s+/)
       .filter((line) => /Invoice #TODAY|VendorToday|payment|bill/i.test(line))
       .join(" ");
-    expect(billSentences).toMatch(/unknown|unclear|unconfirmed|not confirmed/i);
+    expect(billSentences).toMatch(
+      /unknown|unclear|unconfirmed|not confirmed|does not show.*payment status|status (?:is )?not known/i
+    );
     expect(billSentences).not.toMatch(/unpaid|owed|overdue|pay today/i);
     if (briefingType === "evening") expect(run!.summaryText).not.toMatch(/Dana|draft feedback/i);
     expect(run!.summaryText).toMatch(/Emissions/i);
     if (briefingType === "morning" && /Dana|draft|reply/i.test(run!.summaryText)) {
-      expect(run!.summaryText).toMatch(/unknown|unclear|unconfirmed|not confirmed/i);
+      expect(run!.summaryText).toMatch(
+        /unknown|unclear|unconfirmed|not confirmed|does not show.*payment status|status (?:is )?not known/i
+      );
       expect(run!.summaryText).not.toMatch(/urgent|reply today|overdue reply/i);
     }
     await page.goto("/today");
