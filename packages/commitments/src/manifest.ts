@@ -106,6 +106,11 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.commitments.email-judgement",
       description: "Checked what new email asks of you"
+    },
+    {
+      id: "commitments.email-owner-participation",
+      description:
+        "Email suggests commitments only when you wrote in the conversation. Separate-message mailboxes cannot prove this. Unanswered questions remain eligible; answered threads leave Today. Chat and notes extraction are unchanged."
     }
   ],
   assistantActionFamilies: [
@@ -145,7 +150,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     {
       name: "commitments.threadJudgements",
       description:
-        "Check which email threads the commitments closer look has already judged, and when.",
+        "Check when email threads were judged and whether each outcome was item or no_item. Missing outcomes are unknown.",
       permissionId: "commitments.view",
       risk: "read",
       content: "outside",

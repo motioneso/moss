@@ -268,7 +268,7 @@ export const briefingsModuleManifest = {
     {
       id: "briefings.email_current_status",
       description:
-        "Checks later payment receipts. Today's bills report unknown payment status; old bills stay out. Keeps triaged replies ranked today or dated unknown in morning; evening shows today's mail only. Saves owner-only assessments."
+        "Checks later receipts; bills report unknown payment status. Keeps triaged replies; judged commitments replace their email. No-action confirmation emails are left off Today. Saves owner-only assessments."
     },
     {
       // #2956: the Activity history line title for this module's structured calls.

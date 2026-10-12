@@ -49,6 +49,8 @@ export async function extractCommitmentsFromText(
   occurredAt: string,
   warn?: CommitmentExtractionWarnLogger
 ): Promise<ExtractedCommitmentCandidate[]> {
+  // Text-only email lacks owner participation evidence; use the thread judgement instead.
+  if (sourceKind === "email") return [];
   if (!passesPrefilter(text)) return [];
 
   const truncated = text.slice(0, MAX_TEXT_LENGTH);

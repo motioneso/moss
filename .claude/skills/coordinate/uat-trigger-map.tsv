@@ -11,6 +11,15 @@
 # output means "no automated spec covers this", never "no live proof needed".
 #
 # When you add a UAT spec, add its rows here in the same PR.
+blocking	packages/commitments/src/email-judgement-worker.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/commitments/src/extractor.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/briefings/src/morning-inputs.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/briefings/src/email-evidence.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/briefings/src/action-rows.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/commitments/src/repository.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/commitments/src/tools.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/connectors/src/email-gate.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/connectors/src/email-sorting-live.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
 blocking	packages/module-registry/**	tests/uat/specs/module-install.uat.spec.ts
 blocking	scripts/module-reconcile.ts	tests/uat/specs/module-install.uat.spec.ts
 # #1974: chat archive settings screen (switch + folder field), backend from #1951/#1963.

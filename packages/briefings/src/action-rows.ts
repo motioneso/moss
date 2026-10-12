@@ -16,6 +16,7 @@ import {
   type ComposeRunInput
 } from "./compose-shared.js";
 import { SECTION_ITEM_CAP } from "./compose-shared.js";
+import { isNoActionConfirmation } from "./email-evidence.js";
 import { catchUpEntryId } from "./feedback-targets.js";
 import { withToolSavepoint } from "./savepoint.js";
 
@@ -293,8 +294,12 @@ export async function buildEmailCatchUp(
   const eligible: Record<string, unknown>[] = [];
   let leftOutCount = 0;
   for (const item of candidates) {
+    if (item.answered === true) continue;
     const actionability = item.actionability;
-    if (typeof actionability === "string" && LEFT_OUT_ACTIONABILITY.has(actionability)) {
+    if (
+      isNoActionConfirmation(item) ||
+      (typeof actionability === "string" && LEFT_OUT_ACTIONABILITY.has(actionability))
+    ) {
       leftOutCount += 1;
       continue;
     }

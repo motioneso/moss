@@ -85,6 +85,7 @@ describe("emailListVisibleMessagesExecute (source context)", () => {
       suggestedTasks: [{ title: "Reply to Alice", dueDate: null }],
       awaitingJudgement: false,
       bulk: true,
+      answered: false,
       source: "live",
       degradedReason: null
     });
@@ -107,5 +108,24 @@ describe("emailListVisibleMessagesExecute (source context)", () => {
     const message = (result.data as { messages: Record<string, unknown>[] }).messages[0]!;
     expect("body" in message).toBe(false);
     expect("bodyExcerpt" in message).toBe(false);
+  });
+});
+
+it("preserves answered mail's real label and summary in the chat email list", async () => {
+  const services = {
+    sourceContext: {
+      listEmailContext: vi.fn(async () => ({
+        items: [contextItem({ answered: true })],
+        accounts: [],
+        gaps: []
+      })),
+      listCalendarContext: vi.fn()
+    }
+  };
+  const result = await emailListVisibleMessagesExecute(scopedDb, {}, ctx, services);
+  expect(result.data).toMatchObject({
+    messages: [
+      { answered: true, actionability: "needs_reply", summary: "Alice has a quick question." }
+    ]
   });
 });

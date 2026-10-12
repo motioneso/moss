@@ -2,6 +2,31 @@ import { describe, it, expect, vi } from "vitest";
 import { extractCommitmentsFromText } from "@moss/commitments/extractor";
 
 describe("extractCommitmentsFromText", () => {
+  it("cannot infer an email commitment from text without owner participation records", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        candidates: [
+          {
+            kind: "obligation",
+            title: "Pick up prescription",
+            dueLocalDate: null,
+            counterpartyLabel: "Pharmacy",
+            evidenceExcerpt: "Pick up your prescription by Friday",
+            confidence: "high"
+          }
+        ]
+      })
+    });
+    expect(
+      await extractCommitmentsFromText(
+        generate,
+        "You need to pick up your prescription by Friday",
+        "email",
+        "2026-10-11T10:00:00Z"
+      )
+    ).toEqual([]);
+    expect(generate).not.toHaveBeenCalled();
+  });
   it("returns empty array for text that fails prefilter", async () => {
     const mockGenerate = vi.fn().mockResolvedValue({ text: '{"candidates":[]}' });
     const warn = vi.fn();
