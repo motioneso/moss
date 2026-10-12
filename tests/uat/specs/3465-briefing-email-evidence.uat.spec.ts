@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
-import { assertUnknownPaymentStatus } from "../briefing-email-status.js";
+import { assertUnknownPaymentStatus, assertUnknownReplyStatus } from "../briefing-email-status.js";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
@@ -21,7 +21,8 @@ function seedMail(): void {
       await runner.withDataContext({ actorUserId: ${JSON.stringify(UAT_ADMIN_ID)} }, async db => {
         const connectors = new ConnectorsRepository();
         const cipher = createConnectorSecretCipher();
-        const account = await connectors.createAccount(db, { providerId: "imap-fastmail", scopes: ["email.read"], encryptedSecret: cipher.encryptJson({ kind: "imap-password", providerId: "imap-fastmail", username: "fixture@example.test", password: "synthetic-fixture", imapHost: "127.0.0.1", imapPort: 1, imapTls: false, smtpHost: "127.0.0.1", smtpPort: 1, smtpSecurity: "none" }) });
+        const accounts = await connectors.listAccounts(db);
+        const account = accounts.find(row => row.provider_id === "imap-fastmail") ?? await connectors.createAccount(db, { providerId: "imap-fastmail", scopes: ["email.read"], encryptedSecret: cipher.encryptJson({ kind: "imap-password", providerId: "imap-fastmail", username: "fixture@example.test", password: "synthetic-fixture", imapHost: "127.0.0.1", imapPort: 1, imapTls: false, smtpHost: "127.0.0.1", smtpPort: 1, smtpSecurity: "none" }) });
         const repo = new EmailRepository();
         const now = Date.now();
         for (let i = 0; i < 3; i++) {
@@ -30,6 +31,7 @@ function seedMail(): void {
         }
         await repo.upsertCachedMessage(db, { connectorAccountId: account.id, sender: "VendorToday", subject: "Invoice #TODAY", summary: "Invoice #TODAY arrived today.", receivedAt: new Date(now), externalId: "today-bill", signals: { actionability: { category: "needs_action" } } });
         await repo.upsertCachedMessage(db, { connectorAccountId: account.id, sender: "Dana <dana@example.test>", subject: "Draft feedback", summary: "Dana asked for a reply about the draft.", receivedAt: new Date(now - 10 * 86400000), externalId: "colleague", signals: { actionability: { category: "needs_reply", inferredSubject: "Draft feedback", suggestedTasks: [{ title: "Reply about draft", dueDate: null }] } } });
+        if ((await connectors.listAccounts(db)).filter(row => row.provider_id === "imap-fastmail").length !== 1) throw new Error("Synthetic mailbox duplicated");
       });
     } finally { await runner.destroy(); }
   `;
@@ -47,7 +49,11 @@ function seedMail(): void {
   );
 }
 
-test.beforeAll(() => seedMail());
+test.beforeAll(() => {
+  seedMail();
+  // A worker restart repeats this seed; the writer's line counts must stay unchanged.
+  seedMail();
+});
 
 for (const briefingType of ["morning", "evening"] as const) {
   test(`real ${briefingType} writer reports current bills without unpaid claims (#3465)`, async ({
@@ -151,10 +157,11 @@ for (const briefingType of ["morning", "evening"] as const) {
     if (briefingType === "evening") expect(run!.summaryText).not.toMatch(/Dana|draft feedback/i);
     expect(run!.summaryText).toMatch(/Emissions/i);
     if (briefingType === "morning" && /Dana|draft|reply/i.test(run!.summaryText)) {
-      expect(run!.summaryText).toMatch(
-        /unknown|unclear|unconfirmed|not confirmed|does not show.*payment status|status (?:is )?not known/i
-      );
-      expect(run!.summaryText).not.toMatch(/urgent|reply today|overdue reply/i);
+      const replySentences = run!.summaryText
+        .split(/\n|(?<=[.!?])\s+/)
+        .filter((line) => /Dana|draft|reply/i.test(line))
+        .join(" ");
+      assertUnknownReplyStatus(replySentences);
     }
     await page.goto("/today");
     await page.getByRole("button", { name: `Read the full ${briefingType} briefing` }).click();

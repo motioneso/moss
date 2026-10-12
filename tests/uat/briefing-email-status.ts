@@ -8,3 +8,15 @@ export function assertUnknownPaymentStatus(report: string): void {
   );
   assert.doesNotMatch(report, /\b(unpaid|owed|overdue|due[ -]now|pay today)\b/i);
 }
+
+/** Dated questions may be conditional, but cannot claim a current obligation. */
+export function assertUnknownReplyStatus(report: string): void {
+  assert.match(
+    report,
+    /unknown|unclear|unconfirmed|not confirmed|status (?:is )?not known|if (?:that|it) remains outstanding|if you have not already|may still need/i
+  );
+  assert.doesNotMatch(
+    report,
+    /\b(overdue|urgent|still waiting on you|you need to reply now|reply today)\b/i
+  );
+}
