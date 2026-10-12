@@ -86,7 +86,12 @@ export async function runScheduledReadJob(
       current.reminder,
       report ?? (transient ? SCHEDULED_READ_FAILED : SCHEDULED_READ_REFUSED),
       current.now,
-      { chat, reminders, enqueueNotification: deps.enqueueNotification }
+      {
+        chat,
+        reminders,
+        enqueueNotification: deps.enqueueNotification,
+        ...(report ? { scheduledReadSource: "tasks" as const } : {})
+      }
     );
     return outcome;
   });

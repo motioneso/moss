@@ -18,7 +18,7 @@ import {
 import type { MainBackgroundMessage } from "../live/background-message-routing.js";
 import type { ChatSessionManager } from "../live/chat-session-manager.js";
 import { ChatRepository } from "../repository.js";
-import { asRecord, readOrigin } from "../route-serializers.js";
+import { asRecord, readOrigin, readScheduledReadSource } from "../route-serializers.js";
 
 export const REMINDER_ARRIVAL_CHANNEL = "moss_chat_reminder_arrival";
 
@@ -89,7 +89,13 @@ export async function readReminderArrival(
     return {
       actorUserId,
       mainThreadId: main.id,
-      record: { kind: "reply", text: message.body, messageId: message.id, background: true }
+      record: {
+        kind: "reply",
+        text: message.body,
+        messageId: message.id,
+        background: true,
+        scheduledReadSource: readScheduledReadSource(asRecord(message.model_metadata))
+      }
     };
   });
 }

@@ -424,6 +424,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
             {
               kind: message.status === "error" ? ("error" as const) : ("reply" as const),
               text: message.body,
+              scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
               ...(isDeliveredReminder(message) ? { background: true as const } : {}),
               sourceFreshness: message.sourceFreshness,

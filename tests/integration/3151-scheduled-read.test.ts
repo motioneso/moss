@@ -22,6 +22,7 @@ import { tasksModuleManifest, TasksRepository } from "@moss/tasks";
 import { SettingsRepository } from "@moss/settings";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import { createActiveModulesResolver } from "../../packages/module-registry/src/active-modules-resolver.js";
+import { serializeMessage } from "../../packages/chat/src/route-serializers.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import {
   registerScheduledReadWorker,
@@ -214,6 +215,9 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("success");
     expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("inactive");
     const messages = await message(saved);
+    expect(
+      messages.filter((m) => serializeMessage(m).scheduledReadSource === "tasks")
+    ).toHaveLength(1);
     expect(
       messages.filter(
         (m) => m.body.includes("Its status is done") && m.body.includes("[Source: Tasks]")

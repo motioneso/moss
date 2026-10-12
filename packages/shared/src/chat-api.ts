@@ -115,6 +115,8 @@ export interface ChatMessageDto {
    * and on all history written before this contract existed.
    */
   readonly origin?: ChatTurnOriginV1;
+  /** Server-authored successful scheduled report; source text is rendered without markdown. */
+  readonly scheduledReadSource?: "tasks";
 }
 
 export interface ListChatThreadsResponse {
@@ -189,6 +191,7 @@ export interface ActionRequestDetails {
 }
 
 export interface TranscriptRecord {
+  readonly scheduledReadSource?: "tasks";
   readonly nativePermission?: true;
   /** Host-marked connected tool; complete arguments are shown verbatim. */
   readonly externalTool?: true;
@@ -734,6 +737,7 @@ const chatMessageSchema = {
     },
     answerProvenanceCitedIds: { type: "array", items: { type: "string" } },
     origin: chatTurnOriginSchema,
+    scheduledReadSource: { type: "string", enum: ["tasks"] },
     meetingContext: {
       type: "object",
       additionalProperties: false,

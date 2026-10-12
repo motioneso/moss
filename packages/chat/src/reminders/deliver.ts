@@ -57,6 +57,7 @@ export type ReminderDeliveryOutcome =
 type ReminderDeliveryDeps = {
   readonly reminders: ReminderRepository;
   readonly chat: ChatRepository;
+  readonly scheduledReadSource?: "tasks";
   readonly enqueueNotification?: (scopedDb: DataContextDb, reminder: DueReminder) => Promise<void>;
 };
 
@@ -136,6 +137,7 @@ export async function persistReminderResult(
     threadId: reminder.threadId,
     body,
     origin: { version: 1, kind: "reminder", event: "delivered", reminderId: reminder.id, late },
+    scheduledReadSource: deps.scheduledReadSource,
     now
   });
   await deps.reminders.markDelivered(scopedDb, reminder.id, late);
