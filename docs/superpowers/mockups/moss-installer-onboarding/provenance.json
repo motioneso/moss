@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Sanitized static repository-review mockups; no installer implementation.",
+  "frozenScreenSource": "69db5d08812767abb3a485dc43ae789d9f97ee51",
+  "exportDate": "2026-10-12",
+  "visualBaseline": "Park Press approved screens; access subpanel is a new revision proposal with rendered review pending.",
+  "registry": {
+    "sourceUrl": "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json",
+    "retrievedAt": "2026-10-11T23:50:28Z",
+    "sourceSha256": "1d172c5340cd26e9f654940cecb39ceaea83a80801280b1741fb934c6d98a5cb",
+    "upstreamCommit": "909a134730072310bbc66150b11322ebc26bdf4b",
+    "entries": 41,
+    "license": "Apache-2.0",
+    "licenseFile": "assets/acp/LICENSE-ACP-REGISTRY.txt",
+    "transformation": "Inert display metadata only. Publisher/contact arrays omitted; website/repository links omitted. No launch commands, package specifications, environment values, or downloads."
+  },
+  "mossCapabilities": {
+    "sourceUrl": "https://github.com/motioneso/moss/blob/275b198ab159588bb799f95f69c2e78b498a2913/packages/acp/src/providers.ts",
+    "note": "Pinned source inspection, not a fresh runtime test. Discovery versions do not upgrade tested adapters."
+  },
+  "verification": {
+    "sourceAndDOM": "See validation.md",
+    "renderedBrowser": "Not run. Prior browser QA was blocked; no browser launch or socket workaround was attempted."
+  }
+}

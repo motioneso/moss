@@ -190,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Trail Marker Settings"
+        window.identifier = SettingsWindow.windowIdentifier
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         place(window, hosting: hosting)

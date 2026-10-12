@@ -169,6 +169,20 @@ final class PrivacyFixesTests: XCTestCase {
         )
     }
 
+    func testEmptyJudgmentIdCannotBeCorrected() async {
+        let h = harness()
+        link(h)
+        await settle()
+        let empty = RememberedJudgment(
+            judgment: FocusJudgment(judgmentId: "", label: .focused, reason: "", nudge: false),
+            at: Date(), blockTitle: "Study", appName: "Safari", windowTitle: "Docs", screenDescription: nil
+        )
+        h.focus.seedLastJudgmentForTesting(empty)
+        h.focus.correct(.right)
+        await settle()
+        XCTAssertEqual(h.transport.count("/focus/correct"), 0)
+    }
+
     // MARK: - §3.1 capture fails closed; app-name judgment unchanged
 
     func testWithoutAnIdentifiedWindowNothingIsCapturedButAppNameJudgmentStillRuns() {

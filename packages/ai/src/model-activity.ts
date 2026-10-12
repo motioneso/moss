@@ -236,7 +236,7 @@ function truncateBytes(value: string, maxBytes: number): string {
  * else is dropped, never stored. The database trigger is the second lock and rejects
  * the write outright.
  */
-const FACT_COUNT_KEYS = new Set(["tools", "tools_failed", "jev_agreed", "confidence"]);
+const FACT_COUNT_KEYS = new Set(["tools", "tools_failed", "jev_agreed", "confidence", "images"]);
 
 export function boundModelActivityFacts(
   facts: ActivityFactCounts | undefined

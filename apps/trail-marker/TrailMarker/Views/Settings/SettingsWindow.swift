@@ -27,6 +27,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
 /// One native settings window with sidebar navigation (design guide §11).
 struct SettingsWindow: View {
+    static let windowIdentifier = NSUserInterfaceItemIdentifier("trail-marker-settings")
     @ObservedObject var connection: ConnectionRuntime
     @ObservedObject var permissions: PermissionsService
     @ObservedObject var focus: FocusRuntime
@@ -94,6 +95,15 @@ struct SettingsWindow: View {
         .frame(
             width: TrailMarkerTokens.Layout.settingsWidth, height: TrailMarkerTokens.Layout.settingsHeight
         )
+        .onChange(of: selection) { oldValue, newValue in
+            if oldValue == .focus && newValue != .focus { focus.clearVisionTest() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            guard let window = notification.object as? NSWindow,
+                  window.identifier == Self.windowIdentifier else { return }
+            // The app retains Settings after closing, so onDisappear does not run.
+            focus.clearVisionTest()
+        }
         .onChange(of: autoCheckUpdates) { _, newValue in
             let preferences = PreferencesStore()
             preferences.autoCheckUpdates = newValue
