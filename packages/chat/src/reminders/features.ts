@@ -6,7 +6,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.scheduled_owner_read",
     description:
-      "In Main, ask Moss to check one owned Tasks item at a future time. Your configured model selects the task and time; Moss saves directly and later posts a sourced result. Plain reminder wording stays a reminder, and questions stay in chat. Reminder controls, limits, deadlines and notification policy apply.",
+      "In Main, ask Moss to check one owned task later. Your model selects the task and time; Moss saves and posts a sourced result. Plain reminders and questions keep their usual paths. Reminder controls, limits and notification policy apply.",
     featureFlagId: "chat.module",
     errors: [
       {
