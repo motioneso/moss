@@ -294,6 +294,7 @@ export async function buildEmailCatchUp(
   const eligible: Record<string, unknown>[] = [];
   let leftOutCount = 0;
   for (const item of candidates) {
+    if (item.answered === true) continue;
     const actionability = item.actionability;
     if (
       isNoActionConfirmation(item) ||

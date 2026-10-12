@@ -70,7 +70,7 @@ export const emailModuleManifest = {
     {
       id: "email.answered-conversations",
       description:
-        "Answered conversations stay off Today once your latest reply is cached, including older messages still marked for reply."
+        "Answered conversations stay off Today once your latest reply is cached, including older messages still marked for reply. Email reads keep their original label and summary."
     },
     {
       id: "email.proactive_current_access",

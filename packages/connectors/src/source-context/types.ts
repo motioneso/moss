@@ -80,6 +80,8 @@ export interface EmailContextItem {
   readonly suggestedTasks: readonly EmailSuggestedTaskCandidate[];
   /** The sorter handed this message to the Commitments closer look; no verdict yet. */
   readonly awaitingJudgement?: boolean;
+  /** The newest cached thread message is the owner's reply; original triage is retained. */
+  readonly answered?: boolean;
   /** Sent to a list rather than to this person (list headers or unsubscribe footer). */
   readonly bulk?: boolean;
   readonly source: SourceMode;

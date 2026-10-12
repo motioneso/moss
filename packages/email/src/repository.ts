@@ -192,12 +192,9 @@ export class EmailRepository {
       settled.has(row.id)
         ? {
             ...row,
-            summary: null,
             signals: {
-              skipped: "answered_thread",
-              pendingJudgement: false,
-              actionability: { category: "noise" },
-              confidence: 1
+              ...(row.signals as Record<string, unknown> | null),
+              answered: true
             }
           }
         : row

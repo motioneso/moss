@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { assessBriefingEmailEvidence } from "../../packages/briefings/src/email-evidence.js";
-import { buildMorningEmailLines } from "../../packages/briefings/src/morning-inputs.js";
+import {
+  isBriefingEmailItem,
+  buildMorningEmailLines
+} from "../../packages/briefings/src/morning-inputs.js";
 import { buildEmailCatchUp } from "../../packages/briefings/src/action-rows.js";
 import { fakeScopedDb } from "./briefings-compose.harness.js";
 
@@ -118,3 +121,21 @@ describe("Today excludes no-action confirmations", () => {
     expect(result.eligibleItems).toEqual([]);
   });
 });
+
+it.each(["needs_reply", "fyi", "noise"])(
+  "keeps answered %s mail off Today without counting it as left out",
+  async (category) => {
+    const answered = { ...mail("Dana's question", false, category), answered: true };
+    expect(isBriefingEmailItem(answered)).toBe(false);
+    expect(lines(answered)).toEqual([]);
+    const digest = await buildEmailCatchUp(
+      fakeScopedDb,
+      [answered, mail("Team update", false, "fyi")],
+      new Set(),
+      undefined,
+      { since: null, includes: () => true }
+    );
+    expect(digest?.itemCount).toBe(1);
+    expect(digest?.leftOutCount).toBe(0);
+  }
+);

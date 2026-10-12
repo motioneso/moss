@@ -230,52 +230,61 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
     expect(gaps.filter((gap) => gap.source === "email")).toEqual([]);
   });
 
-  it("reuses the stored closer-look decision without asking the model again", async () => {
-    const runChat = fakeSorterModel({});
-    const stored = {
-      id: "row-contract",
-      connector_account_id: "acc-google",
-      owner_user_id: "owner-1",
-      sender: CONTRACT_MAIL.from,
-      recipients: CONTRACT_MAIL.recipients,
-      subject: CONTRACT_MAIL.subject,
-      snippet: CONTRACT_MAIL.snippet,
-      body_excerpt: null,
-      received_at: new Date(CONTRACT_MAIL.receivedAt),
-      external_id: CONTRACT_MAIL.externalId,
-      external_metadata: { threadId: "th-contract" },
-      summary: null,
-      signals: {
-        importance: "normal",
-        confidence: 0.6,
-        pendingJudgement: true,
-        actionability: { category: "needs_reply" }
-      },
-      created_at: FIXED_NOW,
-      updated_at: FIXED_NOW,
-      analysis_attempts: 0,
-      judgement_requested_at: null
-    } as EmailMessage;
-    const messages = Array.from({ length: 10 }, (_, i) => ({
-      ...CONTRACT_MAIL,
-      externalId: `question-${i}`,
-      subject: `Colleague question ${i}`
-    }));
-    const cached = messages.map((message, i) => ({
-      ...stored,
-      id: `row-${i}`,
-      external_id: message.externalId,
-      subject: message.subject
-    }));
-    const emailDeps = liveEmailDeps(messages, runChat, cached);
-    const read = await listEmailContext(fakeScopedDb, emailDeps, {});
-    expect(read.items).toHaveLength(10);
-    for (const item of read.items) expect(item.actionability).toBe("needs_reply");
-    const { prompt } = await composeWith(emailDeps);
+  it.each([false, true])(
+    "reuses the stored closer-look decision with answered=%s without asking the model again",
+    async (answered) => {
+      const runChat = fakeSorterModel({});
+      const stored = {
+        id: "row-contract",
+        connector_account_id: "acc-google",
+        owner_user_id: "owner-1",
+        sender: CONTRACT_MAIL.from,
+        recipients: CONTRACT_MAIL.recipients,
+        subject: CONTRACT_MAIL.subject,
+        snippet: CONTRACT_MAIL.snippet,
+        body_excerpt: null,
+        received_at: new Date(CONTRACT_MAIL.receivedAt),
+        external_id: CONTRACT_MAIL.externalId,
+        external_metadata: { threadId: "th-contract" },
+        summary: "Dana asked for a report.",
+        signals: {
+          importance: "normal",
+          confidence: 0.6,
+          pendingJudgement: true,
+          answered,
+          actionability: { category: "needs_reply" }
+        },
+        created_at: FIXED_NOW,
+        updated_at: FIXED_NOW,
+        analysis_attempts: 0,
+        judgement_requested_at: null
+      } as EmailMessage;
+      const messages = Array.from({ length: 10 }, (_, i) => ({
+        ...CONTRACT_MAIL,
+        externalId: `question-${i}`,
+        subject: `Colleague question ${i}`
+      }));
+      const cached = messages.map((message, i) => ({
+        ...stored,
+        id: `row-${i}`,
+        external_id: message.externalId,
+        subject: message.subject
+      }));
+      const emailDeps = liveEmailDeps(messages, runChat, cached);
+      const read = await listEmailContext(fakeScopedDb, emailDeps, {});
+      expect(read.items).toHaveLength(10);
+      for (const item of read.items) {
+        expect(item.actionability).toBe("needs_reply");
+        expect(item.summary).toBe("Dana asked for a report.");
+        expect(item.answered).toBe(answered);
+      }
+      const { prompt } = await composeWith(emailDeps);
 
-    expect(runChat).toHaveBeenCalledTimes(0);
-    expect(emailBlock(prompt)).toContain("Colleague question");
-  });
+      expect(runChat).toHaveBeenCalledTimes(0);
+      if (answered) expect(emailBlock(prompt)).not.toContain("Colleague question");
+      else expect(emailBlock(prompt)).toContain("Colleague question");
+    }
+  );
 
   it.each([
     ["item after arrival", "2026-06-13T08:00:00.000Z", "item", false],

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 /** Check assertions before a conditional clause, preserving later independent assertions. */
 export function assertNoDefiniteEmailClaim(report: string): void {
   const assertions = report
-    .split(/[.!?;\n]|\bbut\b|,\s*however\b/i)
+    .split(/[.!?;,\n:]|[–—]|\s+-\s+|\bbut\b/i)
     .map((clause) => clause.split(/\b(?:whether|if|confirm)\b/i)[0])
     .join("\n");
   assert.doesNotMatch(

@@ -109,6 +109,7 @@ interface TriageFields {
   readonly suggestedTasks: readonly EmailSuggestedTaskCandidate[];
   readonly awaitingJudgement: boolean;
   readonly bulk: boolean;
+  readonly answered: boolean;
 }
 
 function triageFromSignals(summary: string | null, signals: EmailSignals): TriageFields {
@@ -122,7 +123,8 @@ function triageFromSignals(summary: string | null, signals: EmailSignals): Triag
     dueDate: signals.actionability?.dueDate ?? null,
     suggestedTasks: suggestedTasksFromSignals(signals),
     awaitingJudgement: signals.pendingJudgement === true,
-    bulk: signals.bulk === true
+    bulk: signals.bulk === true,
+    answered: signals.answered === true
   };
 }
 
@@ -136,7 +138,8 @@ const UNTRIAGED: TriageFields = {
   dueDate: null,
   suggestedTasks: [],
   awaitingJudgement: false,
-  bulk: false
+  bulk: false,
+  answered: false
 };
 
 function cachedSignals(row: EmailMessage): EmailSignals {
@@ -382,6 +385,7 @@ async function readAccountLive(
       }),
       snippet: message.snippet,
       ...triage,
+      answered: cachedSignalSet?.answered === true,
       source: "live",
       degradedReason: null,
       cacheMessageId: cachedRow?.id ?? null

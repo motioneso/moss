@@ -120,7 +120,9 @@ export function openTaskLines(lines: readonly string[]): string[] {
  */
 export function isBriefingEmailItem(item: Record<string, unknown>): boolean {
   return (
-    !isNoActionConfirmation(item) && (isActionableTriage(item) || item.awaitingJudgement === true)
+    item.answered !== true &&
+    !isNoActionConfirmation(item) &&
+    (isActionableTriage(item) || item.awaitingJudgement === true)
   );
 }
 
@@ -249,7 +251,9 @@ export function buildMorningEmailLines(args: {
   readonly suggestionLines: readonly string[];
   readonly locale?: LocaleSettingsDto;
 }): MorningEmailLines {
-  const items = args.items.filter((item) => !isNoActionConfirmation(item));
+  const items = args.items.filter(
+    (item) => item.answered !== true && !isNoActionConfirmation(item)
+  );
   const signalLines = args.signals.map((s) => sanitizeExternal(s.summary)).filter(Boolean);
   const named = new Set(args.signals.flatMap((s) => s.messageIds));
   const allAwaiting = items

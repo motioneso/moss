@@ -21,7 +21,10 @@ it.each([
   "Confirm whether it has been paid. It has been paid.",
   "If payment is unknown, ask the vendor; it has been paid.",
   "Confirm whether it has been paid, but it is unpaid.",
-  "Dana's reply is urgent."
+  "Dana's reply is urgent.",
+  "If you haven't already, pay Invoice #TODAY today, it is overdue.",
+  "If you get a minute, Dana is still waiting on you.",
+  "Please confirm the details: the bill is overdue and urgent."
 ])("rejects a definite claim outside conditional clauses: %s", (report) => {
   expect(() => assertNoDefiniteEmailClaim(report)).toThrow();
 });
