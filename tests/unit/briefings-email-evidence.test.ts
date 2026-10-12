@@ -1,8 +1,9 @@
+import type { ToolExecute } from "@moss/module-sdk";
 import type { BriefingEmailEvidenceV1 } from "@moss/shared";
 import { assessBriefingEmailEvidence } from "../../packages/briefings/src/email-evidence.js";
 import { describe, expect, it } from "vitest";
 import { composeBriefing, type ComposeDeps } from "../../packages/briefings/src/compose.js";
-import { definition, fakeScopedDb, makeFakeDeps } from "./briefings-compose.harness.js";
+import { definition, fakeScopedDb, makeFakeDeps, runInput } from "./briefings-compose.harness.js";
 
 const NOW = new Date("2026-10-11T15:00:00Z");
 const LOCALE = { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "12" as const };
@@ -105,6 +106,95 @@ describe("briefing email current-status evidence (#3465)", () => {
       ).toMatchObject({ messageId: "colleague", status: "current_status_unknown", rank: null });
     }
   );
+
+  it("keeps an older needs-reply report outside the current signal ranking", async () => {
+    const deps = makeFakeDeps();
+    const manifests = deps.moduleManifests.map((m) => ({
+      ...m,
+      assistantTools: (m.assistantTools ?? []).map((t) =>
+        t.name === "email.listVisibleMessages"
+          ? {
+              ...t,
+              execute: (async () => ({
+                data: {
+                  messages: [
+                    {
+                      id: "bill-1",
+                      connectorAccountId: "conn-1",
+                      sender: "billing@example.test",
+                      subject: "Invoice due today",
+                      snippet: "Payment due today",
+                      actionability: "needs_action"
+                    },
+                    {
+                      id: "bill-2",
+                      connectorAccountId: "conn-1",
+                      sender: "bank@example.test",
+                      subject: "Past due statement",
+                      snippet: "Past due notice",
+                      actionability: "needs_action"
+                    },
+                    {
+                      id: "urgent-1",
+                      connectorAccountId: "conn-1",
+                      sender: "pm@example.test",
+                      subject: "Can you reply before the 3pm review?",
+                      snippet: "Need this today",
+                      receivedAt: "2026-06-13T08:30:00.000Z",
+                      actionability: "needs_reply"
+                    },
+                    {
+                      id: "plan-1",
+                      connectorAccountId: "conn-1",
+                      sender: "legal@example.test",
+                      subject: "Contract draft for meeting",
+                      snippet: "Please review before tomorrow",
+                      actionability: "time_sensitive_info"
+                    },
+                    {
+                      id: "follow-1",
+                      connectorAccountId: "conn-1",
+                      sender: "partner@example.test",
+                      subject: "Following up on the open thread",
+                      snippet: "Can you respond when you have a minute?",
+                      receivedAt: "2026-05-30T08:30:00.000Z",
+                      actionability: "needs_reply"
+                    },
+                    {
+                      id: "extra-1",
+                      connectorAccountId: "conn-1",
+                      sender: "ops@example.test",
+                      subject: "Due today",
+                      snippet: "Urgent follow up needed",
+                      actionability: "needs_action"
+                    }
+                  ]
+                }
+              })) as ToolExecute
+            }
+          : t
+      )
+    }));
+
+    const result = await composeBriefing(fakeScopedDb, definition(), runInput, {
+      ...deps,
+      moduleManifests: manifests
+    });
+
+    expect(result.sourceMetadata.emailSignals).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ messageIds: ["follow-1"] })])
+    );
+    expect(result.sourceMetadata.emailEvidence).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          messageId: "follow-1",
+          status: "current_status_unknown",
+          rank: null
+        })
+      ])
+    });
+    expect((result.sourceMetadata.emailSignals as unknown[]).length).toBeLessThanOrEqual(5);
+  });
 
   it("keeps the assessment on a degraded morning run", async () => {
     const { result } = await compose([...bills, ...receipts], "morning", true);
