@@ -79,6 +79,7 @@ const calls: Call[] = [];
 let draftPlan: DayPlanDto;
 let applyMode: "report" | "confirm" = "report";
 let previewConflictIds: string[] = [];
+let availability: PreviewDayPlanResponse["calendarAvailability"] = "available";
 
 function json(data: unknown, status = 200) {
   return {
@@ -92,7 +93,7 @@ function json(data: unknown, status = 200) {
 function previewResponse(): PreviewDayPlanResponse {
   return {
     revision: draftPlan.revision,
-    calendarAvailability: "available",
+    calendarAvailability: availability,
     calendarAsOf: null,
     blocks: [],
     eligibleBlockIds: ["b1", "b2"].filter((id) => !previewConflictIds.includes(id)),
@@ -230,6 +231,7 @@ beforeEach(() => {
   draftPlan = plan();
   applyMode = "report";
   previewConflictIds = [];
+  availability = "available";
   installFetch();
 });
 
@@ -337,4 +339,19 @@ describe("useDayPlanReview saveChanges", () => {
     expect(current().approval?.changes[0]?.blockId).toBe("b2");
     expect(calls.some((call) => call.url.endsWith("/confirm"))).toBe(false);
   });
+});
+
+it("retains a move and re-previews after the calendar becomes available", async () => {
+  availability = "unavailable";
+  const { current } = await mountHook(plan());
+  await act(async () => current().setPlacement("b2", "move", "2026-09-10T22:00:00.000Z"));
+  await act(async () => expect(await current().saveChanges()).toBe(false));
+  expect(calls.filter((call) => call.url.endsWith("/apply"))).toHaveLength(0);
+  expect(current().choices["b2"]).toMatchObject({ placement: "move" });
+  expect(current().preview?.calendarAvailability).toBe("unavailable");
+  availability = "available";
+  await act(async () => expect(await current().saveChanges()).toBe(true));
+  expect(calls.filter((call) => call.url.endsWith("/preview"))).toHaveLength(2);
+  expect(calls.filter((call) => call.url.endsWith("/apply"))).toHaveLength(1);
+  expect(current().outcomes["b2"]?.outcome).toBe("applied");
 });

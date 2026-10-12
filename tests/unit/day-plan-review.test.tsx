@@ -737,6 +737,7 @@ describe("DayPlanReview view", () => {
       preview: null,
       approval: null,
       outcomes: {},
+      reportVersion: 0,
       notice: null,
       busy: false,
       choiceFor: (block) => choices[block.id] ?? defaultChoiceFor(block),
@@ -937,7 +938,7 @@ describe("DayPlanReview view", () => {
     ).toBe(true);
   });
 
-  it("counts outcomes honestly and disables apply without a calendar", async () => {
+  it("counts outcomes honestly and disables Save until changes are selected", async () => {
     const container = await renderReview(
       stubController({
         preview: {

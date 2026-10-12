@@ -9,11 +9,11 @@ export function GoalsSection() {
     queryFn: listGoals
   });
 
-  if (isLoading || !data?.items || data.items.length === 0) {
+  if (isLoading || !data || data.length === 0) {
     return null;
   }
 
-  const activeGoals = data.items.filter((g) => g.status === "active");
+  const activeGoals = data.filter((g) => g.status === "active");
   if (activeGoals.length === 0) return null;
 
   return (

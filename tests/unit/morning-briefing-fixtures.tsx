@@ -241,6 +241,7 @@ export function stubReaderController(
     preview: null,
     approval: null,
     outcomes: {},
+    reportVersion: 0,
     notice: null,
     busy: false,
     choiceFor: (block: DayPlanBlockDto) => defaultChoiceFor(block),

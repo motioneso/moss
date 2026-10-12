@@ -554,6 +554,32 @@ export const calendarModuleManifest = {
   ],
   features: [
     {
+      id: "calendar.preview_recovery",
+      description:
+        "An unavailable task-block preview retains selected choices and leaves Save changes available to recheck. No calendar apply follows that unavailable preview.",
+      errors: [
+        {
+          code: "calendar.preview_unavailable",
+          class: "transient",
+          description:
+            "The preview could not read calendar availability. Selected changes stay in the review and are not applied. Press Save changes to recheck."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_preview_retry",
+          description:
+            "Press Save changes again in task-block review to recheck calendar availability while keeping your choices.",
+          path: "/today"
+        }
+      ]
+    },
+    {
+      id: "calendar.month_navigation",
+      description:
+        "Previous and Next in Month select the adjacent month without carrying an overflowing day into another month. Day and Week retain their one-day and seven-day steps."
+    },
+    {
       id: "calendar.chat_app_actions",
       description:
         "App actions read calendar data and create or edit day-plan drafts. Provider writes, plan execution and settings that expand automatic authority stay unavailable through generic actions."

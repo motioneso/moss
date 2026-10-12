@@ -127,7 +127,7 @@ function quietPageHtml(): string {
   client.setQueryData(queryKeys.tasks.list, { tasks: [] });
   client.setQueryData(queryKeys.tasks.lists, { lists: [] });
   client.setQueryData(queryKeys.calendar.list, { events: [] });
-  client.setQueryData(queryKeys.goals.list, { items: [] });
+  client.setQueryData(queryKeys.goals.list, []);
   client.setQueryData(queryKeys.briefings.definitions, { definitions: [] });
   client.setQueryData(queryKeys.calendar.dayPlan(localDay(NOW, locale.timezone), locale.timezone), {
     plan: null,

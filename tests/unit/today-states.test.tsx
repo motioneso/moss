@@ -205,7 +205,7 @@ function seedPage(input: {
   client.setQueryData(queryKeys.tasks.list, { tasks: [] });
   client.setQueryData(queryKeys.tasks.lists, { lists: [] });
   client.setQueryData(queryKeys.calendar.list, { events: [] });
-  client.setQueryData(queryKeys.goals.list, { items: [] });
+  client.setQueryData(queryKeys.goals.list, []);
   client.setQueryData(queryKeys.briefings.definitions, {
     definitions: [...(input.definitions ?? [])]
   });
@@ -608,7 +608,7 @@ describe("TodayPage background refetch", () => {
     client.setQueryData(queryKeys.tasks.activity("task-1"), { activity: [] });
     client.setQueryData(queryKeys.tasks.tags("list-1"), { tags: [] });
     client.setQueryData(queryKeys.calendar.list, { events: [] });
-    client.setQueryData(queryKeys.goals.list, { items: [] });
+    client.setQueryData(queryKeys.goals.list, []);
     client.setQueryData(queryKeys.briefings.definitions, { definitions: [] });
     const dayPlanKey = queryKeys.calendar.dayPlan(localDay(NOW, locale.timezone), locale.timezone);
     const emptyPlan = {
@@ -794,7 +794,7 @@ describe("TodayPage background refetch", () => {
     client.setQueryData(queryKeys.tasks.list, { tasks: [] });
     client.setQueryData(queryKeys.tasks.lists, { lists: [] });
     client.setQueryData(queryKeys.calendar.list, { events: [] });
-    client.setQueryData(queryKeys.goals.list, { items: [] });
+    client.setQueryData(queryKeys.goals.list, []);
     client.setQueryData(queryKeys.briefings.definitions, { definitions: [morningDefinition] });
     client.setQueryData(queryKeys.briefings.runs(morningDefinition.id), { runs: [morningRun] });
     const dayPlanKey = queryKeys.calendar.dayPlan(localDay(NOW, locale.timezone), locale.timezone);
