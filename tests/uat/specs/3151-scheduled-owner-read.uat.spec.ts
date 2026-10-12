@@ -28,7 +28,7 @@ function captureJobState(itemId: string): string {
       'reminder_state', r.state, 'version', r.version, 'outcome', s.outcome,
       'message_body', m.body, 'message_thread', m.thread_id, 'reminder_thread', r.thread_id,
       'message_created_at', m.created_at, 'reminder_created_at', r.created_at,
-      'job_state', j.state, 'job_output', j.output,
+      'job_queue', j.name, 'job_state', j.state, 'job_output', j.output,
       'due_at', r.due_at, 'start_after', j.start_after,
       'job_started_on', to_jsonb(j)->>'started_on',
       'job_completed_on', to_jsonb(j)->>'completed_on',
@@ -53,6 +53,7 @@ test("a real model saves an exact owner read, reports source status and refuses 
   await signInUatAdmin(page);
   const model = await bringUpRealChatModel(page);
   expect(model.tier).toBe("economy");
+  console.info(`Real model proof: Codex economy model ${model.id}`);
   test.info().annotations.push({ type: "real-model", description: `Codex: ${model.id}` });
   const title = `Scheduled source proof ${Date.now()}`;
   await page.goto("/tasks");
@@ -113,6 +114,7 @@ test("a real model saves an exact owner read, reports source status and refuses 
     page.getByText(`I checked ${title}. Its status is done.`, { exact: false }).last()
   ).toBeVisible();
   const confirmations = page.getByText(`I'll check ${title} once`, { exact: false });
+  await expect(confirmations.first()).toBeVisible();
   const savedCount = await confirmations.count();
   await sendInMain(page, `Check the status of my task ${title} in 45 seconds`);
   await expect(confirmations).toHaveCount(savedCount + 1, { timeout: 120_000 });

@@ -1,6 +1,6 @@
 # One scheduled owner-source read (#3151)
 
-Status: approved by coordinator on plan ef49e0361; implementation in progress. Worktree: `~/Jarv1s/.claude/worktrees/sched-3151-scheduled-read`.
+Status: approved by coordinator on plan ef49e0361; implementation complete; final live verification in progress. Worktree: `~/Jarv1s/.claude/worktrees/sched-3151-scheduled-read`.
 Branch: scheduled/3151-scheduled-read. Base: integration/scheduled-proactive.
 
 ## Contract and scope
@@ -169,3 +169,5 @@ All reminder enqueues use the shared extension-aware function, including future 
 ## Stream delivery diagnosis (#3492)
 
 The third instrumented run persisted the successful result in Main about 46 seconds after saving, with zero retries, but the browser missed it while chat startup delayed its subscription. A held-startup regression reproduced that gap. The shared fix subscribes and flushes first, then warms the agent asynchronously; every stream open reads back unseen background messages and the existing message-id merge drops duplicates. Both plain reminders and scheduled reports have held-startup and first-open recovery regressions. This fix is a separate commit in this integration PR, Part of #3492. Main has the same wait at packages/chat/src/live-routes.ts:544, before subscription at :562, but lacks the background-delivery path; the coordinator ruled against prerequisite backports or a separate main PR. #3492 closes with #3154. The first uninstrumented failure remains unexplained and is retained in the proof.
+
+The first post-fix full run passed source delivery, app link, reload, reply and Settings history. It then exposed a harness race: the existing confirmation was counted before history loaded (zero), so two visible confirmations after the next save failed an expectation of one. Wait for the existing confirmation before taking that count; keep this failed run in the proof and restart the three-clean-run sequence. Job capture also names its queue to distinguish the source job from notification work.
