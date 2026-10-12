@@ -82,6 +82,8 @@ for (const briefingType of ["morning", "evening"] as const) {
         title: `Email ${briefingType} status proof`,
         briefingType,
         enabled: true,
+        // Exercise the evening reader regardless of the real clock's current hour.
+        scheduleMetadata: { targetTime: "00:00", timezone: "America/Los_Angeles" },
         selectedToolNames: ["tasks.list", "email.listVisibleMessages"]
       }
     });
