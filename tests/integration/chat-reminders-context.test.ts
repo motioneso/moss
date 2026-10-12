@@ -317,7 +317,10 @@ describe("who may acknowledge, and how (#3311)", () => {
           .where("id", "=", reminder.id)
           .execute()
       )
-    ).rejects.toMatchObject({ code: "42501" });
+    ).rejects.toMatchObject({
+      code: "P0001",
+      message: "chat reminder identity cannot be changed"
+    });
   });
 
   it("rejects every context change except delivered pending to acknowledged", async () => {

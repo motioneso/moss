@@ -323,6 +323,58 @@ describe("editing owner reminders", () => {
     });
     expect(resolve).not.toHaveBeenCalled();
   });
+  it("lets the interpreter distinguish inert replacement words from unsupported capabilities", async () => {
+    const saved = await save(ids.userA, "inert replacement");
+    const ai = new AiRepository();
+    vi.spyOn(ai, "resolveModelForService").mockResolvedValue({
+      model: {
+        id: "model",
+        provider_kind: "anthropic",
+        provider_model_id: "economy-test",
+        provider_config_id: "provider"
+      },
+      reason: "matched-active-model"
+    } as never);
+    vi.spyOn(ai, "selectProviderWithCredential").mockResolvedValue({
+      id: "provider",
+      auth_method: "cli",
+      encrypted_credential: {}
+    } as never);
+    for (const text of ["buy daily vitamins", "email me the weekly grocery list"]) {
+      const generate = vi.fn().mockResolvedValue({
+        rawText: JSON.stringify({ ...keep, target: "inert replacement", unsupported: false, text }),
+        usage: { inputTokens: 0, outputTokens: 0 }
+      });
+      const run = await asOwner(ids.userA, (db) =>
+        prepareReminderEdit(
+          db,
+          ai,
+          () => ({ generateStructured: generate }),
+          `change my inert replacement reminder text to ${text}`,
+          saved.threadId,
+          locale
+        )
+      );
+      expect(await run()).toMatchObject({ kind: "edit", proposal: { terms: { text } } });
+      expect(generate).toHaveBeenCalledOnce();
+    }
+    const generate = vi.fn().mockResolvedValue({
+      rawText: JSON.stringify({ ...keep, target: "inert replacement", unsupported: true }),
+      usage: { inputTokens: 0, outputTokens: 0 }
+    });
+    const run = await asOwner(ids.userA, (db) =>
+      prepareReminderEdit(
+        db,
+        ai,
+        () => ({ generateStructured: generate }),
+        "change my inert replacement reminder to repeat daily",
+        saved.threadId,
+        locale
+      )
+    );
+    expect(await run()).toMatchObject({ kind: "edit_refused" });
+  });
+
   it("requires an owner typed choice before changing ambiguous matches", async () => {
     const first = await save(ids.userA, "choice one");
     const second = await save(ids.userA, "choice two");

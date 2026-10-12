@@ -98,15 +98,23 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
   await send(page, drawer, "remind me in 10 minutes to choice proof one");
   await send(page, drawer, "remind me in 10 minutes to choice proof two");
   const before = (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"));
-  await send(page, drawer, "change my choice proof reminder text to chosen proof revised");
+  await send(
+    page,
+    drawer,
+    "change my choice proof reminder text to chosen proof revised daily vitamins"
+  );
   expect(
     (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"))
   ).toHaveLength(2);
   await expect(drawer.getByText(/Which reminder should I change/).last()).toBeVisible();
   await send(page, drawer, "2");
   const selected = (await tasks(page)).find((row) => row.id === before[1]!.id)!;
-  expect(selected.instruction).toBe("chosen proof revised");
-  await send(page, drawer, "change my chosen proof revised reminder to repeat daily");
+  expect(selected.instruction).toBe("chosen proof revised daily vitamins");
+  await send(
+    page,
+    drawer,
+    "change my chosen proof revised daily vitamins reminder to repeat daily"
+  );
   expect((await tasks(page)).find((row) => row.id === selected.id)?.dueAt).toBe(selected.dueAt);
   await expect(
     drawer.getByText(/I can edit a reminder's text, time or deadline only/).last()

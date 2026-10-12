@@ -45,13 +45,6 @@ export async function prepareReminderEdit(
   if (!recognizeReminderEdit(text)) return async () => undefined;
   const owned = await readEditableReminders(scopedDb);
   if (owned.length === 0) return async () => undefined;
-  // These capabilities must never be silently treated as a text/time edit.
-  if (
-    /\b(?:every|repeat|recurring|daily|weekly|quiet hours|notify|notifications|recipient|destination|side chat|send it|email it|email me|text me|perform|execute)\b/i.test(
-      text
-    )
-  )
-    return async () => ({ kind: "edit_refused", reply: REFUSED });
   const { model } = await ai.resolveModelForService(scopedDb, "module.chat", {
     capability: "json"
   });

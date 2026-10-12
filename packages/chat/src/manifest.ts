@@ -81,7 +81,8 @@ export const chatModuleManifest = {
       "sql/0310_chat_live_turns.sql",
       "sql/0311_chat_local_clock_reminders.sql",
       "sql/0313_chat_reminder_controls.sql",
-      "sql/0314_chat_quiet_hours_allowances.sql"
+      "sql/0314_chat_quiet_hours_allowances.sql",
+      "sql/0317_chat_reminder_edits.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
