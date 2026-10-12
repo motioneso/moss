@@ -343,6 +343,28 @@ describe("briefing email current-status evidence (#3465)", () => {
     const { prompt } = await compose([{ ...bills[0], actionability: "needs_reply" }]);
     expect(prompt).not.toContain("Invoice #0");
   });
+  it.each(["morning", "evening"] as const)(
+    "%s reports today's FYI statement with unknown payment status and no AI summary",
+    async (kind) => {
+      const message = {
+        ...bills[0],
+        id: "today-statement",
+        receivedAt: NOW.toISOString(),
+        subject: "Your October statement is ready",
+        summary: "Payment of $120 is overdue",
+        actionability: "fyi"
+      };
+      const { result, prompt } = await compose([message], kind);
+      expect(prompt).toContain(message.subject);
+      expect(prompt).toContain("payment status unknown");
+      expect(prompt).toContain("Oct");
+      expect(prompt).not.toContain(message.summary);
+      expect(result.sourceMetadata.emailSignals).toEqual([]);
+      expect(
+        (result.sourceMetadata.emailEvidence as BriefingEmailEvidenceV1).items[0]
+      ).toMatchObject({ ageDays: 0, status: "current_status_unknown", rank: null });
+    }
+  );
   it("omits unverified FYI billing summaries", async () => {
     const { prompt } = await compose([
       {

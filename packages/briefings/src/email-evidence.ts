@@ -2,7 +2,7 @@ import { localDay, type BriefingEmailEvidenceV1, type LocaleSettingsDto } from "
 
 // The source cache returns 200 recent messages plus 25 older actionable messages.
 const EVIDENCE_CAP = 225;
-const BILLING = /\b(bills?|invoices?|past[ -]due|auto-?pay)\b/i;
+const BILLING = /\b(bills?|invoices?|payments?|statements?|past[ -]due|auto-?pay)\b/i;
 const SETTLED = /\b(paid in full|fully paid|payment (?:received|confirmed|successful))\b/i;
 const NOT_SETTLED = /\b(not|unpaid|failed|pending|partial|partially)\b/i;
 
