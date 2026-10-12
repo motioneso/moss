@@ -68,6 +68,11 @@ export const emailModuleManifest = {
   ],
   features: [
     {
+      id: "email.answered-conversations",
+      description:
+        "Answered conversations stay off Today once your latest reply is cached, including older messages still marked for reply."
+    },
+    {
       id: "email.proactive_current_access",
       description:
         "Proactive checks use cached mail only from active accounts with Email access granted and the Email source available. A permitted account cannot admit revoked-account mail. Existing monitoring choices, cooldowns and limits still apply.",

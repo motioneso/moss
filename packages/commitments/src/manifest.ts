@@ -110,7 +110,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     {
       id: "commitments.email-owner-participation",
       description:
-        "Email candidates require owner participation. IMAP singleton messages cannot create inferred commitments (#3470). Needs-reply triage survives no-item; item outcomes use the commitment path. Chat and notes extraction are unchanged."
+        "Email suggests commitments only when you wrote in the conversation. Separate-message mailboxes cannot prove this. Unanswered questions remain eligible; answered threads leave Today. Chat and notes extraction are unchanged."
     }
   ],
   assistantActionFamilies: [

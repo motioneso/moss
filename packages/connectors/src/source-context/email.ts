@@ -327,7 +327,9 @@ async function readAccountLive(
       cachedRow &&
       cachedSignalSet &&
       cachedDecision &&
-      (!cachedNeedsActionDetails || cachedActionDetailsComplete)
+      (cachedSignalSet.pendingJudgement === true ||
+        !cachedNeedsActionDetails ||
+        cachedActionDetailsComplete)
     ) {
       // The live read has the whole message in hand, so the full rule can be applied here as
       // well as the decision stored when it was saved.

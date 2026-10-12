@@ -245,16 +245,36 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
       external_id: CONTRACT_MAIL.externalId,
       external_metadata: { threadId: "th-contract" },
       summary: null,
-      signals: { importance: "normal", confidence: 0.6, pendingJudgement: true },
+      signals: {
+        importance: "normal",
+        confidence: 0.6,
+        pendingJudgement: true,
+        actionability: { category: "needs_reply" }
+      },
       created_at: FIXED_NOW,
       updated_at: FIXED_NOW,
       analysis_attempts: 0,
       judgement_requested_at: null
     } as EmailMessage;
-    const { prompt } = await composeWith(liveEmailDeps([CONTRACT_MAIL], runChat, [stored]));
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      ...CONTRACT_MAIL,
+      externalId: `question-${i}`,
+      subject: `Colleague question ${i}`
+    }));
+    const cached = messages.map((message, i) => ({
+      ...stored,
+      id: `row-${i}`,
+      external_id: message.externalId,
+      subject: message.subject
+    }));
+    const emailDeps = liveEmailDeps(messages, runChat, cached);
+    const read = await listEmailContext(fakeScopedDb, emailDeps, {});
+    expect(read.items).toHaveLength(10);
+    for (const item of read.items) expect(item.actionability).toBe("needs_reply");
+    const { prompt } = await composeWith(emailDeps);
 
-    expect(runChat).not.toHaveBeenCalled();
-    expect(emailBlock(prompt)).toContain("Contract redlines for Thursday");
+    expect(runChat).toHaveBeenCalledTimes(0);
+    expect(emailBlock(prompt)).toContain("Colleague question");
   });
 
   it.each([

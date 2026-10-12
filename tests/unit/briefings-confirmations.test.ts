@@ -55,6 +55,10 @@ describe("Today excludes no-action confirmations", () => {
     }
   );
   it.each([
+    ["Your parcel was delivered", "Collect within 3 days."],
+    ["Your order has shipped", "Signature required. Schedule a delivery window."],
+    ["Payment received", "Your next payment of $50 is due on Nov 1."],
+    ["Need the receipt for the hotel by Friday", "Please send it."],
     ["Order confirmed", "Action needed to complete your order."],
     ["Payment confirmation", "Your payment failed. Please update your card."],
     ["Payment received", "Your next payment was declined."],
@@ -68,6 +72,14 @@ describe("Today excludes no-action confirmations", () => {
     const item = { ...mail(subject), snippet };
     expect(assessBriefingEmailEvidence([item], now, locale).eligibleItems).toHaveLength(1);
     expect(lines(item).join("\n")).toContain(subject);
+  });
+  it("keeps a delivered parcel with time-sensitive triage and collection instructions", () => {
+    const item = {
+      ...mail("Your parcel was delivered", true, "time_sensitive_info"),
+      snippet: "Collect within 3 days."
+    };
+    expect(assessBriefingEmailEvidence([item], now, locale).eligibleItems).toHaveLength(1);
+    expect(lines(item).join("\n")).toContain(item.subject);
   });
   it.each(["needs_reply", "needs_action"])("keeps explicit %s confirmation triage", (category) => {
     const item = mail("Booking confirmed", false, category);

@@ -301,7 +301,7 @@ describe("judgeEmailThread", () => {
     expect(await judgeEmailThread({}, payload, d)).toBe("skipped");
     expect(d.generate).not.toHaveBeenCalled();
   });
-  it("skips when the newest message is from the user", async () => {
+  it("records no item when the newest message is the owner reply", async () => {
     const d = deps({
       threads: {
         listThreadMessages: vi.fn(async () => [
@@ -311,7 +311,14 @@ describe("judgeEmailThread", () => {
         listThreadsWithNewerMessages: vi.fn()
       }
     });
-    expect(await judgeEmailThread({}, payload, d)).toBe("skipped");
+    expect(await judgeEmailThread({}, payload, d)).toBe("no_item");
+    expect(d.repository.recordThreadJudgement).toHaveBeenCalledWith(
+      {},
+      "u1",
+      "t1",
+      "m2",
+      "no_item"
+    );
     expect(d.generate).not.toHaveBeenCalled();
   });
   it("runs without a failing provider and tells the prompt", async () => {

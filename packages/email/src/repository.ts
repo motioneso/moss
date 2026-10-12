@@ -133,7 +133,75 @@ export class EmailRepository {
       .limit(EmailRepository.BRIEFING_OLDER_UNRESOLVED_LIMIT)
       .execute();
 
-    return [...recent, ...olderUnresolved];
+    return this.settleAnsweredThreads(scopedDb, [...recent, ...olderUnresolved]);
+  }
+
+  /** Read-time settlement also covers old reply labels before the queued judgement runs. */
+  private async settleAnsweredThreads(
+    scopedDb: DataContextDb,
+    rows: EmailMessage[]
+  ): Promise<EmailMessage[]> {
+    const settled = new Set<string>();
+    for (const owner of new Set(rows.map((row) => row.owner_user_id))) {
+      const mine = new Set(
+        (await this.listFrequentRecipientAddresses(scopedDb, owner)).map(bareAddress)
+      );
+      if (mine.size === 0) continue;
+      const owned = rows.filter((row) => row.owner_user_id === owner);
+      const threadIds = [
+        ...new Set(
+          owned.flatMap((row) => {
+            const meta = row.external_metadata as { threadId?: unknown } | null;
+            return typeof meta?.threadId === "string" && meta.threadId ? [meta.threadId] : [];
+          })
+        )
+      ];
+      const newest =
+        threadIds.length === 0
+          ? []
+          : await scopedDb.db
+              .selectFrom("app.email_messages")
+              .selectAll()
+              .distinctOn(["connector_account_id", sql<string>`external_metadata->>'threadId'`])
+              .where("owner_user_id", "=", owner)
+              .where(sql<string>`external_metadata->>'threadId'`, "in", threadIds)
+              .orderBy("connector_account_id")
+              .orderBy(sql<string>`external_metadata->>'threadId'`)
+              .orderBy("received_at", "desc")
+              .orderBy("id")
+              .execute();
+      const answered = new Set(
+        newest
+          .filter((row) => mine.has(bareAddress(row.sender)))
+          .map(
+            (row) =>
+              `${row.connector_account_id}:${(row.external_metadata as { threadId: string }).threadId}`
+          )
+      );
+      for (const row of owned) {
+        const meta = row.external_metadata as { threadId?: unknown } | null;
+        if (
+          mine.has(bareAddress(row.sender)) ||
+          (typeof meta?.threadId === "string" &&
+            answered.has(`${row.connector_account_id}:${meta.threadId}`))
+        )
+          settled.add(row.id);
+      }
+    }
+    return rows.map((row) =>
+      settled.has(row.id)
+        ? {
+            ...row,
+            summary: null,
+            signals: {
+              skipped: "answered_thread",
+              pendingJudgement: false,
+              actionability: { category: "noise" },
+              confidence: 1
+            }
+          }
+        : row
+    );
   }
 
   async getById(scopedDb: DataContextDb, messageId: string): Promise<EmailMessage | undefined> {
