@@ -10,6 +10,20 @@ it("accepts a report explicitly stating that payment status is not shown", () =>
   expect(() => assertUnknownPaymentStatus(UNKNOWN)).not.toThrow();
 });
 
+it.each([
+  "Its payment status is not shown in what I can see.",
+  "I cannot see whether it was paid.",
+  "Payment status is unclear.",
+  "Payment status is unknown.",
+  "There is no record of payment in what I can see."
+])("accepts explicit uncertainty about payment: %s", (report) => {
+  expect(() => assertUnknownPaymentStatus(report)).not.toThrow();
+});
+
+it("rejects an unknown-status report that also claims payment was made", () => {
+  expect(() => assertUnknownPaymentStatus(`${UNKNOWN} But it has been paid.`)).toThrow();
+});
+
 it.each(["unpaid", "owed", "overdue", "due now", "due-now"])(
   "rejects an unknown-status report that also claims the invoice is %s",
   (claim) => {

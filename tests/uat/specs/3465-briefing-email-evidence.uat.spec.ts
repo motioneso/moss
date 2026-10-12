@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { assertUnknownPaymentStatus, assertUnknownReplyStatus } from "../briefing-email-status.js";
+import { readerSchedule } from "../briefing-reader-schedule.js";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
@@ -82,8 +83,7 @@ for (const briefingType of ["morning", "evening"] as const) {
         title: `Email ${briefingType} status proof`,
         briefingType,
         enabled: true,
-        // Exercise the evening reader regardless of the real clock's current hour.
-        scheduleMetadata: { targetTime: "00:00", timezone: "America/Los_Angeles" },
+        scheduleMetadata: readerSchedule(),
         selectedToolNames: ["tasks.list", "email.listVisibleMessages"]
       }
     });
@@ -164,6 +164,13 @@ for (const briefingType of ["morning", "evening"] as const) {
         .filter((line) => /Dana|draft|reply/i.test(line))
         .join(" ");
       assertUnknownReplyStatus(replySentences);
+    }
+    // Refresh after generation in case the writer crossed midnight.
+    if (briefingType === "evening") {
+      const scheduled = await page.request.patch(`/api/briefings/definitions/${definitionId}`, {
+        data: { scheduleMetadata: readerSchedule() }
+      });
+      expect(scheduled.ok()).toBe(true);
     }
     await page.goto("/today");
     await page.getByRole("button", { name: `Read the full ${briefingType} briefing` }).click();
