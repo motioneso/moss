@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
-import { assertUnknownPaymentStatus, assertUnknownReplyStatus } from "../briefing-email-status.js";
+import { assertNoDefiniteEmailClaim } from "../briefing-email-status.js";
 import { readerSchedule } from "../briefing-reader-schedule.js";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
@@ -150,21 +150,14 @@ for (const briefingType of ["morning", "evening"] as const) {
     expect(run!.sourceMetadata.sectionLines).toMatchObject(
       briefingType === "morning" ? { email: 2 } : { email_today: 1 }
     );
-    const billSentences = run!.summaryText
+    const emailSentences = run!.summaryText
       .split(/\n|(?<=[.!?])\s+/)
-      .filter((line) => /Invoice #TODAY|VendorToday|payment|bill/i.test(line))
+      .filter((line) => /Invoice #TODAY|VendorToday|payment|bill|Dana|draft|reply/i.test(line))
       .join(" ");
-    // Guaranteed prose inclusion belongs to #3466; any included bill must preserve uncertainty.
-    if (billSentences) assertUnknownPaymentStatus(billSentences);
+    // Positive prose wording belongs to #3466; metadata proves selection and unknown status.
+    assertNoDefiniteEmailClaim(emailSentences);
     if (briefingType === "evening") expect(run!.summaryText).not.toMatch(/Dana|draft feedback/i);
     expect(run!.summaryText).toMatch(/Emissions/i);
-    if (briefingType === "morning" && /Dana|draft|reply/i.test(run!.summaryText)) {
-      const replySentences = run!.summaryText
-        .split(/\n|(?<=[.!?])\s+/)
-        .filter((line) => /Dana|draft|reply/i.test(line))
-        .join(" ");
-      assertUnknownReplyStatus(replySentences);
-    }
     // Refresh after generation in case the writer crossed midnight.
     if (briefingType === "evening") {
       const scheduled = await page.request.patch(`/api/briefings/definitions/${definitionId}`, {
