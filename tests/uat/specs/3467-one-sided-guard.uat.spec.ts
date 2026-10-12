@@ -28,7 +28,7 @@ test("real mailbox notices create no commitments while an owner promise reaches 
     const model = await bringUpRealChatModel(page);
     const extractionBinding = await page.request.put(
       "/api/ai/services/module.connectors.email-extract/binding",
-      { data: { kind: "model", modelId: model.id } }
+      { data: { binding: { kind: "model", modelId: model.id } } }
     );
     expect(extractionBinding.ok()).toBe(true);
     greenmail = await startGreenmail(project);
