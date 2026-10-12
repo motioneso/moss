@@ -4,9 +4,14 @@ import { pauseReminderById, resumeReminderById, deleteReminderById } from "./con
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import { ACT_AS_GRANT_HEADER } from "@moss/module-sdk/server";
-import { listScheduledTasksRouteSchema, scheduledTaskControlRouteSchema } from "@moss/shared";
+import {
+  listScheduledTasksRouteSchema,
+  scheduledTaskControlRouteSchema,
+  listQuietHoursAllowancesRouteSchema
+} from "@moss/shared";
 import { handleRouteError } from "../route-errors.js";
 import { listScheduledReminders } from "./settings.js";
+import { listQuietHoursAllowances } from "./quiet-hours-allowances.js";
 
 export function registerScheduledTaskRoutes(
   server: FastifyInstance,
@@ -16,6 +21,18 @@ export function registerScheduledTaskRoutes(
     readonly boss?: Pick<PgBoss, "send">;
   }
 ): void {
+  server.get(
+    "/api/chat/quiet-hours-allowances",
+    { schema: listQuietHoursAllowancesRouteSchema },
+    async (request, reply) => {
+      try {
+        const access = await dependencies.resolveAccessContext(request);
+        return await dependencies.dataContext.withDataContext(access, listQuietHoursAllowances);
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
   server.get(
     "/api/chat/scheduled-tasks",
     { schema: listScheduledTasksRouteSchema },

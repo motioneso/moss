@@ -57,6 +57,15 @@ function reminderRows() {
   }[];
 }
 
+test.afterEach(async ({ page }, info) => {
+  if (info.status === info.expectedStatus) return;
+  console.log("[3134 failure] reminder snapshot:", JSON.stringify(reminderRows()));
+  console.log(
+    "[3134 failure] visible reminder:",
+    await page.getByText("Reminder: check the quiet proof timer", { exact: true }).count()
+  );
+});
+
 async function browserNotifications(page: Page) {
   return page.evaluate(async () => {
     const registration = await navigator.serviceWorker.getRegistration();

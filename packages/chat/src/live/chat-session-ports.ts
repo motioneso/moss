@@ -157,6 +157,8 @@ export interface ChatPersistencePort {
    * an accepted reminder in the same transaction. Optional: embedders without reminders omit it.
    */
   hasPendingReminderDeletion?(actorUserId: string, threadId: string): Promise<boolean>;
+  hasQuietHoursReminderTarget?(actorUserId: string, target: string): Promise<boolean>;
+  hasPendingQuietHoursProposal?(actorUserId: string, threadId: string): Promise<boolean>;
   recordReminderTurn?(
     actorUserId: string,
     userText: string,

@@ -1,4 +1,4 @@
-import type { ListScheduledTasksResponse } from "@moss/shared";
+import type { ListScheduledTasksResponse, ListQuietHoursAllowancesResponse } from "@moss/shared";
 import type { MossGoal } from "@moss/goals";
 import type {
   AddTaskActivityRequest,
@@ -1945,4 +1945,8 @@ export async function resumeScheduledTask(id: string): Promise<void> {
 }
 export async function deleteScheduledTask(id: string): Promise<void> {
   await requestJson(`/api/chat/scheduled-tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function listQuietHoursAllowances(): Promise<ListQuietHoursAllowancesResponse> {
+  return requestJson<ListQuietHoursAllowancesResponse>("/api/chat/quiet-hours-allowances");
 }

@@ -28,6 +28,7 @@ import {
   type NotificationPreferencePort,
   type NotificationWithReadState,
   type QuietHoursPort,
+  type QuietHoursAllowancePolicy,
   type PushQueuePort
 } from "./repository.js";
 import { shouldPushImmediately } from "./sensitivity.js";
@@ -35,6 +36,7 @@ import { shouldPushImmediately } from "./sensitivity.js";
 export interface PushWorkerDependencies {
   readonly notificationPreferencePort?: NotificationPreferencePort;
   readonly quietHoursPort?: QuietHoursPort;
+  readonly isAllowedDuringQuietHours?: QuietHoursAllowancePolicy;
   readonly pushQueuePort?: PushQueuePort;
   readonly isNotificationActive?: (
     scopedDb: DataContextDb,
@@ -376,7 +378,11 @@ async function canDeliverPush(
   const sensitivity =
     (await deps.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
   if (!shouldPushImmediately(sensitivity, urgency)) return false;
-  if (urgency !== "urgent" && deps.quietHoursPort) {
+  if (
+    urgency !== "urgent" &&
+    deps.quietHoursPort &&
+    !(await deps.isAllowedDuringQuietHours?.(scopedDb, notification))
+  ) {
     const releaseAt = await actorQuietHoursDeferredUntil(scopedDb, deps.quietHoursPort, now);
     if (releaseAt) {
       if (!deps.pushQueuePort) throw new Error("push quiet-hours queue is not configured");

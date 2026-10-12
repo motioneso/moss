@@ -37,6 +37,37 @@ export interface ListScheduledTasksResponse {
   readonly tasks: readonly ScheduledTaskDto[];
 }
 
+export interface ListQuietHoursAllowancesResponse {
+  readonly mainThreadId: string | null;
+  readonly allowances: readonly { readonly id: string; readonly title: string }[];
+}
+
+export const listQuietHoursAllowancesResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["mainThreadId", "allowances"],
+  properties: {
+    mainThreadId: { anyOf: [{ type: "string" }, { type: "null" }] },
+    allowances: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "title"],
+        properties: { id: { type: "string" }, title: { type: "string" } }
+      }
+    }
+  }
+} as const;
+
+export const listQuietHoursAllowancesRouteSchema = {
+  response: {
+    200: listQuietHoursAllowancesResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema
+  }
+} as const;
+
 const messageSchema = {
   type: "object",
   additionalProperties: false,

@@ -1055,6 +1055,23 @@ export interface ChatRemindersTable {
   created_at: TimestampColumn;
 }
 
+export interface ChatReminderQuietAllowancesTable {
+  reminder_id: string;
+  owner_user_id: string;
+  source_message_id: string | null;
+  created_at: TimestampColumn;
+}
+
+export interface ChatReminderQuietProposalsTable {
+  thread_id: string;
+  owner_user_id: string;
+  reminder_id: string;
+  reminder_version: number;
+  allow: boolean;
+  source_message_id: string;
+  created_at: TimestampColumn;
+}
+
 /** Attachment metadata kept on a live turn; mirrors the shared ChatAttachmentDto. */
 export interface ChatLiveTurnAttachment {
   readonly id: string;
@@ -2025,6 +2042,8 @@ export interface MossDatabase {
   "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_reminders": ChatRemindersTable;
+  "app.chat_reminder_quiet_allowances": ChatReminderQuietAllowancesTable;
+  "app.chat_reminder_quiet_proposals": ChatReminderQuietProposalsTable;
   "app.chat_live_turns": ChatLiveTurnsTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;

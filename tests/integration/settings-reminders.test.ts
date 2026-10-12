@@ -14,6 +14,7 @@ import type { ListScheduledTasksResponse } from "@moss/shared";
 import { createAppActionsService } from "../../packages/chat/src/app-actions.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { ReminderRepository } from "../../packages/chat/src/reminders/repository.js";
+import { saveQuietHoursAllowance } from "../../packages/chat/src/reminders/quiet-hours-allowances.js";
 import { registerScheduledTaskRoutes } from "../../packages/chat/src/reminders/routes.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -86,7 +87,7 @@ async function save(actorUserId: string, text: string) {
       when: { timing: "relative", delaySeconds: 600 },
       text
     });
-    return { ...reminder, threadId: thread.id };
+    return { ...reminder, threadId: thread.id, sourceMessageId: source.id };
   });
 }
 async function list(actorUserId: string): Promise<ListScheduledTasksResponse> {
@@ -249,4 +250,49 @@ it("never exposes Settings controls to model app-action grants", async () => {
   });
   expect(response.statusCode).toBe(403);
   expect((await list(ids.userA)).tasks.some((task) => task.id === saved.id)).toBe(true);
+});
+
+describe("read-only quiet-hours allowance API", () => {
+  it("requires sign-in and never exposes a write endpoint", async () => {
+    expect((await server.inject({ url: "/api/chat/quiet-hours-allowances" })).statusCode).toBe(401);
+    expect(
+      (
+        await server.inject({
+          method: "POST",
+          url: "/api/chat/quiet-hours-allowances",
+          headers: { "x-test-actor": ids.userA }
+        })
+      ).statusCode
+    ).toBe(404);
+  });
+  it("lists only saved owner allowances, uses Main as the chat destination and reflects removal", async () => {
+    const own = await save(ids.userC, "private allowed reminder");
+    const other = await save(ids.userD, "other owner reminder");
+    for (const [actorUserId, saved] of [
+      [ids.userC, own],
+      [ids.userD, other]
+    ] as const) {
+      await runner.withDataContext({ actorUserId }, (scoped) =>
+        saveQuietHoursAllowance(scoped, saved.id, true, saved.sourceMessageId)
+      );
+    }
+    const listAllowed = (actorUserId: string) =>
+      server.inject({
+        url: "/api/chat/quiet-hours-allowances",
+        headers: { "x-test-actor": actorUserId }
+      });
+    const response = await listAllowed(ids.userC);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      mainThreadId: own.threadId,
+      allowances: [{ id: own.id, title: "private allowed reminder" }]
+    });
+    expect((await listAllowed(ids.adminUser)).json().allowances).toEqual([]);
+    expect(response.body).not.toContain("source_message_id");
+    expect(response.body).not.toContain("other owner reminder");
+    await runner.withDataContext({ actorUserId: ids.userC }, (scoped) =>
+      saveQuietHoursAllowance(scoped, own.id, false, own.sourceMessageId)
+    );
+    expect((await listAllowed(ids.userC)).json().allowances).toEqual([]);
+  });
 });

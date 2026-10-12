@@ -9,6 +9,7 @@ import {
 import { listConnectorAccounts } from "../api/client.js";
 import { getConnectorFeatureGrants } from "../api/connectors-client.js";
 import { queryKeys } from "../api/query-keys.js";
+import { QuietHoursAllowances } from "./settings-quiet-hours-allowances.js";
 import { QuietHoursEditor } from "./settings-quiet-hours-editor.js";
 import type { PaneProps } from "./settings-types.js";
 import { readError } from "./settings-types.js";
@@ -127,6 +128,7 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
         </span>
         <div className="alerts-pane__quiet">
           <QuietHoursEditor />
+          <QuietHoursAllowances />
         </div>
       </div>
     </>

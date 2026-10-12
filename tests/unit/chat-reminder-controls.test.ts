@@ -25,6 +25,6 @@ describe("typed reminder controls", () => {
       kind: "delete",
       target: "stretch"
     });
-    expect(recognizeReminderPlan("yes")).toBeUndefined();
+    expect(recognizeReminderPlan("yes")).toEqual({ kind: "quiet_agreement", agree: true });
   });
 });

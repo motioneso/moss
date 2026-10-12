@@ -178,6 +178,7 @@ import {
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
   isReminderNotificationActive,
+  isReminderNotificationAllowedDuringQuietHours,
   registerChatRoutes,
   type ChatEngineFactory,
   type ChatRoutesDependencies,
@@ -2128,7 +2129,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             notificationPreferencePort: createNotificationPreferencePort(),
             quietHoursPort: quietHoursPortImpl,
             pushQueuePort: createPushQueuePort(boss),
-            isNotificationActive: isReminderNotificationActive
+            isNotificationActive: isReminderNotificationActive,
+            isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
           }),
         PUSH_WORK_OPTIONS,
         { afterCommit: throwIfPushRetryNeeded }
@@ -2142,7 +2144,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             notificationPreferencePort: createNotificationPreferencePort(),
             quietHoursPort: quietHoursPortImpl,
             pushQueuePort: createPushQueuePort(boss),
-            isNotificationActive: isReminderNotificationActive
+            isNotificationActive: isReminderNotificationActive,
+            isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
           }),
         PUSH_WORK_OPTIONS,
         { afterCommit: throwIfPushRetryNeeded }
@@ -2390,7 +2393,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         reminderNotifications: new NotificationsRepository(
           quietHoursPortImpl,
           createNotificationPreferencePort(),
-          createPushQueuePort(boss)
+          createPushQueuePort(boss),
+          isReminderNotificationAllowedDuringQuietHours
         ),
         embeddingProviderFactory: createRuntimeEmbeddingProvider,
         extractFactsDeps: {

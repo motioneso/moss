@@ -24,6 +24,8 @@ const SAVED = {
 function setup(options: {
   incognito?: boolean;
   pending?: ReturnType<typeof vi.fn>;
+  pendingProposal?: boolean;
+  matchingTarget?: boolean;
   record?: ReturnType<typeof vi.fn>;
   abortDuringThreadRead?: () => void;
 }) {
@@ -50,7 +52,9 @@ function setup(options: {
       touchExistingThread: vi.fn().mockResolvedValue(true),
       getMainThreadState,
       hasPendingReminderDeletion: options.pending,
-      recordReminderTurn
+      recordReminderTurn,
+      hasQuietHoursReminderTarget: vi.fn().mockResolvedValue(options.matchingTarget ?? false),
+      hasPendingQuietHoursProposal: vi.fn().mockResolvedValue(options.pendingProposal ?? false)
     } as never
   });
   const manager = new ChatSessionManager(deps);
@@ -60,6 +64,77 @@ function setup(options: {
 }
 
 describe("chat reminder turn (#3309)", () => {
+  it.each([
+    "let the dog out at night",
+    "let the dough rest overnight",
+    "let me sleep overnight",
+    "allow notifications at night",
+    "allow the bread to rise overnight",
+    "the baby cannot interrupt me at night",
+    "let it through quiet hours"
+  ])("passes unmatched everyday wording %j untouched to the model", async (text) => {
+    const { manager, engine, recordReminderTurn } = setup({});
+    await manager.submitTurn("u1", "Ben", text);
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(1);
+    expect(engine.submitted.join("\n")).toContain(text);
+  });
+  it("passes unmatched everyday wording to the model in private chat", async () => {
+    const { manager, engine, recordReminderTurn } = setup({ incognito: true });
+    await manager.submitTurn("u1", "Ben", "let me sleep overnight");
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(1);
+  });
+  it("handles everyday wording when a live reminder matches", async () => {
+    const { manager, engine, recordReminderTurn } = setup({ matchingTarget: true });
+    await manager.submitTurn("u1", "Ben", "let stretch through quiet hours");
+    expect(recordReminderTurn).toHaveBeenCalled();
+    expect(engine.launchCount).toBe(0);
+  });
+  it("handles wording that explicitly names an unmatched reminder", async () => {
+    const { manager, engine, recordReminderTurn } = setup({});
+    await manager.submitTurn("u1", "Ben", "let the stretch reminder through quiet hours");
+    expect(recordReminderTurn).toHaveBeenCalled();
+    expect(engine.launchCount).toBe(0);
+  });
+  it.each(["yes", "no"])("does not confirm an allowance with attached %s", async (text) => {
+    const { manager, engine, recordReminderTurn } = setup({ pendingProposal: true });
+    await manager.submitTurn("u1", "Ben", text, {
+      attachments: [
+        {
+          id: "file",
+          fileName: "note.txt",
+          mimeType: "text/plain",
+          sizeBytes: 1,
+          createdAt: "2026-10-12T10:00:00Z"
+        }
+      ]
+    });
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(1);
+  });
+  it("leaves a bare yes to ordinary chat when there is no saved allowance proposal", async () => {
+    const { manager, engine, recordReminderTurn } = setup({});
+    await manager.submitTurn("u1", "Ben", "yes");
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(1);
+  });
+
+  it("routes an owner typed yes for a stored proposal before the model", async () => {
+    const { manager, engine, recordReminderTurn } = setup({ pendingProposal: true });
+    await manager.submitTurn("u1", "Ben", "yes");
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toEqual({ kind: "quiet_agreement", agree: true });
+    expect(engine.launchCount).toBe(0);
+  });
+
+  it("refuses a module-controlled allowance turn without owner authority", async () => {
+    const { manager, recordReminderTurn } = setup({});
+    await manager.submitTurn("u1", "Ben", "let the stretch reminder through quiet hours", {
+      moduleControl: "some-module"
+    });
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toEqual({ kind: "main_only", manage: true });
+  });
+
   it("sends ordinary text to the gate and the model, never to the reminder store", async () => {
     const { manager, engine, gate, recordReminderTurn } = setup({});
     const result = await manager.submitTurn("u1", "Ben", "what is the weather");

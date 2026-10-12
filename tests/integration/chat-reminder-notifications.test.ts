@@ -22,9 +22,14 @@ import {
   enqueueReminderNotification,
   runReminderNotificationJob,
   isReminderNotificationActive,
+  isReminderNotificationAllowedDuringQuietHours,
   type ReminderNotificationPayload
 } from "../../packages/chat/src/reminders/notifications.js";
 import { ReminderRepository } from "../../packages/chat/src/reminders/repository.js";
+import {
+  readQuietHoursReminder,
+  saveQuietHoursAllowance
+} from "../../packages/chat/src/reminders/quiet-hours-allowances.js";
 import { deleteReminderById } from "../../packages/chat/src/reminders/controls.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -487,4 +492,146 @@ it("keeps an already-visible Tasks bell item while delaying its device alert", a
     notificationId: notification!.id,
     releaseAt: releaseAt.toISOString()
   });
+});
+
+it("only a live owner allowance skips quiet hours, without urgency promotion or cached consent", async () => {
+  const allowed = await due("allowed quiet task");
+  const ordinary = await due("ordinary quiet task");
+  const now = new Date();
+  const hhmm = (date: Date) => date.toISOString().slice(11, 16);
+  const quiet: QuietHoursPort = {
+    getSettings: async () => ({
+      enabled: true,
+      start: hhmm(new Date(now.getTime() - 300000)),
+      end: hhmm(new Date(now.getTime() + 3600000)),
+      timezone: "UTC"
+    }),
+    getLocaleTimezone: async () => null
+  };
+  const repository = new NotificationsRepository(
+    quiet,
+    createNotificationPreferencePort(),
+    createPushQueuePort(boss),
+    isReminderNotificationAllowedDuringQuietHours
+  );
+  const setAllowed = (allow: boolean) =>
+    asOwner(async (db) => {
+      await readQuietHoursReminder(db, allowed.resourceId);
+      const source = await db.db
+        .selectFrom("app.chat_reminders")
+        .select("source_message_id")
+        .where("id", "=", allowed.resourceId)
+        .executeTakeFirstOrThrow();
+      await saveQuietHoursAllowance(db, allowed.resourceId, allow, source.source_message_id);
+    });
+  await setAllowed(true);
+  await notify(allowed, repository);
+  await notify(ordinary, repository);
+  const row = await asOwner((db) => repository.findByEventKey(db, "chat", allowed.idempotencyKey));
+  const held = await asOwner((db) =>
+    repository.findByEventKey(db, "chat", ordinary.idempotencyKey)
+  );
+  expect(row?.deferred_until).toBeNull();
+  expect(row?.urgency).toBe("normal");
+  expect(held?.deferred_until).not.toBeNull();
+  const check = (notification = row!) =>
+    worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+      isReminderNotificationAllowedDuringQuietHours(db, notification)
+    );
+  expect(await check()).toBe(true);
+  expect(await check({ ...row!, module_id: "tasks" })).toBe(false);
+  expect(await check({ ...row!, event_key: randomUUID() })).toBe(false);
+  const forgedMessageId = randomUUID();
+  expect(
+    await check({
+      ...row!,
+      event_key: forgedMessageId,
+      metadata: { ...row!.metadata, messageId: forgedMessageId }
+    })
+  ).toBe(false);
+  expect(
+    await app.withDataContext({ actorUserId: ids.userB }, (db) =>
+      isReminderNotificationAllowedDuringQuietHours(db, row!)
+    )
+  ).toBe(false);
+  await setAllowed(false);
+  expect(await check()).toBe(false);
+  const pushed = await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+    runPushDeliverJob(
+      { data: { actorUserId: ids.userA, recipientUserId: ids.userA, notificationId: row!.id } },
+      db,
+      {
+        notificationsRepository: repository,
+        subscriptionsRepository: new UnexpectedSubscriptions(),
+        quietHoursPort: quiet,
+        pushQueuePort: createPushQueuePort(boss),
+        isNotificationActive: isReminderNotificationActive,
+        isAllowedDuringQuietHours: isReminderNotificationAllowedDuringQuietHours
+      }
+    )
+  );
+  expect(pushed.delivered).toBe(0);
+  expect(await notify(allowed, repository)).toBe("already_created");
+  const queued = await bootstrap.query(
+    "SELECT data FROM pgboss.job WHERE name='notifications.push.deliver' AND data->>'notificationId'=$1",
+    [row!.id]
+  );
+  expect(queued.rows.some((job) => job.data.releaseAt)).toBe(true);
+  expect(row?.metadata).toEqual({
+    kind: "chat_reminder",
+    reminderId: allowed.resourceId,
+    messageId: allowed.idempotencyKey
+  });
+  const messages = await bootstrap.query(
+    "SELECT count(*)::int AS count FROM app.chat_messages WHERE id=$1",
+    [allowed.idempotencyKey]
+  );
+  expect(messages.rows[0].count).toBe(1);
+});
+
+it("allowance removal waits for a push admitted under the shared reminder lock", async () => {
+  const payload = await due("allowance removal ordering");
+  const source = await asOwner(async (db) => {
+    await readQuietHoursReminder(db, payload.resourceId);
+    const row = await db.db
+      .selectFrom("app.chat_reminders")
+      .select("source_message_id")
+      .where("id", "=", payload.resourceId)
+      .executeTakeFirstOrThrow();
+    await saveQuietHoursAllowance(db, payload.resourceId, true, row.source_message_id);
+    return row.source_message_id;
+  });
+  await notify(payload);
+  const row = await asOwner((db) =>
+    notifications.findByEventKey(db, "chat", payload.idempotencyKey)
+  );
+  const locked = barrier();
+  const release = barrier();
+  const admitted = worker.withDataContext({ actorUserId: ids.userA }, async (db) => {
+    expect(await isReminderNotificationAllowedDuringQuietHours(db, row!)).toBe(true);
+    locked.resolve();
+    await release.promise;
+  });
+  await locked.promise;
+  try {
+    await expect(
+      asOwner(async (db) => {
+        await sql`SET LOCAL lock_timeout = '100ms'`.execute(db.db);
+        await readQuietHoursReminder(db, payload.resourceId);
+        await saveQuietHoursAllowance(db, payload.resourceId, false, source);
+      })
+    ).rejects.toThrow("lock timeout");
+  } finally {
+    release.resolve();
+    await admitted;
+  }
+  await asOwner(async (db) => {
+    await readQuietHoursReminder(db, payload.resourceId);
+    await saveQuietHoursAllowance(db, payload.resourceId, false, source);
+  });
+  expect(
+    await worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+      isReminderNotificationAllowedDuringQuietHours(db, row!)
+    )
+  ).toBe(false);
 });
