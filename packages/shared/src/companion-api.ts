@@ -440,6 +440,8 @@ export interface FocusJudgeRequest {
    * instead of `description`, never with it. Held only for the request and the one provider call.
    */
   readonly image?: string;
+  /** Test the judge without saving a judgment or affecting nudge history. */
+  readonly test?: boolean;
   readonly observedAt: string;
 }
 
@@ -535,6 +537,7 @@ export const focusJudgeRouteSchema = {
       windowTitle: FOCUS_WINDOW_TITLE_SCHEMA,
       description: FOCUS_DESCRIPTION_SCHEMA,
       image: FOCUS_IMAGE_SCHEMA,
+      test: { type: "boolean" },
       observedAt: { type: "string", minLength: 1, maxLength: 40 }
     }
   },

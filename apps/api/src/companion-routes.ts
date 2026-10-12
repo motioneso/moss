@@ -435,6 +435,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
               windowTitle: request.body.windowTitle,
               description: request.body.description,
               image: request.body.image,
+              test: request.body.test,
               observedAt
             },
             new Date(),

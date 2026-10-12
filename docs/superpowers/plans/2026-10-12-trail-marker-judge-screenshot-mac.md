@@ -1,6 +1,6 @@
 # Plan: Trail Marker sends a window picture to the focus judge (#3067)
 
-Status: awaiting coordinator approval. Sensitive risk tier. Base: main at
+Status: approved by coordinator on October 12 at commit 2dc21a6ec. Sensitive risk tier. Base: main at
 90e7f263c, including server Phase 1 from PR #3075. Branch:
 feat/3067-judge-screenshot-mac. Work stays in this worktree under ~/Jarv1s.
 
@@ -18,16 +18,22 @@ not saved pictures (apps/trail-marker/README.md:43). Its specification section 5
 says frames live only for one recognition call. No five-window set was found in
 these bounded checks; no personal directories were searched broadly.
 
-The comparison has NOT passed. Per the task brief, continue planning and notify
-the coordinator while Ben decides. If an existing set becomes available, run
-the direct path through our disposable Moss install and the old path with
-tools/jev-pilot/clef_probe.py --compare. That tool calls Cloudflare directly, so
-its direct timing alone cannot establish latency through Moss. Use the same
-goal and picture for both paths. Keep pictures on the Mac or in a removed temp
-folder. Post only five labels, correctness and timings. Ben owns the decision:
-stop if the direct judge is wrong twice where the old path is right, or median
-latency through Moss exceeds five seconds. Never capture Ben's screen to fill
-the missing set.
+The comparison has NOT passed. Ben subsequently ruled that it will use five
+realistic synthetic pages: two aligned, two off-task and one borderline, all
+against the same synthetic block goal. Capture only the disposable browser
+window and remove every temporary picture after proof. Record each expected
+answer, both path answers and timing through Moss with the median on PR #3491.
+Continue building while preparing this comparison. The coordinator ruled that
+there is no approved OpenRouter key and it must not be sought. Use the Mac's
+shipped Claude Code describer with its existing executable, arguments and
+prompt, then feed the description through the disposable Moss text judge.
+If Claude is not signed in or refuses, use the server Codex CLI's cheapest
+model with the same prompt and identify that describer in the table. Never
+copy a login. Both paths use the same picture, goal and configured Moss judge;
+measure both through Moss, including description time for the old path.
+Stop and notify the coordinator if the direct judge is wrong twice where the
+old path is right, or median direct latency through Moss exceeds five seconds.
+Never capture Ben's screen.
 
 ## Verified seams on the base commit
 
@@ -84,16 +90,22 @@ worktree. The prior plan's :572 citation is still accurate.
    another source. Unsupported or failed image calls leave insufficient evidence.
 7. Keep JPEG Data, encoded request body and data URL local to the async call.
    Nothing enters lastSent, RememberedJudgment, preferences or diagnostics.
-   Clear image-bearing locals and preview in all success, error and cancellation
-   exits. Do not print provider exceptions or request bodies. Inspect URLSession
+   Clear image-bearing request locals in all success, error and cancellation
+   exits; Test display previews follow decision 8 below. Do not print provider exceptions or request bodies. Inspect URLSession
    configuration and use an ephemeral uncached session if needed to meet the
    brief's no-disk condition; verify the receiving library path before claiming
    this property. Do not promise physical memory erasure from Swift Data.
-8. The brief requires dropping the picture immediately after the call, whereas
-   spec section 4 shows a retained Test thumbnail. Follow the newer brief: show
-   the preview only while the Test call is in flight, clear it on completion,
-   and retain only label/reason. Coordinator approval must resolve this visible
-   deviation. Existing non-judge previews keep their behavior.
+8. Coordinator ruling on October 12 supersedes the brief for Test previews:
+   keep the thumbnail on screen after the call, in memory only. Clear it on
+   the next Test, pane close, disconnect and logout. Automatic rung-3 pictures
+   and request bodies, data URLs and encoded JPEGs remain local to the call
+   and are released on every exit. The Test preview is a separate display
+   image, not the retained encoded JPEG or request. No preview reaches disk,
+   defaults, logs or diagnostics. Existing source previews use the same
+   lifecycle cleanup.
+9. Add a Mac regression that an empty test judgment id cannot reach remembered
+   judgment or correction flow, including a defensive check on those boundaries.
+   The approved synthetic comparison runs during disposable-install proof.
 
 ## Determinism boundary
 
@@ -129,7 +141,7 @@ Extend CompanionClientTests and Rung3DecisionTests; add JudgeSourceTests in
 apps/trail-marker/TrailMarkerTests. Use injected transport/capture seams for
 the real runtime orchestration, not just a parallel test helper. Assert one
 title call followed by exactly one image call, zero describe calls, no image
-in remembered state/defaults, and no retained test capture after completion.
+in remembered state/defaults, and only a display thumbnail retained after Test completion.
 Exercise success, failure, cancellation, pause during capture, permission loss,
 never-watch, missing block, unknown name and stale context. Observe the image
 retention assertion fail when cleanup is removed.
@@ -147,6 +159,9 @@ existing confidence-bearing reason. Keep API-key and CLI text unchanged.
 Add tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts for the disposable
 server path using the existing UAT helpers: pair, current synthetic block,
 image capability, test call with no judgment row and normal image judgment.
+The existing fixture can prove text-only image refusal and Test no-write; use
+real Clef separately for successful image proof. Run UAT with the existing
+credential-free environment helper so it does not copy any host login.
 Add blocking rows in .claude/skills/coordinate/uat-trigger-map.tsv for changed
 server and contract paths. This browser/server UAT cannot prove native capture;
 record the separate real Mac proof explicitly.
@@ -165,7 +180,7 @@ server's tailnet address. Read Clef credentials locally without exposing them.
 Never rewrite or intercept network responses. Through the real settings and
 app: choose the available named judge; exercise an ambiguous title during a
 synthetic current calendar block; observe capture and direct image judgment;
-press Test and count unchanged focus judgment rows; switch to a non-image
+press Test and count unchanged focus judgment rows; check preview cleanup; switch to a non-image
 judge and observe unavailable with insufficient evidence.
 
 Check the marker image against API/worker logs, activity, focus judgments,
@@ -203,4 +218,4 @@ describing it first. Body says Closes #3067.
 Stop every owned server and app by recorded PID, remove the disposable install,
 volumes, image and Mac build folder, and release the claimed port. Leave the
 worktree clean. Report ready for review to coordinator; never merge or change
-the board or milestones. Stop at plan approval now, with no feature code.
+the board or milestones. Coordinator approved the build at 2dc21a6ec. Keep PR #3491 draft while native live proof is pending.
