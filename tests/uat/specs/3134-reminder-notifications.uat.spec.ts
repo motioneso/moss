@@ -206,7 +206,8 @@ test("due reminders alert this browser once, wait for quiet hours, and respect t
   const mute = page.getByLabel("Notify from Chat");
   await page.locator("label.jds-switch").filter({ has: mute }).click();
   await expect(mute).not.toBeChecked();
-  const before = (await browserNotifications(page)).length;
+  // Older native notifications may expire while the next reminder waits.
+  const before = (await browserNotifications(page)).map((item) => item.tag);
   await sendInMain(page, "remind me in 10 seconds to check the muted proof timer");
   await expect(
     page.getByText("Reminder: check the muted proof timer", { exact: true })
@@ -221,7 +222,9 @@ test("due reminders alert this browser once, wait for quiet hours, and respect t
     )
     .toBe("completed");
   expect(reminderRows().find((row) => row.id === muted.id)!.notificationId).toBeNull();
-  expect((await browserNotifications(page)).length).toBe(before);
+  expect(
+    (await browserNotifications(page)).filter((item) => !before.includes(item.tag))
+  ).toHaveLength(0);
   console.log(
     `3134 muted reminder: reminder=${muted.id} delivered in chat, no notification record or browser display`
   );
@@ -242,7 +245,9 @@ test("due reminders alert this browser once, wait for quiet hours, and respect t
         reminderRows().find((row) => row.text === "check the disabled device timer")?.notificationId
     )
     .not.toBeNull();
-  expect((await browserNotifications(page)).length).toBe(before);
+  expect(
+    (await browserNotifications(page)).filter((item) => !before.includes(item.tag))
+  ).toHaveLength(0);
   console.log(
     "3134 removed device: reminder stays in chat and Notifications, no further browser alert"
   );
