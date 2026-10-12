@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" data-theme="forest" data-color-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Sanitized, offline Park Press repository-review mockups for Moss onboarding. All interactions are simulated."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <title>Getting started · Moss</title>
+    <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to current step</a>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="Moss setup home"
+        ><svg viewBox="0 0 24 24" width="27" height="27" fill="none" aria-hidden="true">
+          <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+          <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" />
+          <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" /></svg
+        ><span class="brand-name">Moss</span></a
+      ><button
+        type="button"
+        class="prototype-menu"
+        id="review-open"
+        aria-label="Open prototype menu"
+      >
+        Prototype <span aria-hidden="true">···</span>
+      </button>
+    </header>
+    <div id="app"></div>
+    <footer class="site-footer">
+      <span class="small-dot" aria-hidden="true"></span
+      ><span>Repository review · simulated setup · choices last only in this tab.</span>
+    </footer>
+    <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
+    <dialog id="review-dialog" aria-labelledby="review-title">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">PROTOTYPE ONLY</p>
+          <h2 id="review-title">Prototype menu.</h2>
+        </div>
+        <button class="icon-button" id="review-close" aria-label="Close review controls">×</button>
+      </div>
+      <p class="muted">
+        Every control below changes this tab’s demo only. Refresh resets all choices. No account,
+        model, folder, or network is touched.
+      </p>
+      <div id="review-content"></div>
+    </dialog>
+    <dialog id="detail-dialog" aria-labelledby="detail-title"></dialog>
+    <noscript
+      ><main class="noscript">
+        <h1>This prototype needs JavaScript.</h1>
+        <p>
+          Enable JavaScript to explore the locally simulated setup. No integrations or credentials
+          are used.
+        </p>
+        <a href="README.md">Read the review guide instead</a>
+      </main></noscript
+    >
+  </body>
+</html>

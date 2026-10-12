@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150" viewBox="0 0 260 150" fill="none">
+  <title>A quiet park entrance</title>
+  <desc>A forest-green trailhead sign with a mountain, sunrise, and winding path, nestled among simple pine trees.</desc>
+  <!-- Flat inks from the Park Press palette; no fonts or external resources. -->
+  <path d="M17 132c22-18 52-25 81-21 37 6 50-13 81-9 28 3 46 14 65 30H17Z" fill="#dbe2d3"/>
+  <g stroke="#294b39" stroke-width="1.5" stroke-linecap="round">
+    <path d="M18 133h225M30 139h42m112 0h34"/>
+    <path d="M21 122c13-5 23-7 36-6m151 3c10 1 18 4 25 8"/>
+  </g>
+  <!-- Two timber uprights support the clipped-corner welcome plaque. -->
+  <path d="M77 88h10v44H77zm94 0h10v44h-10z" fill="#294b39"/>
+  <path d="M81 108v18m94-18v18" stroke="#f2eee4" stroke-width="1.5"/>
+  <path d="m63 33 14-14h104l14 14v64H63V33Z" fill="#294b39"/>
+  <path d="m69 36 11-11h98l11 11v55H69V36Z" stroke="#f2eee4" stroke-width="1.5"/>
+  <circle cx="159" cy="43" r="10" fill="#c2872b"/>
+  <!-- Broad, carved mountain shapes and a path create the sign's emblem. -->
+  <path d="m81 69 29-31 25 29 17-17 26 30H81V69Z" fill="#f2eee4"/>
+  <path d="m110 38 11 34-13-9-12 6 14-31Zm42 12 8 27-10-10-9 3 11-20Z" fill="#294b39"/>
+  <path d="M127 79c-8-5-8-10-2-15 3-2 3-4 1-6 9 4 9 8 2 13-3 2-1 4 7 8h-8Z" fill="#c2872b"/>
+  <!-- Pines keep the scene grounded without becoming characters. -->
+  <g fill="#294b39">
+    <path d="m41 66 12 22h-7l12 21H44v22h-6v-22H24l12-21h-7l12-22Z"/>
+    <path d="m216 82 9 17h-5l10 17h-11v16h-5v-16h-11l9-17h-5l9-17Z"/>
+  </g>
+  <g stroke="#f2eee4" stroke-width="1.5" stroke-linecap="round">
+    <path d="m40 84 1 19m-9 0 7-5m8 9-5-4m173-4v12"/>
+  </g>
+  <path d="m101 121 7-3m6 9 8-3m33-7 8 2" stroke="#294b39" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
