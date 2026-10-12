@@ -829,6 +829,36 @@ export const tasksModuleManifest = {
       ]
     },
     {
+      id: "tasks.list_metadata_refresh",
+      description:
+        "The first task can create Personal implicitly. Its list index and task row refresh without reloading, even if a later child write fails."
+    },
+    {
+      id: "tasks.status_refresh",
+      description:
+        "Mounted rows follow refreshed server status. Late write success cannot replace a newer server state. Failed toggles retain the latest confirmed state; completing then reopening before refresh sends each chosen status."
+    },
+    {
+      id: "tasks.saved_locale_dates",
+      description:
+        "When saved timezone arrives late, untouched due and reminder fields update without discarding other edits. Saving retains untouched timestamps; edited dates retain their selected day in the saved timezone."
+    },
+    {
+      id: "tasks.details_write_guard",
+      description:
+        "Main task saves wait for comment, tag and subtask writes to finish. Those immediate writes cannot start during a main save. Failed immediate writes keep their input and the dialog open."
+    },
+    {
+      id: "tasks.details_save_boundary",
+      description:
+        "Main fields save together. Comments, tags and subtasks on existing tasks save immediately. Discard retains already saved parts, including a partly created new task."
+    },
+    {
+      id: "tasks.comment_focus",
+      description:
+        "Posting a comment by pointer or Enter keeps focus in task details when a control disables or disappears. Escape returns to the opener."
+    },
+    {
       id: "tasks.approval_effects",
       description:
         "Deleting a list keeps reassigned tasks but deletes its tags and assignments. Moving a task removes tags from other lists; a parent's subtasks follow it. Deleting a tag removes it from all tasks without deleting the tasks."
@@ -885,12 +915,28 @@ export const tasksModuleManifest = {
     {
       id: "tasks.details_window",
       description:
-        "Open a task from List or Grid in Task details. X, Cancel or Escape discards unsaved field edits; subtasks, tags and comments save as you go. Each read distinguishes loading and failure with Retry; refresh failure keeps loaded fields."
+        "Open task details from List or Grid. Close, Cancel, Escape and backdrop ask before discarding input; Keep editing preserves it. Dismissal waits for writes. Reads show loading or failure with Retry; refresh failure keeps fields."
     },
     {
       id: "tasks.details_save",
       description:
-        "Save changes waits for the task to load. Failed saves keep edits; adding again resumes without duplicating. Repeats shows the stored repeat. Failed comment, tag and subtask writes explain the error beside the action and keep draft text."
+        "Save changes waits for the task to load. Failed saves retain edits; retry resumes partial creation without duplicating the parent or saved parts. Failed comment, tag and subtask writes explain the error and retain draft text.",
+      errors: [
+        {
+          code: "tasks.details_save_failed",
+          class: "transient",
+          description:
+            "The task save failed. The draft stays available; a partially created task and any completed child writes remain saved. Try Add task or Save changes again."
+        }
+      ],
+      remediations: [
+        {
+          id: "tasks.details_save_retry",
+          description:
+            "Try Add task or Save changes again in the still-open dialog. A partial creation resumes its remaining parts without creating another parent.",
+          path: "/tasks"
+        }
+      ]
     },
     {
       id: "tasks.breakdown",
@@ -900,8 +946,7 @@ export const tasksModuleManifest = {
     {
       id: "tasks.due_and_recurrence",
       description:
-        "Set due dates, effort estimates and recurrence; recurring tasks roll forward each day, " +
-        "and incomplete ones show in the overdue list."
+        "Set due dates, reminders, effort and repeats. Date inputs retain the chosen day in your saved timezone; repeats start from the chosen due day or today locally. Recurring tasks roll forward daily; incomplete ones show in the overdue list."
     },
     {
       id: "tasks.natural_language_search",

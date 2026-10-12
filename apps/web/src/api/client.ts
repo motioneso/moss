@@ -727,9 +727,7 @@ export async function listTaskActivity(taskId: string): Promise<ListTaskActivity
   return requestJson<ListTaskActivityResponse>(`/api/tasks/${encodeURIComponent(taskId)}/activity`);
 }
 
-export interface ListGoalsResponse {
-  readonly items: readonly MossGoal[];
-}
+export type ListGoalsResponse = readonly MossGoal[];
 
 export async function listGoals(): Promise<ListGoalsResponse> {
   return requestJson<ListGoalsResponse>(`/api/goals`);
@@ -839,9 +837,39 @@ export async function updateTaskPreferences(
   });
 }
 
-export async function listWellnessCheckins(limitHint?: number): Promise<ListCheckinsResponse> {
-  const limit = limitHint ?? 50;
-  return requestJson<ListCheckinsResponse>(`/api/wellness/checkins?limit=${limit}`);
+export interface WellnessCheckinsQuery {
+  readonly limit?: number;
+  readonly since?: string;
+  readonly cursor?: string;
+}
+
+export async function listWellnessCheckins(
+  input?: number | WellnessCheckinsQuery
+): Promise<ListCheckinsResponse> {
+  const options = typeof input === "number" ? { limit: input } : (input ?? {});
+  const params = new URLSearchParams({ limit: String(options.limit ?? 50) });
+  if (options.since !== undefined) params.set("since", options.since);
+  if (options.cursor !== undefined) params.set("cursor", options.cursor);
+  return requestJson<ListCheckinsResponse>(`/api/wellness/checkins?${params}`);
+}
+
+/** A failed page rejects the whole read so statistics never use a partial window. */
+export async function listWellnessCheckinsInWindow(since: string): Promise<ListCheckinsResponse> {
+  const checkins: ListCheckinsResponse["checkins"][number][] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const page = await listWellnessCheckins({ limit: 500, since, cursor });
+    if (page.nextCursor === undefined && page.checkins.length >= 500)
+      throw new Error("Could not verify the complete check-in window. Try again.");
+    checkins.push(...page.checkins);
+    cursor = page.nextCursor ?? undefined;
+    if (cursor !== undefined) {
+      if (seenCursors.has(cursor)) throw new Error("Check-in cursor repeated. Try again.");
+      seenCursors.add(cursor);
+    }
+  } while (cursor !== undefined);
+  return { checkins, nextCursor: null };
 }
 
 export async function createWellnessCheckin(

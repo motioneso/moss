@@ -1,5 +1,5 @@
 import { AlertCircle, Calendar, Check, GitCommitHorizontal, PanelRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   groupByPriority,
@@ -194,6 +194,13 @@ export function TaskRow(props: {
   const assistantName = useAssistantName();
   const locale = useUserLocale();
   const [optimisticDone, setOptimisticDone] = useState(task.status === "done");
+  const committedDoneRef = useRef(task.status === "done");
+  const serverStatusGenerationRef = useRef(0);
+  useEffect(() => {
+    serverStatusGenerationRef.current += 1;
+    committedDoneRef.current = task.status === "done";
+    setOptimisticDone(task.status === "done");
+  }, [task.id, task.status, task.updatedAt]);
   const done = optimisticDone;
   const due = dueInfo(task, locale);
   const tags = compact ? [] : (task.tags ?? []);
@@ -220,8 +227,16 @@ export function TaskRow(props: {
               onChange={() => {
                 const next = !optimisticDone;
                 setOptimisticDone(next);
-                void Promise.resolve(props.onToggleDone(task)).catch(() =>
-                  setOptimisticDone(!next)
+                const serverStatusGeneration = serverStatusGenerationRef.current;
+                void Promise.resolve(
+                  props.onToggleDone({ ...task, status: optimisticDone ? "done" : "todo" })
+                ).then(
+                  () => {
+                    if (serverStatusGenerationRef.current === serverStatusGeneration) {
+                      committedDoneRef.current = next;
+                    }
+                  },
+                  () => setOptimisticDone(committedDoneRef.current)
                 );
               }}
               aria-label={done ? `Reopen ${task.title}` : `Complete ${task.title}`}

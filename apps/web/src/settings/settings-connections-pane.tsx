@@ -60,7 +60,15 @@ export function ConnectionsPane() {
               <dt>{accountCount === 1 ? "Account" : "Accounts"}</dt>
             </div>
             <div className="conn__count">
-              <dd>{folderLinked === undefined ? "-" : folderLinked ? "Linked" : "None"}</dd>
+              <dd>
+                {notesQuery.isError
+                  ? "Unknown"
+                  : folderLinked === undefined
+                    ? "-"
+                    : folderLinked
+                      ? "Linked"
+                      : "None"}
+              </dd>
               <dt>Notes folder</dt>
             </div>
             <div className="conn__count">

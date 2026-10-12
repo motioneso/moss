@@ -33,6 +33,12 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Clearer meeting search and Mac startup feedback.** Meeting search explains which transcript lines it checks, and Mac startup settings show confirmed state with clear recovery. [PR #3406](https://github.com/motioneso/moss/pull/3406)
+- **Clearer setup and account recovery.** Setup and account access offer clearer recovery, and settings search keeps keyboard selection visible. [PR #3407](https://github.com/motioneso/moss/pull/3407)
+- **Recover Wellness history, doses and exports.** Older check-ins stay reachable, summaries include all selected entries, and interrupted dose logs and exports offer clearer recovery. [PR #3405](https://github.com/motioneso/moss/pull/3405)
+- **Reliable source and export recovery.** Source links and exports show saved state clearly, offer recovery, and explain which private notes are included. [PR #3404](https://github.com/motioneso/moss/pull/3404)
+- **Clear News feedback and Sports pause controls.** News preferences show saved and failed changes clearly, and Sports carousels can stay paused while scores refresh. [PR #3403](https://github.com/motioneso/moss/pull/3403)
+- **Chat reconnects after closing during startup.** Closing or reloading chat while it starts no longer leaves Moss stuck thinking. [PR #3445](https://github.com/motioneso/moss/pull/3445)
 - **Reliable dialog focus.** Dialogs keep keyboard focus usable when a focused control becomes unavailable. [PR #3401](https://github.com/motioneso/moss/pull/3401)
 - **Chat and approvals use your time zone and clock.** Times in chat answers, approval cards and approval messages now follow the time zone, region and 12- or 24-hour clock you chose in Settings. [PR #3437](https://github.com/motioneso/moss/pull/3437)
 - **Today shows times in your own time zone and clock style.** The Today page and chat suggestions now show every time in your saved time zone and use your 12-hour or 24-hour choice, and the greeting follows your own time of day. [PR #3425](https://github.com/motioneso/moss/pull/3425)

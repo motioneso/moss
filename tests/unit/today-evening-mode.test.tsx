@@ -514,7 +514,7 @@ function renderToday(input: {
         runs: input.runs.filter((run) => run.definitionId === definition.id)
       });
     }
-    client.setQueryData(queryKeys.goals.list, { items: [] });
+    client.setQueryData(queryKeys.goals.list, []);
     if (input.assistantName !== undefined) {
       client.setQueryData(queryKeys.settings.persona, {
         persona: { assistantName: input.assistantName, personaText: "" }

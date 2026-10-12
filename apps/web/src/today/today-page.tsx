@@ -8,13 +8,7 @@ import { Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
-import {
-  eventCoversDay,
-  localDay,
-  readPlanContext,
-  type MeResponse,
-  type TaskDto
-} from "@moss/shared";
+import { eventCoversDay, localDay, readPlanContext, type MeResponse } from "@moss/shared";
 import {
   getBriefingRun,
   getDayPlan,
@@ -255,8 +249,8 @@ export function TodayPage(props: {
     }
   });
   const toggleMutation = useMutation({
-    mutationFn: (task: TaskDto) =>
-      updateTask(task.id, { status: task.status === "done" ? "todo" : "done" }),
+    mutationFn: (input: { taskId: string; status: "todo" | "done" }) =>
+      updateTask(input.taskId, { status: input.status }),
     onSuccess: () => {
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
@@ -531,7 +525,7 @@ export function TodayPage(props: {
             <BriefTaskRow
               key={task.id}
               task={task}
-              onToggle={() => toggleMutation.mutate(task)}
+              onToggle={(status) => toggleMutation.mutateAsync({ taskId: task.id, status })}
               onOpen={() => setDialog({ id: task.id })}
             />
           ))
