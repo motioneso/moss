@@ -79,7 +79,7 @@ afterAll(async () => {
 });
 const owner = <T>(work: (db: DataContextDb) => Promise<T>) =>
   app.withDataContext({ actorUserId: ids.userA }, work);
-async function save() {
+async function save(repeating = false) {
   await setTasksDisabled(false);
   const task = await owner((db) => tasks.create(db, { title: `Proof ${randomUUID()}` }));
   const thread = await owner(
@@ -99,7 +99,15 @@ async function save() {
       kind: "scheduled_read",
       taskId: task.id,
       title: task.title,
-      when: { kind: "request", delaySeconds: 1, text: "check task" }
+      when: repeating
+        ? {
+            kind: "repeat_request",
+            repeat: { kind: "interval", seconds: 60 },
+            clock: null,
+            weekday: null,
+            text: "check task"
+          }
+        : { kind: "request", delaySeconds: 1, text: "check task" }
     },
     { threadId: thread.id }
   );

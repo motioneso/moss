@@ -40,3 +40,22 @@ export async function recordReadOutcome(
     .where("reminder_id", "=", reminderId)
     .executeTakeFirstOrThrow();
 }
+
+/** Called only under the responsibility lock in the result transaction. */
+export async function recordScheduledObservation(
+  db: DataContextDb,
+  reminderId: string,
+  outcome: "success" | "refused" | "failed",
+  observationKey: string | null
+) {
+  assertDataContextDb(db);
+  await db.db
+    .updateTable("app.chat_scheduled_reads")
+    .set(
+      outcome === "success"
+        ? { outcome, observation_key: observationKey, failure_streak: 0 }
+        : { outcome, failure_streak: sql<number>`least(failure_streak + 1, 2147483647)` }
+    )
+    .where("reminder_id", "=", reminderId)
+    .executeTakeFirstOrThrow();
+}

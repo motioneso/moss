@@ -112,7 +112,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     );
     expect(row).toEqual({ version: 2, reminder_text: `Check task status: ${saved.task.title}` });
   });
-  it("refuses repeat edits on task checks without changing their version or queue", async () => {
+  it("supports bounded repeat edits on task checks and invalidates old jobs", async () => {
     const saved = await save();
     const result = await owner((db) =>
       editReminderById(
@@ -132,11 +132,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
         "UTC"
       )
     );
-    expect(result).toEqual({
-      kind: "invalid",
-      reply:
-        "Task checks run once. You can change its time, but not make it repeat. Nothing changed."
-    });
+    expect(result).toMatchObject({ kind: "changed" });
     expect(
       await owner((db) =>
         db.db
@@ -145,25 +141,21 @@ describe("scheduled reads through the actor worker and real gateway", () => {
           .where("id", "=", saved.id)
           .executeTakeFirstOrThrow()
       )
-    ).toEqual({ version: 1, repeat_kind: null });
+    ).toEqual({ version: 2, repeat_kind: "interval" });
   });
-  it("database refuses repetition on an existing task check", async () => {
+  it("database permits a validated recurrence edit on an existing exact check", async () => {
     const saved = await save();
     await expect(
       owner((db) =>
         db.db
           .updateTable("app.chat_reminders")
-          .set({
-            repeat_kind: "interval",
-            repeat_seconds: 60,
-            version: 2
-          })
+          .set({ repeat_kind: "interval", repeat_seconds: 60, version: 2 })
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow("task checks must run once");
+    ).resolves.toBeDefined();
   });
-  it("database refuses attaching a task check to a repeating reminder", async () => {
+  it("database permits an exact source extension on a valid repeating reminder", async () => {
     const saved = await save();
     const repeating = await owner(async (db) => {
       const source = await db.db
@@ -189,7 +181,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     });
     await expect(
       owner((db) => saveScheduledOperation(db, repeating.id, saved.task.id))
-    ).rejects.toThrow("task checks must run once");
+    ).resolves.toBeUndefined();
   });
   it("keeps frozen storage immutable and hides another owner's responsibility", async () => {
     const saved = await save();

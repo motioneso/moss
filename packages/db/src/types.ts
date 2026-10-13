@@ -1036,7 +1036,7 @@ export interface ChatReminderRunsTable {
   version: number;
   due_at: TimestampColumn;
   at: TimestampColumn;
-  outcome: "delivered" | "expired";
+  outcome: "delivered" | "quiet" | "failed" | "refused" | "expired";
   message_id: string | null;
   late: boolean;
   context_state: ColumnType<
@@ -1078,6 +1078,8 @@ export interface ChatRemindersTable {
 }
 
 export interface ChatScheduledReadsTable {
+  observation_key: ColumnType<string | null, string | null | undefined, string | null>;
+  failure_streak: ColumnType<number, number | undefined, number>;
   reminder_id: string;
   owner_user_id: string;
   operation: "tasks.get";

@@ -6,7 +6,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.scheduled_owner_read",
     description:
-      "In Main, ask Moss to check one owned task later. Your configured JSON model selects the task and time, then writes a sourced report. Plain reminders and questions keep their usual paths. Reminder controls and notification policy apply.",
+      "In Main, check one owned task once or repeatedly. Repeats start with a quiet baseline and report only title/status changes. Configured JSON models prepare sourced reports. Controls, quiet retries and notification policy apply.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -14,12 +14,6 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         class: "validation",
         description:
           "A saved task check keeps its source fixed. Time edits use the source-read queue; text edits change nothing. Delete the check and request a new one to choose a different task."
-      },
-      {
-        code: "scheduled_read_repeat_edit_refused",
-        class: "validation",
-        description:
-          "Task checks run once. Change the time of the saved check, or set a separate fixed-text reminder to repeat. Nothing changes when a repeat edit is refused."
       },
       {
         code: "scheduled_read_unresolved",
@@ -38,7 +32,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         class: "prerequisite",
         remediationRef: "chat.restore_scheduled_read_access",
         description:
-          "If the source capability or owned task is no longer accessible at run time, Moss posts a refusal without source data. Choose an accessible task and request a new check."
+          "If Tasks access is unavailable, refusal contains no source data. One-time checks post it immediately; repeating checks record every refusal and post guidance after three consecutive failed runs. Restore access or request a new check."
       },
       {
         code: "scheduled_report_failed",
@@ -50,7 +44,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         code: "scheduled_read_failed",
         class: "transient",
         description:
-          "A classified temporary source failure retries quietly twice, then posts a failure. Other read failures and model failures do not retry. Request a new check when the source and model are available."
+          "Temporary source failures retry quietly twice. Recurring checks record every failed run and post guidance once after three consecutive failures, resetting after a valid success. One-time checks post failures immediately."
       }
     ],
     remediations: [
@@ -65,7 +59,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time, repeat or stop time in Main. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused reminders stay paused.",
+      "Edit pending or paused text, time, repeat or stop time in Main. Task checks keep their source fixed. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused tasks stay paused.",
     featureFlagId: "chat.module",
     errors: [
       {

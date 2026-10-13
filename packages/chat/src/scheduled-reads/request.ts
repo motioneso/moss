@@ -1,4 +1,5 @@
 import { normalizeReminderRequest, recognizeRelativeReminder } from "../reminders/recognizer.js";
+import { recognizeRepeatingReminder, type RepeatRequest } from "../reminders/repeat-recognizer.js";
 import type { StructuredFailureReason } from "@moss/ai";
 
 export type ScheduledReadFailureStage =
@@ -48,10 +49,10 @@ export interface ScheduledReadPlan {
   readonly failure?: "unavailable";
   readonly taskId: string | null;
   readonly title: string;
-  readonly when: Extract<
-    ReturnType<typeof recognizeRelativeReminder>,
-    { kind: "request" | "clock_request" }
-  > | null;
+  readonly when:
+    | Extract<ReturnType<typeof recognizeRelativeReminder>, { kind: "request" | "clock_request" }>
+    | RepeatRequest
+    | null;
 }
 
 export function namesScheduledRead(request: string): boolean {
@@ -62,7 +63,7 @@ export function namesScheduledRead(request: string): boolean {
     !/^check\s+(?:which|what|how|why|where|when)\b/.test(normalized) &&
     /\b(?:check|status)\b/i.test(request) &&
     /\btask\b/i.test(request) &&
-    /\b(?:(?:in|after)\s+(?:\d+|an?|one|two|three|five|ten|half)\b|at\s+\d|tomorrow|tonight|every|daily|weekly)\b/i.test(
+    /\b(?:(?:in|after)\s+(?:\d+|an?|one|two|three|five|ten|half)\b|at\s+\d|tomorrow|tonight|every|each|daily|weekly|hourly|monthly)\b/i.test(
       request
     )
   );
@@ -104,11 +105,13 @@ export async function resolveScheduledReadRequest(
     recordScheduledReadFailure(stage, signal?.aborted ? "aborted" : "ValidationError");
     return refused;
   };
+  const requestedRepeat = recognizeRepeatingReminder(`remind me to ${request}`);
   if (
     signal?.aborted ||
-    /\b(?:delete|remove|update|change|complete|mark|every|daily|weekly|monthly|hourly)\b/i.test(
-      request
-    )
+    requestedRepeat?.kind === "unsupported" ||
+    (/\b(?:every|each|daily|weekly|monthly|hourly)\b/i.test(request) &&
+      requestedRepeat?.kind !== "repeat_request") ||
+    /\b(?:delete|remove|update|change|complete|mark|monthly)\b/i.test(request)
   )
     return refuse("request");
   const output = await interpret();
@@ -125,7 +128,37 @@ export async function resolveScheduledReadRequest(
     return undefined;
   }
   const task = matches[0]!;
+  const titleAt = task.title ? request.toLowerCase().indexOf(task.title.toLowerCase()) : -1;
+  const ownerTiming =
+    titleAt < 0
+      ? request
+      : request.slice(0, titleAt) + "selected task" + request.slice(titleAt + task.title.length);
+  const confirmedRepeat = recognizeRepeatingReminder(`remind me to ${ownerTiming}`);
+  if (
+    requestedRepeat?.kind === "repeat_request" &&
+    (confirmedRepeat?.kind !== "repeat_request" ||
+      JSON.stringify(confirmedRepeat.repeat) !== JSON.stringify(requestedRepeat.repeat) ||
+      confirmedRepeat.clock !== requestedRepeat.clock ||
+      confirmedRepeat.weekday !== requestedRepeat.weekday ||
+      /\b(?:(?:in|after|at)\s+(?:\d+|an?|one|two|three|five|ten|half)|tomorrow|tonight|until|starting|start at|not after)\b/i.test(
+        confirmedRepeat.text
+      ))
+  )
+    return refuse("timing");
+
   if (typeof timing !== "string") return refuse("output_shape");
+  const repeat = recognizeRepeatingReminder(timing);
+  if (requestedRepeat?.kind === "repeat_request") {
+    if (
+      repeat?.kind !== "repeat_request" ||
+      JSON.stringify(repeat.repeat) !== JSON.stringify(requestedRepeat.repeat) ||
+      repeat.clock !== requestedRepeat.clock ||
+      repeat.weekday !== requestedRepeat.weekday
+    )
+      return refuse("timing");
+    return { kind: "scheduled_read", taskId: task.id, title: task.title, when: repeat };
+  }
+  if (repeat) return refuse("timing");
   const when = recognizeRelativeReminder(timing);
   if (when.kind !== "request" && when.kind !== "clock_request") return refuse("timing");
   return { kind: "scheduled_read", taskId: task.id, title: task.title, when };

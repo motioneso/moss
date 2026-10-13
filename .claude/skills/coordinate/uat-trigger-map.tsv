@@ -380,3 +380,9 @@ blocking	packages/chat/sql/0319_chat_repeating_reminders.sql	tests/uat/specs/313
 blocking	packages/module-sdk/src/time.ts	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
 blocking	apps/web/src/settings/scheduled-task-list.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
 blocking	apps/web/src/settings/scheduled-task-details/timing.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
+
+# #3138: quiet recurring reads, useful changes and real worker recovery.
+blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	packages/chat/sql/0321_chat_repeating_reads.sql	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	packages/chat/src/reminders/runs.ts	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/status.tsx	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts

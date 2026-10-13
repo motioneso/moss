@@ -5,7 +5,20 @@ import { ChatRepository } from "../repository.js";
 import { ReminderRepository, type DueReminder } from "../reminders/repository.js";
 import { persistReminderResult, type DeliverReminderJobPayload } from "../reminders/deliver.js";
 import { enqueueReminderNotification } from "../reminders/notifications.js";
-import { readScheduledOperation, recordReadOutcome } from "./repository.js";
+import {
+  scheduledObservationKey,
+  scheduledObservationDecision,
+  recurringReadFailureMessage,
+  scheduledFailureNotification
+} from "./observation.js";
+import { persistQuietScheduledRun } from "./recurring.js";
+import { nextReminderOccurrence } from "../reminders/repeating.js";
+import { recordReminderRun } from "../reminders/runs.js";
+import {
+  readScheduledOperation,
+  recordReadOutcome,
+  recordScheduledObservation
+} from "./repository.js";
 import {
   readScheduledTask,
   SCHEDULED_READ_FAILED,
@@ -21,6 +34,7 @@ import { CHAT_SCHEDULED_READ_QUEUE } from "./queue.js";
 
 export interface ScheduledReadRunnerDeps {
   readonly dataContext: DataContextRunner;
+  readonly boss?: Pick<PgBoss, "send">;
   readonly generateReport: ScheduledReportGenerator;
   readonly gateway: Pick<AssistantToolGateway, "runBackgroundReadForActor">;
   readonly enqueueNotification?: (db: DataContextDb, reminder: DueReminder) => Promise<void>;
@@ -53,6 +67,7 @@ export async function runScheduledReadJob(
     const now = await reminders.now(db);
     if (now < reminder.dueAt) throw new Error("scheduled read ran early");
     if (reminder.deadlineAt && now > reminder.deadlineAt) {
+      if (reminder.repeat) await recordReminderRun(db, reminder, "expired", false);
       await reminders.markExpired(db, reminder.id);
       return null;
     }
@@ -95,17 +110,22 @@ export async function runScheduledReadJob(
   };
   const response = await read();
   const task = readScheduledTask(response, snapshot.operation.item_id);
-  let result;
+  let result: {
+    outcome: "success" | "refused" | "failed";
+    text: string;
+    observationKey?: string;
+    quiet?: boolean;
+  };
   if (!task) result = readFailure(response);
   else {
     if (!(await deps.dataContext.withDataContext(access, load))) return "inactive";
+    const decision = scheduledObservationDecision(snapshot.operation.observation_key, task);
+    const quiet = snapshot.reminder.repeat !== null && decision !== "changed";
     let generated;
     try {
-      generated = await deps.generateReport(
-        payload.actorUserId,
-        task,
-        AbortSignal.timeout(120_000)
-      );
+      generated = quiet
+        ? { ok: true as const, text: "" }
+        : await deps.generateReport(payload.actorUserId, task, AbortSignal.timeout(120_000));
     } catch {
       generated = { ok: false as const, reason: "failed" as const };
     }
@@ -125,16 +145,55 @@ export async function runScheduledReadJob(
               ? SCHEDULED_REPORT_TIMEOUT
               : SCHEDULED_REPORT_FAILED
       };
-    else result = { outcome: "success" as const, text: generated.text };
+    else
+      result = {
+        outcome: "success",
+        text: generated.text,
+        observationKey: scheduledObservationKey(task),
+        quiet
+      };
   }
   const { outcome, text } = result;
   return deps.dataContext.withDataContext(access, async (db) => {
     const current = await load(db);
     if (!current) return "inactive";
-    await recordReadOutcome(db, current.reminder.id, outcome);
-    await persistReminderResult(db, current.reminder, text, current.now, {
+    const continues =
+      !current.reminder.repeat ||
+      !current.reminder.deadlineAt ||
+      nextReminderOccurrence({ ...current.reminder, repeat: current.reminder.repeat }, current.now)
+        .dueAt <= current.reminder.deadlineAt;
+    const postedText =
+      current.reminder.repeat && outcome !== "success"
+        ? recurringReadFailureMessage(outcome, continues)
+        : text;
+    if (current.reminder.repeat) {
+      if (!deps.boss) throw new Error("Recurring scheduled read queue unavailable");
+      await recordScheduledObservation(
+        db,
+        current.reminder.id,
+        outcome,
+        result.observationKey ?? null
+      );
+      if (
+        result.quiet ||
+        (outcome !== "success" && !scheduledFailureNotification(current.operation.failure_streak))
+      ) {
+        await persistQuietScheduledRun(
+          db,
+          current.reminder,
+          outcome === "success" ? "quiet" : outcome,
+          current.now,
+          reminders,
+          deps.boss
+        );
+        return outcome === "success" ? "quiet" : outcome;
+      }
+    } else await recordReadOutcome(db, current.reminder.id, outcome);
+    await persistReminderResult(db, current.reminder, postedText, current.now, {
       chat,
       reminders,
+      boss: deps.boss,
+      runOutcome: outcome === "success" ? "delivered" : outcome,
       enqueueNotification: deps.enqueueNotification,
       ...(outcome === "success" ? { scheduledReadSource: "tasks" as const } : {})
     });
@@ -154,6 +213,7 @@ export function registerScheduledReadWorker(
       if (job)
         await runScheduledReadJob(job, {
           ...deps,
+          boss,
           enqueueNotification: (db, reminder) => enqueueReminderNotification(boss, db, reminder)
         });
     }

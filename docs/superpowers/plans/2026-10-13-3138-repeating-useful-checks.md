@@ -66,10 +66,12 @@ coordinator; they are implementation decisions, not extra spec quotations:
   and worker-only update grants; remove one-time-read guards; expand immutable
   run checks/RLS and worker advancement validation for read occurrences. Keep
   owner-only RLS, immutable exact operation/source, due/version identity and
-  metadata-only queue payloads.
+  metadata-only queue payloads. A final quiet/failed no-message read may close
+  only when its exact persisted run exists and no next saved-cadence occurrence
+  fits its deadline; fixed reminders still require their reserved message.
 - Writable source: scheduled-reads request/generation/runner/repository and new
   observation/recurring helpers; reminders scheduled-read command, runs,
-  deliver, edit, settings and features; DB types, shared scheduled API and
+  deliver, edit, repository (message-bearing notification/context predicates), settings and features; DB types, shared scheduled API and
   authored Settings status. Scoped tests, UAT trigger map and this plan.
 
 ## Determinism and trust boundary
@@ -126,3 +128,14 @@ code-complete, unverified, and no merge. Publication remains root-owned.
   runOutcome override. #3137 acceptance ruling treats retry/exhaustion as
   automated coverage; its actual live demo passed. Webmail remains whole-3154
   acceptance or explicitly not exercisable when no account/source exists.
+
+## Integration composition gate
+
+PR #3500 adds migration 0320 destination-edit and destination-loss authority.
+The standalone 0321 is based on integration 8c4b1aff5 and intentionally retains
+that base's Main-only behavior. Before readiness after #3500 lands, rebase and
+compare every function/trigger redefined by 0320 then 0321, preserving all new
+destination checks, edit permissions, lifecycle and immutable fields. Source
+conflict resolution alone cannot detect sequential SQL overrides. Independent
+review and the actual isolated DB/live checks must run on the composed final
+head; this standalone review or its focused units cannot certify that head.

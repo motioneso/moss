@@ -143,12 +143,6 @@ export async function editReminderById(
   if (locked.state !== "queued" && locked.state !== "paused") return { kind: "not_pending" };
   const current = (await readEditableReminders(scopedDb)).find((row) => row.id === id);
   if (!current) return { kind: "missing" };
-  if (terms.repeat != null && (await readScheduledOperation(scopedDb, id)))
-    return {
-      kind: "invalid",
-      reply:
-        "Task checks run once. You can change its time, but not make it repeat. Nothing changed."
-    };
   if (terms.text !== null && (await readScheduledOperation(scopedDb, id)))
     return {
       kind: "invalid",

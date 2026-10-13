@@ -19,6 +19,7 @@ export function TaskStatus({ task }: TaskDetailProps) {
           {labels[task.state]}
         </Badge>
       </div>
+      {task.checkFailure && <Note variant="practical">{task.checkFailure}</Note>}
       {task.state === "failed" && (
         <Note variant="practical">
           This reminder could not be sent. Ask Moss in Main chat to set it again.
