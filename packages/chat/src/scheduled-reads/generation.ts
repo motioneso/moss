@@ -19,7 +19,8 @@ import {
 class ScheduledReadGenerationError extends Error {
   constructor(
     readonly stage: ScheduledReadFailureStage,
-    readonly errorClass: Parameters<typeof recordScheduledReadFailure>[1]
+    readonly errorClass: Parameters<typeof recordScheduledReadFailure>[1],
+    readonly validation?: Parameters<typeof recordScheduledReadFailure>[2]
   ) {
     super("Scheduled read generation failed");
   }
@@ -93,7 +94,11 @@ export function createScheduledReadResolver(deps: {
               stage = "generate";
               const result = await run();
               if (!result.ok)
-                throw new ScheduledReadGenerationError(result.reason ?? stage, result.error);
+                throw new ScheduledReadGenerationError(
+                  result.reason ?? stage,
+                  result.error,
+                  result.validation
+                );
               return result.object;
             },
             signal
@@ -112,7 +117,8 @@ export function createScheduledReadResolver(deps: {
                 ? "TypeError"
                 : error instanceof RangeError
                   ? "RangeError"
-                  : "Error"
+                  : "Error",
+        error instanceof ScheduledReadGenerationError ? error.validation : undefined
       );
       return refused;
     }

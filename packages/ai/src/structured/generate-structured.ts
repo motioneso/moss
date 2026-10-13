@@ -190,6 +190,7 @@ export type GenerateStructuredResult =
       readonly ok: false;
       readonly error: StructuredFailure;
       readonly reason?: StructuredFailureReason;
+      readonly validation?: { readonly keyword: string; readonly schemaPath: string };
     };
 
 type SortingFailure = Exclude<StructuredFailure, "aborted">;
@@ -450,13 +451,17 @@ async function runPreparedModel(
 ): Promise<GenerateStructuredResult> {
   const { adapter, providerKind, actorUserId, acpAgentId } = transport;
   const signal = options.signal;
+  let validation: { keyword: string; schemaPath: string } | undefined;
   const failure = (
     error: StructuredFailure,
     reason?: StructuredFailureReason
   ): GenerateStructuredResult => ({
     ok: false,
     error,
-    ...(options.detailedFailureReasons && reason ? { reason } : {})
+    ...(options.detailedFailureReasons && reason ? { reason } : {}),
+    ...(options.detailedFailureReasons && reason === "schema_validation" && validation
+      ? { validation }
+      : {})
   });
   const aborted = () =>
     failure("aborted", isStructuredTimeout(signal?.reason) ? "timeout" : undefined);
@@ -588,6 +593,9 @@ async function runPreparedModel(
     }
 
     validationReason = "schema_validation";
+    const error = validate.errors?.[0];
+    // Schema paths come from the host schema; instance paths can contain private output keys.
+    validation = error ? { keyword: error.keyword, schemaPath: error.schemaPath } : undefined;
     messages.push({ role: "assistant", content: serialized.slice(0, 4000) });
     messages.push({ role: "user", content: formatValidationErrors(validate.errors ?? []) });
     input.telemetry?.emit({ kind: "repair" });
