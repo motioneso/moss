@@ -111,6 +111,7 @@ export interface DataContextChatPersistenceDeps {
   /** #3128 — this process's boot id; tests pass one per simulated boot. */
   readonly bootId?: string;
   readonly editCliAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
+  readonly resolveScheduledReadRequest?: ChatPersistencePort["resolveScheduledReadRequest"];
 }
 
 /**
@@ -190,6 +191,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly dataContext: DataContextRunner;
   private readonly rootDb: Kysely<MossDatabase> | undefined;
   private readonly chat: ChatRepository;
+  readonly resolveScheduledReadRequest: ChatPersistencePort["resolveScheduledReadRequest"];
   private readonly reminders = new ReminderRepository();
   private readonly ai: AiRepository;
   private readonly boss: PgBoss | undefined;
@@ -200,6 +202,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly editCliAdapter: GenerateStructuredDeps["createCliStructuredAdapter"];
 
   constructor(deps: DataContextChatPersistenceDeps) {
+    this.resolveScheduledReadRequest = deps.resolveScheduledReadRequest;
     this.rootDb = deps.rootDb;
     this.dataContext = deps.dataContext;
     this.chat = deps.chatRepository;

@@ -170,9 +170,8 @@ export function useChatStream(
       streamScope.current.enabled &&
       streamScope.current.surface === surface;
 
-    // A reconnect has no backlog, so a reminder delivered while disconnected is read back from
-    // Main's history. Only background messages are merged; the live stream owns the rest.
-    let connectedBefore = false;
+    // Subscribe first, then catch up on every open, including results saved before first connection.
+    // Merge only unseen message ids; a result arriving in both history and SSE appears once.
     const catchUpMain = () => {
       const threadId = hydratedMainThread.current;
       if (!threadId) return;
@@ -199,8 +198,7 @@ export function useChatStream(
         if (!isCurrent()) return;
         retries = 0;
         setStreamErrorCount(0);
-        if (connectedBefore) catchUpMain();
-        connectedBefore = true;
+        catchUpMain();
       };
       stream.onmessage = (event) => {
         if (!isCurrent()) return;
@@ -424,6 +422,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
             {
               kind: message.status === "error" ? ("error" as const) : ("reply" as const),
               text: message.body,
+              scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
               ...(isDeliveredReminder(message) ? { background: true as const } : {}),
               sourceFreshness: message.sourceFreshness,
@@ -484,6 +483,7 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
       background: parsed.background === true ? true : undefined,
+      scheduledReadSource: parsed.scheduledReadSource === "tasks" ? "tasks" : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
       workflowApprovalId:

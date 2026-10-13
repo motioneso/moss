@@ -125,7 +125,8 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
     answerProvenanceCitedIds,
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
     ...(usage !== undefined ? { usage } : {}),
-    ...(origin !== undefined ? { origin } : {})
+    ...(origin !== undefined ? { origin } : {}),
+    ...(readScheduledReadSource(modelMetadata) ? { scheduledReadSource: "tasks" as const } : {})
   };
 }
 
@@ -273,4 +274,14 @@ export function readSourceFreshness(value: unknown): SourceFreshnessV1 | null {
     return [{ source: r.source, freshnessKind: r.freshnessKind as FreshnessKind, asOf }];
   });
   return { version: 1, capturedAt: rec.capturedAt as string, sources };
+}
+
+/** Only code-authored successful delivery metadata grants the fixed app source link. */
+export function readScheduledReadSource(metadata: Record<string, unknown>): "tasks" | undefined {
+  const origin = readOrigin(metadata.origin);
+  return origin?.kind === "reminder" &&
+    origin.event === "delivered" &&
+    metadata.scheduledReadSource === "tasks"
+    ? "tasks"
+    : undefined;
 }

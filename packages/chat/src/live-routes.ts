@@ -525,37 +525,6 @@ export function registerChatLiveRoutes(
     const surfaceResult = readOptionalSurface((request.query as Record<string, unknown>).surface);
     if ("error" in surfaceResult) return reply.code(400).send({ error: surfaceResult.error });
 
-    // Open the protocol session when the conversation drawer opens. The first user prompt then
-    // pays no session-start cost, and the session key can include the current conversation id.
-    //
-    // The pre-start is best-effort. EventSource never reconnects after an HTTP error, so refusing
-    // the stream here would hide every later action result and approval request until a page
-    // reload (#2737). The next turn starts the session itself and reports any failure.
-    const ensureSession = (
-      runtime.manager as unknown as {
-        ensureSession?: (
-          actorUserId: string,
-          userName: string,
-          opts?: { readonly forceReplay?: boolean },
-          surface?: string
-        ) => Promise<unknown>;
-      }
-    ).ensureSession;
-    if (ensureSession) {
-      try {
-        await ensureSession.call(
-          runtime.manager,
-          access.actorUserId,
-          await runtime.resolveUserName(access.actorUserId),
-          undefined,
-          surfaceResult.surface
-        );
-      } catch {
-        // Fixed text only. An error's name, message and cause can carry private detail.
-        reply.log?.warn?.("chat stream session pre-start failed");
-      }
-    }
-
     if (closed) return reply;
 
     // Subscriptions are keyed by the caller's actor + surface — a stream only ever
@@ -585,6 +554,39 @@ export function registerChatLiveRoutes(
     // a minute or more, which reads as a hung stream. A comment frame is inert by the SSE spec
     // (EventSource ignores any line that is not a field), so the browser is unaffected.
     reply.raw.write(": connected\n\n");
+
+    // Open the protocol session when the conversation drawer opens. The first user prompt then
+    // pays no session-start cost, and the session key can include the current conversation id.
+    //
+    // Subscribe and flush first: agent startup must not delay background result delivery.
+    // The pre-start is best-effort. EventSource never reconnects after an HTTP error, so refusing
+    // the stream here would hide every later action result and approval request until a page
+    // reload (#2737). The next turn starts the session itself and reports any failure.
+    const ensureSession = (
+      runtime.manager as unknown as {
+        ensureSession?: (
+          actorUserId: string,
+          userName: string,
+          opts?: { readonly forceReplay?: boolean },
+          surface?: string
+        ) => Promise<unknown>;
+      }
+    ).ensureSession;
+    if (ensureSession)
+      void (async () => {
+        try {
+          await ensureSession.call(
+            runtime.manager,
+            access.actorUserId,
+            await runtime.resolveUserName(access.actorUserId),
+            undefined,
+            surfaceResult.surface
+          );
+        } catch {
+          // Fixed text only. An error's name, message and cause can carry private detail.
+          reply.log?.warn?.("chat stream session pre-start failed");
+        }
+      })();
 
     // Keep the Fastify handler open until the client disconnects.
     return reply;

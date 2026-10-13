@@ -17,6 +17,22 @@ const drift = new TaskDriftRepository();
 const lists = new TaskListsRepository();
 const breakdown = new TaskBreakdownRepository();
 
+export async function authorizeTaskBackgroundRead(
+  scopedDb: DataContextDb,
+  input: Record<string, unknown>,
+  ctx: { readonly actorUserId: string }
+): Promise<boolean> {
+  if (Object.keys(input).length !== 1 || typeof input.taskId !== "string") return false;
+  const task = await repository.getById(scopedDb, input.taskId);
+  return task?.owner_user_id === ctx.actorUserId;
+}
+
+/** Bounded owner-only candidates; listing never advances recurring series. */
+export async function listOwnedTasksForScheduledRead(scopedDb: DataContextDb) {
+  assertDataContextDb(scopedDb);
+  return repository.listOwnedReadCandidates(scopedDb);
+}
+
 async function taskData(scopedDb: DataContextDb, task: Task) {
   const tags = await repository.getTagsForTask(scopedDb, task.id);
   return serializeTask(task, tags);

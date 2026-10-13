@@ -11,6 +11,10 @@
 # output means "no automated spec covers this", never "no live proof needed".
 #
 # When you add a UAT spec, add its rows here in the same PR.
+blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/chat/sql/0318_chat_scheduled_reads.sql	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/chat/src/reminders/commands/scheduled-read.ts	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/ai/src/gateway/gateway.ts	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
 blocking	packages/commitments/src/email-judgement-worker.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
 blocking	packages/commitments/src/extractor.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
 blocking	packages/briefings/src/morning-inputs.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts

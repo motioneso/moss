@@ -3,6 +3,52 @@ import type { ModuleFeatureManifest } from "@moss/module-sdk";
 import { quietHoursAllowanceFeature } from "./quiet-hours-feature.js";
 
 export const reminderFeatures: readonly ModuleFeatureManifest[] = [
+  {
+    id: "chat.scheduled_owner_read",
+    description:
+      "In Main, ask Moss to check one owned task later. Your model selects the task and time; Moss saves and posts a sourced result. Plain reminders and questions keep their usual paths. Reminder controls, limits and notification policy apply.",
+    featureFlagId: "chat.module",
+    errors: [
+      {
+        code: "scheduled_read_text_edit_refused",
+        class: "validation",
+        description:
+          "A saved task check keeps its source fixed. Time edits use the source-read queue; text edits change nothing. Delete the check and request a new one to choose a different task."
+      },
+      {
+        code: "scheduled_read_unresolved",
+        class: "validation",
+        description:
+          "An unresolved task stays in ordinary chat instead of saving a check. Name one task you own and a supported future time."
+      },
+      {
+        code: "scheduled_read_unavailable",
+        class: "transient",
+        description:
+          "If the model or Tasks module is unavailable, Moss says it could not set the check and saves nothing. Check the configured JSON model and enabled Tasks module, then try again."
+      },
+      {
+        code: "scheduled_read_access_refused",
+        class: "prerequisite",
+        remediationRef: "chat.restore_scheduled_read_access",
+        description:
+          "If the source capability or owned task is no longer accessible at run time, Moss posts a refusal without source data. Choose an accessible task and request a new check."
+      },
+      {
+        code: "scheduled_read_failed",
+        class: "transient",
+        description:
+          "A temporary source failure retries quietly twice, then posts that the check failed. Request a new check when the source is available."
+      }
+    ],
+    remediations: [
+      {
+        id: "chat.restore_scheduled_read_access",
+        description: "Choose a task you own in Tasks and request a new status check in Main.",
+        path: "/tasks"
+      }
+    ]
+  },
   quietHoursAllowanceFeature,
   {
     id: "chat.reminder_edits",

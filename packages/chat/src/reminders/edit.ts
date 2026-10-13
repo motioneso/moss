@@ -6,6 +6,7 @@ import type { ReminderEditTerms } from "@moss/shared";
 import { lockReminderControl } from "./controls.js";
 import { enqueueReminderDelivery } from "./deliver.js";
 import { ReminderRepository } from "./repository.js";
+import { readScheduledOperation } from "../scheduled-reads/repository.js";
 
 export async function readEditableReminders(scopedDb: DataContextDb) {
   assertDataContextDb(scopedDb);
@@ -117,6 +118,12 @@ export async function editReminderById(
   if (locked.state !== "queued" && locked.state !== "paused") return { kind: "not_pending" };
   const current = (await readEditableReminders(scopedDb)).find((row) => row.id === id);
   if (!current) return { kind: "missing" };
+  if (terms.text !== null && (await readScheduledOperation(scopedDb, id)))
+    return {
+      kind: "invalid",
+      reply:
+        "A task check's source is fixed. You can change its time, but not its text. Nothing changed."
+    };
   let values;
   try {
     values = resolveReminderEdit(
@@ -159,7 +166,6 @@ export async function editReminderById(
     .where("id", "=", id)
     .returningAll()
     .executeTakeFirstOrThrow();
-  // Shared enqueue seam: the scheduled-read lane can route extension-backed rows here.
   if (row.state === "queued")
     await enqueueReminderDelivery(boss, scopedDb, actorUserId, {
       id,

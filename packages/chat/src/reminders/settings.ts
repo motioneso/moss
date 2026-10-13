@@ -15,6 +15,7 @@ interface ScheduledReminderRow {
   readonly late: boolean | null;
   readonly message_id: string | null;
   readonly message_body: string | null;
+  readonly read_outcome?: "success" | "refused" | "failed" | null;
 }
 
 const STATES: Record<ChatReminderState, ScheduledTaskState> = {
@@ -32,10 +33,21 @@ export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
     runs.push({
       at: row.delivered_at.toISOString(),
       outcome: "delivered",
-      summary: row.late ? "Reminder delivered late" : "Reminder delivered",
+      summary: row.read_outcome
+        ? row.read_outcome === "success"
+          ? "Task status checked"
+          : "Task check failed"
+        : row.late
+          ? "Reminder delivered late"
+          : "Reminder delivered",
       message:
         row.message_id !== null && row.message_body !== null
-          ? { id: row.message_id, threadId: row.thread_id, body: row.message_body }
+          ? {
+              id: row.message_id,
+              threadId: row.thread_id,
+              body: row.message_body,
+              ...(row.read_outcome === "success" ? { scheduledReadSource: "tasks" as const } : {})
+            }
           : null
     });
   }
@@ -52,7 +64,7 @@ export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
     title: row.reminder_text,
     instruction: row.reminder_text,
     group: "Reminders",
-    state: STATES[row.state],
+    state: row.read_outcome && row.read_outcome !== "success" ? "failed" : STATES[row.state],
     dueAt: row.due_at.toISOString(),
     deadlineAt: row.deadline_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
@@ -64,6 +76,7 @@ export async function listScheduledReminders(scopedDb: DataContextDb): Promise<S
   assertDataContextDb(scopedDb);
   const rows = await scopedDb.db
     .selectFrom("app.chat_reminders as reminder")
+    .leftJoin("app.chat_scheduled_reads as source_read", "source_read.reminder_id", "reminder.id")
     .leftJoin("app.chat_messages as message", (join) =>
       join
         .onRef("message.id", "=", "reminder.reserved_message_id")
@@ -73,6 +86,7 @@ export async function listScheduledReminders(scopedDb: DataContextDb): Promise<S
         .on("reminder.state", "=", "delivered")
     )
     .select([
+      "source_read.outcome as read_outcome",
       "reminder.id",
       "reminder.reminder_text",
       "reminder.state",

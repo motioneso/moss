@@ -81,8 +81,53 @@ describe("GET /api/chat/stream session pre-start", () => {
         await running;
 
         expect(manager["countSubscribers"](ACTOR)).toBe(0);
-        expect(raw.writeHead).not.toHaveBeenCalled();
+        expect(raw.writeHead).toHaveBeenCalledTimes(1);
       } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it.each([
+    ["plain reminder", "Reminder: stretch", undefined],
+    ["scheduled report", "I checked the task.", "tasks"]
+  ] as const)(
+    "delivers a %s while the chat agent is still starting",
+    async (_kind, text, source) => {
+      const { app, handler, manager, request, reply, raw } = await streamLifecycle();
+      let release: () => void = () => undefined;
+      let start: () => void = () => undefined;
+      const started = new Promise<void>((resolve) => (start = resolve));
+      const startup = new Promise<void>((resolve) => (release = resolve));
+      vi.spyOn(manager, "ensureSession").mockImplementation(async () => {
+        start();
+        await startup;
+        return undefined as never;
+      });
+      vi.spyOn(manager, "getPrivacyState").mockResolvedValue({
+        incognito: false,
+        threadId: "main"
+      });
+      const running = handler.call(app, request, reply);
+      try {
+        await started;
+        await manager.deliverMainBackgroundMessage({
+          actorUserId: ACTOR,
+          mainThreadId: "main",
+          record: {
+            kind: "reply",
+            text,
+            ...(source ? { scheduledReadSource: source } : {}),
+            messageId: "result",
+            background: true
+          }
+        });
+        expect(raw.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
+        expect(raw.write).toHaveBeenCalledWith(expect.stringContaining(text));
+      } finally {
+        release();
+        await running;
+        raw.emit("close");
         await app.close();
       }
     }
@@ -103,7 +148,7 @@ describe("GET /api/chat/stream session pre-start", () => {
     }
   });
 
-  it("subscribes after a successful pre-start", async () => {
+  it("subscribes before a successful pre-start", async () => {
     const result = await openStream(async () => undefined);
 
     expect(result.subscribedSurfaces).toEqual(["drawer"]);

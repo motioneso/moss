@@ -1,3 +1,5 @@
+import { readScheduledOperation } from "../scheduled-reads/repository.js";
+import { CHAT_SCHEDULED_READ_QUEUE } from "../scheduled-reads/queue.js";
 // #3309: puts one due reminder into its owner's Main chat, once. The job only names the
 // reminder; every fact the delivery depends on is re-read under the row lock.
 
@@ -55,6 +57,7 @@ export type ReminderDeliveryOutcome =
 type ReminderDeliveryDeps = {
   readonly reminders: ReminderRepository;
   readonly chat: ChatRepository;
+  readonly scheduledReadSource?: "tasks";
   readonly enqueueNotification?: (scopedDb: DataContextDb, reminder: DueReminder) => Promise<void>;
 };
 
@@ -67,7 +70,9 @@ export async function enqueueReminderDelivery(
 ): Promise<void> {
   await sendJob<DeliverReminderJobPayload>(
     boss,
-    CHAT_DELIVER_REMINDER_QUEUE,
+    (await readScheduledOperation(scopedDb, reminder.id))
+      ? CHAT_SCHEDULED_READ_QUEUE
+      : CHAT_DELIVER_REMINDER_QUEUE,
     { actorUserId, resourceId: reminder.id, version: reminder.version },
     { startAfter: reminder.dueAt, db: scopedJobDatabase(scopedDb) }
   );
@@ -82,6 +87,7 @@ export async function deliverDueReminder(
 
   if (!reminder) return unlockedOutcome(scopedDb, payload, deps);
   if (reminder.ownerUserId !== payload.actorUserId) return "missing";
+  if (await readScheduledOperation(scopedDb, reminder.id)) return "missing";
   if (reminder.state === "paused") return "paused";
   if (reminder.state !== "queued") return "already_delivered";
   if (reminder.version !== payload.version) return "stale_version";
@@ -105,17 +111,36 @@ export async function deliverDueReminder(
     return "not_main";
   }
 
-  // The row lock stays held through message persistence and notification enqueue.
+  return persistReminderResult(
+    scopedDb,
+    reminder,
+    reminderDeliveredMessage(
+      reminder.text,
+      now.getTime() - reminder.dueAt.getTime() > REMINDER_LATE_AFTER_MS
+    ),
+    now,
+    deps
+  );
+}
+
+/** Caller holds the responsibility lock through result persistence and notification enqueue. */
+export async function persistReminderResult(
+  scopedDb: DataContextDb,
+  reminder: DueReminder,
+  body: string,
+  now: Date,
+  deps: ReminderDeliveryDeps
+): Promise<"delivered"> {
   const late = now.getTime() - reminder.dueAt.getTime() > REMINDER_LATE_AFTER_MS;
   await deps.chat.insertReservedAssistantMessage(scopedDb, {
     id: reminder.reservedMessageId,
     threadId: reminder.threadId,
-    body: reminderDeliveredMessage(reminder.text, late),
+    body,
     origin: { version: 1, kind: "reminder", event: "delivered", reminderId: reminder.id, late },
+    scheduledReadSource: deps.scheduledReadSource,
     now
   });
   await deps.reminders.markDelivered(scopedDb, reminder.id, late);
-  // #3195: Postgres delivers this only if the delivery commits, so a rollback shows nothing.
   await notifyReminderArrival(scopedDb, {
     actorUserId: reminder.ownerUserId,
     threadId: reminder.threadId,

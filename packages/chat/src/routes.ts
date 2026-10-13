@@ -1,3 +1,4 @@
+import { createScheduledReadResolver } from "./scheduled-reads/generation.js";
 import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Kysely } from "kysely";
@@ -16,11 +17,11 @@ import {
   normalizeChatSettings,
   putChatSettingsRouteSchema,
   type AiModelCapability,
-  type AnswerSourceSupportCard,
   type PutChatSettingsRequest
 } from "@moss/shared";
 import {
   AiRepository,
+  type GenerateStructuredDeps,
   AssistantToolGateway,
   ConfirmationRegistry,
   SessionTokenRegistry,
@@ -72,7 +73,7 @@ import {
   serializeFact,
   serializeSettings
 } from "./memory-serializers.js";
-import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
+import { registerChatProvenanceRoutes } from "./provenance-routes.js";
 import {
   registerMcpTransportRoute,
   registerNativePermissionRoute,
@@ -86,18 +87,9 @@ import { ChatRepository } from "./repository.js";
 import { registerScheduledTaskRoutes } from "./reminders/routes.js";
 import { registerReminderArrivalLifecycle } from "./reminders/live-arrival.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
+import { registerMeetingChatBoundary } from "./meeting-chat-boundary.js";
+import { createMeetingChatRuntime, type MeetingChatData } from "./live/meeting-chat-runtime.js";
 import {
-  registerMeetingChatBoundary,
-  dereferenceMeetingCitation,
-  isMeetingEvidenceAvailable
-} from "./meeting-chat-boundary.js";
-import {
-  createMeetingChatRuntime,
-  readMeetingChatContext,
-  type MeetingChatData
-} from "./live/meeting-chat-runtime.js";
-import {
-  asRecord,
   readShadowReportDays,
   serializeMessage,
   serializeShadowReport,
@@ -138,6 +130,7 @@ export interface ChatRoutesDependencies {
   readonly classifierShadowRepository?: ClassifierShadowRepository;
   /** Override the live-chat engine factory (tests inject a fake); defaults to real tmux. */
   readonly chatEngineFactory?: ChatEngineFactory;
+  readonly createCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
   readonly resolveActiveModules?: ActiveModulesResolver;
   readonly mcpServerUrl?: string;
   /** #1133 — override the attachment store (tests use a tmpdir vault base). */
@@ -466,6 +459,15 @@ export function registerChatRoutes(
         })
       : undefined;
   const runtime = createChatSessionRuntime({
+    resolveScheduledReadRequest: wiring
+      ? createScheduledReadResolver({
+          dataContext: dependencies.dataContext,
+          resolveActiveModules: resolveActiveModules as ActiveModulesResolver,
+          createCliStructuredAdapter:
+            dependencies.createCliStructuredAdapter ??
+            createCliStructuredAdapterFactory(dependencies.chatEngineFactory)
+        })
+      : undefined,
     flushActionRecords: async (sessionKey) => {
       await realNotifier?.flush(sessionKey);
     },
@@ -930,71 +932,5 @@ export function registerChatRoutes(
     }
   });
 
-  // ── Answer provenance ──────────────────────────────────────────────────────
-
-  server.get<{ Params: { messageId: string } }>(
-    "/api/chat/messages/:messageId/provenance",
-    async (request, reply) => {
-      try {
-        const access = await dependencies.resolveAccessContext(request);
-        const message = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
-          repository.getMessageById(scopedDb, request.params.messageId)
-        );
-        if (!message || message.owner_user_id !== access.actorUserId) {
-          return reply.code(404).send({ error: "Message not found" });
-        }
-        const toolMetadata = asRecord(message.tool_metadata);
-        const meetingBinding = readMeetingChatContext(toolMetadata);
-        if (!(await isMeetingEvidenceAvailable(meetingChat, access, meetingBinding)))
-          return reply.code(404).send({ error: "Meeting evidence unavailable" });
-        const stored = readStoredProvenance(toolMetadata);
-        const cards: AnswerSourceSupportCard[] = stored != null ? provenanceCards(stored) : [];
-        return { cards };
-      } catch (error) {
-        return handleRouteError(error, reply);
-      }
-    }
-  );
-
-  server.get<{ Params: { messageId: string; supportId: string } }>(
-    "/api/chat/messages/:messageId/provenance/:supportId/dereference",
-    async (request, reply) => {
-      try {
-        const access = await dependencies.resolveAccessContext(request);
-        const message = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
-          repository.getMessageById(scopedDb, request.params.messageId)
-        );
-        if (!message || message.owner_user_id !== access.actorUserId) {
-          return reply.code(404).send({ error: "Message not found" });
-        }
-        const toolMetadata = asRecord(message.tool_metadata);
-        const meetingBinding = readMeetingChatContext(toolMetadata);
-        if (!(await isMeetingEvidenceAvailable(meetingChat, access, meetingBinding)))
-          return reply.code(404).send({ error: "Meeting evidence unavailable" });
-        const stored = readStoredProvenance(toolMetadata);
-        if (!stored) return reply.code(404).send({ error: "No provenance for this message" });
-
-        const supportItem = stored.supportItems.find(
-          (item) => item.supportId === request.params.supportId
-        );
-        if (!supportItem) return reply.code(404).send({ error: "Support item not found" });
-
-        if (meetingBinding && meetingChat)
-          return dereferenceMeetingCitation(
-            meetingChat,
-            access,
-            meetingBinding,
-            request.params.supportId
-          );
-        // Other source providers are not registered yet.
-        return {
-          unavailableReason: "source_unavailable" as const,
-          sourceLabel: supportItem.sourceLabel,
-          title: supportItem.title
-        };
-      } catch (error) {
-        return handleRouteError(error, reply);
-      }
-    }
-  );
+  registerChatProvenanceRoutes(server, dependencies, repository, meetingChat);
 }

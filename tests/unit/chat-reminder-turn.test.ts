@@ -22,6 +22,7 @@ const SAVED = {
 } as const;
 
 function setup(options: {
+  read?: ReturnType<typeof vi.fn>;
   incognito?: boolean;
   pending?: ReturnType<typeof vi.fn>;
   pendingProposal?: boolean;
@@ -33,6 +34,7 @@ function setup(options: {
   const engine = new FakeEngine(0, [
     { records: [{ kind: "reply", text: "model answer" }], offset: 10, complete: true }
   ]);
+  Object.assign(engine, { purgeTranscripts: vi.fn().mockResolvedValue(undefined) });
   const recordReminderTurn = options.record ?? vi.fn().mockResolvedValue(SAVED);
   const gate = { mode: vi.fn().mockResolvedValue("on"), evaluate: vi.fn() };
   gate.evaluate.mockResolvedValue({ kind: "declined" });
@@ -52,6 +54,11 @@ function setup(options: {
       getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
       touchExistingThread: vi.fn().mockResolvedValue(true),
       getMainThreadState,
+      getCurrentThreadState: vi.fn(async (_actor, surface) => ({
+        id: surface && surface !== "drawer" ? "side-thread" : "main-thread",
+        incognito: options.incognito ?? false
+      })),
+      resolveScheduledReadRequest: options.read,
       hasPendingReminderDeletion: options.pending,
       recordReminderTurn,
       prepareReminderEdit: options.prepareEdit,
@@ -86,6 +93,58 @@ describe("chat reminder turn (#3309)", () => {
     expect(prepare).toHaveBeenCalled();
     expect(recordReminderTurn.mock.calls[0]?.[2]).toMatchObject({ kind: "edit_refused" });
     expect(engine.launchCount).toBe(0);
+  });
+  it.each([
+    ["Remind me in 20 minutes to check the laundry task", 1200, "check the laundry task"],
+    [
+      "remind me in 10 minutes to check if the task is complete",
+      600,
+      "check if the task is complete"
+    ]
+  ])("keeps %s as a plain reminder", async (text, delaySeconds, reminderText) => {
+    const read = vi
+      .fn()
+      .mockResolvedValue({ kind: "scheduled_read", taskId: null, title: "", when: null });
+    const { manager, engine, recordReminderTurn } = setup({ read });
+    await manager.submitTurn("u1", "Ben", text);
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toEqual({
+      kind: "request",
+      delaySeconds,
+      text: reminderText
+    });
+    expect(read).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(0);
+  });
+  it.each([
+    "What's the status of the task due tomorrow?",
+    "Can you check which task I should do tomorrow?"
+  ])("passes the question %s unchanged in Main, private, side and meeting chat", async (text) => {
+    for (const [surface, incognito] of [
+      [undefined, false],
+      [undefined, true],
+      ["side", false],
+      ["meeting", false]
+    ] as const) {
+      const read = vi
+        .fn()
+        .mockResolvedValue({ kind: "scheduled_read", taskId: null, title: "", when: null });
+      const { manager, engine, recordReminderTurn } = setup({ read, incognito });
+      const result = await manager.submitTurn("u1", "Ben", text, undefined, surface);
+      if (!incognito) expect(result.reply).toBe("model answer");
+      expect(engine.launchCount).toBe(1);
+      expect(engine.submitted.join("\n")).toContain(text);
+      expect(recordReminderTurn).not.toHaveBeenCalled();
+      expect(read).not.toHaveBeenCalled();
+    }
+  });
+  it("falls back to ordinary chat when a check has no confident owned task", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValue({ kind: "scheduled_read", taskId: null, title: "", when: null });
+    const { manager, engine, recordReminderTurn } = setup({ read });
+    await manager.submitTurn("u1", "Ben", "Check the status of my laundry task in 20 minutes");
+    expect(engine.launchCount).toBe(1);
+    expect(recordReminderTurn).not.toHaveBeenCalled();
   });
   it.each([
     "let the dog out at night",

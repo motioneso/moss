@@ -1055,6 +1055,14 @@ export interface ChatRemindersTable {
   created_at: TimestampColumn;
 }
 
+export interface ChatScheduledReadsTable {
+  reminder_id: string;
+  owner_user_id: string;
+  operation: "tasks.get";
+  item_id: string;
+  outcome: "success" | "refused" | "failed" | null;
+}
+
 export interface ChatReminderQuietAllowancesTable {
   reminder_id: string;
   owner_user_id: string;
@@ -2042,6 +2050,7 @@ export interface MossDatabase {
   "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_reminders": ChatRemindersTable;
+  "app.chat_scheduled_reads": ChatScheduledReadsTable;
   "app.chat_reminder_quiet_allowances": ChatReminderQuietAllowancesTable;
   "app.chat_reminder_quiet_proposals": ChatReminderQuietProposalsTable;
   "app.chat_live_turns": ChatLiveTurnsTable;

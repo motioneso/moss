@@ -51,7 +51,11 @@ export function TaskHistory({ task, locale }: TaskDetailProps) {
             </Button>
           }
         >
-          <MarkdownMessage text={message.body} messageId={message.id} />
+          <MarkdownMessage
+            text={message.body}
+            messageId={message.id}
+            scheduledReadSource={message.scheduledReadSource}
+          />
         </Dialog>
       )}
     </section>

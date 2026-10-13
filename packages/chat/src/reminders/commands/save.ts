@@ -1,3 +1,4 @@
+import { saveScheduledOperation } from "../../scheduled-reads/repository.js";
 import { randomUUID } from "node:crypto";
 import { enqueueReminderDelivery } from "../deliver.js";
 import type { ReminderTimingInput } from "../repository.js";
@@ -7,7 +8,8 @@ import type { ReminderCommandContext, ReminderTurnDecision } from "./types.js";
 export async function save(
   context: ReminderCommandContext,
   prepare: () => Promise<
-    { reply: string; when: ReminderTimingInput; text: string } | ReminderTurnDecision
+    | { reply: string; when: ReminderTimingInput; text: string; sourceItemId?: string }
+    | ReminderTurnDecision
   >
 ): Promise<ReminderTurnDecision> {
   const { scopedDb, deps, actorUserId, thread } = context;
@@ -33,6 +35,8 @@ export async function save(
         when: prepared.when,
         text: prepared.text
       });
+      if (prepared.sourceItemId)
+        await saveScheduledOperation(scopedDb, reminderId, prepared.sourceItemId);
       await enqueueReminderDelivery(boss, scopedDb, actorUserId, saved);
     }
   };

@@ -17,6 +17,22 @@ const row = {
 };
 
 describe("Settings reminder records", () => {
+  it.each(["success", "refused", "failed", null] as const)(
+    "grants a Tasks link only for a successful recorded read: %s",
+    (read_outcome) => {
+      const task = scheduledReminder({
+        ...row,
+        state: "delivered",
+        delivered_at: row.due_at,
+        message_id: "message",
+        message_body: "[Source: Tasks](/tasks)",
+        read_outcome
+      });
+      expect(task.runs[0]?.message?.scheduledReadSource).toBe(
+        read_outcome === "success" ? "tasks" : undefined
+      );
+    }
+  );
   it("lists an active reminder without pretending saving was a run", () => {
     expect(scheduledReminder(row)).toMatchObject({ group: "Reminders", state: "active", runs: [] });
   });

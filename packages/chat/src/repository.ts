@@ -450,6 +450,7 @@ export class ChatRepository {
       readonly threadId: string;
       readonly body: string;
       readonly origin: ChatTurnOriginV1;
+      readonly scheduledReadSource?: "tasks";
       readonly now: Date;
     }
   ): Promise<void> {
@@ -463,7 +464,10 @@ export class ChatRepository {
         role: "assistant",
         status: "stored",
         body: input.body,
-        model_metadata: { origin: input.origin },
+        model_metadata: {
+          origin: input.origin,
+          ...(input.scheduledReadSource ? { scheduledReadSource: input.scheduledReadSource } : {})
+        },
         tool_metadata: { selectedTools: [] },
         created_at: input.now,
         updated_at: input.now

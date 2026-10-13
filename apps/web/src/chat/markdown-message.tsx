@@ -28,6 +28,7 @@ export function safeUrl(url: string): string {
  * injection, #360), so these guarantees must stay intact.
  */
 interface MarkdownMessageProps {
+  readonly scheduledReadSource?: "tasks";
   readonly disableRemoteImages?: boolean;
   readonly messageId?: string;
   readonly text: string;
@@ -37,6 +38,21 @@ interface MarkdownMessageProps {
 
 export function MarkdownMessage(props: MarkdownMessageProps) {
   const { text, answerProvenance, answerProvenanceCitedIds } = props;
+
+  // The marker comes only from the worker, never from message/source text. Keep safeUrl unchanged.
+  if (props.scheduledReadSource === "tasks") {
+    const report = text
+      .replace(/\n\n\[Source: Tasks\]\(\/tasks\)$/, "")
+      .replace(/\\([\\`*_{}[\]()<>!#|~])/g, "$1");
+    return (
+      <div className="chatd-md">
+        <p>{report}</p>
+        <p>
+          <a href="/tasks">Source: Tasks</a>
+        </p>
+      </div>
+    );
+  }
 
   const citedSet = new Set(answerProvenanceCitedIds ?? []);
   const displayText =

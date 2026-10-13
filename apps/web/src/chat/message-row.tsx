@@ -135,6 +135,7 @@ export function RecordRow(props: {
         </span>
         <div className="chatd-bubble">
           <MarkdownMessage
+            scheduledReadSource={props.record.scheduledReadSource}
             messageId={props.record.messageId}
             disableRemoteImages={Boolean(props.record.meetingContext) || props.meetingScoped}
             text={text}

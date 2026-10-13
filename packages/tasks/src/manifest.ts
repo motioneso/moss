@@ -68,6 +68,7 @@ import {
 } from "@moss/shared";
 
 import {
+  authorizeTaskBackgroundRead,
   taskAddActivityExecute,
   taskAssignTagExecute,
   taskActivityExecute,
@@ -522,6 +523,7 @@ export const tasksModuleManifest = {
           taskId: { type: "string" }
         }
       },
+      authorizeBackgroundRead: authorizeTaskBackgroundRead,
       execute: taskGetExecute
     },
     {

@@ -77,6 +77,8 @@ export interface TranscriptRecord {
    * reads the same stamp from the assistant message's stored model metadata.
    */
   readonly origin?: ChatTurnOriginV1;
+  /** Server-authored successful scheduled report; source text is rendered without markdown. */
+  readonly scheduledReadSource?: "tasks";
   /** Duration of an approval hold in milliseconds, when recorded. */
   readonly durationMs?: number;
 }

@@ -482,6 +482,7 @@ export function unavailableEngineFactory(reason: string): ChatEngineFactory {
 export const realEngineFactory: ChatEngineFactory = createRealEngineFactory();
 
 export interface CreateChatSessionRuntimeDeps {
+  readonly resolveScheduledReadRequest?: DataContextChatPersistence["resolveScheduledReadRequest"];
   readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   readonly rootDb?: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
@@ -649,6 +650,7 @@ export interface ChatSessionRuntime {
  */
 export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): ChatSessionRuntime {
   const persistence = new DataContextChatPersistence({
+    resolveScheduledReadRequest: deps.resolveScheduledReadRequest,
     rootDb: deps.rootDb,
     dataContext: deps.dataContext,
     chatRepository: new ChatRepository(),
