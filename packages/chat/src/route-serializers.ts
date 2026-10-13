@@ -169,12 +169,16 @@ const REMINDER_ORIGIN_EVENTS: ReadonlySet<string> = new Set<ChatReminderOriginV1
   "allowance_saved",
   "allowance_removed",
   "allowance_proposed",
-  "allowance_refused"
+  "allowance_refused",
+  "scope_proposed",
+  "scope_saved",
+  "scope_refused"
 ]);
 
 function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 | undefined {
   const event = record.event;
   if (typeof event !== "string" || !REMINDER_ORIGIN_EVENTS.has(event)) return undefined;
+  const responsibilityProposal = readResponsibilityBinding(record.responsibilityProposal);
   return {
     version: 1,
     kind: "reminder",
@@ -184,8 +188,23 @@ function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 |
       ? { reminderVersion: record.reminderVersion }
       : {}),
     ...(typeof record.reminderState === "string" ? { reminderState: record.reminderState } : {}),
+    ...(typeof record.proposalId === "string" ? { proposalId: record.proposalId } : {}),
+    ...(responsibilityProposal ? { responsibilityProposal } : {}),
     ...(typeof record.late === "boolean" ? { late: record.late } : {})
   };
+}
+
+function readResponsibilityBinding(value: unknown): ChatReminderOriginV1["responsibilityProposal"] {
+  const row = asRecord(value);
+  return typeof row.id === "string" &&
+    typeof row.kind === "string" &&
+    typeof row.version === "number" &&
+    Number.isSafeInteger(row.version) &&
+    row.version >= 1 &&
+    typeof row.fingerprint === "string" &&
+    /^[a-f0-9]{64}$/.test(row.fingerprint)
+    ? { id: row.id, kind: row.kind, version: row.version, fingerprint: row.fingerprint }
+    : undefined;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {

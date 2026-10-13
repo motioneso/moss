@@ -1,4 +1,5 @@
 // Reminder commands run inside the turn transaction; their deferred saves commit with it.
+import { clearResponsibilityProposals } from "../responsibility-agreements/repository.js";
 import { clearQuietHoursProposal } from "./quiet-hours-allowances.js";
 import type { DataContextDb } from "@moss/db";
 import { reminderCommands } from "./commands/registry.js";
@@ -29,6 +30,12 @@ export async function decideReminderTurn(
     !thread.incognito
   )
     await clearQuietHoursProposal(scopedDb, thread.id);
+  if (
+    plan.kind !== "scope_proposal" &&
+    plan.kind !== "scope_agreement" &&
+    plan.kind !== "scope_refused"
+  )
+    await clearResponsibilityProposals(scopedDb, thread.id);
   if (plan.kind === "unsupported") return refused(reminderRefusedReply(plan.reason));
   if (plan.kind === "main_only" || !thread.is_main || thread.incognito) {
     const manage =

@@ -1,3 +1,4 @@
+import { listApprovedActionScopes } from "../responsibility-agreements/settings.js";
 import { readPersonLocale } from "../person-locale.js";
 import type { PgBoss } from "pg-boss";
 import { HttpError } from "@moss/module-sdk";
@@ -47,16 +48,21 @@ export function registerScheduledTaskRoutes(
             (await readPersonLocale(db, dependencies.localePreferences)).dateFormat
           )
         );
+        const approvedScopes = await dependencies.dataContext.withDataContext(
+          access,
+          listApprovedActionScopes
+        );
         // App reads may run from any chat; saved chat content is screen-only.
         if (request.headers[ACT_AS_GRANT_HEADER] !== undefined) {
           return {
+            approvedScopes: [],
             tasks: tasks.map((task) => ({
               ...task,
               runs: task.runs.map((run) => ({ ...run, message: null }))
             }))
           };
         }
-        return { tasks };
+        return { tasks, approvedScopes };
       } catch (error) {
         return handleRouteError(error, reply);
       }

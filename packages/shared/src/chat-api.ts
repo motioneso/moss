@@ -314,8 +314,18 @@ export interface ChatReminderOriginV1 {
     | "allowance_proposed"
     | "allowance_refused"
     | "edited"
-    | "edit_requested";
+    | "edit_requested"
+    | "scope_proposed"
+    | "scope_saved"
+    | "scope_refused";
   readonly reminderId: string | null;
+  readonly proposalId?: string | null;
+  readonly responsibilityProposal?: {
+    readonly id: string;
+    readonly kind: string;
+    readonly version: number;
+    readonly fingerprint: string;
+  };
   readonly reminderVersion?: number;
   readonly reminderState?: string;
   readonly editProposal?: ReminderEditProposal;

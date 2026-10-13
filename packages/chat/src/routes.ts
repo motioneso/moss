@@ -459,6 +459,12 @@ export function registerChatRoutes(
         })
       : undefined;
   const runtime = createChatSessionRuntime({
+    canProposeBoundedAction: wiring
+      ? async (actor) =>
+          (await wiring.gateway.listToolsForActor(actor)).some(
+            (tool) => tool.name === "tasks.updateStatus" && tool.risk === "write"
+          )
+      : undefined,
     resolveScheduledReadRequest: wiring
       ? createScheduledReadResolver({
           dataContext: dependencies.dataContext,

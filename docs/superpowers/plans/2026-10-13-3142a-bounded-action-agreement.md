@@ -52,7 +52,7 @@ are reused; this stage adds an inert group, not a new module or approval panel.
 - Existing completed-turn identity reaches the early command via
   `packages/chat/src/live/pre-model-turn.ts:232`; direct persistence calls get a generated identity.
 - Existing Tasks public owner lookup/candidate APIs: `packages/tasks/src/tools.ts:31`.
-  Current tool availability is checked via the gateway wiring in `packages/chat/src/routes.ts`.
+  Current tool availability is checked via the gateway wiring in `packages/chat/src/routes.ts:462`.
 - Existing background operation allowlist: `packages/ai/src/gateway/gateway.ts:574`.
   This stage adds no allowlist entry, worker handler, action execution or queue call.
 - Owner Settings response: `packages/chat/src/reminders/routes.ts:51`; separate list/detail

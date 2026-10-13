@@ -1,3 +1,4 @@
+import { responsibilityAgreement } from "../../responsibility-agreements/command.js";
 import { repeatRequest } from "./repeat-request.js";
 import { edit } from "./edit.js";
 import { scheduledRead } from "./scheduled-read.js";
@@ -13,6 +14,9 @@ import { request } from "./request.js";
 import type { ReminderCommandHandler, ReminderTurnPlan } from "./types.js";
 
 export const reminderCommands = {
+  scope_proposal: { execute: responsibilityAgreement },
+  scope_agreement: { execute: responsibilityAgreement },
+  scope_refused: { execute: responsibilityAgreement },
   edit: { execute: edit },
   edit_selection: { execute: edit },
   edit_refused: { execute: edit },

@@ -1,3 +1,4 @@
+import { ApprovedActionScopes, ApprovedActionScopeDetail } from "./approved-action-scopes";
 import "../styles/settings-scheduled-tasks.css";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +19,16 @@ export function ScheduledTasksPane() {
   const list = useRef<HTMLDivElement>(null);
   const { openChat } = useChatControls();
   const selected = query.data?.tasks.find((task) => task.id === selectedId);
+  const selectedScope = query.data?.approvedScopes?.find((scope) => scope.id === selectedId);
+  const back = () => {
+    const id = selectedId;
+    setSelectedId(null);
+    requestAnimationFrame(() =>
+      (
+        list.current?.querySelector<HTMLButtonElement>(`[data-task-id="${id}"]`) ?? list.current
+      )?.focus()
+    );
+  };
   return (
     <>
       <PaneHead title="Scheduled tasks" desc="What Moss is keeping an eye on for you." />
@@ -32,7 +43,7 @@ export function ScheduledTasksPane() {
         </EmptyState>
       ) : (
         <>
-          <div ref={list} tabIndex={-1} hidden={Boolean(selected)}>
+          <div ref={list} tabIndex={-1} hidden={Boolean(selected || selectedScope)}>
             {query.data.tasks.length === 0 ? (
               <EmptyState
                 title="Nothing scheduled yet"
@@ -43,7 +54,12 @@ export function ScheduledTasksPane() {
             ) : (
               <ScheduledTaskList tasks={query.data.tasks} onSelect={setSelectedId} />
             )}
+            <ApprovedActionScopes
+              scopes={query.data.approvedScopes ?? []}
+              onSelect={setSelectedId}
+            />
           </div>
+          {selectedScope && <ApprovedActionScopeDetail agreement={selectedScope} onBack={back} />}
           {selected && (
             <ScheduledTaskDetail
               key={selected.id}

@@ -159,6 +159,12 @@ export interface ChatPersistencePort {
     text: string,
     signal: AbortSignal
   ): Promise<ScheduledReadPlan | undefined>;
+  prepareResponsibilityAgreement?(
+    actorUserId: string,
+    text: string,
+    threadId: string,
+    signal?: AbortSignal
+  ): Promise<ReminderTurnPlan | undefined>;
   hasPendingReminderDeletion?(actorUserId: string, threadId: string): Promise<boolean>;
   hasQuietHoursReminderTarget?(actorUserId: string, target: string): Promise<boolean>;
   hasPendingQuietHoursProposal?(actorUserId: string, threadId: string): Promise<boolean>;
@@ -276,6 +282,7 @@ export interface HandledTurnOptions {
 
 /** A stop that lands before the reminder turn commits rolls the whole turn back. */
 export interface ReminderTurnOptions extends HandledTurnOptions {
+  readonly turnId?: string;
   readonly stopSignal?: AbortSignal;
 }
 
