@@ -584,7 +584,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
         privateModeDecidedLocally.current = true;
         setPrivateMode(false);
         setPrivateEnded(false);
-        props.clearRecords();
+        props.clearRecords(state.threadId);
       } catch (caught) {
         if (transition.isCurrent(change)) {
           callerDraft.retire(change.surface, change.generation);

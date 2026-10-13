@@ -321,3 +321,10 @@ history-only branch also hid correctly filtered background records. Allow only
 background records whose destination equals the confirmed reopened chat. The
 unit test failed before this fix and passed afterward; prior-chat live turns and
 Main background results remain hidden. Repeat all final proofs after this change.
+
+The next live run reproduced the missing new-side arrival. The new-side creation
+path cleared the stream without binding the accepted new chat ID, so its exact
+destination filter rejected arrivals. The new-side unit assertion failed before
+passing state.threadId to clearRecords. Keep both new-side binding and reopened
+background display fixes; they cover separate UI paths. Compact the display
+condition to stay under the 1000-line file limit. Final proof must use these bytes.

@@ -254,6 +254,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
   vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
   vi.mocked(listChatThreads).mockResolvedValue({ threads: [chatThread("a", "Main", true)] });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const clearRecords = vi.fn();
   const view = (records: readonly TranscriptRecord[]) =>
     createElement(
       QueryClientProvider,
@@ -265,7 +266,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
           open: true,
           onClose: () => undefined,
           records,
-          clearRecords: () => undefined,
+          clearRecords,
           streamErrorCount: 0,
           isFounder: false,
           ownerId: "owner",
@@ -297,6 +298,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
+    expect(clearRecords).toHaveBeenCalledWith("side-1");
     const shown = JSON.stringify(renderer.toJSON());
     expect(shown).toContain("Turn the porch light on");
     expect(findByAriaLabel(renderer, "Action request")).not.toBeNull();
