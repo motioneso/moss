@@ -1,5 +1,7 @@
 import { readScheduledOperation } from "../scheduled-reads/repository.js";
 import { CHAT_SCHEDULED_READ_QUEUE } from "../scheduled-reads/queue.js";
+import { recordReminderRun, advanceReminder } from "./runs.js";
+import { nextReminderOccurrence } from "./repeating.js";
 // #3309: puts one due reminder into its owner's Main chat, once. The job only names the
 // reminder; every fact the delivery depends on is re-read under the row lock.
 
@@ -58,6 +60,7 @@ type ReminderDeliveryDeps = {
   readonly reminders: ReminderRepository;
   readonly chat: ChatRepository;
   readonly scheduledReadSource?: "tasks";
+  readonly boss?: Pick<PgBoss, "send">;
   readonly enqueueNotification?: (scopedDb: DataContextDb, reminder: DueReminder) => Promise<void>;
 };
 
@@ -101,6 +104,7 @@ export async function deliverDueReminder(
 
   // #3150: past its deadline the reminder is skipped, never posted, however late the worker ran.
   if (pastDeadline(reminder, now)) {
+    if (reminder.repeat) await recordReminderRun(scopedDb, reminder, "expired", false);
     await deps.reminders.markExpired(scopedDb, reminder.id);
     return "expired";
   }
@@ -140,7 +144,18 @@ export async function persistReminderResult(
     scheduledReadSource: deps.scheduledReadSource,
     now
   });
-  await deps.reminders.markDelivered(scopedDb, reminder.id, late);
+  if (reminder.repeat) {
+    if (!deps.boss) throw new Error("Recurring reminder queue unavailable");
+    await recordReminderRun(scopedDb, reminder, "delivered", late);
+    const next = nextReminderOccurrence({ ...reminder, repeat: reminder.repeat }, now);
+    if (reminder.deadlineAt && next.dueAt > reminder.deadlineAt) {
+      await deps.reminders.markDelivered(scopedDb, reminder.id, late);
+    } else {
+      const saved = await advanceReminder(scopedDb, reminder, next);
+      await enqueueReminderDelivery(deps.boss, scopedDb, payload.actorUserId, saved);
+    }
+  } else await deps.reminders.markDelivered(scopedDb, reminder.id, late);
+  // #3195: Postgres delivers this only if the delivery commits, so a rollback shows nothing.
   await notifyReminderArrival(scopedDb, {
     actorUserId: reminder.ownerUserId,
     threadId: reminder.threadId,
@@ -225,6 +240,7 @@ export async function registerReminderDeliveryWorker(
   workOptions?: WorkOptions
 ): Promise<string> {
   const deps = {
+    boss,
     reminders: new ReminderRepository(),
     chat: new ChatRepository(),
     enqueueNotification: (scopedDb: DataContextDb, reminder: DueReminder) =>

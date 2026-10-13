@@ -53,7 +53,7 @@ export const REMINDER_CONTROL_ROUTES = [
 export const REMINDER_SETTINGS_FEATURE = {
   id: "chat.reminder_settings",
   description:
-    "Settings, Scheduled tasks shows reminder details, dated history and Past tasks. View message opens the saved result; Open chat opens its thread. Pause, resume or delete here or in Main chat. Set reminders in Main chat.",
+    "Scheduled tasks groups Daily, Weekly and More often, with saved cadence, clock-change rules and 20 dated runs. View message opens that run; Open chat opens its thread. Pause, resume or delete here; set and edit in Main chat.",
   featureFlagId: "chat.module",
   errors: [
     {

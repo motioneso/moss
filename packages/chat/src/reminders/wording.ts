@@ -1,3 +1,5 @@
+import { reminderRepeatDescription } from "./repeating.js";
+import { repeatFor } from "./repository.js";
 import type { EditableReminder } from "./edit.js";
 // #3309: every reminder reply is written by code, so the wording here is the whole contract.
 
@@ -30,7 +32,7 @@ export function reminderRefusedReply(reason: ReminderUnsupportedReason): string 
     case "text_length":
       return `Keep the reminder to 500 characters or fewer. ${tryThis}`;
     case "recurrence":
-      return `I can only set a one-off reminder, not one that repeats, so I didn't set anything. ${tryThis}`;
+      return "Use every day at a clock time, every named weekday at a clock time, or an interval from 60 seconds to less than a day. Nothing was saved.";
     case "unsupported_day":
       return 'I can set a clock-time reminder for today or tomorrow only, said like "tomorrow at 9am", so I didn\'t set anything.';
     case "needs_am_pm":
@@ -180,8 +182,12 @@ export function reminderEditedReply(
     reminder.deadline_at === null
       ? ""
       : `, not after ${editTimeLabel(reminder.deadline_at, locale)}`;
+  const repeat = repeatFor(reminder);
+  const cadence = repeat
+    ? ` ${reminderRepeatDescription(repeat, reminder.local_due, reminder.time_zone)}.`
+    : "";
   const paused = reminder.state === "paused" ? " It stays paused until you resume it." : "";
-  return `${unchanged ? "Already saved" : "Updated"}: ${reminder.reminder_text}. I'll remind you ${editTimeLabel(reminder.due_at, locale)}${deadline}.${paused}`;
+  return `${unchanged ? "Already saved" : "Updated"}: ${reminder.reminder_text}. I'll remind you ${editTimeLabel(reminder.due_at, locale)}${deadline}.${cadence}${paused}`;
 }
 
 export function reminderEditChoiceReply(

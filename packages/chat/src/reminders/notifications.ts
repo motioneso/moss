@@ -54,7 +54,8 @@ export async function runReminderNotificationJob(
 ): Promise<"created" | "already_created" | "inactive" | "muted"> {
   const result = await new ReminderRepository().readNotificationResult(
     scopedDb,
-    payload.resourceId
+    payload.resourceId,
+    payload.idempotencyKey
   );
   if (
     !result ||
@@ -87,7 +88,11 @@ export async function isReminderNotificationActive(
   const { reminderId, messageId } = notification.metadata;
   if (typeof reminderId !== "string" || !isUuid(reminderId) || typeof messageId !== "string")
     return false;
-  const result = await new ReminderRepository().readNotificationResult(scopedDb, reminderId);
+  const result = await new ReminderRepository().readNotificationResult(
+    scopedDb,
+    reminderId,
+    messageId
+  );
   return result?.messageId === messageId;
 }
 
@@ -106,7 +111,11 @@ export const isReminderNotificationAllowedDuringQuietHours: QuietHoursAllowanceP
     notification.event_key !== messageId
   )
     return false;
-  const result = await new ReminderRepository().readNotificationResult(scopedDb, reminderId);
+  const result = await new ReminderRepository().readNotificationResult(
+    scopedDb,
+    reminderId,
+    messageId
+  );
   return result?.messageId === messageId && (await hasQuietHoursAllowance(scopedDb, reminderId));
 };
 

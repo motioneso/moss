@@ -6,7 +6,7 @@ Ordinary-chat creation, Responsibilities and user controls, and Recovery and lif
 
 ## Status and scope
 
-Plan prepared; coordinator approval required before feature code. Work stays in
+Plan 4a1c97a0f approved by the coordinator on 2026-10-12 with the rulings below. Work stays in
 ~/Jarv1s/.claude/worktrees/sched-3136-repeating, on scheduled/3136-repeating-reminders.
 Migration assignment: 0319. No applied migration changes.
 
@@ -52,11 +52,11 @@ spec baseline. The graph has older symbols but lacks the current reminder paths.
   Hourly is 3600 seconds. Refuse shorter intervals instead of allowing a chat flood.
 - Daily/weekly creation requires a clock time, weekly also requires a weekday.
   Missing or ambiguous terms save nothing and explain what to supply.
-- Proposed DST policy: skip a daily/weekly occurrence whose local time does not
-  exist or occurs twice. Resume at the next valid saved local time. State this
-  policy in confirmation and details. This reuses the existing strict converter
-  without guessing an offset; test both transitions before implementing delivery.
-  This proposal is a product decision for coordinator approval, not a prior ruling.
+- Approved DST policy: advancing a saved daily/weekly schedule shifts a missing
+  spring time forward by the gap (02:30 becomes 03:30 for a one-hour gap). A fall
+  fold fires once at its earlier occurrence. Keep strict conversion for creation
+  and edits; use a separate resolver only for advancement. State the rule plainly
+  in details, not in confirmation. Test both transitions before delivery code.
 - Downtime or resume after an overdue time delivers one catch-up result. Calculate
   the next occurrence strictly after database now from the saved cadence, not
   from the completion time. Never iterate or enqueue missed occurrences.
@@ -195,7 +195,7 @@ choose new actions, recipients, destination, or interruption permissions.
 
 ## Checks and live proof
 
-Before delivery code, tests define DST behavior: spring gap, fall fold, 23/25-hour
+Before delivery code, tests define DST behavior: shifted spring gap, earlier fall fold, 23/25-hour
 days, weekly transition, midnight, and a timezone different from the server.
 Unit cases cover interval phase preservation and multi-day downtime producing one
 catch-up and a strictly future next due. Recognizer negatives include ordinary
@@ -252,5 +252,8 @@ No merge, board, milestone or docs/coordination changes.
 
 ## Review ledger
 
-No coordinator review yet. Approval must settle the proposed DST skip policy and
-60-second minimum interval before implementation.
+Coordinator approved the 60-second minimum and full scope. Rejected skipping DST
+occurrences; the rule is shift forward by the gap and use the earlier fold once.
+Lane #3148 will rebuild migration 0320 on top of 0319; this lane must preserve
+thread and destination checks. If the session runs short, finish daily/weekly with
+a PR open and report the remaining more-often work.

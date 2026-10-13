@@ -11,7 +11,7 @@ export interface ReminderLocale {
   readonly clockFormat: LocaleDateFormat;
 }
 
-function formatClock(time: LocalClockTime, clockFormat: LocaleDateFormat): string {
+export function formatClock(time: LocalClockTime, clockFormat: LocaleDateFormat): string {
   const minute = String(time.minute).padStart(2, "0");
   if (clockFormat === "24") return `${String(time.hour).padStart(2, "0")}:${minute}`;
   const hour = time.hour % 12 === 0 ? 12 : time.hour % 12;

@@ -298,6 +298,28 @@ function wallClockInstantResolution(
 const LOCAL_WALL_CLOCK_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
 
+/** Advance saved schedules: shift gaps forward, and use the earlier fold exactly once. */
+export function scheduledLocalWallClockToInstant(localDateTime: string, timeZone: string): Date {
+  try {
+    return strictLocalWallClockToInstant(localDateTime, timeZone);
+  } catch (error) {
+    if (
+      !(error instanceof StrictLocalWallClockError) ||
+      (error.reason !== "dst-gap" && error.reason !== "dst-fold")
+    )
+      throw error;
+    const wallAsUtc = Date.parse(`${localDateTime}Z`);
+    const { candidates, offsets } = wallClockInstantResolution(
+      wallAsUtc,
+      localWallClockParts(new Date(wallAsUtc), "UTC"),
+      timeZone
+    );
+    return new Date(
+      candidates.length > 0 ? Math.min(...candidates) : wallAsUtc - Math.min(...offsets) * 60_000
+    );
+  }
+}
+
 /**
  * Converts an offset-less local wall-clock date-time (`YYYY-MM-DDTHH:mm[:ss[.sss]]`, no `Z` and no
  * numeric offset) to the exact UTC instant it denotes in `timeZone`.

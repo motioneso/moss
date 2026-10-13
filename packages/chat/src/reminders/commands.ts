@@ -1,3 +1,4 @@
+import { recognizeRepeatingReminder } from "./repeat-recognizer.js";
 // #3310: bounded recognizer for listing and cancelling reminders in a raw Main chat request.
 // Like the save recognizer, it reads only the user's own words.
 
@@ -31,6 +32,8 @@ export function recognizeReminderCommand(raw: string): ReminderCommand {
 export function recognizeReminderPlan(raw: string): ReminderTurnPlan | undefined {
   const quiet = recognizeQuietHoursCommand(raw);
   if (quiet) return quiet;
+  const repeat = recognizeRepeatingReminder(raw);
+  if (repeat) return repeat;
   const save = recognizeRelativeReminder(raw);
   if (save.kind !== "none") return save;
   const command = recognizeReminderCommand(raw);

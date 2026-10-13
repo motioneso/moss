@@ -53,14 +53,14 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time or deadline in Main chat; Settings shows the saved record without an editor. Old jobs cannot fire. Ambiguous targets need a typed choice. Paused reminders stay paused.",
+      "Edit pending or paused reminder text, time, repeat or stop time in Main chat; Settings shows the saved record without an editor. Old jobs cannot fire. Ambiguous targets need a typed choice. Paused reminders stay paused.",
     featureFlagId: "chat.module",
     errors: [
       {
         code: "reminder_edit_unsupported",
         class: "validation",
         description:
-          "Actions, recipients, destinations, recurrence and attention changes are unsupported. Nothing changed. Ask for a text, time or deadline edit instead."
+          "Actions, recipients, destinations and attention changes are unsupported. Nothing changed. Ask for a text, time, repeat or stop-time edit instead."
       },
       {
         code: "reminder_edit_unclear",
@@ -113,17 +113,13 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.relative_reminders",
     description:
-      "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder Moss posts once in Main, " +
-      "noting if late; its next reply knows it and frees the slot. Up to 20 at once, 30 days ahead. " +
-      "No deadline, repeats or private chats.",
+      "In Main, 'remind me in 10 minutes to stretch' posts once, noting if late; Moss's next reply knows it. Up to 20 active schedules, 30 days ahead. One-time relative reminders have no deadline. Private chats cannot create reminders.",
     featureFlagId: "chat.module"
   },
   {
     id: "chat.clock_reminders",
     description:
-      "In Main chat, 'remind me tomorrow at 9am to call Sam' saves a reminder for that time in your " +
-      "time zone, today, tonight or tomorrow only. Moss confirms it in your 12- or 24-hour clock and names the time zone. " +
-      "Repeats are not available.",
+      "In Main, 'remind me tomorrow at 9am to call Sam' saves a one-time reminder for today, tonight or tomorrow in your time zone. Moss confirms in your 12- or 24-hour clock. Daily and weekly repeats keep a saved local time and zone.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -142,7 +138,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         code: "reminder_day_unsupported",
         class: "validation",
         description:
-          "Weekdays, dates and repeats are refused and nothing is saved. Say today, tonight or tomorrow, or a time from now."
+          "One-time weekdays and dates are refused. Say today, tonight or tomorrow, or explicitly ask for every named weekday at a clock time."
       },
       {
         code: "reminder_time_passed",
@@ -172,6 +168,12 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         path: "/settings?section=profile"
       }
     ]
+  },
+  {
+    id: "chat.repeating_reminders",
+    description:
+      "Main saves daily, named-weekday or 60-86399-second reminders. Saved local times shift through gaps and use the earlier fold. One catch-up after downtime, then normal cadence. Edits invalidate old jobs; saved stops end repeats.",
+    featureFlagId: "chat.module"
   },
   {
     id: "chat.reminder_deadline",

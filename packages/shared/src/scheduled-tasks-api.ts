@@ -26,7 +26,9 @@ export interface ScheduledTaskDto {
   readonly id: string;
   readonly title: string;
   readonly instruction: string;
-  readonly group: "Reminders";
+  readonly group: "Reminders" | "Daily" | "Weekly" | "More often";
+  readonly schedule?: string | null;
+  readonly timeZone?: string | null;
   readonly state: ScheduledTaskState;
   readonly dueAt: string;
   readonly deadlineAt: string | null;
@@ -106,7 +108,9 @@ export const listScheduledTasksResponseSchema = {
           id: { type: "string" },
           title: { type: "string" },
           instruction: { type: "string" },
-          group: { type: "string", enum: ["Reminders"] },
+          schedule: { anyOf: [{ type: "string" }, { type: "null" }] },
+          timeZone: { anyOf: [{ type: "string" }, { type: "null" }] },
+          group: { type: "string", enum: ["Reminders", "Daily", "Weekly", "More often"] },
           state: {
             type: "string",
             enum: ["active", "paused", "completed", "expired", "failed", "cancelled"]

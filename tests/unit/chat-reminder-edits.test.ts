@@ -57,7 +57,9 @@ const current: EditableReminder = {
   timing: "local_clock",
   delay_seconds: null,
   local_due: "2026-10-12T15:00",
-  time_zone: "UTC"
+  time_zone: "UTC",
+  repeat_kind: null,
+  repeat_seconds: null
 };
 const keep: ReminderEditTerms = {
   text: null,
@@ -138,4 +140,25 @@ describe("validated reminder field changes", () => {
       validateReminderEdit({ ...keep, target: null, unsupported: false, deadline: "set" })
     ).toBeUndefined();
   });
+});
+
+it("preserves repetition on text-only edits", () => {
+  expect(
+    resolveReminderEdit(
+      { ...current, repeat_kind: "daily" },
+      { ...keep, text: "drink water" },
+      NOW,
+      "UTC"
+    )
+  ).toMatchObject({ repeat_kind: "daily", due_at: current.due_at });
+});
+it("changes recurrence and accepts an absolute stop beyond one cycle", () => {
+  expect(
+    resolveReminderEdit(
+      current,
+      { ...keep, repeat: { kind: "daily" }, deadline: "set", localDeadline: "2026-10-15T18:00" },
+      NOW,
+      "UTC"
+    )
+  ).toMatchObject({ repeat_kind: "daily", deadline_at: new Date("2026-10-15T18:00Z") });
 });

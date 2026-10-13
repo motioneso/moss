@@ -114,6 +114,7 @@ async function save(
 }
 
 const keep: ReminderEditTerms = {
+  repeat: null,
   text: null,
   delaySeconds: null,
   localDue: null,
@@ -367,7 +368,7 @@ describe("editing owner reminders", () => {
         db,
         ai,
         () => ({ generateStructured: generate }),
-        "change my inert replacement reminder to repeat daily",
+        "change my inert replacement reminder destination to a private chat",
         saved.threadId,
         locale
       )

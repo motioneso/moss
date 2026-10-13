@@ -113,7 +113,7 @@ type ParsedTime =
  * from 1 to 12 with no am or pm could be either, so it is refused, except "tonight" reads 5 to
  * 11 as pm. "Midnight" could start or end the day, so it is refused.
  */
-function parseClockTime(raw: string, evening: boolean): ParsedTime {
+export function parseClockTime(raw: string, evening: boolean): ParsedTime {
   if (raw === "noon") return { kind: "time", time: { hour: 12, minute: 0 } };
 
   const match = /^(\d{1,2})(?::(\d{2}))? ?(?:(a)|(p))?\.?m?\.?$/.exec(raw);

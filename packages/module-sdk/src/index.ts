@@ -25,6 +25,7 @@ export {
   localDayKey,
   localDayRange,
   resolveLocalDay,
+  scheduledLocalWallClockToInstant,
   StrictLocalWallClockError,
   strictLocalWallClockToInstant,
   timeZoneOffsetMinutes,
