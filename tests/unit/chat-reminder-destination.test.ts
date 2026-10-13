@@ -7,7 +7,8 @@ describe("explicit reminder destinations", () => {
   it.each([
     ["remind me in 5 minutes to stretch and send it to the Travel chat", "Travel"],
     ["remind me in 5 minutes to stretch, send the results to Travel", "Travel"],
-    ["remind me in 5 minutes to stretch in this chat", "this chat"]
+    ["remind me in 5 minutes to stretch in this chat", "this chat"],
+    ["remind me in 5 minutes to stretch, send it to this chat", "this chat"]
   ])("separates the delivery clause from inert text: %s", (raw, destination) => {
     expect(recognizeReminderPlan(raw)).toEqual({
       kind: "request",

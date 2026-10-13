@@ -39,13 +39,12 @@ export function recognizeReminderPlan(raw: string): ReminderTurnPlan | undefined
     );
   const here = /\s+in (this chat)[.!]?$/i.exec(raw);
   const clause = delivery ?? here;
-  const destination =
-    here && !delivery
-      ? "this chat"
-      : clause?.[1]
-          ?.replace(/^(?:the |(?:side )?chat (?:named |called )?)/i, "")
-          .replace(/ (?:side )?chat$/i, "")
-          .trim();
+  const destination = /^this chat$/i.test(clause?.[1]?.trim() ?? "")
+    ? "this chat"
+    : clause?.[1]
+        ?.replace(/^(?:the |(?:side )?chat (?:named |called )?)/i, "")
+        .replace(/ (?:side )?chat$/i, "")
+        .trim();
   const request = clause ? raw.slice(0, clause.index).trim() : raw;
   const repeat = recognizeRepeatingReminder(request);
   if (repeat)

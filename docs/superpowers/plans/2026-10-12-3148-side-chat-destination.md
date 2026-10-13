@@ -268,3 +268,9 @@ Runner evidence: the Main-only version failed the available-side case. Removing
 the check failed deleted and foreign cases at insertion instead of marking the
 task failed. Restored owned-destination validation passed all 110 tests in the
 eight-file isolated suite. Full gate and live UI proof remain pending.
+
+The first real UI run found that send it to this chat was normalized to this.
+The owner resolver honestly refused the missing target. A unit regression failed
+with that value, then the parser was corrected to preserve the special phrase.
+This is deterministic parsing, with no further model guidance tuning. The first
+full gate was stopped with rc 143 because the proof found this correction.
