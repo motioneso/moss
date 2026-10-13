@@ -93,6 +93,14 @@ in the legacy harness during this exploratory run, so it is not a frozen-head
 acceptance receipt. Its built image ID was
 `sha256:9ff3f87c4ac33eef2b2ab417b9d783e91517a34fe218caba23c4f64d85fef678`.
 
+On `25c4d5016`, runtime-context passed its ordinary transport case, then three
+later setups failed with HTTP 409 before their acceptance assertions. The first
+setup had persisted an admin pin; production deliberately rejects user chat-model
+override writes while pinned. The shared helper now uses only the existing admin
+pin, retaining exact route checks for all four capabilities. Its redundant user
+override helper had no other callers and was removed. This preserves production
+configuration authority and requires fresh multi-case live validation.
+
 Run all fourteen blocking specs from PR #3509, regenerate trigger selection after edits,
 and require three consecutive complete #3151 runs. Track each spec's actual exit.
 The selected legacy specs originally included scripted providers and explicit `test.fixme`
