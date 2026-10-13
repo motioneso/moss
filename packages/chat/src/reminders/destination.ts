@@ -1,4 +1,3 @@
-import { sql } from "kysely";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 import { ChatRepository } from "../repository.js";
@@ -16,9 +15,9 @@ export async function resolveReminderDestination(
 ): Promise<ReminderDestination> {
   assertDataContextDb(scopedDb);
   const chat = new ChatRepository();
-  const name = request?.trim();
-  const mainRequested = !name || /^main(?: chat)?$/i.test(name);
-  const here = /^this chat$/i.test(name ?? "");
+  const name = request === undefined ? undefined : normalizeDestinationName(request);
+  const mainRequested = request === undefined || !request.trim() || name === "main";
+  const here = /^this (?:chat|conversation)$/i.test(request?.replace(/\s+/g, " ").trim() ?? "");
   const rows = mainRequested
     ? [await chat.getMainThread(scopedDb, actorUserId)]
     : here
@@ -33,14 +32,11 @@ export async function resolveReminderDestination(
           .where("owner_user_id", "=", actorUserId)
           .where("surface", "=", DEFAULT_CHAT_SURFACE)
           .where("incognito", "=", false)
-          .where(sql<boolean>`lower(title) = lower(${name!})`)
           .execute();
-  const matches = rows.filter(
-    (row) =>
-      row &&
-      row.owner_user_id === actorUserId &&
-      !row.incognito &&
-      row.surface === DEFAULT_CHAT_SURFACE
+  const matches = matchOwnedReminderDestinations(
+    rows,
+    actorUserId,
+    mainRequested || here ? undefined : name
   );
   const target = matches.length === 1 ? matches[0] : undefined;
   if (!target)
@@ -68,4 +64,28 @@ export async function lockReminderDestination(
     .where("surface", "=", DEFAULT_CHAT_SURFACE);
   if (title === null) query = query.where("is_main", "=", true);
   return query.forShare().executeTakeFirst();
+}
+
+export function matchOwnedReminderDestinations<
+  T extends { owner_user_id: string; incognito: boolean; surface: string; title: string | null }
+>(rows: readonly (T | undefined)[], actorUserId: string, name?: string): T[] {
+  return rows.filter(
+    (row): row is T =>
+      !!row &&
+      row.owner_user_id === actorUserId &&
+      !row.incognito &&
+      row.surface === DEFAULT_CHAT_SURFACE &&
+      (name === undefined ||
+        normalizeDestinationName(row.title ?? "") === normalizeDestinationName(name))
+  );
+}
+
+function normalizeDestinationName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^the /, "")
+    .replace(/ (?:chat|conversation)$/, "")
+    .trim();
 }

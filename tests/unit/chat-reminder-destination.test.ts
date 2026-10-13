@@ -82,3 +82,44 @@ describe("explicit destination-only edits", () => {
     expect(recognizeReminderDestinationEdit(raw)).toBeUndefined();
   });
 });
+
+import { matchOwnedReminderDestinations } from "../../packages/chat/src/reminders/destination.js";
+
+const travel = {
+  id: "owned",
+  owner_user_id: "owner",
+  surface: "drawer",
+  incognito: false,
+  title: "Travel proof"
+};
+describe("owned destination name matching", () => {
+  it.each([
+    "the Travel proof chat",
+    "travel proof",
+    "Travel proof conversation",
+    "  THE   travel  proof   CHAT  "
+  ])("accepts owner wording %j", (name) => {
+    expect(matchOwnedReminderDestinations([travel], "owner", name)).toEqual([travel]);
+  });
+  it("keeps equivalent owned names ambiguous", () => {
+    const other = { ...travel, id: "second", title: "the Travel proof conversation" };
+    expect(matchOwnedReminderDestinations([travel, other], "owner", "Travel proof chat")).toEqual([
+      travel,
+      other
+    ]);
+  });
+  it("never matches a foreign, incognito or other-surface chat", () => {
+    expect(
+      matchOwnedReminderDestinations(
+        [
+          { ...travel, owner_user_id: "foreign" },
+          { ...travel, incognito: true },
+          { ...travel, surface: "meeting" }
+        ],
+        "owner",
+        "the Travel proof chat"
+      )
+    ).toEqual([]);
+    expect(matchOwnedReminderDestinations([travel], "owner", "missing chat")).toEqual([]);
+  });
+});

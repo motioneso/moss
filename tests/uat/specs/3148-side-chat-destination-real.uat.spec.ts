@@ -58,11 +58,55 @@ async function select(drawer: Locator, name: string) {
   await expect(drawer.getByLabel("Message Moss")).toBeEnabled();
 }
 
+// Observe only the raw destination in this disposable bundle; model calls and replies stay real.
+function installRawDestinationCapture() {
+  const script = String.raw`const fs=require('node:fs'); const file='/app/dist/server.js'; const source=fs.readFileSync(file,'utf8'); const pattern=/const interpreted = (\w+)\.ok \? validateReminderEdit\(\1\.object\) : void 0;/g; let count=0; const patched=source.replace(pattern, (line, result) => { count++; return 'console.log("[3148 raw destination]", JSON.stringify('+result+'.ok ? '+result+'.object?.destination : null));\n'+line; }); if(count!==1) throw new Error('raw destination capture must match exactly once'); fs.writeFileSync(file,patched);`;
+  execFileSync(
+    "docker",
+    buildUatComposeArgs(requireUatProjectName(), [
+      "exec",
+      "-T",
+      "--user",
+      "0",
+      "jarv1s",
+      "node",
+      "-e",
+      script
+    ]),
+    { stdio: "pipe" }
+  );
+  execFileSync("docker", buildUatComposeArgs(requireUatProjectName(), ["restart", "jarv1s"]), {
+    stdio: "pipe"
+  });
+}
+function printRawDestinations() {
+  const logs = execFileSync(
+    "docker",
+    buildUatComposeArgs(requireUatProjectName(), [
+      "logs",
+      "--no-color",
+      "--tail",
+      "2000",
+      "jarv1s"
+    ]),
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+  );
+  const values = logs.split("\n").filter((line) => line.includes("[3148 raw destination]"));
+  for (const line of values) console.log(line.slice(line.indexOf("[3148 raw destination]")));
+  expect(values.length, "raw model destinations must be captured before teardown").toBeGreaterThan(
+    0
+  );
+}
+
 test("real task creation, destination edits, isolated delivery and failed target recovery", async ({
   page
 }) => {
   test.setTimeout(720_000);
   expect(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED).toBe("1");
+  installRawDestinationCapture();
+  await expect
+    .poll(async () => (await page.request.get("/health/ready")).ok(), { timeout: 60_000 })
+    .toBe(true);
   await signInUatAdmin(page);
   const model = await bringUpRealChatModel(page);
   expect(model.tier).toBe("economy");
@@ -85,32 +129,32 @@ test("real task creation, destination edits, isolated delivery and failed target
   const original = (await tasks(page)).find((t) => t.instruction === "edited route proof")!;
   await send(page, drawer, `send my edited route proof reminder to the ${side.title} chat`);
   let edited = (await tasks(page)).find((t) => t.id === original.id)!;
-  expect(
-    edited.destination,
-    "kill gate: real economy model must extract a destination-only edit"
-  ).toEqual({ threadId: sideId, title: side.title });
-  expect(edited.dueAt).toBe(original.dueAt);
-  expect(edited.instruction).toBe(original.instruction);
-  console.log("[3148] destination-only run 1 changed Main to the named owned side chat");
-  await send(page, drawer, "send my edited route proof reminder to Main");
-  edited = (await tasks(page)).find((t) => t.id === original.id)!;
-  expect(edited.destination).toBeUndefined();
-  expect(edited.dueAt).toBe(original.dueAt);
-  expect(edited.instruction).toBe(original.instruction);
-  console.log("[3148] destination-only run 2 changed the side destination to Main");
-  await send(
-    page,
-    drawer,
-    `change my edited route proof reminder text to combined route proof and send it to the ${side.title} chat`
-  );
-  edited = (await tasks(page)).find((t) => t.id === original.id)!;
-  expect(edited.destination, "stop if the real model refuses the combined edit").toEqual({
+  expect(edited.destination, "destination-only edit must use the owned side chat").toEqual({
     threadId: sideId,
     title: side.title
   });
-  expect(edited.instruction).toBe("combined route proof");
   expect(edited.dueAt).toBe(original.dueAt);
-  console.log("[3148] combined text and destination edit passed through the real model once");
+  expect(edited.instruction).toBe(original.instruction);
+  console.log("[3148] destination-only edit changed Main to the named owned side chat");
+  for (const [target, replacement] of [
+    ["edited route proof", "combined route proof"],
+    ["combined route proof", "final route proof"]
+  ]) {
+    await send(
+      page,
+      drawer,
+      `change my ${target} reminder text to ${replacement} and send it to the ${side.title} chat`
+    );
+    printRawDestinations();
+    edited = (await tasks(page)).find((t) => t.id === original.id)!;
+    expect(edited.destination, "stop if a combined edit fails again").toEqual({
+      threadId: sideId,
+      title: side.title
+    });
+    expect(edited.instruction).toBe(replacement);
+    expect(edited.dueAt).toBe(original.dueAt);
+    console.log(`[3148] combined edit passed: ${target} to ${replacement}`);
+  }
   console.log(
     "[3148] default Main from side, explicit this chat and destination-only edit saved through UI"
   );

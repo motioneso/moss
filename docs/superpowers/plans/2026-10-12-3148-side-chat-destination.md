@@ -285,3 +285,12 @@ editor, including ambiguity, row locks and owned-target validation. Combined
 edits remain on the model path. Guidance stays unchanged. Final live proof must
 run two destination-only edits and one combined text and destination edit with
 gpt-6-luna pinned, stopping without tuning if the combined edit fails.
+
+The combined-edit ruling authorizes destination name normalization in code,
+without guidance changes. Match case, extra spaces, leading "the" and trailing
+"chat" or "conversation" identically on requests and owned chat titles; exactly
+one owned match remains required. Four unit cases failed before normalization.
+The final disposable proof passively logs the raw model destination before
+teardown, runs two combined edits and one destination-only edit, and stops on
+any combined failure without tuning. The capture adds logging only inside the
+disposable API bundle and does not replace model calls or network replies.
