@@ -422,22 +422,19 @@ export function ChatDrawer(props: ChatDrawerProps) {
   // Reopened chats accept only background arrivals for their confirmed destination.
   // The previous chat's live turn stays hidden until a new live thread is bound.
   const liveTail =
-    reviewing &&
-    liveThreadId === reviewThreadId &&
-    !historyActivationPending &&
-    !props.meetingContext
-      ? reconcileFallbacks(props.records, persistedRecords)
-      : reviewing &&
-          confirmedSelection?.threadId === reviewThreadId &&
-          !historyActivationPending &&
-          !props.meetingContext
-        ? reconcileFallbacks(
-            props.records.filter(
-              (record) => record.background && record.backgroundThreadId === reviewThreadId
-            ),
-            persistedRecords
-          )
-        : [];
+    reviewing && !historyActivationPending && !props.meetingContext
+      ? reconcileFallbacks(
+          liveThreadId === reviewThreadId
+            ? props.records
+            : props.records.filter(
+                (record) =>
+                  confirmedSelection?.threadId === reviewThreadId &&
+                  record.background &&
+                  record.backgroundThreadId === reviewThreadId
+              ),
+          persistedRecords
+        )
+      : [];
   const displayRecords = reviewing ? [...persistedRecords, ...liveTail] : props.records;
   const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
   const effectiveRecords: readonly TranscriptRecord[] = [
