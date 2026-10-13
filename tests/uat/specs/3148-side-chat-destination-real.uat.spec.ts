@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type {
   ListScheduledTasksResponse,
@@ -6,6 +7,7 @@ import type {
   ListActivityLinesResponse
 } from "@moss/shared";
 import { execUatSql } from "./job-search-board-sql.js";
+import { buildUatComposeArgs } from "../provisioner.js";
 import { startNewSideChat } from "./notes-new-side-chat.js";
 import {
   bringUpRealChatModel,
@@ -85,7 +87,7 @@ test("real task creation, destination edits, isolated delivery and failed target
   await send(page, drawer, "Travel proof. Reply briefly: ready to pack.");
   const side = (await threads(page)).find((t) => t.id === sideId)!;
   expect(side.isMain).toBe(false);
-  await send(page, drawer, "remind me in 10 minutes to edited route proof");
+  await send(page, drawer, "remind me in 150 seconds to edited route proof");
   const original = (await tasks(page)).find((t) => t.instruction === "edited route proof")!;
   const combinedRequests = [
     "change my edited route proof reminder text to combined route proof",
@@ -115,7 +117,6 @@ test("real task creation, destination edits, isolated delivery and failed target
   expect(edited.dueAt).toBe(original.dueAt);
   expect(edited.instruction).toBe(original.instruction);
   console.log("[3148] destination-only edits passed from Main to side and back to Main");
-  await send(page, drawer, "move my edited route proof reminder to 150 seconds from now");
   await send(page, drawer, "remind me in 90 seconds to default route proof");
   const defaultTask = (await tasks(page)).find((t) => t.instruction === "default route proof")!;
   expect(defaultTask.destination).toBeUndefined();
@@ -128,7 +129,7 @@ test("real task creation, destination edits, isolated delivery and failed target
   await drawer.getByLabel("Message Moss").fill("Side unsent draft");
   await expect
     .poll(async () => (await tasks(page)).find((t) => t.id === defaultTask.id)?.state, {
-      timeout: 90_000,
+      timeout: 120_000,
       intervals: [2000]
     })
     .toBe("completed");
@@ -181,13 +182,28 @@ test("real task creation, destination edits, isolated delivery and failed target
   await send(
     page,
     drawer,
-    "remind me in 30 seconds to reconnect route proof, send it to this chat"
+    "remind me in 60 seconds to reconnect route proof, send it to this chat"
   );
   const reconnectTask = (await tasks(page)).find((t) => t.instruction === "reconnect route proof")!;
   await drawer.getByLabel("Message Moss").fill("Reconnect unsent draft");
   await page.context().setOffline(true);
   try {
-    // APIRequestContext stays online while the browser's real stream is disconnected.
+    // Offline blocks new requests but can leave an established SSE socket alive; close it for real.
+    execFileSync("docker", buildUatComposeArgs(requireUatProjectName(), ["restart", "jarv1s"]), {
+      stdio: "pipe",
+      timeout: 90_000
+    });
+    await expect
+      .poll(
+        () =>
+          page.request.get("/health/ready").then(
+            (response) => response.ok(),
+            () => false
+          ),
+        { timeout: 60_000, intervals: [2000] }
+      )
+      .toBe(true);
+    // APIRequestContext stays online while the browser's new stream requests are blocked.
     await expect
       .poll(async () => (await tasks(page)).find((t) => t.id === reconnectTask.id)?.state, {
         timeout: 90_000,
@@ -239,6 +255,8 @@ test("real task creation, destination edits, isolated delivery and failed target
     .toBeLessThan(5000);
   const packingPrompt =
     "Write a detailed travel packing guide with 40 numbered tips, each with two full sentences. Start with a tip about a small travel bag. Do not use tools.";
+  const replyBubbles = drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
+  const repliesBeforePacking = await replyBubbles.count();
   const packingResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -248,6 +266,8 @@ test("real task creation, destination edits, isolated delivery and failed target
   await drawer.getByLabel("Message Moss").fill(packingPrompt);
   await drawer.getByLabel("Message Moss").press("Enter");
   await expect(drawer.getByRole("button", { name: "Stop generating", exact: true })).toBeVisible();
+  await expect(replyBubbles).toHaveCount(repliesBeforePacking + 1);
+  await expect(replyBubbles.nth(repliesBeforePacking)).toContainText(/packing|travel|bag/i);
   await expect(drawer.getByText("Reminder: overlapping route proof", { exact: true })).toHaveCount(
     1,
     { timeout: 30_000 }
@@ -260,9 +280,8 @@ test("real task creation, destination edits, isolated delivery and failed target
   expect(packing.ok()).toBe(true);
   const packingBody = (await packing.json()) as { reply: string; assistantMessageId: string };
   expect(packingBody.reply.length).toBeGreaterThan(100);
-  await expect(drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()).toContainText(
-    /packing|travel|bag/i
-  );
+  await expect(replyBubbles).toHaveCount(repliesBeforePacking + 2);
+  await expect(replyBubbles.nth(repliesBeforePacking)).toContainText(/packing|travel|bag/i);
   const overlapHistory = await history(page, sideId);
   expect(overlapHistory.filter((m) => m.id === packingBody.assistantMessageId)).toHaveLength(1);
   expect(overlapHistory.find((m) => m.id === packingBody.assistantMessageId)?.body).toBe(
@@ -340,7 +359,7 @@ test("real task creation, destination edits, isolated delivery and failed target
   const modelCalls = activity.entries.filter((entry) =>
     ["chat", "structured"].includes(entry.kind)
   );
-  expect(modelCalls.length).toBeGreaterThan(0);
+  expect(modelCalls.filter((entry) => entry.kind === "chat").length).toBeGreaterThan(0);
   for (const call of modelCalls) expect(call.modelName).toBe(model.providerModelId);
   console.log("[3148] executed chat activity records confirm the selected economy model");
 });

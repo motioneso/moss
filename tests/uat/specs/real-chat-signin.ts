@@ -46,7 +46,9 @@ export function requireUatProjectName(): string {
   return projectName;
 }
 
-export async function readUatJson(response: APIResponse): Promise<unknown> {
+export async function readUatJson(
+  response: Pick<APIResponse, "ok" | "url" | "status" | "json">
+): Promise<unknown> {
   expect(response.ok(), `${response.url()} -> ${response.status()}`).toBeTruthy();
   return response.json();
 }

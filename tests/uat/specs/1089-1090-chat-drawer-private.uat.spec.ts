@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 /** Opens the "More chat options" menu, picks one item, and leaves the menu closed (it closes itself). */
 async function pickChatMenuItem(drawer: Locator, name: string) {
@@ -44,6 +45,10 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    test.setTimeout(300_000);
+    await bringUpRealChatModel(page);
+  }
 }
 
 async function openChat(page: Page): Promise<Locator> {
@@ -57,7 +62,8 @@ async function sendAndAwaitReply(page: Page, drawer: Locator, message: string): 
   const turnResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
-      response.request().method() === "POST"
+      response.request().method() === "POST",
+    { timeout: 120_000 }
   );
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill(message);
@@ -65,8 +71,16 @@ async function sendAndAwaitReply(page: Page, drawer: Locator, message: string): 
   const response = await turnResponse;
   expect(response.status()).toBe(200);
   expect(response.request().postDataJSON()).toMatchObject({ text: message });
-  await expect(drawer.getByText(SCRIPTED_REPLY, { exact: true }).last()).toBeVisible();
-  await expect(response.json()).resolves.toMatchObject({ reply: SCRIPTED_REPLY });
+  const body = (await response.json()) as { reply: string };
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    expect(body.reply.trim()).not.toBe("");
+    await expect(
+      drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()
+    ).toBeVisible();
+  } else {
+    await expect(drawer.getByText(SCRIPTED_REPLY, { exact: true }).last()).toBeVisible();
+    expect(body.reply).toBe(SCRIPTED_REPLY);
+  }
 }
 
 /** Reads the server's current privacy state and selected conversation for the drawer. */
