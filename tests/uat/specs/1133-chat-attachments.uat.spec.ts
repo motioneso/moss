@@ -208,12 +208,18 @@ test("model reads an attached file and answers about its content (#3343)", async
   )) as ListChatThreadMessagesResponse;
   const answer = history.messages.find((message) => message.id === body.assistantMessageId)!;
   expect(answer).toBeDefined();
+  const calls = answer.activity.filter(
+    (entry) =>
+      entry.kind === "tool" && entry.toolName?.includes("readAttachment") && entry.toolCallId
+  );
+  expect(calls.length).toBeGreaterThan(0);
   expect(
     answer.activity.some(
       (entry) =>
-        entry.kind === "tool" &&
-        entry.toolName?.includes("readAttachment") &&
-        entry.outcome === "executed"
+        entry.kind === "result" &&
+        calls.some((call) => call.toolCallId === entry.toolCallId) &&
+        /"fileName"\s*:\s*"content-proof\.txt"/.test(entry.text) &&
+        entry.text.includes("cobalt otter 47")
     )
   ).toBe(true);
 });

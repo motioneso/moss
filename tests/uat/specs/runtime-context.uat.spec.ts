@@ -201,10 +201,21 @@ test("News screen error is pulled and resolved against the map (#1121)", async (
     const answer = history.messages.find((message) => message.id === body.assistantMessageId)!;
     expect(answer).toBeDefined();
     for (const tool of ["getCurrentView", "getMapSlice"]) {
+      const calls = answer.activity.filter(
+        (entry) => entry.kind === "tool" && entry.toolName?.includes(tool) && entry.toolCallId
+      );
+      expect(calls.length).toBeGreaterThan(0);
+      const results = answer.activity.filter(
+        (entry) =>
+          entry.kind === "result" && calls.some((call) => call.toolCallId === entry.toolCallId)
+      );
       expect(
-        answer.activity.some(
-          (entry) =>
-            entry.kind === "tool" && entry.toolName?.includes(tool) && entry.outcome === "executed"
+        results.some((entry) =>
+          tool === "getCurrentView"
+            ? /"available"\s*:\s*true/.test(entry.text) &&
+              /"route"\s*:\s*"\/settings"/.test(entry.text)
+            : /news\.add_source\.(no_json_model|configure_json_model)/.test(entry.text) &&
+              /"items"\s*:\s*\[\s*\{|^\|.+\|\s*\n\|[ :|-]+\|/m.test(entry.text)
         )
       ).toBe(true);
     }

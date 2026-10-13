@@ -72,6 +72,16 @@ The installed image ID was
 `sha256:edf88bbc080ceb7d7d7b99df66667080b80b13de2581b7307d8826004a1bfaa5`.
 These assertion repairs require fresh final-head checks and live proof.
 
+The clean `450cac1a6` scoped gate also passed 122 tests in 8 files, exit 0.
+The corresponding foundation was stopped with exit 143 after preflight found a
+second legacy-harness contract mismatch. ACP activity records do not carry an
+executed outcome: tool calls and results are linked by `toolCallId`, and failed
+updates also produce result records. Attachment and News proof now require
+correlated positive result data: filename/content, available Settings view, and
+the News error/remediation identifier in returned map items. Persisted result
+text is capped at 500 characters, so the view/map checks tolerate truncated JSON
+and Markdown tables. These repairs are not yet live-validated.
+
 Run all fourteen blocking specs from PR #3509, regenerate trigger selection after edits,
 and require three consecutive complete #3151 runs. Track each spec's actual exit.
 The selected legacy specs originally included scripted providers and explicit `test.fixme`
