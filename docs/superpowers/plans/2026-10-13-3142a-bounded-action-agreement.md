@@ -38,6 +38,41 @@ The binder stores caller-validated terms without owning action semantics. #3141 
 those adapters are not implemented here. Existing live-chat outside-content rules are unchanged.
 No model/source text can call the binder's acceptance directly through an assistant tool.
 
+## Verified platform seams and decisions
+
+Approved product/design reference: `docs/superpowers/specs/2026-10-07-scheduled-tasks-and-proactive-messaging.md:99`
+(ordinary typed agreement), `:107` (stored destination) and `:111` (local timing/authority).
+The existing compact Settings index/detail mockup and shared RowIndex/SectionHead primitives
+are reused; this stage adds an inert group, not a new module or approval panel.
+
+- Actor-scoped transaction: `packages/db/src/data-context.ts:63`; acceptance and its user/assistant
+  messages are written together in `packages/chat/src/live/persistence.ts:508`.
+- Existing owner/surface advisory selection lock: `packages/chat/src/repository.ts:877`;
+  persistence takes it before proposal/acceptance at `packages/chat/src/live/persistence.ts:545`.
+- Existing completed-turn identity reaches the early command via
+  `packages/chat/src/live/pre-model-turn.ts:232`; direct persistence calls get a generated identity.
+- Existing Tasks public owner lookup/candidate APIs: `packages/tasks/src/tools.ts:31`.
+  Current tool availability is checked via the gateway wiring in `packages/chat/src/routes.ts`.
+- Existing background operation allowlist: `packages/ai/src/gateway/gateway.ts:574`.
+  This stage adds no allowlist entry, worker handler, action execution or queue call.
+- Owner Settings response: `packages/chat/src/reminders/routes.ts:51`; separate list/detail
+  composition: `apps/web/src/settings/settings-scheduled-tasks-pane.tsx:22` and
+  `apps/web/src/settings/approved-action-scopes.tsx:6`.
+- New reload/history contract: `packages/chat/src/route-serializers.ts:157` includes scope origins.
+
+The model has exactly two jobs: select one named owned candidate, and render the owner's relative
+timing in the bounded reminder form. Its prompt is under 150 words before request/candidate data.
+All four output guards apply: schema field descriptions; prompt contract with worked example;
+server boundary checks of exact two-field output, listed target and matching raw-request delay;
+per-item agreement showing the exact proposed target/status/time before the absent approval record
+becomes accepted. Record-derived ordinary replies and Settings show the persisted result. There is
+no source-data before/after effect in this slice; #3142b must define that gate before execution.
+
+Kill gate owner: Ben, after this standalone stage's live proof. Stop #3142b planning if ordinary
+chat plus exact inactive Settings details do not make the proposed authority understandable, or
+if any job/effect occurs from a saved agreement. A failed scope/owner/freshness boundary blocks merge.
+The later execution slice is not planned in detail here.
+
 ## Verification plan
 
 Pure behavioral tests cover exact terms, malformed/widened input, typed agreement versus revised
@@ -57,3 +92,27 @@ disposable task after the agreed time. Use executable DOM/network/database asser
 textual evidence, with no screenshots or rewritten API/Moss responses. A configured model remains
 provider-agnostic; any third-party stand-in is disclosed. If an isolated installed instance or DB
 gate is unavailable, report code-complete, unverified and leave merge blocked.
+
+## Exact checks and expected exits
+
+Run each command unpiped, recording its own exit. All expected exits are 0 for unchanged source;
+mutation controls expect 1 with the intended assertion failing. TypeScript runs are serialized.
+
+- `pnpm exec node --import tsx scripts/test-unit.ts tests/unit/3142a-agreement-terms.test.ts tests/unit/3142a-agreement-preparation.test.ts tests/unit/3142a-agreement-persistence-boundary.test.ts tests/unit/3142a-agreement-rendering.test.tsx tests/unit/3142a-background-action-refusal.test.ts tests/unit/chat-reminder-recognizer.test.ts tests/unit/chat-reminder-controls.test.ts tests/unit/3151-background-read-gateway.test.ts`
+- `NODE_OPTIONS=--max-old-space-size=4096 pnpm exec tsc --noEmit`
+- `NODE_OPTIONS=--max-old-space-size=4096 pnpm exec tsc -p tsconfig.tests.json --noEmit`
+- `pnpm --filter @moss/web typecheck`
+- `pnpm exec eslint <all changed TypeScript/TSX paths> --max-warnings=0`
+- `pnpm exec prettier --check <all changed supported-format paths>`; SQL is reviewed without a
+  nonexistent Prettier SQL parser.
+- `pnpm check:file-size`, `pnpm check:design-tokens`, `pnpm check:ui-classes`
+- `scripts/run-gate.sh start --gate test:integration:3142a`, then
+  `scripts/run-gate.sh wait --follow` (wrapper only, disposable DB).
+- `scripts/run-gate.sh start`, then `scripts/run-gate.sh wait --follow` (final full foundation gate).
+- On the installed disposable proof instance with the configured real model:
+  `MOSS_UAT_CAPTURE_OFF=1 pnpm test:uat 3142a-bounded-action-agreement.uat.spec.ts`.
+  The isolated installed harness owns teardown of its database; the test closes its replacement page.
+
+Compiler OOMs, unavailable Docker and unrun installed proof are reported as failed/blocked checks,
+not replaced with narrowed green claims. Publication may be a reviewed draft; merge remains blocked
+until final-head isolated foundation/CI and real installed UI proof pass.
