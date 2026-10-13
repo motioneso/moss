@@ -127,34 +127,36 @@ test("real task creation, destination edits, isolated delivery and failed target
   expect(explicit.destination).toEqual({ threadId: sideId, title: side.title });
   await send(page, drawer, "remind me in 150 seconds to edited route proof");
   const original = (await tasks(page)).find((t) => t.instruction === "edited route proof")!;
-  await send(page, drawer, `send my edited route proof reminder to the ${side.title} chat`);
-  let edited = (await tasks(page)).find((t) => t.id === original.id)!;
+  let edited: typeof original;
+  for (const [target, replacement, destination] of [
+    ["edited route proof", "combined route proof", side.title],
+    ["combined route proof", "final route proof", "Main"]
+  ]) {
+    await send(
+      page,
+      drawer,
+      `change my ${target} reminder text to ${replacement} and send it to the ${destination} chat`
+    );
+    printRawDestinations();
+    edited = (await tasks(page)).find((t) => t.id === original.id)!;
+    expect(edited.destination, "stop if a combined edit fails again").toEqual(
+      destination === "Main" ? undefined : { threadId: sideId, title: side.title }
+    );
+    expect(edited.instruction).toBe(replacement);
+    expect(edited.dueAt).toBe(original.dueAt);
+    console.log(
+      `[3148] combined edit passed: ${target} to ${replacement}, destination ${destination}`
+    );
+  }
+  await send(page, drawer, `send my final route proof reminder to the ${side.title} chat`);
+  edited = (await tasks(page)).find((t) => t.id === original.id)!;
   expect(edited.destination, "destination-only edit must use the owned side chat").toEqual({
     threadId: sideId,
     title: side.title
   });
   expect(edited.dueAt).toBe(original.dueAt);
-  expect(edited.instruction).toBe(original.instruction);
+  expect(edited.instruction).toBe("final route proof");
   console.log("[3148] destination-only edit changed Main to the named owned side chat");
-  for (const [target, replacement] of [
-    ["edited route proof", "combined route proof"],
-    ["combined route proof", "final route proof"]
-  ]) {
-    await send(
-      page,
-      drawer,
-      `change my ${target} reminder text to ${replacement} and send it to the ${side.title} chat`
-    );
-    printRawDestinations();
-    edited = (await tasks(page)).find((t) => t.id === original.id)!;
-    expect(edited.destination, "stop if a combined edit fails again").toEqual({
-      threadId: sideId,
-      title: side.title
-    });
-    expect(edited.instruction).toBe(replacement);
-    expect(edited.dueAt).toBe(original.dueAt);
-    console.log(`[3148] combined edit passed: ${target} to ${replacement}`);
-  }
   console.log(
     "[3148] default Main from side, explicit this chat and destination-only edit saved through UI"
   );

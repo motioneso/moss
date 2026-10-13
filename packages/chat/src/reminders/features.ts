@@ -65,7 +65,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_destinations",
     description:
-      "Reminders default to Main. Name an owned regular chat or say this chat to choose delivery. Destination-only edits preserve text and time. Chat names ignore case, extra spaces, leading the and trailing chat or conversation; equivalent owned names remain ambiguous. Private, module and foreign-owned chats are refused; sharing does not authorize delivery.",
+      "Tasks default to Main; name one owned chat or this chat. Names ignore case, spaces, leading the and trailing chat/conversation. Destination-only edits keep text/time. Private, module, foreign and ambiguous chats are refused.",
     featureFlagId: "chat.module",
     errors: [
       {
