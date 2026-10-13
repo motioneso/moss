@@ -244,111 +244,6 @@ test("real task creation, destination edits, isolated delivery and failed target
   console.log(
     "[3148] real SSE reconnect catches up once; draft, focus and durable identity preserved"
   );
-  await send(
-    page,
-    drawer,
-    "remind me in 60 seconds to overlapping route proof, send it to this chat"
-  );
-  const overlapTask = (await tasks(page)).find((t) => t.instruction === "overlapping route proof")!;
-  await expect
-    .poll(() => Date.parse(overlapTask.dueAt) - Date.now(), {
-      timeout: 60_000,
-      intervals: [1000]
-    })
-    .toBeLessThan(20_000);
-  const packingPrompt =
-    "Write a detailed travel packing guide with 40 numbered tips, each with two full sentences. Start with a tip about a small travel bag. Do not use tools.";
-  const replyBubbles = drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
-  const repliesBeforePacking = await replyBubbles.count();
-  const overlapObservation = drawer.evaluate(
-    (root, repliesBeforePacking) =>
-      new Promise<{ arrivalAt: number; stopVisible: boolean; partialText: string }>((resolve) => {
-        const observer = new MutationObserver(observe);
-        const timeout = setTimeout(() => finish(false, ""), 30_000);
-        function finish(stopVisible: boolean, partialText: string) {
-          observer.disconnect();
-          clearTimeout(timeout);
-          resolve({ arrivalAt: Date.now(), stopVisible, partialText });
-        }
-        function observe() {
-          const bubbles = Array.from(
-            root.querySelectorAll(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")
-          );
-          const visible = (element: Element) =>
-            element.getClientRects().length > 0 &&
-            getComputedStyle(element).visibility !== "hidden";
-          if (
-            !bubbles.some(
-              (bubble) =>
-                visible(bubble) &&
-                bubble.textContent?.trim() === "Reminder: overlapping route proof"
-            )
-          )
-            return;
-          const stop = root.querySelector('button[aria-label="Stop generating"]');
-          const stopVisible = !!stop && visible(stop);
-          const partialText =
-            bubbles
-              .slice(repliesBeforePacking)
-              .filter(
-                (bubble) => visible(bubble) && /packing|travel|bag/i.test(bubble.textContent ?? "")
-              )
-              .at(-1)?.textContent ?? "";
-          finish(stopVisible, partialText);
-        }
-        observer.observe(root, {
-          childList: true,
-          subtree: true,
-          characterData: true,
-          attributes: true
-        });
-        observe();
-      }),
-    repliesBeforePacking
-  );
-  const packingResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/chat/turn",
-    { timeout: 120_000 }
-  );
-  await drawer.getByLabel("Message Moss").fill(packingPrompt);
-  await drawer.getByLabel("Message Moss").press("Enter");
-  await expect(drawer.getByRole("button", { name: "Stop generating", exact: true })).toBeVisible();
-  const observed = await overlapObservation;
-  expect(
-    observed.stopVisible,
-    "the real reply must still be running when the reminder arrives"
-  ).toBe(true);
-  expect(observed.partialText).toMatch(/packing|travel|bag/i);
-  await expect(drawer.getByText("Reminder: overlapping route proof", { exact: true })).toHaveCount(
-    1
-  );
-  const packing = await packingResponse;
-  expect(packing.ok()).toBe(true);
-  const packingBody = (await packing.json()) as { reply: string; assistantMessageId: string };
-  expect(packingBody.reply.length).toBeGreaterThan(100);
-  await expect(replyBubbles).toHaveCount(repliesBeforePacking + 2);
-  await expect(
-    replyBubbles
-      .nth(repliesBeforePacking)
-      .or(replyBubbles.nth(repliesBeforePacking + 1))
-      .filter({ hasText: /packing|travel|bag/i })
-  ).toHaveCount(1);
-  const overlapHistory = await history(page, sideId);
-  expect(overlapHistory.filter((m) => m.id === packingBody.assistantMessageId)).toHaveLength(1);
-  expect(overlapHistory.find((m) => m.id === packingBody.assistantMessageId)?.body).toBe(
-    packingBody.reply
-  );
-  expect(
-    overlapHistory.filter(
-      (m) =>
-        m.origin?.kind === "reminder" &&
-        m.origin.event === "delivered" &&
-        m.origin.reminderId === overlapTask.id
-    )
-  ).toHaveLength(1);
-  console.log("[3148] shown-side reminder arrived once during an observed real model reply");
   await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -409,6 +304,165 @@ test("real task creation, destination edits, isolated delivery and failed target
   console.log(
     "[3148] disclosed disposable bootstrap target deletion: owner paths show failed task, recovery guidance, no Main result"
   );
+  drawer = await openChat(page);
+  await select(drawer, side.title);
+  await send(
+    page,
+    drawer,
+    "remind me in 60 seconds to overlapping route proof, send it to this chat"
+  );
+  const overlapTask = (await tasks(page)).find((t) => t.instruction === "overlapping route proof")!;
+  expect(Date.parse(overlapTask.dueAt)).toBeGreaterThan(Date.now());
+  expect((await page.request.post(`/api/chat/scheduled-tasks/${overlapTask.id}/pause`)).ok()).toBe(
+    true
+  );
+  expect((await tasks(page)).find((t) => t.id === overlapTask.id)).toMatchObject({
+    instruction: overlapTask.instruction,
+    destination: overlapTask.destination,
+    dueAt: overlapTask.dueAt,
+    state: "paused"
+  });
+  await expect
+    .poll(() => Date.parse(overlapTask.dueAt) - Date.now(), {
+      timeout: 60_000,
+      intervals: [1000]
+    })
+    .toBeLessThanOrEqual(0);
+  const packingPrompt =
+    "Write a detailed travel packing guide with 40 numbered tips, each with two full sentences. Start with a tip about a small travel bag. Do not use tools.";
+  const replyBubbles = drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
+  const repliesBeforePacking = await replyBubbles.count();
+  const overlapObservation = drawer.evaluate(
+    (root, repliesBeforePacking) =>
+      new Promise<{
+        reason: "arrival" | "timeout";
+        elapsedMs: number;
+        stopVisible: boolean;
+        partialText: string;
+      }>((resolve) => {
+        const armedAt = Date.now();
+        const observer = new MutationObserver(observe);
+        const timeout = setTimeout(() => finish("timeout", false, ""), 30_000);
+        function finish(reason: "arrival" | "timeout", stopVisible: boolean, partialText: string) {
+          observer.disconnect();
+          clearTimeout(timeout);
+          resolve({ reason, elapsedMs: Date.now() - armedAt, stopVisible, partialText });
+        }
+        function observe() {
+          const bubbles = Array.from(
+            root.querySelectorAll(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")
+          );
+          const visible = (element: Element) =>
+            element.getClientRects().length > 0 &&
+            getComputedStyle(element).visibility !== "hidden";
+          if (
+            !bubbles.some(
+              (bubble) =>
+                visible(bubble) &&
+                bubble.textContent?.trim() === "Reminder: overlapping route proof"
+            )
+          )
+            return;
+          const stop = root.querySelector('button[aria-label="Stop generating"]');
+          const stopVisible = !!stop && visible(stop);
+          const partialText =
+            bubbles
+              .slice(repliesBeforePacking)
+              .filter(
+                (bubble) => visible(bubble) && /packing|travel|bag/i.test(bubble.textContent ?? "")
+              )
+              .at(-1)?.textContent ?? "";
+          finish("arrival", stopVisible, partialText);
+        }
+        observer.observe(root, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true
+        });
+        observe();
+      }),
+    repliesBeforePacking
+  );
+  const packingResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/chat/turn",
+    { timeout: 120_000 }
+  );
+  await drawer.getByLabel("Message Moss").fill(packingPrompt);
+  await drawer.getByLabel("Message Moss").press("Enter");
+  await expect(drawer.getByRole("button", { name: "Stop generating", exact: true })).toBeVisible();
+  // Release the overdue reminder through normal owner controls only after real text is streaming.
+  await expect
+    .poll(
+      () =>
+        drawer.evaluate((root, previousCount) => {
+          const visible = (element: Element) =>
+            element.getClientRects().length > 0 &&
+            getComputedStyle(element).visibility !== "hidden";
+          const stop = root.querySelector('button[aria-label="Stop generating"]');
+          const partial = Array.from(
+            root.querySelectorAll(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")
+          )
+            .slice(previousCount)
+            .some(
+              (bubble) => visible(bubble) && /packing|travel|bag/i.test(bubble.textContent ?? "")
+            );
+          return !!stop && visible(stop) && partial;
+        }, repliesBeforePacking),
+      { timeout: 30_000, intervals: [50] }
+    )
+    .toBe(true);
+  expect((await page.request.post(`/api/chat/scheduled-tasks/${overlapTask.id}/resume`)).ok()).toBe(
+    true
+  );
+  expect((await tasks(page)).find((t) => t.id === overlapTask.id)).toMatchObject({
+    instruction: overlapTask.instruction,
+    destination: overlapTask.destination,
+    dueAt: overlapTask.dueAt
+  });
+  const observed = await overlapObservation;
+  console.log("[3148] overlap observation", {
+    reason: observed.reason,
+    elapsedMs: observed.elapsedMs,
+    stopVisible: observed.stopVisible,
+    partialLength: observed.partialText.length
+  });
+  expect(observed.reason).toBe("arrival");
+  expect(
+    observed.stopVisible,
+    "the real reply must still be running when the reminder arrives"
+  ).toBe(true);
+  expect(observed.partialText).toMatch(/packing|travel|bag/i);
+  await expect(drawer.getByText("Reminder: overlapping route proof", { exact: true })).toHaveCount(
+    1
+  );
+  const packing = await packingResponse;
+  expect(packing.ok()).toBe(true);
+  const packingBody = (await packing.json()) as { reply: string; assistantMessageId: string };
+  expect(packingBody.reply.length).toBeGreaterThan(100);
+  await expect(replyBubbles).toHaveCount(repliesBeforePacking + 2);
+  await expect(
+    replyBubbles
+      .nth(repliesBeforePacking)
+      .or(replyBubbles.nth(repliesBeforePacking + 1))
+      .filter({ hasText: /packing|travel|bag/i })
+  ).toHaveCount(1);
+  const overlapHistory = await history(page, sideId);
+  expect(overlapHistory.filter((m) => m.id === packingBody.assistantMessageId)).toHaveLength(1);
+  expect(overlapHistory.find((m) => m.id === packingBody.assistantMessageId)?.body).toBe(
+    packingBody.reply
+  );
+  expect(
+    overlapHistory.filter(
+      (m) =>
+        m.origin?.kind === "reminder" &&
+        m.origin.event === "delivered" &&
+        m.origin.reminderId === overlapTask.id
+    )
+  ).toHaveLength(1);
+  console.log("[3148] shown-side reminder arrived once during an observed real model reply");
   const activity = (await readUatJson(
     await page.request.get("/api/ai/activity-lines?limit=100")
   )) as ListActivityLinesResponse;

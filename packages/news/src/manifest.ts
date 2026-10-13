@@ -663,7 +663,7 @@ export const newsModuleManifest = {
     {
       id: "news.add_source",
       description:
-        "Add publishers by URL/name or subreddit hot-feed articles via r/name. Reviewed credentialed " +
+        "Add publishers by URL/name or articles linked from subreddit hot feeds via r/name. Reviewed credentialed " +
         "news services need active-provider policy approval. Redirects to unrelated sites are refused.",
       requires: newsAddSourceRequirement,
       remediations: [

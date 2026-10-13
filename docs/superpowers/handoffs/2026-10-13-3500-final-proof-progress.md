@@ -231,3 +231,38 @@ logs show DELETE completed before the replacement POST completed, leaving Connec
 The serial journey now waits for the successful replacement response and form closure
 before revoking. Concurrent replacement/revocation safety is not established by this test.
 The disposable stack and copied auth volumes were removed; all later specs were not run.
+
+## Credentialed News receipt and overlap synchronization
+
+At clean `05c9b0147`, rebuilt installed News #2006 passed its complete serial journey:
+connection, real article arrival, rejected-key preservation, valid replacement, revocation,
+and source article removal (one test, 52.1 seconds). The real selected Codex model and capture-off
+configuration were retained. The image ID was
+`sha256:db1bccbe6e738837ef2226b7c6631fbc185fe40963e7636609e00d6b5f137725`.
+This does not establish concurrent replacement/revocation safety.
+
+Destination proof passed atomic combined refusals, standalone moves, durable delivery,
+focused drafts and real reconnect, then failed the simultaneous Stop-visible observation.
+Target-loss and layout proof were not reached. The packing request completed in 11.874 seconds;
+the fixture started approximately twenty seconds before due. The old observer did not distinguish
+actual arrival from its timeout, so the failure alone does not establish a concurrency defect.
+
+The revised fixture preserves the sixty-second reminder request, saved due time, packing prompt,
+real reply and every overlap/durable assertion. It pauses the newly created reminder through the
+normal owner API, waits for the original due time to pass, and resumes through that same API only
+when meaningful new text and Stop are simultaneously visible. Resume preserves the due time and
+uses the normal queue/worker path. No bootstrap write, response delay or production change is used
+for overlap. Metadata diagnostics distinguish arrival from timeout without recording model text.
+Layout and the approved disposable target-loss fixture now run before overlap; overlap remains
+blocking and all model-activity checks remain afterward. The revised fixture requires fresh proof.
+
+Clean `05c9b0147` scoped DB passed 122 tests in eight files. Four independent installed specs
+completed: runtime-context (four cases), app-map-grounding (three), quoted tool steps (one), and
+News layout (one). The next News-sources spec was interrupted before acceptance so repairs could
+be made on frozen inputs. Its remaining disposable volume was removed. The foundation run was
+stopped with exit 143 and is not a passing receipt.
+
+Exact-head CI passed 17,231 unit tests with one failure and three skips: shortened News app-map
+copy dropped the existing required phrase "articles linked from". The truthful description now
+restores that wording within the 240-character limit; all eight manifest tests pass locally.
+This is not final CI, complete foundation, or merge readiness. All three PRs remain draft/unmerged.
