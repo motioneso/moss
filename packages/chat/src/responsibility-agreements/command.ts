@@ -28,10 +28,18 @@ function reply(
 
 export const responsibilityAgreement: ReminderCommandHandler = async (context, plan) => {
   const { scopedDb, actorUserId, thread, deps } = context;
-  if (plan.kind === "scope_refused") {
+  const closeProposal = async (text: string, expectedId?: string) => {
+    const pending = await scopedDb.db
+      .selectFrom("app.chat_responsibility_proposals")
+      .select("id")
+      .where("thread_id", "=", thread.id)
+      .where("state", "=", "pending")
+      .limit(1)
+      .executeTakeFirst();
     await clearResponsibilityProposals(scopedDb, thread.id);
-    return reply(plan.reply, "scope_refused", plan.proposalId ?? null);
-  }
+    return reply(text, "scope_refused", pending?.id ?? expectedId ?? null);
+  };
+  if (plan.kind === "scope_refused") return closeProposal(plan.reply, plan.proposalId);
   if (plan.kind === "scope_proposal") {
     const scope = boundedActionScope(plan.scope);
     if (
@@ -41,7 +49,7 @@ export const responsibilityAgreement: ReminderCommandHandler = async (context, p
       new Date(scope.dueAt) <= (await agreementNow(scopedDb)) ||
       !(await authorizeTaskBackgroundRead(scopedDb, { taskId: scope.taskId }, { actorUserId }))
     )
-      return reply(SCOPE_REFUSED_MESSAGE, "scope_refused");
+      return closeProposal(SCOPE_REFUSED_MESSAGE);
     const id = randomUUID();
     const locale = await deps.locale();
     const time = new Intl.DateTimeFormat("en", {

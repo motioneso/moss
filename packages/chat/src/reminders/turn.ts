@@ -31,6 +31,7 @@ export async function decideReminderTurn(
   )
     await clearQuietHoursProposal(scopedDb, thread.id);
   if (
+    plan.kind !== "main_only" &&
     plan.kind !== "scope_proposal" &&
     plan.kind !== "scope_agreement" &&
     plan.kind !== "scope_refused"

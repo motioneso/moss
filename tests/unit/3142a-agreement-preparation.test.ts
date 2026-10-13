@@ -2,12 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiRepository } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import type { ChatRepository } from "../../packages/chat/src/repository.js";
+import { responsibilityAgreement } from "../../packages/chat/src/responsibility-agreements/command.js";
+import {
+  ChatSessionManager,
+  type ChatPersistencePort
+} from "../../packages/chat/src/live/chat-session-manager.js";
 import { createResponsibilityPreparation } from "../../packages/chat/src/responsibility-agreements/prepare.js";
 const mocks = vi.hoisted(() => ({
   prepare: vi.fn(),
   candidates: vi.fn(),
   authorize: vi.fn(),
-  pending: vi.fn()
+  pending: vi.fn(),
+  clear: vi.fn()
 }));
 vi.mock("@moss/ai", () => ({
   prepareStructuredGeneration: mocks.prepare,
@@ -18,7 +24,8 @@ vi.mock("@moss/tasks", () => ({
   authorizeTaskBackgroundRead: mocks.authorize
 }));
 vi.mock("../../packages/chat/src/responsibility-agreements/repository.js", () => ({
-  pendingResponsibilityProposal: mocks.pending
+  pendingResponsibilityProposal: mocks.pending,
+  clearResponsibilityProposals: mocks.clear
 }));
 afterEach(() => vi.clearAllMocks());
 const taskId = "11111111-1111-4111-8111-111111111111";
@@ -26,7 +33,7 @@ const threadId = "22222222-2222-4222-8222-222222222222";
 function fixture(
   output: unknown,
   available = true,
-  closed?: { id: string; state: "accepted" | "cancelled" }
+  closed?: { id: string; state: "pending" | "accepted" | "cancelled" }
 ) {
   mocks.pending.mockResolvedValue(undefined);
   mocks.candidates.mockResolvedValue([
@@ -49,7 +56,12 @@ function fixture(
                   model_metadata: {
                     origin: {
                       kind: "reminder",
-                      event: closed.state === "accepted" ? "scope_saved" : "scope_refused",
+                      event:
+                        closed.state === "accepted"
+                          ? "scope_saved"
+                          : closed.state === "pending"
+                            ? "scope_proposed"
+                            : "scope_refused",
                       proposalId: closed.id
                     }
                   }
@@ -202,4 +214,166 @@ it.each([
     agree
   });
   expect(model).not.toHaveBeenCalled();
+});
+
+function managerFixture(prepare: ReturnType<typeof fixture>["prepare"]) {
+  const engineFactory = vi.fn(() => {
+    throw new Error("unexpected model engine launch");
+  });
+  const recordReminderTurn = vi.fn(
+    async (_actor: string, _text: string, plan: { kind: string; reply?: string }) => ({
+      userMessageId: "owner-reply",
+      assistantMessageId: "refusal",
+      reply: plan.reply ?? "Module-sourced terms were not approved.",
+      origin: {
+        version: 1 as const,
+        kind: "reminder" as const,
+        event: "scope_refused" as const,
+        reminderId: null
+      }
+    })
+  );
+  const persistence = {
+    prepareResponsibilityAgreement: prepare,
+    getMainThreadState: async () => ({ id: threadId, incognito: false }),
+    getCurrentThreadState: async () => ({ id: threadId, incognito: false }),
+    resolveActiveProvider: async () => ({
+      provider: "anthropic" as const,
+      model: "configured-model"
+    }),
+    listPriorTurns: async () => ({ recent: [], oldSummary: null }),
+    getThreadContext: async () => ({ incognito: false, localTimezone: null, threadTitle: null }),
+    recordReminderTurn,
+    recordTurn: vi.fn(),
+    openNewConversation: vi.fn()
+  } as unknown as ChatPersistencePort;
+  const manager = new ChatSessionManager({
+    engineFactory,
+    persistence,
+    personaFs: { mkdir: async () => {}, writeFile: async () => {} },
+    clock: { now: () => 0 },
+    idleMs: 1000,
+    neutralBase: "/tmp/agreement-unit",
+    persona: "Proof",
+    pollMs: 0
+  });
+  return { manager, engineFactory, recordReminderTurn };
+}
+it.each(["yes", "no"])(
+  "refuses expired/invalid current scope question %s before engine launch",
+  async (text) => {
+    // The repository excludes expired or malformed pending terms. The latest stored question still exists.
+    const { prepare, model } = fixture({}, true, { id: "expired-proposal", state: "pending" });
+    const { manager, engineFactory, recordReminderTurn } = managerFixture(prepare);
+    const result = await manager.submitTurn("owner", "Owner", text).catch(() => undefined);
+    expect(engineFactory).not.toHaveBeenCalled();
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toMatchObject({
+      kind: "scope_refused",
+      proposalId: "expired-proposal"
+    });
+    expect(result?.reply).toContain("Those terms are closed");
+    expect(model).not.toHaveBeenCalled();
+  }
+);
+it.each(["attachment", "module"] as const)(
+  "refuses %s-sourced yes to a current question before engine launch",
+  async (source) => {
+    const { prepare, model } = fixture({});
+    mocks.pending.mockResolvedValue({
+      id: "current",
+      kind: "bounded_action_creation",
+      version: 1,
+      fingerprint: "a".repeat(64),
+      terms: {}
+    });
+    const { manager, engineFactory, recordReminderTurn } = managerFixture(prepare);
+    const opts =
+      source === "module"
+        ? { moduleControl: "tasks" }
+        : {
+            attachments: [
+              {
+                id: "outside",
+                fileName: "outside.txt",
+                mimeType: "text/plain",
+                sizeBytes: 1,
+                createdAt: "2026-10-13T10:00:00Z"
+              }
+            ]
+          };
+    await manager.submitTurn("owner", "Owner", "yes", opts);
+    expect(engineFactory).not.toHaveBeenCalled();
+    if (source === "module") expect(recordReminderTurn).not.toHaveBeenCalled();
+    else expect(recordReminderTurn.mock.calls[0]?.[2]).toMatchObject({ kind: "scope_refused" });
+    expect(model).not.toHaveBeenCalled();
+    expect(mocks.candidates).not.toHaveBeenCalled();
+  }
+);
+it.each(["attachment", "module"] as const)(
+  "refuses an explicit bounded request with %s without interpretation",
+  async (source) => {
+    const { prepare, model } = fixture({});
+    const { manager, engineFactory } = managerFixture(prepare);
+    const opts =
+      source === "module"
+        ? { moduleControl: "tasks" }
+        : {
+            attachments: [
+              {
+                id: "outside",
+                fileName: "outside.txt",
+                mimeType: "text/plain",
+                sizeBytes: 1,
+                createdAt: "2026-10-13T10:00:00Z"
+              }
+            ]
+          };
+    await manager.submitTurn("owner", "Owner", "Mark task Proof done in 30 seconds", opts);
+    expect(engineFactory).not.toHaveBeenCalled();
+    expect(model).not.toHaveBeenCalled();
+    expect(mocks.candidates).not.toHaveBeenCalled();
+    expect(mocks.pending).not.toHaveBeenCalled();
+  }
+);
+
+it("unsupported/revised scope refusal retains the pending identity and later yes never launches a model", async () => {
+  const chain = {
+    select: () => chain,
+    where: () => chain,
+    limit: () => chain,
+    executeTakeFirst: async () => ({ id: "closed-proposal" })
+  };
+  const decision = await responsibilityAgreement(
+    {
+      scopedDb: { db: { selectFrom: () => chain } },
+      actorUserId: "owner",
+      thread: { id: threadId },
+      deps: {}
+    } as never,
+    { kind: "scope_refused", reply: "Nothing is saved or changed." }
+  );
+  expect(decision.origin).toMatchObject({ event: "scope_refused", proposalId: "closed-proposal" });
+  expect(mocks.clear).toHaveBeenCalled();
+  const { prepare, model } = fixture({}, true, { id: "closed-proposal", state: "cancelled" });
+  const { manager, engineFactory } = managerFixture(prepare);
+  await manager.submitTurn("owner", "Owner", "yes");
+  expect(engineFactory).not.toHaveBeenCalled();
+  expect(model).not.toHaveBeenCalled();
+});
+
+it("keeps revised module-sourced current-question replies out of interpretation and engine launch", async () => {
+  const { prepare, model } = fixture({});
+  mocks.pending.mockResolvedValue({
+    id: "current",
+    kind: "bounded_action_creation",
+    version: 1,
+    fingerprint: "a".repeat(64),
+    terms: {}
+  });
+  const { manager, engineFactory, recordReminderTurn } = managerFixture(prepare);
+  await manager.submitTurn("owner", "Owner", "yes but delete it", { moduleControl: "tasks" });
+  expect(engineFactory).not.toHaveBeenCalled();
+  expect(recordReminderTurn).not.toHaveBeenCalled();
+  expect(model).not.toHaveBeenCalled();
+  expect(mocks.candidates).not.toHaveBeenCalled();
 });

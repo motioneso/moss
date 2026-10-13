@@ -43,26 +43,38 @@ export async function tryPreModelTurn(
 ): ReturnType<typeof tryGatedTurn> {
   const [host, actorUserId, surface, text, opts, controller, flushActions] = args;
   let recognition: ReminderTurnPlan | undefined;
-  if (
-    !opts?.moduleControl &&
-    !opts?.attachments?.length &&
-    host.deps.persistence.prepareResponsibilityAgreement
-  ) {
-    const thread = await (args[7] ?? selectTurnThread(host, actorUserId, surface));
-    if (thread?.id && !thread.incognito) {
-      try {
-        recognition = await host.deps.persistence.prepareResponsibilityAgreement(
-          actorUserId,
-          text,
-          thread.id,
-          controller.signal
-        );
-      } catch {
-        if (namesBoundedActionRequest(text) || typedResponsibilityAgreement(text) !== undefined)
-          recognition = {
-            kind: "scope_refused",
-            reply: "I couldn't check that agreement. Nothing is saved or changed. Try again."
-          };
+  if (host.deps.persistence.prepareResponsibilityAgreement) {
+    const outsideInput = Boolean(opts?.moduleControl || opts?.attachments?.length);
+    if (outsideInput && namesBoundedActionRequest(text)) {
+      recognition = {
+        kind: "scope_refused",
+        reply: "Nothing is saved or changed. Ask in your own words without attachments."
+      };
+    } else {
+      const thread = await (args[7] ?? selectTurnThread(host, actorUserId, surface));
+      if (thread?.incognito && namesBoundedActionRequest(text))
+        recognition = { kind: "scope_refused", reply: "Nothing is saved or changed." };
+      else if (thread?.id && !thread.incognito) {
+        try {
+          recognition = await host.deps.persistence.prepareResponsibilityAgreement(
+            actorUserId,
+            text,
+            thread.id,
+            controller.signal
+          );
+          if (outsideInput && recognition)
+            recognition = {
+              kind: "scope_refused",
+              reply:
+                "Those terms weren't approved. Nothing is saved or changed. Reply in your own words without attachments."
+            };
+        } catch {
+          if (namesBoundedActionRequest(text) || typedResponsibilityAgreement(text) !== undefined)
+            recognition = {
+              kind: "scope_refused",
+              reply: "I couldn't check that agreement. Nothing is saved or changed. Try again."
+            };
+        }
       }
     }
   }
@@ -221,6 +233,9 @@ export async function tryPreModelTurn(
     const reply = manage ? REMINDER_MANAGE_MAIN_ONLY_REPLY : REMINDER_MAIN_ONLY_REPLY;
     return done(emitUnsaved(host, actorUserId, surface, text, reply));
   }
+
+  if (opts?.moduleControl && recognition.kind === "scope_refused")
+    return done(emitUnsaved(host, actorUserId, surface, text, recognition.reply));
 
   // A module-controlled turn speaks for a module, not for the user, so it never saves or cancels.
   const plan: ReminderTurnPlan = opts?.moduleControl

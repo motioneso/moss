@@ -116,3 +116,20 @@ mutation controls expect 1 with the intended assertion failing. TypeScript runs 
 Compiler OOMs, unavailable Docker and unrun installed proof are reported as failed/blocked checks,
 not replaced with narrowed green claims. Publication may be a reviewed draft; merge remains blocked
 until final-head isolated foundation/CI and real installed UI proof pass.
+
+## Review rulings ledger
+
+- Proposal and typed agreement share a real completed-turn identity, with UUID/kind/version/terms
+  fingerprint carried by the question origin; persistence supplies a fallback only for direct calls.
+  `packages/chat/src/live/persistence.ts:475`, `packages/chat/src/live/pre-model-turn.ts:247`.
+- PostgreSQL transaction-start `now()` is unsuitable for an expiry check after waits. The binder
+  uses `clock_timestamp()` at lookup and final consume; `packages/chat/src/responsibility-agreements/repository.ts:145`.
+- A filtered-out expired/invalid proposal is still a current action question. Its yes/no must close
+  deterministically rather than fall through to the ordinary model;
+  `packages/chat/src/responsibility-agreements/prepare.ts:230`.
+- Refusal retains the pending UUID so later replies stay closed;
+  `packages/chat/src/responsibility-agreements/command.ts:32`.
+- Attached replies refuse before model fallback. Module-controlled scoped replies refuse unsaved
+  and do not cancel an owner proposal; `packages/chat/src/live/pre-model-turn.ts:43` and `:237`.
+- The existing task-owner immutability trigger makes fixture owner reassignment invalid; source
+  deletion is used instead for actual loss-of-access proof. SQL/runtime verification remains open.

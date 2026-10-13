@@ -23,7 +23,7 @@ export const responsibilityAgreementFeature = {
       code: "bounded_action_scope_refused",
       class: "validation",
       description:
-        "Deletion, broader actions, repeats, changed scope and unclear replies save no agreement. Name one owned task and a future relative time, then answer the current question yes or no."
+        "Deletion, broader actions, repeats, changed scope, unclear replies and attached or module-controlled approval input save no agreement. Name one owned task and a future relative time, then answer the current question yes or no."
     },
     {
       code: "bounded_action_scope_stale",

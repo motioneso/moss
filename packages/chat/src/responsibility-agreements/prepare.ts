@@ -91,7 +91,7 @@ export function createResponsibilityPreparation(deps: {
             agree: agreement
           });
         if (!pending && agreement !== undefined) {
-          const closed = await lastBoundedResolution(db, threadId);
+          const closed = await lastBoundedQuestion(db, threadId);
           if (closed)
             return async () => ({
               kind: "scope_refused" as const,
@@ -204,7 +204,7 @@ export function createResponsibilityPreparation(deps: {
   };
 }
 
-async function lastBoundedResolution(db: DataContextDb, threadId: string) {
+async function lastBoundedQuestion(db: DataContextDb, threadId: string) {
   const latest = await db.db
     .selectFrom("app.chat_messages")
     .select(["role", "model_metadata"])
@@ -229,7 +229,9 @@ async function lastBoundedResolution(db: DataContextDb, threadId: string) {
   const resolution = origin as Record<string, unknown>;
   if (
     resolution.kind !== "reminder" ||
-    (resolution.event !== "scope_saved" && resolution.event !== "scope_refused") ||
+    (resolution.event !== "scope_proposed" &&
+      resolution.event !== "scope_saved" &&
+      resolution.event !== "scope_refused") ||
     typeof resolution.proposalId !== "string"
   )
     return undefined;
@@ -239,6 +241,6 @@ async function lastBoundedResolution(db: DataContextDb, threadId: string) {
     .where("id", "=", resolution.proposalId)
     .where("thread_id", "=", threadId)
     .where("proposal_kind", "=", BOUNDED_ACTION_PROPOSAL_KIND)
-    .where("state", "in", ["accepted", "cancelled"])
+    .where("state", "in", ["pending", "accepted", "cancelled"])
     .executeTakeFirst();
 }

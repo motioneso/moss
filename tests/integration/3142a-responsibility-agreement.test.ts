@@ -117,6 +117,12 @@ describe("real persistence binds inert agreement once", () => {
     );
     await persistence().recordReminderTurn(ids.userA, text, plan!, { threadId: saved.thread.id });
     expect(await acceptedCount(saved.proposal.id)).toBe(0);
+    const closedReply = await persistence().prepareResponsibilityAgreement(
+      ids.userA,
+      "yes",
+      saved.thread.id
+    );
+    expect(closedReply).toMatchObject({ kind: "scope_refused", proposalId: saved.proposal.id });
   });
   it("revalidates raw text and attachments before persistence", async () => {
     const saved = await propose();
