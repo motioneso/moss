@@ -294,3 +294,12 @@ The final disposable proof passively logs the raw model destination before
 teardown, runs two combined edits and one destination-only edit, and stops on
 any combined failure without tuning. The capture adds logging only inside the
 disposable API bundle and does not replace model calls or network replies.
+
+Coordinator ruling 2 authorizes one further guidance sentence: moving results
+among Main, this chat and owned chats is a supported destination change; only
+other people are recipients. Keep both time examples and the 150-word limit,
+and preserve the unsupported flag. Final proof runs three combined edits in
+both directions and one destination-only edit, with raw destinations captured.
+If a combined edit fails, revert that sentence and implement an atomic refusal
+for combined destination edits, asking for a separate destination message.
+Record the limitation in a Part of #3148 follow-up and continue full verification.

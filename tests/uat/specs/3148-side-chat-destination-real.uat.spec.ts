@@ -137,7 +137,8 @@ test("real task creation, destination edits, isolated delivery and failed target
   let edited: typeof original;
   for (const [target, replacement, destination] of [
     ["edited route proof", "combined route proof", side.title],
-    ["combined route proof", "final route proof", "Main"]
+    ["combined route proof", "return route proof", "Main"],
+    ["return route proof", "final route proof", side.title]
   ]) {
     await send(
       page,
@@ -155,15 +156,12 @@ test("real task creation, destination edits, isolated delivery and failed target
       `[3148] combined edit passed: ${target} to ${replacement}, destination ${destination}`
     );
   }
-  await send(page, drawer, `send my final route proof reminder to the ${side.title} chat`);
+  await send(page, drawer, "send my final route proof reminder to Main");
   edited = (await tasks(page)).find((t) => t.id === original.id)!;
-  expect(edited.destination, "destination-only edit must use the owned side chat").toEqual({
-    threadId: sideId,
-    title: side.title
-  });
+  expect(edited.destination, "destination-only edit must return to Main").toBeUndefined();
   expect(edited.dueAt).toBe(original.dueAt);
   expect(edited.instruction).toBe("final route proof");
-  console.log("[3148] destination-only edit changed Main to the named owned side chat");
+  console.log("[3148] destination-only edit changed the owned side chat to Main");
   console.log(
     "[3148] default Main from side, explicit this chat and destination-only edit saved through UI"
   );
@@ -178,7 +176,7 @@ test("real task creation, destination edits, isolated delivery and failed target
   await expect(drawer.getByLabel("Message Moss")).toHaveValue("Side unsent draft");
   await expect(drawer.getByLabel("Message Moss")).toBeFocused();
   await send(page, drawer, "Reply briefly: how should I pack a small travel bag?");
-  for (const saved of [explicit, edited]) {
+  for (const saved of [explicit]) {
     await expect
       .poll(async () => (await tasks(page)).find((t) => t.id === saved.id)?.state, {
         timeout: 90_000,
@@ -194,19 +192,27 @@ test("real task creation, destination edits, isolated delivery and failed target
   );
   expect(
     sideResults.map((m) => (m.origin?.kind === "reminder" ? m.origin.reminderId : null)).sort()
-  ).toEqual([explicit.id, edited.id].sort());
-  const mainResults = (await history(page, main.id)).filter(
+  ).toEqual([explicit.id]);
+  await expect
+    .poll(async () => (await tasks(page)).find((t) => t.id === edited.id)?.state, {
+      timeout: 90_000
+    })
+    .toBe("completed");
+  const finalMainResults = (await history(page, main.id)).filter(
     (m) => m.origin?.kind === "reminder" && m.origin.event === "delivered"
   );
-  expect(mainResults).toHaveLength(1);
-  expect(mainResults[0]!.body).toBe("Reminder: default route proof");
+  expect(finalMainResults.map((m) => m.body).sort()).toEqual(
+    ["Reminder: default route proof", "Reminder: final route proof"].sort()
+  );
   await select(drawer, "Main chat");
   await expect(drawer.getByText("Reminder: default route proof", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("Reminder: final route proof", { exact: true })).toHaveCount(1);
   await expect(drawer.getByText("Reminder: side route proof", { exact: true })).toHaveCount(0);
   await page.reload();
   drawer = await openChat(page);
   await select(drawer, side.title);
   await expect(drawer.getByText("Reminder: side route proof", { exact: true })).toHaveCount(1);
+  await expect(drawer.getByText("Reminder: final route proof", { exact: true })).toHaveCount(0);
   await expect(drawer.getByText("Reminder: default route proof", { exact: true })).toHaveCount(0);
   console.log(
     "[3148] real queue results stay in exact durable histories and UI after switching and reload"
