@@ -89,6 +89,11 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  IF NEW.repeat_kind IS NOT NULL AND EXISTS (
+    SELECT 1 FROM app.chat_scheduled_reads WHERE reminder_id = NEW.id
+  ) THEN
+    RAISE EXCEPTION 'task checks must run once';
+  END IF;
   -- Advancing is a worker-only effect, validated against the just-persisted occurrence.
   IF OLD.state = 'queued' AND NEW.state = 'queued' AND OLD.repeat_kind IS NOT NULL
     AND NEW.reserved_message_id IS DISTINCT FROM OLD.reserved_message_id THEN
@@ -237,3 +242,19 @@ CREATE POLICY chat_reminders_deliver ON app.chat_reminders
   FOR UPDATE TO jarvis_worker_runtime
   USING (owner_user_id = app.current_actor_user_id() AND state = 'queued')
   WITH CHECK (owner_user_id = app.current_actor_user_id() AND state IN ('queued','delivered','failed','expired'));
+
+-- Lock the responsibility so inserting an extension and editing its repeat cannot race.
+CREATE FUNCTION app.enforce_chat_scheduled_read_one_time()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE saved_repeat text;
+BEGIN
+  SELECT repeat_kind INTO saved_repeat FROM app.chat_reminders
+    WHERE id = NEW.reminder_id FOR UPDATE;
+  IF saved_repeat IS NOT NULL THEN
+    RAISE EXCEPTION 'task checks must run once';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER chat_scheduled_reads_one_time BEFORE INSERT ON app.chat_scheduled_reads
+  FOR EACH ROW EXECUTE FUNCTION app.enforce_chat_scheduled_read_one_time();

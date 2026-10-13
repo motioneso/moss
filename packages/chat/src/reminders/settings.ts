@@ -3,7 +3,12 @@ import { reminderRepeatDescription } from "./repeating.js";
 import { readReminderRuns } from "./runs.js";
 import { sql } from "kysely";
 import { assertDataContextDb, type ChatReminderState, type DataContextDb } from "@moss/db";
-import type { ScheduledTaskDto, ScheduledTaskRunDto, ScheduledTaskState } from "@moss/shared";
+import type {
+  ScheduledTaskDto,
+  ScheduledTaskRunDto,
+  ScheduledTaskState,
+  LocaleDateFormat
+} from "@moss/shared";
 
 interface ScheduledReminderRow {
   readonly repeat_kind?: "daily" | "weekly" | "interval" | null;
@@ -34,7 +39,10 @@ const STATES: Record<ChatReminderState, ScheduledTaskState> = {
   cancelled: "cancelled"
 };
 
-export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
+export function scheduledReminder(
+  row: ScheduledReminderRow,
+  clockFormat: LocaleDateFormat = "24"
+): ScheduledTaskDto {
   const runs: ScheduledTaskRunDto[] = [];
   if (row.state === "delivered" && row.delivered_at) {
     runs.push({
@@ -83,7 +91,7 @@ export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
             ? "More often"
             : "Reminders",
     schedule: repeat
-      ? reminderRepeatDescription(repeat, row.local_due ?? null, row.time_zone ?? null)
+      ? reminderRepeatDescription(repeat, row.local_due ?? null, row.time_zone ?? null, clockFormat)
       : null,
     timeZone: row.time_zone ?? null,
     state: row.read_outcome && row.read_outcome !== "success" ? "failed" : STATES[row.state],
@@ -94,7 +102,10 @@ export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
   };
 }
 
-export async function listScheduledReminders(scopedDb: DataContextDb): Promise<ScheduledTaskDto[]> {
+export async function listScheduledReminders(
+  scopedDb: DataContextDb,
+  clockFormat: LocaleDateFormat = "24"
+): Promise<ScheduledTaskDto[]> {
   assertDataContextDb(scopedDb);
   const rows = await scopedDb.db
     .selectFrom("app.chat_reminders as reminder")
@@ -132,7 +143,7 @@ export async function listScheduledReminders(scopedDb: DataContextDb): Promise<S
     .execute();
   const tasks: ScheduledTaskDto[] = [];
   for (const row of rows) {
-    const task = scheduledReminder(row);
+    const task = scheduledReminder(row, clockFormat);
     const runs = await readReminderRuns(scopedDb, row.id);
     tasks.push(
       runs.length

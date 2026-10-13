@@ -16,6 +16,12 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
           "A saved task check keeps its source fixed. Time edits use the source-read queue; text edits change nothing. Delete the check and request a new one to choose a different task."
       },
       {
+        code: "scheduled_read_repeat_edit_refused",
+        class: "validation",
+        description:
+          "Task checks run once. Change the time of the saved check, or set a separate fixed-text reminder to repeat. Nothing changes when a repeat edit is refused."
+      },
+      {
         code: "scheduled_read_unresolved",
         class: "validation",
         description:
@@ -53,7 +59,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time, repeat or stop time in Main chat; Settings shows the saved record without an editor. Old jobs cannot fire. Ambiguous targets need a typed choice. Paused reminders stay paused.",
+      "Edit pending or paused reminder text, time, repeat or stop time in Main. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused reminders stay paused.",
     featureFlagId: "chat.module",
     errors: [
       {

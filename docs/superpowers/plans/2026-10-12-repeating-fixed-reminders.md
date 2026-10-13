@@ -257,3 +257,12 @@ occurrences; the rule is shift forward by the gap and use the earlier fold once.
 Lane #3148 will rebuild migration 0320 on top of 0319; this lane must preserve
 thread and destination checks. If the session runs short, finish daily/weekly with
 a PR open and report the remaining more-often work.
+
+## QA rulings, October 12
+
+Task checks stay one-time: refuse repeat edits in the edit path and enforce the
+same boundary in migration 0319, including extension insertion. Settings cadence
+uses the owner's clock preference. Remove the clock-change explanation from the
+details screen per Ben's later ruling; the saved DST behavior remains as approved.
+Follow-ups: batch the Settings history queries and cover the half-hour DST change
+in database tests. Rerun live proof and the blocking browser specs on the fixed head.

@@ -120,3 +120,27 @@ describe("ordinary repeat requests", () => {
     });
   });
 });
+
+import { scheduledReminder } from "../../packages/chat/src/reminders/settings.js";
+it("formats Settings cadence with the owner's 12-hour clock", () => {
+  const row = {
+    id: "reminder",
+    reminder_text: "stretch",
+    state: "queued" as const,
+    thread_id: "main",
+    due_at: new Date("2026-10-13T13:30Z"),
+    deadline_at: null,
+    created_at: new Date("2026-10-12T13:30Z"),
+    delivered_at: null,
+    expired_at: null,
+    late: null,
+    message_id: null,
+    message_body: null,
+    repeat_kind: "daily" as const,
+    repeat_seconds: null,
+    local_due: "2026-10-13T13:30",
+    time_zone: "UTC"
+  };
+  expect(scheduledReminder(row, "12").schedule).toBe("Every day at 1:30 PM (UTC)");
+  expect(scheduledReminder(row, "24").schedule).toBe("Every day at 13:30 (UTC)");
+});

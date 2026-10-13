@@ -36,6 +36,8 @@ import {
 } from "../../packages/chat/src/reminders/controls.js";
 import { listScheduledReminders } from "../../packages/chat/src/reminders/settings.js";
 import { editReminderById } from "../../packages/chat/src/reminders/edit.js";
+import { ReminderRepository } from "../../packages/chat/src/reminders/repository.js";
+import { saveScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
 import { readScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -208,6 +210,85 @@ describe("scheduled reads through the actor worker and real gateway", () => {
         .executeTakeFirstOrThrow()
     );
     expect(row).toEqual({ version: 2, reminder_text: `Check task status: ${saved.task.title}` });
+  });
+  it("refuses repeat edits on task checks without changing their version or queue", async () => {
+    const saved = await save();
+    const result = await owner((db) =>
+      editReminderById(
+        db,
+        boss,
+        ids.userA,
+        saved.id,
+        1,
+        {
+          text: null,
+          delaySeconds: 60,
+          localDue: null,
+          deadline: "keep",
+          localDeadline: null,
+          repeat: { kind: "interval", seconds: 60 }
+        },
+        "UTC"
+      )
+    );
+    expect(result).toEqual({
+      kind: "invalid",
+      reply:
+        "Task checks run once. You can change its time, but not make it repeat. Nothing changed."
+    });
+    expect(
+      await owner((db) =>
+        db.db
+          .selectFrom("app.chat_reminders")
+          .select(["version", "repeat_kind"])
+          .where("id", "=", saved.id)
+          .executeTakeFirstOrThrow()
+      )
+    ).toEqual({ version: 1, repeat_kind: null });
+  });
+  it("database refuses repetition on an existing task check", async () => {
+    const saved = await save();
+    await expect(
+      owner((db) =>
+        db.db
+          .updateTable("app.chat_reminders")
+          .set({
+            repeat_kind: "interval",
+            repeat_seconds: 60,
+            version: 2
+          })
+          .where("id", "=", saved.id)
+          .execute()
+      )
+    ).rejects.toThrow("task checks must run once");
+  });
+  it("database refuses attaching a task check to a repeating reminder", async () => {
+    const saved = await save();
+    const repeating = await owner(async (db) => {
+      const source = await db.db
+        .insertInto("app.chat_messages")
+        .values({
+          id: randomUUID(),
+          thread_id: saved.threadId,
+          owner_user_id: ids.userA,
+          role: "user",
+          status: "stored",
+          body: "remind me every minute to stretch",
+          model_metadata: {},
+          tool_metadata: {}
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      return new ReminderRepository().create(db, {
+        threadId: saved.threadId,
+        sourceMessageId: source.id,
+        text: "fixed reminder",
+        when: { timing: "relative", delaySeconds: 60, repeat: { kind: "interval", seconds: 60 } }
+      });
+    });
+    await expect(
+      owner((db) => saveScheduledOperation(db, repeating.id, saved.task.id))
+    ).rejects.toThrow("task checks must run once");
   });
   it("keeps frozen storage immutable and hides another owner's responsibility", async () => {
     const saved = await save();

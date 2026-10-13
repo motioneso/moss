@@ -171,6 +171,7 @@ export async function tryPreModelTurn(
   const manage =
     recognition.kind !== "request" &&
     recognition.kind !== "clock_request" &&
+    recognition.kind !== "repeat_request" &&
     recognition.kind !== "scheduled_read" &&
     recognition.kind !== "unsupported";
 
