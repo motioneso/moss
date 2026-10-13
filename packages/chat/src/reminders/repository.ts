@@ -1,3 +1,4 @@
+import type { ReminderRepeat } from "@moss/shared";
 // #3309, #3150: storage for chat reminders, set a time from now or at a local clock time. Row
 // security, the table's checks and its triggers own the storage rules; this file only names the
 // queries. A time the clocks show twice is refused by the turn, before it reaches storage.
@@ -30,6 +31,9 @@ export interface DueReminder {
   readonly version: number;
   readonly dueAt: Date;
   readonly deadlineAt: Date | null;
+  readonly repeat: ReminderRepeat | null;
+  readonly localDue: string | null;
+  readonly timeZone: string | null;
 }
 
 export interface OwnedReminder {
@@ -45,7 +49,7 @@ export interface OwnedReminder {
 }
 
 /** When a new reminder is due: a delay the database adds to its clock, or a local clock time. */
-export type ReminderTimingInput =
+export type ReminderTimingInput = (
   | { readonly timing: "relative"; readonly delaySeconds: number }
   | {
       readonly timing: "local_clock";
@@ -53,7 +57,8 @@ export type ReminderTimingInput =
       readonly localDue: string;
       readonly timeZone: string;
       readonly deadlineAt: Date | null;
-    };
+    }
+) & { readonly repeat?: ReminderRepeat };
 
 const OWNED_COLUMNS = [
   "id",
@@ -92,9 +97,36 @@ function toOwned(row: {
 }
 
 export class ReminderRepository {
-  async readNotificationResult(scopedDb: DataContextDb, reminderId: string) {
+  async readNotificationResult(scopedDb: DataContextDb, reminderId: string, messageId?: string) {
     assertDataContextDb(scopedDb);
     await lockNotificationDelivery(scopedDb, reminderId);
+    if (messageId) {
+      const run = await scopedDb.db
+        .selectFrom("app.chat_reminder_runs as run")
+        .innerJoin("app.chat_reminders as reminder", "reminder.id", "run.reminder_id")
+        .innerJoin("app.chat_messages as message", (join) =>
+          join
+            .onRef("message.id", "=", "run.message_id")
+            .onRef("message.owner_user_id", "=", "run.owner_user_id")
+            .onRef("message.thread_id", "=", "reminder.thread_id")
+        )
+        .select(["run.owner_user_id", "run.version", "message.id", "message.body"])
+        .where("run.reminder_id", "=", reminderId)
+        .where("run.message_id", "=", messageId)
+        .where("run.outcome", "=", "delivered")
+        .where("run.context_state", "!=", "dismissed")
+        .where("reminder.state", "in", ["queued", "delivered"])
+        .where("message.role", "=", "assistant")
+        .where("message.status", "=", "stored")
+        .executeTakeFirst();
+      if (run)
+        return {
+          ownerUserId: run.owner_user_id,
+          version: run.version,
+          messageId: run.id,
+          body: run.body
+        };
+    }
     const row = await scopedDb.db
       .selectFrom("app.chat_reminders as reminder")
       .innerJoin("app.chat_messages as message", (join) =>
@@ -106,6 +138,7 @@ export class ReminderRepository {
       .select(["reminder.owner_user_id", "reminder.version", "message.id", "message.body"])
       .where("reminder.id", "=", reminderId)
       .where("reminder.state", "=", "delivered")
+      .where("reminder.repeat_kind", "is", null)
       .where("reminder.context_state", "!=", "dismissed")
       .where("message.role", "=", "assistant")
       .where("message.status", "=", "stored")
@@ -150,6 +183,8 @@ export class ReminderRepository {
         source_message_id: input.sourceMessageId,
         reserved_message_id: randomUUID(),
         reminder_text: input.text,
+        repeat_kind: when.repeat?.kind ?? null,
+        repeat_seconds: when.repeat?.kind === "interval" ? when.repeat.seconds : null,
         ...(when.timing === "relative"
           ? { delay_seconds: when.delaySeconds }
           : {
@@ -172,6 +207,7 @@ export class ReminderRepository {
     reminderId: string
   ): Promise<DueReminder | undefined> {
     assertDataContextDb(scopedDb);
+    await lockNotificationDelivery(scopedDb, reminderId);
     const row = await scopedDb.db
       .selectFrom("app.chat_reminders")
       .select([
@@ -183,7 +219,11 @@ export class ReminderRepository {
         "state",
         "version",
         "due_at",
-        "deadline_at"
+        "deadline_at",
+        "repeat_kind",
+        "repeat_seconds",
+        "local_due",
+        "time_zone"
       ])
       .where("id", "=", reminderId)
       .forUpdate()
@@ -198,7 +238,10 @@ export class ReminderRepository {
       state: row.state,
       version: row.version,
       dueAt: new Date(row.due_at),
-      deadlineAt: row.deadline_at === null ? null : new Date(row.deadline_at)
+      deadlineAt: row.deadline_at === null ? null : new Date(row.deadline_at),
+      repeat: repeatFor(row),
+      localDue: row.local_due,
+      timeZone: row.time_zone
     };
   }
 
@@ -269,10 +312,11 @@ export class ReminderRepository {
           .onRef("message.id", "=", "reminder.reserved_message_id")
           .onRef("message.thread_id", "=", "reminder.thread_id")
       )
-      .select(["reminder.reserved_message_id", "message.body"])
+      .select(["reminder.reserved_message_id", "message.body", "reminder.delivered_at"])
       .where("reminder.thread_id", "=", threadId)
       .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
       .where("reminder.state", "=", "delivered")
+      .where("reminder.repeat_kind", "is", null)
       .where("reminder.context_state", "=", "pending")
       .where("thread.is_main", "=", true)
       .where("thread.incognito", "=", false)
@@ -280,7 +324,44 @@ export class ReminderRepository {
       .orderBy("reminder.id")
       .limit(limit)
       .execute();
-    return rows.map((row) => ({ reservedMessageId: row.reserved_message_id, body: row.body }));
+    const runs = await scopedDb.db
+      .selectFrom("app.chat_reminder_runs as run")
+      .innerJoin("app.chat_reminders as reminder", "reminder.id", "run.reminder_id")
+      .innerJoin("app.chat_threads as thread", "thread.id", "reminder.thread_id")
+      .innerJoin("app.chat_messages as message", (join) =>
+        join
+          .onRef("message.id", "=", "run.message_id")
+          .onRef("message.thread_id", "=", "reminder.thread_id")
+          .onRef("message.owner_user_id", "=", "run.owner_user_id")
+      )
+      .select(["message.id", "message.body", "run.at"])
+      .where("reminder.thread_id", "=", threadId)
+      .where("thread.is_main", "=", true)
+      .where("thread.incognito", "=", false)
+      .where("run.context_state", "=", "pending")
+      .where("run.outcome", "=", "delivered")
+      .where("reminder.state", "in", ["queued", "paused", "delivered"])
+      .orderBy("run.at")
+      .orderBy("run.id")
+      .limit(limit)
+      .execute();
+    const seen = new Set<string>();
+    return [
+      ...rows.map((row) => ({
+        reservedMessageId: row.reserved_message_id,
+        body: row.body,
+        at: new Date(row.delivered_at!).getTime()
+      })),
+      ...runs.map((row) => ({
+        reservedMessageId: row.id,
+        body: row.body,
+        at: new Date(row.at).getTime()
+      }))
+    ]
+      .sort((a, b) => a.at - b.at || a.reservedMessageId.localeCompare(b.reservedMessageId))
+      .filter((row) => !seen.has(row.reservedMessageId) && !!seen.add(row.reservedMessageId))
+      .slice(0, limit)
+      .map(({ reservedMessageId, body }) => ({ reservedMessageId, body }));
   }
 
   /** #3311: acknowledges exactly the shown reminders that are still pending in this Main chat. */
@@ -291,6 +372,17 @@ export class ReminderRepository {
   ): Promise<void> {
     assertDataContextDb(scopedDb);
     if (reservedMessageIds.length === 0) return;
+    await scopedDb.db
+      .updateTable("app.chat_reminder_runs")
+      .set({ context_state: "acknowledged" })
+      .where("message_id", "in", [...reservedMessageIds])
+      .where("context_state", "=", "pending")
+      .where(
+        "reminder_id",
+        "in",
+        scopedDb.db.selectFrom("app.chat_reminders").select("id").where("thread_id", "=", threadId)
+      )
+      .execute();
     await scopedDb.db
       .updateTable("app.chat_reminders")
       .set({ context_state: "acknowledged" })
@@ -348,6 +440,12 @@ export class ReminderRepository {
   /** Frees the slot a delivered reminder holds while its context is still pending. */
   async dismissContext(scopedDb: DataContextDb, reminderId: string): Promise<void> {
     assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.chat_reminder_runs")
+      .set({ context_state: "dismissed" })
+      .where("reminder_id", "=", reminderId)
+      .where("context_state", "=", "pending")
+      .execute();
     const result = await scopedDb.db
       .updateTable("app.chat_reminders")
       .set({ context_state: "dismissed" })
@@ -373,4 +471,16 @@ export async function lockNotificationDelivery(
   await sql`select pg_advisory_xact_lock(hashtextextended(
     'reminder-notification:' || app.current_actor_user_id()::text || ':' || ${reminderId}, 0
   ))`.execute(scopedDb.db);
+}
+
+export function repeatFor(row: {
+  readonly repeat_kind: "daily" | "weekly" | "interval" | null;
+  readonly repeat_seconds: number | null;
+}): ReminderRepeat | null {
+  if (row.repeat_kind === null) return null;
+  if (row.repeat_kind === "interval") {
+    if (row.repeat_seconds === null) throw new Error("Missing reminder interval");
+    return { kind: "interval", seconds: row.repeat_seconds };
+  }
+  return { kind: row.repeat_kind };
 }

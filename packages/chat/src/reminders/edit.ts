@@ -22,7 +22,9 @@ export async function readEditableReminders(scopedDb: DataContextDb) {
       "timing",
       "delay_seconds",
       "local_due",
-      "time_zone"
+      "time_zone",
+      "repeat_kind",
+      "repeat_seconds"
     ])
     .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
     .where("state", "in", ["queued", "paused"])
@@ -71,24 +73,47 @@ export function resolveReminderEdit(
   }
   if (timingChanged && (dueAt <= now || dueAt.getTime() > now.getTime() + 2592000000))
     throw new Error("Choose a future reminder time within 30 days.");
+  const repeat =
+    terms.repeat === undefined || terms.repeat === null
+      ? current.repeat_kind === "interval"
+        ? { kind: "interval" as const, seconds: current.repeat_seconds! }
+        : current.repeat_kind
+          ? { kind: current.repeat_kind }
+          : null
+      : terms.repeat === "remove"
+        ? null
+        : terms.repeat;
+  if (repeat && repeat.kind !== "interval" && timing !== "local_clock")
+    throw new Error("Daily and weekly reminders need a local clock time.");
+  if (
+    repeat?.kind === "interval" &&
+    (timing !== "relative" ||
+      !Number.isInteger(repeat.seconds) ||
+      repeat.seconds < 60 ||
+      repeat.seconds >= 86400)
+  )
+    throw new Error("Intervals need a relative start and 60 to 86399 seconds.");
   let deadlineAt = current.deadline_at === null ? null : new Date(current.deadline_at);
   if (terms.deadline === "remove") deadlineAt = null;
   if (terms.deadline === "set") {
-    if (terms.localDeadline === null || timing !== "local_clock")
+    if (terms.localDeadline === null || (timing !== "local_clock" && !repeat))
       throw new Error("A deadline needs a local-clock reminder time.");
     deadlineAt = strictLocalWallClockToInstant(terms.localDeadline, zone ?? timeZone);
   }
   if (
     deadlineAt !== null &&
-    (timing !== "local_clock" ||
-      deadlineAt <= dueAt ||
-      deadlineAt.getTime() > dueAt.getTime() + 43200000)
+    (deadlineAt <= dueAt ||
+      (!repeat && (timing !== "local_clock" || deadlineAt.getTime() > dueAt.getTime() + 43200000)))
   )
     throw new Error(
-      "The deadline must follow the reminder time by no more than 12 hours. Change or remove it explicitly."
+      repeat
+        ? "The stop time must follow the reminder time. Change or remove it explicitly."
+        : "The deadline must follow the reminder time by no more than 12 hours. Change or remove it explicitly."
     );
   return {
     reminder_text: text,
+    repeat_kind: repeat?.kind ?? null,
+    repeat_seconds: repeat?.kind === "interval" ? repeat.seconds : null,
     timing,
     delay_seconds: delaySeconds,
     due_at: dueAt,
@@ -118,6 +143,12 @@ export async function editReminderById(
   if (locked.state !== "queued" && locked.state !== "paused") return { kind: "not_pending" };
   const current = (await readEditableReminders(scopedDb)).find((row) => row.id === id);
   if (!current) return { kind: "missing" };
+  if (terms.repeat != null && (await readScheduledOperation(scopedDb, id)))
+    return {
+      kind: "invalid",
+      reply:
+        "Task checks run once. You can change its time, but not make it repeat. Nothing changed."
+    };
   if (terms.text !== null && (await readScheduledOperation(scopedDb, id)))
     return {
       kind: "invalid",
@@ -136,12 +167,17 @@ export async function editReminderById(
     return {
       kind: "invalid",
       reply:
-        "That text, time or deadline is invalid or ambiguous. Nothing changed. Use a future time and a deadline within 12 hours after it."
+        "Those reminder terms are invalid or ambiguous. Nothing changed. Daily and weekly reminders need a local time; intervals need a relative start and at least 60 seconds. A stop must follow the next reminder time."
     };
   }
   const changed =
+    values.repeat_kind !== current.repeat_kind ||
+    values.repeat_seconds !== current.repeat_seconds ||
     values.reminder_text !== current.reminder_text ||
     values.timing !== current.timing ||
+    values.local_due !== current.local_due ||
+    values.time_zone !== current.time_zone ||
+    values.delay_seconds !== current.delay_seconds ||
     values.due_at.getTime() !== new Date(current.due_at).getTime() ||
     (values.deadline_at?.getTime() ?? null) !==
       (current.deadline_at === null ? null : new Date(current.deadline_at).getTime());
@@ -150,6 +186,8 @@ export async function editReminderById(
     .updateTable("app.chat_reminders")
     .set({
       reminder_text: values.reminder_text,
+      repeat_kind: values.repeat_kind,
+      repeat_seconds: values.repeat_seconds,
       // Preserve omitted timestamps in PostgreSQL, including their microseconds.
       ...(terms.delaySeconds !== null || terms.localDue !== null
         ? {

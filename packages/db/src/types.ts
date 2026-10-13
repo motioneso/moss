@@ -1029,7 +1029,29 @@ export type ChatReminderState =
 export type ChatReminderTiming = "relative" | "local_clock";
 export type ChatReminderContextState = "pending" | "dismissed" | "acknowledged";
 
+export interface ChatReminderRunsTable {
+  id: string;
+  reminder_id: string;
+  owner_user_id: string;
+  version: number;
+  due_at: TimestampColumn;
+  at: TimestampColumn;
+  outcome: "delivered" | "expired";
+  message_id: string | null;
+  late: boolean;
+  context_state: ColumnType<
+    ChatReminderContextState,
+    ChatReminderContextState | undefined,
+    ChatReminderContextState
+  >;
+}
+
 export interface ChatRemindersTable {
+  repeat_kind: ColumnType<
+    "daily" | "weekly" | "interval" | null,
+    "daily" | "weekly" | "interval" | null | undefined
+  >;
+  repeat_seconds: ColumnType<number | null, number | null | undefined>;
   id: string;
   owner_user_id: string;
   thread_id: string;
@@ -2051,6 +2073,7 @@ export interface MossDatabase {
   "app.chat_messages": ChatMessagesTable;
   "app.chat_reminders": ChatRemindersTable;
   "app.chat_scheduled_reads": ChatScheduledReadsTable;
+  "app.chat_reminder_runs": ChatReminderRunsTable;
   "app.chat_reminder_quiet_allowances": ChatReminderQuietAllowancesTable;
   "app.chat_reminder_quiet_proposals": ChatReminderQuietProposalsTable;
   "app.chat_live_turns": ChatLiveTurnsTable;

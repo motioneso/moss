@@ -5,7 +5,11 @@ export function TaskTiming({ task, locale }: TaskDetailProps) {
   if (isPastTask(task) || task.state === "failed") return null;
   return (
     <RowIndex variant="facts" density="compact">
-      <RowIndexItem title="Schedule" meta={formatDateTime(task.dueAt, locale)} />
+      {task.schedule && <RowIndexItem title="Schedule" meta={task.schedule} />}
+      <RowIndexItem
+        title={task.schedule ? "Next reminder" : "Schedule"}
+        meta={formatDateTime(task.dueAt, locale)}
+      />
       {task.deadlineAt && (
         <RowIndexItem title="Not after" meta={formatDateTime(task.deadlineAt, locale)} />
       )}

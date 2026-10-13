@@ -1,8 +1,9 @@
+import { readPersonLocale } from "../person-locale.js";
 import type { PgBoss } from "pg-boss";
 import { HttpError } from "@moss/module-sdk";
 import { pauseReminderById, resumeReminderById, deleteReminderById } from "./controls.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
 import { ACT_AS_GRANT_HEADER } from "@moss/module-sdk/server";
 import {
   listScheduledTasksRouteSchema,
@@ -18,6 +19,7 @@ export function registerScheduledTaskRoutes(
   dependencies: {
     readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
     readonly dataContext: DataContextRunner;
+    readonly localePreferences?: PreferencesPort;
     readonly boss?: Pick<PgBoss, "send">;
   }
 ): void {
@@ -39,9 +41,11 @@ export function registerScheduledTaskRoutes(
     async (request, reply) => {
       try {
         const access = await dependencies.resolveAccessContext(request);
-        const tasks = await dependencies.dataContext.withDataContext(
-          access,
-          listScheduledReminders
+        const tasks = await dependencies.dataContext.withDataContext(access, async (db) =>
+          listScheduledReminders(
+            db,
+            (await readPersonLocale(db, dependencies.localePreferences)).dateFormat
+          )
         );
         // App reads may run from any chat; saved chat content is screen-only.
         if (request.headers[ACT_AS_GRANT_HEADER] !== undefined) {

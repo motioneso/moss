@@ -179,12 +179,13 @@ function openCount(actorUserId: string): Promise<number> {
   return asOwner(actorUserId, (db) => reminders.openCountLocked(db, actorUserId));
 }
 
-/** Resolves once some session is waiting on a row lock over the reminders table. */
+/** Delivery and cancellation serialize on the notification lock before the reminder row. */
 async function waitForLockWaiter(): Promise<void> {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const result = await bootstrap.query<{ waiting: number }>(
       `SELECT count(*)::int AS waiting FROM pg_stat_activity
-        WHERE wait_event_type = 'Lock' AND query ILIKE '%chat_reminders%'`
+        WHERE wait_event_type = 'Lock' AND
+          (query ILIKE '%chat_reminders%' OR query ILIKE '%reminder-notification:%')`
     );
     if ((result.rows[0]?.waiting ?? 0) > 0) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
@@ -293,7 +294,7 @@ describe("cancelling after delivery", () => {
   });
 });
 
-describe("cancel and delivery race on the row lock", () => {
+describe("cancel and delivery race on reminder locks", () => {
   it("waits for a paused delivery that posts, then answers already delivered", async () => {
     const saved = await save(ids.userA, "check the oven");
     await makeDue(saved.id);
@@ -302,8 +303,11 @@ describe("cancel and delivery race on the row lock", () => {
     const delivery = deliver(saved, ids.userA, paused.repo);
     await paused.reached;
     const cancel = cancelInTurn(ids.userA, saved.threadId, "check the oven");
-    await waitForLockWaiter();
-    paused.release();
+    try {
+      await waitForLockWaiter();
+    } finally {
+      paused.release();
+    }
 
     await expect(delivery).resolves.toBe("delivered");
     await expect(cancel).resolves.toMatchObject({ kind: "already_delivered" });
@@ -322,8 +326,11 @@ describe("cancel and delivery race on the row lock", () => {
     const delivery = deliver(saved, ids.userA, paused.repo);
     await paused.reached;
     const cancel = cancelInTurn(ids.userA, saved.threadId, "move the car");
-    await waitForLockWaiter();
-    paused.release();
+    try {
+      await waitForLockWaiter();
+    } finally {
+      paused.release();
+    }
 
     await expect(delivery).rejects.toThrow("delivery failed after pausing");
     await expect(cancel).resolves.toMatchObject({ kind: "cancelled" });
@@ -348,8 +355,11 @@ describe("cancel and delivery race on the row lock", () => {
     });
     await locked;
     const delivery = deliver(saved, ids.userA);
-    await waitForLockWaiter();
-    releaseCancel();
+    try {
+      await waitForLockWaiter();
+    } finally {
+      releaseCancel();
+    }
 
     await expect(cancel).resolves.toMatchObject({ kind: "cancelled" });
     await expect(delivery).resolves.toBe("cancelled");

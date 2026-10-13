@@ -18,7 +18,7 @@ import {
 import type { ReminderTurnPlan } from "./turn.js";
 
 const REFUSED =
-  "I can edit a reminder's text, time or deadline only. I can't change its actions, recipients, destination, repetition or notification permissions. Nothing changed.";
+  "I can edit a reminder's text, timing, repetition or stop time only. I can't change its actions, recipients, destination or notification permissions. Nothing changed.";
 
 /** Prepare under RLS, execute after the transaction closes, and validate again when saving. */
 export async function prepareReminderEdit(
@@ -70,7 +70,7 @@ export async function prepareReminderEdit(
       schema: reminderEditSchema,
       maxOutputTokens: 1000,
       signal,
-      prompt: `${REMINDER_EDIT_GUIDANCE}\n${JSON.stringify({ ownerRequest: text, localNow, timeZone: locale.timeZone, reminders: owned.map((row) => ({ text: row.reminder_text, dueAt: row.due_at, deadlineAt: row.deadline_at, state: row.state })) })}`
+      prompt: `${REMINDER_EDIT_GUIDANCE}\n${JSON.stringify({ ownerRequest: text, localNow, timeZone: locale.timeZone, reminders: owned.map((row) => ({ text: row.reminder_text, dueAt: row.due_at, deadlineAt: row.deadline_at, state: row.state, repeatKind: row.repeat_kind, repeatSeconds: row.repeat_seconds, localDue: row.local_due, timeZone: row.time_zone })) })}`
     },
     { repository: ai, cipher: createAiSecretCipher(), createCliStructuredAdapter: cli }
   );
@@ -110,7 +110,8 @@ export async function prepareReminderEdit(
       terms.text === null &&
       terms.delaySeconds === null &&
       terms.localDue === null &&
-      terms.deadline === "keep"
+      terms.deadline === "keep" &&
+      (terms.repeat === null || terms.repeat === undefined)
     )
       return {
         kind: "edit_refused",

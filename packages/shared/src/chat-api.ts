@@ -272,7 +272,12 @@ export interface ChatClassifierGateOriginV1 {
 }
 
 /** Only inert reminder terms, never actions, recipients or attention permissions. */
+export type ReminderRepeat =
+  | { readonly kind: "daily" | "weekly" }
+  | { readonly kind: "interval"; readonly seconds: number };
+
 export interface ReminderEditTerms {
+  readonly repeat?: ReminderRepeat | "remove" | null;
   readonly text: string | null;
   readonly delaySeconds: number | null;
   readonly localDue: string | null;

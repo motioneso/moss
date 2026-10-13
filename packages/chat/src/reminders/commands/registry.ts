@@ -1,3 +1,4 @@
+import { repeatRequest } from "./repeat-request.js";
 import { edit } from "./edit.js";
 import { scheduledRead } from "./scheduled-read.js";
 import { pause, recognizePause } from "./pause.js";
@@ -23,6 +24,7 @@ export const reminderCommands = {
   quiet_allowance: { execute: quietHoursAllowance },
   quiet_agreement: { execute: quietHoursAllowance },
   request: { execute: request },
+  repeat_request: { execute: repeatRequest },
   clock_request: { execute: clockRequest },
   list: { execute: list, recognize: recognizeList },
   cancel: { execute: cancel, recognize: recognizeCancel }

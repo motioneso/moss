@@ -1,8 +1,20 @@
+import { repeatFor } from "./repository.js";
+import { reminderRepeatDescription } from "./repeating.js";
+import { readReminderRuns } from "./runs.js";
 import { sql } from "kysely";
 import { assertDataContextDb, type ChatReminderState, type DataContextDb } from "@moss/db";
-import type { ScheduledTaskDto, ScheduledTaskRunDto, ScheduledTaskState } from "@moss/shared";
+import type {
+  ScheduledTaskDto,
+  ScheduledTaskRunDto,
+  ScheduledTaskState,
+  LocaleDateFormat
+} from "@moss/shared";
 
 interface ScheduledReminderRow {
+  readonly repeat_kind?: "daily" | "weekly" | "interval" | null;
+  readonly repeat_seconds?: number | null;
+  readonly local_due?: string | null;
+  readonly time_zone?: string | null;
   readonly id: string;
   readonly reminder_text: string;
   readonly state: ChatReminderState;
@@ -27,7 +39,10 @@ const STATES: Record<ChatReminderState, ScheduledTaskState> = {
   cancelled: "cancelled"
 };
 
-export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
+export function scheduledReminder(
+  row: ScheduledReminderRow,
+  clockFormat: LocaleDateFormat = "24"
+): ScheduledTaskDto {
   const runs: ScheduledTaskRunDto[] = [];
   if (row.state === "delivered" && row.delivered_at) {
     runs.push({
@@ -59,11 +74,26 @@ export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
       message: null
     });
   }
+  const repeat = repeatFor({
+    repeat_kind: row.repeat_kind ?? null,
+    repeat_seconds: row.repeat_seconds ?? null
+  });
   return {
     id: row.id,
     title: row.reminder_text,
     instruction: row.reminder_text,
-    group: "Reminders",
+    group:
+      repeat?.kind === "daily"
+        ? "Daily"
+        : repeat?.kind === "weekly"
+          ? "Weekly"
+          : repeat
+            ? "More often"
+            : "Reminders",
+    schedule: repeat
+      ? reminderRepeatDescription(repeat, row.local_due ?? null, row.time_zone ?? null, clockFormat)
+      : null,
+    timeZone: row.time_zone ?? null,
     state: row.read_outcome && row.read_outcome !== "success" ? "failed" : STATES[row.state],
     dueAt: row.due_at.toISOString(),
     deadlineAt: row.deadline_at?.toISOString() ?? null,
@@ -72,7 +102,10 @@ export function scheduledReminder(row: ScheduledReminderRow): ScheduledTaskDto {
   };
 }
 
-export async function listScheduledReminders(scopedDb: DataContextDb): Promise<ScheduledTaskDto[]> {
+export async function listScheduledReminders(
+  scopedDb: DataContextDb,
+  clockFormat: LocaleDateFormat = "24"
+): Promise<ScheduledTaskDto[]> {
   assertDataContextDb(scopedDb);
   const rows = await scopedDb.db
     .selectFrom("app.chat_reminders as reminder")
@@ -88,6 +121,10 @@ export async function listScheduledReminders(scopedDb: DataContextDb): Promise<S
     .select([
       "source_read.outcome as read_outcome",
       "reminder.id",
+      "reminder.repeat_kind",
+      "reminder.repeat_seconds",
+      "reminder.local_due",
+      "reminder.time_zone",
       "reminder.reminder_text",
       "reminder.state",
       "reminder.thread_id",
@@ -104,5 +141,20 @@ export async function listScheduledReminders(scopedDb: DataContextDb): Promise<S
     .orderBy("reminder.due_at", "asc")
     .orderBy("reminder.id", "asc")
     .execute();
-  return rows.map(scheduledReminder);
+  const tasks: ScheduledTaskDto[] = [];
+  for (const row of rows) {
+    const task = scheduledReminder(row, clockFormat);
+    const runs = await readReminderRuns(scopedDb, row.id);
+    tasks.push(
+      runs.length
+        ? {
+            ...task,
+            runs: [...(row.repeat_kind === null ? task.runs : []), ...runs]
+              .sort((a, b) => b.at.localeCompare(a.at))
+              .slice(0, 20)
+          }
+        : task
+    );
+  }
+  return tasks;
 }

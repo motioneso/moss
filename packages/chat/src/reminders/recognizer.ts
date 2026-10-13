@@ -195,7 +195,7 @@ export function normalizeReminderRequest(raw: string): string {
 
 // The saved text keeps the user's own capitalisation. Normalisation only lowercases and
 // collapses whitespace, so the text is found again in the whitespace-collapsed original.
-function originalCaseText(raw: string, normalizedText: string): string {
+export function originalCaseText(raw: string, normalizedText: string): string {
   const collapsed = raw.replace(/\s+/g, " ").trim();
   if (collapsed.toLowerCase().length !== collapsed.length) return normalizedText;
   const start = collapsed.toLowerCase().lastIndexOf(normalizedText);

@@ -44,12 +44,15 @@ export function ScheduledTaskList({
   const past = tasks.filter(isPastTask).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <div className="scheduled-task-groups">
-      {active.length > 0 && (
-        <section aria-label="Reminders">
-          <SectionHead title="Reminders" titleAs="h3" />
-          <TaskRows tasks={active} onSelect={onSelect} />
-        </section>
-      )}
+      {(["Reminders", "Daily", "Weekly", "More often"] as const).map((group) => {
+        const grouped = active.filter((task) => task.group === group);
+        return grouped.length > 0 ? (
+          <section key={group} aria-label={group}>
+            <SectionHead title={group} titleAs="h3" />
+            <TaskRows tasks={grouped} onSelect={onSelect} />
+          </section>
+        ) : null;
+      })}
       {past.length > 0 && (
         <section aria-label="Past tasks">
           <DisclosureToggle

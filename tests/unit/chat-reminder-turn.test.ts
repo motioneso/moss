@@ -280,6 +280,17 @@ describe("chat reminder turn (#3309)", () => {
     expect(recordReminderTurn.mock.calls[0]![2]).toEqual({ kind: "main_only" });
   });
 
+  it("uses creation refusal wording for repeats in private chat", async () => {
+    const { manager, recordReminderTurn } = setup({ incognito: true });
+    const result = await manager.submitTurn("u1", "Ben", "remind me every 60 seconds to stretch");
+    expect(result.reply).toBe(REMINDER_MAIN_ONLY_REPLY);
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+  });
+  it("uses creation failure wording when a repeat cannot be stored", async () => {
+    const { manager } = setup({ record: vi.fn().mockRejectedValue(new Error("db down")) });
+    const result = await manager.submitTurn("u1", "Ben", "remind me every 60 seconds to stretch");
+    expect(result.reply).toBe(REMINDER_STORAGE_FAILURE_MESSAGE);
+  });
   it("refuses in a private chat and stores nothing", async () => {
     const { manager, engine, recordReminderTurn, records } = setup({ incognito: true });
     const result = await manager.submitTurn("u1", "Ben", "remind me in 10 minutes to stretch");

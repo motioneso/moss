@@ -184,7 +184,8 @@ describe("app-map integrity and truthfulness", () => {
   it("declares clock reminders, their deadline and every refusal Moss gives (#3150)", () => {
     const feature = (id: string) => appMap.features.find((item) => item.id === id);
     expect(feature("chat.clock_reminders")?.description).toContain("today, tonight or tomorrow");
-    expect(feature("chat.clock_reminders")?.description).toContain("Repeats are not available");
+    expect(feature("chat.clock_reminders")?.description).toContain("Daily and weekly repeats");
+    expect(feature("chat.repeating_reminders")?.description).toContain("60-86399-second");
     expect(feature("chat.reminder_deadline")?.description).toContain("never after the deadline");
     expect(feature("chat.reminder_deadline")?.description).toContain("marked late");
     expect(feature("chat.relative_reminders")?.description).not.toContain("No clock times");

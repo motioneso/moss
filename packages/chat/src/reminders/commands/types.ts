@@ -1,3 +1,4 @@
+import type { RepeatRequest } from "../repeat-recognizer.js";
 import type { ReminderEditProposal } from "@moss/shared";
 import type { ScheduledReadPlan } from "../../scheduled-reads/request.js";
 import type { QuietHoursCommand } from "../quiet-hours-recognizer.js";
@@ -13,6 +14,7 @@ import type { ReminderRepository } from "../repository.js";
 export type ReminderTurnPlan =
   | ScheduledReadPlan
   | QuietHoursCommand
+  | RepeatRequest
   | { readonly kind: "edit"; readonly proposal: ReminderEditProposal }
   | { readonly kind: "edit_selection"; readonly selection: string }
   | { readonly kind: "edit_refused"; readonly reply: string }
