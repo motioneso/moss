@@ -14,12 +14,21 @@ import {
 } from "../../packages/chat/src/responsibility-agreements/repository.js";
 import { listApprovedActionScopes } from "../../packages/chat/src/responsibility-agreements/settings.js";
 import { BOUNDED_ACTION_PROPOSAL_KIND } from "../../packages/chat/src/responsibility-agreements/prepare.js";
+const FIXTURE_OWNER_TIME_ZONE = "America/Los_Angeles";
 function persistence(available = true) {
   return new DataContextChatPersistence({
     dataContext: app,
     chatRepository: chat,
     aiRepository: new AiRepository(),
     boss,
+    localePreferences: {
+      get: async (_db, key) =>
+        key === "locale"
+          ? { timezone: FIXTURE_OWNER_TIME_ZONE, region: "US", dateFormat: "24" }
+          : null,
+      getWithMetadata: async () => null,
+      upsert: async () => undefined
+    },
     canProposeBoundedAction: async () => available
   });
 }
@@ -53,7 +62,11 @@ async function propose(delayMs = 600_000) {
     pendingResponsibilityProposal(db, thread.id, BOUNDED_ACTION_PROPOSAL_KIND, boundedActionScope)
   );
   expect(pending).toBeDefined();
-  return { task, thread, scope, proposal: pending! };
+  const agreedScope = { ...scope, timeZone: FIXTURE_OWNER_TIME_ZONE };
+  // Expected authority is computed from the independently configured owner locale, not DB output.
+  expect(pending!.terms).toEqual(agreedScope);
+  expect(stored && stored !== "stopped" && stored.reply).toContain(FIXTURE_OWNER_TIME_ZONE);
+  return { task, thread, scope: agreedScope, proposal: pending! };
 }
 async function acceptedCount(id: string) {
   const result = await bootstrap.query(

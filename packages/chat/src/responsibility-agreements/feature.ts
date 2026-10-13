@@ -3,7 +3,7 @@ export const responsibilityAgreementFeature = {
   id: "chat.bounded_action_agreements",
   featureFlagId: "chat.module",
   description:
-    "With a configured JSON model and currently available Tasks status-change capability, in Main chat ask to mark one owned task done at a future relative time. Moss asks once in ordinary text. Typed yes saves the exact agreement under Settings, Scheduled tasks, Approved changes - not active. These records cannot run or resume; scheduled writes and action-scope editing are unavailable.",
+    "With a configured JSON model and available Tasks status-change tool, Main chat saves a typed agreement to mark one owned task done later. Inspect scope in Settings. Agreements stay inactive; no execution, Resume or scope edits.",
   errors: [
     {
       code: "bounded_action_model_unavailable",
@@ -33,7 +33,7 @@ export const responsibilityAgreementFeature = {
     },
     {
       code: "bounded_action_not_active",
-      class: "prerequisite",
+      class: "validation",
       description:
         "Saved action agreements are not scheduled tasks. No change runs and no Resume control exists. Timing, pause/resume and task delivery controls do not activate these agreements."
     }

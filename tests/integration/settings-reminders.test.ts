@@ -121,7 +121,7 @@ async function deliver(actorUserId: string, instruction: string, body: string) {
 describe("read-only Settings reminders", () => {
   it("requires an actor and returns an empty list for a fresh account", async () => {
     expect((await server.inject({ url: "/api/chat/scheduled-tasks" })).statusCode).toBe(401);
-    expect(await list(ids.userC)).toEqual({ tasks: [] });
+    expect(await list(ids.userC)).toEqual({ tasks: [], approvedScopes: [] });
   });
   it("shows only the owner's records, including all past records", async () => {
     const own = await save(ids.userA, "private stretch");
