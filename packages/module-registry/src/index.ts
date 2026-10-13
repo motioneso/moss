@@ -1,3 +1,4 @@
+import { createScheduledReportGenerator } from "@moss/chat";
 import { SessionTokenRegistry, ConfirmationRegistry } from "@moss/ai";
 import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
 export { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
@@ -2392,6 +2393,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       }),
     registerWorkers: (boss, deps) =>
       registerChatJobWorkers(boss, deps.dataContext, {
+        scheduledReportGenerator: createScheduledReportGenerator({
+          dataContext: deps.dataContext,
+          createCliStructuredAdapter: createCliStructuredAdapterFactory()
+        }),
         scheduledReadGateway: new AssistantToolGateway({
           runner: deps.dataContext,
           repository: new AiRepository(),

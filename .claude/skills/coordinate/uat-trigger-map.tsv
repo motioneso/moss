@@ -12,6 +12,8 @@
 #
 # When you add a UAT spec, add its rows here in the same PR.
 blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3152-configured-source-report.uat.spec.ts
+blocking	packages/ai/src/gateway/actor-read-failure.ts	tests/uat/specs/3152-configured-source-report.uat.spec.ts
 blocking	packages/chat/sql/0318_chat_scheduled_reads.sql	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
 blocking	packages/chat/src/reminders/commands/scheduled-read.ts	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
 blocking	packages/ai/src/gateway/gateway.ts	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts

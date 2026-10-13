@@ -1,7 +1,8 @@
 # Configured source reports with bounded read retries
 
 Part of #3152, under #3137. Base: integration/scheduled-proactive at 4b2846f8e.
-Risk: sensitive. Status: awaiting coordinator approval; no feature code written.
+Risk: sensitive. Status: approved by the coordinator at 9d4a69caa; implementation
+complete, final verification and live proof in progress.
 
 ## Scope and verified foundations
 
@@ -141,6 +142,18 @@ normal report. Reload, reply, inspect Settings history, and verify only one resu
 For a second check delete its source through the real UI before execution and verify
 an access refusal with no title/status/source content. Prove quiet-hours persistence
 with outward policy unchanged. No response interception, screenshots or test retries.
+
+Verification adjustment: Tasks is core and exposes no delete or disable UI. The live
+proof removes only its disposable source row as disclosed fault setup, following
+the prerequisite proof. Creation, scheduling, status change, report, reply and
+Settings history still use the real UI. Webmail links do not apply because Tasks
+is the only supported source, as the coordinator explicitly confirmed.
+
+The coordinator also confirmed the explicit creation errors and cancellation
+behavior above. A cancelled turn must not start another model turn, and an
+unavailable prerequisite must not imply that a check was saved. Hostile task titles
+are tested through the report generator and schema as well as the renderer.
+The narrowed isolated gate uses the added test:integration:3152 pnpm script.
 
 Kill gate: after this single phase's first assembled live proof, the coordinator
 decides whether to stop if the economy model cannot provide a supported sourced

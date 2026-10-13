@@ -1,4 +1,5 @@
 import { emitInputValidationFailure } from "./validation-failure.js";
+import { actorReadFailure } from "./actor-read-failure.js";
 import { localeContext } from "./locale-context.js";
 import { randomUUID } from "node:crypto";
 
@@ -632,14 +633,7 @@ export class AssistantToolGateway {
     } catch (error) {
       if (error === backgroundReadRefused)
         return { ok: false, error: "Background source access refused" };
-      // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
-      // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
-      (this.deps.logger ?? defaultGatewayLogger).error("read_tool_handler_threw", {
-        toolName: found.tool.name,
-        requestId,
-        errorClass: "handler_error"
-      });
-      return { ok: false, error: `Tool ${found.tool.name} failed` };
+      return actorReadFailure(found, requestId, error, this.deps.logger ?? defaultGatewayLogger);
     }
   }
 

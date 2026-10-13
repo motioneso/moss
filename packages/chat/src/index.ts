@@ -114,3 +114,5 @@ export * from "./routes.js";
 export * from "./skills/repository.js";
 
 export { createConstrainedCliStructuredAdapterFactory } from "./live/constrained-structured-adapter.js";
+
+export { createScheduledReportGenerator } from "./scheduled-reads/report-generation.js";

@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { AssistantToolGateway } from "@moss/ai";
 import type { ModuleAssistantToolManifest, MossModuleManifest } from "@moss/module-sdk";
 
-function fixture(risk: ModuleAssistantToolManifest["risk"] = "read", allowed = true) {
+function fixture(
+  risk: ModuleAssistantToolManifest["risk"] = "read",
+  allowed = true,
+  isExternal = false
+) {
   const execute = vi.fn(async () => ({
     data: { task: { id: "item", title: "Proof", status: "todo" } }
   }));
@@ -20,6 +24,7 @@ function fixture(risk: ModuleAssistantToolManifest["risk"] = "read", allowed = t
         description: "Read",
         permissionId: "tasks.view",
         risk,
+        isExternal,
         authorizeBackgroundRead,
         execute
       },
@@ -57,6 +62,18 @@ function fixture(risk: ModuleAssistantToolManifest["risk"] = "read", allowed = t
 }
 const read = { operation: "tasks.get", itemId: "item", runId: "run" };
 describe("the real background read gateway", () => {
+  it("marks only classified temporary source failures retryable", async () => {
+    const f = fixture();
+    f.execute.mockRejectedValueOnce(Object.assign(new Error("private"), { code: "ECONNRESET" }));
+    expect(await f.gateway.runBackgroundReadForActor("owner", read)).toMatchObject({
+      ok: false,
+      retryable: true
+    });
+    f.execute.mockRejectedValueOnce(new Error("private"));
+    expect(await f.gateway.runBackgroundReadForActor("owner", read)).not.toHaveProperty(
+      "retryable"
+    );
+  });
   it("returns source data without touching conversation authority", async () => {
     const f = fixture();
     expect(await f.gateway.runBackgroundReadForActor("owner", read)).toMatchObject({
@@ -64,6 +81,25 @@ describe("the real background read gateway", () => {
       structuredData: { task: { title: "Proof", status: "todo" } }
     });
     expect(f.execute.mock.calls).toHaveLength(1);
+  });
+  it("does not retry external failures or inspect a hostile proxy", async () => {
+    const external = fixture("read", true, true);
+    external.execute.mockRejectedValueOnce(
+      Object.assign(new Error("private"), { code: "ETIMEDOUT" })
+    );
+    expect(await external.gateway.runBackgroundReadForActor("owner", read)).not.toHaveProperty(
+      "retryable"
+    );
+    const getCode = vi.fn(() => {
+      throw new Error("must not inspect getters");
+    });
+    const hostile = new Proxy(new Error("private"), { get: getCode });
+    const firstParty = fixture();
+    firstParty.execute.mockRejectedValueOnce(hostile);
+    expect(await firstParty.gateway.runBackgroundReadForActor("owner", read)).not.toHaveProperty(
+      "retryable"
+    );
+    expect(getCode).not.toHaveBeenCalled();
   });
   it.each(["tasks.update", "tasks.delete", "tasks.list"])(
     "refuses %s before invoking a handler",

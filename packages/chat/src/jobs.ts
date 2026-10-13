@@ -485,6 +485,7 @@ export async function handleArchiveDayJob(
 
 export interface RegisterChatJobWorkersOptions {
   readonly scheduledReadGateway?: ScheduledReadRunnerDeps["gateway"];
+  readonly scheduledReportGenerator?: ScheduledReadRunnerDeps["generateReport"];
   readonly reminderNotifications: NotificationsRepository;
   readonly embeddingProviderFactory: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
   /**
@@ -619,13 +620,18 @@ export async function registerChatJobWorkers(
     options.workOptions
   );
 
-  const readWorkId = options.scheduledReadGateway
-    ? await registerScheduledReadWorker(
-        boss,
-        { dataContext, gateway: options.scheduledReadGateway },
-        options.workOptions
-      )
-    : null;
+  const readWorkId =
+    options.scheduledReadGateway && options.scheduledReportGenerator
+      ? await registerScheduledReadWorker(
+          boss,
+          {
+            dataContext,
+            gateway: options.scheduledReadGateway,
+            generateReport: options.scheduledReportGenerator
+          },
+          options.workOptions
+        )
+      : null;
 
   const workIds = [
     ...(readWorkId ? [readWorkId] : []),

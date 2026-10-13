@@ -6,7 +6,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.scheduled_owner_read",
     description:
-      "In Main, ask Moss to check one owned task later. Your model selects the task and time; Moss saves and posts a sourced result. Plain reminders and questions keep their usual paths. Reminder controls, limits and notification policy apply.",
+      "In Main, ask Moss to check one owned task later. Your configured JSON model selects the task and time, then writes a sourced report. Plain reminders and questions keep their usual paths. Reminder controls and notification policy apply.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -41,10 +41,16 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
           "If the source capability or owned task is no longer accessible at run time, Moss posts a refusal without source data. Choose an accessible task and request a new check."
       },
       {
+        code: "scheduled_report_failed",
+        class: "transient",
+        description:
+          "Missing model setup, a model timeout, an invalid report or a changed source produces an honest failure without source prose. Check your configured JSON model and ask for a new check."
+      },
+      {
         code: "scheduled_read_failed",
         class: "transient",
         description:
-          "A temporary source failure retries quietly twice, then posts that the check failed. Request a new check when the source is available."
+          "A classified temporary source failure retries quietly twice, then posts a failure. Other read failures and model failures do not retry. Request a new check when the source and model are available."
       }
     ],
     remediations: [
