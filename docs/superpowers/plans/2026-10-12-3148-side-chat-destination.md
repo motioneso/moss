@@ -303,3 +303,21 @@ both directions and one destination-only edit, with raw destinations captured.
 If a combined edit fails, revert that sentence and implement an atomic refusal
 for combined destination edits, asking for a separate destination message.
 Record the limitation in a Part of #3148 follow-up and continue full verification.
+
+## Posting recheck after PR 3502
+
+Coordinator ruling: rebase onto 8c4b1aff5 before final proof. The shared load
+function now runs immediately before posting as well as around report generation;
+the carried owned-destination check applies to every call. Add deleted and
+ownership-loss cases after the last source read, observe failure with the guard
+removed, restore it and verify no result is posted and the task remains failed.
+Update the existing 3148 scheduled-read fixture for the report-generator contract
+and two source reads introduced by 3502. No extra runner change is needed.
+
+Intermediate head 50bf307cc passed three combined edits and the destination-only
+edit with raw destinations "Travel proof chat", "Main", "Travel proof chat".
+Delivery completed but the reopened side chat hid its live arrival. The drawer's
+history-only branch also hid correctly filtered background records. Allow only
+background records whose destination equals the confirmed reopened chat. The
+unit test failed before this fix and passed afterward; prior-chat live turns and
+Main background results remain hidden. Repeat all final proofs after this change.

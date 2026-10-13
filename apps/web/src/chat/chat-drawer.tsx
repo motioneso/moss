@@ -419,15 +419,25 @@ export function ChatDrawer(props: ChatDrawerProps) {
   const reviewing = reviewThreadId !== null;
   const persistedRecords = reviewing ? recordsFromMessages(messagesQuery.data?.messages ?? []) : [];
 
-  // A side chat started here shows its stored history plus the live turn not yet stored. A
-  // reopened thread shows stored history only, so the previous thread's stream never shows under it.
+  // Reopened chats accept only background arrivals for their confirmed destination.
+  // The previous chat's live turn stays hidden until a new live thread is bound.
   const liveTail =
     reviewing &&
     liveThreadId === reviewThreadId &&
     !historyActivationPending &&
     !props.meetingContext
       ? reconcileFallbacks(props.records, persistedRecords)
-      : [];
+      : reviewing &&
+          confirmedSelection?.threadId === reviewThreadId &&
+          !historyActivationPending &&
+          !props.meetingContext
+        ? reconcileFallbacks(
+            props.records.filter(
+              (record) => record.background && record.backgroundThreadId === reviewThreadId
+            ),
+            persistedRecords
+          )
+        : [];
   const displayRecords = reviewing ? [...persistedRecords, ...liveTail] : props.records;
   const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
   const effectiveRecords: readonly TranscriptRecord[] = [

@@ -65,14 +65,14 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_destinations",
     description:
-      "Tasks default to Main; name one owned chat or this chat. Names ignore case, spaces, leading the and trailing chat/conversation. Destination-only edits keep text/time. Private, module, foreign and ambiguous chats are refused.",
+      "Tasks default to Main; name one owned chat or this chat. Results appear only there, including reopened chats. Names tolerate ordinary wording. Destination-only edits keep text/time. Private, module, foreign and ambiguous chats are refused.",
     featureFlagId: "chat.module",
     errors: [
       {
         code: "reminder_destination_unavailable",
         class: "validation",
         description:
-          "A missing, ambiguous or unavailable destination saves nothing. A destination lost before delivery leaves the task failed without posting to Main."
+          "A missing, ambiguous or unavailable destination saves nothing. A destination lost before or during a run leaves the task failed without posting to Main."
       }
     ],
     remediations: [

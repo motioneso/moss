@@ -309,7 +309,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
   }
 });
 
-it("keeps the previous conversation's live turn out of a reopened side chat", async () => {
+it("shows only the reopened side chat's background arrivals and excludes the previous live turn", async () => {
   vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false, threadId: "a" });
   vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
   vi.mocked(listChatThreads).mockResolvedValue({
@@ -351,12 +351,32 @@ it("keeps the previous conversation's live turn out of a reopened side chat", as
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await act(async () => {
-      renderer.update(view(mainTurn));
+      renderer.update(
+        view([
+          ...mainTurn,
+          {
+            kind: "reply",
+            text: "Side reminder arrived",
+            messageId: "side-result",
+            background: true,
+            backgroundThreadId: "b"
+          },
+          {
+            kind: "reply",
+            text: "Main reminder arrived",
+            messageId: "main-result",
+            background: true,
+            backgroundThreadId: "a"
+          }
+        ])
+      );
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(vi.mocked(resumeChat)).toHaveBeenCalled();
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Question asked in Main");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Main reminder arrived");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Side reminder arrived");
   } finally {
     await act(async () => renderer?.unmount());
     client.clear();

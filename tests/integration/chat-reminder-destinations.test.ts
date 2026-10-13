@@ -190,10 +190,17 @@ describe("owned task destinations", () => {
             version: saved.version + 1
           }
         },
-        { dataContext: worker, gateway: { runBackgroundReadForActor: read } }
+        {
+          dataContext: worker,
+          gateway: { runBackgroundReadForActor: read },
+          generateReport: async () => ({
+            ok: true,
+            text: "I checked Destination source. Its status is done.\n\n[Source: Tasks](/tasks)"
+          })
+        }
       );
       expect(result).toBe(availability === "available" ? "success" : "inactive");
-      expect(read).toHaveBeenCalledTimes(availability === "available" ? 1 : 0);
+      expect(read).toHaveBeenCalledTimes(availability === "available" ? 2 : 0);
       const messages = await bootstrap.query(
         "SELECT thread_id, body FROM app.chat_messages WHERE id = $1",
         [saved.reserved_message_id]
@@ -215,6 +222,63 @@ describe("owned task destinations", () => {
         expect(
           await owner((db) => chat.getMessageById(db, saved.reserved_message_id), ids.userB)
         ).toBeUndefined();
+    }
+  );
+  it.each(["deleted", "foreign"])(
+    "posts nothing when the destination becomes %s immediately before posting",
+    async (availability) => {
+      const target = await side(`Lost during run ${availability}`);
+      const saved = await save(target.id, "this chat");
+      const itemId = randomUUID();
+      await owner((db) => saveScheduledOperation(db, saved.id, itemId));
+      await due(saved.id);
+      let reads = 0;
+      const read = async () => {
+        reads += 1;
+        if (reads === 2) {
+          if (availability === "deleted")
+            await bootstrap.query("DELETE FROM app.chat_threads WHERE id = $1", [target.id]);
+          else {
+            // Ownership is immutable in production; represent revocation in the fixture.
+            await bootstrap.query("BEGIN");
+            try {
+              await bootstrap.query("SET LOCAL session_replication_role = replica");
+              await bootstrap.query(
+                "UPDATE app.chat_threads SET owner_user_id = $1 WHERE id = $2",
+                [ids.userB, target.id]
+              );
+              await bootstrap.query("COMMIT");
+            } catch (error) {
+              await bootstrap.query("ROLLBACK");
+              throw error;
+            }
+          }
+        }
+        return {
+          ok: true as const,
+          data: {},
+          structuredData: { task: { id: itemId, title: "Destination source", status: "done" } }
+        };
+      };
+      expect(
+        await runScheduledReadJob(
+          { data: { actorUserId: ids.userA, resourceId: saved.id, version: saved.version } },
+          {
+            dataContext: worker,
+            gateway: { runBackgroundReadForActor: read },
+            generateReport: async () => ({ ok: true, text: "Private report must be discarded" })
+          }
+        )
+      ).toBe("inactive");
+      expect(reads).toBe(2);
+      expect((await owner((db) => reminders.readState(db, saved.id)))?.state).toBe("failed");
+      const messages = await bootstrap.query("SELECT id FROM app.chat_messages WHERE id = $1", [
+        saved.reserved_message_id
+      ]);
+      expect(messages.rows).toEqual([]);
+      expect(
+        await owner((db) => chat.getMessageById(db, saved.reserved_message_id), ids.userB)
+      ).toBeUndefined();
     }
   );
   it("advances side repeats and validates the destination again on the next firing", async () => {
