@@ -6,9 +6,11 @@ export function actorReadFailure(
   found: ExecutableTool,
   requestId: string,
   error: unknown,
-  logger: GatewayLogger
+  logger: GatewayLogger,
+  background: boolean
 ): GatewayToolResponse {
-  const cause = found.tool.isExternal === false ? classifyToolDependencyFailure(error) : null;
+  const cause =
+    background && found.tool.isExternal === false ? classifyToolDependencyFailure(error) : null;
   logger.error("read_tool_handler_threw", {
     toolName: found.tool.name,
     requestId,
@@ -17,7 +19,7 @@ export function actorReadFailure(
   return {
     ok: false,
     error: `Tool ${found.tool.name} failed`,
-    failureKind: "read",
+    ...(background ? { failureKind: "read" as const } : {}),
     ...(cause && cause !== "upstream_http_error" ? { retryable: true as const } : {})
   };
 }

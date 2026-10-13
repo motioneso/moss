@@ -62,6 +62,14 @@ function fixture(
 }
 const read = { operation: "tasks.get", itemId: "item", runId: "run" };
 describe("the real background read gateway", () => {
+  it("keeps ordinary chat reads on their existing error contract", async () => {
+    const f = fixture();
+    f.execute.mockRejectedValueOnce(Object.assign(new Error("private"), { code: "ECONNRESET" }));
+    expect(await f.gateway.runReadToolForActor("owner", "tasks.get", { taskId: "item" })).toEqual({
+      ok: false,
+      error: "Tool tasks.get failed"
+    });
+  });
   it("marks only classified temporary source failures retryable", async () => {
     const f = fixture();
     f.execute.mockRejectedValueOnce(Object.assign(new Error("private"), { code: "ECONNRESET" }));

@@ -633,7 +633,13 @@ export class AssistantToolGateway {
     } catch (error) {
       if (error === backgroundReadRefused)
         return { ok: false, error: "Background source access refused" };
-      return actorReadFailure(found, requestId, error, this.deps.logger ?? defaultGatewayLogger);
+      return actorReadFailure(
+        found,
+        requestId,
+        error,
+        this.deps.logger ?? defaultGatewayLogger,
+        background
+      );
     }
   }
 
