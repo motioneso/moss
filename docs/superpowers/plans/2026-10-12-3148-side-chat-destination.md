@@ -274,3 +274,14 @@ The owner resolver honestly refused the missing target. A unit regression failed
 with that value, then the parser was corrected to preserve the special phrase.
 This is deterministic parsing, with no further model guidance tuning. The first
 full gate was stopped with rc 143 because the proof found this correction.
+
+Coordinator ruled that clear destination-only edits must use code ahead of the
+model if the model refused. The captured assistant refusal matches the branch
+entered only after a validated model response sets unsupported true. Destination
+resolution and empty edits have different replies. The raw one-shot transcript
+is purged by the adapter, so its original JSON cannot be quoted. Explicit named
+reminder or task destination edits now reuse target matching and the existing
+editor, including ambiguity, row locks and owned-target validation. Combined
+edits remain on the model path. Guidance stays unchanged. Final live proof must
+run two destination-only edits and one combined text and destination edit with
+gpt-6-luna pinned, stopping without tuning if the combined edit fails.

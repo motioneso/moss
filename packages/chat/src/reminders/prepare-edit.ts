@@ -9,7 +9,7 @@ import type { ReminderLocale } from "./clock-wording.js";
 import { normalizeReminderText, matchTarget } from "./cancel.js";
 import { pendingReminderEdit, matchReminderEditSelection } from "./edit-agreement.js";
 import { readEditableReminders } from "./edit.js";
-import { recognizeReminderEdit } from "./edit-recognizer.js";
+import { recognizeReminderEdit, recognizeReminderDestinationEdit } from "./edit-recognizer.js";
 import {
   reminderEditSchema,
   REMINDER_EDIT_GUIDANCE,
@@ -45,6 +45,34 @@ export async function prepareReminderEdit(
   if (!recognizeReminderEdit(text)) return async () => undefined;
   const owned = await readEditableReminders(scopedDb);
   if (owned.length === 0) return async () => undefined;
+  const destinationOnly = recognizeReminderDestinationEdit(text);
+  if (destinationOnly) {
+    const matches = matchTarget(
+      owned.map((row) => ({ ...row, text: row.reminder_text })),
+      destinationOnly.target
+    );
+    return async () =>
+      matches.length
+        ? {
+            kind: "edit",
+            proposal: {
+              candidates: matches.map((row) => ({ id: row.id, version: row.version })),
+              terms: {
+                text: null,
+                delaySeconds: null,
+                localDue: null,
+                repeat: null,
+                deadline: "keep",
+                localDeadline: null,
+                destination: destinationOnly.destination
+              }
+            }
+          }
+        : {
+            kind: "edit_refused",
+            reply: "I couldn't find a waiting reminder with those words. Nothing changed."
+          };
+  }
   const { model } = await ai.resolveModelForService(scopedDb, "module.chat", {
     capability: "json"
   });

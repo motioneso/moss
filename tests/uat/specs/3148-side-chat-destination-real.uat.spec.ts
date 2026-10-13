@@ -75,22 +75,42 @@ test("real task creation, destination edits, isolated delivery and failed target
   await send(page, drawer, "Travel proof. Reply briefly: ready to pack.");
   const side = (await threads(page)).find((t) => t.id === sideId)!;
   expect(side.isMain).toBe(false);
-  await send(page, drawer, "remind me in 60 seconds to default route proof");
+  await send(page, drawer, "remind me in 90 seconds to default route proof");
   const defaultTask = (await tasks(page)).find((t) => t.instruction === "default route proof")!;
   expect(defaultTask.destination).toBeUndefined();
-  await send(page, drawer, "remind me in 90 seconds to side route proof, send it to this chat");
+  await send(page, drawer, "remind me in 150 seconds to side route proof, send it to this chat");
   const explicit = (await tasks(page)).find((t) => t.instruction === "side route proof")!;
   expect(explicit.destination).toEqual({ threadId: sideId, title: side.title });
-  await send(page, drawer, "remind me in 90 seconds to edited route proof");
+  await send(page, drawer, "remind me in 150 seconds to edited route proof");
   const original = (await tasks(page)).find((t) => t.instruction === "edited route proof")!;
   await send(page, drawer, `send my edited route proof reminder to the ${side.title} chat`);
-  const edited = (await tasks(page)).find((t) => t.id === original.id)!;
+  let edited = (await tasks(page)).find((t) => t.id === original.id)!;
   expect(
     edited.destination,
     "kill gate: real economy model must extract a destination-only edit"
   ).toEqual({ threadId: sideId, title: side.title });
   expect(edited.dueAt).toBe(original.dueAt);
   expect(edited.instruction).toBe(original.instruction);
+  console.log("[3148] destination-only run 1 changed Main to the named owned side chat");
+  await send(page, drawer, "send my edited route proof reminder to Main");
+  edited = (await tasks(page)).find((t) => t.id === original.id)!;
+  expect(edited.destination).toBeUndefined();
+  expect(edited.dueAt).toBe(original.dueAt);
+  expect(edited.instruction).toBe(original.instruction);
+  console.log("[3148] destination-only run 2 changed the side destination to Main");
+  await send(
+    page,
+    drawer,
+    `change my edited route proof reminder text to combined route proof and send it to the ${side.title} chat`
+  );
+  edited = (await tasks(page)).find((t) => t.id === original.id)!;
+  expect(edited.destination, "stop if the real model refuses the combined edit").toEqual({
+    threadId: sideId,
+    title: side.title
+  });
+  expect(edited.instruction).toBe("combined route proof");
+  expect(edited.dueAt).toBe(original.dueAt);
+  console.log("[3148] combined text and destination edit passed through the real model once");
   console.log(
     "[3148] default Main from side, explicit this chat and destination-only edit saved through UI"
   );

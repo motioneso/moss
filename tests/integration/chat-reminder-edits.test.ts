@@ -325,6 +325,48 @@ describe("editing owner reminders", () => {
     });
     expect(resolve).not.toHaveBeenCalled();
   });
+  it("routes explicit destination edits without a model and preserves target choices", async () => {
+    const first = await save(ids.userA, "direct destination one");
+    const second = await save(ids.userA, "direct destination two");
+    const target = await asOwner(ids.userA, (db) =>
+      chat.openNewThread(db, { title: "Direct owned" })
+    );
+    await asOwner(ids.userB, (db) => chat.openNewThread(db, { title: "Direct foreign" }));
+    const ai = new AiRepository();
+    const resolve = vi.spyOn(ai, "resolveModelForService");
+    const prepare = async (raw: string) => {
+      const run = await asOwner(ids.userA, (db) =>
+        prepareReminderEdit(db, ai, undefined, raw, first.threadId, locale)
+      );
+      return (await run())!;
+    };
+    const ambiguous = "send my direct destination reminder to Main";
+    expect((await turn(first.threadId, ambiguous, await prepare(ambiguous))).origin.event).toBe(
+      "edit_requested"
+    );
+    for (const [raw, threadId] of [
+      ["send my direct destination one reminder to the Direct owned chat", target.id],
+      ["deliver my direct destination one task results to Main", first.threadId],
+      ["post my direct destination one reminder in this chat", first.threadId]
+    ]) {
+      expect((await turn(first.threadId, raw!, await prepare(raw!))).origin.event).toBe("edited");
+      const row = await asOwner(
+        ids.userA,
+        async (db) => (await readEditableReminders(db)).find((r) => r.id === first.id)!
+      );
+      expect(row.thread_id).toBe(threadId);
+      expect(row.reminder_text).toBe("direct destination one");
+      expect(row.due_at).toEqual(first.dueAt);
+    }
+    const foreign = "send my direct destination one reminder to the Direct foreign chat";
+    expect((await turn(first.threadId, foreign, await prepare(foreign))).origin.event).toBe(
+      "refused"
+    );
+    expect(resolve).not.toHaveBeenCalled();
+    await asOwner(ids.userA, (db) =>
+      db.db.deleteFrom("app.chat_reminders").where("id", "in", [first.id, second.id]).execute()
+    );
+  });
   it("lets the interpreter distinguish inert replacement words from unsupported capabilities", async () => {
     const saved = await save(ids.userA, "inert replacement");
     const ai = new AiRepository();

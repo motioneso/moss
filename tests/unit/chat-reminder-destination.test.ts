@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { recognizeReminderPlan } from "../../packages/chat/src/reminders/commands.js";
-import { recognizeReminderEdit } from "../../packages/chat/src/reminders/edit-recognizer.js";
+import {
+  recognizeReminderEdit,
+  recognizeReminderDestinationEdit
+} from "../../packages/chat/src/reminders/edit-recognizer.js";
 import { validateReminderEdit } from "../../packages/chat/src/reminders/edit-interpretation.js";
 
 describe("explicit reminder destinations", () => {
@@ -53,5 +56,29 @@ describe("explicit reminder destinations", () => {
     };
     expect(validateReminderEdit(value)).toEqual(value);
     expect(validateReminderEdit({ ...value, ownerUserId: "another owner" })).toBeUndefined();
+  });
+});
+
+describe("explicit destination-only edits", () => {
+  it.each([
+    ["send my stretch reminder to the Travel chat", "stretch", "Travel"],
+    ["deliver the check eyes task results to Main", "check eyes", "Main"],
+    ["post my stretch reminder in this chat", "stretch", "this chat"]
+  ])("extracts the named pending task and destination: %s", (raw, target, destination) => {
+    expect(recognizeReminderDestinationEdit(raw)).toEqual({ target, destination });
+  });
+  it.each([
+    "send this paragraph to the Travel chat",
+    "I send my stretch reminder to Main every day",
+    "what happens if I send my stretch reminder to Main?",
+    "send my reminder to Main",
+    "send my reminder app subscription to Main",
+    "send my stretch reminder to Travel and change its text to bring water",
+    "change my stretch reminder text to bring water and send it to Travel",
+    "send my stretch reminder to Main tomorrow at 9am",
+    "send my stretch reminder to Travel with text changed to bring water",
+    "x".repeat(701)
+  ])("leaves ordinary sentences and combined edits unchanged: %s", (raw) => {
+    expect(recognizeReminderDestinationEdit(raw)).toBeUndefined();
   });
 });
