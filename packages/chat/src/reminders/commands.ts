@@ -34,7 +34,7 @@ export function recognizeReminderPlan(raw: string): ReminderTurnPlan | undefined
   const quiet = recognizeQuietHoursCommand(raw);
   if (quiet) return quiet;
   const delivery =
-    /(?:,\s*|\s+and\s+|\s+)(?:send|post|deliver) (?:it|(?:the |its )?results?|(?:the )?reminder) (?:to|in) (.+?)[.!]?$/i.exec(
+    /(?:,\s*|\s+and\s+)(?:send|post|deliver) (?:it|(?:the |its )?results?|(?:the )?reminder) (?:to|in) (.+?)[.!]?$/i.exec(
       raw
     );
   const here = /\s+in (this chat)[.!]?$/i.exec(raw);

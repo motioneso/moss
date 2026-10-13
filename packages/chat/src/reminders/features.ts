@@ -65,7 +65,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_destinations",
     description:
-      "Tasks default to Main; name one owned chat or this chat. Results appear only there, including reopened chats. Change destination separately from other terms. Private, module, foreign and ambiguous chats are refused.",
+      "Tasks default to Main; append a comma or and before send it to one owned chat, or say in this chat. Results appear only there. Change destination separately. Private, module, foreign and ambiguous chats are refused.",
     featureFlagId: "chat.module",
     errors: [
       {

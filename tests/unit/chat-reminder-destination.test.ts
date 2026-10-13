@@ -32,11 +32,16 @@ describe("explicit reminder destinations", () => {
       destination: "Travel"
     });
   });
-  it("does not turn an inert chat mention into routing", () => {
-    expect(recognizeReminderPlan("remind me in 5 minutes to read the Travel chat")).toEqual({
+  it.each([
+    "read the Travel chat",
+    "tell Alex to send the results to Travel",
+    "ask Alex to post the reminder in Travel",
+    "tell Alex to deliver it to the Travel chat"
+  ])("keeps reminder text intact without an explicit delivery clause: %s", (text) => {
+    expect(recognizeReminderPlan(`remind me in 5 minutes to ${text}`)).toEqual({
       kind: "request",
       delaySeconds: 300,
-      text: "read the Travel chat"
+      text
     });
   });
   it("routes a destination-only edit", () => {

@@ -87,6 +87,12 @@ test("real task creation, destination edits, isolated delivery and failed target
   await send(page, drawer, "Travel proof. Reply briefly: ready to pack.");
   const side = (await threads(page)).find((t) => t.id === sideId)!;
   expect(side.isMain).toBe(false);
+  const inertText = `tell Alex to send the results to the ${side.title} chat`;
+  await send(page, drawer, `remind me in 20 minutes to ${inertText}`);
+  const inertTask = (await tasks(page)).find((t) => t.instruction === inertText);
+  expect(inertTask).toBeDefined();
+  expect(inertTask!.destination).toBeUndefined();
+  console.log("[3148] embedded delivery wording stays intact and defaults to Main");
   await send(page, drawer, "remind me in 150 seconds to edited route proof");
   const original = (await tasks(page)).find((t) => t.instruction === "edited route proof")!;
   const combinedRequests = [
