@@ -82,6 +82,17 @@ the News error/remediation identifier in returned map items. Persisted result
 text is capped at 500 characters, so the view/map checks tolerate truncated JSON
 and Markdown tables. These repairs are not yet live-validated.
 
+The next installed #3148 attempt completed reconnect catch-up, draft/focus and
+durable identity checks. Overlap was inconclusive: starting the fixed packing
+request less than five seconds before due left no meaningful reply text before
+the reminder arrived. The fixture now starts less than twenty seconds before due
+to allow CLI startup, retaining the same prompt and every streaming/arrival
+assertion. This is one bounded timing correction; no repeated prompt tuning is
+authorized. Target-loss recovery and later specs were not reached. Source changed
+in the legacy harness during this exploratory run, so it is not a frozen-head
+acceptance receipt. Its built image ID was
+`sha256:9ff3f87c4ac33eef2b2ab417b9d783e91517a34fe218caba23c4f64d85fef678`.
+
 Run all fourteen blocking specs from PR #3509, regenerate trigger selection after edits,
 and require three consecutive complete #3151 runs. Track each spec's actual exit.
 The selected legacy specs originally included scripted providers and explicit `test.fixme`

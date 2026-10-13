@@ -255,7 +255,7 @@ test("real task creation, destination edits, isolated delivery and failed target
       timeout: 60_000,
       intervals: [1000]
     })
-    .toBeLessThan(5000);
+    .toBeLessThan(20_000);
   const packingPrompt =
     "Write a detailed travel packing guide with 40 numbered tips, each with two full sentences. Start with a tip about a small travel bag. Do not use tools.";
   const replyBubbles = drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
