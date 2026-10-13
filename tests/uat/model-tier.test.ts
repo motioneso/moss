@@ -13,6 +13,24 @@ function model(overrides: Partial<UatDiscoveredModel> = {}): UatDiscoveredModel 
 }
 
 describe("pickCheapestActiveChatModel (#2732)", () => {
+  it("pins the requested provider model within the economy tier", () => {
+    const pinned = model({ providerModelId: "gpt-6-luna" });
+    expect(
+      pickCheapestActiveChatModel(
+        [model({ providerModelId: "gpt-5.6-luna" }), pinned],
+        "gpt-6-luna"
+      )
+    ).toBe(pinned);
+  });
+
+  it.each([
+    model({ providerModelId: "gpt-5.6-luna" }),
+    model({ providerModelId: "gpt-6-luna", tier: "reasoning" }),
+    model({ providerModelId: "gpt-6-luna", status: "disabled" })
+  ])("refuses fallback when a requested model is unavailable or ineligible", (candidate) => {
+    expect(() => pickCheapestActiveChatModel([candidate], "gpt-6-luna")).toThrow();
+  });
+
   it("picks the active, chat-capable, economy-tier model", () => {
     const economy = model({ id: "gpt-6-luna", tier: "economy" });
     const picked = pickCheapestActiveChatModel([

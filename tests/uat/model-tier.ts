@@ -12,6 +12,7 @@ export interface UatDiscoveredModel {
   readonly status: string;
   readonly capabilities: readonly string[];
   readonly tier: string;
+  readonly providerModelId?: string | null;
 }
 
 /**
@@ -20,15 +21,19 @@ export interface UatDiscoveredModel {
  * silently widens to a pricier tier, per Ben's ruling.
  */
 export function pickCheapestActiveChatModel(
-  models: readonly UatDiscoveredModel[]
+  models: readonly UatDiscoveredModel[],
+  providerModelId?: string
 ): UatDiscoveredModel {
   const eligible = models.filter(
     (model) =>
-      model.status === "active" && model.capabilities.includes("chat") && model.tier === "economy"
+      model.status === "active" &&
+      model.capabilities.includes("chat") &&
+      model.tier === "economy" &&
+      (!providerModelId || model.providerModelId === providerModelId)
   );
   if (eligible.length === 0) {
     throw new Error(
-      "[uat real-chat] no active, chat-capable, economy-tier model was discovered; refusing to " +
+      `[uat real-chat] no active, chat-capable, economy-tier model${providerModelId ? ` matching ${providerModelId}` : ""} was discovered; refusing to ` +
         `fall back to a pricier tier (found ${models.length} model(s) total: ` +
         `${JSON.stringify(models.map((model) => ({ id: model.id, status: model.status, tier: model.tier })))})`
     );

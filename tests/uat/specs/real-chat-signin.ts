@@ -141,7 +141,7 @@ export async function discoverCheapestChatModel(
     };
     lastModels = body.models;
     try {
-      return pickCheapestActiveChatModel(lastModels);
+      return pickCheapestActiveChatModel(lastModels, process.env.MOSS_UAT_REAL_CHAT_MODEL);
     } catch {
       // Discovery hasn't landed an eligible model yet; keep polling until the deadline.
     }
@@ -185,7 +185,7 @@ export async function bringUpRealChatModel(
   const cheapest = await discoverCheapestChatModel(page, deadlineMs);
   await selectChatModelOverride(page, cheapest);
   console.log(
-    `[uat real-chat] provider=${uatRealChatProvider()}, model=${cheapest.id}, tier=${cheapest.tier}`
+    `[uat real-chat] provider=${uatRealChatProvider()}, model=${cheapest.id}, providerModel=${cheapest.providerModelId}, tier=${cheapest.tier}`
   );
   return cheapest;
 }

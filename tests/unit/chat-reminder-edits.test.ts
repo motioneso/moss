@@ -43,8 +43,21 @@ import {
   resolveReminderEdit,
   type EditableReminder
 } from "../../packages/chat/src/reminders/edit.js";
-import { validateReminderEdit } from "../../packages/chat/src/reminders/edit-interpretation.js";
+import {
+  REMINDER_EDIT_GUIDANCE,
+  validateReminderEdit
+} from "../../packages/chat/src/reminders/edit-interpretation.js";
 import type { ReminderEditTerms } from "@moss/shared";
+
+it("keeps worked combined text/time and time-only edits within the guidance budget", () => {
+  expect(REMINDER_EDIT_GUIDANCE).toContain(
+    '"change my stretch reminder text to bring water and move it to 4 minutes from now"'
+  );
+  expect(REMINDER_EDIT_GUIDANCE).toContain('text="bring water", delaySeconds=240');
+  expect(REMINDER_EDIT_GUIDANCE).toContain('"move my stretch reminder to tomorrow at 9am"');
+  expect(REMINDER_EDIT_GUIDANCE).toContain("text=null, localDue=tomorrow");
+  expect(REMINDER_EDIT_GUIDANCE.split(/\s+/).length).toBeLessThan(150);
+});
 
 const NOW = new Date("2026-10-12T12:00:00Z");
 const current: EditableReminder = {
