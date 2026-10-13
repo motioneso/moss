@@ -228,7 +228,10 @@ test("real task creation, destination edits, isolated delivery and failed target
     await page.context().setOffline(false);
   }
   const reconnectResults = (await history(page, sideId)).filter(
-    (m) => m.origin?.kind === "reminder" && m.origin.reminderId === reconnectTask.id
+    (m) =>
+      m.origin?.kind === "reminder" &&
+      m.origin.event === "delivered" &&
+      m.origin.reminderId === reconnectTask.id
   );
   expect(reconnectResults).toHaveLength(1);
   await page.reload();
@@ -281,7 +284,12 @@ test("real task creation, destination edits, isolated delivery and failed target
   const packingBody = (await packing.json()) as { reply: string; assistantMessageId: string };
   expect(packingBody.reply.length).toBeGreaterThan(100);
   await expect(replyBubbles).toHaveCount(repliesBeforePacking + 2);
-  await expect(replyBubbles.nth(repliesBeforePacking)).toContainText(/packing|travel|bag/i);
+  await expect(
+    replyBubbles
+      .nth(repliesBeforePacking)
+      .or(replyBubbles.nth(repliesBeforePacking + 1))
+      .filter({ hasText: /packing|travel|bag/i })
+  ).toHaveCount(1);
   const overlapHistory = await history(page, sideId);
   expect(overlapHistory.filter((m) => m.id === packingBody.assistantMessageId)).toHaveLength(1);
   expect(overlapHistory.find((m) => m.id === packingBody.assistantMessageId)?.body).toBe(
@@ -289,7 +297,10 @@ test("real task creation, destination edits, isolated delivery and failed target
   );
   expect(
     overlapHistory.filter(
-      (m) => m.origin?.kind === "reminder" && m.origin.reminderId === overlapTask.id
+      (m) =>
+        m.origin?.kind === "reminder" &&
+        m.origin.event === "delivered" &&
+        m.origin.reminderId === overlapTask.id
     )
   ).toHaveLength(1);
   console.log("[3148] shown-side reminder arrived once during an observed real model reply");

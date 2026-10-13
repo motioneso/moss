@@ -49,6 +49,29 @@ This is an explicit exception to PR #3509's "Never bypass runtime RLS" fault-set
 
 ## Remaining acceptance work
 
+The clean `d873055407b4bd02d35a08d57af20d3f2af3b1d8` scoped database gate passed
+122 tests in 8 files, exit 0. Input fingerprint:
+`2828d15fa03184c88d90410956abf3d7a72623c761e9c068840e47e6f9201305`;
+Node 22.22.2, pnpm 10.6.2, PostgreSQL 17.11. The corresponding foundation run was
+stopped with exit 143 before changing its inputs; it is not a completed receipt.
+
+The installed run on that head passed combined refusals, standalone moves, durable
+delivery and draft checks. Service-restart reconnect reached catch-up and preserved
+the draft/focus, then failed because its history filter counted the saved confirmation
+alongside the delivered reminder. Reconnect and overlap history filters now require
+the delivered event. Independent product review also identified a completion/history
+ordering race: the packing reply check now examines both newly appended bubbles,
+while retaining exact durable message ID/body assertions and observed streaming overlap.
+The overlap and target-loss steps were not reached in this run.
+
+Concurrent browser traces contain `ERR_NETWORK_CHANGED` on imported modules while
+the page remained at Loading Moss. Disposable Docker network changes occurred during
+this run; serialize the next browser receipt with Docker provisioning/cleanup. This
+is an observed transport failure and a candidate cause, not a product regression verdict.
+The installed image ID was
+`sha256:edf88bbc080ceb7d7d7b99df66667080b80b13de2581b7307d8826004a1bfaa5`.
+These assertion repairs require fresh final-head checks and live proof.
+
 Run all fourteen blocking specs from PR #3509, regenerate trigger selection after edits,
 and require three consecutive complete #3151 runs. Track each spec's actual exit.
 The selected legacy specs originally included scripted providers and explicit `test.fixme`
