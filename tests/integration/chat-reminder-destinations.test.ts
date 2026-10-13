@@ -202,13 +202,22 @@ describe("owned task destinations", () => {
     await owner((db) => reminders.acknowledgeMain(db, target.id, [delivered.reserved_message_id]));
     expect(await owner((db) => reminders.listPendingMain(db, target.id, 20))).toEqual([]);
   });
-  it("fails delivery if the destination stops belonging to its owner", async () => {
+  it("refuses a foreign destination even if the thread ownership invariant is bypassed", async () => {
     const target = await side("Ownership changed");
     const saved = await save(target.id, "this chat");
-    await bootstrap.query("UPDATE app.chat_threads SET owner_user_id = $1 WHERE id = $2", [
-      ids.userB,
-      target.id
-    ]);
+    // Production forbids ownership changes; only this isolated fixture bypasses that invariant.
+    await bootstrap.query("BEGIN");
+    try {
+      await bootstrap.query("SET LOCAL session_replication_role = replica");
+      await bootstrap.query("UPDATE app.chat_threads SET owner_user_id = $1 WHERE id = $2", [
+        ids.userB,
+        target.id
+      ]);
+      await bootstrap.query("COMMIT");
+    } catch (error) {
+      await bootstrap.query("ROLLBACK");
+      throw error;
+    }
     await due(saved.id);
     expect(await deliver(saved.id, saved.version)).toBe("destination_unavailable");
     expect(await owner((db) => chat.getMessageById(db, saved.reserved_message_id))).toBeUndefined();
