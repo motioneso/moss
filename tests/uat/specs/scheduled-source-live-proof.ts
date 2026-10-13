@@ -113,6 +113,18 @@ export async function proveScheduledSourceReport(page: Page) {
   expect((await done).ok()).toBe(true);
   const context = page.context();
   await page.close();
+  expect(context.pages()).toHaveLength(0);
+  await expect
+    .poll(
+      () =>
+        execUatSql(
+          requireUatProjectName(),
+          `SELECT s.outcome FROM app.chat_scheduled_reads s WHERE s.item_id = '${task.id}' AND s.outcome IS NOT NULL`
+        ).trim(),
+      { timeout: 150_000, intervals: [2_000, 5_000, 10_000] }
+    )
+    .toBe("success");
+  console.info("Scheduled report persisted while every app page was closed.");
   page = await context.newPage();
   await page.goto("/today");
   if (!(await page.getByRole("textbox", { name: "Message Moss" }).isVisible()))

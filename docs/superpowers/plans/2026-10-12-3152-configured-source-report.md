@@ -1,8 +1,8 @@
 # Configured source reports with bounded read retries
 
 Part of #3152, under #3137. Base: integration/scheduled-proactive at 4b2846f8e.
-Risk: sensitive. Status: approved by the coordinator at 9d4a69caa; implementation
-complete, final verification and live proof in progress.
+Risk: sensitive. Status: approved by the coordinator at 9d4a69caa and implemented.
+Verification evidence is tracked on PR #3502.
 
 ## Scope and verified foundations
 
@@ -139,6 +139,8 @@ tests/uat/provisioner.ts:617; no provisioning change is required.
 The live test creates a real task through Tasks, schedules its status check in Main,
 changes its status through Tasks, closes the browser page, then reopens to the sourced
 normal report. Reload, reply, inspect Settings history, and verify only one result.
+The proof waits for the worker's persisted success with zero app pages open before
+reopening; its SQL read observes the result and does not drive delivery.
 For a second check delete its source through the real UI before execution and verify
 an access refusal with no title/status/source content. Prove quiet-hours persistence
 with outward policy unchanged. No response interception, screenshots or test retries.
