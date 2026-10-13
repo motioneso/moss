@@ -324,7 +324,7 @@ test("real task creation, destination edits, isolated delivery and failed target
   });
   await expect
     .poll(() => Date.parse(overlapTask.dueAt) - Date.now(), {
-      timeout: 60_000,
+      timeout: 90_000,
       intervals: [1000]
     })
     .toBeLessThanOrEqual(0);

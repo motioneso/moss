@@ -266,3 +266,11 @@ Exact-head CI passed 17,231 unit tests with one failure and three skips: shorten
 copy dropped the existing required phrase "articles linked from". The truthful description now
 restores that wording within the 240-character limit; all eight manifest tests pass locally.
 This is not final CI, complete foundation, or merge readiness. All three PRs remain draft/unmerged.
+
+At clean `dbaf49b51`, rebuilt destination proof additionally passed all six Settings
+viewport/theme layouts and the complete approved target-loss fault: preserved failed task,
+owner-visible recovery guidance, and no Main fallback. Overlap stopped before the packing
+request: the due-time wait's 60-second timeout ended with 844 milliseconds remaining. Its
+bounded wait now allows 90 seconds, without changing the original due time or prompt.
+The corresponding clean scoped DB passed 122 tests in eight files; full foundation was
+stopped with exit 143 before this repair. No complete destination or foundation pass is claimed.
