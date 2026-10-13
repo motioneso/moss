@@ -126,11 +126,15 @@ test("resuming Main from Conversations while private clears the stale privateMod
   await expect(mainRow).toBeVisible();
   await mainRow.click();
 
-  await expect(drawer.getByText(FIRST_MESSAGE)).toBeVisible();
+  await expect(
+    drawer.locator(".chatd-msg--me").getByText(FIRST_MESSAGE, { exact: true })
+  ).toBeVisible();
   await expectPrivateChecked(drawer, false);
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
   await sendAndAwaitReply(page, drawer, CONTINUATION_MESSAGE);
-  await expect(drawer.getByText(CONTINUATION_MESSAGE, { exact: true })).toBeVisible();
+  await expect(
+    drawer.locator(".chatd-msg--me").getByText(CONTINUATION_MESSAGE, { exact: true })
+  ).toBeVisible();
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
 
   // The resumed conversation is the same persisted Main, and the continuation lands in it.
