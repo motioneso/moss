@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import type { Kysely } from "kysely";
@@ -40,7 +41,12 @@ async function side(title: string, actorUserId: string = ids.userA, incognito = 
     return chat.openNewThread(db, { title, incognito });
   }, actorUserId);
 }
-async function save(sourceThreadId: string, destination?: string, actorUserId: string = ids.userA) {
+async function save(
+  sourceThreadId: string,
+  destination?: string,
+  actorUserId: string = ids.userA,
+  repeat = false
+) {
   return owner(async (db) => {
     const thread = (await chat.getOwnedThreadById(db, actorUserId, sourceThreadId))!;
     const decision = await decideReminderTurn(
@@ -53,9 +59,15 @@ async function save(sourceThreadId: string, destination?: string, actorUserId: s
       actorUserId,
       thread,
       {
-        kind: "request",
+        ...(repeat
+          ? {
+              kind: "repeat_request" as const,
+              repeat: { kind: "interval" as const, seconds: 60 },
+              clock: null,
+              weekday: null
+            }
+          : { kind: "request" as const, delaySeconds: 60 }),
         text: "destination proof",
-        delaySeconds: 60,
         ...(destination ? { destination } : {})
       }
     );
@@ -98,7 +110,7 @@ async function due(id: string) {
 }
 function deliver(id: string, version: number, actorUserId: string = ids.userA) {
   return worker.withDataContext({ actorUserId }, (db) =>
-    deliverDueReminder(db, { resourceId: id, version, actorUserId }, { chat, reminders })
+    deliverDueReminder(db, { resourceId: id, version, actorUserId }, { chat, reminders, boss })
   );
 }
 
@@ -118,6 +130,110 @@ describe("owned task destinations", () => {
     expect(message?.thread_id).toBe(source.id);
     expect(message?.body).toBe("Reminder: destination proof");
   });
+  it("advances side repeats and validates the destination again on the next firing", async () => {
+    const target = await side("Repeating target");
+    const saved = await save(target.id, "this chat", ids.userA, true);
+    await due(saved.id);
+    expect(await deliver(saved.id, saved.version)).toBe("delivered");
+    const next = await owner((db) =>
+      db.db
+        .selectFrom("app.chat_reminders")
+        .selectAll()
+        .where("id", "=", saved.id)
+        .executeTakeFirstOrThrow()
+    );
+    expect(next.version).toBe(saved.version + 1);
+    expect(next.repeat_kind).toBe("interval");
+    expect(next.thread_id).toBe(target.id);
+    expect(next.reserved_message_id).not.toBe(saved.reserved_message_id);
+    await bootstrap.query("DELETE FROM app.chat_threads WHERE id = $1", [target.id]);
+    await due(saved.id);
+    expect(await deliver(saved.id, next.version)).toBe("destination_unavailable");
+    expect((await owner((db) => reminders.readState(db, saved.id)))?.state).toBe("failed");
+  });
+  it.each(["advancement", "task check", "destination"])(
+    "observes the %s update guard fail when removed, then restores it",
+    async (guard) => {
+      const target = await side(`Guard ${guard}`);
+      const saved = await save(target.id, "this chat", ids.userA, guard === "advancement");
+      if (guard === "task check")
+        await owner((db) =>
+          db.db
+            .insertInto("app.chat_scheduled_reads")
+            .values({
+              reminder_id: saved.id,
+              owner_user_id: ids.userA,
+              operation: "tasks.get",
+              item_id: randomUUID(),
+              outcome: null
+            })
+            .execute()
+        );
+      if (guard === "advancement") await due(saved.id);
+      const attempt = () =>
+        (guard === "advancement" ? worker : app).withDataContext(
+          { actorUserId: ids.userA },
+          async (db) => {
+            await db.db
+              .updateTable("app.chat_reminders")
+              .set(
+                guard === "advancement"
+                  ? {
+                      version: saved.version + 1,
+                      reserved_message_id: randomUUID(),
+                      due_at: sql<Date>`due_at + interval '60 seconds'`
+                    }
+                  : guard === "task check"
+                    ? { version: saved.version + 1, repeat_kind: "interval", repeat_seconds: 60 }
+                    : {
+                        version: saved.version + 1,
+                        thread_id: randomUUID(),
+                        destination_title: "Missing"
+                      }
+              )
+              .where("id", "=", saved.id)
+              .execute();
+            // Roll back the deliberately accepted mutation so restoration sees the original row.
+            throw new Error("guard absent");
+          }
+        );
+      const expected =
+        guard === "advancement"
+          ? /persisted run/
+          : guard === "task check"
+            ? /task checks must run once/
+            : /destination is unavailable/;
+      await expect(attempt()).rejects.toThrow(expected);
+      const definition = (
+        await bootstrap.query(
+          "SELECT pg_get_functiondef('app.enforce_chat_reminder_update()'::regprocedure) AS definition"
+        )
+      ).rows[0]!.definition as string;
+      const removed =
+        guard === "task check"
+          ? definition.replace(
+              / {2}IF NEW.repeat_kind IS NOT NULL AND EXISTS \([\s\S]*? {2}END IF;/,
+              ""
+            )
+          : guard === "destination"
+            ? definition.replace(
+                "      PERFORM app.check_chat_reminder_destination(NEW.owner_user_id, NEW.thread_id, NEW.destination_title);",
+                "      NULL;"
+              )
+            : definition.replace(
+                / {6}OR NOT EXISTS \(SELECT 1 FROM app.chat_reminder_runs run[\s\S]*?run.outcome = 'delivered'\)/,
+                ""
+              );
+      expect(removed).not.toBe(definition);
+      try {
+        await bootstrap.query(removed);
+        await expect(attempt()).rejects.toThrow("guard absent");
+      } finally {
+        await bootstrap.query(definition);
+      }
+      await expect(attempt()).rejects.toThrow(expected);
+    }
+  );
   it("destination-only edits preserve time/text and invalidate the old queued version", async () => {
     const source = await side("Route source");
     const target = await side("Route target");

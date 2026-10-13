@@ -33,6 +33,7 @@ export async function decideReminderTurn(
   const sideAllowed = [
     "request",
     "clock_request",
+    "repeat_request",
     "edit",
     "edit_selection",
     "edit_refused"

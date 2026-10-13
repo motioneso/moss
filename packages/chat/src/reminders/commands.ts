@@ -48,7 +48,8 @@ export function recognizeReminderPlan(raw: string): ReminderTurnPlan | undefined
           .trim();
   const request = clause ? raw.slice(0, clause.index).trim() : raw;
   const repeat = recognizeRepeatingReminder(request);
-  if (repeat) return destination ? { ...repeat, destination } : repeat;
+  if (repeat)
+    return destination && repeat.kind === "repeat_request" ? { ...repeat, destination } : repeat;
   const save = recognizeRelativeReminder(request);
   if (destination && (save.kind === "request" || save.kind === "clock_request"))
     return { ...save, destination };

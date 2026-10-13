@@ -87,7 +87,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time, repeat, stop time or destination in an owned regular chat. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused reminders stay paused.",
+      "Edit pending or paused reminder text, time, repeat, stop time or destination in regular chat. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused stays paused.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -147,7 +147,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.relative_reminders",
     description:
-      "In a regular chat, remind me in 10 minutes to stretch posts once to Main by default, noting if late. A reply in its destination frees the slot. Up to 20 active schedules, 30 days ahead. One-time relative reminders have no deadline. Private chats cannot create reminders.",
+      "In regular chat, remind me in 10 minutes to stretch posts once to Main by default, noting if late. A reply in its destination frees the slot. Up to 20 schedules, 30 days ahead. No deadline on one-time relative reminders; no private chats.",
     featureFlagId: "chat.module"
   },
   {

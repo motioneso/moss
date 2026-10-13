@@ -1,7 +1,7 @@
 # Send saved task results to a named side chat
 
 Part of #3148. Base: integration/scheduled-proactive. Risk: sensitive.
-Status: tasks 1 and 2 implemented; draft PR checkpoint under coordinator fit condition. Tasks 3 and 4 remain open.
+Status: rebased onto 73509bac9. Rebuilt 0320 from 0319, preserving repeat advancement and task-check guards. Settings destination details added; verification and live proof remain open. One edit guidance change used to add destination while retaining both timing examples.
 Worktree: ~/Jarv1s/.claude/worktrees/sched-3148-side-chat-dest.
 Migration assignment: 0320, in packages/chat/sql.
 
@@ -79,7 +79,7 @@ destination. Main must be the designated Main when destination_title is null.
 Sharing never grants destination authority. Validate the title against the owned
 destination at acceptance, rather than accepting model-authored labels.
 
-Replace the update trigger using the existing 0317 lifecycle rules: permit a
+Replace the update trigger using the existing 0319 lifecycle, repeat and task-check rules: permit a
 pending destination change only with version increment, retain all identity,
 time/deadline, lifecycle, and reserved-result checks, and check the reserved
 message against the current destination. Revalidate a changed destination under
@@ -223,29 +223,37 @@ Coordinator approval: plan commit 185e8dc31 approved. Conditions:
 - If context runs short, stop after tasks 1 and 2 with an open PR and state note. No handoff.
 - Coordinator messages use pane w1:p19D; the inherited environment's w3:p6 value was stale.
 
-## Draft checkpoint state
+## Finish state
 
-Tasks 1 and 2 now include destination resolution, creation/edit persistence, owner-only
-worker routing, unavailable-destination failure, committed arrival identity, and
-browser selection filtering. The app map describes the implemented behavior without
-claiming a Settings destination row. Account deletion retains its cascade and has
-an integration test with both a live and already-deleted destination.
+Rebased onto integration head 73509bac9. Migration collisions check passed.
+Migration 0320 now starts from 0319, preserving repeated firing advancement,
+immutable runs, owner-runtime edits, interval/local cadence and task-check guards.
+Settings exposes the accepted destination and actionable failure guidance without
+changing repeat groups. The app map includes these details.
 
-Do not merge this checkpoint. Remaining work within #3148:
+Coordinator routing conditions for the finish:
 
-- After #3151 / PR #3497 lands, rebase on integration/scheduled-proactive. Preserve
-  subscribe-then-catch-up and dedupe, and message coordinator before resolving any
-  routing conflict. Current browser code still starts from the earlier catch-up implementation.
-- After #3136 lands, rebuild migration 0320's update trigger and worker insert policy
-  from migration 0319. The current draft is based on 0317. Preserve queued-to-queued
-  advancement and per-firing runs rules; destination validation must apply to every firing.
-- Implement Settings destination DTO/schema/detail and actionable failed-destination
-  guidance using current design primitives, without changing #3136's list grouping.
-- Add the real-chat UAT spec and trigger-map rows, then run disposable Codex economy
-  model proof and post it on the PR. No UI instance has been started and no live proof exists.
-  In particular, #3126 navigation acceptance has not been exercised.
-- Run final gates after those changes and upstream integration. The scoped test evidence
-  recorded on the PR applies only to this checkpoint.
+- Apply exact destination filtering to live arrivals and catch-up history.
+- Keep the message ID dedupe key. A live/catch-up duplicate appears once.
+- Main and side-chat results never appear in each other's transcript.
+- Preserve 3136 repeat logic and both timing examples in its edit guidance.
 
-No successor agent was spawned. The fit condition authorizes this partial checkpoint;
-it does not mark #3148 complete. Pane: w1:p19D.
+The guidance change is used; no further prompt tuning is available. It remains
+under 150 words. Focused units passed 100 tests. The scoped isolated integration
+gate passed 107 tests, including repeat side delivery, deleted destinations and
+mutation checks for worker insertion, destination edits, persisted-run advancement
+and the one-time task-check guard. Protection removal allowed the prohibited
+operations, then restoration rejected them again.
+
+The final foundation gate, final-head live proof and CI are pending. The live spec
+covers existing Conversations drawer controls, creation from a side chat, default
+Main, an explicit side target, a destination-only edit, focused draft preservation,
+durable distinct histories, reload, destination details at two widths and three
+themes, and simulated owner deletion of a target. That deletion uses the disposable
+install's owner RLS because the current drawer has no delete control. This does not
+prove the unfinished #3126 accepted overlay or its full navigation acceptance.
+
+Live setup uses the shared disposable provisioner, image tag uat-sched-3148,
+a claimed port, Codex sign-in helper and one pinned economy model. No network
+response rewriting. Rerun 3135 edit and 3136 repeat browser specs on the same head.
+Current pane: w1:p19H. No successor or helper agent spawned.

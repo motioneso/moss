@@ -5,7 +5,6 @@ import { pendingReminderDeletion } from "../reminders/delete-agreement.js";
 /**
  * DataContextChatPersistence — the REAL ChatPersistencePort backing the live
  * ChatSessionManager.
- *
  * Every method builds an AccessContext { actorUserId, requestId } and runs its
  * queries through the DataContextRunner so RLS scopes all reads/writes to the
  * acting owner. Provider routing reuses the AI capability router; turn recording
@@ -44,9 +43,7 @@ import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/s
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { PgBoss } from "pg-boss";
-
 import { sendJob } from "@moss/jobs";
-
 import {
   CHAT_ARCHIVE_DAY_QUEUE,
   CHAT_EMBED_TURN_QUEUE,

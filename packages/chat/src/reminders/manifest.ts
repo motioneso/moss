@@ -53,7 +53,7 @@ export const REMINDER_CONTROL_ROUTES = [
 export const REMINDER_SETTINGS_FEATURE = {
   id: "chat.reminder_settings",
   description:
-    "Scheduled tasks groups Daily, Weekly and More often, with saved cadence in your chosen clock format and 20 dated runs. Details name side-chat destinations. View message opens that run; Open chat opens its thread. Pause, resume or delete here; set and edit in regular chat.",
+    "Scheduled tasks groups Daily, Weekly and More often, with saved cadence and 20 runs. Details name side destinations. View message opens that run; Open chat opens its thread. Pause, resume or delete here; set and edit in regular chat.",
   featureFlagId: "chat.module",
   errors: [
     {

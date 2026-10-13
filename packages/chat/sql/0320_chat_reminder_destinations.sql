@@ -30,9 +30,51 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  IF NEW.repeat_kind IS NOT NULL AND EXISTS (
+    SELECT 1 FROM app.chat_scheduled_reads WHERE reminder_id = NEW.id
+  ) THEN
+    RAISE EXCEPTION 'task checks must run once';
+  END IF;
+  -- Advancing is a worker-only effect, validated against the just-persisted occurrence.
+  IF OLD.state = 'queued' AND NEW.state = 'queued' AND OLD.repeat_kind IS NOT NULL
+    AND NEW.reserved_message_id IS DISTINCT FROM OLD.reserved_message_id THEN
+    IF current_user <> 'jarvis_worker_runtime'
+      OR NEW.version <> OLD.version + 1 OR NEW.due_at <= now()
+      OR NEW.due_at <= OLD.due_at OR NEW.due_at > now() + interval '30 days'
+      OR (to_jsonb(NEW) - ARRAY['version','due_at','local_due','reserved_message_id'])
+        IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['version','due_at','local_due','reserved_message_id'])
+      OR NOT EXISTS (SELECT 1 FROM app.chat_reminder_runs run
+        WHERE run.reminder_id = OLD.id AND run.version = OLD.version
+          AND run.message_id = OLD.reserved_message_id AND run.outcome = 'delivered') THEN
+      RAISE EXCEPTION 'chat reminder advancement needs its persisted run';
+    END IF;
+    IF NEW.timing = 'local_clock' AND app.chat_reminder_repeat_instant(NEW.local_due, NEW.time_zone) IS DISTINCT FROM NEW.due_at THEN
+      RAISE EXCEPTION 'chat reminder next local time does not match';
+    END IF;
+    IF NEW.timing = 'local_clock' THEN
+      IF right(NEW.local_due, 5) <> right(OLD.local_due, 5)
+        OR (NEW.local_due::date - OLD.local_due::date) <= 0
+        OR (OLD.repeat_kind = 'weekly' AND (NEW.local_due::date - OLD.local_due::date) % 7 <> 0)
+        OR app.chat_reminder_repeat_instant(to_char(NEW.local_due::timestamp -
+          CASE WHEN OLD.repeat_kind = 'weekly' THEN interval '7 days' ELSE interval '1 day' END,
+          'YYYY-MM-DD"T"HH24:MI'), NEW.time_zone) > now() THEN
+        RAISE EXCEPTION 'chat reminder advancement must preserve local cadence';
+      END IF;
+    ELSE
+      IF abs(extract(epoch FROM NEW.due_at - OLD.due_at) /
+        OLD.repeat_seconds - round(extract(epoch FROM NEW.due_at - OLD.due_at) / OLD.repeat_seconds)) > 0.0001
+        OR NEW.due_at - make_interval(secs => OLD.repeat_seconds) > now() THEN
+        RAISE EXCEPTION 'chat reminder advancement must preserve interval cadence';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
   -- Terms edits preserve lifecycle/identity and invalidate every older queued version.
   IF OLD.state IN ('queued', 'paused') AND NEW.state = OLD.state
     AND NEW.version = OLD.version + 1 THEN
+    IF current_user <> 'jarvis_app_runtime' THEN
+      RAISE EXCEPTION 'chat reminder terms edits require owner runtime';
+    END IF;
     IF NEW.id IS DISTINCT FROM OLD.id
       OR NEW.owner_user_id IS DISTINCT FROM OLD.owner_user_id
       OR NEW.source_message_id IS DISTINCT FROM OLD.source_message_id
@@ -53,12 +95,12 @@ BEGIN
         RAISE EXCEPTION 'chat reminder due time is out of range' USING ERRCODE = 'check_violation';
       END IF;
     END IF;
-    IF NEW.timing = 'local_clock' THEN
+    IF NEW.timing = 'local_clock' AND (NEW.due_at IS DISTINCT FROM OLD.due_at OR NEW.local_due IS DISTINCT FROM OLD.local_due OR NEW.time_zone IS DISTINCT FROM OLD.time_zone) THEN
       IF (NEW.local_due::timestamp AT TIME ZONE NEW.time_zone) IS DISTINCT FROM NEW.due_at
         OR to_char(NEW.due_at AT TIME ZONE NEW.time_zone, 'YYYY-MM-DD"T"HH24:MI') <> NEW.local_due THEN
         RAISE EXCEPTION 'chat reminder local time does not match its due time' USING ERRCODE = 'check_violation';
       END IF;
-    ELSIF (NEW.due_at IS DISTINCT FROM OLD.due_at
+    ELSIF NEW.timing = 'relative' AND (NEW.due_at IS DISTINCT FROM OLD.due_at
       OR NEW.delay_seconds IS DISTINCT FROM OLD.delay_seconds)
       AND abs(extract(epoch FROM NEW.due_at - now()) - NEW.delay_seconds) > 1 THEN
       RAISE EXCEPTION 'chat reminder delay does not match its due time' USING ERRCODE = 'check_violation';
@@ -71,6 +113,8 @@ BEGIN
     OR NEW.destination_title IS DISTINCT FROM OLD.destination_title
     OR NEW.source_message_id IS DISTINCT FROM OLD.source_message_id
     OR NEW.reserved_message_id IS DISTINCT FROM OLD.reserved_message_id
+    OR NEW.repeat_kind IS DISTINCT FROM OLD.repeat_kind
+    OR NEW.repeat_seconds IS DISTINCT FROM OLD.repeat_seconds
     OR NEW.reminder_text IS DISTINCT FROM OLD.reminder_text
     OR NEW.delay_seconds IS DISTINCT FROM OLD.delay_seconds
     OR NEW.due_at IS DISTINCT FROM OLD.due_at

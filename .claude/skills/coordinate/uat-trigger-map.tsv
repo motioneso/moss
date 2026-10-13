@@ -380,3 +380,14 @@ blocking	packages/chat/sql/0319_chat_repeating_reminders.sql	tests/uat/specs/313
 blocking	packages/module-sdk/src/time.ts	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
 blocking	apps/web/src/settings/scheduled-task-list.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
 blocking	apps/web/src/settings/scheduled-task-details/timing.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
+
+# #3148: owned reminder destinations and exact background arrival filtering.
+blocking	packages/chat/src/reminders/**	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/background-message-routing.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/chat-session-manager.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/live-chat-session.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/sql/0320_chat_reminder_destinations.sql	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/chat/use-chat-stream.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/chat/chat-drawer.tsx	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/**	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/shared/src/scheduled-tasks-api.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts

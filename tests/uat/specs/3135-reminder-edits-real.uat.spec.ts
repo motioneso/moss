@@ -113,14 +113,16 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
   await send(
     page,
     drawer,
-    "change my chosen proof revised daily vitamins reminder destination to a private chat"
+    "change my chosen proof revised daily vitamins reminder recipients to someone else"
   );
   expect((await tasks(page)).find((row) => row.id === selected.id)?.dueAt).toBe(selected.dueAt);
   await expect(
-    drawer.getByText(/I can edit a reminder's text, timing, repetition or stop time only/).last()
+    drawer
+      .getByText(/I can edit a reminder's text, timing, repetition, stop time or destination/)
+      .last()
   ).toBeVisible();
   console.log(
-    "[3135] ambiguous edits waited for a typed numbered choice; destination changes were refused unchanged"
+    "[3135] ambiguous edits waited for a typed numbered choice; recipient changes were refused unchanged"
   );
   await close(drawer);
   // Wait once across the old due time, then observe the real queue's state.
