@@ -178,6 +178,7 @@ describe("generateStructured", () => {
   // inside a ```json fence. Accept the fence here, where CLI text is already parsed.
   it("accepts the reminder edit payload in the real Claude fenced JSON shape", async () => {
     const object = {
+      repeat: null,
       target: "stretch",
       unsupported: false,
       text: "bring the blue folder",

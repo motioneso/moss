@@ -106,7 +106,9 @@ export function resolveReminderEdit(
       (!repeat && (timing !== "local_clock" || deadlineAt.getTime() > dueAt.getTime() + 43200000)))
   )
     throw new Error(
-      "The deadline must follow the reminder time by no more than 12 hours. Change or remove it explicitly."
+      repeat
+        ? "The stop time must follow the reminder time. Change or remove it explicitly."
+        : "The deadline must follow the reminder time by no more than 12 hours. Change or remove it explicitly."
     );
   return {
     reminder_text: text,

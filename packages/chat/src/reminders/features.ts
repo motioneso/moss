@@ -66,7 +66,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         code: "reminder_edit_unclear",
         class: "validation",
         description:
-          "Moss could not resolve the reminder or new terms. Nothing changed. Name the reminder and give a future time; deadlines must follow it within 12 hours."
+          "Moss could not resolve the reminder or new terms. Nothing changed. Name the reminder and give a future time. One-time deadlines follow it within 12 hours; repeating stops may be later."
       },
       {
         code: "reminder_edit_stale",
