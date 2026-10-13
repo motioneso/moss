@@ -90,3 +90,31 @@ simply follow 0320 unchanged. On rebase after #3500 lands:
 
 The coordinator owns publication and final-head verification/merge. This lane
 has not published GitHub changes, merged, deployed or accessed a server.
+
+## Extreme-counter follow-up
+
+The coordinator's isolated cloud verification of standalone remote head
+`27da19c240c0168dae1eda6075c8d1745a4b4cc9` reported 63 scoped DB tests passing,
+observed authority controls failing with protections removed and passing after
+restoration, and real pg-boss/bounded-history checks passing. Its additional
+maximum-counter probe found PostgreSQL integer overflow on the second exhausted
+occurrence after bootstrap seeded `failure_streak = 2147483646`.
+
+The old `least(failure_streak + 1, 2147483647)` evaluates the addition before the
+clamp. The minimal follow-up clamps first with
+`least(failure_streak, 2147483646) + 1`; this saturates within PostgreSQL integer
+range for every permitted nonnegative streak. It changes no authority, migration,
+run history, retry, cadence or warning threshold rule.
+
+A real-Kysely SQL regression failed for both failed/refused writes before the
+source fix (two intended failures; success-reset control passed). After the fix,
+the focused repository/observation/worker/Settings bundle passed 17 tests. The
+final frozen-source 23-file bundle passed 259 tests; full root/tests/web/external
+TypeScript stages, scoped lint/format and file-size checks passed. Independent
+source review approved the minimal repair with authority unchanged. The
+permanent DB regression seeds both maximum-minus-one and maximum using only gate
+bootstrap, executes two exhausted occurrences, checks the saturated value after
+each and two honest message-free failed runs, then proves valid quiet recovery
+resets the streak. This new DB regression still requires exact-head cloud
+execution; its local SQL unit is not PostgreSQL execution proof. The mandatory
+0320 composition and final installed live proof remain pending separately.

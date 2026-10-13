@@ -258,6 +258,62 @@ describe("requested recurring exact Tasks reads", () => {
     );
     expect(state.failure_streak).toBe(0);
   });
+  it.each([2147483646, 2147483647])(
+    "exhausted occurrences saturate failure streak %i without overflow and valid recovery resets it",
+    async (initialStreak) => {
+      const saved = await save(true);
+      // Only gate bootstrap can seed the extreme boundary; app writes remain forbidden.
+      await bootstrap.query(
+        "UPDATE app.chat_scheduled_reads SET failure_streak = $1 WHERE reminder_id = $2",
+        [initialStreak, saved.id]
+      );
+      const deps = {
+        dataContext: worker,
+        boss,
+        generateReport,
+        gateway: {
+          runBackgroundReadForActor: async () => ({
+            ok: false as const,
+            failureKind: "read" as const,
+            retryable: true as const,
+            error: "private dependency content"
+          })
+        }
+      };
+      for (let occurrence = 0; occurrence < 2; occurrence++) {
+        const data = occurrence === 0 ? saved.data : await nextRun(saved);
+        expect(await runScheduledReadJob({ data, retryCount: 2, retryLimit: 2 }, deps)).toBe(
+          "failed"
+        );
+        const state = await owner((db) =>
+          db.db
+            .selectFrom("app.chat_scheduled_reads")
+            .select("failure_streak")
+            .where("reminder_id", "=", saved.id)
+            .executeTakeFirstOrThrow()
+        );
+        expect(state.failure_streak).toBe(2147483647);
+      }
+      const failed = await history(saved);
+      expect(failed.state).toBe("active");
+      expect(failed.runs).toHaveLength(2);
+      expect(failed.runs.every((run) => run.outcome === "failed" && run.message === null)).toBe(
+        true
+      );
+      expect(
+        await runScheduledReadJob({ data: await nextRun(saved) }, { ...deps, gateway: gateway() })
+      ).toBe("quiet");
+      const recovered = await owner((db) =>
+        db.db
+          .selectFrom("app.chat_scheduled_reads")
+          .select("failure_streak")
+          .where("reminder_id", "=", saved.id)
+          .executeTakeFirstOrThrow()
+      );
+      expect(recovered.failure_streak).toBe(0);
+      expect((await history(saved)).checkFailure).toBeUndefined();
+    }
+  );
   it("repeated source refusals post once with actionable status and no private source data", async () => {
     const saved = await save(true);
     const deps = {

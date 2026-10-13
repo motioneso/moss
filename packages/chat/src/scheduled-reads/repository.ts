@@ -54,7 +54,7 @@ export async function recordScheduledObservation(
     .set(
       outcome === "success"
         ? { outcome, observation_key: observationKey, failure_streak: 0 }
-        : { outcome, failure_streak: sql<number>`least(failure_streak + 1, 2147483647)` }
+        : { outcome, failure_streak: sql<number>`least(failure_streak, 2147483646) + 1` }
     )
     .where("reminder_id", "=", reminderId)
     .executeTakeFirstOrThrow();
