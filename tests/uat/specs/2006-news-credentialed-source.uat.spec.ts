@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 // #2006 live-path proof. The real key is supplied only through the environment and is never
 // included in an assertion message, URL, screenshot, or log.
@@ -57,10 +58,11 @@ async function overviewArticles(page: Page): Promise<readonly { canonicalDomain?
 test("connects, rotates, and revokes a real credentialed News source", async ({ page }) => {
   const key = realKey();
   await signIn(page);
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) await bringUpRealChatModel(page);
   await openNewsSettings(page);
 
   await page.getByRole("button", { name: "Add a source" }).click();
-  const sourceInput = page.getByLabel("Publication homepage or domain");
+  const sourceInput = page.getByLabel("Source homepage or domain");
   await sourceInput.fill(CONNECTION_HOST);
   await page.getByRole("button", { name: "Check" }).click();
   await expect(page.getByLabel("Access key")).toBeVisible();

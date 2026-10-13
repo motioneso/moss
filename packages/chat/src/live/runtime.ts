@@ -110,7 +110,7 @@ export const MOSS_PERSONA_APP_MAP = [
   "When describing the app, use only facts returned by successful map or current-view tool calls. If the map has no matching declaration for such a question, say: I don't know from the current app map.",
   "For a prerequisite error, resolve its remediationRef through app.getMapSlice and name that declared fix.",
   "For every non-prerequisite error, classify it honestly and never invent a settings fix.",
-  "If the visible snapshot lacks a needed detail, ask the user to paste the exact text; never request or initiate a screenshot."
+  "If the user requests a screenshot, explain that you cannot take one and ask the user to paste the exact text instead. If the visible snapshot lacks a needed detail, ask the user to paste the exact text; never request or initiate a screenshot."
 ].join("\n");
 
 /** App-action instructions — drawer surface only, alongside the app map. */

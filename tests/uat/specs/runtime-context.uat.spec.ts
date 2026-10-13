@@ -239,9 +239,12 @@ test("News screen error is pulled and resolved against the map (#1121)", async (
           tool === "getCurrentView"
             ? /"available"\s*:\s*true/.test(entry.text) &&
               /"route"\s*:\s*"\/settings"/.test(entry.text)
-            : /news\.add_source\.(no_json_model|configure_json_model)/.test(entry.text) &&
+            : /"id"\s*:\s*"news\.add_source"/.test(entry.text) &&
+              /"capability"\s*:\s*"json"/.test(entry.text) &&
+              /"tier"\s*:\s*"economy"/.test(entry.text) &&
               /"items"\s*:\s*\[\s*\{|^\|.+\|\s*\n\|[ :|-]+\|/m.test(entry.text)
-        )
+        ),
+        `${tool} correlated result excerpts: ${JSON.stringify(results.map((entry) => entry.text))}`
       ).toBe(true);
     }
     await expect(page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()).toBeVisible();

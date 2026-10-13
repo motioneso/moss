@@ -156,3 +156,39 @@ Actual installed instruction loading remains to be proved by the refusal case.
 ACP engine, check-turn and runner tests passed 63 tests in three files; stream identity tests
 passed 18. Independent product source review found no remaining blocker. These repairs still
 require a rebuilt installed image, complete live acceptance and final-head gates before merge.
+
+## Latest installed diagnosis and repairs
+
+At `9bb60235e`, scoped DB proof passed 122 tests in 8 files on clean inputs.
+Installed destination proof passed edits, delivery history and reconnect/draft/focus checks,
+but failed before its first partial packing reply. Target loss was not reached.
+Source diagnosis found reopened side chats excluded ordinary stream records because their
+`liveThreadId` remained unbound. An admitted send now binds its confirmed destination and
+clears the previous stream. Matching background arrivals survive in the fallback snapshot,
+including through failed sends and retries. The regression failed before the streaming fix;
+the arrival-preservation assertion also failed before its repair.
+
+The runtime-context diagnostic passed two cases and failed two: screenshot refusal omitted
+pasted-text guidance, and the News map result's error declarations fell outside its retained
+500-character activity excerpt. The persona now explicitly gives pasted-text guidance whenever
+a user requests a screenshot. The News assertion still requires actual uploaded error metadata,
+a correct remediation reply, correlated successful current-view activity, and a correlated
+nonempty map result naming `news.add_source`, JSON capability and economy tier. No response
+is rewritten and no context is intercepted.
+
+Newly selected News and quote-step fixtures use the shared real-model setup in strict mode.
+The non-admin map case uses a separate admin context to provision and pin the model for the
+second owner; the second owner's authenticated requests verify every capability and the actual
+completed map-tool activity. Deterministic prerequisite/override cases remain unchanged.
+The NewsAPI credential prerequisite is now supplied through a local owner-only environment
+file after Ben used a one-time hidden-entry script. No credential value enters this document.
+
+The file-size check found three files just over its limit. The drawer's unchanged waiting
+indicator moved to its own component; three direct agent-home preparation tests moved to their
+own test file; an inaccurate build-start-time comment was removed from `AcpHost`.
+
+Regenerate trigger selection: the current baseline selects 21 blocking specs, including seven
+added by the News/ACP repairs. Audit-feeds remains declared deterministic feedback fixture
+proof, and CLI-terminal exercises actual PTY commands without model inference. Do not describe
+these as real-model inference proof. Fresh installed receipts, full foundation, serialized
+browser proof, three consecutive complete #3151 runs, CI and independent review remain required.

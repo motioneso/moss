@@ -140,9 +140,15 @@ export const chatModuleManifest = {
   features: [
     REMINDER_CONTROL_FEATURE,
     {
+      id: "chat.current_view_grounding",
+      description:
+        "Moss uses the current view and app map to explain screens and errors. Screenshot requests receive a refusal and guidance to paste the exact text instead.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.stream_reconnect",
       description:
-        "Closing or reloading chat releases its stream; reopening keeps receiving replies. ACP text updates one live bubble, and completion preserves its identity beside delivered reminders.",
+        "Closing or reloading chat releases its stream; reopening keeps receiving replies. New turns in reopened chats stream into one live bubble, and completion preserves its identity beside delivered reminders.",
       featureFlagId: "chat.module"
     },
     {

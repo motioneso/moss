@@ -35,6 +35,7 @@ import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { DEFAULT_CHAT_SURFACE, type ChatAttachmentDto, type ChatSurface } from "@moss/shared";
 import { ChatModelPill } from "./chat-model-pill";
+import { ChatWaitingIndicator } from "./chat-waiting-indicator";
 import { ChatEmptyState } from "./chat-empty-state";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
@@ -275,8 +276,15 @@ export function ChatDrawer(props: ChatDrawerProps) {
       ) {
         return false;
       }
+      const initiatingThreadId = confirmedSelection?.threadId ?? reviewThreadId;
       if (reviewThreadId !== null) {
-        setFallbackRecords(recordsFromMessages(messagesQuery.data?.messages ?? []));
+        const persisted = recordsFromMessages(messagesQuery.data?.messages ?? []);
+        setFallbackRecords((current) => {
+          const arrivals = [...props.records, ...reconcileFallbacks(current, props.records)].filter(
+            (record) => record.background && record.backgroundThreadId === initiatingThreadId
+          );
+          return [...persisted, ...reconcileFallbacks(arrivals, persisted)];
+        });
       }
       setSendError(null);
       setNeedsProvider(false);
@@ -284,7 +292,10 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setPendingUser({ text: trimmed, attachments });
       const initiatingSurface = props.surface;
       const generation = generationRef.current;
-      const initiatingThreadId = confirmedSelection?.threadId ?? reviewThreadId;
+      if (initiatingThreadId !== null && liveThreadId !== initiatingThreadId) {
+        props.clearRecords(initiatingThreadId);
+        setLiveThreadId(initiatingThreadId);
+      }
       callerDraft.dispatch(trimmed, initiatingSurface, generation);
       void (async () => {
         try {
@@ -401,6 +412,9 @@ export function ChatDrawer(props: ChatDrawerProps) {
       sendPending,
       messagesQuery.data?.messages,
       confirmedSelection?.threadId,
+      liveThreadId,
+      props.clearRecords,
+      props.records,
       privateEnded,
       queryClient,
       reviewThreadId,
@@ -877,62 +891,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
               lockedModelUnavailable={lockedModelUnavailable}
             />
           )}
-          {isWaiting ? (
-            <div
-              className="chatd-loading"
-              aria-live="polite"
-              aria-label={assistantName ? `${assistantName} is thinking` : "Assistant is thinking"}
-            >
-              <span className="chatd-msg__av">
-                <BrandMark size={14} />
-              </span>
-              <svg
-                className="chatd-loading__bar"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 14 32 4"
-                fill="currentColor"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <path opacity="0.8" transform="translate(0 0)" d="M2 14 V18 H6 V14z">
-                  <animateTransform
-                    attributeName="transform"
-                    type="translate"
-                    values="0 0; 24 0; 0 0"
-                    dur="2s"
-                    begin="0"
-                    repeatCount="indefinite"
-                    keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8"
-                    calcMode="spline"
-                  />
-                </path>
-                <path opacity="0.5" transform="translate(0 0)" d="M0 14 V18 H8 V14z">
-                  <animateTransform
-                    attributeName="transform"
-                    type="translate"
-                    values="0 0; 24 0; 0 0"
-                    dur="2s"
-                    begin="0.1s"
-                    repeatCount="indefinite"
-                    keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8"
-                    calcMode="spline"
-                  />
-                </path>
-                <path opacity="0.25" transform="translate(0 0)" d="M0 14 V18 H8 V14z">
-                  <animateTransform
-                    attributeName="transform"
-                    type="translate"
-                    values="0 0; 24 0; 0 0"
-                    dur="2s"
-                    begin="0.2s"
-                    repeatCount="indefinite"
-                    keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8"
-                    calcMode="spline"
-                  />
-                </path>
-              </svg>
-            </div>
-          ) : null}
+          {isWaiting ? <ChatWaitingIndicator assistantName={assistantName} /> : null}
         </div>
         {!stickToBottom ? (
           <button

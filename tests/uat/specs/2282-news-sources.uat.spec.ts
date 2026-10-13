@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 // #2282 live-path proof. r/technology is a real, public subreddit — no key or credential is
 // needed, unlike the #2006 credentialed-source path this test is modelled on.
@@ -48,6 +49,7 @@ async function overviewStories(page: Page): Promise<readonly { sourceLabel?: unk
 
 test("adding r/technology as a source shows its articles in News", async ({ page }) => {
   await signIn(page);
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) await bringUpRealChatModel(page);
   await openNewsSettings(page);
 
   await page.getByRole("button", { name: "Add a source" }).click();

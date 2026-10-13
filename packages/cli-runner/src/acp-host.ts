@@ -249,12 +249,6 @@ interface AcpSession {
 
 export { defaultResolveAdapterTarget, type AcpAdapterTarget };
 
-/**
- * A process's actual start time in system ticks, read from the system process
- * table. Compared against the start time saved when the build was started:
- * only the same build is ever stopped. Null when the process is gone or the
- * table cannot be read — never a reason to kill.
- */
 export class AcpHost {
   private readonly sessions = new Map<string, AcpSession>();
   private generationCounter = 0;
