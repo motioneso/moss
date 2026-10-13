@@ -58,52 +58,11 @@ async function select(drawer: Locator, name: string) {
   await expect(drawer.getByLabel("Message Moss")).toBeEnabled();
 }
 
-// Observe only the raw destination in this disposable bundle; model calls and replies stay real.
-function installRawDestinationCapture() {
-  const script = String.raw`const fs=require('node:fs'); const file='/app/dist/server.js'; const source=fs.readFileSync(file,'utf8'); const pattern=/const interpreted = (\w+)\.ok \? validateReminderEdit\(\1\.object\) : void 0;/g; let count=0; const patched=source.replace(pattern, (line, result) => { count++; return 'console.log("[3148 raw destination]", JSON.stringify('+result+'.ok ? '+result+'.object?.destination : null));\n'+line; }); if(count!==1) throw new Error('raw destination capture must match exactly once'); fs.writeFileSync(file,patched);`;
-  execFileSync(
-    "docker",
-    buildUatComposeArgs(requireUatProjectName(), [
-      "exec",
-      "-T",
-      "--user",
-      "0",
-      "jarv1s",
-      "node",
-      "-e",
-      script
-    ]),
-    { stdio: "pipe" }
-  );
-  execFileSync("docker", buildUatComposeArgs(requireUatProjectName(), ["restart", "jarv1s"]), {
-    stdio: "pipe"
-  });
-}
-function printRawDestinations() {
-  const logs = execFileSync(
-    "docker",
-    buildUatComposeArgs(requireUatProjectName(), [
-      "logs",
-      "--no-color",
-      "--tail",
-      "2000",
-      "jarv1s"
-    ]),
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
-  );
-  const values = logs.split("\n").filter((line) => line.includes("[3148 raw destination]"));
-  for (const line of values) console.log(line.slice(line.indexOf("[3148 raw destination]")));
-  expect(values.length, "raw model destinations must be captured before teardown").toBeGreaterThan(
-    0
-  );
-}
-
 test("real task creation, destination edits, isolated delivery and failed target recovery", async ({
   page
 }) => {
   test.setTimeout(720_000);
   expect(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED).toBe("1");
-  installRawDestinationCapture();
   await expect
     .poll(
       () =>
@@ -139,7 +98,6 @@ test("real task creation, destination edits, isolated delivery and failed target
     drawer,
     `change my edited route proof reminder text to combined route proof and send it to the ${side.title} chat`
   );
-  printRawDestinations();
   await expect(
     drawer.getByText(
       "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately.",

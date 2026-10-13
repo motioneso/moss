@@ -71,7 +71,6 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
       {
         code: "reminder_destination_combined_edit_refused",
         class: "validation",
-        remediationRef: "chat.choose_reminder_destination",
         description:
           "A destination edit combined with other terms changes nothing. Send the destination in its own message, then edit text, time, repeat or stop time separately."
       },
@@ -94,7 +93,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time, repeat or stop time in regular chat; change destination separately. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused stays paused.",
+      "Edit pending or paused reminder text, time, repeat or stop time in regular chat; change destination separately. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguity needs a choice. Paused stays paused.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -160,7 +159,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.clock_reminders",
     description:
-      "In a regular chat, remind me tomorrow at 9am to call Sam saves a one-time reminder in your time zone. Moss confirms in your chosen clock format. Daily and weekly repeats keep a saved local time and zone.",
+      "In regular chat, set a one-time reminder for today, tonight or tomorrow in your time zone. Moss confirms in your chosen clock format. Daily and weekly repeats keep a saved local time and zone.",
     featureFlagId: "chat.module",
     errors: [
       {

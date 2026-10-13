@@ -10,6 +10,7 @@ import { resolveReminderDestination } from "../../packages/chat/src/reminders/de
 import { decideReminderTurn } from "../../packages/chat/src/reminders/turn.js";
 import { editReminderById } from "../../packages/chat/src/reminders/edit.js";
 import { deliverDueReminder } from "../../packages/chat/src/reminders/deliver.js";
+import { readReminderRuns } from "../../packages/chat/src/reminders/runs.js";
 import { runScheduledReadJob } from "../../packages/chat/src/scheduled-reads/runner.js";
 import { saveScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
@@ -302,6 +303,103 @@ describe("owned task destinations", () => {
     expect(await deliver(saved.id, next.version)).toBe("destination_unavailable");
     expect((await owner((db) => reminders.readState(db, saved.id)))?.state).toBe("failed");
   });
+  it.each(["Main to side", "side to Main"])(
+    "keeps delivered occurrences in their original chat after a %s edit",
+    async (direction) => {
+      const target = await side(`Historical ${direction}`);
+      const main = (await owner((db) => chat.getMainThread(db, ids.userA)))!;
+      const originalThread = direction === "Main to side" ? main : target;
+      const futureThread = direction === "Main to side" ? target : main;
+      const saved = await save(originalThread.id, "this chat", ids.userA, true);
+      await due(saved.id);
+      expect(await deliver(saved.id, saved.version)).toBe("delivered");
+      const originalMessage = await owner((db) =>
+        chat.getMessageById(db, saved.reserved_message_id)
+      );
+      const edited = await owner((db) =>
+        editReminderById(
+          db,
+          boss,
+          ids.userA,
+          saved.id,
+          saved.version + 1,
+          {
+            text: null,
+            delaySeconds: null,
+            localDue: null,
+            deadline: "keep",
+            localDeadline: null,
+            destination: futureThread.is_main ? "Main" : futureThread.title
+          },
+          "UTC",
+          originalThread.id
+        )
+      );
+      expect(edited.kind).toBe("changed");
+      expect(await owner((db) => chat.getMessageById(db, saved.reserved_message_id))).toEqual(
+        originalMessage
+      );
+      const occurrence = {
+        id: saved.reserved_message_id,
+        threadId: originalThread.id,
+        body: "Reminder: destination proof"
+      };
+      expect((await owner((db) => readReminderRuns(db, saved.id)))[0]?.message).toEqual(occurrence);
+      expect(
+        await owner((db) => reminders.readNotificationResult(db, saved.id, occurrence.id))
+      ).toEqual({
+        ownerUserId: ids.userA,
+        version: saved.version,
+        messageId: occurrence.id,
+        body: occurrence.body
+      });
+      const pending = await owner((db) => reminders.listPendingMain(db, originalThread.id, 20));
+      expect(pending.map((row) => row.reservedMessageId)).toContain(occurrence.id);
+      expect(
+        (await owner((db) => reminders.listPendingMain(db, futureThread.id, 20))).some(
+          (row) => row.reservedMessageId === occurrence.id
+        )
+      ).toBe(false);
+      expect(await owner((db) => readReminderRuns(db, saved.id), ids.userB)).toEqual([]);
+      expect(
+        await owner(
+          (db) => reminders.readNotificationResult(db, saved.id, occurrence.id),
+          ids.userB
+        )
+      ).toBeUndefined();
+      await owner(
+        (db) => reminders.acknowledgeMain(db, originalThread.id, [occurrence.id]),
+        ids.userB
+      );
+      await owner((db) => reminders.acknowledgeMain(db, futureThread.id, [occurrence.id]));
+      expect(await owner((db) => reminders.listPendingMain(db, originalThread.id, 20))).toEqual(
+        pending
+      );
+      await owner((db) => reminders.acknowledgeMain(db, originalThread.id, [occurrence.id]));
+      expect(
+        (await owner((db) => reminders.listPendingMain(db, originalThread.id, 20))).some(
+          (row) => row.reservedMessageId === occurrence.id
+        )
+      ).toBe(false);
+      const next = await owner((db) =>
+        db.db
+          .selectFrom("app.chat_reminders")
+          .selectAll()
+          .where("id", "=", saved.id)
+          .executeTakeFirstOrThrow()
+      );
+      await due(saved.id);
+      expect(await deliver(saved.id, next.version)).toBe("delivered");
+      const runs = await owner((db) => readReminderRuns(db, saved.id));
+      expect(runs.find((run) => run.message?.id === occurrence.id)?.message).toEqual(occurrence);
+      expect(
+        runs.find((run) => run.message?.id === next.reserved_message_id)?.message?.threadId
+      ).toBe(futureThread.id);
+      await owner((db) =>
+        db.db.deleteFrom("app.chat_reminders").where("id", "=", saved.id).execute()
+      );
+    }
+  );
   it.each(["advancement", "task check", "destination"])(
     "observes the %s update guard fail when removed, then restores it",
     async (guard) => {
@@ -424,51 +522,67 @@ describe("owned task destinations", () => {
     expect(await deliver(saved.id, saved.version)).toBe("stale_version");
     expect(await deliver(saved.id, changed.version)).toBe("delivered");
   });
-  it("keeps destination edits paused and acknowledges only the exact delivered side chat", async () => {
-    const source = await side("Paused source");
-    const target = await side("Paused target");
-    const saved = await save(source.id);
-    await owner((db) =>
-      db.db
-        .updateTable("app.chat_reminders")
-        .set({ state: "paused", version: saved.version + 1 })
-        .where("id", "=", saved.id)
-        .execute()
-    );
-    const beforeJobs = boss.send.mock.calls.length;
-    const edited = await owner((db) =>
-      editReminderById(
-        db,
-        boss,
-        ids.userA,
-        saved.id,
-        saved.version + 1,
-        {
-          text: null,
-          delaySeconds: null,
-          localDue: null,
-          deadline: "keep",
-          localDeadline: null,
-          destination: "Paused target"
-        },
-        "UTC",
-        source.id
-      )
-    );
-    expect(edited.kind).toBe("changed");
-    expect(boss.send.mock.calls.length).toBe(beforeJobs);
-    expect(await deliver(saved.id, saved.version + 2)).toBe("paused");
-    const delivered = await save(target.id, "this chat");
-    await due(delivered.id);
-    expect(await deliver(delivered.id, delivered.version)).toBe("delivered");
-    expect(await owner((db) => reminders.listPendingMain(db, source.id, 20))).toEqual([]);
-    const pending = await owner((db) => reminders.listPendingMain(db, target.id, 20));
-    expect(pending.map((row) => row.reservedMessageId)).toContain(delivered.reserved_message_id);
-    await owner((db) => reminders.acknowledgeMain(db, source.id, [delivered.reserved_message_id]));
-    expect(await owner((db) => reminders.listPendingMain(db, target.id, 20))).toEqual(pending);
-    await owner((db) => reminders.acknowledgeMain(db, target.id, [delivered.reserved_message_id]));
-    expect(await owner((db) => reminders.listPendingMain(db, target.id, 20))).toEqual([]);
-  });
+  it.each([false, true])(
+    "keeps paused edits and acknowledges exact side delivery, repeat=%s",
+    async (repeat) => {
+      const source = await side(`Paused source ${repeat}`);
+      const target = await side(`Paused target ${repeat}`);
+      const saved = await save(source.id);
+      await owner((db) =>
+        db.db
+          .updateTable("app.chat_reminders")
+          .set({ state: "paused", version: saved.version + 1 })
+          .where("id", "=", saved.id)
+          .execute()
+      );
+      const beforeJobs = boss.send.mock.calls.length;
+      const edited = await owner((db) =>
+        editReminderById(
+          db,
+          boss,
+          ids.userA,
+          saved.id,
+          saved.version + 1,
+          {
+            text: null,
+            delaySeconds: null,
+            localDue: null,
+            deadline: "keep",
+            localDeadline: null,
+            destination: target.title
+          },
+          "UTC",
+          source.id
+        )
+      );
+      expect(edited.kind).toBe("changed");
+      expect(boss.send.mock.calls.length).toBe(beforeJobs);
+      expect(await deliver(saved.id, saved.version + 2)).toBe("paused");
+      const delivered = await save(target.id, "this chat", ids.userA, repeat);
+      await due(delivered.id);
+      expect(await deliver(delivered.id, delivered.version)).toBe("delivered");
+      expect(await owner((db) => reminders.listPendingMain(db, source.id, 20))).toEqual([]);
+      const pending = await owner((db) => reminders.listPendingMain(db, target.id, 20));
+      expect(pending.map((row) => row.reservedMessageId)).toContain(delivered.reserved_message_id);
+      const main = await owner((db) => chat.getMainThread(db, ids.userA));
+      expect(
+        (await owner((db) => reminders.listPendingMain(db, main!.id, 20))).some(
+          (row) => row.reservedMessageId === delivered.reserved_message_id
+        )
+      ).toBe(false);
+      expect(await owner((db) => reminders.listPendingMain(db, target.id, 20), ids.userB)).toEqual(
+        []
+      );
+      await owner((db) =>
+        reminders.acknowledgeMain(db, source.id, [delivered.reserved_message_id])
+      );
+      expect(await owner((db) => reminders.listPendingMain(db, target.id, 20))).toEqual(pending);
+      await owner((db) =>
+        reminders.acknowledgeMain(db, target.id, [delivered.reserved_message_id])
+      );
+      expect(await owner((db) => reminders.listPendingMain(db, target.id, 20))).toEqual([]);
+    }
+  );
   it("refuses a foreign destination even if the thread ownership invariant is bypassed", async () => {
     const target = await side("Ownership changed");
     const saved = await save(target.id, "this chat");

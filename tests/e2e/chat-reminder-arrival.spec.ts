@@ -14,7 +14,8 @@ const reminderRecord = {
   kind: "reply",
   text: "Reminder: stretch",
   messageId: "reminder-1",
-  background: true
+  background: true,
+  backgroundThreadId: "own-main"
 };
 
 function sse(...records: readonly object[]): string {

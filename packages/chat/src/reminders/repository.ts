@@ -109,13 +109,18 @@ export class ReminderRepository {
           join
             .onRef("message.id", "=", "run.message_id")
             .onRef("message.owner_user_id", "=", "run.owner_user_id")
-            .onRef("message.thread_id", "=", "reminder.thread_id")
         )
+        .innerJoin("app.chat_threads as thread", "thread.id", "message.thread_id")
         .select(["run.owner_user_id", "run.version", "message.id", "message.body"])
         .where("run.reminder_id", "=", reminderId)
         .where("run.message_id", "=", messageId)
         .where("run.outcome", "=", "delivered")
         .where("run.context_state", "!=", "dismissed")
+        .where("run.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("thread.surface", "=", "drawer")
+        .where("thread.incognito", "=", false)
         .where("reminder.state", "in", ["queued", "delivered"])
         .where("message.role", "=", "assistant")
         .where("message.status", "=", "stored")
@@ -333,17 +338,21 @@ export class ReminderRepository {
     const runs = await scopedDb.db
       .selectFrom("app.chat_reminder_runs as run")
       .innerJoin("app.chat_reminders as reminder", "reminder.id", "run.reminder_id")
-      .innerJoin("app.chat_threads as thread", "thread.id", "reminder.thread_id")
       .innerJoin("app.chat_messages as message", (join) =>
         join
           .onRef("message.id", "=", "run.message_id")
-          .onRef("message.thread_id", "=", "reminder.thread_id")
           .onRef("message.owner_user_id", "=", "run.owner_user_id")
       )
+      .innerJoin("app.chat_threads as thread", "thread.id", "message.thread_id")
       .select(["message.id", "message.body", "run.at"])
-      .where("reminder.thread_id", "=", threadId)
-      .where("thread.is_main", "=", true)
+      .where("message.thread_id", "=", threadId)
+      .where("run.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("thread.surface", "=", "drawer")
       .where("thread.incognito", "=", false)
+      .where("message.role", "=", "assistant")
+      .where("message.status", "=", "stored")
       .where("run.context_state", "=", "pending")
       .where("run.outcome", "=", "delivered")
       .where("reminder.state", "in", ["queued", "paused", "delivered"])
@@ -383,10 +392,22 @@ export class ReminderRepository {
       .set({ context_state: "acknowledged" })
       .where("message_id", "in", [...reservedMessageIds])
       .where("context_state", "=", "pending")
+      .where("outcome", "=", "delivered")
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
       .where(
-        "reminder_id",
+        "message_id",
         "in",
-        scopedDb.db.selectFrom("app.chat_reminders").select("id").where("thread_id", "=", threadId)
+        scopedDb.db
+          .selectFrom("app.chat_messages as message")
+          .innerJoin("app.chat_threads as thread", "thread.id", "message.thread_id")
+          .select("message.id")
+          .where("message.thread_id", "=", threadId)
+          .where("message.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+          .where("message.role", "=", "assistant")
+          .where("message.status", "=", "stored")
+          .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+          .where("thread.surface", "=", "drawer")
+          .where("thread.incognito", "=", false)
       )
       .execute();
     await scopedDb.db

@@ -1,9 +1,41 @@
 # Send saved task results to a named side chat
 
 Part of #3148. Base: integration/scheduled-proactive. Risk: sensitive.
-Status: rebased onto 73509bac9. Rebuilt 0320 from 0319, preserving repeat advancement and task-check guards. Settings destination details added; verification and live proof remain open. One edit guidance change used to add destination while retaining both timing examples.
+Status: rebased onto 8c4b1aff5. Atomic-refusal fallback and destination repairs are implemented; final isolated gates, CI and real UI proof remain pending. Code-complete, unverified.
 Worktree: ~/Jarv1s/.claude/worktrees/sched-3148-side-chat-dest.
 Migration assignment: 0320, in packages/chat/sql.
+
+## Current state, 2026-10-13
+
+This section supersedes the earlier build, ruling and finish-state notes below.
+Those notes retain the history of previous designs and verification attempts.
+
+Destination changes combined with text, timing, repeat or stop-time changes refuse
+the whole edit atomically. The owner is asked to send the destination separately;
+standalone destination edits keep the deterministic matcher and existing editor.
+Combined editing is deferred to #3504, Part of #3148. No further model guidance
+tuning is included. The fallback proof no longer patches the disposable API bundle
+or requires raw model destination logs: this refusal occurs before a model call.
+Its real UI refusal, unchanged saved terms, standalone moves, delivery, history,
+layout and failed-target assertions remain required.
+
+The app-map validation declaration and description lengths are repaired, the
+migration manifest lists 0320, and structured-output and browser fixtures match
+their destination contracts. Migration SQL is unchanged.
+
+Historical recurring occurrence reads and acknowledgments now use each stored
+run message's original thread instead of the reminder's mutable future destination.
+New regressions cover Main-to-side and side-to-Main edits after delivery, original
+history links and notification identity, exact-chat context, cross-thread and
+foreign-owner exclusion, and later delivery to the new destination. Their isolated
+database execution and required negative controls remain unverified.
+
+Before readiness, run the scoped and full isolated gates, build the final image,
+and run every blocking UAT selected by the trigger map on the same final head.
+These include the 3148 fallback proof pinned to gpt-6-luna and the 3135 and 3136
+live proofs. Inspect final-head CI and record bounded real evidence.
+The unfinished #3126 overlay acceptance is outside the existing drawer proof;
+#3148 cannot be closed until that dependency is complete.
 
 ## Scope and precedence
 

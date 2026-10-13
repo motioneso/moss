@@ -179,6 +179,7 @@ describe("generateStructured", () => {
   it("accepts the reminder edit payload in the real Claude fenced JSON shape", async () => {
     const object = {
       repeat: null,
+      destination: null,
       target: "stretch",
       unsupported: false,
       text: "bring the blue folder",
