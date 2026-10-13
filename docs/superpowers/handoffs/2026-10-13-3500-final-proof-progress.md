@@ -274,3 +274,126 @@ request: the due-time wait's 60-second timeout ended with 844 milliseconds remai
 bounded wait now allows 90 seconds, without changing the original due time or prompt.
 The corresponding clean scoped DB passed 122 tests in eight files; full foundation was
 stopped with exit 143 before this repair. No complete destination or foundation pass is claimed.
+
+## Server restart pause checkpoint — 2026-10-13
+
+Ben requested a safe pause for a server restart. Runtime and test source remain at tested
+`71e48ec9962e2cbab2537fb9ae7248577ce1e8d6`; this checkpoint adds documentation only.
+The owned checkout is `~/Jarv1s-scheduled-3500`, local branch `local/3500-final-proof`,
+published branch `scheduled/3148-side-chat-destination`. Integration remains
+`8c4b1aff52ee83967ab668e5d3f0a74e760e5a87`. All three feature PRs remain draft/unmerged.
+This is a pause checkpoint, not completion or permission to merge.
+
+### Completed receipts on the tested head
+
+- Isolated scoped database gate: exit 0, 122 tests in eight files, clean inputs
+  `18f23bd3e538247d46eaa00ae96cb7c109dfc7d91773c83ef1ac7c733b8bcebd`,
+  Node 22.22.2, pnpm 10.6.2, PostgreSQL 17.11. Includes the existing SQL update-guard
+  removal/restoration controls. Other historical lock-removal controls are not fresh receipts.
+- Hosted CI: 19 successful checks and three skips. Independent product and authority
+  source reviews are clear for the tested head; no submitted GitHub review is claimed.
+- Eleven of the 21 selected blocking installed specs completed successfully:
+
+| Spec | Passing cases | Duration |
+| --- | ---: | --- |
+| #3148 side-chat destination | 1 | 6.6 minutes |
+| #2006 credentialed News | 1 | 50.8 seconds |
+| runtime-context | 4 | 1.1 minutes |
+| app-map-grounding | 3 | 55 seconds |
+| #2816 quoted tool steps | 1 | 17.2 seconds |
+| #1133 attachments | 3 | 38 seconds |
+| #2890 model Activity | 1 | 16.9 seconds |
+| #3133 reminder controls | 1 | 2.4 minutes |
+| #3133 Settings reminders | 1 | 2.6 minutes |
+| #3134 notifications | 1 | 3.7 minutes |
+| #3135 reminder edits | 1 | 4.3 minutes |
+
+Destination proof completed atomic combined refusals, standalone moves, default Main and
+explicit side creation, exact durable histories and identities, switch/reload, focused draft,
+actual SSE reconnect, six Settings layouts, and the approved bounded target-loss fault.
+Strict real overlap observed arrival after 2,304 ms with Stop visible and 415 characters of
+meaningful partial text simultaneously. It proves owner-resumed overdue delivery during a
+real reply; it does not prove uninterrupted automatic delivery at sixty seconds. The exact
+assistant identity/body and event deduplication assertions passed. Its installed image was
+`sha256:ca2e85f5bae8d24cd7c201136e7f5fdac83e47a937fb2a134701567f876ac50c`.
+Other provisioned specs rebuilt normally; do not assume one image digest covers every rebuild.
+The destination receipt is also recorded on
+[PR #3500](https://github.com/motioneso/moss/pull/3500#issuecomment-6153434114).
+
+Credentialed News completed connection, real articles, rejected-key preservation, valid serial
+replacement, revocation and source removal. The locally configured key remains operator-owned;
+no reentry is needed. Concurrent replacement/revocation safety is not established.
+Notifications used real headed persistent Chrome: actual browser alert, quiet release exactly
+once, muted chat-only delivery, and removed-device behavior all passed. Settings retained its
+saved result during a real refresh outage. Reminder edits produced no result at the old due
+time and exactly one revised result at the new due time. Real inference used only the approved
+Codex subscription and gpt-6-luna, with all four capabilities pinned and capture off.
+
+### Failed, interrupted, and never-run checks
+
+The full isolated foundation was deliberately stopped through `scripts/run-gate.sh stop` for
+restart: runner exit 143, wait exit 1. Static checks, 17,232 unit passes with three existing
+skips across 1,473 files, and 29 seed passes across 12 files completed. All-integration was
+still running; there is no complete foundation receipt. Do not reuse this as a pass.
+
+The #3136 installed spec was deliberately interrupted at its Playwright child, allowing the
+supported parent runner to capture evidence and tear down once; terminal exit 143. Language
+refusals, one-time task-check repeat refusal and six layouts passed before interruption, but
+occurrence/final acceptance did not complete. #3151, #3152, audit-feeds, CLI-terminal,
+moss-assistant-name and Workshop were never reached. Three consecutive complete #3151 runs
+and serialized browser proof remain required; browser proof was not launched.
+
+Three installed failures remain separate from passing receipts:
+
+1. **#1089/#1090 private chat:** first case failed because substring `getByText(FIRST_MESSAGE)`
+   matched both the persisted user bubble and a real assistant quotation. The second serial
+   case did not run. Pending repair: scope the assertion to the user message and exact text;
+   retain the subsequent durable user-message checks. No repair has been applied yet.
+2. **#1185 News layout:** default live mix produced cards but not both variants in 180 seconds.
+   A separate diagnostic preserved the assertions and measured eight photo cards, zero text-only
+   mosaic cards. A normal authenticated overview read showed genuine text-only metadata deeper
+   in a source group: group sizes 12/12/10/10, with one text-only item in the last group.
+   The approved #1185 spec excludes ranking changes, and composition tests pin the first six
+   remaining stories as standards. Do not add a product diversity policy to force acceptance.
+   A reviewed, not-yet-executed fixture selects NPR via normal owner `POST /api/news/prefs`
+   with `{ kind: "source", key: "npr" }`, preserving real RSS and original assertions. This
+   can establish explicitly NPR-selected coverage, not erase the default-source failure.
+3. **#2282 Reddit source:** normal add-source UI succeeded, but real r/technology article
+   arrival failed after 180 seconds. Refresh completed; aggregate fetch failures rose from
+   one to two and one custom source became unavailable. The predicate matches the public DTO.
+   Exact source-specific failure/status was not captured. A separate host RSS probe returned
+   HTTP 429; this supports rate limiting but does not prove the UAT's exact failure. Obtain
+   source health and per-source fetch outcome before any fix or supported retry. Do not mock
+   articles, weaken the assertion, add credentials, or introduce a paid/provider fallback.
+
+An earlier remaining-suite launch failed at Docker registry DNS before tests. Resolution and
+HTTP 200 token-endpoint availability were verified before one build-enabled recovery attempt.
+This failed launch is not a test receipt.
+
+### Resume and composition order
+
+All owned runners and browser processes were stopped; gate and UAT disposable containers,
+networks and volumes were removed, including copied auth. Ports 5184/5185 were released.
+Valuable receipts and diagnostic scripts are retained in the operator's protected local state
+folder `~/.local/state/moss/scheduled-3500-restart`; its small local ledger carries private
+configuration paths. Temporary diagnostic output was removed after preservation.
+
+Resume in this same checkout. Reclaim ports with `devports`, read the local ledger, inspect the
+remote head/base, apply the precise private-message assertion repair, and verify the reviewed
+normal-owner News fixture. Diagnose Reddit retrieval without changing acceptance. Freeze and
+publish any repairs before fresh exact-input scoped/full foundation, all selected installed
+specs, three consecutive complete #3151 runs, CI/source review and serialized browser proof.
+No #3500 merge until every required gate is complete.
+
+Only after #3500 merges, compose #3507. Its published 0321 currently rejects legitimate
+`thread_id` terms edits and omits `destination_title` immutability in non-terms edits. Preserve
+0320 destination validation when either destination field changes, while adding recurring,
+persisted-run and no-message completion support. Extend valid/invalid destination and
+pause/context-title guard-removal controls; retire the obsolete one-time task-check control.
+Application composition must retain selection-before-reminder locks and destination validation
+on every runner recheck, destination-only editing and combined refusal, destination metadata
+in settings/shared DTOs, and each historical message's original destination in history,
+context, notifications and acknowledgment. Widen posted outcomes for failed/refused results
+without rebinding older messages to a task's current destination. These are read-only review
+findings; no #3507 edits have been made. #3508 remains inert-agreement scope afterward, with no
+execution, jobs or Resume. Later waves and deployment remain outside this checkpoint.
