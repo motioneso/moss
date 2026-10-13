@@ -815,19 +815,36 @@ describe("task 5b launch follows the row", () => {
         handedOff.push(files ?? []);
         await fakeAgentHomePrepare(request);
       });
-      const first = await host.spawn("chat:user-a:codex", "proj", "openai", "user-a", "chat");
+      const first = await host.spawn(
+        "chat:user-a:codex",
+        "proj",
+        "openai",
+        "user-a",
+        "chat",
+        false,
+        "Trusted Moss persona"
+      );
       const second = await host.spawn("chat:user-b:codex", "proj", "openai", "user-b", "chat");
-      expect(handedOff.map((files) => files.map(({ path }) => path))).toEqual([
+      expect(
+        handedOff.map((files) =>
+          files.filter((file) => file.kind === "codex-auth").map(({ path }) => path)
+        )
+      ).toEqual([
         [join(home, "agents", "user-a", ".codex", "auth.json")],
         [join(home, "agents", "user-b", ".codex", "auth.json")]
       ]);
-      expect(handedOff[0]?.[0]?.sourcePath).toBe(
+      expect(handedOff[0]?.find((file) => file.kind === "codex-auth")?.sourcePath).toBe(
         join(home, "agents", "user-a", ".codex", "auth.json")
       );
-      expect(handedOff[1]?.[0]?.sourcePath).toBe(
+      expect(handedOff[1]?.find((file) => file.kind === "codex-auth")?.sourcePath).toBe(
         join(home, "agents", "user-b", ".codex", "auth.json")
       );
       expect(seen[0]?.env.HOME).toBe(first.home);
+      expect(handedOff[0]).toContainEqual({
+        path: join(first.cwd, "AGENTS.md"),
+        content: "Trusted Moss persona"
+      });
+      expect(handedOff[1]).toContainEqual({ path: join(second.cwd, "AGENTS.md"), content: "" });
       expect(seen[1]?.env.HOME).toBe(second.home);
       expect(seen.every(({ env }) => env.CODEX_HOME === undefined)).toBe(true);
       expect(seen.every(({ env }) => env.CLAUDE_CODE_OAUTH_TOKEN === undefined)).toBe(true);

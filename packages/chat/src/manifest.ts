@@ -142,7 +142,7 @@ export const chatModuleManifest = {
     {
       id: "chat.stream_reconnect",
       description:
-        "Closing or reloading chat while it starts releases the disconnected stream, so reopening chat keeps receiving replies.",
+        "Closing or reloading chat while it starts releases the disconnected stream, so reopening chat keeps receiving replies. ACP replies update one live bubble as text arrives; the completed answer preserves that identity beside delivered reminders.",
       featureFlagId: "chat.module"
     },
     {

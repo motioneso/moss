@@ -82,7 +82,7 @@ async function runCheckTurnInner(
           normalize(record.toolName ?? "").endsWith(normalize(toolName))
         )
           called = true;
-        if (record.kind === "reply") replyText += record.text;
+        if (record.kind === "reply") replyText = record.text;
       }
       if (batch.complete) break;
       if (now() >= deadline) {

@@ -132,3 +132,27 @@ then failed before overlap proof: Stop generating appeared, but no new reply bub
 within ten seconds. The approved single timing adjustment did not establish overlap. Target-loss
 recovery and the later eleven specs were not reached. The disposable stack and all its volumes,
 including copied CLI auth, were removed. No full foundation or final merge readiness is claimed.
+
+Installed runtime-context at `730979b97` passed three of four cases: the News capture and
+tool-grounded remediation now pass. Screenshot pasted-text guidance still fails.
+The complete typecheck passed for the News repair.
+
+## ACP roots found by installed proof
+
+The ACP engine discarded `agent_message_chunk` and emitted replies only after completion;
+no timing adjustment can prove streaming overlap under that contract. It now emits cumulative
+reply snapshots with one stable ID and sequence, then replaces them with authoritative final
+text and usage. The check-turn reader uses the latest snapshot. Failed prompts discard unread
+partial replies and reject late chunks, preserving structured-generation failure semantics.
+The failure regression failed with this protection removed and passed after restoration.
+
+Independent inspection of the installed `codex-acp@1.10.0` bundle verified that it ignores
+`session/new._meta.systemPrompt`. The persona now travels through the existing spawn RPC to
+the owner-switched file writer, which writes the host-derived chat working directory's
+`AGENTS.md` before the Codex adapter starts. Only OpenAI chat uses this file; absent persona
+clears it. Workshop files and shared homes are untouched. Runtime type checks precede effects.
+Actual installed instruction loading remains to be proved by the refusal case.
+
+ACP engine, check-turn and runner tests passed 63 tests in three files; stream identity tests
+passed 18. Independent product source review found no remaining blocker. These repairs still
+require a rebuilt installed image, complete live acceptance and final-head gates before merge.

@@ -289,9 +289,12 @@ export class AcpHost {
     providerKind: AcpProviderKind,
     userId: string,
     profile: AcpProfile,
-    useCandidate = false
+    useCandidate = false,
+    personaText?: string
   ): Promise<AcpSpawnResult> {
     if (!providerKind) throw new Error("acpSpawn.providerKind is required: no default provider");
+    if (personaText !== undefined && typeof personaText !== "string")
+      throw new Error("acpSpawn.personaText must be a string");
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
       throw new Error("acpSpawn.projectId must match [A-Za-z0-9_-]{1,64}");
     }
@@ -417,10 +420,8 @@ export class AcpHost {
             codexPeerHomesFor(shared, homeBase, userId, access)
           );
         }
-        await runAgentHomePrepare(
-          { dirs: prepareDirs, denyFile },
-          { uid, gid },
-          codexAuth
+        await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid }, [
+          ...(codexAuth
             ? [
                 {
                   path: join(agentHome, ".codex", "auth.json"),
@@ -428,8 +429,12 @@ export class AcpHost {
                   kind: "codex-auth" as const
                 }
               ]
-            : []
-        );
+            : []),
+          // codex-acp ignores session/new systemPrompt metadata and reads this cwd's AGENTS.md.
+          ...(providerKind === "openai" && profile === "chat"
+            ? [{ path: join(sessionDir, "AGENTS.md"), content: personaText ?? "" }]
+            : [])
+        ]);
         return { agentHome, sessionDir, env };
       } catch (error) {
         if (agentHomeTop?.createdHere) {
