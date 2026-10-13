@@ -200,7 +200,12 @@ export type GatewayToolResponse =
       readonly media?: ToolResultMedia;
     }
   | { readonly ok: false; readonly denied: true; readonly reason: string }
-  | { readonly ok: false; readonly error: string };
+  | {
+      readonly ok: false;
+      readonly error: string;
+      readonly retryable?: true;
+      readonly failureKind?: "read";
+    };
 
 /** Why the classifier gate's call was turned away before any handler ran. */
 export type GatewayDeclineReason =

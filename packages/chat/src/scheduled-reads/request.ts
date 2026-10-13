@@ -24,9 +24,19 @@ export function recordScheduledReadFailure(
     | "needs_config"
     | "validation_failed"
     | "provider_error"
-    | "aborted"
+    | "aborted",
+  validation?: { readonly keyword: string; readonly schemaPath: string }
 ) {
-  console.warn(JSON.stringify({ event: "chat.scheduled_read_refused", stage, errorClass }));
+  console.warn(
+    JSON.stringify({
+      event: "chat.scheduled_read_refused",
+      stage,
+      errorClass,
+      ...(validation
+        ? { validation: { keyword: validation.keyword, schemaPath: validation.schemaPath } }
+        : {})
+    })
+  );
 }
 
 export interface ScheduledReadCandidate {

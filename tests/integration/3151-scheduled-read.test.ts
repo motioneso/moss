@@ -1,29 +1,7 @@
 import { randomUUID } from "node:crypto";
-import pg from "pg";
-import type { Kysely } from "kysely";
-import type { PgBoss } from "pg-boss";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  AiRepository,
-  AssistantToolGateway,
-  ConfirmationRegistry,
-  SessionTokenRegistry
-} from "@moss/ai";
-import { DataContextChatPersistence } from "@moss/chat";
-import {
-  createDatabase,
-  DataContextRunner,
-  SharesRepository,
-  type DataContextDb,
-  type MossDatabase
-} from "@moss/db";
-import { createPgBossClient } from "@moss/jobs";
-import { tasksModuleManifest, TasksRepository } from "@moss/tasks";
-import { SettingsRepository } from "@moss/settings";
-import { getBuiltInModuleManifests } from "@moss/module-registry";
-import { createActiveModulesResolver } from "../../packages/module-registry/src/active-modules-resolver.js";
+import { describe, expect, it } from "vitest";
+import { SharesRepository } from "@moss/db";
 import { serializeMessage } from "../../packages/chat/src/route-serializers.js";
-import { ChatRepository } from "../../packages/chat/src/repository.js";
 import {
   registerScheduledReadWorker,
   runScheduledReadJob
@@ -39,126 +17,46 @@ import { editReminderById } from "../../packages/chat/src/reminders/edit.js";
 import { ReminderRepository } from "../../packages/chat/src/reminders/repository.js";
 import { saveScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
 import { readScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
-import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
-
-let appDb: Kysely<MossDatabase>;
-let workerDb: Kysely<MossDatabase>;
-let app: DataContextRunner;
-let worker: DataContextRunner;
-let boss: PgBoss;
-let workerBoss: PgBoss;
-let bootstrap: pg.Client;
-const chat = new ChatRepository();
-const tasks = new TasksRepository();
-function gateway(allBuiltIns = false) {
-  return new AssistantToolGateway({
-    confirmTimeoutMs: 0,
-    runner: worker,
-    repository: new AiRepository(),
-    resolveActiveModules: createActiveModulesResolver({
-      dataContext: worker,
-      // Tasks is core today; use an optional fixture to exercise the real disable resolver.
-      manifests: () =>
-        allBuiltIns
-          ? getBuiltInModuleManifests()
-          : [
-              {
-                ...tasksModuleManifest,
-                availability: { ...tasksModuleManifest.availability, required: false }
-              }
-            ]
-    }),
-    tokens: new SessionTokenRegistry(),
-    confirmations: new ConfirmationRegistry(),
-    notifier: { emit() {} }
-  });
-}
-beforeAll(async () => {
-  await resetFoundationDatabase();
-  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 3 });
-  workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 3 });
-  app = new DataContextRunner(appDb);
-  worker = new DataContextRunner(workerDb);
-  boss = createPgBossClient(connectionStrings.app);
-  workerBoss = createPgBossClient(connectionStrings.worker);
-  bootstrap = new pg.Client({ connectionString: connectionStrings.bootstrap });
-  await Promise.all([boss.start(), workerBoss.start(), bootstrap.connect()]);
-});
-afterAll(async () => {
-  await Promise.allSettled([
-    boss?.stop({ graceful: false }),
-    workerBoss?.stop({ graceful: false }),
-    appDb?.destroy(),
-    workerDb?.destroy(),
-    bootstrap?.end()
-  ]);
-});
-const owner = <T>(work: (db: DataContextDb) => Promise<T>) =>
-  app.withDataContext({ actorUserId: ids.userA }, work);
-async function save() {
-  await setTasksDisabled(false);
-  const task = await owner((db) => tasks.create(db, { title: `Proof ${randomUUID()}` }));
-  const thread = await owner(
-    async (db) =>
-      (await chat.getMainThread(db, ids.userA)) ?? chat.openNewThread(db, { title: "Main" })
-  );
-  const persistence = new DataContextChatPersistence({
-    dataContext: app,
-    chatRepository: chat,
-    aiRepository: new AiRepository(),
-    boss
-  });
-  const stored = await persistence.recordReminderTurn(
-    ids.userA,
-    `Check task ${task.title} in 1 second`,
-    {
-      kind: "scheduled_read",
-      taskId: task.id,
-      title: task.title,
-      when: { kind: "request", delaySeconds: 1, text: "check task" }
-    },
-    { threadId: thread.id }
-  );
-  if (
-    !stored ||
-    stored === "stopped" ||
-    stored.origin.kind !== "reminder" ||
-    !stored.origin.reminderId
-  )
-    throw new Error("check not saved");
-  const id = stored.origin.reminderId;
-  await bootstrap.query("BEGIN");
-  await bootstrap.query("SET LOCAL session_replication_role = replica");
-  await bootstrap.query(
-    "UPDATE app.chat_reminders SET due_at = now() - interval '2 seconds' WHERE id = $1",
-    [id]
-  );
-  await bootstrap.query("COMMIT");
-  return {
-    task,
-    id,
-    threadId: thread.id,
-    data: { actorUserId: ids.userA, resourceId: id, version: 1 }
-  };
-}
-function setTasksDisabled(disabled: boolean) {
-  return owner((db) =>
-    new SettingsRepository().setUserModuleDisabled(db, {
-      moduleId: "tasks",
-      actorUserId: ids.userA,
-      requestId: "scheduled-read:disable-test",
-      disabled
-    })
-  );
-}
-async function message(saved: Awaited<ReturnType<typeof save>>) {
-  return owner(async (db) =>
-    (await chat.listMessages(db, saved.threadId)).filter(
-      (m) => m.role === "assistant" && m.body.includes(saved.task.title)
-    )
-  );
-}
+import { ids } from "./test-database.js";
+import {
+  app,
+  worker,
+  boss,
+  workerBoss,
+  bootstrap,
+  chat,
+  tasks,
+  owner,
+  save,
+  message,
+  gateway,
+  setTasksDisabled,
+  generateReport
+} from "./scheduled-read-fixture.js";
 describe("scheduled reads through the actor worker and real gateway", () => {
+  it("posts model prose once after rechecking access", async () => {
+    const saved = await save();
+    let calls = 0;
+    expect(
+      await runScheduledReadJob(
+        { data: saved.data },
+        {
+          dataContext: worker,
+          gateway: gateway(),
+          generateReport: async () => {
+            calls++;
+            return { ok: true, text: "Model-written task report.\n\n[Source: Tasks](/tasks)" };
+          }
+        }
+      )
+    ).toBe("success");
+    expect(calls).toBe(1);
+    expect(
+      (await owner((db) => chat.listMessages(db, saved.threadId))).filter((m) =>
+        m.body.startsWith("Model-written")
+      )
+    ).toHaveLength(1);
+  });
   it("requeues time edits on the source-read queue and refuses text edits", async () => {
     const saved = await save();
     const keep = {
@@ -184,7 +82,10 @@ describe("scheduled reads through the actor worker and real gateway", () => {
       item_id: saved.task.id
     });
     expect(
-      await runScheduledReadJob({ data: saved.data }, { dataContext: worker, gateway: gateway() })
+      await runScheduledReadJob(
+        { data: saved.data },
+        { dataContext: worker, generateReport, gateway: gateway() }
+      )
     ).toBe("inactive");
     const textEdit = await owner((db) =>
       editReminderById(
@@ -334,7 +235,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(
       await runScheduledReadJob(
         { data: { ...saved.data, actorUserId: ids.userB } },
-        { dataContext: worker, gateway: gateway() }
+        { dataContext: worker, generateReport, gateway: gateway() }
       )
     ).toBe("inactive");
   });
@@ -346,7 +247,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     );
     expect(jobs.rows.map((row) => row.data)).toEqual([saved.data]);
     await owner((db) => tasks.update(db, saved.task.id, { status: "done" }));
-    const deps = { dataContext: worker, gateway: gateway() };
+    const deps = { dataContext: worker, generateReport, gateway: gateway() };
     expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("success");
     expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("inactive");
     const messages = await message(saved);
@@ -369,7 +270,10 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     const saved = await save();
     await setTasksDisabled(true);
     expect(
-      await runScheduledReadJob({ data: saved.data }, { dataContext: worker, gateway: gateway() })
+      await runScheduledReadJob(
+        { data: saved.data },
+        { dataContext: worker, generateReport, gateway: gateway() }
+      )
     ).toBe("refused");
     expect((await owner(listScheduledReminders)).find((r) => r.id === saved.id)).toMatchObject({
       state: "failed"
@@ -407,7 +311,10 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     await owner((db) => pauseReminderById(db, saved.id));
     await owner((db) => resumeReminderById(db, boss, ids.userA, saved.id));
     expect(
-      await runScheduledReadJob({ data: saved.data }, { dataContext: worker, gateway: gateway() })
+      await runScheduledReadJob(
+        { data: saved.data },
+        { dataContext: worker, generateReport, gateway: gateway() }
+      )
     ).toBe("inactive");
     const jobs = await bootstrap.query(
       "SELECT name FROM pgboss.job WHERE data->>'resourceId' = $1",
@@ -424,6 +331,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          generateReport,
           gateway: {
             async runBackgroundReadForActor(actor, read) {
               const result = await real.runBackgroundReadForActor(actor, read);
@@ -440,9 +348,15 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     const saved = await save();
     const deps = {
       dataContext: worker,
+      generateReport,
       gateway: {
         async runBackgroundReadForActor() {
-          return { ok: false as const, error: "Tool tasks.get failed" };
+          return {
+            ok: false as const,
+            error: "Tool tasks.get failed",
+            failureKind: "read" as const,
+            retryable: true as const
+          };
         }
       }
     };
@@ -461,7 +375,11 @@ describe("scheduled reads through the actor worker and real gateway", () => {
   it("delivers through the registered queue worker and notification enqueue", async () => {
     const saved = await save();
     await owner((db) => tasks.update(db, saved.task.id, { status: "done" }));
-    await registerScheduledReadWorker(workerBoss, { dataContext: worker, gateway: gateway(true) });
+    await registerScheduledReadWorker(workerBoss, {
+      dataContext: worker,
+      generateReport,
+      gateway: gateway(true)
+    });
     const states: unknown[] = [];
     await expect
       .poll(

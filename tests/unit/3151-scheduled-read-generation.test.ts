@@ -73,6 +73,32 @@ it("records the stage of an exception without its message or arbitrary name", as
   );
 });
 
+it("records only the schema keyword and schema path for a validation failure", async () => {
+  const resolve = fixture();
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  mocks.prepare.mockResolvedValue(async () => ({
+    ok: false,
+    error: "validation_failed",
+    reason: "schema_validation",
+    validation: {
+      keyword: "additionalProperties",
+      schemaPath: "#/additionalProperties",
+      instancePath: "/PRIVATE OUTPUT KEY",
+      params: { additionalProperty: "PRIVATE OUTPUT VALUE" }
+    }
+  }));
+  await resolve("owner", "Check my task in 30 seconds", new AbortController().signal);
+  expect(warn).toHaveBeenCalledExactlyOnceWith(
+    JSON.stringify({
+      event: "chat.scheduled_read_refused",
+      stage: "schema_validation",
+      errorClass: "validation_failed",
+      validation: { keyword: "additionalProperties", schemaPath: "#/additionalProperties" }
+    })
+  );
+  expect(JSON.stringify(warn.mock.calls)).not.toContain("PRIVATE");
+});
+
 it("records cancellation during candidate lookup as aborted", async () => {
   const resolve = fixture();
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

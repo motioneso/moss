@@ -160,7 +160,7 @@ it.each([
     f.deps
   );
   f.close();
-  expect(await run()).toEqual({
+  expect(await run()).toMatchObject({
     ok: false,
     error: "validation_failed",
     reason:
@@ -170,6 +170,20 @@ it.each([
         : "json_parse"
   });
   expect(f.generate).toHaveBeenCalledTimes(1);
+});
+
+it("returns schema metadata without private output keys or values", async () => {
+  const f = fixture('{"overview":"PRIVATE VALUE","PRIVATE PROPERTY":"PRIVATE TEXT"}');
+  const run = await prepareStructuredGeneration(f.scoped, request, f.deps);
+  f.close();
+  const result = await run();
+  expect(result).toEqual({
+    ok: false,
+    error: "validation_failed",
+    reason: "schema_validation",
+    validation: { keyword: "additionalProperties", schemaPath: "#/additionalProperties" }
+  });
+  expect(JSON.stringify(result)).not.toContain("PRIVATE");
 });
 
 it.each([

@@ -1,7 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MarkdownMessage, safeUrl } from "../../apps/web/src/chat/markdown-message.js";
-import { scheduledReadReport } from "../../packages/chat/src/scheduled-reads/report.js";
+import { renderScheduledReport } from "../../packages/chat/src/scheduled-reads/report.js";
 import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
 import { readScheduledReadSource } from "../../packages/chat/src/route-serializers.js";
 
@@ -11,13 +11,9 @@ describe("scheduled report source rendering", () => {
   it("renders the trusted app link while source markdown and URLs remain plain text", () => {
     const title =
       "[click](javascript:alert(1)) [other](/tasks) https://evil.test javascript:alert(2)";
-    const text = scheduledReadReport(
-      {
-        ok: true,
-        data: {},
-        structuredData: { task: { id: "item", title, status: "done" } }
-      },
-      "item"
+    const text = renderScheduledReport(
+      { taskId: "item", status: "done", summary: title },
+      { id: "item", title, status: "done" }
     );
     expect(text).not.toBeNull();
     const record = parseRecord(
