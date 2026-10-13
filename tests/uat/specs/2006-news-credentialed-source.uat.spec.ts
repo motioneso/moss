@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { bringUpRealChatModel } from "./real-chat-signin.js";
 
@@ -45,13 +46,10 @@ async function openNewsSettings(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "News" })).toBeVisible();
 }
 
-async function overviewArticles(page: Page): Promise<readonly { canonicalDomain?: unknown }[]> {
+async function overviewArticles(page: Page): Promise<readonly NewsHeadline[]> {
   const response = await page.request.get("/api/news/overview");
   expect(response.ok(), `news overview -> ${response.status()}`).toBeTruthy();
-  const body = (await response.json()) as {
-    topStories?: readonly { canonicalDomain?: unknown }[];
-    rankedStories?: readonly { canonicalDomain?: unknown }[];
-  };
+  const body = (await response.json()) as NewsOverviewResponse;
   return body.rankedStories ?? body.topStories ?? [];
 }
 
@@ -86,7 +84,7 @@ test("connects, rotates, and revokes a real credentialed News source", async ({ 
     .poll(
       async () => {
         const articles = await overviewArticles(page);
-        return articles.some((article) => article.canonicalDomain === CONNECTION_HOST);
+        return articles.some((article) => article.sourceKey === CONNECTION_HOST);
       },
       { timeout: 180_000, intervals: [1_000, 2_000, 4_000, 8_000] }
     )
@@ -115,7 +113,7 @@ test("connects, rotates, and revokes a real credentialed News source", async ({ 
     .poll(
       async () => {
         const articles = await overviewArticles(page);
-        return articles.some((article) => article.canonicalDomain === CONNECTION_HOST);
+        return articles.some((article) => article.sourceKey === CONNECTION_HOST);
       },
       { timeout: 60_000, intervals: [1_000, 2_000, 4_000] }
     )

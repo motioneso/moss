@@ -214,3 +214,12 @@ the returned model fingerprint remains unchanged. New policy checks failed again
 implementation, then the repaired policy/source/preview/protocol suites passed 83 tests in
 four files. Final installed credential validation and the later selected fixtures remain
 unproved. Fresh exact-head gates and rebuilt installed proof are still required.
+
+At `47ed4154f`, scoped DB passed 122 tests in 8 files on clean inputs. The rebuilt
+installed image passed News preview, key connection and healthy-source display; refresh
+logged 41 collected candidates and a published 37-article snapshot. UAT then timed out
+checking a field absent from its response: `NewsHeadline` exposes snapshot canonical
+domain as `sourceKey`, not `canonicalDomain`. The helper now uses the shared overview
+DTO and both arrival/revocation assertions check `sourceKey`. Rotation and revocation
+were not reached. All later specs were not run. Full foundation was stopped (143)
+before this harness correction, so it supplies no final receipt.
