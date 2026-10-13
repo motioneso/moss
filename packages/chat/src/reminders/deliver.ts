@@ -152,7 +152,7 @@ export async function persistReminderResult(
       await deps.reminders.markDelivered(scopedDb, reminder.id, late);
     } else {
       const saved = await advanceReminder(scopedDb, reminder, next);
-      await enqueueReminderDelivery(deps.boss, scopedDb, payload.actorUserId, saved);
+      await enqueueReminderDelivery(deps.boss, scopedDb, reminder.ownerUserId, saved);
     }
   } else await deps.reminders.markDelivered(scopedDb, reminder.id, late);
   // #3195: Postgres delivers this only if the delivery commits, so a rollback shows nothing.
