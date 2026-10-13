@@ -101,7 +101,14 @@ test("connects, rotates, and revokes a real credentialed News source", async ({ 
 
   await page.getByLabel("Access key").fill(key);
   await page.getByLabel("I have permission to use this key here.").check();
+  const replacementResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/credential")
+  );
   await page.getByRole("button", { name: "Save key" }).click();
+  expect((await replacementResponse).ok()).toBe(true);
+  await expect(page.getByRole("button", { name: "Save key" })).toHaveCount(0);
   await expect(page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Revoke access for NewsAPI" }).click();

@@ -223,3 +223,11 @@ domain as `sourceKey`, not `canonicalDomain`. The helper now uses the shared ove
 DTO and both arrival/revocation assertions check `sourceKey`. Rotation and revocation
 were not reached. All later specs were not run. Full foundation was stopped (143)
 before this harness correction, so it supplies no final receipt.
+
+At `a4f20d996`, real source article arrival and rejected-key preservation passed. The
+revocation assertion failed because the test clicked revoke while valid replacement was
+still in flight: it accepted the already-visible Connected badge as completion. Request
+logs show DELETE completed before the replacement POST completed, leaving Connected.
+The serial journey now waits for the successful replacement response and form closure
+before revoking. Concurrent replacement/revocation safety is not established by this test.
+The disposable stack and copied auth volumes were removed; all later specs were not run.
