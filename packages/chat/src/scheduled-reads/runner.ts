@@ -4,6 +4,7 @@ import type { DataContextDb, DataContextRunner } from "@moss/db";
 import { ChatRepository } from "../repository.js";
 import { ReminderRepository, type DueReminder } from "../reminders/repository.js";
 import { persistReminderResult, type DeliverReminderJobPayload } from "../reminders/deliver.js";
+import { lockReminderDestination } from "../reminders/destination.js";
 import { enqueueReminderNotification } from "../reminders/notifications.js";
 import { readScheduledOperation, recordReadOutcome } from "./repository.js";
 import {
@@ -58,8 +59,13 @@ export async function runScheduledReadJob(
     }
     const operation = await readScheduledOperation(db, reminder.id);
     if (!operation || operation.owner_user_id !== payload.actorUserId) return null;
-    const main = await chat.getMainThread(db, payload.actorUserId);
-    if (main?.id !== reminder.threadId) {
+    const target = await lockReminderDestination(
+      db,
+      payload.actorUserId,
+      reminder.threadId,
+      reminder.destinationTitle
+    );
+    if (!target) {
       await reminders.markFailed(db, reminder.id);
       return null;
     }

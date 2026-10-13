@@ -10,6 +10,8 @@ import { resolveReminderDestination } from "../../packages/chat/src/reminders/de
 import { decideReminderTurn } from "../../packages/chat/src/reminders/turn.js";
 import { editReminderById } from "../../packages/chat/src/reminders/edit.js";
 import { deliverDueReminder } from "../../packages/chat/src/reminders/deliver.js";
+import { runScheduledReadJob } from "../../packages/chat/src/scheduled-reads/runner.js";
+import { saveScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const chat = new ChatRepository();
@@ -130,6 +132,91 @@ describe("owned task destinations", () => {
     expect(message?.thread_id).toBe(source.id);
     expect(message?.body).toBe("Reminder: destination proof");
   });
+  it.each(["available", "deleted", "foreign"])(
+    "checks a saved source task with destination %s",
+    async (availability) => {
+      const target = await side(`Source check ${availability}`);
+      const saved = await save(target.id);
+      const itemId = randomUUID();
+      await owner((db) => saveScheduledOperation(db, saved.id, itemId));
+      const edited = await owner((db) =>
+        editReminderById(
+          db,
+          boss,
+          ids.userA,
+          saved.id,
+          saved.version,
+          {
+            text: null,
+            delaySeconds: null,
+            localDue: null,
+            deadline: "keep",
+            localDeadline: null,
+            destination: target.title
+          },
+          "UTC",
+          target.id
+        )
+      );
+      expect(edited.kind).toBe("changed");
+      if (availability === "deleted")
+        await bootstrap.query("DELETE FROM app.chat_threads WHERE id = $1", [target.id]);
+      if (availability === "foreign") {
+        // Ownership is immutable in production; this fixture represents a revoked target.
+        await bootstrap.query("BEGIN");
+        try {
+          await bootstrap.query("SET LOCAL session_replication_role = replica");
+          await bootstrap.query("UPDATE app.chat_threads SET owner_user_id = $1 WHERE id = $2", [
+            ids.userB,
+            target.id
+          ]);
+          await bootstrap.query("COMMIT");
+        } catch (error) {
+          await bootstrap.query("ROLLBACK");
+          throw error;
+        }
+      }
+      await due(saved.id);
+      const read = vi.fn(async () => ({
+        ok: true as const,
+        data: {},
+        structuredData: { task: { id: itemId, title: "Destination source", status: "done" } }
+      }));
+      const result = await runScheduledReadJob(
+        {
+          data: {
+            actorUserId: ids.userA,
+            resourceId: saved.id,
+            version: saved.version + 1
+          }
+        },
+        { dataContext: worker, gateway: { runBackgroundReadForActor: read } }
+      );
+      expect(result).toBe(availability === "available" ? "success" : "inactive");
+      expect(read).toHaveBeenCalledTimes(availability === "available" ? 1 : 0);
+      const messages = await bootstrap.query(
+        "SELECT thread_id, body FROM app.chat_messages WHERE id = $1",
+        [saved.reserved_message_id]
+      );
+      expect(messages.rows).toEqual(
+        availability === "available"
+          ? [
+              {
+                thread_id: target.id,
+                body: "I checked Destination source. Its status is done.\n\n[Source: Tasks](/tasks)"
+              }
+            ]
+          : []
+      );
+      expect((await owner((db) => reminders.readState(db, saved.id)))?.state).toBe(
+        availability === "available" ? "delivered" : "failed"
+      );
+      if (availability === "foreign")
+        expect(
+          await owner((db) => chat.getMessageById(db, saved.reserved_message_id), ids.userB)
+        ).toBeUndefined();
+    }
+  );
   it("advances side repeats and validates the destination again on the next firing", async () => {
     const target = await side("Repeating target");
     const saved = await save(target.id, "this chat", ids.userA, true);

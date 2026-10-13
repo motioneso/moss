@@ -257,3 +257,14 @@ Live setup uses the shared disposable provisioner, image tag uat-sched-3148,
 a claimed port, Codex sign-in helper and one pinned economy model. No network
 response rewriting. Rerun 3135 edit and 3136 repeat browser specs on the same head.
 Current pane: w1:p19H. No successor or helper agent spawned.
+
+Coordinator approved the narrow scheduled-read runner exception after 3151 merged.
+Only the destination check in load changes to the existing owned-target lock.
+Creation remains Main-only. Integration coverage checks side delivery and deleted
+or foreign targets, with the check removed to observe failures. PR 3502 must keep
+this validation in its second load immediately before posting when it lands.
+
+Runner evidence: the Main-only version failed the available-side case. Removing
+the check failed deleted and foreign cases at insertion instead of marking the
+task failed. Restored owned-destination validation passed all 110 tests in the
+eight-file isolated suite. Full gate and live UI proof remain pending.
