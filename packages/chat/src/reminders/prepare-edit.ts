@@ -9,7 +9,13 @@ import type { ReminderLocale } from "./clock-wording.js";
 import { normalizeReminderText, matchTarget } from "./cancel.js";
 import { pendingReminderEdit, matchReminderEditSelection } from "./edit-agreement.js";
 import { readEditableReminders } from "./edit.js";
-import { recognizeReminderEdit, recognizeReminderDestinationEdit } from "./edit-recognizer.js";
+import {
+  recognizeReminderEdit,
+  recognizeReminderDestinationEdit,
+  requestsCombinedReminderDestination,
+  combinesReminderDestination,
+  REMINDER_DESTINATION_SEPARATE_REPLY
+} from "./edit-recognizer.js";
 import {
   reminderEditSchema,
   REMINDER_EDIT_GUIDANCE,
@@ -73,6 +79,8 @@ export async function prepareReminderEdit(
             reply: "I couldn't find a waiting reminder with those words. Nothing changed."
           };
   }
+  if (requestsCombinedReminderDestination(text))
+    return async () => ({ kind: "edit_refused", reply: REMINDER_DESTINATION_SEPARATE_REPLY });
   const { model } = await ai.resolveModelForService(scopedDb, "module.chat", {
     capability: "json"
   });
@@ -128,6 +136,8 @@ export async function prepareReminderEdit(
         kind: "edit_refused",
         reply: "Name the destination chat in your request. Nothing changed."
       };
+    if (combinesReminderDestination(interpreted))
+      return { kind: "edit_refused", reply: REMINDER_DESTINATION_SEPARATE_REPLY };
     if (interpreted.unsupported) return { kind: "edit_refused", reply: REFUSED };
     const matches =
       interpreted.target === null

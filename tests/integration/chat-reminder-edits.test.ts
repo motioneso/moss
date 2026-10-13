@@ -5,6 +5,7 @@ import type { ReminderEditTerms } from "@moss/shared";
 import { vi } from "vitest";
 import { localWallClock } from "../../packages/chat/src/reminders/local-clock.js";
 import {
+  deleteReminderById,
   pauseReminderById,
   resumeReminderById
 } from "../../packages/chat/src/reminders/controls.js";
@@ -324,6 +325,47 @@ describe("editing owner reminders", () => {
         ).toBeUndefined();
     });
     expect(resolve).not.toHaveBeenCalled();
+  });
+  it("refuses combined destination requests atomically before calling the model", async () => {
+    const saved = await save(ids.userA, "atomic destination proof");
+    const ai = new AiRepository();
+    const resolve = vi.spyOn(ai, "resolveModelForService");
+    const before = await asOwner(ids.userA, readEditableReminders);
+    for (const raw of [
+      "change my atomic destination proof reminder text to bring water and send it to Main",
+      "send my atomic destination proof reminder to Main and move it to tomorrow at 9am",
+      "send my atomic destination proof reminder to Main tomorrow at 9am"
+    ]) {
+      const run = await asOwner(ids.userA, (db) =>
+        prepareReminderEdit(db, ai, undefined, raw, saved.threadId, locale)
+      );
+      const plan = await run();
+      expect(plan).toEqual({
+        kind: "edit_refused",
+        reply:
+          "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately."
+      });
+      expect((await turn(saved.threadId, raw, plan!)).origin.event).toBe("refused");
+      expect(await asOwner(ids.userA, readEditableReminders)).toEqual(before);
+    }
+    expect(resolve).not.toHaveBeenCalled();
+    await asOwner(ids.userA, (db) => deleteReminderById(db, saved.id));
+  });
+  it.each([
+    { text: "replacement" },
+    { delaySeconds: 120 },
+    { deadline: "remove" as const },
+    { repeat: "remove" as const }
+  ])("refuses combined accepted terms without a partial update: %j", async (other) => {
+    const saved = await save(ids.userA, "atomic accepted terms");
+    const before = await asOwner(ids.userA, readEditableReminders);
+    expect(await edited(ids.userA, saved, { ...keep, destination: "Main", ...other })).toEqual({
+      kind: "invalid",
+      reply:
+        "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately."
+    });
+    expect(await asOwner(ids.userA, readEditableReminders)).toEqual(before);
+    await asOwner(ids.userA, (db) => deleteReminderById(db, saved.id));
   });
   it("routes explicit destination edits without a model and preserves target choices", async () => {
     const first = await save(ids.userA, "direct destination one");

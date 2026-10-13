@@ -1,3 +1,4 @@
+import type { ReminderEditTerms } from "@moss/shared";
 import { normalizeReminderRequest } from "./recognizer.js";
 import { namesQuietHoursReminder } from "./quiet-hours-recognizer.js";
 
@@ -39,4 +40,28 @@ export function recognizeReminderDestinationEdit(
         .replace(/ (?:side )?chat$/i, "")
         .trim();
   return destination ? { target, destination } : undefined;
+}
+
+export const REMINDER_DESTINATION_SEPARATE_REPLY =
+  "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately.";
+
+export function combinesReminderDestination(terms: ReminderEditTerms): boolean {
+  return (
+    Boolean(terms.destination) &&
+    (terms.text !== null ||
+      terms.delaySeconds !== null ||
+      terms.localDue !== null ||
+      terms.deadline !== "keep" ||
+      terms.localDeadline !== null ||
+      terms.repeat != null)
+  );
+}
+
+/** Explicit delivery wording with extra terms must never produce a partial edit. */
+export function requestsCombinedReminderDestination(raw: string): boolean {
+  return (
+    recognizeReminderEdit(raw) &&
+    !recognizeReminderDestinationEdit(raw) &&
+    /\b(?:send|deliver|post|route)\b.+\b(?:to|in)\b/i.test(raw)
+  );
 }

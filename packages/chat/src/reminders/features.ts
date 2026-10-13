@@ -65,9 +65,16 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_destinations",
     description:
-      "Tasks default to Main; name one owned chat or this chat. Results appear only there, including reopened chats. Names tolerate ordinary wording. Destination-only edits keep text/time. Private, module, foreign and ambiguous chats are refused.",
+      "Tasks default to Main; name one owned chat or this chat. Results appear only there, including reopened chats. Change destination separately from other terms. Private, module, foreign and ambiguous chats are refused.",
     featureFlagId: "chat.module",
     errors: [
+      {
+        code: "reminder_destination_combined_edit_refused",
+        class: "validation",
+        remediationRef: "chat.choose_reminder_destination",
+        description:
+          "A destination edit combined with other terms changes nothing. Send the destination in its own message, then edit text, time, repeat or stop time separately."
+      },
       {
         code: "reminder_destination_unavailable",
         class: "validation",
@@ -87,7 +94,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time, repeat, stop time or destination in regular chat. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused stays paused.",
+      "Edit pending or paused reminder text, time, repeat or stop time in regular chat; change destination separately. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused stays paused.",
     featureFlagId: "chat.module",
     errors: [
       {

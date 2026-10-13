@@ -328,3 +328,38 @@ destination filter rejected arrivals. The new-side unit assertion failed before
 passing state.threadId to clearRecords. Keep both new-side binding and reopened
 background display fixes; they cover separate UI paths. Compact the display
 condition to stay under the 1000-line file limit. Final proof must use these bytes.
+
+## Chosen fallback after the final combined failure
+
+Head 847203e05 failed the first combined edit with raw destination "Travel proof
+chat". Apply ruling 2 automatically: explicit combined delivery wording gets an
+atomic refusal before the model; interpreted or saved terms combining destination
+with other fields also refuse under the editor lock. No field changes and no
+unsupported-flag override. Destination-only edits remain available. Restore the
+prior guidance and keep the required timing examples and 150-word limit.
+
+Five new integration cases failed before the fallback: raw combined requests got
+the wrong refusal, while structured combinations changed or accepted saved terms.
+The green cases compare all editable fields and remove their own saved fixtures
+to avoid consuming the owner's reminder cap in later tests. Follow-up #3504 is
+Part of #3148. Final live proof replaces three combined edits with one atomic
+refusal and standalone destination moves in both directions; all delivery and
+layout checks and 3135/3136 reruns remain required.
+
+## Paused for cloud handoff
+
+Stop requested by pause-all ruling. Preserve unfinished fallback without further
+fixes or new checks. Unit suites: 147 passed. The restored posting guard had
+114 passing scoped integration tests before fallback. The fallback red tests
+were observed failing before implementation, but its green integration run did
+not execute tests: app-map validation rejected an overlong destination feature
+description loaded during the run. Current description was shortened, but a
+separate app-map build still rejects remediationRef on the new validation error.
+Remove that invalid reference and verify all descriptions are at most 240 chars
+first. The final fallback has no fast trio, full gate or live proof yet.
+
+Next: repair app-map declaration, rerun scoped fallback integration and fast
+checks, build final image, commit/push as needed, run full isolated gate and
+3148 fallback live proof with gpt-6-luna pinned, then 3135 and 3136 live reruns.
+Read final-head CI, update PR evidence and mark ready only if everything passes.
+Keep #3126 overlay limitation. No coordinator ruling is pending.

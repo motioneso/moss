@@ -1,3 +1,7 @@
+import {
+  combinesReminderDestination,
+  REMINDER_DESTINATION_SEPARATE_REPLY
+} from "./edit-recognizer.js";
 import { resolveReminderDestination } from "./destination.js";
 import { sql } from "kysely";
 import type { PgBoss } from "pg-boss";
@@ -145,6 +149,8 @@ export async function editReminderById(
   if (!locked) return { kind: "missing" };
   if (locked.version !== expectedVersion) return { kind: "stale" };
   if (locked.state !== "queued" && locked.state !== "paused") return { kind: "not_pending" };
+  if (combinesReminderDestination(terms))
+    return { kind: "invalid", reply: REMINDER_DESTINATION_SEPARATE_REPLY };
   const current = (await readEditableReminders(scopedDb)).find((row) => row.id === id);
   if (!current) return { kind: "missing" };
   if (terms.repeat != null && (await readScheduledOperation(scopedDb, id)))

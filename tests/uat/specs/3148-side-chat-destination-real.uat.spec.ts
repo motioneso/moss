@@ -134,34 +134,31 @@ test("real task creation, destination edits, isolated delivery and failed target
   expect(explicit.destination).toEqual({ threadId: sideId, title: side.title });
   await send(page, drawer, "remind me in 150 seconds to edited route proof");
   const original = (await tasks(page)).find((t) => t.instruction === "edited route proof")!;
-  let edited: typeof original;
-  for (const [target, replacement, destination] of [
-    ["edited route proof", "combined route proof", side.title],
-    ["combined route proof", "return route proof", "Main"],
-    ["return route proof", "final route proof", side.title]
-  ]) {
-    await send(
-      page,
-      drawer,
-      `change my ${target} reminder text to ${replacement} and send it to the ${destination} chat`
-    );
-    printRawDestinations();
-    edited = (await tasks(page)).find((t) => t.id === original.id)!;
-    expect(edited.destination, "stop if a combined edit fails again").toEqual(
-      destination === "Main" ? undefined : { threadId: sideId, title: side.title }
-    );
-    expect(edited.instruction).toBe(replacement);
-    expect(edited.dueAt).toBe(original.dueAt);
-    console.log(
-      `[3148] combined edit passed: ${target} to ${replacement}, destination ${destination}`
-    );
-  }
-  await send(page, drawer, "send my final route proof reminder to Main");
-  edited = (await tasks(page)).find((t) => t.id === original.id)!;
-  expect(edited.destination, "destination-only edit must return to Main").toBeUndefined();
+  await send(
+    page,
+    drawer,
+    `change my edited route proof reminder text to combined route proof and send it to the ${side.title} chat`
+  );
+  printRawDestinations();
+  await expect(
+    drawer.getByText(
+      "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately.",
+      { exact: true }
+    )
+  ).toHaveCount(1);
+  expect((await tasks(page)).find((t) => t.id === original.id)).toEqual(original);
+  console.log("[3148] combined destination edit refused atomically; all saved terms unchanged");
+  await send(page, drawer, `send my edited route proof reminder to the ${side.title} chat`);
+  let edited = (await tasks(page)).find((t) => t.id === original.id)!;
+  expect(edited.destination).toEqual({ threadId: sideId, title: side.title });
+  expect(edited.instruction).toBe(original.instruction);
   expect(edited.dueAt).toBe(original.dueAt);
-  expect(edited.instruction).toBe("final route proof");
-  console.log("[3148] destination-only edit changed the owned side chat to Main");
+  await send(page, drawer, "send my edited route proof reminder to Main");
+  edited = (await tasks(page)).find((t) => t.id === original.id)!;
+  expect(edited.destination).toBeUndefined();
+  expect(edited.dueAt).toBe(original.dueAt);
+  expect(edited.instruction).toBe(original.instruction);
+  console.log("[3148] destination-only edits passed from Main to side and back to Main");
   console.log(
     "[3148] default Main from side, explicit this chat and destination-only edit saved through UI"
   );
@@ -202,17 +199,17 @@ test("real task creation, destination edits, isolated delivery and failed target
     (m) => m.origin?.kind === "reminder" && m.origin.event === "delivered"
   );
   expect(finalMainResults.map((m) => m.body).sort()).toEqual(
-    ["Reminder: default route proof", "Reminder: final route proof"].sort()
+    ["Reminder: default route proof", "Reminder: edited route proof"].sort()
   );
   await select(drawer, "Main chat");
   await expect(drawer.getByText("Reminder: default route proof", { exact: true })).toBeVisible();
-  await expect(drawer.getByText("Reminder: final route proof", { exact: true })).toHaveCount(1);
+  await expect(drawer.getByText("Reminder: edited route proof", { exact: true })).toHaveCount(1);
   await expect(drawer.getByText("Reminder: side route proof", { exact: true })).toHaveCount(0);
   await page.reload();
   drawer = await openChat(page);
   await select(drawer, side.title);
   await expect(drawer.getByText("Reminder: side route proof", { exact: true })).toHaveCount(1);
-  await expect(drawer.getByText("Reminder: final route proof", { exact: true })).toHaveCount(0);
+  await expect(drawer.getByText("Reminder: edited route proof", { exact: true })).toHaveCount(0);
   await expect(drawer.getByText("Reminder: default route proof", { exact: true })).toHaveCount(0);
   console.log(
     "[3148] real queue results stay in exact durable histories and UI after switching and reload"
