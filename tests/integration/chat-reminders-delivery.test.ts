@@ -414,7 +414,7 @@ describe("delivering a due reminder", () => {
 
 describe("the last delivery attempt", () => {
   const brokenChat = {
-    getMainThread: chat.getMainThread.bind(chat),
+    lockThreadSelection: chat.lockThreadSelection.bind(chat),
     insertReservedAssistantMessage: async () => {
       throw new Error("message store down");
     }

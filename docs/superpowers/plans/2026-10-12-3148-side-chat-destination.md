@@ -30,6 +30,19 @@ history links and notification identity, exact-chat context, cross-thread and
 foreign-owner exclusion, and later delivery to the new destination. Their isolated
 database execution and required negative controls remain unverified.
 
+The subsequent CI race exposed a lock inversion: a turn held its thread while
+waiting for the reminder lock, and delivery held the reminder lock while waiting
+for that thread. A controlled baseline reproduced the PostgreSQL deadlock.
+Fixed delivery, each scheduled-read load, and the final-attempt rollback path now
+take the canonical owner/drawer selection lock before notification, reminder and
+destination locks. Destination FOR SHARE validation remains under the current
+responsibility/version locks; provider work holds no database transaction.
+Regression coverage includes both orderings, scheduled initial/final loads,
+rollback reacquisition, and edits between provider transactions. Final repaired
+database execution remains pending. The old Main-only acknowledgment fixture is
+updated to accept the exact owned side destination and reject private/module
+targets, retaining foreign-owner, worker and wrong-thread exclusions.
+
 Before readiness, run the scoped and full isolated gates, build the final image,
 and run every blocking UAT selected by the trigger map on the same final head.
 These include the 3148 fallback proof pinned to gpt-6-luna and the 3135 and 3136

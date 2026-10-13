@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { sql } from "kysely";
 import { runScheduledReadJob } from "../../packages/chat/src/scheduled-reads/runner.js";
+import { cancelReminder } from "../../packages/chat/src/reminders/cancel.js";
+import { ReminderRepository } from "../../packages/chat/src/reminders/repository.js";
 import {
   pauseReminderById,
   deleteReminderById
@@ -9,6 +12,9 @@ import { editReminderById } from "../../packages/chat/src/reminders/edit.js";
 import { ids } from "./test-database.js";
 import {
   worker,
+  workerDb,
+  app,
+  bootstrap,
   boss,
   chat,
   tasks,
@@ -18,6 +24,14 @@ import {
   setTasksDisabled,
   generateReport
 } from "./scheduled-read-fixture.js";
+import {
+  backendPid,
+  barrier,
+  observedTransaction,
+  ObservedDataContextRunner,
+  untilObserved,
+  waitForSessionBlocker
+} from "./reminder-lock-fixture.js";
 
 describe("configured scheduled reports through the worker", () => {
   it("a version edit during generation discards the old report", async () => {
@@ -228,4 +242,157 @@ describe("configured scheduled reports through the worker", () => {
       );
     }
   );
+});
+
+describe("scheduled-read and chat-turn lock order", () => {
+  it.each(["initial", "final"] as const)(
+    "orders the %s load after a turn holding its thread before cancellation",
+    async (phase) => {
+      const saved = await save();
+      const before = (await owner((db) => chat.listMessages(db, saved.threadId))).length;
+      const turnLocked = barrier();
+      const releaseTurn = barrier();
+      const workerPid = barrier<number>();
+      const startTurn = () =>
+        observedTransaction(app, ids.userA, async (db) => {
+          await chat.lockThreadSelection(db);
+          await sql`select id from app.chat_threads where id = ${saved.threadId}
+            for no key update`.execute(db.db);
+          turnLocked.resolve();
+          await releaseTurn.promise;
+          return cancelReminder(db, new ReminderRepository(), saved.task.title);
+        });
+      let cancel: ReturnType<typeof startTurn> | undefined;
+      if (phase === "initial") {
+        cancel = startTurn();
+        await untilObserved(turnLocked.promise, cancel.result);
+      }
+      let loads = 0;
+      const dataContext = new ObservedDataContextRunner(workerDb, async (db) => {
+        if (++loads === (phase === "initial" ? 1 : 4)) workerPid.resolve(await backendPid(db));
+      });
+      const real = gateway();
+      let reads = 0;
+      const delivery = runScheduledReadJob(
+        { data: saved.data },
+        {
+          dataContext,
+          generateReport,
+          gateway: {
+            runBackgroundReadForActor: async (...args) => {
+              const response = await real.runBackgroundReadForActor(...args);
+              if (++reads === 2 && phase === "final") {
+                cancel = startTurn();
+                await untilObserved(turnLocked.promise, cancel.result);
+              }
+              return response;
+            }
+          }
+        }
+      );
+      void delivery.catch(() => undefined);
+      try {
+        const pid = await untilObserved(workerPid.promise, delivery);
+        if (!cancel) throw new Error("turn did not start");
+        await waitForSessionBlocker(bootstrap, pid, await cancel.pid);
+      } finally {
+        releaseTurn.resolve();
+        await Promise.allSettled([delivery, ...(cancel ? [cancel.result] : [])]);
+      }
+      await expect(cancel!.result).resolves.toMatchObject({ kind: "cancelled" });
+      await expect(delivery).resolves.toBe("inactive");
+      expect((await owner((db) => chat.listMessages(db, saved.threadId))).length).toBe(before);
+    }
+  );
+
+  it("a final post holding delivery locks finishes before a later turn cancels", async () => {
+    const saved = await save();
+    const workerPid = barrier<number>();
+    const posted = barrier();
+    const releasePost = barrier();
+    let loads = 0;
+    const dataContext = new ObservedDataContextRunner(
+      workerDb,
+      async (db) => {
+        if (++loads === 4) workerPid.resolve(await backendPid(db));
+      },
+      async () => {
+        if (loads === 4) {
+          posted.resolve();
+          await releasePost.promise;
+        }
+      }
+    );
+    const delivery = runScheduledReadJob(
+      { data: saved.data },
+      { dataContext, generateReport, gateway: gateway() }
+    );
+    void delivery.catch(() => undefined);
+    await untilObserved(posted.promise, delivery);
+    const cancel = observedTransaction(app, ids.userA, async (db) => {
+      await chat.lockThreadSelection(db);
+      await sql`select id from app.chat_threads where id = ${saved.threadId}
+        for no key update`.execute(db.db);
+      return cancelReminder(db, new ReminderRepository(), saved.task.title);
+    });
+    try {
+      await waitForSessionBlocker(bootstrap, await cancel.pid, await workerPid.promise);
+    } finally {
+      releasePost.resolve();
+      await Promise.allSettled([delivery, cancel.result]);
+    }
+    await expect(delivery).resolves.toBe("success");
+    await expect(cancel.result).resolves.toMatchObject({ kind: "already_delivered" });
+    const reminder = (await owner(listScheduledReminders)).find((row) => row.id === saved.id);
+    expect(reminder?.runs).toHaveLength(1);
+    expect(reminder?.runs[0]?.message?.body).toContain(saved.task.title);
+  });
+
+  it("a destination edit between worker transactions rejects the old version", async () => {
+    const saved = await save();
+    const side = await owner((db) => chat.openNewThread(db, { title: `Moved ${saved.id}` }));
+    const before = (await owner((db) => chat.listMessages(db, saved.threadId))).length;
+    expect(
+      await runScheduledReadJob(
+        { data: saved.data },
+        {
+          dataContext: worker,
+          gateway: gateway(),
+          generateReport: async (...args) => {
+            const changed = await owner((db) =>
+              editReminderById(
+                db,
+                boss,
+                ids.userA,
+                saved.id,
+                1,
+                {
+                  text: null,
+                  delaySeconds: null,
+                  localDue: null,
+                  deadline: "keep",
+                  localDeadline: null,
+                  destination: side.title
+                },
+                "UTC"
+              )
+            );
+            expect(changed.kind).toBe("changed");
+            return generateReport(args[0], args[1]);
+          }
+        }
+      )
+    ).toBe("inactive");
+    expect((await owner((db) => chat.listMessages(db, saved.threadId))).length).toBe(before);
+    expect(await owner((db) => chat.listMessages(db, side.id))).toEqual([]);
+    expect(
+      await owner((db) =>
+        db.db
+          .selectFrom("app.chat_reminders")
+          .select(["state", "version", "thread_id"])
+          .where("id", "=", saved.id)
+          .executeTakeFirstOrThrow()
+      )
+    ).toMatchObject({ state: "queued", version: 2, thread_id: side.id });
+  });
 });

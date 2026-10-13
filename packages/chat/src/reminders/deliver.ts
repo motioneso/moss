@@ -87,6 +87,7 @@ export async function deliverDueReminder(
   payload: DeliverReminderJobPayload,
   deps: ReminderDeliveryDeps
 ): Promise<ReminderDeliveryOutcome> {
+  await deps.chat.lockThreadSelection(scopedDb);
   const reminder = await deps.reminders.lockForDelivery(scopedDb, payload.resourceId);
 
   if (!reminder) return unlockedOutcome(scopedDb, payload, deps);
@@ -216,6 +217,7 @@ export async function runReminderDeliveryJob(
     return await deliverDueReminder(scopedDb, job.data, deps);
   } catch {
     await sql`rollback to savepoint reminder_delivery`.execute(scopedDb.db);
+    await deps.chat.lockThreadSelection(scopedDb);
     const reminder = await deps.reminders.lockForDelivery(scopedDb, job.data.resourceId);
     if (!reminder) return unlockedOutcome(scopedDb, job.data, deps);
     if (reminder.ownerUserId !== job.data.actorUserId) return "missing";

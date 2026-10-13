@@ -146,6 +146,7 @@ async function message(saved: Awaited<ReturnType<typeof save>>) {
 export {
   app,
   worker,
+  workerDb,
   boss,
   workerBoss,
   bootstrap,

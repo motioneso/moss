@@ -6,11 +6,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AiRepository } from "@moss/ai";
 import { DataContextChatPersistence } from "@moss/chat";
 import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
+import { normalizeChatSurface } from "@moss/shared";
 
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
-// #3311: the next Main model turn reads the delivered reminders whose context is pending, and the
+// #3311/#3148: the next destination model turn reads its delivered pending reminders, and the
 // stored turn acknowledges exactly the ones it was shown. Acknowledged reminders leave the cap.
 
 const { Client } = pg;
@@ -43,9 +44,11 @@ async function sideThreadId(actorUserId: string): Promise<string> {
   return asOwner(actorUserId, async (db) => (await chat.openNewThread(db, { title: "Side" })).id);
 }
 
-async function queueReminder(actorUserId: string): Promise<Reminder> {
-  const threadId = await mainThreadId(actorUserId);
+async function queueReminder(actorUserId: string, destinationThreadId?: string): Promise<Reminder> {
+  const threadId = destinationThreadId ?? (await mainThreadId(actorUserId));
   return asOwner(actorUserId, async (db) => {
+    const target = await chat.getOwnedThreadById(db, actorUserId, threadId);
+    if (!target) throw new Error("destination missing");
     const source = await db.db
       .insertInto("app.chat_messages")
       .values({
@@ -66,6 +69,7 @@ async function queueReminder(actorUserId: string): Promise<Reminder> {
         id: randomUUID(),
         owner_user_id: actorUserId,
         thread_id: threadId,
+        destination_title: target.is_main ? null : target.title,
         source_message_id: source.id,
         reserved_message_id: randomUUID(),
         reminder_text: "stretch",
@@ -107,7 +111,7 @@ async function deliveredReminder(actorUserId: string, body: string, at?: Date) {
 }
 
 // Planting skips triggers for its own session only, so a delivered reminder can sit past the
-// insert cap or in a side chat, where the app never creates one.
+// insert cap or in an invalid destination that normal creation refuses.
 async function plantDelivered(
   actorUserId: string,
   threadId: string,
@@ -285,12 +289,30 @@ describe("who may acknowledge, and how (#3311)", () => {
     expect(await contextStates(ids.userA)).toEqual({ [reminder.reservedMessageId]: "pending" });
   });
 
-  it("never acknowledges a reminder outside the Main chat", async () => {
+  it("acknowledges a reminder delivered in its owned side destination", async () => {
     const side = await sideThreadId(ids.userA);
-    const planted = await plantDelivered(ids.userA, side, new Date());
-    await expect(acknowledgeAs(app, ids.userA, planted)).rejects.toThrow(/row-level security/);
-    expect(await contextStates(ids.userA)).toEqual({ [planted.reservedMessageId]: "pending" });
+    const reminder = await queueReminder(ids.userA, side);
+    await deliver(reminder, "Reminder: side destination");
+    expect(await acknowledgeAs(app, ids.userA, reminder)).toBe(1n);
+    expect(await contextStates(ids.userA)).toEqual({
+      [reminder.reservedMessageId]: "acknowledged"
+    });
   });
+
+  it.each(["private", "non-drawer"] as const)(
+    "never acknowledges a reminder planted in a %s destination",
+    async (kind) => {
+      const target = await asOwner(ids.userA, (db) =>
+        chat.openNewThread(db, {
+          title: `Invalid ${kind}`,
+          ...(kind === "private" ? { incognito: true } : { surface: normalizeChatSurface("tasks") })
+        })
+      );
+      const planted = await plantDelivered(ids.userA, target.id, new Date());
+      await expect(acknowledgeAs(app, ids.userA, planted)).rejects.toThrow(/row-level security/);
+      expect(await contextStates(ids.userA)).toEqual({ [planted.reservedMessageId]: "pending" });
+    }
+  );
 
   it("never acknowledges a queued reminder", async () => {
     const queued = await queueReminder(ids.userA);

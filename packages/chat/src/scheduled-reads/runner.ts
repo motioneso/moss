@@ -43,6 +43,7 @@ export async function runScheduledReadJob(
   const reminders = new ReminderRepository();
   const chat = new ChatRepository();
   const load = async (db: DataContextDb) => {
+    await chat.lockThreadSelection(db);
     const reminder = await reminders.lockForDelivery(db, payload.resourceId);
     if (
       !reminder ||
