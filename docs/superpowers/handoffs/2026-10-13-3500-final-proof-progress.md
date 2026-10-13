@@ -192,3 +192,25 @@ added by the News/ACP repairs. Audit-feeds remains declared deterministic feedba
 proof, and CLI-terminal exercises actual PTY commands without model inference. Do not describe
 these as real-model inference proof. Fresh installed receipts, full foundation, serialized
 browser proof, three consecutive complete #3151 runs, CI and independent review remain required.
+
+## Follow-up verification repairs
+
+At `19543fb05`, clean scoped DB proof passed 122 tests in 8 files. Full foundation
+finished with 17,229 passing unit tests, one failure and three skips; the failure was a
+stale six-argument spawn expectation after optional persona forwarding. The expectation
+now includes the seventh argument. This is not a full-foundation pass.
+
+Installed runtime-context passed all four cases. Destination proof reached meaningful
+streaming text but failed a sequential Stop check after reminder appearance; target loss
+was not reached. A bounded MutationObserver now records visible reminder, visible Stop,
+and meaningful new packing text in one observation. Prompt and schedule are unchanged;
+failed overlap observations still fail acceptance.
+
+Credentialed News failed before key submission: the classifier treated registered NewsAPI
+as a publisher rather than an aggregation service. Only existing registry hosts (including
+the supported www alias) receive the service classification. Active-provider policy approval
+remains required. A reviewed-service cache suffix prevents old publisher-only verdict reuse;
+the returned model fingerprint remains unchanged. New policy checks failed against the old
+implementation, then the repaired policy/source/preview/protocol suites passed 83 tests in
+four files. Final installed credential validation and the later selected fixtures remain
+unproved. Fresh exact-head gates and rebuilt installed proof are still required.

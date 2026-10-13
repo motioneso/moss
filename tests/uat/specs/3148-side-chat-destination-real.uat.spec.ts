@@ -260,6 +260,52 @@ test("real task creation, destination edits, isolated delivery and failed target
     "Write a detailed travel packing guide with 40 numbered tips, each with two full sentences. Start with a tip about a small travel bag. Do not use tools.";
   const replyBubbles = drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
   const repliesBeforePacking = await replyBubbles.count();
+  const overlapObservation = drawer.evaluate(
+    (root, repliesBeforePacking) =>
+      new Promise<{ arrivalAt: number; stopVisible: boolean; partialText: string }>((resolve) => {
+        const observer = new MutationObserver(observe);
+        const timeout = setTimeout(() => finish(false, ""), 30_000);
+        function finish(stopVisible: boolean, partialText: string) {
+          observer.disconnect();
+          clearTimeout(timeout);
+          resolve({ arrivalAt: Date.now(), stopVisible, partialText });
+        }
+        function observe() {
+          const bubbles = Array.from(
+            root.querySelectorAll(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")
+          );
+          const visible = (element: Element) =>
+            element.getClientRects().length > 0 &&
+            getComputedStyle(element).visibility !== "hidden";
+          if (
+            !bubbles.some(
+              (bubble) =>
+                visible(bubble) &&
+                bubble.textContent?.trim() === "Reminder: overlapping route proof"
+            )
+          )
+            return;
+          const stop = root.querySelector('button[aria-label="Stop generating"]');
+          const stopVisible = !!stop && visible(stop);
+          const partialText =
+            bubbles
+              .slice(repliesBeforePacking)
+              .filter(
+                (bubble) => visible(bubble) && /packing|travel|bag/i.test(bubble.textContent ?? "")
+              )
+              .at(-1)?.textContent ?? "";
+          finish(stopVisible, partialText);
+        }
+        observer.observe(root, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true
+        });
+        observe();
+      }),
+    repliesBeforePacking
+  );
   const packingResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -269,16 +315,15 @@ test("real task creation, destination edits, isolated delivery and failed target
   await drawer.getByLabel("Message Moss").fill(packingPrompt);
   await drawer.getByLabel("Message Moss").press("Enter");
   await expect(drawer.getByRole("button", { name: "Stop generating", exact: true })).toBeVisible();
-  await expect(replyBubbles).toHaveCount(repliesBeforePacking + 1);
-  await expect(replyBubbles.nth(repliesBeforePacking)).toContainText(/packing|travel|bag/i);
-  await expect(drawer.getByText("Reminder: overlapping route proof", { exact: true })).toHaveCount(
-    1,
-    { timeout: 30_000 }
-  );
-  await expect(
-    drawer.getByRole("button", { name: "Stop generating", exact: true }),
+  const observed = await overlapObservation;
+  expect(
+    observed.stopVisible,
     "the real reply must still be running when the reminder arrives"
-  ).toBeVisible();
+  ).toBe(true);
+  expect(observed.partialText).toMatch(/packing|travel|bag/i);
+  await expect(drawer.getByText("Reminder: overlapping route proof", { exact: true })).toHaveCount(
+    1
+  );
   const packing = await packingResponse;
   expect(packing.ok()).toBe(true);
   const packingBody = (await packing.json()) as { reply: string; assistantMessageId: string };
