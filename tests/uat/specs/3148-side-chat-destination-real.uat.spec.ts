@@ -105,7 +105,14 @@ test("real task creation, destination edits, isolated delivery and failed target
   expect(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED).toBe("1");
   installRawDestinationCapture();
   await expect
-    .poll(async () => (await page.request.get("/health/ready")).ok(), { timeout: 60_000 })
+    .poll(
+      () =>
+        page.request.get("/health/ready").then(
+          (response) => response.ok(),
+          () => false
+        ),
+      { timeout: 60_000 }
+    )
     .toBe(true);
   await signInUatAdmin(page);
   const model = await bringUpRealChatModel(page);
