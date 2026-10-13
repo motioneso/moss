@@ -679,7 +679,8 @@ export const newsModuleManifest = {
           code: "news.add_source.no_json_model",
           class: "prerequisite",
           remediationRef: "news.add_source.configure_json_model",
-          description: "News has no JSON-capable economy model binding."
+          description:
+            "News has no JSON-capable economy model binding. The disabled Add source gate exposes this prerequisite error to current-view capture."
         },
         {
           code: "news.add_source.discovery_unavailable",

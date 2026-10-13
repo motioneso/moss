@@ -111,3 +111,24 @@ remove the pinned model's JSON capability temporarily, verify routing unavailabl
 and restore the exact capabilities and changed statuses. Grounding checks use the returned
 assistant message's invoked-tool activity, not the offered tool catalog. Do not weaken original
 assertions, invent model output, omit notifications/Workshop, or merge #3507 before #3500.
+
+## News current-view repair and latest installed results
+
+At `c1175efec`, runtime-context passed two cases and failed two behavioral assertions:
+the screenshot refusal offered an upload rather than pasted text, and News prerequisite
+context omitted the disabled Add source gate. The latter gate now exposes its existing
+registered prerequisite/remediation metadata and visible copy to page capture. The News
+manifest reflects this behavior. UAT waits for a successful actual page-context upload
+containing both the copy and structured error before asking Moss; it fabricates no context.
+Screenshot refusal accepts either apostrophe style but still requires pasted-text guidance.
+
+The SSR regression was observed failing before the News repair. News settings and page-context
+unit suites then passed 74 tests in two files. Independent product and authority source reviews
+identified no remaining blocker in the repaired delta; installed validation remains required.
+
+The separate installed batch passed all three attachment cases. Its subsequent #3148 run passed
+combined refusals, destination moves, durable histories, focused drafts and real reconnect,
+then failed before overlap proof: Stop generating appeared, but no new reply bubble appeared
+within ten seconds. The approved single timing adjustment did not establish overlap. Target-loss
+recovery and the later eleven specs were not reached. The disposable stack and all its volumes,
+including copied CLI auth, were removed. No full foundation or final merge readiness is claimed.

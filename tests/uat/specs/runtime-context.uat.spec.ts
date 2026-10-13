@@ -117,7 +117,7 @@ test("chat refuses to take a screenshot and explains why instead (#1121)", async
   await page.getByLabel("Message Moss").fill("Take a screenshot of this page and read it for me.");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   const body = (await readUatJson(await response)) as { reply: string };
-  expect(body.reply).toMatch(/cannot|can't|unable|do not have|don't have/i);
+  expect(body.reply).toMatch(/cannot|can['’]t|unable|do not have|don['’]t have/i);
   expect(body.reply).toMatch(/paste|copy|text/i);
   await expect(page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()).toBeVisible();
 });
@@ -161,11 +161,36 @@ test("News screen error is pulled and resolved against the map (#1121)", async (
       route: { model: unknown };
     };
     expect(route.route.model).toBeNull();
+    const contextUploaded = page.waitForResponse(
+      (response) => {
+        const request = response.request();
+        if (
+          request.method() !== "PUT" ||
+          !response.url().endsWith("/api/chat/page-context") ||
+          !response.ok()
+        )
+          return false;
+        const body = request.postDataJSON();
+        return (
+          body.snapshot?.visibleText?.some((text: string) =>
+            text.includes("Adding sources needs an AI model with structured output.")
+          ) === true &&
+          body.snapshot?.errors?.some(
+            (error: { code: string; class: string; remediationRef?: string }) =>
+              error.code === "news.add_source.no_json_model" &&
+              error.class === "prerequisite" &&
+              error.remediationRef === "news.add_source.configure_json_model"
+          ) === true
+        );
+      },
+      { timeout: 30_000 }
+    );
     await page.goto(`${requireBaseURL()}/settings?section=modules&module=news`);
     await expect(page.getByRole("button", { name: "Add source", exact: true })).toBeDisabled();
     await expect(
       page.getByText("Adding sources needs an AI model with structured output.")
     ).toBeVisible();
+    await contextUploaded;
     const preview = await page.request.post("/api/news/sources/preview", {
       data: { input: "example.com" }
     });
