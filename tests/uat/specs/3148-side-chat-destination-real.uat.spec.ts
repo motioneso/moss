@@ -1,11 +1,11 @@
-import { execFileSync } from "node:child_process";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type {
   ListScheduledTasksResponse,
   ListChatThreadsResponse,
-  ListChatThreadMessagesResponse
+  ListChatThreadMessagesResponse,
+  ListActivityLinesResponse
 } from "@moss/shared";
-import { buildUatComposeArgs } from "../provisioner.js";
+import { execUatSql } from "./job-search-board-sql.js";
 import { startNewSideChat } from "./notes-new-side-chat.js";
 import {
   bringUpRealChatModel,
@@ -85,27 +85,25 @@ test("real task creation, destination edits, isolated delivery and failed target
   await send(page, drawer, "Travel proof. Reply briefly: ready to pack.");
   const side = (await threads(page)).find((t) => t.id === sideId)!;
   expect(side.isMain).toBe(false);
-  await send(page, drawer, "remind me in 90 seconds to default route proof");
-  const defaultTask = (await tasks(page)).find((t) => t.instruction === "default route proof")!;
-  expect(defaultTask.destination).toBeUndefined();
-  await send(page, drawer, "remind me in 150 seconds to side route proof, send it to this chat");
-  const explicit = (await tasks(page)).find((t) => t.instruction === "side route proof")!;
-  expect(explicit.destination).toEqual({ threadId: sideId, title: side.title });
-  await send(page, drawer, "remind me in 150 seconds to edited route proof");
+  await send(page, drawer, "remind me in 10 minutes to edited route proof");
   const original = (await tasks(page)).find((t) => t.instruction === "edited route proof")!;
-  await send(
-    page,
-    drawer,
-    `change my edited route proof reminder text to combined route proof and send it to the ${side.title} chat`
-  );
-  await expect(
-    drawer.getByText(
-      "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately.",
-      { exact: true }
-    )
-  ).toHaveCount(1);
-  expect((await tasks(page)).find((t) => t.id === original.id)).toEqual(original);
-  console.log("[3148] combined destination edit refused atomically; all saved terms unchanged");
+  const combinedRequests = [
+    "change my edited route proof reminder text to combined route proof",
+    "move my edited route proof reminder to 20 minutes from now",
+    "change my edited route proof reminder to repeat every day",
+    "change my edited route proof reminder stop time to tomorrow"
+  ];
+  for (const [index, request] of combinedRequests.entries()) {
+    await send(page, drawer, `${request} and send it to the ${side.title} chat`);
+    await expect(
+      drawer.getByText(
+        "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately.",
+        { exact: true }
+      )
+    ).toHaveCount(index + 1);
+    expect((await tasks(page)).find((t) => t.id === original.id)).toEqual(original);
+  }
+  console.log("[3148] combined text/time/repeat/stop edits refused; full saved task unchanged");
   await send(page, drawer, `send my edited route proof reminder to the ${side.title} chat`);
   let edited = (await tasks(page)).find((t) => t.id === original.id)!;
   expect(edited.destination).toEqual({ threadId: sideId, title: side.title });
@@ -117,6 +115,13 @@ test("real task creation, destination edits, isolated delivery and failed target
   expect(edited.dueAt).toBe(original.dueAt);
   expect(edited.instruction).toBe(original.instruction);
   console.log("[3148] destination-only edits passed from Main to side and back to Main");
+  await send(page, drawer, "move my edited route proof reminder to 150 seconds from now");
+  await send(page, drawer, "remind me in 90 seconds to default route proof");
+  const defaultTask = (await tasks(page)).find((t) => t.instruction === "default route proof")!;
+  expect(defaultTask.destination).toBeUndefined();
+  await send(page, drawer, "remind me in 150 seconds to side route proof, send it to this chat");
+  const explicit = (await tasks(page)).find((t) => t.instruction === "side route proof")!;
+  expect(explicit.destination).toEqual({ threadId: sideId, title: side.title });
   console.log(
     "[3148] default Main from side, explicit this chat and destination-only edit saved through UI"
   );
@@ -130,7 +135,6 @@ test("real task creation, destination edits, isolated delivery and failed target
   await expect(drawer.getByText("Reminder: default route proof", { exact: true })).toHaveCount(0);
   await expect(drawer.getByLabel("Message Moss")).toHaveValue("Side unsent draft");
   await expect(drawer.getByLabel("Message Moss")).toBeFocused();
-  await send(page, drawer, "Reply briefly: how should I pack a small travel bag?");
   for (const saved of [explicit]) {
     await expect
       .poll(async () => (await tasks(page)).find((t) => t.id === saved.id)?.state, {
@@ -141,6 +145,8 @@ test("real task creation, destination edits, isolated delivery and failed target
     await expect(drawer.getByText(`Reminder: ${saved.instruction}`, { exact: true })).toHaveCount(
       1
     );
+    await expect(drawer.getByLabel("Message Moss")).toHaveValue("Side unsent draft");
+    await expect(drawer.getByLabel("Message Moss")).toBeFocused();
   }
   const sideResults = (await history(page, sideId)).filter(
     (m) => m.origin?.kind === "reminder" && m.origin.event === "delivered"
@@ -172,6 +178,102 @@ test("real task creation, destination edits, isolated delivery and failed target
   console.log(
     "[3148] real queue results stay in exact durable histories and UI after switching and reload"
   );
+  await send(
+    page,
+    drawer,
+    "remind me in 30 seconds to reconnect route proof, send it to this chat"
+  );
+  const reconnectTask = (await tasks(page)).find((t) => t.instruction === "reconnect route proof")!;
+  await drawer.getByLabel("Message Moss").fill("Reconnect unsent draft");
+  await page.context().setOffline(true);
+  try {
+    // APIRequestContext stays online while the browser's real stream is disconnected.
+    await expect
+      .poll(async () => (await tasks(page)).find((t) => t.id === reconnectTask.id)?.state, {
+        timeout: 90_000,
+        intervals: [2000]
+      })
+      .toBe("completed");
+    await expect(drawer.getByText("Reminder: reconnect route proof", { exact: true })).toHaveCount(
+      0
+    );
+    const reconnected = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/chat/stream" && response.ok(),
+      { timeout: 60_000 }
+    );
+    await page.context().setOffline(false);
+    await reconnected;
+    await expect(drawer.getByText("Reminder: reconnect route proof", { exact: true })).toHaveCount(
+      1
+    );
+    await expect(drawer.getByLabel("Message Moss")).toHaveValue("Reconnect unsent draft");
+    await expect(drawer.getByLabel("Message Moss")).toBeFocused();
+  } finally {
+    await page.context().setOffline(false);
+  }
+  const reconnectResults = (await history(page, sideId)).filter(
+    (m) => m.origin?.kind === "reminder" && m.origin.reminderId === reconnectTask.id
+  );
+  expect(reconnectResults).toHaveLength(1);
+  await page.reload();
+  drawer = await openChat(page);
+  await select(drawer, side.title);
+  await expect(drawer.getByText("Reminder: reconnect route proof", { exact: true })).toHaveCount(1);
+  expect(
+    (await history(page, sideId)).filter((m) => m.id === reconnectResults[0]!.id)
+  ).toHaveLength(1);
+  console.log(
+    "[3148] real SSE reconnect catches up once; draft, focus and durable identity preserved"
+  );
+  await send(
+    page,
+    drawer,
+    "remind me in 60 seconds to overlapping route proof, send it to this chat"
+  );
+  const overlapTask = (await tasks(page)).find((t) => t.instruction === "overlapping route proof")!;
+  await expect
+    .poll(() => Date.parse(overlapTask.dueAt) - Date.now(), {
+      timeout: 60_000,
+      intervals: [1000]
+    })
+    .toBeLessThan(5000);
+  const packingPrompt =
+    "Write a detailed travel packing guide with 40 numbered tips, each with two full sentences. Start with a tip about a small travel bag. Do not use tools.";
+  const packingResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/chat/turn",
+    { timeout: 120_000 }
+  );
+  await drawer.getByLabel("Message Moss").fill(packingPrompt);
+  await drawer.getByLabel("Message Moss").press("Enter");
+  await expect(drawer.getByRole("button", { name: "Stop generating", exact: true })).toBeVisible();
+  await expect(drawer.getByText("Reminder: overlapping route proof", { exact: true })).toHaveCount(
+    1,
+    { timeout: 30_000 }
+  );
+  await expect(
+    drawer.getByRole("button", { name: "Stop generating", exact: true }),
+    "the real reply must still be running when the reminder arrives"
+  ).toBeVisible();
+  const packing = await packingResponse;
+  expect(packing.ok()).toBe(true);
+  const packingBody = (await packing.json()) as { reply: string; assistantMessageId: string };
+  expect(packingBody.reply.length).toBeGreaterThan(100);
+  await expect(drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()).toContainText(
+    /packing|travel|bag/i
+  );
+  const overlapHistory = await history(page, sideId);
+  expect(overlapHistory.filter((m) => m.id === packingBody.assistantMessageId)).toHaveLength(1);
+  expect(overlapHistory.find((m) => m.id === packingBody.assistantMessageId)?.body).toBe(
+    packingBody.reply
+  );
+  expect(
+    overlapHistory.filter(
+      (m) => m.origin?.kind === "reminder" && m.origin.reminderId === overlapTask.id
+    )
+  ).toHaveLength(1);
+  console.log("[3148] shown-side reminder arrived once during an observed real model reply");
   await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -205,23 +307,15 @@ test("real task creation, destination edits, isolated delivery and failed target
   await send(page, drawer, "remind me in 60 seconds to gone route proof, send it to this chat");
   const gone = (await tasks(page)).find((t) => t.instruction === "gone route proof")!;
   await select(drawer, "Main chat");
-  // The current drawer has no owner delete control; simulate target loss in this disposable only.
+  // Ben approved this disposable bootstrap-only fault fixture; normal runtime DELETE stays revoked.
   const ownerId = (await threads(page)).find((t) => t.id === main.id)!.ownerUserId;
-  const script = `import { createDatabase, DataContextRunner, getMossDatabaseUrls } from './packages/db/src/index.ts'; void (async () => { const db=createDatabase({connectionString:getMossDatabaseUrls().app}); try { await new DataContextRunner(db).withDataContext({actorUserId:${JSON.stringify(ownerId)}}, async scoped => { await scoped.db.deleteFrom('app.chat_threads').where('id','=',${JSON.stringify(goneId)}).execute(); }); } finally { await db.destroy(); } })();`;
-  execFileSync(
-    "docker",
-    [
-      ...buildUatComposeArgs(requireUatProjectName(), [
-        "exec",
-        "-T",
-        "jarv1s",
-        "node_modules/.bin/tsx",
-        "-e",
-        script
-      ])
-    ],
-    { stdio: "pipe" }
-  );
+  for (const id of [ownerId, goneId]) expect(id).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(
+    execUatSql(
+      requireUatProjectName(),
+      `DELETE FROM app.chat_threads WHERE id = '${goneId}' AND owner_user_id = '${ownerId}' AND NOT is_main AND NOT incognito AND surface = 'drawer' RETURNING id`
+    ).trim()
+  ).toBe(goneId);
   await expect
     .poll(async () => (await tasks(page)).find((t) => t.id === gone.id)?.state, {
       timeout: 90_000,
@@ -238,6 +332,15 @@ test("real task creation, destination edits, isolated delivery and failed target
   await page.locator(`[data-task-id="${gone.id}"]`).click();
   await expect(page.getByText(/set it again with an available chat or Main/)).toBeVisible();
   console.log(
-    "[3148] simulated destination deletion under owner RLS: failed task visible, recovery guidance, no Main result"
+    "[3148] disclosed disposable bootstrap target deletion: owner paths show failed task, recovery guidance, no Main result"
   );
+  const activity = (await readUatJson(
+    await page.request.get("/api/ai/activity-lines?limit=100")
+  )) as ListActivityLinesResponse;
+  const modelCalls = activity.entries.filter((entry) =>
+    ["chat", "structured"].includes(entry.kind)
+  );
+  expect(modelCalls.length).toBeGreaterThan(0);
+  for (const call of modelCalls) expect(call.modelName).toBe(model.providerModelId);
+  console.log("[3148] executed chat activity records confirm the selected economy model");
 });

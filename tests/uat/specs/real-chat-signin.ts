@@ -14,7 +14,7 @@
 // tier when none is found.
 
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../model-tier.js";
 import { uatRealChatProvider, uatRealChatProviderKind } from "../real-chat-env.js";
 import {
@@ -174,8 +174,8 @@ export async function selectChatModelOverride(
 
 /**
  * The full setup real turns run against: install + log in the selected CLI, discover the cheapest
- * eligible model, and bind it as the account's chat override. Returns the model so a spec can
- * assert against its id.
+ * eligible model, and pin it for chat and worker capabilities through the existing admin API.
+ * Returns the model so a spec can assert against its id.
  */
 export async function bringUpRealChatModel(
   page: Page,
@@ -183,7 +183,23 @@ export async function bringUpRealChatModel(
 ): Promise<UatDiscoveredModel> {
   await bringUpRealChatProvider(page);
   const cheapest = await discoverCheapestChatModel(page, deadlineMs);
+  // A missing worker capability would allow fallback to another model within the provider.
+  for (const capability of ["chat", "tool-use", "json", "summarization"]) {
+    expect(cheapest.capabilities).toContain(capability);
+  }
   await selectChatModelOverride(page, cheapest);
+  await readUatJson(
+    await page.request.put(`/api/admin/users/${UAT_ADMIN_ID}/ai-pin`, {
+      data: { modelId: cheapest.id }
+    })
+  );
+  for (const capability of ["chat", "tool-use", "json", "summarization"]) {
+    const body = (await readUatJson(
+      await page.request.get(`/api/ai/capability-route/${capability}`)
+    )) as { route: { model: { id: string } | null; reason: string } };
+    expect(body.route.model?.id).toBe(cheapest.id);
+    expect(body.route.reason).toBe("admin-pin");
+  }
   console.log(
     `[uat real-chat] provider=${uatRealChatProvider()}, model=${cheapest.id}, providerModel=${cheapest.providerModelId}, tier=${cheapest.tier}`
   );

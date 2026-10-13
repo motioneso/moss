@@ -53,12 +53,6 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
   await page.getByRole("button", { name: "Scheduled tasks", exact: true }).click();
   let drawer = await openChat(page);
   await send(page, drawer, "Reply briefly: ready for reminder edit proof.");
-  console.log(
-    "[3135] " +
-      (await drawer
-        .getByRole("button", { name: /^Chat model:/ })
-        .evaluate((button) => button.getAttribute("aria-label") ?? button.textContent))
-  );
   await send(page, drawer, "remind me in 120 seconds to edit proof original");
   const original = (await tasks(page)).find((row) => row.instruction === "edit proof original")!;
   expect(original.state).toBe("active");
