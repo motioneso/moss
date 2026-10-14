@@ -3,7 +3,7 @@ export const responsibilityAgreementFeature = {
   id: "chat.bounded_action_agreements",
   featureFlagId: "chat.module",
   description:
-    "With a configured JSON model and available Tasks status-change tool, Main chat saves a typed agreement to mark one owned task done later. Inspect scope in Settings. Agreements stay inactive; no execution, Resume or scope edits. Existing reminders and Tasks checks can still be edited through their normal controls.",
+    "With a JSON model and Tasks status-change tool, Main saves typed agreements to mark one owned task done later. Inspect in Settings. Agreements stay inactive: no execution, Resume or scope edits. Reminders and Tasks checks stay editable.",
   errors: [
     {
       code: "bounded_action_model_unavailable",

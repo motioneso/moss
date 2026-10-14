@@ -216,7 +216,10 @@ it.each([
   expect(model).not.toHaveBeenCalled();
 });
 
-function managerFixture(prepare: ReturnType<typeof fixture>["prepare"]) {
+function managerFixture(
+  prepare: ReturnType<typeof fixture>["prepare"],
+  overrides: Partial<ChatPersistencePort> = {}
+) {
   const engineFactory = vi.fn(() => {
     throw new Error("unexpected model engine launch");
   });
@@ -245,7 +248,8 @@ function managerFixture(prepare: ReturnType<typeof fixture>["prepare"]) {
     getThreadContext: async () => ({ incognito: false, localTimezone: null, threadTitle: null }),
     recordReminderTurn,
     recordTurn: vi.fn(),
-    openNewConversation: vi.fn()
+    openNewConversation: vi.fn(),
+    ...overrides
   } as unknown as ChatPersistencePort;
   const manager = new ChatSessionManager({
     engineFactory,
@@ -378,14 +382,59 @@ it("keeps revised module-sourced current-question replies out of interpretation 
   expect(mocks.candidates).not.toHaveBeenCalled();
 });
 
-it.each([
+const reminderEdits = [
   "change my Check task status: repeat boundary proof reminder to repeat every 60 seconds starting in 60 seconds",
   "update my task check reminder to start in 60 seconds",
   "change my task reminder text to Review the report every morning"
-])("leaves existing reminder edits to their own preparation: %s", async (text) => {
+] as const;
+it.each(reminderEdits)(
+  "leaves existing reminder edits to their own preparation: %s",
+  async (text) => {
+    const { prepare, model } = fixture({});
+    expect(await prepare("owner", text, threadId)).toBeUndefined();
+    expect(model).not.toHaveBeenCalled();
+    expect(mocks.candidates).not.toHaveBeenCalled();
+    expect(mocks.prepare).not.toHaveBeenCalled();
+  }
+);
+
+it.each(reminderEdits)("routes reminder edits past a pending action question: %s", async (text) => {
   const { prepare, model } = fixture({});
+  mocks.pending.mockResolvedValue({
+    id: "current",
+    kind: "bounded_action_creation",
+    version: 1,
+    fingerprint: "a".repeat(64),
+    terms: {}
+  });
   expect(await prepare("owner", text, threadId)).toBeUndefined();
   expect(model).not.toHaveBeenCalled();
-  expect(mocks.candidates).not.toHaveBeenCalled();
   expect(mocks.prepare).not.toHaveBeenCalled();
+});
+
+it("prepares a reminder edit instead of answering a pending action question in the live manager", async () => {
+  const { prepare } = fixture({});
+  mocks.pending.mockResolvedValue({
+    id: "current",
+    kind: "bounded_action_creation",
+    version: 1,
+    fingerprint: "a".repeat(64),
+    terms: {}
+  });
+  const plan = { kind: "edit_refused" as const, reply: "Name the reminder to edit." };
+  const prepareReminderEdit = vi.fn(async () => plan);
+  const { manager, engineFactory, recordReminderTurn } = managerFixture(prepare, {
+    prepareReminderEdit
+  });
+  const text = reminderEdits[0];
+  const result = await manager.submitTurn("owner", "Owner", text);
+  expect(prepareReminderEdit).toHaveBeenCalledWith(
+    "owner",
+    text,
+    threadId,
+    expect.any(AbortSignal)
+  );
+  expect(recordReminderTurn.mock.calls[0]?.[2]).toEqual(plan);
+  expect(result.reply).toBe(plan.reply);
+  expect(engineFactory).not.toHaveBeenCalled();
 });

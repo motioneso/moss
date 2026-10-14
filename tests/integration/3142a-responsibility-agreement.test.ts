@@ -14,6 +14,7 @@ import {
 } from "../../packages/chat/src/responsibility-agreements/repository.js";
 import { listApprovedActionScopes } from "../../packages/chat/src/responsibility-agreements/settings.js";
 import { BOUNDED_ACTION_PROPOSAL_KIND } from "../../packages/chat/src/responsibility-agreements/prepare.js";
+import { readEditableReminders } from "../../packages/chat/src/reminders/edit.js";
 const FIXTURE_OWNER_TIME_ZONE = "America/Los_Angeles";
 function persistence(available = true) {
   return new DataContextChatPersistence({
@@ -76,6 +77,69 @@ async function acceptedCount(id: string) {
   return Number(result.rows[0].count);
 }
 describe("real persistence binds inert agreement once", () => {
+  it("edits an existing reminder while closing a pending action proposal without approving it", async () => {
+    const reopened = persistence();
+    const text = `Cadence routing ${randomUUID()}`;
+    const created = await reopened.recordReminderTurn(
+      ids.userA,
+      `Remind me in 10 minutes to ${text}`,
+      {
+        kind: "request",
+        text,
+        delaySeconds: 600
+      }
+    );
+    expect(created && created !== "stopped" && created.origin.kind).toBe("reminder");
+    const reminder = (await owner(readEditableReminders)).find(
+      (row) => row.reminder_text === text
+    )!;
+    const saved = await propose();
+    const request = `change my ${text} reminder to repeat every 60 seconds starting in 60 seconds`;
+    expect(
+      await reopened.prepareResponsibilityAgreement(ids.userA, request, saved.thread.id)
+    ).toBeUndefined();
+    const result = await reopened.recordReminderTurn(
+      ids.userA,
+      request,
+      {
+        kind: "edit",
+        proposal: {
+          candidates: [{ id: reminder.id, version: reminder.version }],
+          terms: {
+            text: null,
+            delaySeconds: 60,
+            localDue: null,
+            deadline: "keep",
+            localDeadline: null,
+            repeat: { kind: "interval", seconds: 60 },
+            destination: null
+          }
+        }
+      },
+      { threadId: saved.thread.id }
+    );
+    expect(result && result !== "stopped" && result.origin).toMatchObject({ event: "edited" });
+    expect(
+      (await owner(readEditableReminders)).find((row) => row.id === reminder.id)
+    ).toMatchObject({
+      repeat_kind: "interval",
+      repeat_seconds: 60,
+      delay_seconds: 60
+    });
+    const closed = await bootstrap.query(
+      "SELECT state FROM app.chat_responsibility_proposals WHERE id = $1",
+      [saved.proposal.id]
+    );
+    expect(closed.rows[0].state).toBe("cancelled");
+    await reopened.recordReminderTurn(
+      ids.userA,
+      "yes",
+      { kind: "scope_agreement", proposal: saved.proposal, agree: true },
+      { threadId: saved.thread.id }
+    );
+    expect(await acceptedCount(saved.proposal.id)).toBe(0);
+    expect(await owner((db) => tasks.getById(db, saved.task.id))).toMatchObject({ status: "todo" });
+  });
   it("stores a real paired question, survives reload, accepts once, exposes scope and queues no action", async () => {
     const before = await bootstrap.query(
       "SELECT (SELECT count(*) FROM app.chat_reminders WHERE owner_user_id = $1) AS reminders, (SELECT count(*) FROM pgboss.job WHERE data->>'actorUserId' = $1::text AND name IN ('chat.deliver-reminder', 'chat.scheduled-read')) AS jobs",

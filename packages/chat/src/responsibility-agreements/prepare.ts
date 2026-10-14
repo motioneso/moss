@@ -79,6 +79,7 @@ export function createResponsibilityPreparation(deps: {
             namesBoundedActionRequest(text)
               ? { kind: "scope_refused" as const, reply: SCOPE_REFUSED_MESSAGE }
               : undefined;
+        if (recognizeReminderEdit(text)) return async () => undefined;
         const pending = await pendingResponsibilityProposal(
           db,
           threadId,
