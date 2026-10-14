@@ -23,6 +23,7 @@ async function send(page: Page, drawer: Locator, text: string): Promise<void> {
     { timeout: 120_000 }
   );
   await drawer.getByLabel("Message Moss").fill(text);
+  await expect(drawer.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
   await drawer.getByLabel("Message Moss").press("Enter");
   expect((await response).ok()).toBe(true);
   await expect(drawer.getByText(text, { exact: true })).toBeVisible();

@@ -1,4 +1,5 @@
 import { authorizeTaskBackgroundRead } from "@moss/tasks";
+import { firstClockOccurrence, reminderRepeatDescription } from "../repeating.js";
 import { localDayKey } from "@moss/module-sdk";
 import { whenPhrase, reminderClockRefusedReply } from "../clock-wording.js";
 import { resolveLocalClock } from "../local-clock.js";
@@ -11,7 +12,7 @@ export const scheduledRead: ReminderCommandHandler = async (context, plan) => {
     reply:
       plan.failure === "unavailable"
         ? "I couldn't set that check right now, so nothing is set. Try again in a moment."
-        : "I didn't set a check. Name one task you own and one time; I can only read its status once.",
+        : "I didn't set a check. Name one task you own and one supported time or cadence; I can only read its status.",
     origin: {
       version: 1 as const,
       kind: "reminder" as const,
@@ -32,6 +33,42 @@ export const scheduledRead: ReminderCommandHandler = async (context, plan) => {
     const now = await context.deps.reminders.now(context.scopedDb);
     const title = plan.title.replace(/[\r\n]/g, " ").slice(0, 400);
     const text = `Check task status: ${title}`;
+    if (timing.kind === "repeat_request") {
+      try {
+        const when =
+          timing.repeat.kind === "interval"
+            ? {
+                timing: "relative" as const,
+                delaySeconds: timing.repeat.seconds,
+                repeat: timing.repeat
+              }
+            : {
+                timing: "local_clock" as const,
+                ...firstClockOccurrence(timing.clock!, timing.weekday, now, locale.timeZone),
+                timeZone: locale.timeZone,
+                deadlineAt: null,
+                repeat: timing.repeat
+              };
+        const schedule = reminderRepeatDescription(
+          timing.repeat,
+          "localDue" in when ? when.localDue : null,
+          locale.timeZone,
+          locale.clockFormat
+        );
+        return {
+          reply: `I'll check ${title} ${schedule.toLowerCase()}. The first check will establish a quiet baseline; after that I'll report changes to its title or status here.`,
+          text,
+          when,
+          sourceItemId: itemId
+        };
+      } catch {
+        return {
+          ...refused,
+          reply:
+            "That first check time is invalid or ambiguous because the clocks change. Choose another start time. Nothing was saved."
+        };
+      }
+    }
     if (timing.kind === "request")
       return {
         reply: `I'll check ${title} once in ${timing.delaySeconds} seconds and report its status here.`,

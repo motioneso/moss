@@ -649,6 +649,11 @@ export const settingsModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "settings.app_map_lookup",
+      description:
+        "Moss finds declared screens, settings, features and fixes in the app map. Exact references and phrases take precedence; otherwise shared words rank up to eight entries visible to the requesting user."
+    },
+    {
       id: "app.findAction",
       description:
         "Find declared app routes by plain words, including their input schemas, blocked categories and existing dedicated tools.",
@@ -843,7 +848,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       name: "app.getMapSlice",
       description:
-        "Look up a bounded slice of the app's declared screens, settings, features, errors, and remediations. Supply at least one of screenId, settingId, errorCode, or query — a call with none of them is rejected.",
+        "Look up a bounded slice of the app's declared screens, settings, features, errors, and remediations. Exact references and phrases take precedence; otherwise free-text queries rank entries sharing at least two words. Supply at least one of screenId, settingId, errorCode, or query — a call with none of them is rejected.",
       permissionId: "settings.view",
       risk: "read",
       content: "user_authored",

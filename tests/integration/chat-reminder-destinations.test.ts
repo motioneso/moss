@@ -400,24 +400,11 @@ describe("owned task destinations", () => {
       );
     }
   );
-  it.each(["advancement", "task check", "destination"])(
+  it.each(["advancement", "destination"])(
     "observes the %s update guard fail when removed, then restores it",
     async (guard) => {
       const target = await side(`Guard ${guard}`);
       const saved = await save(target.id, "this chat", ids.userA, guard === "advancement");
-      if (guard === "task check")
-        await owner((db) =>
-          db.db
-            .insertInto("app.chat_scheduled_reads")
-            .values({
-              reminder_id: saved.id,
-              owner_user_id: ids.userA,
-              operation: "tasks.get",
-              item_id: randomUUID(),
-              outcome: null
-            })
-            .execute()
-        );
       if (guard === "advancement") await due(saved.id);
       const attempt = () =>
         (guard === "advancement" ? worker : app).withDataContext(
@@ -432,13 +419,11 @@ describe("owned task destinations", () => {
                       reserved_message_id: randomUUID(),
                       due_at: sql<Date>`due_at + interval '60 seconds'`
                     }
-                  : guard === "task check"
-                    ? { version: saved.version + 1, repeat_kind: "interval", repeat_seconds: 60 }
-                    : {
-                        version: saved.version + 1,
-                        thread_id: randomUUID(),
-                        destination_title: "Missing"
-                      }
+                  : {
+                      version: saved.version + 1,
+                      thread_id: randomUUID(),
+                      destination_title: "Missing"
+                    }
               )
               .where("id", "=", saved.id)
               .execute();
@@ -446,12 +431,7 @@ describe("owned task destinations", () => {
             throw new Error("guard absent");
           }
         );
-      const expected =
-        guard === "advancement"
-          ? /persisted run/
-          : guard === "task check"
-            ? /task checks must run once/
-            : /destination is unavailable/;
+      const expected = guard === "advancement" ? /persisted run/ : /destination is unavailable/;
       await expect(attempt()).rejects.toThrow(expected);
       const definition = (
         await bootstrap.query(
@@ -459,20 +439,20 @@ describe("owned task destinations", () => {
         )
       ).rows[0]!.definition as string;
       const removed =
-        guard === "task check"
+        guard === "destination"
           ? definition.replace(
-              / {2}IF NEW.repeat_kind IS NOT NULL AND EXISTS \([\s\S]*? {2}END IF;/,
-              ""
+              "      PERFORM app.check_chat_reminder_destination(NEW.owner_user_id, NEW.thread_id, NEW.destination_title);",
+              "      NULL;"
             )
-          : guard === "destination"
-            ? definition.replace(
-                "      PERFORM app.check_chat_reminder_destination(NEW.owner_user_id, NEW.thread_id, NEW.destination_title);",
-                "      NULL;"
+          : definition.slice(
+              0,
+              definition.indexOf("      OR NOT EXISTS (SELECT 1 FROM app.chat_reminder_runs run")
+            ) +
+            definition.slice(
+              definition.indexOf(
+                " THEN\n      RAISE EXCEPTION 'chat reminder advancement needs its persisted run'"
               )
-            : definition.replace(
-                / {6}OR NOT EXISTS \(SELECT 1 FROM app.chat_reminder_runs run[\s\S]*?run.outcome = 'delivered'\)/,
-                ""
-              );
+            );
       expect(removed).not.toBe(definition);
       try {
         await bootstrap.query(removed);

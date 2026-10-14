@@ -2,6 +2,25 @@ import { readFileSync } from "node:fs";
 import type { DataContextDb } from "@moss/db";
 import type { AppMapArtifact, AppMapItem } from "@moss/shared";
 
+function matchMapQuery(items: readonly AppMapItem[], needle: string): readonly AppMapItem[] {
+  const exact = items.filter((item) => JSON.stringify(item).toLowerCase().includes(needle));
+  if (exact.length > 0) return exact;
+  const terms = [...new Set(needle.match(/[\p{L}\p{N}]+/gu) ?? [])];
+  if (terms.length < 2) return [];
+  return items
+    .map((item) => {
+      const words = new Set(
+        JSON.stringify(item)
+          .toLowerCase()
+          .match(/[\p{L}\p{N}]+/gu)
+      );
+      return { item, score: terms.filter((term) => words.has(term)).length };
+    })
+    .filter(({ score }) => score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .map(({ item }) => item);
+}
+
 export type AppMapQuery =
   | { readonly screenId: string; readonly limit?: number }
   | { readonly settingId: string; readonly limit?: number }
@@ -90,18 +109,18 @@ export function createAppMapReadService(deps: {
                   ...deps.artifact.remediations
                 ];
       const needle = raw.trim().toLowerCase();
-      const items = source
-        .filter(
-          (item: AppMapItem) =>
-            activeIds.has(item.moduleId) &&
-            (isAdmin || item.scope !== "admin") &&
-            (item.featureFlagId === undefined ||
-              deps.resolveFeatureFlagState(item.featureFlagId) === true) &&
-            (kind === "query"
-              ? JSON.stringify(item).toLowerCase().includes(needle)
-              : item.id === raw || item.code === raw)
-        )
-        .slice(0, limit);
+      const visible = source.filter(
+        (item: AppMapItem) =>
+          activeIds.has(item.moduleId) &&
+          (isAdmin || item.scope !== "admin") &&
+          (item.featureFlagId === undefined ||
+            deps.resolveFeatureFlagState(item.featureFlagId) === true)
+      );
+      const items = (
+        kind === "query"
+          ? matchMapQuery(visible, needle)
+          : visible.filter((item) => item.id === raw || item.code === raw)
+      ).slice(0, limit);
       if (items.length === 0) deps.logGap({ kind, value: raw.slice(0, 120) });
       const narrative =
         kind === "query" && /what'?s new|what can/i.test(raw)

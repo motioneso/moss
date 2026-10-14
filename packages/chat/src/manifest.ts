@@ -85,7 +85,8 @@ export const chatModuleManifest = {
       "sql/0317_chat_reminder_edits.sql",
       "sql/0318_chat_scheduled_reads.sql",
       "sql/0319_chat_repeating_reminders.sql",
-      "sql/0320_chat_reminder_destinations.sql"
+      "sql/0320_chat_reminder_destinations.sql",
+      "sql/0321_chat_repeating_reads.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -142,7 +143,7 @@ export const chatModuleManifest = {
     {
       id: "chat.current_view_grounding",
       description:
-        "Moss uses the current view and app map to explain screens and errors. Screenshot requests receive a refusal and guidance to paste the exact text instead.",
+        "Moss uses the current view and app map to explain screens and errors, linking prerequisite fixes to their declared paths. Screenshot requests receive a refusal and guidance to paste the exact text instead.",
       featureFlagId: "chat.module"
     },
     {

@@ -6,7 +6,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.scheduled_owner_read",
     description:
-      "In Main, ask Moss to check one owned task later. Your configured JSON model selects the task and time, then writes a sourced report. Plain reminders and questions keep their usual paths. Reminder controls and notification policy apply.",
+      "In regular chat, check one owned task once or repeatedly. Repeats start with a quiet baseline and report only title/status changes. Configured JSON models prepare sourced reports. Controls, quiet retries and notification policy apply.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -16,16 +16,10 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
           "A saved task check keeps its source fixed. Time edits use the source-read queue; text edits change nothing. Delete the check and request a new one to choose a different task."
       },
       {
-        code: "scheduled_read_repeat_edit_refused",
-        class: "validation",
-        description:
-          "Task checks run once. Change the time of the saved check, or set a separate fixed-text reminder to repeat. Nothing changes when a repeat edit is refused."
-      },
-      {
         code: "scheduled_read_unresolved",
         class: "validation",
         description:
-          "An unresolved task stays in ordinary chat instead of saving a check. Name one task you own and a supported future time."
+          "An unresolved repeating check is refused and saves nothing; an unresolved one-time check stays in ordinary chat. Name one task you own and a supported time or cadence."
       },
       {
         code: "scheduled_read_unavailable",
@@ -38,7 +32,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         class: "prerequisite",
         remediationRef: "chat.restore_scheduled_read_access",
         description:
-          "If the source capability or owned task is no longer accessible at run time, Moss posts a refusal without source data. Choose an accessible task and request a new check."
+          "If Tasks access is unavailable, refusal contains no source data. One-time checks post it immediately; repeating checks record every refusal and post guidance after three consecutive failed runs. Restore access or request a new check."
       },
       {
         code: "scheduled_report_failed",
@@ -50,13 +44,14 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         code: "scheduled_read_failed",
         class: "transient",
         description:
-          "A classified temporary source failure retries quietly twice, then posts a failure. Other read failures and model failures do not retry. Request a new check when the source and model are available."
+          "Temporary source failures retry quietly twice. Recurring checks record every failed run and post guidance once after three consecutive failures, resetting after a valid success. One-time checks post failures immediately."
       }
     ],
     remediations: [
       {
         id: "chat.restore_scheduled_read_access",
-        description: "Choose a task you own in Tasks and request a new status check in Main.",
+        description:
+          "Choose a task you own in Tasks and request a new status check in regular chat.",
         path: "/tasks"
       }
     ]
@@ -93,7 +88,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time, repeat or stop time in regular chat; change destination separately. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguity needs a choice. Paused stays paused.",
+      "Edit pending or paused text, time, repeat or stop time in regular chat; change destination separately. Task checks keep their source fixed. Settings shows saved terms. Old jobs cannot fire; ambiguity needs a choice. Paused stays paused.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -212,7 +207,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.repeating_reminders",
     description:
-      "Main saves daily, named-weekday or 60-86399-second reminders. Saved local times shift through gaps and use the earlier fold. One catch-up after downtime, then normal cadence. Edits invalidate old jobs; saved stops end repeats.",
+      "Regular chat saves daily, named-weekday or 60-86399-second reminders. Saved local times shift through gaps and use the earlier fold. One catch-up after downtime, then normal cadence. Edits invalidate old jobs; saved stops end repeats.",
     featureFlagId: "chat.module"
   },
   {
@@ -239,9 +234,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_live_arrival",
     description:
-      "A due chat reminder appears at once in the open Main chat, even while Moss is replying; both " +
-      "stay separate after a reload. Side, private and module chats never show it. If it does not " +
-      "appear, reopen Main or reload.",
+      "Due results appear in their open destination, even during a reply, and remain separate after reload. Other conversations, private and module chats do not show them. Reopen the destination or reload if a result is missing.",
     featureFlagId: "chat.module"
   },
   {

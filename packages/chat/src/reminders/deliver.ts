@@ -61,6 +61,7 @@ type ReminderDeliveryDeps = {
   readonly reminders: ReminderRepository;
   readonly chat: ChatRepository;
   readonly scheduledReadSource?: "tasks";
+  readonly runOutcome?: "delivered" | "failed" | "refused";
   readonly boss?: Pick<PgBoss, "send">;
   readonly enqueueNotification?: (scopedDb: DataContextDb, reminder: DueReminder) => Promise<void>;
 };
@@ -153,7 +154,13 @@ export async function persistReminderResult(
   });
   if (reminder.repeat) {
     if (!deps.boss) throw new Error("Recurring reminder queue unavailable");
-    await recordReminderRun(scopedDb, reminder, "delivered", late);
+    await recordReminderRun(
+      scopedDb,
+      reminder,
+      deps.runOutcome ?? "delivered",
+      late,
+      reminder.reservedMessageId
+    );
     const next = nextReminderOccurrence({ ...reminder, repeat: reminder.repeat }, now);
     if (reminder.deadlineAt && next.dueAt > reminder.deadlineAt) {
       await deps.reminders.markDelivered(scopedDb, reminder.id, late);

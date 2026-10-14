@@ -7,8 +7,9 @@ import type { DueReminder } from "./repository.js";
 export async function recordReminderRun(
   db: DataContextDb,
   reminder: DueReminder,
-  outcome: "delivered" | "expired",
-  late: boolean
+  outcome: ScheduledTaskRunDto["outcome"],
+  late: boolean,
+  messageId: string | null = outcome === "delivered" ? reminder.reservedMessageId : null
 ) {
   await db.db
     .insertInto("app.chat_reminder_runs")
@@ -20,7 +21,7 @@ export async function recordReminderRun(
       due_at: sql<Date>`(select due_at from app.chat_reminders where id = ${reminder.id}::uuid)`,
       at: sql<Date>`now()`,
       outcome,
-      message_id: outcome === "delivered" ? reminder.reservedMessageId : null,
+      message_id: messageId,
       late
     })
     .execute();
@@ -33,6 +34,7 @@ export async function readReminderRuns(
   const rows = await db.db
     .selectFrom("app.chat_reminder_runs as run")
     .innerJoin("app.chat_reminders as reminder", "reminder.id", "run.reminder_id")
+    .leftJoin("app.chat_scheduled_reads as source_read", "source_read.reminder_id", "reminder.id")
     .leftJoin("app.chat_messages as message", (join) =>
       join
         .onRef("message.id", "=", "run.message_id")
@@ -48,6 +50,7 @@ export async function readReminderRuns(
         .on("thread.incognito", "=", false)
     )
     .select([
+      "source_read.operation",
       "run.at",
       "run.outcome",
       "run.late",
@@ -68,12 +71,27 @@ export async function readReminderRuns(
     summary:
       row.outcome === "expired"
         ? "Skipped because its deadline passed"
-        : row.late
-          ? "Reminder delivered late"
-          : "Reminder delivered",
+        : row.outcome === "quiet"
+          ? "Task checked successfully; nothing new to report"
+          : row.outcome === "refused"
+            ? "Task check refused; restore source access"
+            : row.outcome === "failed"
+              ? "Task check failed; check Tasks and AI settings"
+              : row.operation
+                ? "Task change reported"
+                : row.late
+                  ? "Reminder delivered late"
+                  : "Reminder delivered",
     message:
       row.id && row.body !== null && row.destination_thread_id
-        ? { id: row.id, threadId: row.destination_thread_id, body: row.body }
+        ? {
+            id: row.id,
+            threadId: row.destination_thread_id,
+            body: row.body,
+            ...(row.operation && row.outcome === "delivered"
+              ? { scheduledReadSource: "tasks" as const }
+              : {})
+          }
         : null
   }));
 }

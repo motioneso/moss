@@ -101,9 +101,31 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
     (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"))
   ).toHaveLength(2);
   await expect(drawer.getByText(/Which reminder should I change/).last()).toBeVisible();
-  await send(page, drawer, "2");
-  const selected = (await tasks(page)).find((row) => row.id === before[1]!.id)!;
+  const intended = before.find((row) => row.instruction === "choice proof two")!;
+  expect(intended).toBeDefined();
+  const displayedChoices = await drawer
+    .getByRole("list")
+    .last()
+    .getByRole("listitem")
+    .allTextContents();
+  const intendedChoice = displayedChoices.findIndex((text) => text.startsWith("choice proof two"));
+  expect(intendedChoice).toBeGreaterThanOrEqual(0);
+  expect(displayedChoices.filter((text) => text.startsWith("choice proof two"))).toHaveLength(1);
+  await send(page, drawer, String(intendedChoice + 1));
+  const afterSelection = await tasks(page);
+  const selected = afterSelection.find((row) => row.id === intended.id)!;
   expect(selected.instruction).toBe("chosen proof revised daily vitamins");
+  for (const unselected of before.filter((row) => row.id !== intended.id)) {
+    expect(afterSelection.find((row) => row.id === unselected.id)).toMatchObject({
+      instruction: unselected.instruction,
+      dueAt: unselected.dueAt,
+      state: unselected.state
+    });
+  }
+  expect(afterSelection.find((row) => row.id === original.id)).toMatchObject({
+    instruction: revised.instruction,
+    dueAt: revised.dueAt
+  });
   await send(
     page,
     drawer,

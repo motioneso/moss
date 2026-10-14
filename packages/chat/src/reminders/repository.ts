@@ -114,7 +114,7 @@ export class ReminderRepository {
         .select(["run.owner_user_id", "run.version", "message.id", "message.body"])
         .where("run.reminder_id", "=", reminderId)
         .where("run.message_id", "=", messageId)
-        .where("run.outcome", "=", "delivered")
+        .where("run.outcome", "in", ["delivered", "failed", "refused"])
         .where("run.context_state", "!=", "dismissed")
         .where("run.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
         .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
@@ -354,7 +354,7 @@ export class ReminderRepository {
       .where("message.role", "=", "assistant")
       .where("message.status", "=", "stored")
       .where("run.context_state", "=", "pending")
-      .where("run.outcome", "=", "delivered")
+      .where("run.outcome", "in", ["delivered", "failed", "refused"])
       .where("reminder.state", "in", ["queued", "paused", "delivered"])
       .orderBy("run.at")
       .orderBy("run.id")
@@ -392,7 +392,7 @@ export class ReminderRepository {
       .set({ context_state: "acknowledged" })
       .where("message_id", "in", [...reservedMessageIds])
       .where("context_state", "=", "pending")
-      .where("outcome", "=", "delivered")
+      .where("outcome", "in", ["delivered", "failed", "refused"])
       .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
       .where(
         "message_id",
