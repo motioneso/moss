@@ -26,15 +26,25 @@ describe("hasFinishedVerdict (#2804)", () => {
     ).toBe(true);
   });
 
-  it("counts a message handed to the thread judgement as finished", () => {
-    const owed = gated({
-      gate: "maybe_owed",
-      summary: null,
-      signals: { actionability: { category: "needs_reply", reason: "Asked a question." } }
-    });
-    expect(owed.summary).toBeNull();
-    expect(hasFinishedVerdict(owed.summary, owed.signals)).toBe(true);
-  });
+  it.each(["needs_reply", "needs_action"] as const)(
+    "keeps %s when handing mail to judgement",
+    (category) => {
+      const owed = gated({
+        gate: "maybe_owed",
+        summary: null,
+        signals: {
+          actionability: {
+            category,
+            reason: "Asked a question.",
+            suggestedTasks: [{ text: "Send the report" }]
+          }
+        }
+      });
+      expect(owed.summary).toBeNull();
+      expect(owed.signals.actionability).toEqual({ category });
+      expect(hasFinishedVerdict(owed.summary, owed.signals)).toBe(true);
+    }
+  );
 
   it("counts a worth-knowing summary as finished", () => {
     const fyi = gated({ gate: "worth_knowing", summary: "Store sale.", signals: {} });

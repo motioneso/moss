@@ -1,0 +1,45 @@
+/* Alerts & quiet hours: the quiet-hours column and its rule beside the alert choices. Layout only. */
+
+.alerts-pane__rule {
+  display: flex;
+}
+
+.alerts-pane__quiet {
+  min-width: 0;
+}
+
+.quiet-hours__times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.quiet-hours__times .jds-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.quiet-hours__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.quiet-hours__links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.quiet-hours__status {
+  margin: var(--space-3) 0 0;
+}
+
+@media (max-width: 760px) {
+  .alerts-pane__rule {
+    display: none;
+  }
+}

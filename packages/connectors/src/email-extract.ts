@@ -246,6 +246,8 @@ export interface EmailSignals {
   readonly skipped?: "otp" | "own_sent";
   /** The gate said maybe_owed: no verdict yet, the thread's judgement worker decides. */
   readonly pendingJudgement?: boolean;
+  /** Read-time marker when the newest cached thread message is the owner's reply. */
+  readonly answered?: boolean;
   /** #2805: the sorting model settled the first pass; the general model was not asked. */
   readonly sortedBy?: "sorting_model";
 }

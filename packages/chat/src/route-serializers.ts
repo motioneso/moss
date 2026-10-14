@@ -4,6 +4,7 @@ import type {
   ChatMessageDto,
   ChatSelectedToolMetadataDto,
   ChatThreadDto,
+  ChatReminderOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   FreshnessKind,
@@ -77,6 +78,7 @@ export function serializeThread(
     ownerUserId: thread.owner_user_id,
     title: thread.title,
     incognito: thread.incognito,
+    isMain: thread.is_main,
     createdAt: toIsoString(thread.created_at),
     updatedAt: toIsoString(thread.updated_at),
     lastActiveAt: toIsoString(thread.last_active_at),
@@ -123,7 +125,8 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
     answerProvenanceCitedIds,
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
     ...(usage !== undefined ? { usage } : {}),
-    ...(origin !== undefined ? { origin } : {})
+    ...(origin !== undefined ? { origin } : {}),
+    ...(readScheduledReadSource(modelMetadata) ? { scheduledReadSource: "tasks" as const } : {})
   };
 }
 
@@ -133,6 +136,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
  */
 export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
   const record = asRecord(value);
+  if (record.kind === "reminder" && record.version === 1) return readReminderOrigin(record);
   if (record.kind !== "classifier_gate" || record.version !== 1) return undefined;
   const outcome =
     record.outcome === "executed-success" || record.outcome === "executed-failure-or-unknown"
@@ -148,6 +152,59 @@ export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
     toolName: typeof record.toolName === "string" ? record.toolName : null,
     outcome
   };
+}
+
+const REMINDER_ORIGIN_EVENTS: ReadonlySet<string> = new Set<ChatReminderOriginV1["event"]>([
+  "saved",
+  "refused",
+  "delivered",
+  "listed",
+  "cancelled",
+  "cancel_refused",
+  "paused",
+  "resumed",
+  "delete_requested",
+  "deleted",
+  "delete_declined",
+  "allowance_saved",
+  "allowance_removed",
+  "allowance_proposed",
+  "allowance_refused",
+  "scope_proposed",
+  "scope_saved",
+  "scope_refused"
+]);
+
+function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 | undefined {
+  const event = record.event;
+  if (typeof event !== "string" || !REMINDER_ORIGIN_EVENTS.has(event)) return undefined;
+  const responsibilityProposal = readResponsibilityBinding(record.responsibilityProposal);
+  return {
+    version: 1,
+    kind: "reminder",
+    event: event as ChatReminderOriginV1["event"],
+    reminderId: typeof record.reminderId === "string" ? record.reminderId : null,
+    ...(typeof record.reminderVersion === "number"
+      ? { reminderVersion: record.reminderVersion }
+      : {}),
+    ...(typeof record.reminderState === "string" ? { reminderState: record.reminderState } : {}),
+    ...(typeof record.proposalId === "string" ? { proposalId: record.proposalId } : {}),
+    ...(responsibilityProposal ? { responsibilityProposal } : {}),
+    ...(typeof record.late === "boolean" ? { late: record.late } : {})
+  };
+}
+
+function readResponsibilityBinding(value: unknown): ChatReminderOriginV1["responsibilityProposal"] {
+  const row = asRecord(value);
+  return typeof row.id === "string" &&
+    typeof row.kind === "string" &&
+    typeof row.version === "number" &&
+    Number.isSafeInteger(row.version) &&
+    row.version >= 1 &&
+    typeof row.fingerprint === "string" &&
+    /^[a-f0-9]{64}$/.test(row.fingerprint)
+    ? { id: row.id, kind: row.kind, version: row.version, fingerprint: row.fingerprint }
+    : undefined;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {
@@ -236,4 +293,14 @@ export function readSourceFreshness(value: unknown): SourceFreshnessV1 | null {
     return [{ source: r.source, freshnessKind: r.freshnessKind as FreshnessKind, asOf }];
   });
   return { version: 1, capturedAt: rec.capturedAt as string, sources };
+}
+
+/** Only code-authored successful delivery metadata grants the fixed app source link. */
+export function readScheduledReadSource(metadata: Record<string, unknown>): "tasks" | undefined {
+  const origin = readOrigin(metadata.origin);
+  return origin?.kind === "reminder" &&
+    origin.event === "delivered" &&
+    metadata.scheduledReadSource === "tasks"
+    ? "tasks"
+    : undefined;
 }

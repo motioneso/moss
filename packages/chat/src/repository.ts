@@ -27,6 +27,14 @@ import {
   mergeTerminalAction,
   type TerminalActionRecord
 } from "./action-record-history.js";
+import {
+  claimLiveTurn,
+  claimStaleLiveTurns,
+  deleteLiveTurn,
+  hasStaleLiveTurns,
+  INTERRUPTED_REPLY_TEXT,
+  type ClaimedLiveTurn
+} from "./live-turns.js";
 
 /** Absorbed synthetic rows remain stored; only their visible replacement participates in history. */
 function visibleChatMessage(table: "app.chat_messages" | "m" = "app.chat_messages") {
@@ -40,6 +48,16 @@ function visibleChatMessage(table: "app.chat_messages" | "m" = "app.chat_message
     false
   )`;
 }
+
+export interface PublishConversationSummaryInput {
+  readonly threadId: string;
+  readonly expectedRevision: number;
+  readonly expectedCoveredThroughMessageId: string | null;
+  readonly throughMessageId: string;
+  readonly summary: string;
+}
+
+export type PublishConversationSummaryResult = "published" | "stale" | "missing";
 
 export interface CreateChatThreadInput {
   readonly title: string;
@@ -58,6 +76,8 @@ export interface CompletedTurnOptions {
   readonly activityRecords?: readonly unknown[];
   readonly elapsedMs?: number;
   readonly usage?: ChatTurnUsageDto;
+  /** #3128: live turn identity; stamped on both rows and clears the in-flight record. */
+  readonly turnId?: string;
 }
 
 /**
@@ -250,6 +270,117 @@ export class ChatRepository {
     ))`.execute(scopedDb.db);
   }
 
+  /**
+   * #3128: stores every reply in this thread that another API boot left unfinished as its
+   * question plus an interrupted note. Nothing is resubmitted, because a tool the reply started
+   * may or may not have run.
+   */
+  async reconcileInterruptedTurns(
+    scopedDb: DataContextDb,
+    threadId: string,
+    bootId: string
+  ): Promise<number> {
+    assertDataContextDb(scopedDb);
+    if (!(await hasStaleLiveTurns(scopedDb, threadId, bootId))) return 0;
+    return this.storeInterrupted(scopedDb, threadId, (db) =>
+      claimStaleLiveTurns(db, threadId, bootId)
+    );
+  }
+
+  /** #3128: stores one reply that failed in this process after the model received it. */
+  async storeInterruptedTurn(
+    scopedDb: DataContextDb,
+    threadId: string,
+    turnId: string
+  ): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    const stored = await this.storeInterrupted(scopedDb, threadId, (db) =>
+      claimLiveTurn(db, threadId, turnId)
+    );
+    return stored > 0;
+  }
+
+  // Takes the same locks as writeCompletedTurn, so a claimed row and a completed save of the
+  // same turn never both land.
+  private async storeInterrupted(
+    scopedDb: DataContextDb,
+    threadId: string,
+    claim: (scopedDb: DataContextDb) => Promise<readonly ClaimedLiveTurn[]>
+  ): Promise<number> {
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!thread || thread.incognito) return 0;
+
+    await this.lockActionHistory(scopedDb, threadId);
+    const claimed = await claim(scopedDb);
+    const frontierAt = await this.summaryFrontierCreatedAt(scopedDb, thread);
+    for (const turn of claimed) {
+      // The pair keeps the question's place in history unless the summary already covers it.
+      const startedAt = new Date(turn.started_at);
+      const now = frontierAt && startedAt <= frontierAt ? new Date() : startedAt;
+      await this.insertMessage(scopedDb, {
+        thread,
+        role: "user",
+        status: "stored",
+        body: turn.user_text,
+        modelMetadata: {},
+        toolMetadata: {
+          selectedTools: [],
+          turnId: turn.turn_id,
+          ...(turn.attachments.length > 0 ? { attachments: turn.attachments } : {})
+        },
+        now
+      });
+      await this.insertMessage(scopedDb, {
+        thread,
+        role: "assistant",
+        status: "error",
+        body: INTERRUPTED_REPLY_TEXT,
+        modelMetadata: {},
+        toolMetadata: { selectedTools: [], turnId: turn.turn_id, interruptedTurn: true },
+        now
+      });
+    }
+    return claimed.length;
+  }
+
+  private async summaryFrontierCreatedAt(
+    scopedDb: DataContextDb,
+    thread: ChatThread
+  ): Promise<Date | undefined> {
+    if (!thread.summary_covered_through_message_id) return undefined;
+    const frontier = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .select("created_at")
+      .where("id", "=", thread.summary_covered_through_message_id)
+      .executeTakeFirst();
+    return frontier ? new Date(frontier.created_at) : undefined;
+  }
+
+  // The stored user and assistant rows of a turn id that already landed. A real reply outranks
+  // the interrupted note of the same turn.
+  private async findStoredTurn(
+    scopedDb: DataContextDb,
+    threadId: string,
+    turnId: string
+  ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
+    const rows = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .selectAll()
+      .where("thread_id", "=", threadId)
+      .where(sql<boolean>`tool_metadata @> ${JSON.stringify({ turnId })}::jsonb`)
+      .execute();
+    const userMessage = rows.find((row) => row.role === "user");
+    const assistants = rows.filter((row) => row.role === "assistant");
+    const assistantMessage =
+      assistants.find((row) => row.tool_metadata.interruptedTurn !== true) ?? assistants[0];
+    return userMessage && assistantMessage ? { userMessage, assistantMessage } : undefined;
+  }
+
   async listMessages(scopedDb: DataContextDb, threadId: string): Promise<ChatMessage[]> {
     assertDataContextDb(scopedDb);
 
@@ -309,10 +440,42 @@ export class ChatRepository {
   }
 
   /**
-   * Returns the owner's most-recent thread by last_active_at (the conversation the
-   * live drawer should open to), or undefined when the owner has no threads. RLS
-   * scopes rows to the owner; we still bind to the actor's ownership explicitly.
+   * Writes a code-authored assistant message under an id reserved earlier, for example a
+   * reminder delivery. No RETURNING; the caller already holds the id it reserved.
    */
+  async insertReservedAssistantMessage(
+    scopedDb: DataContextDb,
+    input: {
+      readonly id: string;
+      readonly threadId: string;
+      readonly body: string;
+      readonly origin: ChatTurnOriginV1;
+      readonly scheduledReadSource?: "tasks";
+      readonly now: Date;
+    }
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .insertInto("app.chat_messages")
+      .values({
+        id: input.id,
+        thread_id: input.threadId,
+        owner_user_id: sql<string>`app.current_actor_user_id()`,
+        role: "assistant",
+        status: "stored",
+        body: input.body,
+        model_metadata: {
+          origin: input.origin,
+          ...(input.scheduledReadSource ? { scheduledReadSource: input.scheduledReadSource } : {})
+        },
+        tool_metadata: { selectedTools: [] },
+        created_at: input.now,
+        updated_at: input.now
+      })
+      .executeTakeFirstOrThrow();
+  }
+
+  /** Returns the owner's most-recent thread by last_active_at for an explicit side-chat resume. */
   async getCurrentThread(
     scopedDb: DataContextDb,
     actorUserId: string,
@@ -332,6 +495,21 @@ export class ChatRepository {
       .executeTakeFirst();
   }
 
+  /** Returns the owner's durable drawer Main chat, excluding shared and transient threads. */
+  async getMainThread(
+    scopedDb: DataContextDb,
+    actorUserId: string
+  ): Promise<ChatThread | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("owner_user_id", "=", actorUserId)
+      .where("surface", "=", "drawer")
+      .where("is_main", "=", true)
+      .executeTakeFirst();
+  }
+
   /**
    * Creates a new chat thread stamped active now, making it the most-recent (and
    * therefore "current") conversation for the owner.
@@ -340,6 +518,16 @@ export class ChatRepository {
     assertDataContextDb(scopedDb);
     const surface = normalizeChatSurface(input.surface);
     await this.lockThreadSelection(scopedDb, surface);
+
+    const isMain =
+      surface === "drawer" &&
+      !input.incognito &&
+      !(await scopedDb.db
+        .selectFrom("app.chat_threads")
+        .select("id")
+        .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("is_main", "=", true)
+        .executeTakeFirst());
 
     const now = new Date();
 
@@ -351,6 +539,7 @@ export class ChatRepository {
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         title: input.title,
         incognito: input.incognito ?? false,
+        is_main: isMain,
         surface,
         created_at: now,
         updated_at: now,
@@ -445,6 +634,17 @@ export class ChatRepository {
     }
 
     await this.lockActionHistory(scopedDb, threadId);
+    // #3128: the turn lands once, and its in-flight record goes in the same transaction so a
+    // later restart can never also store it as interrupted. A turn another process already
+    // stored as interrupted keeps its question, and the real reply follows the note.
+    let landedQuestion: ChatMessage | undefined;
+    if (opts?.turnId) {
+      const landed = await this.findStoredTurn(scopedDb, threadId, opts.turnId);
+      await deleteLiveTurn(scopedDb, opts.turnId);
+      if (landed && landed.assistantMessage.tool_metadata.interruptedTurn !== true) return landed;
+      landedQuestion = landed?.userMessage;
+    }
+    const turnIdentity = opts?.turnId ? { turnId: opts.turnId } : {};
     let activity = [...(opts?.activityRecords ?? opts?.actionResults ?? [])];
     let actionResults: readonly unknown[] = [...(opts?.actionResults ?? [])];
     const actionIds = new Set(activity.map(actionRecordId).filter((id): id is string => !!id));
@@ -511,20 +711,23 @@ export class ChatRepository {
       }
     }
     const now = new Date();
-    const userMessage = await this.insertMessage(scopedDb, {
-      thread,
-      role: "user",
-      status: "stored",
-      body: userText,
-      modelMetadata: {},
-      toolMetadata: {
-        selectedTools: [],
-        ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
-        // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
-        ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
-      },
-      now
-    });
+    const userMessage =
+      landedQuestion ??
+      (await this.insertMessage(scopedDb, {
+        thread,
+        role: "user",
+        status: "stored",
+        body: userText,
+        modelMetadata: {},
+        toolMetadata: {
+          selectedTools: [],
+          ...turnIdentity,
+          ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
+          // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
+          ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
+        },
+        now
+      }));
     const assistantMessage = await this.insertMessage(scopedDb, {
       thread,
       role: "assistant",
@@ -533,6 +736,7 @@ export class ChatRepository {
       modelMetadata: assistantModelMetadata,
       toolMetadata: {
         selectedTools: [],
+        ...turnIdentity,
         ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
         ...(opts?.sourceFreshness ? { sourceFreshness: opts.sourceFreshness } : {}),
         ...(opts?.answerProvenance !== undefined
@@ -549,17 +753,79 @@ export class ChatRepository {
     return { userMessage, assistantMessage };
   }
 
-  async updateConversationSummary(
+  /**
+   * Publish a summary candidate with compare-and-swap on the covered frontier.
+   *
+   * Takes the actor/surface selection lock, then the thread row, matching every
+   * other writer. The candidate lands only when the thread is still the owner's,
+   * not private, at the expected revision and frontier, and the new frontier is a
+   * visible message of this thread that sorts after the current frontier in
+   * replay order. Activity time is never touched, so a publish cannot select the
+   * thread.
+   */
+  async publishConversationSummary(
     scopedDb: DataContextDb,
-    threadId: string,
-    summary: string
-  ): Promise<void> {
+    input: PublishConversationSummaryInput
+  ): Promise<PublishConversationSummaryResult> {
     assertDataContextDb(scopedDb);
+    const located = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .select("surface")
+      .where("id", "=", input.threadId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .executeTakeFirst();
+    if (!located) return "missing";
+
+    await this.lockThreadSelection(scopedDb, normalizeChatSurface(located.surface));
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .select(["incognito", "summary_revision", "summary_covered_through_message_id"])
+      .where("id", "=", input.threadId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!thread || thread.incognito) return "missing";
+    if (
+      thread.summary_revision !== input.expectedRevision ||
+      thread.summary_covered_through_message_id !== input.expectedCoveredThroughMessageId
+    ) {
+      return "stale";
+    }
+
+    const frontier = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .select("id")
+      .where(visibleChatMessage())
+      .where("id", "=", input.throughMessageId)
+      .where("thread_id", "=", input.threadId)
+      .where(
+        sql<boolean>`(
+          not exists (
+            select 1 from app.chat_messages prior
+            where prior.id = ${input.expectedCoveredThroughMessageId}
+              and prior.thread_id = ${input.threadId}
+          )
+          or (created_at, case when role = 'user' then 0 else 1 end, id) > (
+            select prior.created_at, case when prior.role = 'user' then 0 else 1 end, prior.id
+            from app.chat_messages prior
+            where prior.id = ${input.expectedCoveredThroughMessageId}
+              and prior.thread_id = ${input.threadId}
+          )
+        )`
+      )
+      .executeTakeFirst();
+    if (!frontier) return "stale";
+
     await scopedDb.db
       .updateTable("app.chat_threads")
-      .set({ conversation_summary: summary })
-      .where("id", "=", threadId)
+      .set({
+        conversation_summary: input.summary,
+        summary_covered_through_message_id: input.throughMessageId,
+        summary_revision: input.expectedRevision + 1
+      })
+      .where("id", "=", input.threadId)
       .execute();
+    return "published";
   }
 
   async updateThreadTitle(scopedDb: DataContextDb, threadId: string, title: string): Promise<void> {
@@ -608,11 +874,13 @@ export class ChatRepository {
     return this.updateThreadActivity(scopedDb, threadId, chatSurface);
   }
 
-  private async lockThreadSelection(scopedDb: DataContextDb, surface: ChatSurface): Promise<void> {
-    // New-thread selection, explicit resume and bound completion use the same transaction
-    // lock before touching thread rows. The timestamp is generated only after this lock.
+  async lockThreadSelection(scopedDb: DataContextDb, surface?: ChatSurface): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const chatSurface = normalizeChatSurface(surface);
+    // Turns and background delivery take this actor/surface lock before thread or
+    // reminder locks, so a turn holding its thread cannot deadlock with delivery.
     await sql`SELECT pg_advisory_xact_lock(hashtextextended(
-      'chat:thread-selection:' || app.current_actor_user_id()::text || ':' || ${surface}, 0
+      'chat:thread-selection:' || app.current_actor_user_id()::text || ':' || ${chatSurface}, 0
     ))`.execute(scopedDb.db);
   }
 

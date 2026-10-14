@@ -1,5 +1,6 @@
 import type { ChatTurn } from "@moss/ai";
 import type { BriefingDefinition, DataContextDb } from "@moss/db";
+import { assessBriefingEmailEvidence } from "./email-evidence.js";
 import {
   EVENING_FALLBACK_QUESTIONS,
   EVENING_SECTION_HEADERS,
@@ -69,7 +70,7 @@ const SYNTHESIS_INSTRUCTIONS_EVENING =
   "([completed today], [slipped], [carrying forward]) — respect those tags. " +
   '"What got done": celebrate completed work, briefly and specifically. "What slipped": name ' +
   'it plainly and without judgment. "Carrying forward": open items rolling to future days. ' +
-  '"Needs your attention": commitments and email signals that need a decision or a reply. ' +
+  '"Needs your attention": commitments and today\'s email signals that need a decision or a reply. ' +
   '"Tomorrow": ALWAYS include this section — preview tomorrow\'s calendar and the likely ' +
   'focus; if it is empty, say tomorrow looks clear. "News & sports": recap from the sports ' +
   "block; if there is nothing, call it a quiet day. Treat the chats and morning_plan blocks " +
@@ -327,8 +328,7 @@ export async function composeEveningBriefing(
           toolName: "email.listVisibleMessages",
           arrayKey: "messages",
           metaKeys: ["accounts", "gaps"],
-          // Authoritative user-tz "arrived today" bound.
-          localDayField: "receivedAt",
+          // Retain older invoices and later receipts for evidence reconciliation.
           // Kept mail only (#729 §7, #2770): noise/fyi/unknown never become prompt lines,
           // and the allow-list is sender · subject · actionability · summary-or-snippet.
           format: (m) =>
@@ -359,10 +359,19 @@ export async function composeEveningBriefing(
   ].some((account) => account.source === "cache");
   const emailSettings = await readEmailSignalSettings(scopedDb, deps);
   const context = contextTokens(tasksReconciliation.lines, commitments.lines);
+  const emailAssessment = assessBriefingEmailEvidence(rawEmail.rawItems ?? [], now, locale);
+  const todayEmailItems = (rawEmail.rawItems ?? []).filter((item) =>
+    withinLocalDay(item.receivedAt, now, timeZone)
+  );
   const proseEmailItems = includeEmail
     ? await settleJudgedEmail(
         [scopedDb, definition, input, deps],
-        filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs),
+        filterEmailItems(
+          emailAssessment.eligibleItems.filter((item) =>
+            withinLocalDay(item.receivedAt, now, timeZone)
+          ),
+          actionRows.sourceRefs
+        ),
         now,
         timeZone
       )
@@ -370,10 +379,13 @@ export async function composeEveningBriefing(
   const emailSignals = includeEmail
     ? deriveEmailSignals({
         // Same filter as the prompt lines: noise/fyi/unknown never seed signals.
-        items: proseEmailItems.filter(isBriefingEmailItem),
+        items: proseEmailItems.filter(
+          (item) => !item.briefingCurrentStatusUnknown && isBriefingEmailItem(item)
+        ),
         now,
         context,
-        settings: emailSettings
+        settings: emailSettings,
+        locale
       })
     : [];
   const emailSelected = definition.selected_tool_names.includes("email.listVisibleMessages");
@@ -384,11 +396,12 @@ export async function composeEveningBriefing(
   const emailLines = buildMorningEmailLines({
     signals: emailSignals.slice(0, SECTION_ITEM_CAP),
     items: proseEmailItems,
-    suggestionLines: commitmentSuggestions
+    suggestionLines: commitmentSuggestions,
+    locale
   });
   if (includeEmail && emailSelected && emailLines.lines.length === 0) {
     // Mail arrived but none of it was kept is a different gap from no mail at all.
-    const fetched = (rawEmail.rawItems?.length ?? 0) > 0;
+    const fetched = todayEmailItems.length > 0;
     gaps.push({ source: "email_today", reason: fetched ? "filtered_out" : "empty" });
   } else if (
     emailLines.truncated &&
@@ -401,7 +414,7 @@ export async function composeEveningBriefing(
     label: "EMAIL ARRIVED TODAY",
     lines: emailLines.lines,
     count: emailLines.lines.length,
-    rawItems: rawEmail.rawItems
+    rawItems: todayEmailItems
   };
   const catchUp = includeEmail
     ? await buildEmailCatchUp(
@@ -547,7 +560,7 @@ export async function composeEveningBriefing(
 
   const baseMetadata: Record<string, unknown> = {
     sectionLines: sectionLineCounts,
-    emailMessageCount: rawEmail.rawItems?.length ?? 0,
+    emailMessageCount: todayEmailItems.length,
     taskCompletedCount: lenses.completedToday.length,
     taskSlippedCount: lenses.slipped.length,
     taskCarryCount: lenses.carryingForward.length,
@@ -556,6 +569,21 @@ export async function composeEveningBriefing(
     emailSignalCount: emailSignals.length,
     emailSignals,
     emailKept: emailLines.breakdown,
+    emailEvidence: {
+      ...emailAssessment.evidence,
+      items: emailAssessment.evidence.items.map((item) => {
+        const rank = emailSignals.findIndex(
+          (signal) =>
+            signal.connectorAccountId === item.connectorAccountId &&
+            signal.messageIds.includes(item.messageId)
+        );
+        return {
+          ...item,
+          rank: rank < 0 ? null : rank,
+          rankingReasons: rank < 0 ? [] : emailSignals[rank]!.relevanceReasons
+        };
+      })
+    },
     goalCount: goals.count,
     sportsCount: sports.count,
     chatTurnCount: chats.count,

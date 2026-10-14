@@ -1,8 +1,10 @@
 import type { DataContextDb } from "@moss/db";
+import { deferUntilQuietHoursEnd } from "@moss/module-sdk";
 import type { ProactiveMonitoringPreferenceV1, ProactiveSource } from "@moss/shared";
 
 import type { CardRepository } from "./card-repository.js";
 import { resolveSourcePreference } from "./preferences-repository.js";
+import type { ProactiveQuietPolicy } from "./types.js";
 
 export type AntiSpamVerdict =
   | { readonly allow: true; readonly deferredUntil: string | null }
@@ -18,7 +20,8 @@ export class AntiSpamPolicy {
     stableKey: string,
     pref: ProactiveMonitoringPreferenceV1,
     nowIso: string,
-    timeZone: string
+    timeZone: string,
+    quiet?: ProactiveQuietPolicy | null
   ): Promise<AntiSpamVerdict> {
     // Dismissed stable key: suppress for 30 days.
     const dismissed = await this.cardRepository.isDismissedStableKeySuppressed(
@@ -56,19 +59,23 @@ export class AntiSpamPolicy {
       return { allow: false, reason: "source_hourly_cap" };
     }
 
-    // Quiet hours deferral.
-    if (pref.quietHours.enabled) {
-      const deferredUntil = quietHoursDeferral(nowIso, timeZone, pref.quietHours);
-      if (deferredUntil) {
-        return { allow: true, deferredUntil };
-      }
-    }
+    return { allow: true, deferredUntil: this.quietDeferral(pref, nowIso, timeZone, quiet) };
+  }
 
-    return { allow: true, deferredUntil: null };
+  /** When quiet hours are on now, the instant they end. The saved schedule replaces the nested one. */
+  quietDeferral(
+    pref: ProactiveMonitoringPreferenceV1,
+    nowIso: string,
+    timeZone: string,
+    quiet?: ProactiveQuietPolicy | null
+  ): string | null {
+    const quietHours = quiet ?? { ...pref.quietHours, timeZone };
+    if (!quietHours.enabled) return null;
+    return quietHoursDeferral(nowIso, quietHours.timeZone, quietHours);
   }
 }
 
-function localMidnight(nowIso: string, timeZone: string): string {
+export function localMidnight(nowIso: string, timeZone: string): string {
   try {
     return wallTimeToInstant(
       localDateString(new Date(nowIso), timeZone),
@@ -88,36 +95,17 @@ function quietHoursDeferral(
   qh: { readonly startLocalTime: string; readonly endLocalTime: string }
 ): string | null {
   try {
-    const now = new Date(nowIso);
-    const localTimeStr = now.toLocaleTimeString("en-GB", {
-      timeZone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    });
-    if (!isInQuietHours(localTimeStr, qh.startLocalTime, qh.endLocalTime)) return null;
-    // Defer to quiet-hours end today (or tomorrow if end < start and we're before midnight).
-    const localDateStr = localDateString(now, timeZone);
-    const endLocal = wallTimeToInstant(localDateStr, qh.endLocalTime, timeZone);
-    // If end is before now (e.g. end=08:00 and now=23:00), defer to tomorrow's end.
-    if (endLocal <= now) {
-      const tomorrow = new Date(`${localDateStr}T00:00:00Z`);
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-      return wallTimeToInstant(tomorrowStr, qh.endLocalTime, timeZone).toISOString();
-    }
-    return endLocal.toISOString();
+    return (
+      deferUntilQuietHoursEnd(
+        new Date(nowIso),
+        qh.startLocalTime,
+        qh.endLocalTime,
+        timeZone
+      )?.toISOString() ?? null
+    );
   } catch {
     return null;
   }
-}
-
-function isInQuietHours(localTime: string, start: string, end: string): boolean {
-  if (start < end) {
-    return localTime >= start && localTime < end;
-  }
-  // Wraps midnight.
-  return localTime >= start || localTime < end;
 }
 
 function localDateString(date: Date, timeZone: string): string {

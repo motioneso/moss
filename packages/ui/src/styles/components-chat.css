@@ -3,6 +3,15 @@
   outline: none;
 }
 
+.chatd-conversations__overlay {
+  background: var(--surface);
+}
+
+.chatd-conversations__empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 /* Chat — visual declarations extracted from kit-chat.css, kit-chat-attach.css, kit-chat-skills.css, chat-model-pill.css. Layout stays in the section CSS; this file owns color/type/border/radius/shadow. */
 
 /* from apps/web/src/styles/kit-chat.css */

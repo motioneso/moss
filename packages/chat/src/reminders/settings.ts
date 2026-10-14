@@ -1,0 +1,177 @@
+import { repeatFor } from "./repository.js";
+import { reminderRepeatDescription } from "./repeating.js";
+import { readReminderRuns } from "./runs.js";
+import { sql } from "kysely";
+import { assertDataContextDb, type ChatReminderState, type DataContextDb } from "@moss/db";
+import type {
+  ScheduledTaskDto,
+  ScheduledTaskRunDto,
+  ScheduledTaskState,
+  LocaleDateFormat
+} from "@moss/shared";
+
+interface ScheduledReminderRow {
+  readonly destination_title?: string | null;
+  readonly repeat_kind?: "daily" | "weekly" | "interval" | null;
+  readonly repeat_seconds?: number | null;
+  readonly local_due?: string | null;
+  readonly time_zone?: string | null;
+  readonly id: string;
+  readonly reminder_text: string;
+  readonly state: ChatReminderState;
+  readonly thread_id: string;
+  readonly due_at: Date;
+  readonly deadline_at: Date | null;
+  readonly created_at: Date;
+  readonly delivered_at: Date | null;
+  readonly expired_at: Date | null;
+  readonly late: boolean | null;
+  readonly message_id: string | null;
+  readonly message_body: string | null;
+  readonly read_outcome?: "success" | "refused" | "failed" | null;
+}
+
+const STATES: Record<ChatReminderState, ScheduledTaskState> = {
+  queued: "active",
+  paused: "paused",
+  delivered: "completed",
+  expired: "expired",
+  failed: "failed",
+  cancelled: "cancelled"
+};
+
+export function scheduledReminder(
+  row: ScheduledReminderRow,
+  clockFormat: LocaleDateFormat = "24"
+): ScheduledTaskDto {
+  const runs: ScheduledTaskRunDto[] = [];
+  if (row.state === "delivered" && row.delivered_at) {
+    runs.push({
+      at: row.delivered_at.toISOString(),
+      outcome: "delivered",
+      summary: row.read_outcome
+        ? row.read_outcome === "success"
+          ? "Task status checked"
+          : "Task check failed"
+        : row.late
+          ? "Reminder delivered late"
+          : "Reminder delivered",
+      message:
+        row.message_id !== null && row.message_body !== null
+          ? {
+              id: row.message_id,
+              threadId: row.thread_id,
+              body: row.message_body,
+              ...(row.read_outcome === "success" ? { scheduledReadSource: "tasks" as const } : {})
+            }
+          : null
+    });
+  }
+  if (row.state === "expired" && row.expired_at) {
+    runs.push({
+      at: row.expired_at.toISOString(),
+      outcome: "expired",
+      summary: "Skipped because its deadline passed",
+      message: null
+    });
+  }
+  const repeat = repeatFor({
+    repeat_kind: row.repeat_kind ?? null,
+    repeat_seconds: row.repeat_seconds ?? null
+  });
+  return {
+    ...(row.destination_title
+      ? { destination: { threadId: row.thread_id, title: row.destination_title } }
+      : {}),
+    id: row.id,
+    title: row.reminder_text,
+    instruction: row.reminder_text,
+    group:
+      repeat?.kind === "daily"
+        ? "Daily"
+        : repeat?.kind === "weekly"
+          ? "Weekly"
+          : repeat
+            ? "More often"
+            : "Reminders",
+    schedule: repeat
+      ? reminderRepeatDescription(repeat, row.local_due ?? null, row.time_zone ?? null, clockFormat)
+      : null,
+    timeZone: row.time_zone ?? null,
+    state:
+      !repeat && row.read_outcome && row.read_outcome !== "success" ? "failed" : STATES[row.state],
+    ...(repeat &&
+    (row.state === "queued" || row.state === "paused") &&
+    row.read_outcome &&
+    row.read_outcome !== "success"
+      ? {
+          checkFailure:
+            row.read_outcome === "refused"
+              ? "The last task check could not access its source. Restore Tasks access or choose a new task. This check keeps its saved cadence; you can pause it."
+              : "The last task check failed. Check Tasks and your AI settings. This check keeps its saved cadence; you can pause it."
+        }
+      : {}),
+    dueAt: row.due_at.toISOString(),
+    deadlineAt: row.deadline_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString(),
+    runs
+  };
+}
+
+export async function listScheduledReminders(
+  scopedDb: DataContextDb,
+  clockFormat: LocaleDateFormat = "24"
+): Promise<ScheduledTaskDto[]> {
+  assertDataContextDb(scopedDb);
+  const rows = await scopedDb.db
+    .selectFrom("app.chat_reminders as reminder")
+    .leftJoin("app.chat_scheduled_reads as source_read", "source_read.reminder_id", "reminder.id")
+    .leftJoin("app.chat_messages as message", (join) =>
+      join
+        .onRef("message.id", "=", "reminder.reserved_message_id")
+        .onRef("message.thread_id", "=", "reminder.thread_id")
+        .onRef("message.owner_user_id", "=", "reminder.owner_user_id")
+        .on("message.role", "=", "assistant")
+        .on("reminder.state", "=", "delivered")
+    )
+    .select([
+      "source_read.outcome as read_outcome",
+      "reminder.id",
+      "reminder.repeat_kind",
+      "reminder.repeat_seconds",
+      "reminder.local_due",
+      "reminder.time_zone",
+      "reminder.reminder_text",
+      "reminder.state",
+      "reminder.thread_id",
+      "reminder.destination_title",
+      "reminder.due_at",
+      "reminder.deadline_at",
+      "reminder.created_at",
+      "reminder.delivered_at",
+      "reminder.expired_at",
+      "reminder.late",
+      "message.id as message_id",
+      "message.body as message_body"
+    ])
+    .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+    .orderBy("reminder.due_at", "asc")
+    .orderBy("reminder.id", "asc")
+    .execute();
+  const tasks: ScheduledTaskDto[] = [];
+  for (const row of rows) {
+    const task = scheduledReminder(row, clockFormat);
+    const runs = await readReminderRuns(scopedDb, row.id);
+    tasks.push(
+      runs.length
+        ? {
+            ...task,
+            runs: [...(row.repeat_kind === null ? task.runs : []), ...runs]
+              .sort((a, b) => b.at.localeCompare(a.at))
+              .slice(0, 20)
+          }
+        : task
+    );
+  }
+  return tasks;
+}

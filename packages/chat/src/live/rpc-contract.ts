@@ -649,6 +649,8 @@ export interface RpcAcpSpawnParams {
   readonly profile: string;
   /** Run the staged candidate tools instead of the live ones. Only the version check sets this. */
   readonly useCandidate?: boolean;
+  /** Trusted Moss persona, delivered to the adapter's working directory before session creation. */
+  readonly personaText?: string;
 }
 /** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
 export interface RpcAcpSpawnResult {

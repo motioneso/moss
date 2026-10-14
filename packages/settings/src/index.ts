@@ -46,6 +46,7 @@ export {
   deriveModuleRegistryRows
 } from "./module-registry-rows.js";
 export {
+  PROACTIVE_SETTINGS_CONFLICT_MESSAGE,
   registerProactiveMonitoringSettingsRoutes,
   type ReconcileProactiveScheduleFn
 } from "./proactive-monitoring-routes.js";
@@ -78,3 +79,11 @@ export {
   setNotificationPreferenceEnabled
 } from "./notification-preference-application.js";
 export { appCallActionExecute } from "./app-action-tools.js";
+export {
+  type AlertsQuietPolicy,
+  type QuietHoursAuthority,
+  alertsQuietPolicy,
+  notificationsQuietHoursValue,
+  readQuietHoursAuthority,
+  resolveAlertsQuietPolicy
+} from "./quiet-hours-authority.js";

@@ -157,6 +157,7 @@ describe("Today weather fetch", () => {
               ChatControlsProvider,
               {
                 value: {
+                  openChatThread: () => undefined,
                   openChat: () => undefined,
                   openChatWith: () => undefined,
                   openAssistantWithDraft: () => undefined

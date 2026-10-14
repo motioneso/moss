@@ -1,4 +1,4 @@
-import { resolveEffectiveLocale } from "@moss/shared";
+import { type LocaleDateFormat, resolveEffectiveLocale } from "@moss/shared";
 
 /**
  * The timezone the actor effectively lives in: the stored one when present and valid, otherwise
@@ -7,4 +7,9 @@ import { resolveEffectiveLocale } from "@moss/shared";
  */
 export function resolveEffectiveTimezone(raw: unknown): string {
   return resolveEffectiveLocale(raw).timezone;
+}
+
+/** The actor's 12- or 24-hour clock, falling back to the same default `GET /api/me/locale` shows. */
+export function resolveClockFormat(raw: unknown): LocaleDateFormat {
+  return resolveEffectiveLocale(raw).dateFormat;
 }

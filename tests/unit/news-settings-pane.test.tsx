@@ -705,6 +705,12 @@ describe("NewsSettings adversarial content renders as inert text (#975 council r
     expect(hrefs.length).toBeGreaterThan(0);
     expect([...new Set(hrefs)]).toEqual(["/settings?section=aiproviders"]);
     expect(hrefs.some((href) => /^(javascript|data):/i.test(href))).toBe(false);
+    expect(html).toContain('data-jarvis-capture-text=""');
+    expect(html).toContain('data-jarvis-error-code="news.add_source.no_json_model"');
+    expect(html).toContain('data-jarvis-error-class="prerequisite"');
+    expect(html).toContain(
+      'data-jarvis-error-remediation-ref="news.add_source.configure_json_model"'
+    );
   });
 });
 

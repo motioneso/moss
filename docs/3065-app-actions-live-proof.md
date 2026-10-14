@@ -48,8 +48,11 @@ configuration. The real wrapper also sets `MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF=1
 cannot configure a login, the spec throws before browser setup instead of returning a green skip.
 Ordinary non-opt-in discovery still visibly skips. Neither a skip nor a preflight refusal is live
 proof. Missing or unusable economy models fail. The spec also refuses any target except the harness's loopback
-`127.0.0.1`, reserved ports `20000–20099`, and generated `uat-<pid>_<suffix>` Compose project.
-Never set base URL/project variables manually to aim it at a live instance. **Never use port 1533.**
+`127.0.0.1` over plain `http`, with no credentials, query, fragment or path, and a generated
+`uat-<pid>_<suffix>` Compose project. The port must be one the harness bound: exactly the
+`JARVIS_UAT_CLAIMED_WEB_PORT` claim when set (which must come from `devports claim`, inside the
+shared `5180–5299` range), otherwise a reserved port `20000–20099`. Never set base URL/project
+variables manually to aim it at a live instance. **Never use port 1533 or 5173.**
 
 Commands from the checkout at `~/Jarv1s`, after reading this section. The coordinator can run the
 credential-free scripted command; only Ben runs the real-provider opt-in:

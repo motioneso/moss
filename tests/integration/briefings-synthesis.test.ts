@@ -635,11 +635,13 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
               data: {
                 messages: [
                   {
+                    id: "canary-email",
+                    connectorAccountId: "canary-account",
+                    receivedAt: todayIso,
                     sender: "attacker@example.test",
                     subject: overrides?.emailSubject ?? `${CANARY_CHANNELS.email} subject`,
                     snippet: "snippet",
-                    // Live-first (#729): the email section only renders actionable triage
-                    // categories, so the canary must be actionable to reach the prompt at all.
+                    // Valid current evidence and actionable triage let this canary reach the boundary.
                     actionability: "needs_reply"
                   }
                 ]

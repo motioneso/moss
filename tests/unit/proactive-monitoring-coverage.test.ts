@@ -6,7 +6,9 @@ import {
   isAllowedSignalType,
   makeProactiveCardVerifier,
   mapSignalType,
+  isProactiveSourceEnabled,
   resolveSourcePreference,
+  resolveAutomaticEmailAlertsEnabled,
   serializeCard,
   validateProactiveMonitoringPreference,
   type CardRepository
@@ -216,6 +218,34 @@ describe("per-source preference lookup", () => {
       enabled: false,
       dailyCardCap: 3
     });
+  });
+});
+
+describe("automatic email alert choice", () => {
+  it("defaults an absent choice on, preserves legacy off decisions, and lets explicit email-on stand alone", () => {
+    const legacyOff = enabledPref("email");
+    const explicitEmailOn = {
+      ...defaultProactiveMonitoringPreference(),
+      automaticEmailAlerts: true
+    };
+
+    expect(resolveAutomaticEmailAlertsEnabled(undefined)).toBe(true);
+    expect(resolveAutomaticEmailAlertsEnabled(null)).toBe(false);
+    const legacySaved = {
+      raw: { ...legacyOff, enabled: false },
+      preference: { ...legacyOff, enabled: false },
+      hasLegacyEmailChoice: true
+    };
+    const explicitSaved = {
+      raw: { ...explicitEmailOn },
+      preference: explicitEmailOn,
+      hasLegacyEmailChoice: false
+    };
+
+    expect(resolveAutomaticEmailAlertsEnabled(legacySaved)).toBe(false);
+    expect(resolveAutomaticEmailAlertsEnabled(explicitSaved)).toBe(true);
+    expect(isProactiveSourceEnabled(explicitEmailOn, "email", explicitSaved)).toBe(true);
+    expect(isProactiveSourceEnabled(explicitEmailOn, "calendar", explicitSaved)).toBe(false);
   });
 });
 
@@ -487,6 +517,32 @@ describe("spam filter", () => {
       expect(verdict).toEqual({ allow: true, deferredUntil: want });
     });
   });
+
+  it.each([
+    ["America/Chicago", "2026-10-09T03:30:00Z", "22:00", "07:00", "2026-10-09T12:00:00.000Z"],
+    ["Pacific/Kiritimati", "2026-10-08T09:30:00Z", "22:00", "07:00", "2026-10-08T17:00:00.000Z"],
+    ["America/Los_Angeles", "2026-03-08T09:45:00Z", "22:00", "02:30", "2026-03-08T10:00:00.000Z"],
+    ["America/Los_Angeles", "2026-11-01T08:10:00Z", "22:00", "01:30", "2026-11-01T09:30:00.000Z"],
+    ["America/Los_Angeles", "2026-11-01T09:10:00Z", "22:00", "01:30", "2026-11-01T09:30:00.000Z"],
+    ["America/Los_Angeles", "2026-11-01T08:45:00Z", "22:00", "01:30", null],
+    ["America/Los_Angeles", "2026-11-01T09:30:00Z", "22:00", "01:30", null]
+  ])(
+    "applies quiet-hours membership and release in %s",
+    async (timeZone, nowIso, startLocalTime, endLocalTime, expected) => {
+      const { policy } = spamHarness();
+      const verdict = await policy.check(
+        fakeScopedDb(),
+        OWNER_A,
+        "calendar",
+        "quiet-hours-boundary",
+        { ...pref(), quietHours: { enabled: true, startLocalTime, endLocalTime } },
+        nowIso,
+        timeZone
+      );
+
+      expect(verdict).toEqual({ allow: true, deferredUntil: expected });
+    }
+  );
 
   it("lets a midday card straight through", async () => {
     const { policy } = spamHarness();

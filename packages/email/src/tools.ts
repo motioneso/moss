@@ -38,6 +38,7 @@ export const emailToolMessageOutputSchema = {
     "dueDate",
     "suggestedTasks",
     "awaitingJudgement",
+    "answered",
     "bulk",
     "source",
     "degradedReason"
@@ -85,6 +86,10 @@ export const emailToolMessageOutputSchema = {
       type: "boolean",
       description: "The sorter handed this message to the Commitments closer look"
     },
+    answered: {
+      type: "boolean",
+      description: "The newest cached thread message is your reply; original triage is retained"
+    },
     bulk: { type: "boolean", description: "Sent to a list rather than to this person" },
     source: { type: "string", enum: ["live", "cache"] },
     degradedReason: nullableStringSchema
@@ -120,6 +125,7 @@ interface EmailContextItemShape {
     readonly dueDate: string | null;
   }>;
   readonly awaitingJudgement?: boolean;
+  readonly answered?: boolean;
   readonly bulk?: boolean;
   readonly source: "live" | "cache";
   readonly degradedReason: string | null;
@@ -172,6 +178,7 @@ function serializeEmailContextItem(item: EmailContextItemShape) {
     })),
     awaitingJudgement: item.awaitingJudgement === true,
     bulk: item.bulk === true,
+    answered: item.answered === true,
     source: item.source,
     degradedReason: item.degradedReason
   };

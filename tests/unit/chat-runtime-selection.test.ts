@@ -208,6 +208,27 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
     ).toThrow(CliChatUnavailableError);
   });
 
+  it("routes reminder structured calls through the shared RPC connection without an ACP conversation", async () => {
+    const { factory, connection } = selectEngineFactory({
+      env: {
+        JARVIS_CLI_RUNNER_SOCKET: SOCKET,
+        JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
+      } as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+    try {
+      const engine = await factory("openai-compatible", "structured-reminder-edit", {
+        executionMode: "non_interactive",
+        needsStructuredOutput: true,
+        userId: "user-a"
+      });
+      expect(engine).toBeInstanceOf(ChatEngineRpcClient);
+      expect(engine).not.toBeInstanceOf(AcpChatEngine);
+    } finally {
+      connection?.close();
+    }
+  });
+
   it("refuses an ACP chat launch missing its conversation or user id, instead of silently returning a bare RPC client", async () => {
     const { factory, connection } = selectEngineFactory({
       env: {

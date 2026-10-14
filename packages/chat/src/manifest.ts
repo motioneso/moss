@@ -1,13 +1,17 @@
+import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   getChatPrivacyStateResponseSchema,
+  listScheduledTasksResponseSchema,
+  listQuietHoursAllowancesResponseSchema,
   listChatThreadMessagesResponseSchema,
   listChatThreadsResponseSchema,
   listMemoryCorrectionsResponseSchema
 } from "@moss/shared";
 
+import { reminderFeatures } from "./reminders/features.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -42,6 +46,7 @@ export const chatModuleManifest = {
     defaultEnabled: true,
     required: true
   },
+  notifications: { supported: true },
   database: {
     migrations: [
       "sql/0014_chat_module.sql",
@@ -66,7 +71,23 @@ export const chatModuleManifest = {
       "sql/0277_chat_surface_immutable.sql",
       "sql/0291_chat_conversation_provenance.sql",
       "sql/0293_chat_automatic_action_reservations.sql",
-      "sql/0297_chat_action_history_permissions.sql"
+      "sql/0297_chat_action_history_permissions.sql",
+      "sql/0299_main_chat.sql",
+      "sql/0305_chat_summary_frontier.sql",
+      "sql/0306_chat_relative_reminders.sql",
+      "sql/0307_chat_summary_worker_publish.sql",
+      "sql/0308_chat_reminder_cancel.sql",
+      "sql/0309_chat_reminder_context_acknowledged.sql",
+      "sql/0310_chat_live_turns.sql",
+      "sql/0311_chat_local_clock_reminders.sql",
+      "sql/0313_chat_reminder_controls.sql",
+      "sql/0314_chat_quiet_hours_allowances.sql",
+      "sql/0317_chat_reminder_edits.sql",
+      "sql/0318_chat_scheduled_reads.sql",
+      "sql/0319_chat_repeating_reminders.sql",
+      "sql/0320_chat_reminder_destinations.sql",
+      "sql/0321_chat_repeating_reads.sql",
+      "sql/0322_chat_responsibility_agreements.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -78,7 +99,12 @@ export const chatModuleManifest = {
       "app.chat_classifier_release_eligibility",
       "app.chat_classifier_shadow_reviews",
       "app.chat_conversation_provenance",
-      "app.chat_automatic_action_reservations"
+      "app.chat_automatic_action_reservations",
+      "app.chat_live_turns",
+      "app.chat_scheduled_reads",
+      "app.chat_reminder_quiet_allowances",
+      "app.chat_reminder_quiet_proposals",
+      "app.chat_responsibility_proposals"
     ]
   },
   permissions: [
@@ -115,10 +141,17 @@ export const chatModuleManifest = {
     }
   ],
   features: [
+    REMINDER_CONTROL_FEATURE,
+    {
+      id: "chat.current_view_grounding",
+      description:
+        "Moss uses the current view and app map to explain screens and errors, linking prerequisite fixes to their declared paths. Screenshot requests receive a refusal and guidance to paste the exact text instead.",
+      featureFlagId: "chat.module"
+    },
     {
       id: "chat.stream_reconnect",
       description:
-        "Closing or reloading chat while it starts releases the disconnected stream, so reopening chat keeps receiving replies.",
+        "Closing or reloading chat releases its stream; reopening keeps receiving replies. New turns in reopened chats stream into one live bubble, and completion preserves its identity beside delivered reminders.",
       featureFlagId: "chat.module"
     },
     {
@@ -128,6 +161,87 @@ export const chatModuleManifest = {
         "Times without a reference keep the instruction to convert them. Original timestamps stay unchanged.",
       featureFlagId: "chat.module"
     },
+    {
+      id: "chat.main_conversation",
+      description:
+        "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
+        "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.resume_keeps_decisions",
+      description:
+        "Returning to the same chat after Moss restarts keeps earlier decisions. Older turns are condensed into a summary " +
+        "in the background, and the summary plus every newer turn is restored. Private chats are never condensed.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "conversation_too_long_to_resume",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full, so Moss is condensing it. Your history is kept. Try again shortly or start a new chat."
+        },
+        {
+          code: "conversation_could_not_condense",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full and Moss could not start condensing it. Your history is kept. Try again later or start a new chat."
+        },
+        {
+          code: "conversation_needs_summary_model",
+          class: "prerequisite",
+          remediationRef: "chat.add_summary_model",
+          description:
+            "The conversation is too long to restore in full and no AI model that can summarize is set up. Add one in Settings or start a new chat."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.add_summary_model",
+          description:
+            "Set up a model in Settings, AI providers, or ask an admin, then reopen the chat. Starting a new chat also works.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
+      id: "chat.automatic_session_handoff",
+      description:
+        "Moss counts what a chat's model session holds. Before a turn passes the budget, Moss starts a fresh session " +
+        "for the same chat and model from its summary and newer turns, once a summary is ready. Not in private chats.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_changed_during_handoff",
+          class: "transient",
+          description:
+            "You switched chats while Moss was starting the fresh session, so the message was not sent. Moss says your chat changed while it was starting. Send it again."
+        },
+        {
+          code: "chat_model_changed_during_handoff",
+          class: "transient",
+          description:
+            "The chat's AI provider or model changed while Moss was starting the fresh session, so the message was not sent. Send it again."
+        }
+      ]
+    },
+    {
+      id: "chat.interrupted_reply_recovery",
+      description:
+        "If Moss restarts or its model stops mid-reply, reopening the chat keeps finished messages once and " +
+        "shows the unfinished question with an interrupted note. Moss never redoes it. " +
+        "Not in private chats or for messages with only attachments.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_reply_interrupted",
+          class: "transient",
+          description:
+            "Moss was interrupted before finishing a reply. Anything it started may not have completed, so check first, then ask again."
+        }
+      ]
+    },
+    ...reminderFeatures,
     {
       id: "chat.pending_action_disclosure",
       description:
@@ -365,11 +479,26 @@ export const chatModuleManifest = {
     {
       id: "chat.thread_history",
       description:
-        "Keep previous conversations so you can go back to them: pick an older thread from the " +
-        "drawer history, start a new one anywhere, and see threads ordered by recent activity."
+        "Reopen your own Main chat and older side chats, or start a side chat, from Conversations, ordered by recent activity. " +
+        "A chat another person shared with you is listed as a side chat but does not open, and it never replaces your Main."
     }
   ],
   routes: [
+    ...REMINDER_CONTROL_ROUTES,
+    {
+      method: "GET",
+      path: "/api/chat/quiet-hours-allowances",
+      chat: { access: "read" },
+      responseSchema: listQuietHoursAllowancesResponseSchema,
+      permissionId: "chat.view"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/scheduled-tasks",
+      chat: { access: "read" },
+      responseSchema: listScheduledTasksResponseSchema,
+      permissionId: "chat.view"
+    },
     {
       method: "GET",
       path: "/api/chat/threads",

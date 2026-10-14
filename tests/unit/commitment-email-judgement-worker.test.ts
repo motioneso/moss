@@ -5,6 +5,15 @@ import {
 } from "../../packages/commitments/src/email-judgement-worker.js";
 import type { EmailThreadMessage } from "@moss/module-sdk";
 import type { UpsertEmailCandidateInput } from "../../packages/commitments/src/types.js";
+import { applyGate } from "../../packages/connectors/src/email-gate.js";
+import { composeBriefing } from "../../packages/briefings/src/compose.js";
+import {
+  definition,
+  fakeScopedDb,
+  FIXED_NOW,
+  makeFakeDeps,
+  runInput
+} from "./briefings-compose.harness.js";
 
 const msg = (o: Partial<EmailThreadMessage> = {}): EmailThreadMessage => ({
   externalId: "m1",
@@ -37,7 +46,10 @@ function deps(over: Record<string, unknown> = {}): Deps {
       recordThreadJudgement: vi.fn(async () => {})
     },
     threads: {
-      listThreadMessages: vi.fn(async () => [msg()]),
+      listThreadMessages: vi.fn(async () => [
+        msg({ externalId: "owner1", fromIsUser: true }),
+        msg()
+      ]),
       listThreadsWithNewerMessages: vi.fn(async () => [])
     },
     context: {
@@ -75,6 +87,186 @@ function deps(over: Record<string, unknown> = {}): Deps {
 const payload = { actorUserId: "u1", threadRef: "t1", idempotencyKey: "k" };
 
 describe("judgeEmailThread", () => {
+  it("does not promote inbound-only notices even when the model would call them owed", async () => {
+    const d = deps({
+      context: {},
+      threads: {
+        listThreadMessages: vi.fn(async () => [
+          msg({
+            subject: "Pharmacy pickup",
+            bodyExcerpt: "Your prescription is ready. Please pick it up by Friday."
+          })
+        ]),
+        listThreadsWithNewerMessages: vi.fn()
+      }
+    });
+    expect(await judgeEmailThread({}, payload, d)).toBe("no_item");
+    expect(d.generate).not.toHaveBeenCalled();
+    expect(d.repository.upsertEmailCandidate).not.toHaveBeenCalled();
+    expect(d.repository.recordThreadJudgement).toHaveBeenCalledWith(
+      {},
+      "u1",
+      "t1",
+      "m1",
+      "no_item"
+    );
+  });
+  it("does not treat a contact, notes or unrelated tasks as owner participation", async () => {
+    const d = deps({
+      context: {
+        ...deps().context,
+        tasks: {
+          listOpen: vi.fn(async () => [{ id: "task1", title: "Send a report", dueLocalDate: null }])
+        }
+      },
+      threads: {
+        listThreadMessages: vi.fn(async () => [msg(), msg({ externalId: "m2" })]),
+        listThreadsWithNewerMessages: vi.fn()
+      }
+    });
+    expect(await judgeEmailThread({}, payload, d)).toBe("no_item");
+    expect(d.generate).not.toHaveBeenCalled();
+    expect(d.repository.upsertEmailCandidate).not.toHaveBeenCalled();
+  });
+  it("leaves unanswered requests on the email path instead of inventing a commitment", async () => {
+    const request = msg({
+      subject: "Report request",
+      bodyExcerpt: "Could you send the report by Friday?"
+    });
+    const d = deps({
+      threads: {
+        listThreadMessages: vi.fn(async () => [request]),
+        listThreadsWithNewerMessages: vi.fn()
+      }
+    });
+    expect(await judgeEmailThread({}, payload, d)).toBe("no_item");
+    expect(d.repository.upsertEmailCandidate).not.toHaveBeenCalled();
+  });
+  it.each(["no_item", "item"] as const)(
+    "routes real needs-reply triage after a %s judgement without duplication",
+    async (outcome) => {
+      const request = msg({
+        externalId: "question",
+        subject: "Colleague report question",
+        bodyExcerpt: "Could you send the report by Friday? Please reply today."
+      });
+      const triage = applyGate(
+        {
+          gate: "maybe_owed",
+          summary: "Could you send the report by Friday?",
+          signals: { actionability: { category: "needs_reply" }, confidence: 0.9 }
+        },
+        false,
+        { subject: request.subject, body: request.bodyExcerpt }
+      );
+      let judgedAt: string | undefined;
+      const d = deps({
+        threads: {
+          listThreadMessages: vi.fn(async () =>
+            outcome === "item"
+              ? [msg({ fromIsUser: true, externalId: "owner" }), request]
+              : [request]
+          ),
+          listThreadsWithNewerMessages: vi.fn()
+        },
+        repository: {
+          ...deps().repository,
+          recordThreadJudgement: vi.fn(async () => {
+            judgedAt = FIXED_NOW.toISOString();
+          })
+        }
+      });
+      expect(await judgeEmailThread(fakeScopedDb, payload, d)).toBe(outcome);
+      expect(d.repository.upsertEmailCandidate).toHaveBeenCalledTimes(outcome === "item" ? 1 : 0);
+      const prompts: string[] = [];
+      const base = makeFakeDeps({
+        generateChat: async (input) => {
+          prompts.push(input.messages.map((message) => message.content).join("\n"));
+          return { text: "Briefing" };
+        }
+      });
+      await composeBriefing(
+        fakeScopedDb,
+        definition({ selected_tool_names: ["email.listVisibleMessages"] }),
+        runInput,
+        {
+          ...base,
+          moduleManifests: [
+            ...base.moduleManifests.map((manifest) => ({
+              ...manifest,
+              assistantTools: manifest.assistantTools?.map((tool) =>
+                tool.name === "email.listVisibleMessages"
+                  ? {
+                      ...tool,
+                      execute: async () => ({
+                        data: {
+                          messages: [
+                            {
+                              id: "question",
+                              connectorAccountId: "account",
+                              threadId: "t1",
+                              subject: request.subject,
+                              snippet: request.bodyExcerpt,
+                              summary: triage.summary,
+                              sender: request.fromAddress,
+                              receivedAt: "2026-06-13T10:00:00.000Z",
+                              awaitingJudgement: triage.signals.pendingJudgement === true,
+                              actionability: triage.signals.actionability?.category ?? "unknown",
+                              importance: "normal",
+                              confidence: 0.9
+                            }
+                          ],
+                          accounts: [],
+                          gaps: []
+                        }
+                      })
+                    }
+                  : tool
+              )
+            })),
+            {
+              id: "commitments",
+              name: "Commitments",
+              version: "0.0.0",
+              publisher: "test",
+              lifecycle: "optional",
+              compatibility: { jarv1s: ">=0.0.0" },
+              assistantTools: [
+                {
+                  name: "commitments.threadJudgements",
+                  description: "Read judgement records",
+                  permissionId: "commitments.view",
+                  risk: "read",
+                  inputSchema: { type: "object", properties: {} },
+                  execute: async () => ({
+                    data: { threads: [{ threadRef: "t1", judgedAt, outcome }] }
+                  })
+                },
+                {
+                  name: "commitments.list",
+                  description: "Read commitment suggestions",
+                  permissionId: "commitments.view",
+                  risk: "read",
+                  inputSchema: { type: "object", properties: {} },
+                  execute: async () => ({
+                    data: {
+                      items: outcome === "item" ? [{ title: "Send the colleague report" }] : []
+                    }
+                  })
+                }
+              ]
+            }
+          ]
+        }
+      );
+      const prompt = prompts.join("\n");
+      if (outcome === "no_item") expect(prompt).toContain(request.subject);
+      else {
+        expect(prompt).not.toContain(request.subject);
+        expect(prompt.match(/Send the colleague report/g)).toHaveLength(1);
+      }
+    }
+  );
   it("writes one candidate with person link, actions and why", async () => {
     const d = deps();
     expect(await judgeEmailThread({}, payload, d)).toBe("item");
@@ -109,7 +301,7 @@ describe("judgeEmailThread", () => {
     expect(await judgeEmailThread({}, payload, d)).toBe("skipped");
     expect(d.generate).not.toHaveBeenCalled();
   });
-  it("skips when the newest message is from the user", async () => {
+  it("records no item when the newest message is the owner reply", async () => {
     const d = deps({
       threads: {
         listThreadMessages: vi.fn(async () => [
@@ -119,7 +311,14 @@ describe("judgeEmailThread", () => {
         listThreadsWithNewerMessages: vi.fn()
       }
     });
-    expect(await judgeEmailThread({}, payload, d)).toBe("skipped");
+    expect(await judgeEmailThread({}, payload, d)).toBe("no_item");
+    expect(d.repository.recordThreadJudgement).toHaveBeenCalledWith(
+      {},
+      "u1",
+      "t1",
+      "m2",
+      "no_item"
+    );
     expect(d.generate).not.toHaveBeenCalled();
   });
   it("runs without a failing provider and tells the prompt", async () => {
@@ -134,6 +333,7 @@ describe("judgeEmailThread", () => {
       },
       threads: {
         listThreadMessages: vi.fn(async () => [
+          msg({ externalId: "owner1", fromIsUser: true }),
           msg({ bodyExcerpt: "Can we schedule a call to go over it?" })
         ]),
         listThreadsWithNewerMessages: vi.fn()

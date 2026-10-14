@@ -54,20 +54,25 @@ const artifact = {
 } as const;
 
 describe("AppMapReadService", () => {
-  it("filters inactive, admin-only, and live flagged-OFF entries before slicing", async () => {
-    const resolveFeatureFlagState = vi.fn((featureFlagId: string) => featureFlagId !== "news.labs");
-    const service = createAppMapReadService({
-      artifact,
-      resolveActiveModules: vi.fn().mockResolvedValue([{ id: "news" }, { id: "settings" }]),
-      resolveFeatureFlagState,
-      getUser: vi.fn().mockResolvedValue({ is_instance_admin: false }),
-      logGap: vi.fn()
-    });
-    const result = await service.query({} as never, "user-1", { query: "screen", limit: 8 });
-    expect(result.items.map((item) => item.id)).toEqual(["news"]);
-    expect(result.items.map((item) => item.id)).not.toContain("news-labs");
-    expect(resolveFeatureFlagState).toHaveBeenCalledWith("news.labs");
-  });
+  it.each(["screen", "screen scope"])(
+    "filters inactive, admin-only, and live flagged-OFF entries before slicing for %s",
+    async (query) => {
+      const resolveFeatureFlagState = vi.fn(
+        (featureFlagId: string) => featureFlagId !== "news.labs"
+      );
+      const service = createAppMapReadService({
+        artifact,
+        resolveActiveModules: vi.fn().mockResolvedValue([{ id: "news" }, { id: "settings" }]),
+        resolveFeatureFlagState,
+        getUser: vi.fn().mockResolvedValue({ is_instance_admin: false }),
+        logGap: vi.fn()
+      });
+      const result = await service.query({} as never, "user-1", { query, limit: 8 });
+      expect(result.items.map((item) => item.id)).toEqual(["news"]);
+      expect(result.items.map((item) => item.id)).not.toContain("news-labs");
+      expect(resolveFeatureFlagState).toHaveBeenCalledWith("news.labs");
+    }
+  );
 
   it("returns at most eight schema-sanitized items", async () => {
     const service = createAppMapReadService({

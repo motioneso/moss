@@ -26,6 +26,11 @@ export interface TranscriptRecord {
   /** Creation order shared by the engine and manager for one live session. */
   readonly sequence?: number;
   readonly messageId?: string;
+  /** #3195: the server turn behind a reply. Its stored version replaces only that turn's reply. */
+  readonly turnId?: string;
+  /** #3195: a message committed outside any turn, such as a delivered reminder. */
+  readonly background?: true;
+  readonly backgroundThreadId?: string;
   readonly actionRequestId?: string;
   readonly toolName?: string;
   /**
@@ -73,6 +78,8 @@ export interface TranscriptRecord {
    * reads the same stamp from the assistant message's stored model metadata.
    */
   readonly origin?: ChatTurnOriginV1;
+  /** Server-authored successful scheduled report; source text is rendered without markdown. */
+  readonly scheduledReadSource?: "tasks";
   /** Duration of an approval hold in milliseconds, when recorded. */
   readonly durationMs?: number;
 }

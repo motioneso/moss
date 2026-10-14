@@ -1,3 +1,7 @@
+import {
+  reminderEditSchema,
+  validateReminderEdit
+} from "../../packages/chat/src/reminders/edit-interpretation.js";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DataContextDb } from "@moss/db";
@@ -172,6 +176,39 @@ describe("generateStructured", () => {
   // a transient miss that the repair loop can recover from, it is the CLI's normal output shape.
   // Live proof: asking Moss for a module failed three identical attempts, each a schema-valid plan
   // inside a ```json fence. Accept the fence here, where CLI text is already parsed.
+  it("accepts the reminder edit payload in the real Claude fenced JSON shape", async () => {
+    const object = {
+      repeat: null,
+      destination: null,
+      target: "stretch",
+      unsupported: false,
+      text: "bring the blue folder",
+      delaySeconds: 300,
+      localDue: null,
+      deadline: "keep",
+      localDeadline: null
+    };
+    const generate = vi.fn().mockResolvedValue({
+      rawText: "```json\n" + JSON.stringify(object, null, 2) + "\n```",
+      usage: { inputTokens: 0, outputTokens: 0 }
+    });
+    const result = await generateStructured(
+      scopedDb,
+      { ...makeInput(), schema: reminderEditSchema },
+      makeDeps({
+        repository: {
+          selectProviderWithCredential: vi.fn(
+            async () =>
+              ({ id: "provider-1", auth_method: "cli", encrypted_credential: {} }) as never
+          )
+        },
+        createCliStructuredAdapter: () => ({ generateStructured: generate })
+      })
+    );
+    expect(result).toMatchObject({ ok: true, object });
+    if (result.ok) expect(validateReminderEdit(result.object)).toEqual(object);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
   it("accepts a schema-valid CLI reply wrapped in a markdown code fence", async () => {
     const generateStructured = vi.fn().mockResolvedValue({
       rawText: '```json\n{"a":"fenced"}\n```',

@@ -6,14 +6,20 @@ import {
   type PriorityPreferencesRepository,
   type PrioritySource
 } from "@moss/priority";
-import { resolveEffectiveLocale, type ProactiveSource } from "@moss/shared";
+import {
+  defaultProactiveMonitoringPreference,
+  resolveEffectiveLocale,
+  type ProactiveSource
+} from "@moss/shared";
 
 import type { AntiSpamPolicy } from "./anti-spam.js";
 import type { CardRepository } from "./card-repository.js";
+import { EmailFindingPolicy } from "./email-finding-policy.js";
 import type { MonitorStateRepository } from "./monitor-state-repository.js";
 import type { ProactiveMonitoringPreferencesRepository } from "./preferences-repository.js";
+import { isProactiveSourceEnabled } from "./preferences-repository.js";
 import { isAllowedSignalType, mapSignalType } from "./signal-mapper.js";
-import type { ResolvedMonitoringConfig } from "./types.js";
+import type { ProactiveCardRow, ProactiveQuietPolicy, ResolvedMonitoringConfig } from "./types.js";
 
 const SCAN_COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_SIGNALS = 20;
@@ -24,8 +30,14 @@ interface ScanDependencies {
   readonly monitorStateRepository: MonitorStateRepository;
   readonly cardRepository: CardRepository;
   readonly antiSpamPolicy: AntiSpamPolicy;
+
+  /** Selects and charges unsolicited email findings; defaults to the shared policy. */
+  readonly emailFindingPolicy?: EmailFindingPolicy;
   /** Raw stored `locale` preference; the scanner resolves it to the effective locale. */
   readonly getLocalePreference: (scopedDb: DataContextDb) => Promise<unknown>;
+
+  /** The owner's saved quiet-hours schedule; null keeps the nested alert schedule. */
+  readonly resolveQuietHours: (scopedDb: DataContextDb) => Promise<ProactiveQuietPolicy | null>;
 }
 
 export type ScanReason = "source-sync" | "manual-refresh" | "scheduled-check";
@@ -42,7 +54,12 @@ export interface ScanResult {
 }
 
 export class ProactiveScanner {
-  constructor(private readonly deps: ScanDependencies) {}
+  private readonly emailFindingPolicy: EmailFindingPolicy;
+
+  constructor(private readonly deps: ScanDependencies) {
+    this.emailFindingPolicy =
+      deps.emailFindingPolicy ?? new EmailFindingPolicy(deps.cardRepository);
+  }
 
   async scan(
     scopedDb: DataContextDb,
@@ -55,12 +72,12 @@ export class ProactiveScanner {
     const nowIso = now.toISOString();
 
     // Load monitoring preference.
-    const pref = await this.deps.preferencesRepository.get(scopedDb);
-    if (!pref.enabled) {
+    const saved = await this.deps.preferencesRepository.getSaved(scopedDb);
+    const pref = saved?.preference ?? defaultProactiveMonitoringPreference();
+    if (source !== "email" && !pref.enabled) {
       return skip(source, "monitoring_disabled");
     }
-    const sourcePref = pref.sources[source];
-    if (!sourcePref?.enabled) {
+    if (!isProactiveSourceEnabled(pref, source, saved)) {
       return skip(source, "source_disabled");
     }
 
@@ -78,6 +95,7 @@ export class ProactiveScanner {
     // Resolve the owner's locale; nothing saved takes the platform default, not UTC.
     const locale = resolveEffectiveLocale(await this.deps.getLocalePreference(scopedDb));
     const timeZone = locale.timezone;
+    const quiet = await this.deps.resolveQuietHours(scopedDb);
 
     // Load priority anchors for provider input.
     const priorityRawPref = await scopedDb.db
@@ -171,27 +189,56 @@ export class ProactiveScanner {
       const signal = result.key === undefined ? undefined : signalByKey.get(result.key);
       if (!signal) continue;
 
-      const verdict = await this.deps.antiSpamPolicy.check(
-        scopedDb,
-        ownerUserId,
-        source,
-        signal.stableKey,
-        pref,
-        nowIso,
-        timeZone
-      );
-
-      if (!verdict.allow) {
-        cardsSuppressed++;
-        continue;
+      let deferredUntil: string | null;
+      let existing: ProactiveCardRow | undefined;
+      if (source === "email") {
+        // Email findings are charged once, on first selection. A finding charged earlier only
+        // refreshes its live card; once dismissed it never resurfaces and never charges again.
+        const selection = await this.emailFindingPolicy.select(scopedDb, {
+          kind: "unsolicited",
+          ownerUserId,
+          stableKey: signal.stableKey,
+          saved,
+          nowIso,
+          timeZone
+        });
+        existing = await this.deps.cardRepository.findLiveByStableKey(
+          scopedDb,
+          ownerUserId,
+          source,
+          signal.stableKey
+        );
+        const firstSelection = selection.selected && selection.charged;
+        if (!selection.selected || (!firstSelection && !existing)) {
+          cardsSuppressed++;
+          continue;
+        }
+        deferredUntil = firstSelection
+          ? this.deps.antiSpamPolicy.quietDeferral(pref, nowIso, timeZone, quiet)
+          : null;
+      } else {
+        const verdict = await this.deps.antiSpamPolicy.check(
+          scopedDb,
+          ownerUserId,
+          source,
+          signal.stableKey,
+          pref,
+          nowIso,
+          timeZone,
+          quiet
+        );
+        if (!verdict.allow) {
+          cardsSuppressed++;
+          continue;
+        }
+        deferredUntil = verdict.deferredUntil ?? null;
+        existing = await this.deps.cardRepository.findByStableKey(
+          scopedDb,
+          ownerUserId,
+          source,
+          signal.stableKey
+        );
       }
-
-      const existing = await this.deps.cardRepository.findByStableKey(
-        scopedDb,
-        ownerUserId,
-        source,
-        signal.stableKey
-      );
 
       await this.deps.cardRepository.upsertCard(scopedDb, {
         ownerUserId,
@@ -206,11 +253,11 @@ export class ProactiveScanner {
         occurredAt: signal.occurredAt ?? null,
         targetAt: signal.targetAt ?? null,
         expiresAt: signal.expiresAt ?? null,
-        deferredUntil: verdict.deferredUntil ?? null,
+        deferredUntil,
         metadata: { providerVersion: 1 }
       });
 
-      if (verdict.deferredUntil) {
+      if (deferredUntil) {
         cardsDeferred++;
       } else if (existing) {
         cardsUpdated++;

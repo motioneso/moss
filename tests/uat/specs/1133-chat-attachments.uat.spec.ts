@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { ListChatThreadMessagesResponse } from "@moss/shared";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel, readUatJson } from "./real-chat-signin.js";
 
 // #1133 — chat attachments against a real, prod-shaped instance (no mocks: the upload below
 // writes real bytes into the seeded owner's vault via POST /api/chat/attachments, and the turn
@@ -47,6 +49,10 @@ async function signIn(page: Page) {
     await page.getByRole("button", { name: "Skip anyway" }).click();
   }
   await expect(userMenu).toBeVisible();
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    test.setTimeout(300_000);
+    await bringUpRealChatModel(page);
+  }
 }
 
 const FILE_BODY = "attachment uat proof body"; // 25 bytes
@@ -71,7 +77,8 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   const drawer = page.locator("aside.chatd");
   await expect(drawer).toBeVisible();
   // A fresh chat per run: a reopened chat resumes the scripted conversation at a later turn.
-  await drawer.getByRole("button", { name: "New chat" }).click();
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
 
   // Drive the visually-hidden real <input type=file> directly — the paperclip button only
   // proxies a click to it, and a native picker can't be automated.
@@ -105,6 +112,11 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   await expect(chip).not.toHaveClass(/is-error/);
 
   await drawer.locator(".chatd-input textarea").fill("Please read this file.");
+  const turnResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().endsWith("/api/chat/turn"),
+    { timeout: 120_000 }
+  );
   await drawer.getByRole("button", { name: "Send" }).click();
 
   // The turn body carries the server-issued id (never bytes) into the real /turn handler.
@@ -120,7 +132,16 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   // The scripted reply proves the turn reached the engine and the answer came back to the drawer.
   // The first turn in a chat starts the scripted provider cold, which takes several seconds, so
   // this waits longer than the default 10s.
-  await expect(drawer.getByText("Received the attached file.")).toBeVisible({ timeout: 60_000 });
+  const body = (await readUatJson(await turnResponse)) as { reply: string };
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    expect(body.reply.trim()).not.toBe("");
+    await expect(
+      drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()
+    ).toBeVisible();
+  } else {
+    expect(body.reply).toBe("Received the attached file.");
+    await expect(drawer.getByText("Received the attached file.")).toBeVisible({ timeout: 60_000 });
+  }
 
   // Pending chips cleared on send — the staged upload doesn't linger in the composer.
   await expect(drawer.locator(".chatd-attach__row")).toHaveCount(0);
@@ -151,9 +172,54 @@ test("the real server rejects an unsupported attachment type with 415 (#1133)", 
   expect(result.body.error).toContain("Unsupported attachment type");
 });
 
-// Still fixme: the full exchange (the model receives the <attachments> manifest, calls
-// chat.readAttachment, and answers about the file's content) has no scripted turn in this file
-// yet. Tracked in #3343. The tool read path is proven at unit level
-// (tests/unit/chat-attachment-tool.test.ts: text render+cap, image media pass-through, ownership)
-// and the manifest/turn wiring by tests/integration/chat-attachments-turn.test.ts.
-test.fixme("model reads an attached file and answers about its content (#3343)", async () => {});
+// #3343: only the attachment contains the phrase; a real reply must recover it through the tool.
+test("model reads an attached file and answers about its content (#3343)", async ({ page }) => {
+  test.skip(!process.env.JARVIS_UAT_REQUIRE_REAL_CHAT, "requires installed real-model proof");
+  await signIn(page);
+  await page.locator(".topbar-actions button").click();
+  const drawer = page.locator("aside.chatd");
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
+  await drawer.locator(".chatd-attach__input").setInputFiles({
+    name: "content-proof.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("The validation phrase is cobalt otter 47.")
+  });
+  await expect(drawer.locator(".chatd-attach__chip")).not.toHaveClass(/is-uploading|is-error/);
+  const response = page.waitForResponse(
+    (r) => r.request().method() === "POST" && r.url().endsWith("/api/chat/turn"),
+    { timeout: 120_000 }
+  );
+  await drawer
+    .getByLabel("Message Moss")
+    .fill("Read the attached file and tell me its validation phrase.");
+  await drawer.getByRole("button", { name: "Send", exact: true }).click();
+  const body = (await readUatJson(await response)) as { reply: string; assistantMessageId: string };
+  expect(body.reply).toContain("cobalt otter 47");
+  await expect(drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()).toContainText(
+    "cobalt otter 47"
+  );
+  const privacy = (await readUatJson(
+    await page.request.get("/api/chat/privacy?surface=drawer")
+  )) as { threadId: string };
+  const history = (await readUatJson(
+    await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
+  )) as ListChatThreadMessagesResponse;
+  const answer = history.messages.find((message) => message.id === body.assistantMessageId)!;
+  expect(answer).toBeDefined();
+  const calls = answer.activity.filter(
+    (entry) =>
+      entry.kind === "tool" && entry.toolName?.includes("readAttachment") && entry.toolCallId
+  );
+  expect(calls.length).toBeGreaterThan(0);
+  expect(
+    answer.activity.some(
+      (entry) =>
+        entry.kind === "result" &&
+        calls.some((call) => call.toolCallId === entry.toolCallId) &&
+        /"fileName"\s*:\s*"content-proof\.txt"/.test(entry.text) &&
+        entry.text.includes("cobalt otter 47")
+    )
+  ).toBe(true);
+});

@@ -174,7 +174,7 @@ describe("shared schema fragments", () => {
 });
 
 describe("chat response schemas", () => {
-  it("listChatThreadsResponseSchema keeps the incognito flag", async () => {
+  it("listChatThreadsResponseSchema keeps the Main designation", async () => {
     const { status, body } = await parseBody(listChatThreadsResponseSchema, {
       threads: [
         {
@@ -182,6 +182,7 @@ describe("chat response schemas", () => {
           ownerUserId: "user-1",
           title: "Private",
           incognito: true,
+          isMain: true,
           createdAt: "2026-07-08T00:00:00.000Z",
           updatedAt: "2026-07-08T00:00:00.000Z",
           lastActiveAt: "2026-07-08T00:00:00.000Z",
@@ -191,7 +192,7 @@ describe("chat response schemas", () => {
     });
 
     expect(status).toBe(200);
-    expect(body?.threads).toEqual([expect.objectContaining({ incognito: true })]);
+    expect(body?.threads).toEqual([expect.objectContaining({ incognito: true, isMain: true })]);
   });
 });
 

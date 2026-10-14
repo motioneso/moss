@@ -30,6 +30,9 @@ describe("MOSS_PERSONA_APP_MAP", () => {
   });
 
   it("asks for pasted text rather than model-initiated capture", () => {
+    expect(MOSS_PERSONA_APP_MAP).toContain(
+      "If the user requests a screenshot, explain that you cannot take one"
+    );
     expect(MOSS_PERSONA_APP_MAP).toContain("ask the user to paste the exact text");
     expect(MOSS_PERSONA_APP_MAP).toContain("never request or initiate a screenshot");
   });

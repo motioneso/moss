@@ -159,10 +159,13 @@ describe("durable conversation provenance store", () => {
     expect(await new ChatRepository().openNewThread(scoped, { title: "New conversation" })).toEqual(
       row
     );
-    expect(queries).toHaveLength(2);
+    expect(queries).toHaveLength(3);
     expect(queries[0]?.sql).toContain("pg_advisory_xact_lock");
-    expect(queries[1]?.sql).toContain('insert into "app"."chat_threads"');
-    expect(queries[1]?.sql).toContain("clock_timestamp()");
+    expect(queries[1]?.sql).toContain('select "id" from "app"."chat_threads"');
+    expect(queries[1]?.sql).toContain('"owner_user_id" = app.current_actor_user_id()');
+    expect(queries[1]?.sql).toContain('"is_main" =');
+    expect(queries[2]?.sql).toContain('insert into "app"."chat_threads"');
+    expect(queries[2]?.sql).toContain("clock_timestamp()");
     expect(queries.some((query) => query.sql.includes('"chat_conversation_provenance"'))).toBe(
       false
     );

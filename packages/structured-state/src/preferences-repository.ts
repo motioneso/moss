@@ -76,6 +76,7 @@ export class PreferencesRepository {
     await scopedDb.db.deleteFrom("app.preferences").where("key", "=", key).execute();
   }
 
+  // Keep in step with the proactive-monitoring preferences repository's upsertWithRevision.
   async upsertWithRevision(
     scopedDb: DataContextDb,
     key: string,
@@ -125,6 +126,25 @@ export class PreferencesRepository {
       .returning("revision")
       .executeTakeFirst();
     if (!row) throw new PreferenceRevisionConflictError(key);
+  }
+
+  // Revision plus updated_at for writers whose callers hold an opaque version token. forUpdate
+  // locks the row so a concurrent delete/recreate cannot slip between the check and the CAS write.
+  async getVersioned(
+    scopedDb: DataContextDb,
+    key: string,
+    options: { forUpdate?: boolean } = {}
+  ): Promise<{ value: unknown; revision: number; updatedAt: Date } | null> {
+    assertDataContextDb(scopedDb);
+    let query = scopedDb.db
+      .selectFrom("app.preferences")
+      .select(["value_json", "revision", "updated_at"])
+      .where("key", "=", key);
+    if (options.forUpdate) query = query.forUpdate();
+    const row = await query.executeTakeFirst();
+    return row
+      ? { value: row.value_json, revision: row.revision, updatedAt: row.updated_at }
+      : null;
   }
 
   async getWithRevision(

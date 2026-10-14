@@ -109,6 +109,24 @@ export class CardRepository {
       .executeTakeFirst() as Promise<ProactiveCardRow | undefined>;
   }
 
+  /** The card the upsert would update: the one not dismissed, expired or suppressed. */
+  async findLiveByStableKey(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    source: string,
+    stableKey: string
+  ): Promise<ProactiveCardRow | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.proactive_cards")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId)
+      .where("source", "=", source)
+      .where("stable_key", "=", stableKey)
+      .where("status", "not in", ["dismissed", "expired", "suppressed"])
+      .executeTakeFirst() as Promise<ProactiveCardRow | undefined>;
+  }
+
   async findById(
     scopedDb: DataContextDb,
     ownerUserId: string,

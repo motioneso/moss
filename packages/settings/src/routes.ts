@@ -67,7 +67,7 @@ import {
   type OnboardingProbes
 } from "./onboarding-routes.js";
 import { registerPersonaRoutes } from "./persona-routes.js";
-import type { NotificationPreferencesPort, PersonaPreviewInput } from "./preferences-port.js";
+import type { PersonaPreviewInput, QuietHoursPreferencesPort } from "./preferences-port.js";
 import { registerPriorityRoutes } from "./priority-routes.js";
 import {
   registerProactiveMonitoringSettingsRoutes,
@@ -142,7 +142,7 @@ export interface SettingsRoutesDependencies {
    * hardcoded `userScopedCountQueries` list.
    */
   readonly moduleDeletionTables: readonly { table: string; countPredicate: string }[];
-  readonly preferencesRepository?: NotificationPreferencesPort;
+  readonly preferencesRepository?: QuietHoursPreferencesPort;
   readonly personaPreview?: (input: PersonaPreviewInput) => Promise<string>;
   readonly repository?: SettingsRepository;
   /** #917 external-module discovery snapshot; routes added in Task 9 consume it. */
@@ -245,8 +245,9 @@ export function registerSettingsRoutes(
   dependencies: SettingsRoutesDependencies
 ): void {
   const repository = dependencies.repository ?? new SettingsRepository();
-  const preferencesRepository: NotificationPreferencesPort = dependencies.preferencesRepository ?? {
+  const preferencesRepository: QuietHoursPreferencesPort = dependencies.preferencesRepository ?? {
     get: async () => null,
+    getVersioned: async () => null,
     getWithMetadata: async () => null,
     upsert: async () => undefined,
     getWithRevision: async () => null,
