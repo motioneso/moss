@@ -1,10 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { EmailRepository } from "@moss/email";
+import { createEmailThreadProvider } from "../../packages/email/src/thread-provider.js";
+import { CommitmentsRepository } from "../../packages/commitments/src/repository.js";
+import { judgeEmailThread } from "../../packages/commitments/src/email-judgement-worker.js";
+import { buildMorningEmailLines } from "../../packages/briefings/src/morning-inputs.js";
+import { emailContextItemFromCache } from "../../packages/connectors/src/source-context/email.js";
+import { buildEmailCatchUp } from "../../packages/briefings/src/action-rows.js";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -97,5 +103,99 @@ describe("settling own sent mail that is marked as waiting", () => {
     expect((await signalsOf(ids.userB, otherOwner)).signals).toMatchObject({
       pendingJudgement: true
     });
+  });
+  it("keeps an answered grouped thread off both Today lists before and after judgement", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      await client.query(
+        `UPDATE app.email_messages SET external_metadata='{"threadId":"answered"}'::jsonb,
+        recipients=ARRAY['me@example.test'], received_at=now()-interval '60 days', summary='Dana asked for the report.',
+        signals='{"pendingJudgement":true,"actionability":{"category":"needs_reply"}}'::jsonb WHERE id=$1`,
+        [fromOther]
+      );
+      await client.query(
+        `UPDATE app.email_messages SET external_metadata='{"threadId":"answered"}'::jsonb,
+        recipients=ARRAY['boss@example.test'], received_at=now(), signals='{"skipped":"own_sent"}'::jsonb WHERE id=$1`,
+        [ownSent]
+      );
+      for (let i = 0; i < 5; i++)
+        await client.query(
+          `INSERT INTO app.email_messages
+        (id,connector_account_id,owner_user_id,sender,recipients,subject,received_at,external_id,signals)
+        VALUES ($1,$2,$3,'shop@example.test',ARRAY['me@example.test'],'Receipt',now(),$4,'{"actionability":{"category":"noise"}}'::jsonb)`,
+          [randomUUID(), accountA, ids.userA, `receipt-${i}`]
+        );
+    } finally {
+      await client.end();
+    }
+    await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: randomUUID() },
+      async (db) => {
+        const assertOffToday = async () => {
+          const rows = await repository.listVisibleForBriefing(db);
+          const question = rows.find((row) => row.id === fromOther)!;
+          expect(question.signals).toMatchObject({
+            answered: true,
+            pendingJudgement: true,
+            actionability: { category: "needs_reply" }
+          });
+          expect(question.summary).toBe("Dana asked for the report.");
+          expect(
+            emailContextItemFromCache(
+              question,
+              { connectorAccountId: accountA, providerId: "google-email", providerLabel: "Google" },
+              "network_error"
+            )
+          ).toMatchObject({
+            answered: true,
+            actionability: "needs_reply",
+            summary: "Dana asked for the report."
+          });
+          const items = rows.map((row) => {
+            const signals = row.signals as {
+              pendingJudgement?: boolean;
+              answered?: boolean;
+              actionability?: { category: string };
+            };
+            return {
+              id: row.external_id,
+              connectorAccountId: row.connector_account_id,
+              sender: row.sender,
+              subject: row.subject,
+              summary: row.summary,
+              receivedAt: new Date(row.received_at).toISOString(),
+              actionability: signals.actionability?.category ?? "unknown",
+              answered: signals.answered === true,
+              awaitingJudgement: signals.pendingJudgement === true
+            };
+          });
+          expect(buildMorningEmailLines({ items, signals: [], suggestionLines: [] }).lines).toEqual(
+            []
+          );
+          expect(
+            await buildEmailCatchUp(db, items, new Set(), undefined, {
+              since: null,
+              includes: () => true
+            })
+          ).toBeNull();
+        };
+        await assertOffToday();
+        const generate = vi.fn();
+        const threads = createEmailThreadProvider(
+          repository,
+          async () => new Set(["me@example.test"])
+        );
+        expect(
+          await judgeEmailThread(
+            db,
+            { actorUserId: ids.userA, threadRef: "answered", idempotencyKey: "answered" },
+            { repository: new CommitmentsRepository(), threads, context: {}, generate }
+          )
+        ).toBe("no_item");
+        expect(generate).not.toHaveBeenCalled();
+        await assertOffToday();
+      }
+    );
   });
 });

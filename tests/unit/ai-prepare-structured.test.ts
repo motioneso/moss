@@ -129,7 +129,8 @@ it("does not carry extra search, sorting, CLI or retry options into the prepared
   expect(await run()).toEqual({
     ok: false,
     error: "validation_failed",
-    reason: "schema_validation"
+    reason: "schema_validation",
+    validation: { keyword: "required", schemaPath: "#/required" }
   });
   expect(fetch).toHaveBeenCalledTimes(1);
   const [url, options] = (fetch.mock.calls as unknown as [string, RequestInit][])[0]!;

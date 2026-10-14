@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 import { chatModuleManifest } from "@moss/chat";
 
 describe("chatModuleManifest", () => {
+  it("declares each feature id once", () => {
+    const ids = chatModuleManifest.features.map((feature) => feature.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
   it("explains the actual removable meeting chip escape for subscription chat", () => {
     const feature = chatModuleManifest.features.find(
       (item) => item.id === "chat.meeting_questions"

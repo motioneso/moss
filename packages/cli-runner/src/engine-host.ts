@@ -148,7 +148,8 @@ export class CliChatEngineHost {
     providerKind: AcpProviderKind,
     userId: string,
     profile: AcpProfile,
-    useCandidate = false
+    useCandidate = false,
+    personaText?: string
   ): Promise<{
     cwd: string;
     generation: number;
@@ -157,7 +158,15 @@ export class CliChatEngineHost {
     uid: number;
     gid: number;
   }> {
-    return this.acp.spawn(sessionKey, projectId, providerKind, userId, profile, useCandidate);
+    return this.acp.spawn(
+      sessionKey,
+      projectId,
+      providerKind,
+      userId,
+      profile,
+      useCandidate,
+      personaText
+    );
   }
 
   acpSend(sessionKey: string, line: string): void {

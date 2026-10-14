@@ -102,3 +102,44 @@ describe("ChatDrawer docked mode (#1756)", () => {
     expect(dialog.props.className).toBe("chatd chatd--docked");
   });
 });
+
+it("opens and reopens a mounted drawer without changing hook order (#3133)", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const node = (open: boolean) =>
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(ChatDrawer, {
+          open,
+          onClose: () => {},
+          records: [],
+          clearRecords: () => {},
+          streamErrorCount: 0,
+          isFounder: false,
+          surface: DEFAULT_CHAT_SURFACE
+        })
+      )
+    );
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(node(false));
+  });
+  await act(async () => {
+    renderer.update(node(true));
+  });
+  expect(renderer.root.findByProps({ role: "dialog" }).props.className).toBe("chatd");
+  await act(async () => {
+    renderer.update(node(false));
+  });
+  await act(async () => {
+    renderer.update(node(true));
+  });
+  expect(renderer.root.findByProps({ role: "dialog" }).props.className).toBe("chatd");
+  await act(async () => {
+    renderer.unmount();
+  });
+  client.clear();
+});

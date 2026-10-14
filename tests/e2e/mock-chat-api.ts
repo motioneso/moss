@@ -19,6 +19,8 @@ export interface MockChatApiState {
   clearGate?: { release: () => void; promise: Promise<void> };
   /** Server-truth privacy state returned by GET /api/chat/privacy. Defaults to false. */
   incognito?: boolean;
+  /** Owner-scoped conversation selected on the chat surface. */
+  selectedThreadId?: string;
   /** Status code for POST /api/chat/private/end. Defaults to 204 (success). */
   endPrivateChatStatus?: number;
 }
@@ -77,7 +79,10 @@ export async function registerMockChatRoutes(page: Page, state: MockChatApiState
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ incognito: state.incognito ?? false })
+        body: JSON.stringify({
+          incognito: state.incognito ?? false,
+          ...(state.selectedThreadId ? { threadId: state.selectedThreadId } : {})
+        })
       });
     }
   );
@@ -109,6 +114,7 @@ export function createMockChatThread(
     ownerUserId: "user-1",
     title,
     incognito: false,
+    isMain: false,
     createdAt: "2026-06-06T12:00:00.000Z",
     updatedAt: "2026-06-06T12:00:00.000Z",
     lastActiveAt: "2026-06-06T12:00:00.000Z",

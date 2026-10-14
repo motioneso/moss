@@ -14,6 +14,7 @@ export const PUSH_SUMMARY_QUEUE = "notifications.push.summary";
 export interface PushDeliverJobPayload {
   readonly actorUserId: string;
   readonly notificationId: string;
+  readonly releaseAt?: string;
   readonly recipientUserId: string;
 }
 

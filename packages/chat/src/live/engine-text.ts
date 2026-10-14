@@ -55,7 +55,11 @@ export async function buildEngineText(
   text: string,
   surface?: ChatSurface,
   binding?: CrossToolTurnBinding,
-  extra?: { readonly attachmentManifest?: string; readonly moduleControl?: AdmittedContext | null }
+  extra?: {
+    readonly attachmentManifest?: string;
+    readonly moduleControl?: AdmittedContext | null;
+    readonly mainReminders?: AdmittedContext | null;
+  }
 ): Promise<PreparedTurn & { pendingItems: AnswerSourceSupport[]; locale?: LocaleSettingsDto }> {
   const turnBinding = binding
     ? Object.freeze({ threadId: binding.threadId, chatSessionId: binding.chatSessionId })

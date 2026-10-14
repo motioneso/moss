@@ -44,3 +44,14 @@ export interface ResolvedMonitoringConfig {
     readonly aliases: readonly string[];
   }[];
 }
+
+/**
+ * Quiet hours from the owner's one saved schedule. When present it replaces the nested alert
+ * schedule and is read in its own zone; the cap day keeps the owner locale zone.
+ */
+export interface ProactiveQuietPolicy {
+  readonly enabled: boolean;
+  readonly startLocalTime: string;
+  readonly endLocalTime: string;
+  readonly timeZone: string;
+}

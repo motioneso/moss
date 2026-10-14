@@ -14,6 +14,7 @@ import { dataContextBrand } from "../../packages/db/src/data-context.js";
 import type { DataContextDb } from "../../packages/db/src/data-context.js";
 import type { AntiSpamPolicy } from "../../packages/proactive-monitoring/src/anti-spam.js";
 import type { CardRepository } from "../../packages/proactive-monitoring/src/card-repository.js";
+import type { EmailFindingPolicy } from "../../packages/proactive-monitoring/src/email-finding-policy.js";
 import type { MonitorStateRepository } from "../../packages/proactive-monitoring/src/monitor-state-repository.js";
 import type { ProactiveMonitoringPreferencesRepository } from "../../packages/proactive-monitoring/src/preferences-repository.js";
 import { ProactiveScanner } from "../../packages/proactive-monitoring/src/scanner.js";
@@ -69,6 +70,7 @@ describe("ProactiveScanner — signal/result pairing after ranking", () => {
     const mockCardRepo = {
       upsertCard,
       findByStableKey: vi.fn().mockResolvedValue(undefined),
+      findLiveByStableKey: vi.fn().mockResolvedValue(undefined),
       isDismissedStableKeySuppressed: vi.fn().mockResolvedValue(false),
       getActiveCounts: vi
         .fn()
@@ -76,8 +78,12 @@ describe("ProactiveScanner — signal/result pairing after ranking", () => {
     } as unknown as CardRepository;
 
     const mockAntiSpam = {
-      check: vi.fn().mockResolvedValue({ allow: true, deferredUntil: null })
+      check: vi.fn().mockResolvedValue({ allow: true, deferredUntil: null }),
+      quietDeferral: vi.fn().mockReturnValue(null)
     } as unknown as AntiSpamPolicy;
+    const emailFindingPolicy = {
+      select: vi.fn().mockResolvedValue({ selected: true, charged: true })
+    } as unknown as EmailFindingPolicy;
 
     const enabledPref = {
       ...defaultProactiveMonitoringPreference(),
@@ -91,7 +97,11 @@ describe("ProactiveScanner — signal/result pairing after ranking", () => {
     };
 
     const mockPrefsRepo = {
-      get: vi.fn().mockResolvedValue(enabledPref)
+      getSaved: vi.fn().mockResolvedValue({
+        raw: enabledPref,
+        preference: enabledPref,
+        hasLegacyEmailChoice: true
+      })
     } as unknown as ProactiveMonitoringPreferencesRepository;
 
     const mockStateRepo = {
@@ -115,7 +125,9 @@ describe("ProactiveScanner — signal/result pairing after ranking", () => {
       monitorStateRepository: mockStateRepo,
       cardRepository: mockCardRepo,
       antiSpamPolicy: mockAntiSpam,
-      getLocalePreference: async () => ({ timezone: "UTC" })
+      emailFindingPolicy,
+      getLocalePreference: async () => ({ timezone: "UTC" }),
+      resolveQuietHours: async () => null
     });
 
     await scanner.scan(

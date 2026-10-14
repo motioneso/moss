@@ -146,6 +146,7 @@ describe("origin-bound action history with the real database", () => {
 
     // No session/sequence/pending-result state is carried across this API restart.
     const restarted = manager();
+    await restarted.resumeThread(ids.userA, b!.id);
     const seen: TranscriptRecord[] = [];
     const unsubscribe = restarted.subscribe(ids.userA, (record) => seen.push(record));
     try {
@@ -196,6 +197,7 @@ describe("origin-bound action history with the real database", () => {
         return { records: [{ kind: "reply", text: "Theme changed." }], offset: 1, complete: true };
       }
     });
+    await runtime.resumeThread(ids.userA, origin.id);
     const beforeClose: TranscriptRecord[] = [];
     const close = runtime.subscribe(ids.userA, (record) => beforeClose.push(record));
     const turn = runtime.submitTurn(ids.userA, "Owner", "Change the named theme");

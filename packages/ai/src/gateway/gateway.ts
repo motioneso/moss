@@ -1,4 +1,5 @@
 import { emitInputValidationFailure } from "./validation-failure.js";
+import { actorReadFailure } from "./actor-read-failure.js";
 import { localeContext } from "./locale-context.js";
 import { randomUUID } from "node:crypto";
 
@@ -51,7 +52,7 @@ import {
 } from "./content-admission.js";
 import { recordGatewayAudit } from "./gateway-audit.js";
 import { prepareToolCall, servicesForTool } from "./per-call-resolution.js";
-import { liveStreamResult, renderAndCap } from "./output-validation.js";
+import { liveStreamResult, readToolResponse } from "./output-validation.js";
 import {
   createEffectivePolicyLookup,
   familyAllowsAutoRun,
@@ -75,7 +76,7 @@ import {
 export type { GatewayLogger };
 import { isSelfOperationExcluded } from "./self-operation.js";
 import { denyRateLimited, recordUnattendedRun } from "./unattended-run-record.js";
-import type { SessionTokenRegistry } from "./session-tokens.js";
+import { LAUNCH_REPLAY_REFUSAL, type SessionTokenRegistry } from "./session-tokens.js";
 import type {
   ActiveModulesResolver,
   AdmissionPath,
@@ -388,6 +389,9 @@ export class AssistantToolGateway {
   > {
     const { actorUserId, chatSessionId, threadId, allowedToolNames } =
       this.deps.tokens.verify(token);
+    if (this.deps.tokens.isInLaunchReplay(token)) {
+      return { failure: { ok: false, error: LAUNCH_REPLAY_REFUSAL }, reason: "refused" };
+    }
     const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
     let progressTool: ExecutableTool | undefined;
     let progressAdmission: Promise<void> | undefined;
@@ -434,11 +438,8 @@ export class AssistantToolGateway {
     // null = unrestricted (REST path tokens minted without an allowlist).
     if (allowedToolNames !== null && !allowedToolNames.has(toolName)) {
       return {
-        // #2942 — this session started before the tool appeared (e.g. an
-        // integration connected mid-conversation), so it is not in the
-        // allowlist captured at launch. Name the way out: a new chat picks up
-        // the current tool set. Returned as tool-result content, which the
-        // chat relays to the person.
+        // #2942: the tool appeared after this session captured its allowlist at launch, so
+        // name the way out. A new chat picks up the current tool set.
         failure: {
           ok: false,
           error: `Tool not in session allowlist: ${toolName}. It was added after this conversation started. Start a new chat to use it.`
@@ -563,6 +564,30 @@ export class AssistantToolGateway {
     rawInput: unknown,
     binding?: { readonly threadId: string | null; readonly chatSessionId: string }
   ): Promise<GatewayToolResponse> {
+    return this.runActorRead(actorUserId, toolName, rawInput, binding);
+  }
+
+  async runBackgroundReadForActor(
+    actorUserId: string,
+    read: { readonly operation: string; readonly itemId: string; readonly runId: string }
+  ): Promise<GatewayToolResponse> {
+    if (read.operation !== "tasks.get") return { ok: false, error: "Background operation refused" };
+    return this.runActorRead(
+      actorUserId,
+      read.operation,
+      { taskId: read.itemId },
+      { threadId: null, chatSessionId: read.runId },
+      true
+    );
+  }
+
+  private async runActorRead(
+    actorUserId: string,
+    toolName: string,
+    rawInput: unknown,
+    binding?: { readonly threadId: string | null; readonly chatSessionId: string },
+    background = false
+  ): Promise<GatewayToolResponse> {
     const bound = binding ? { ...binding } : undefined;
     const declared = (await this.executableTools(actorUserId)).find(
       (entry) => entry.tool.name === toolName
@@ -596,25 +621,25 @@ export class AssistantToolGateway {
     }
     const readServices = this.servicesFor(found);
     try {
-      const result = await this.executeTool(found, input, ctx, readServices, access);
-      return {
-        ok: true,
-        data: renderAndCap(
-          found.tool.outputSchema,
-          result,
-          toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
-          ctx
-        )
-      };
-    } catch {
-      // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
-      // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
-      (this.deps.logger ?? defaultGatewayLogger).error("read_tool_handler_threw", {
-        toolName: found.tool.name,
+      if (background && (!found.tool.authorizeBackgroundRead || found.executePerCall))
+        return { ok: false, error: "Background source access refused" };
+      const result = await this.executeTool(found, input, ctx, readServices, access, background);
+      return readToolResponse(
+        found.tool.outputSchema,
+        result,
+        toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
+        ctx
+      );
+    } catch (error) {
+      if (error === backgroundReadRefused)
+        return { ok: false, error: "Background source access refused" };
+      return actorReadFailure(
+        found,
         requestId,
-        errorClass: "handler_error"
-      });
-      return { ok: false, error: `Tool ${found.tool.name} failed` };
+        error,
+        this.deps.logger ?? defaultGatewayLogger,
+        background
+      );
     }
   }
 
@@ -760,10 +785,13 @@ export class AssistantToolGateway {
     input: Record<string, unknown>,
     ctx: ToolContext,
     services: ToolServices,
-    access: AccessContext
+    access: AccessContext,
+    background = false
   ): Promise<ToolResult> {
     if (found.executePerCall) return found.executePerCall();
-    return this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) => {
+    return this.deps.runner.withDataContext(access, async (scopedDb: DataContextDb) => {
+      if (background && !(await found.tool.authorizeBackgroundRead?.(scopedDb, input, ctx)))
+        throw backgroundReadRefused;
       const execute = () => found.execute(scopedDb, input, ctx, services);
       return found.tool.risk === "read" && this.deps.readToolTrustBoundary
         ? this.deps.readToolTrustBoundary({
@@ -969,3 +997,4 @@ export class AssistantToolGateway {
     return out;
   }
 }
+const backgroundReadRefused = new Error("Background source access refused");

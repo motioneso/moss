@@ -11,9 +11,26 @@
 # output means "no automated spec covers this", never "no live proof needed".
 #
 # When you add a UAT spec, add its rows here in the same PR.
+blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3152-configured-source-report.uat.spec.ts
+blocking	packages/ai/src/gateway/actor-read-failure.ts	tests/uat/specs/3152-configured-source-report.uat.spec.ts
+blocking	packages/chat/sql/0318_chat_scheduled_reads.sql	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/chat/src/reminders/commands/scheduled-read.ts	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/ai/src/gateway/gateway.ts	tests/uat/specs/3151-scheduled-owner-read.uat.spec.ts
+blocking	packages/commitments/src/email-judgement-worker.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/commitments/src/extractor.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/briefings/src/morning-inputs.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/briefings/src/email-evidence.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/briefings/src/action-rows.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/commitments/src/repository.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/commitments/src/tools.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/connectors/src/email-gate.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
+blocking	packages/connectors/src/email-sorting-live.ts	tests/uat/specs/3467-one-sided-guard.uat.spec.ts
 blocking	packages/module-registry/**	tests/uat/specs/module-install.uat.spec.ts
 blocking	scripts/module-reconcile.ts	tests/uat/specs/module-install.uat.spec.ts
 # #1974: chat archive settings screen (switch + folder field), backend from #1951/#1963.
+blocking	packages/chat/src/reminders/**	tests/uat/specs/3134-reminder-notifications.uat.spec.ts
+blocking	packages/notifications/src/push-worker.ts	tests/uat/specs/3134-reminder-notifications.uat.spec.ts
 blocking	apps/web/src/settings/settings-ai-pane.tsx	tests/uat/specs/1974-chat-archive-settings.uat.spec.ts
 blocking	scripts/start-jarv1s.ts	tests/uat/specs/module-install.uat.spec.ts
 blocking	apps/web/src/settings/settings-module-registry-section.tsx	tests/uat/specs/module-install.uat.spec.ts
@@ -317,6 +334,72 @@ blocking	packages/vault/src/**	tests/uat/specs/audit-source-truth.uat.spec.ts
 # #3397 shared modal focus recovery through real task comments.
 blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
 blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts
+# #3133 slice A: real reminder list and saved result reader, no network interception.
+blocking	apps/web/src/settings/settings-scheduled-tasks-pane.tsx	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task*.tsx	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/**	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	packages/chat/src/reminders/settings.ts	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+blocking	packages/chat/src/reminders/routes.ts	tests/uat/specs/3133-settings-reminders-real.uat.spec.ts
+
+# #3465 current email status and settlement.
+blocking	packages/briefings/src/email-evidence.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/compose.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/compose-evening.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/morning-inputs.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+blocking	packages/briefings/src/signals.ts	tests/uat/specs/3465-briefing-email-evidence.uat.spec.ts
+# #3133 slice B: real lifecycle controls and typed deletion agreement.
+blocking	packages/chat/src/reminders/controls.ts	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	packages/chat/src/reminders/delete-agreement.ts	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	packages/chat/src/reminders/commands/**	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/controls.tsx	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+blocking	packages/chat/sql/0313_chat_reminder_controls.sql	tests/uat/specs/3133-reminder-controls-real.uat.spec.ts
+
+# #3145: owner allowances, Settings and real device quiet-hours policy.
+blocking	packages/chat/src/reminders/quiet-hours-*.ts	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	packages/chat/src/reminders/commands/quiet-hours-allowance.ts	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	packages/chat/src/reminders/notifications.ts	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	packages/notifications/src/repository.ts	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	packages/notifications/src/push-worker.ts	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	packages/module-registry/src/index.ts	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	apps/web/src/settings/settings-quiet-hours-allowances.tsx	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	apps/web/src/settings/settings-alerts-pane.tsx	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+blocking	packages/chat/sql/0314_chat_quiet_hours_allowances.sql	tests/uat/specs/3145-quiet-hours-allowance.uat.spec.ts
+
+# #3135: real model-filled reminder edits and stale queued-work suppression.
+blocking	packages/chat/src/reminders/edit*.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/reminders/prepare-edit.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/reminders/commands/edit.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/live/pre-model-turn.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/live/persistence.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/src/live/runtime.ts	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+blocking	packages/chat/sql/0317_chat_reminder_edits.sql	tests/uat/specs/3135-reminder-edits-real.uat.spec.ts
+
+# #3136: recurring fixed reminders, saved groups and real worker downtime.
+blocking	packages/chat/src/reminders/**	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
+blocking	packages/chat/sql/0319_chat_repeating_reminders.sql	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
+blocking	packages/module-sdk/src/time.ts	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-list.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/timing.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
+
+# #3138: quiet recurring reads, useful changes and real worker recovery.
+blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	packages/chat/sql/0321_chat_repeating_reads.sql	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	packages/chat/src/reminders/runs.ts	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/status.tsx	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+
+# #3148: owned reminder destinations and exact background arrival filtering.
+blocking	packages/chat/src/reminders/**	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/background-message-routing.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/chat-session-manager.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/live-chat-session.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/sql/0320_chat_reminder_destinations.sql	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/chat/use-chat-stream.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/chat/chat-drawer.tsx	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/**	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/shared/src/scheduled-tasks-api.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/responsibility-agreements/**	tests/uat/specs/3142a-bounded-action-agreement.uat.spec.ts
+blocking	packages/chat/sql/0322_chat_responsibility_agreements.sql	tests/uat/specs/3142a-bounded-action-agreement.uat.spec.ts
+blocking	apps/web/src/settings/approved-action-scopes.tsx	tests/uat/specs/3142a-bounded-action-agreement.uat.spec.ts
 blocking	apps/trail-marker/TrailMarker/**	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
 blocking	packages/shared/src/companion-api.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
 blocking	apps/api/src/companion-routes.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts

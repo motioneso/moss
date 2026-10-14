@@ -406,6 +406,8 @@ export class AcpChatEngine implements CliChatEngine {
   private complete = false;
   private cancelled = false;
   private records: TranscriptRecord[] = [];
+  private activeReplyRecord: TranscriptRecord | null = null;
+  private replyFailed = false;
   private activeThoughtRecord: {
     kind: "thought";
     id: string;
@@ -582,6 +584,24 @@ export class AcpChatEngine implements CliChatEngine {
 
       case "agent_message_chunk": {
         this.flushCurrentThought();
+        if (this.replyFailed) break;
+        const chunk = update as { content?: { type?: string; text?: string } | string };
+        const text =
+          typeof chunk.content === "string"
+            ? chunk.content
+            : chunk.content?.type === "text"
+              ? chunk.content.text
+              : undefined;
+        if (!text) break;
+        const reply: TranscriptRecord = {
+          kind: "reply",
+          id: this.activeReplyRecord?.id ?? randomUUID(),
+          sequence: this.activeReplyRecord?.sequence ?? this.nextRecordSequence(),
+          text: (this.activeReplyRecord?.text ?? "") + text
+        };
+        this.activeReplyRecord = reply;
+        this.records = this.records.filter((record) => record.id !== reply.id);
+        this.records.push(reply);
         break;
       }
     }
@@ -637,6 +657,8 @@ export class AcpChatEngine implements CliChatEngine {
     if (!handle) throw new CliChatUnavailableError("ACP chat session is not open");
     if (this.prompt && !this.complete) throw new CliChatUnavailableError("ACP chat turn is busy");
     this.records = [];
+    this.activeReplyRecord = null;
+    this.replyFailed = false;
     this.activeThoughtRecord = null;
     this.activeToolRecords.clear();
     this.promptError = null;
@@ -650,13 +672,17 @@ export class AcpChatEngine implements CliChatEngine {
         const elapsedMs = Math.max(0, Date.now() - startedAt);
         // #2689: a reply that is only the provider's "version X or newer" API error is a refusal.
         if (result.text && isCliVersionTooOldReply(result.text)) {
+          this.discardFailedReply();
           this.promptError = new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
           return;
         }
         if (result.text) {
+          const streamed = this.activeReplyRecord;
+          if (streamed) this.records = this.records.filter((record) => record.id !== streamed.id);
           this.records.push({
             ...formatReplyRecord(result.text, elapsedMs, result.usage),
-            sequence: this.nextRecordSequence()
+            ...(streamed ? { id: streamed.id } : {}),
+            sequence: streamed?.sequence ?? this.nextRecordSequence()
           });
         }
         const reason = String(result.stopReason);
@@ -670,6 +696,7 @@ export class AcpChatEngine implements CliChatEngine {
       })
       .catch((error: unknown) => {
         this.flushCurrentThought();
+        this.discardFailedReply();
         if (isAuthRequired(error)) {
           this.reportLoginRejected();
           this.promptError = new CliChatUnavailableError(
@@ -685,6 +712,13 @@ export class AcpChatEngine implements CliChatEngine {
       .finally(() => {
         this.complete = true;
       });
+  }
+
+  private discardFailedReply(): void {
+    this.replyFailed = true;
+    const reply = this.activeReplyRecord;
+    if (reply) this.records = this.records.filter((record) => record.id !== reply.id);
+    this.activeReplyRecord = null;
   }
 
   async readNew(_afterOffset: number): Promise<{
@@ -745,13 +779,15 @@ export class RpcAcpTunnel implements AcpTunnel {
     projectId: string,
     providerKind: AcpProviderKind,
     userId: string,
-    profile: "chat" | "workshop"
+    profile: "chat" | "workshop",
+    personaText?: string
   ) {
     const params: RpcAcpSpawnParams = {
       projectId,
       providerKind,
       userId,
       profile,
+      ...(personaText !== undefined ? { personaText } : {}),
       ...(this.options.useCandidate ? { useCandidate: true } : {})
     };
     return this.connection.acpSpawn(sessionKey, params);

@@ -38,9 +38,28 @@ pending action requests older than the startup grace window so a restart leaves 
 
 ## Cold-start replay
 
-Live chat defaults `JARVIS_CHAT_REPLAY_K` to `0`. A cold session should not replay prior chat turns
-into the CLI prompt; durable context should come from the database-backed memory and notes tools.
-Set `JARVIS_CHAT_REPLAY_K` only when intentionally testing legacy prompt replay behavior.
+A fresh provider session replays the conversation's accepted summary plus every stored turn the
+summary does not cover. Nothing is dropped silently: if that does not fit the launch budget, the
+launch refuses with an actionable message and queues a summary run.
+
+- `JARVIS_CHAT_REPLAY_K` (default 40): newest uncovered turns kept raw when a summary run is planned.
+  A run starts once more than twice this many turns, or more than the raw token allowance, sit
+  outside the summary.
+- `JARVIS_CHAT_REPLAY_TOKENS` (default 8000): replay budget. Raw turns kept beside a summary stay under half of it,
+  and never more than a launch with a full seed and summary can still fit.
+
+A live provider session also hands off on its own. The app estimates everything one session was
+sent and returned: launch input, seeded context, prepared turns and every transcript record,
+tool output and the replies to launch replay and seeded context included. Reported output usage can raise that count but never lower it. Before a
+turn would pass the budget, the next admitted turn relaunches that exact session for the same
+owner, conversation and provider, replaying the accepted summary plus every uncovered turn. With no
+accepted summary, or a replay that would not fit, the healthy session keeps serving and a summary
+run is requested. Private chats never hand off. This is the app's own handoff; it does not detect
+or handle a vendor's context limit.
+
+- `JARVIS_CHAT_SESSION_BUDGET_TOKENS` (default 64000): app-counted tokens one provider session may
+  hold. It sits well under the smallest supported economy model window because vendor system
+  prompts and tool definitions use context the app cannot see.
 
 ## Deferred — agent-path PreToolUse policy
 

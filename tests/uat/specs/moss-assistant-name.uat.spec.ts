@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 // #1441's assistant-name live path, updated for #3020/#3032: the per-user name from Settings ->
 // Your assistant -> Persona now also names the sidebar wordmark and browser tab. Prove the real
@@ -49,6 +50,10 @@ async function signIn(page: Page) {
     if (await skipAnyway.isVisible()) await skipAnyway.click();
   }
   await expect(userMenu).toBeVisible();
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    test.setTimeout(300_000);
+    await bringUpRealChatModel(page);
+  }
 }
 
 // apps/web/src/settings/settings-page.tsx: the "assistant" section id maps to AssistantPane,
@@ -109,12 +114,19 @@ test.describe
     const chatButton = page.getByRole("button", { name: `Chat with ${ASSISTANT_NAME}` });
     await expect(chatButton).toBeVisible();
     await expect(chatButton).toHaveAttribute("title", `Ask ${ASSISTANT_NAME}`);
+    const chatRouteResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/ai/capability-route/chat"
+    );
     await chatButton.click();
+    const chatRoute = await chatRouteResponse;
+    expect(chatRoute.status()).toBe(200);
+    expect(await chatRoute.json()).toMatchObject({ route: { available: true } });
 
     // Drawer root: role="dialog" aria-label="Chat with {name}", plus its displayed name.
     const drawer = page.getByRole("dialog", { name: `Chat with ${ASSISTANT_NAME}` });
     await expect(drawer).toBeVisible();
     await expect(drawer.locator(".chatd__name")).toHaveText(ASSISTANT_NAME);
+    await expect(drawer.locator(".chatd__status")).toHaveText("Here when you need me");
 
     // Composer placeholder + aria-label.
     const composer = drawer.getByRole("textbox", { name: `Message ${ASSISTANT_NAME}` });

@@ -57,6 +57,7 @@ import {
   notificationPreferenceSetEnabledInputSchema,
   notificationPreferenceSetEnabledOutputSchema
 } from "./notification-preference-tool.js";
+import { quietHoursFeature } from "./quiet-hours-feature.js";
 import {
   quietHoursOutputSchema,
   quietHoursSetExecute,
@@ -181,6 +182,14 @@ export const settingsModuleManifest: MossModuleManifest = {
         content: "user_authored",
         coveredBy: "settings.quietHours.set"
       },
+      permissionId: "settings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/me/quiet-hours/resolution",
+
+      // Settling differing saved schedules is the owner's explicit pick in Settings, never Moss's.
+      chat: { access: "blocked", blockedBecause: "module_promise" },
       permissionId: "settings.write"
     },
     {
@@ -434,8 +443,8 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/me/proactive-monitoring-settings",
-      chat: { access: "read", content: "user_authored" },
-      permissionId: "settings.view"
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "settings.write"
     },
     {
       method: "PATCH",
@@ -640,6 +649,11 @@ export const settingsModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "settings.app_map_lookup",
+      description:
+        "Moss finds declared screens, settings, features and fixes in the app map. Exact references and phrases take precedence; otherwise shared words rank up to eight entries visible to the requesting user."
+    },
+    {
       id: "app.findAction",
       description:
         "Find declared app routes by plain words, including their input schemas, blocked categories and existing dedicated tools.",
@@ -779,7 +793,8 @@ export const settingsModuleManifest: MossModuleManifest = {
           path: "/settings"
         }
       ]
-    }
+    },
+    quietHoursFeature
   ],
   assistantActionFamilies: [
     {
@@ -833,7 +848,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       name: "app.getMapSlice",
       description:
-        "Look up a bounded slice of the app's declared screens, settings, features, errors, and remediations. Supply at least one of screenId, settingId, errorCode, or query — a call with none of them is rejected.",
+        "Look up a bounded slice of the app's declared screens, settings, features, errors, and remediations. Exact references and phrases take precedence; otherwise free-text queries rank entries sharing at least two words. Supply at least one of screenId, settingId, errorCode, or query — a call with none of them is rejected.",
       permissionId: "settings.view",
       risk: "read",
       content: "user_authored",
@@ -906,7 +921,8 @@ export const settingsModuleManifest: MossModuleManifest = {
       actionLabel: "Change quiet hours",
       approvalPresentation: quietHoursPresentation,
       approvalContent: "user_authored",
-      description: "Set the user's quiet hours (enabled, start/end time, and time zone).",
+      description:
+        "Set the user's quiet hours (enabled, start/end time, and time zone). Leave out the time zone to keep the saved one; send null to clear it. When the result's authority is a conflict, tell the user alert cards still follow the older alerts schedule.",
       permissionId: "settings.write",
       risk: "write",
       content: "user_authored",

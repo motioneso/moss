@@ -940,10 +940,13 @@ export interface ChatThreadsTable {
   title: string;
   surface: string;
   incognito: boolean;
+  is_main: boolean;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
   last_active_at: TimestampColumn;
   conversation_summary: string | null;
+  summary_covered_through_message_id: string | null;
+  summary_revision: ColumnType<number, number | undefined, number>;
 }
 
 export interface ChatConversationProvenanceTable {
@@ -1014,6 +1017,131 @@ export interface ChatMessagesTable {
   tool_metadata: JsonColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
+}
+
+export type ChatReminderState =
+  | "queued"
+  | "paused"
+  | "delivered"
+  | "failed"
+  | "cancelled"
+  | "expired";
+export type ChatReminderTiming = "relative" | "local_clock";
+export type ChatReminderContextState = "pending" | "dismissed" | "acknowledged";
+
+export interface ChatReminderRunsTable {
+  id: string;
+  reminder_id: string;
+  owner_user_id: string;
+  version: number;
+  due_at: TimestampColumn;
+  at: TimestampColumn;
+  outcome: "delivered" | "quiet" | "failed" | "refused" | "expired";
+  message_id: string | null;
+  late: boolean;
+  context_state: ColumnType<
+    ChatReminderContextState,
+    ChatReminderContextState | undefined,
+    ChatReminderContextState
+  >;
+}
+
+export interface ChatRemindersTable {
+  repeat_kind: ColumnType<
+    "daily" | "weekly" | "interval" | null,
+    "daily" | "weekly" | "interval" | null | undefined
+  >;
+  repeat_seconds: ColumnType<number | null, number | null | undefined>;
+  destination_title: ColumnType<string | null, string | null | undefined, string | null>;
+  id: string;
+  owner_user_id: string;
+  thread_id: string;
+  source_message_id: string;
+  reserved_message_id: string;
+  reminder_text: string;
+  delay_seconds: number | null;
+  due_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  timing: ColumnType<ChatReminderTiming, ChatReminderTiming | undefined, ChatReminderTiming>;
+  local_due: string | null;
+  time_zone: string | null;
+  deadline_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  expired_at: NullableTimestampColumn;
+  state: ColumnType<ChatReminderState, ChatReminderState | undefined, ChatReminderState>;
+  context_state: ColumnType<
+    ChatReminderContextState,
+    ChatReminderContextState | undefined,
+    ChatReminderContextState
+  >;
+  version: ColumnType<number, number | undefined, number>;
+  delivered_at: NullableTimestampColumn;
+  late: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;
+  created_at: TimestampColumn;
+}
+
+export interface ChatResponsibilityProposalsTable {
+  id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  thread_id: string;
+  proposal_kind: string;
+  proposal_version: number;
+  terms_json: JsonColumn;
+  terms_fingerprint: string;
+  valid_until: NullableTimestampColumn;
+  question_user_message_id: string;
+  question_assistant_message_id: string;
+  state: "pending" | "cancelled" | "accepted";
+  acceptance_message_id: ColumnType<string | null, string | null | undefined, string | null>;
+  accepted_at: NullableTimestampColumn;
+  created_at: TimestampColumn;
+}
+
+export interface ChatScheduledReadsTable {
+  observation_key: ColumnType<string | null, string | null | undefined, string | null>;
+  failure_streak: ColumnType<number, number | undefined, number>;
+  reminder_id: string;
+  owner_user_id: string;
+  operation: "tasks.get";
+  item_id: string;
+  outcome: "success" | "refused" | "failed" | null;
+}
+
+export interface ChatReminderQuietAllowancesTable {
+  reminder_id: string;
+  owner_user_id: string;
+  source_message_id: string | null;
+  created_at: TimestampColumn;
+}
+
+export interface ChatReminderQuietProposalsTable {
+  thread_id: string;
+  owner_user_id: string;
+  reminder_id: string;
+  reminder_version: number;
+  allow: boolean;
+  source_message_id: string;
+  created_at: TimestampColumn;
+}
+
+/** Attachment metadata kept on a live turn; mirrors the shared ChatAttachmentDto. */
+export interface ChatLiveTurnAttachment {
+  readonly id: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+}
+
+export interface ChatLiveTurnsTable {
+  turn_id: string;
+  owner_user_id: string;
+  thread_id: string;
+  boot_id: string;
+  user_text: string;
+  attachments: ColumnType<
+    ChatLiveTurnAttachment[],
+    ChatLiveTurnAttachment[] | undefined,
+    ChatLiveTurnAttachment[]
+  >;
+  started_at: TimestampColumn;
 }
 
 export type ChatSkillSource = "authored" | "uploaded";
@@ -1963,6 +2091,13 @@ export interface MossDatabase {
   "app.chat_conversation_provenance": ChatConversationProvenanceTable;
   "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
+  "app.chat_reminders": ChatRemindersTable;
+  "app.chat_scheduled_reads": ChatScheduledReadsTable;
+  "app.chat_responsibility_proposals": ChatResponsibilityProposalsTable;
+  "app.chat_reminder_runs": ChatReminderRunsTable;
+  "app.chat_reminder_quiet_allowances": ChatReminderQuietAllowancesTable;
+  "app.chat_reminder_quiet_proposals": ChatReminderQuietProposalsTable;
+  "app.chat_live_turns": ChatLiveTurnsTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;
   "app.chat_classifier_shadow_reviews": ChatClassifierShadowReviewsTable;

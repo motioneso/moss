@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
@@ -16,11 +17,19 @@ export type { ActionRequestPreview, ChatRecordKind, TranscriptRecord };
 
 import {
   chatStreamUrl,
+  getMe,
   listChatThreadMessages,
   listChatThreads,
-  listPendingActionRequests
+  listPendingActionRequests,
+  resumeChat
 } from "../api/client.js";
 import { listWorkflowApprovals } from "../api/workflows-client.js";
+import {
+  applyStreamRecord,
+  isBackgroundRecord,
+  mergeBackgroundRecords,
+  mergeHydratedRecords
+} from "./stream-record-identity.js";
 
 function parsePreview(value: unknown): ActionRequestPreview | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -112,20 +121,38 @@ export function useChatStream(
   enabled = true
 ): {
   readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: () => void;
+  readonly clearRecords: (threadId?: string) => void;
   readonly streamErrorCount: number;
+  readonly selectionPending: boolean;
 } {
   const [records, setRecords] = useState<readonly TranscriptRecord[]>([]);
   const [streamErrorCount, setStreamErrorCount] = useState(0);
   const [streamGeneration, setStreamGeneration] = useState(0);
+  const [hydratedSurface, setHydratedSurface] = useState<ChatSurface>();
   const hydrationGeneration = useRef(0);
+  // The exact owned drawer thread this browser shows, for background arrival and catch-up.
+  const hydratedDrawerThread = useRef<string | undefined>(undefined);
+  // Private and module chats do not accept reminder arrivals.
+  const hydratedSideThread = useRef(false);
+  // Messages already hydrated at selection are not re-added by catch-up.
+  const knownDrawerReminders = useRef<Promise<ReadonlySet<string>>>(Promise.resolve(new Set()));
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
-  const clearRecords = useCallback(() => {
+  // Bind a confirmed drawer selection before accepting arrivals or catch-up.
+  const clearRecords = useCallback((threadId?: string) => {
+    const onDrawer =
+      threadId !== undefined &&
+      (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
+    hydratedDrawerThread.current = onDrawer ? threadId : undefined;
+    hydratedSideThread.current = !onDrawer;
+    knownDrawerReminders.current = onDrawer
+      ? readBackgroundMessageIds(threadId, streamScope.current.surface)
+      : Promise.resolve(new Set());
     hydrationGeneration.current += 1;
     setRecords([]);
     setStreamGeneration(hydrationGeneration.current);
+    setHydratedSurface(streamScope.current.surface);
   }, []);
 
   useEffect(() => {
@@ -142,6 +169,27 @@ export function useChatStream(
       streamScope.current.enabled &&
       streamScope.current.surface === surface;
 
+    // Subscribe first, then catch up on every open; merge unseen message ids once.
+    const catchUpDrawer = () => {
+      const threadId = hydratedDrawerThread.current;
+      if (!threadId) return;
+      void Promise.all([knownDrawerReminders.current, listChatThreadMessages(threadId, surface)])
+        .then(([known, { messages }]) => {
+          if (!isCurrent() || hydratedDrawerThread.current !== threadId) return;
+          const missed = recordsFromMessages(messages).filter(
+            (record) =>
+              record.backgroundThreadId === threadId &&
+              (!record.messageId || !known.has(record.messageId))
+          );
+          setRecords((current) =>
+            isCurrent() && hydratedDrawerThread.current === threadId
+              ? mergeBackgroundRecords(current, missed)
+              : current
+          );
+        })
+        .catch(() => undefined);
+    };
+
     const open = () => {
       if (!isCurrent()) return;
       const stream = new EventSource(chatStreamUrl(surface), { withCredentials: true });
@@ -152,27 +200,20 @@ export function useChatStream(
         if (!isCurrent()) return;
         retries = 0;
         setStreamErrorCount(0);
+        catchUpDrawer();
       };
       stream.onmessage = (event) => {
         if (!isCurrent()) return;
         // #1135 — reset error count on successful message so transient errors don't lock private chat
         setStreamErrorCount(0);
         const record = parseRecord(event.data);
-        if (record) {
-          setRecords((current) => {
-            if (!isCurrent()) return current;
-            if (record.kind === "reply" && record.messageId) {
-              // Replace the last streaming reply (no messageId) with the stored version (has messageId + sourceFreshness)
-              const lastUnstored = [...current]
-                .reverse()
-                .findIndex((r) => r.kind === "reply" && !r.messageId);
-              if (lastUnstored !== -1) {
-                const realIdx = current.length - 1 - lastUnstored;
-                return current.map((r, i) => (i === realIdx ? record : r));
-              }
-            }
-            return upsertTranscriptRecord(current, record);
-          });
+        if (
+          record &&
+          (!record.background ||
+            (!hydratedSideThread.current &&
+              record.backgroundThreadId === hydratedDrawerThread.current))
+        ) {
+          setRecords((current) => (isCurrent() ? applyStreamRecord(current, record) : current));
         }
       };
 
@@ -197,6 +238,10 @@ export function useChatStream(
   }, [enabled, surface, streamGeneration]);
 
   useEffect(() => {
+    setHydratedSurface(undefined);
+    hydratedDrawerThread.current = undefined;
+    hydratedSideThread.current = false;
+    knownDrawerReminders.current = Promise.resolve(new Set());
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -213,17 +258,31 @@ export function useChatStream(
 
     void (async () => {
       try {
-        const [threadsResult, workflowApprovals] = await Promise.all([
+        const isDrawer = surface === undefined || surface === DEFAULT_CHAT_SURFACE;
+        const [threadsResult, workflowApprovals, viewer] = await Promise.all([
           listChatThreads(surface),
-          listWorkflowApprovals().catch(() => [])
+          listWorkflowApprovals().catch(() => []),
+          isDrawer ? getMe() : undefined
         ]);
         if (!active || generation !== hydrationGeneration.current) return;
         const workflowRecords = workflowApprovals.map(workflowApprovalRecord);
         const { threads } = threadsResult;
-        const thread = threads[0];
+        const ownedThreads = isDrawer
+          ? threads.filter((candidate) => candidate.ownerUserId === viewer?.user.id)
+          : threads;
+        const thread = isDrawer
+          ? (ownedThreads.find((candidate) => candidate.isMain) ?? ownedThreads[0])
+          : threads[0];
         if (!thread) {
           setRecords((current) => (current.length === 0 ? workflowRecords : current));
           return;
+        }
+        // The browser's startup is a cold drawer selection even when another tab left a warm
+        // side-chat engine behind. Route it through the authenticated resume seam before reading
+        // history, so the displayed transcript and the next turn bind to the same Main thread.
+        if (isDrawer && thread.isMain) {
+          await resumeChat(thread.id, surface);
+          if (!active || generation !== hydrationGeneration.current) return;
         }
         // Recovery may persist overdue outcomes. Finish it before fetching history so the
         // first reload includes those outcomes instead of an empty, already-expired card.
@@ -234,6 +293,8 @@ export function useChatStream(
         const { messages } = await listChatThreadMessages(thread.id, surface);
         if (!active || generation !== hydrationGeneration.current) return;
         const history = recordsFromMessages(messages);
+        if (isDrawer) hydratedDrawerThread.current = thread.id;
+        hydratedSideThread.current = !isDrawer;
         // #1253 — re-hydrate pending action request cards (only "pending" status; others already resolved)
         const pendingActions = actionsResult.actions.filter((a) => a.status === "pending");
         const actionRecords: TranscriptRecord[] = pendingActions.map((action) => {
@@ -262,10 +323,15 @@ export function useChatStream(
           };
         });
         setRecords((current) =>
-          mergeHydratedRecords(current, [...history, ...actionRecords, ...workflowRecords])
+          mergeHydratedRecords(
+            hydratedSideThread.current ? current.filter((r) => !isBackgroundRecord(r)) : current,
+            [...history, ...actionRecords, ...workflowRecords]
+          )
         );
       } catch {
         // The live stream remains authoritative; an unavailable history read must not block chat.
+      } finally {
+        if (active && generation === hydrationGeneration.current) setHydratedSurface(surface);
       }
     })();
     const timer = setInterval(() => void refreshWorkflowApprovals(), 5_000);
@@ -275,32 +341,12 @@ export function useChatStream(
     };
   }, [enabled, surface]);
 
-  return { records, clearRecords, streamErrorCount };
-}
-
-function mergeHydratedRecords(
-  current: readonly TranscriptRecord[],
-  history: readonly TranscriptRecord[]
-): readonly TranscriptRecord[] {
-  // Recovery or a concurrent expiry timer can notify before the history read settles. These
-  // correlated outcomes alone are not a new turn; ordinary live activity still wins outright.
-  const onlyActionOutcomes = current.every(
-    (record) =>
-      record.actionRequestId &&
-      ["action_result", "approved", "not_approved", "refusal", "refused"].includes(record.kind)
-  );
-  if (!onlyActionOutcomes) return current;
-  const merged = [...history];
-  for (const record of current) {
-    if (
-      !merged.some(
-        (item) => item.kind === record.kind && item.actionRequestId === record.actionRequestId
-      )
-    ) {
-      merged.push(record);
-    }
-  }
-  return merged;
+  return {
+    records,
+    clearRecords,
+    streamErrorCount,
+    selectionPending: enabled && surface !== undefined && hydratedSurface !== surface
+  };
 }
 
 function workflowApprovalRecord(approval: WorkflowApprovalDto): TranscriptRecord {
@@ -338,45 +384,21 @@ export function mergeWorkflowApprovalRecords(
   ];
 }
 
-export function upsertTranscriptRecord(
-  records: readonly TranscriptRecord[],
-  record: TranscriptRecord
-): TranscriptRecord[] {
-  // Approval notifications may be replayed after reconnect. Their server request identity
-  // outlives the engine's per-turn sequence numbers, so do not append another card/outcome.
-  if (record.actionRequestId) {
-    const existing = records.findIndex(
-      (item) => item.kind === record.kind && item.actionRequestId === record.actionRequestId
+/** Ids of the stored background messages in a thread; empty when the read fails. */
+async function readBackgroundMessageIds(
+  threadId: string,
+  surface: ChatSurface | undefined
+): Promise<ReadonlySet<string>> {
+  try {
+    const { messages } = await listChatThreadMessages(threadId, surface);
+    return new Set(
+      recordsFromMessages(messages).flatMap((record) =>
+        isBackgroundRecord(record) && record.messageId ? [record.messageId] : []
+      )
     );
-    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
+  } catch {
+    return new Set();
   }
-  // ACP sequence numbers restart for each user turn. Stable ids and ordering therefore
-  // only apply inside the current turn; scanning older turns lets a later `sequence: 1`
-  // activity record jump in front of the first turn's `sequence: 2` record.
-  let turnStart = 0;
-  for (let index = records.length - 1; index >= 0; index -= 1) {
-    if (records[index]?.kind === "user") {
-      turnStart = index + 1;
-      break;
-    }
-  }
-  const currentTurn = records.slice(turnStart);
-  if (record.id) {
-    const existingInTurn = currentTurn.findIndex((item) => item.id === record.id);
-    const existing = existingInTurn === -1 ? -1 : turnStart + existingInTurn;
-    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
-  }
-  const insertionInTurn = currentTurn.findIndex(
-    (item) =>
-      record.sequence !== undefined &&
-      item.sequence !== undefined &&
-      item.sequence > record.sequence
-  );
-  const insertion = insertionInTurn === -1 ? -1 : turnStart + insertionInTurn;
-  if (insertion >= 0) {
-    return [...records.slice(0, insertion), record, ...records.slice(insertion)];
-  }
-  return [...records, record];
 }
 
 export function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
@@ -407,7 +429,11 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
             {
               kind: message.status === "error" ? ("error" as const) : ("reply" as const),
               text: message.body,
+              scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
+              ...(isDeliveredReminder(message)
+                ? { background: true as const, backgroundThreadId: message.threadId }
+                : {}),
               sourceFreshness: message.sourceFreshness,
               meetingContext: message.meetingContext,
               answerProvenance: message.answerProvenance,
@@ -419,6 +445,10 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
         : [])
     ];
   });
+}
+
+function isDeliveredReminder(message: ChatMessageDto): boolean {
+  return message.origin?.kind === "reminder" && message.origin.event === "delivered";
 }
 
 function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
@@ -460,6 +490,11 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       id: typeof parsed.id === "string" ? parsed.id : undefined,
       sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
+      turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
+      background: parsed.background === true ? true : undefined,
+      scheduledReadSource: parsed.scheduledReadSource === "tasks" ? "tasks" : undefined,
+      backgroundThreadId:
+        typeof parsed.backgroundThreadId === "string" ? parsed.backgroundThreadId : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
       workflowApprovalId:
@@ -531,4 +566,23 @@ function parseUsage(value: unknown): TranscriptRecord["usage"] {
     if (typeof usage[key] === "number") result[key] = usage[key];
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+export function reconcileFallbacks(
+  fallbacks: readonly TranscriptRecord[],
+  liveRecords: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  const unmatched = [...liveRecords];
+  return fallbacks.filter((fallback) => {
+    const idx = unmatched.findIndex(
+      (record) =>
+        record.kind === fallback.kind &&
+        (record.messageId && fallback.messageId
+          ? record.messageId === fallback.messageId
+          : record.text === fallback.text)
+    );
+    if (idx === -1) return true;
+    unmatched.splice(idx, 1);
+    return false;
+  });
 }

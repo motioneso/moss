@@ -11,12 +11,15 @@ import type {
 import {
   listChatThreadMessages,
   listChatThreads,
-  listPendingActionRequests
+  listPendingActionRequests,
+  resumeChat
 } from "../../apps/web/src/api/client.js";
 import { recordsFromMessages, useChatStream } from "../../apps/web/src/chat/use-chat-stream.js";
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
   chatStreamUrl: () => "/api/chat/stream",
+  getMe: vi.fn(async () => ({ user: { id: "user-1" } })),
+  resumeChat: vi.fn(async () => undefined),
   listChatThreadMessages: vi.fn(),
   listChatThreads: vi.fn(),
   listPendingActionRequests: vi.fn()
@@ -57,6 +60,7 @@ function thread(id: string): ChatThreadDto {
     ownerUserId: "user-1",
     title: id,
     incognito: false,
+    isMain: false,
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
     lastActiveAt: new Date(0).toISOString(),
@@ -85,10 +89,14 @@ function action(
 }
 
 function Probe({ surface }: { surface: ChatSurface }) {
-  const { records, clearRecords } = useChatStream(surface);
+  const { records, clearRecords, selectionPending } = useChatStream(surface);
   return createElement(
     "button",
-    { onClick: clearRecords, "data-records": JSON.stringify(records) },
+    {
+      onClick: clearRecords,
+      "data-records": JSON.stringify(records),
+      "data-pending": selectionPending
+    },
     records.map((record) => record.text).join("|")
   );
 }
@@ -128,6 +136,36 @@ function historyMessage(
 }
 
 describe("thread-scoped pending card hydration", () => {
+  it("keeps the composer selection pending until Main resume and history finish", async () => {
+    const resumed = deferred<void>();
+    const history = deferred<{ messages: ChatMessageDto[] }>();
+    vi.mocked(listChatThreads).mockResolvedValue({
+      threads: [{ ...thread("main"), isMain: true }]
+    });
+    vi.mocked(resumeChat).mockReturnValue(resumed.promise);
+    vi.mocked(listChatThreadMessages).mockReturnValue(history.promise);
+    await mount();
+    expect(renderer!.root.findByType("button").props["data-pending"]).toBe(true);
+    expect(listChatThreadMessages).not.toHaveBeenCalled();
+    await act(async () => resumed.resolve());
+    expect(renderer!.root.findByType("button").props["data-pending"]).toBe(true);
+    expect(listChatThreadMessages).toHaveBeenCalledExactlyOnceWith("main", "drawer");
+    await act(async () => history.resolve({ messages: [] }));
+    expect(renderer!.root.findByType("button").props["data-pending"]).toBe(false);
+  });
+
+  it("keeps explicit New chat ready without resuming a stale startup Main", async () => {
+    const threads = deferred<{ threads: ChatThreadDto[] }>();
+    vi.mocked(listChatThreads).mockReturnValue(threads.promise);
+    await mount();
+    expect(renderer!.root.findByType("button").props["data-pending"]).toBe(true);
+    await act(async () => renderer!.root.findByType("button").props.onClick());
+    expect(renderer!.root.findByType("button").props["data-pending"]).toBe(false);
+    await act(async () => threads.resolve({ threads: [{ ...thread("old-main"), isMain: true }] }));
+    expect(resumeChat).not.toHaveBeenCalled();
+    expect(renderer!.root.findByType("button").props["data-pending"]).toBe(false);
+  });
+
   it.each([true, false])(
     "keeps full history once when timeout SSE arrives before history (persisted=%s)",
     async (persisted) => {

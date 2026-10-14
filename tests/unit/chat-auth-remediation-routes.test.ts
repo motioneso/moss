@@ -7,6 +7,7 @@ import { PageContextStore } from "../../packages/chat/src/live/page-context-stor
 import {
   API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE,
   ApiKeyLiveChatUnavailableError,
+  CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   CHAT_PROVIDER_CHANGED_MESSAGE,
   ChatProviderChangedError,
   CliChatUnavailableError,
@@ -17,6 +18,7 @@ import {
   CODEX_SIGN_IN_REQUIRED_MESSAGE,
   knownAuthFailureMessage
 } from "../../packages/chat/src/live/auth-errors.js";
+import { CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE } from "../../packages/chat/src/live/summary-coverage.js";
 
 const ACTOR_ID = "11111111-1111-4111-8111-111111111111";
 const CLAUDE_SIGN_IN_EXPIRED_MESSAGE =
@@ -122,6 +124,50 @@ describe("chat auth remediation route boundaries", () => {
     const app = buildRestApp(new CliChatUnavailableError(message));
     apps.push(app);
     await assertSerializedError(app, { method: "GET", url: "/api/chat/threads" }, 503, message);
+  });
+
+  it("live route tells the owner an over-long conversation is being condensed (#3156)", async () => {
+    const app = buildLiveApp(new CliChatUnavailableError(CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE));
+    apps.push(app);
+    await assertSerializedError(
+      app,
+      { method: "POST", url: "/api/chat/turn", payload: { text: "hello" } },
+      503,
+      CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE
+    );
+  });
+
+  it("REST route tells the owner an over-long conversation is being condensed (#3156)", async () => {
+    const app = buildRestApp(new CliChatUnavailableError(CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE));
+    apps.push(app);
+    await assertSerializedError(
+      app,
+      { method: "GET", url: "/api/chat/threads" },
+      503,
+      CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE
+    );
+  });
+
+  it("live route tells the owner the chat changed while a session was starting (#3157)", async () => {
+    const app = buildLiveApp(new CliChatUnavailableError(CHAT_CHANGED_WHILE_STARTING_MESSAGE));
+    apps.push(app);
+    await assertSerializedError(
+      app,
+      { method: "POST", url: "/api/chat/turn", payload: { text: "hello" } },
+      503,
+      CHAT_CHANGED_WHILE_STARTING_MESSAGE
+    );
+  });
+
+  it("REST route tells the owner the chat changed while a session was starting (#3157)", async () => {
+    const app = buildRestApp(new CliChatUnavailableError(CHAT_CHANGED_WHILE_STARTING_MESSAGE));
+    apps.push(app);
+    await assertSerializedError(
+      app,
+      { method: "GET", url: "/api/chat/threads" },
+      503,
+      CHAT_CHANGED_WHILE_STARTING_MESSAGE
+    );
   });
 
   it.each([

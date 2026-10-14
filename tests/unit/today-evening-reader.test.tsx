@@ -122,6 +122,7 @@ async function renderEveningToday(): Promise<void> {
           ChatControlsProvider,
           {
             value: {
+              openChatThread: () => undefined,
               openChat: () => undefined,
               openChatWith: () => undefined,
               openAssistantWithDraft: () => undefined

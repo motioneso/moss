@@ -266,6 +266,11 @@ export const briefingsModuleManifest = {
   ],
   features: [
     {
+      id: "briefings.email_current_status",
+      description:
+        "Checks later receipts; bills report unknown payment status. Keeps triaged replies; judged commitments replace their email. No-action confirmation emails are left off Today. Saves owner-only assessments."
+    },
+    {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.briefings",
       description: "Prepared a briefing"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyRecencyDecay,
+  estimateTokens,
   hybridScore,
   neutralizeSeedFraming,
   renderModuleControlContext,
@@ -65,6 +66,32 @@ describe("renderMemorySeedBlock", () => {
     expect(result).toContain("Senior engineer");
     expect(result).toContain("<memory>");
     expect(result).toContain("</memory>");
+  });
+
+  it("keeps the whole block, facts and framing included, within the seed budget", () => {
+    const chunks = Array.from({ length: 20 }, (_, index) => ({
+      text: `Recalled passage ${index} `.repeat(10),
+      date: "2026-06-01",
+      threadId: `t${index}`,
+      hybridScore: 1 - index / 100
+    }));
+    const facts = Array.from({ length: 60 }, (_, index) => ({
+      category: "profile",
+      content: `Saved fact number ${index} about the owner`
+    }));
+    const result = renderMemorySeedBlock(chunks, facts, 200);
+    expect(estimateTokens(result)).toBeLessThanOrEqual(200);
+    expect(result).toContain("</memory>");
+  });
+
+  it("keeps saved facts ahead of recalled passages when the budget is tight", () => {
+    const result = renderMemorySeedBlock(
+      [{ text: "x".repeat(2000), date: "2026-06-01", threadId: "t1", hybridScore: 0.9 }],
+      [{ category: "profile", content: "Senior engineer" }],
+      200
+    );
+    expect(result).toContain("Senior engineer");
+    expect(estimateTokens(result)).toBeLessThanOrEqual(200);
   });
 
   it("neutralizes a closing delimiter injected via recalled chunk text (#123)", () => {

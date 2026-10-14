@@ -5,17 +5,30 @@
 // directly would also register its top-level test() calls (the same reason the specs used to
 // hand-copy this logic instead of importing one another).
 //
-// Every real-chat spec signs in with the operator's own Codex login, already copied into the
-// stack by the provisioner (real-chat-env.ts) before any spec runs, then discovers and binds the
-// cheapest ("economy" tier) chat-capable model Ben's ruling requires — never a hardcoded model
-// name, and never a silent widen to a pricier tier when none is found.
+// Every real-chat spec signs in with the provider JARVIS_UAT_REAL_CHAT_PROVIDER selects
+// (real-chat-env.ts). Codex, the default, uses the operator's own login, already copied into the
+// stack by the provisioner. Claude (#3361) signs in through Moss here, with the operator
+// approving a one-time link (claude-signin-handoff.ts) only when no saved token works (#3387).
+// Either way the spec then discovers and binds the cheapest ("economy" tier) chat-capable model
+// Ben's ruling requires — never a hardcoded model name, and never a silent widen to a pricier
+// tier when none is found.
 
-import { expect, type APIResponse, type Page } from "@playwright/test";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../model-tier.js";
+import { uatRealChatProvider, uatRealChatProviderKind } from "../real-chat-env.js";
+import {
+  CLAUDE_TOKEN_REUSED_ENV,
+  claudeSignInPaths,
+  claudeSignInWaitMs,
+  signInClaudeThroughMoss
+} from "../claude-signin-handoff.js";
 
-/** Codex's provider kind (#2732) — the retired token-based "anthropic" path is gone. */
-export const REAL_CHAT_PROVIDER_KIND = "openai-compatible";
+/** The selected provider's kind: "openai-compatible" for Codex, "anthropic" for Claude. */
+export const REAL_CHAT_PROVIDER_KIND = uatRealChatProviderKind();
+
+/** Time the Claude sign-in adds on top of a spec's own budget: the code wait plus Moss's settle. */
+const CLAUDE_SIGNIN_EXTRA_MS = 5 * 60_000;
 
 export const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
@@ -33,7 +46,9 @@ export function requireUatProjectName(): string {
   return projectName;
 }
 
-export async function readUatJson(response: APIResponse): Promise<unknown> {
+export async function readUatJson(
+  response: Pick<APIResponse, "ok" | "url" | "status" | "json">
+): Promise<unknown> {
   expect(response.ok(), `${response.url()} -> ${response.status()}`).toBeTruthy();
   return response.json();
 }
@@ -62,20 +77,40 @@ export async function signInUatAdmin(page: Page): Promise<void> {
 }
 
 /**
- * Installs the Codex CLI and drives its admin-gated login. The CLI is already authenticated by
+ * Installs the selected CLI and drives its admin-gated login. Codex is already authenticated by
  * the operator's own login the provisioner copied into the cli-auth volume (real-chat-env.ts),
- * so this settles to "ready" non-interactively rather than returning an authorization URL.
+ * so it settles to "ready" non-interactively. Claude settles at once on an accepted saved token;
+ * otherwise it waits for the operator to approve a one-time link, so the running test's timeout
+ * grows by that wait first.
  */
 export async function bringUpRealChatProvider(page: Page): Promise<void> {
   const install = (await readUatJson(
     await page.request.post("/api/onboarding/provider-install", {
-      data: { providerKind: REAL_CHAT_PROVIDER_KIND }
+      data: { providerKind: REAL_CHAT_PROVIDER_KIND },
+      timeout: 180_000
     })
   )) as { installState?: string };
   expect(
     install.installState,
     `provider-install did not settle to installed (got "${install.installState}")`
   ).toBe("installed");
+
+  if (uatRealChatProvider() === "claude") {
+    const codeWaitMs = claudeSignInWaitMs();
+    test.info().setTimeout(test.info().timeout + codeWaitMs + CLAUDE_SIGNIN_EXTRA_MS);
+    await signInClaudeThroughMoss(
+      {
+        post: async (path, data) => readUatJson(await page.request.post(path, { data }))
+      },
+      {
+        paths: claudeSignInPaths(requireUatProjectName()),
+        codeWaitMs,
+        sleep: (ms) => page.waitForTimeout(ms),
+        reusingSavedToken: process.env[CLAUDE_TOKEN_REUSED_ENV] === "1"
+      }
+    );
+    return;
+  }
 
   const begin = (await readUatJson(
     await page.request.post("/api/onboarding/provider-login/begin", {
@@ -108,7 +143,7 @@ export async function discoverCheapestChatModel(
     };
     lastModels = body.models;
     try {
-      return pickCheapestActiveChatModel(lastModels);
+      return pickCheapestActiveChatModel(lastModels, process.env.MOSS_UAT_REAL_CHAT_MODEL);
     } catch {
       // Discovery hasn't landed an eligible model yet; keep polling until the deadline.
     }
@@ -122,27 +157,9 @@ export async function discoverCheapestChatModel(
 }
 
 /**
- * Ben's ruling: every real-chat UAT turn runs through the account's cheapest ("economy") model
- * to preserve usage — never hardcode a model name or fall back to a pricier tier. Admin must
- * enable the override before a user's own selection takes effect (packages/ai/src/routes.ts PUT
- * /api/admin/ai/chat-model-override, PUT /api/ai/chat-model-override).
- */
-export async function selectChatModelOverride(
-  page: Page,
-  model: UatDiscoveredModel
-): Promise<void> {
-  await readUatJson(
-    await page.request.put("/api/admin/ai/chat-model-override", { data: { enabled: true } })
-  );
-  await readUatJson(
-    await page.request.put("/api/ai/chat-model-override", { data: { modelId: model.id } })
-  );
-}
-
-/**
- * The full setup real turns run against: install + log in the Codex CLI, discover the cheapest
- * eligible model, and bind it as the account's chat override. Returns the model so a spec can
- * assert against its id.
+ * The full setup real turns run against: install + log in the selected CLI, discover the cheapest
+ * eligible model, and pin it for chat and worker capabilities through the existing admin API.
+ * Returns the model so a spec can assert against its id.
  */
 export async function bringUpRealChatModel(
   page: Page,
@@ -150,6 +167,24 @@ export async function bringUpRealChatModel(
 ): Promise<UatDiscoveredModel> {
   await bringUpRealChatProvider(page);
   const cheapest = await discoverCheapestChatModel(page, deadlineMs);
-  await selectChatModelOverride(page, cheapest);
+  // A missing worker capability would allow fallback to another model within the provider.
+  for (const capability of ["chat", "tool-use", "json", "summarization"]) {
+    expect(cheapest.capabilities).toContain(capability);
+  }
+  await readUatJson(
+    await page.request.put(`/api/admin/users/${UAT_ADMIN_ID}/ai-pin`, {
+      data: { modelId: cheapest.id }
+    })
+  );
+  for (const capability of ["chat", "tool-use", "json", "summarization"]) {
+    const body = (await readUatJson(
+      await page.request.get(`/api/ai/capability-route/${capability}`)
+    )) as { route: { model: { id: string } | null; reason: string } };
+    expect(body.route.model?.id).toBe(cheapest.id);
+    expect(body.route.reason).toBe("admin-pin");
+  }
+  console.log(
+    `[uat real-chat] provider=${uatRealChatProvider()}, model=${cheapest.id}, providerModel=${cheapest.providerModelId}, tier=${cheapest.tier}`
+  );
   return cheapest;
 }

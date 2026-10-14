@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql, type SqlBool } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type Notification } from "@moss/db";
+import { deferUntilQuietHoursEnd } from "@moss/module-sdk";
 import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 
 import { isSameOriginAppPath } from "./app-path.js";
@@ -14,6 +15,11 @@ export const DIGEST_BATCH_SIZE = 50;
 export interface NotificationWithReadState extends Notification {
   readonly read_at: Date | null;
 }
+
+export type QuietHoursAllowancePolicy = (
+  scopedDb: DataContextDb,
+  notification: Pick<Notification, "module_id" | "metadata" | "event_key">
+) => Promise<boolean>;
 
 export interface ListNotificationsResult {
   readonly notifications: readonly NotificationWithReadState[];
@@ -92,7 +98,8 @@ export interface PushQueuePort {
   enqueueDeliver(
     scopedDb: DataContextDb,
     notificationId: string,
-    recipientUserId: string
+    recipientUserId: string,
+    releaseAt?: Date
   ): Promise<void>;
   enqueueSummary(scopedDb: DataContextDb, recipientUserId: string, releaseAt: Date): Promise<void>;
 }
@@ -150,37 +157,8 @@ export function computeDeferredUntil(
   settings: QuietHoursSettings,
   tz: string
 ): Date | null {
-  if (!isInQuietHours(now, settings, tz)) return null;
-  const [eh, em] = parseHHMM(settings.end);
-  const endTotalMin = eh * 60 + em;
-  const curLocal = getLocalMinutes(now, tz);
-
-  const dateFmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour12: false
-  });
-  const partsMap = Object.fromEntries(dateFmt.formatToParts(now).map((p) => [p.type, p.value]));
-  const year = parseInt(partsMap.year ?? "2000", 10);
-  const month = parseInt(partsMap.month ?? "1", 10) - 1;
-  const day = parseInt(partsMap.day ?? "1", 10);
-
-  // For overnight windows (start > end), pre-midnight leg means end is NEXT local day.
-  const dayOffset = endTotalMin <= curLocal ? 1 : 0;
-
-  // Naive approximation: treat tz offset as zero, place end-time at UTC midnight + end.
-  const naiveUTC = new Date(Date.UTC(year, month, day + dayOffset, eh, em, 0));
-
-  // Measure how far the naive approximation's local time is from the target local time.
-  // Use modular arithmetic (±720 window) so overnight wrap doesn't flip the sign.
-  const localMinAtNaive = getLocalMinutes(naiveUTC, tz);
-  let deltaMin = endTotalMin - localMinAtNaive;
-  if (deltaMin < -720) deltaMin += 1440;
-  if (deltaMin > 720) deltaMin -= 1440;
-
-  return new Date(naiveUTC.getTime() + deltaMin * 60 * 1000);
+  if (!settings.enabled) return null;
+  return deferUntilQuietHoursEnd(now, settings.start, settings.end, tz);
 }
 
 export async function resolveTimezone(
@@ -210,6 +188,20 @@ export async function isActorInQuietHours(
   return isInQuietHours(now, settings, tz);
 }
 
+export async function actorQuietHoursDeferredUntil(
+  scopedDb: DataContextDb,
+  port: QuietHoursPort,
+  now: Date
+): Promise<Date | null> {
+  const settings = parseQuietHoursSettings(await port.getSettings(scopedDb));
+  if (!settings?.enabled) return null;
+  return computeDeferredUntil(
+    now,
+    settings,
+    await resolveTimezone(port, scopedDb, settings.timezone)
+  );
+}
+
 /**
  * Task 2b (#1283): same rule as worker-rpc-host.ts's `notifyHref` — a same-origin
  * path only, never an absolute URL, a protocol-relative URL, or a scheme. This is
@@ -231,8 +223,48 @@ export class NotificationsRepository {
   constructor(
     private readonly quietHoursPort?: QuietHoursPort,
     private readonly notificationPreferencePort?: NotificationPreferencePort,
-    private readonly pushQueuePort?: PushQueuePort
+    private readonly pushQueuePort?: PushQueuePort,
+    private readonly isAllowedDuringQuietHours?: QuietHoursAllowancePolicy
   ) {}
+
+  async findByEventKey(scopedDb: DataContextDb, moduleId: string, eventKey: string) {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.notifications")
+      .selectAll()
+      .where("module_id", "=", moduleId)
+      .where("event_key", "=", eventKey)
+      .executeTakeFirst();
+  }
+
+  async listUnreadDeferred(
+    scopedDb: DataContextDb,
+    releaseAt: Date
+  ): Promise<readonly NotificationWithReadState[]> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<NotificationWithReadState>`
+      SELECT n.*, NULL::timestamptz AS read_at
+      FROM app.notifications n
+      LEFT JOIN app.notification_reads r ON r.notification_id = n.id
+      WHERE n.deferred_until = ${releaseAt} AND r.notification_id IS NULL
+      ORDER BY n.id
+    `.execute(scopedDb.db);
+    return result.rows;
+  }
+
+  async deferDelivery(
+    scopedDb: DataContextDb,
+    notificationId: string,
+    releaseAt: Date
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.notifications")
+      .set({ deferred_until: releaseAt })
+      .where("id", "=", notificationId)
+      .where("urgency", "!=", "urgent")
+      .execute();
+  }
 
   async listVisible(scopedDb: DataContextDb): Promise<ListNotificationsResult> {
     assertDataContextDb(scopedDb);
@@ -294,7 +326,15 @@ export class NotificationsRepository {
     const href = validateHref(input.href);
 
     let deferredUntil: Date | null = null;
-    if (urgency !== "urgent" && this.quietHoursPort) {
+    if (
+      urgency !== "urgent" &&
+      this.quietHoursPort &&
+      !(await this.isAllowedDuringQuietHours?.(scopedDb, {
+        module_id: input.moduleId,
+        metadata: projectedMetadata,
+        event_key: eventKey
+      }))
+    ) {
       const raw = await this.quietHoursPort.getSettings(scopedDb);
       const settings = parseQuietHoursSettings(raw);
       if (settings?.enabled) {

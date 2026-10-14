@@ -86,3 +86,7 @@ export * from "./meeting-export-api.js";
 export * from "./meeting-history-api.js";
 
 export * from "./meeting-capture-api.js";
+
+export * from "./scheduled-tasks-api.js";
+export * from "./responsibility-agreement.js";
+export * from "./briefing-email-evidence.js";

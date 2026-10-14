@@ -253,3 +253,17 @@ export function liveStreamResult(
   delete display.timestampContext;
   return display;
 }
+
+/** One validated read response for callers that also need deterministic source fields. */
+export function readToolResponse(
+  schema: JsonSchema | undefined,
+  result: ToolResult,
+  toolName?: string,
+  person?: TimestampContextPerson
+): GatewayToolResponse {
+  return {
+    ok: true,
+    structuredData: sanitizeAssistantToolResult(schema, result).data,
+    data: renderAndCap(schema, result, toolName, person)
+  };
+}

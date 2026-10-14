@@ -15,6 +15,7 @@ import {
   type FixtureCall,
   type FixtureTool
 } from "../uat/fixtures/classifier-mcp-fixture-server.js";
+import { requireOwnInstance } from "./own-instance.js";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -141,6 +142,7 @@ export function sortOf(detail: IntegrationDetail, tool: string): IntegrationClas
 }
 
 export async function signIn(page: Page): Promise<void> {
+  requireOwnInstance();
   await page.goto("/");
   await page.getByLabel("Email").fill(R26.ownerEmail);
   await page.getByLabel("Password").fill(R26.ownerPassword);
@@ -201,7 +203,8 @@ export async function shootBoth(page: Page, name: string): Promise<void> {
   for (const [size, viewport] of SIZES) {
     await page.setViewportSize(viewport);
     await assertNoCrowding(page, `${name} ${size}`);
-    await page.screenshot({ path: `${R26.shotDir}/${name}-${size}.png`, fullPage: true });
+    if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+      await page.screenshot({ path: `${R26.shotDir}/${name}-${size}.png`, fullPage: true });
   }
   await page.setViewportSize(SIZES[0][1]);
 }

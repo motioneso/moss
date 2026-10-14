@@ -1,3 +1,8 @@
+import { CHAT_SCHEDULED_READ_QUEUE_DEFINITION } from "./scheduled-reads/queue.js";
+import {
+  registerScheduledReadWorker,
+  type ScheduledReadRunnerDeps
+} from "./scheduled-reads/runner.js";
 import { createHash } from "node:crypto";
 
 import type { FastifyBaseLogger } from "fastify";
@@ -24,6 +29,7 @@ import {
 import {
   registerDataContextWorker,
   sendJob,
+  toAccessContext,
   type ActorScopedJobPayload,
   type QueueDefinition
 } from "@moss/jobs";
@@ -51,6 +57,16 @@ import {
 import { PreferencesRepository } from "@moss/structured-state";
 
 import { ChatRepository } from "./repository.js";
+import { handleSummarizeConversationJob, type SummaryJobDeps } from "./summary-job.js";
+import {
+  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
+  registerReminderDeliveryWorker
+} from "./reminders/deliver.js";
+import {
+  CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION,
+  registerReminderNotificationWorker
+} from "./reminders/notifications.js";
+import type { NotificationsRepository } from "@moss/notifications";
 import {
   buildDistillationPrompt,
   containsSensitiveMemoryText,
@@ -67,11 +83,22 @@ import {
 export const CHAT_EMBED_TURN_QUEUE = "chat.embed-turn";
 export const CHAT_EXTRACT_FACTS_QUEUE = "chat.extract-facts";
 export const CHAT_ARCHIVE_DAY_QUEUE = "chat.archive-day";
+export const CHAT_SUMMARIZE_CONVERSATION_QUEUE = "chat.summarize-conversation";
 
 export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: CHAT_EMBED_TURN_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
-  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } }
+  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
+  // Exclusive: the singleton key (thread + expected revision) keeps one candidate per checkpoint.
+  // No retries: the handler reports every outcome instead of throwing, and the next launch or
+  // turn re-requests a summary from the current checkpoint.
+  {
+    name: CHAT_SUMMARIZE_CONVERSATION_QUEUE,
+    options: { retryLimit: 0, deleteAfterSeconds: 600, policy: "exclusive" }
+  },
+  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
+  CHAT_SCHEDULED_READ_QUEUE_DEFINITION,
+  CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION
 ];
 
 /**
@@ -96,6 +123,14 @@ export interface ExtractFactsJobPayload extends ActorScopedJobPayload {
 
 export interface ArchiveDayJobPayload extends ActorScopedJobPayload {
   readonly localDate: string;
+}
+
+/** Ids and a revision counter only: the checkpoint a summary candidate must still match. */
+export interface SummarizeConversationJobPayload extends ActorScopedJobPayload {
+  readonly threadId: string;
+  readonly expectedRevision: number;
+  readonly expectedCoveredThroughMessageId: string | null;
+  readonly throughMessageId: string;
 }
 
 // ── Embed-turn handler ────────────────────────────────────────────────────────
@@ -449,6 +484,9 @@ export async function handleArchiveDayJob(
 // ── Worker registration ───────────────────────────────────────────────────────
 
 export interface RegisterChatJobWorkersOptions {
+  readonly scheduledReadGateway?: ScheduledReadRunnerDeps["gateway"];
+  readonly scheduledReportGenerator?: ScheduledReadRunnerDeps["generateReport"];
+  readonly reminderNotifications: NotificationsRepository;
   readonly embeddingProviderFactory: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
   /**
    * AI deps for the extract-facts worker. Optional here so the module registry can
@@ -470,6 +508,9 @@ export interface RegisterChatJobWorkersOptions {
    * worker logger (observability spec: no console.* in prod).
    */
   readonly logger?: FastifyBaseLogger;
+  /** Constrained CLI structured transport for the summarize-conversation worker. */
+  readonly createConstrainedCliStructuredAdapter?: SummaryJobDeps["createConstrainedCliStructuredAdapter"];
+  readonly probeConstrainedCli?: SummaryJobDeps["probeConstrainedCli"];
 }
 
 function defaultExtractFactsDeps(): ExtractFactsDeps {
@@ -545,7 +586,62 @@ export async function registerChatJobWorkers(
     options.workOptions
   );
 
-  const workIds = [embedWorkId, extractWorkId, archiveWorkId];
+  // Not a data-context worker: the model call must run outside any transaction, so the
+  // handler opens its own short owner-scoped transactions.
+  const summarizeWorkId = await boss.work<SummarizeConversationJobPayload, void>(
+    CHAT_SUMMARIZE_CONVERSATION_QUEUE,
+    options.workOptions ?? {},
+    async ([job]) => {
+      if (!job) return;
+      await handleSummarizeConversationJob(toAccessContext(job), job.data, {
+        dataContext,
+        chatRepository: chatRepo,
+        createConstrainedCliStructuredAdapter: options.createConstrainedCliStructuredAdapter,
+        probeConstrainedCli: options.probeConstrainedCli,
+        logger: options.logger,
+        enqueueNext: async (next) => {
+          await sendJob(boss, CHAT_SUMMARIZE_CONVERSATION_QUEUE, next, {
+            singletonKey: `${next.threadId}:${next.expectedRevision}`
+          });
+        }
+      });
+    }
+  );
+
+  const reminderWorkId = await registerReminderDeliveryWorker(
+    boss,
+    dataContext,
+    options.workOptions
+  );
+  const reminderNotificationWorkId = await registerReminderNotificationWorker(
+    boss,
+    dataContext,
+    options.reminderNotifications,
+    options.workOptions
+  );
+
+  const readWorkId =
+    options.scheduledReadGateway && options.scheduledReportGenerator
+      ? await registerScheduledReadWorker(
+          boss,
+          {
+            dataContext,
+            gateway: options.scheduledReadGateway,
+            generateReport: options.scheduledReportGenerator
+          },
+          options.workOptions
+        )
+      : null;
+
+  const workIds = [
+    ...(readWorkId ? [readWorkId] : []),
+    embedWorkId,
+    extractWorkId,
+    archiveWorkId,
+    summarizeWorkId,
+    reminderWorkId,
+    reminderNotificationWorkId
+  ];
   return workIds;
 }
 

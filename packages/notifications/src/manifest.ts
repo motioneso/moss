@@ -88,9 +88,7 @@ export const notificationsModuleManifest = {
       id: "notifications.push",
       label: "Push notifications",
       description:
-        "Turn on push notifications for this browser and manage which devices receive them. " +
-        "Needs a secure connection, is not available in every browser, and each person can " +
-        "register up to 10 devices.",
+        "Manage push for up to 10 devices over a secure connection in supported browsers. Chat appears in the per-module notification switches and counts toward email digest availability.",
       path: "/settings?section=modules&module=notifications",
       scope: "user",
       permissionId: "notifications.update"
@@ -98,11 +96,14 @@ export const notificationsModuleManifest = {
   ],
   features: [
     {
+      id: "notifications.quiet_hours",
+      description:
+        "Normal alerts recheck quiet hours and wait for the local boundary. Visible bell items stay visible; their alerts release individually. Items created during quiet hours release as a summary. Urgent alerts remain immediate."
+    },
+    {
       id: "notifications.push",
       description:
-        "Push notifications alert a registered browser or device, alongside the in-app bell. " +
-        "Needs a secure connection, is not supported everywhere, and allows up to 10 devices " +
-        "per person. A repeatedly-failing device is turned off but stays listed.",
+        "Push alerts up to 10 registered devices per person over a secure connection. Queued delivery and summaries recheck module mutes, sensitivity and active devices. Repeated failure disables a device but keeps it listed.",
       remediations: [
         {
           id: "notifications.push.manage_devices",

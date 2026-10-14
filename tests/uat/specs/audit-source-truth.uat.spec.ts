@@ -156,7 +156,11 @@ test("source changes and resumed archives tell the truth through real interrupti
     expect(exportPosts).toBe(1);
     controlApp(project, ["up", "-d", "--no-deps", "--no-recreate", "--wait"]);
     appStopped = false;
-    await page.getByRole("button", { name: "Try again", exact: true }).click();
+    await page
+      .locator("section")
+      .filter({ has: page.getByText("Your data", { exact: true }) })
+      .getByRole("button", { name: "Try again", exact: true })
+      .click();
     await expect(downloadLink).toBeVisible();
     expect(exportPosts).toBe(1);
     await expect(downloadLink).toHaveAttribute("href", `/api/me/export/download/${jobId}`);

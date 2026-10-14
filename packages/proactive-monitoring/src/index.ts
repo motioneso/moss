@@ -1,6 +1,7 @@
 export type {
   ProactiveMonitorStateRow,
   ProactiveCardRow,
+  ProactiveQuietPolicy,
   ResolvedMonitoringConfig
 } from "./types.js";
 export {
@@ -9,12 +10,24 @@ export {
 } from "./manifest.js";
 export {
   ProactiveMonitoringPreferencesRepository,
+  ProactivePreferenceRevisionConflictError,
+  isProactiveSourceEnabled,
+  parseProactiveMonitoringPreference,
+  resolveAutomaticEmailAlertsEnabled,
+  type SavedProactiveMonitoringPreference,
   validateProactiveMonitoringPreference,
   resolveSourcePreference
 } from "./preferences-repository.js";
 export { MonitorStateRepository } from "./monitor-state-repository.js";
 export { CardRepository, serializeCard } from "./card-repository.js";
 export { AntiSpamPolicy, type AntiSpamVerdict } from "./anti-spam.js";
+export {
+  EmailFindingPolicy,
+  type EmailFindingInput,
+  type EmailFindingKind,
+  type EmailFindingRejection,
+  type EmailFindingSelection
+} from "./email-finding-policy.js";
 export { mapSignalType, isAllowedSignalType } from "./signal-mapper.js";
 export {
   ProactiveScanner,

@@ -22,6 +22,15 @@ export const proactiveMonitoringModuleManifest = {
     migrationDirectories: [proactiveMonitoringSqlMigrationDirectory],
     ownedTables: ["app.proactive_monitor_state", "app.proactive_cards"]
   },
+  features: [
+    {
+      id: "proactive-monitoring.quiet_hours",
+      description:
+        "Proactive cards found during quiet hours defer until the local daily end. They follow " +
+        "the saved quiet-hours schedule in its own time zone; while an older alert schedule " +
+        "differs from it, they keep following the older one."
+    }
+  ],
   permissions: [
     {
       id: "proactive-monitoring.view",

@@ -48,6 +48,7 @@ import {
   readPriorityModel,
   tasksToCandidates
 } from "./priority-consumer.js";
+import { assessBriefingEmailEvidence } from "./email-evidence.js";
 import { fallback } from "./fallback.js";
 import { briefingSignalFeedbackItemId } from "./feedback-targets.js";
 import {
@@ -295,10 +296,11 @@ export async function composeBriefing(
         settings: calendarSettings
       })
     : [];
+  const emailAssessment = assessBriefingEmailEvidence(rawEmail.rawItems ?? [], now, locale);
   const proseEmailItems = includeEmail
     ? await settleJudgedEmail(
         [scopedDb, definition, input, deps],
-        filterEmailItems(rawEmail.rawItems ?? [], actionRows.sourceRefs),
+        filterEmailItems(emailAssessment.eligibleItems, actionRows.sourceRefs),
         now,
         timeZone
       )
@@ -306,10 +308,13 @@ export async function composeBriefing(
   const emailSignals = includeEmail
     ? deriveEmailSignals({
         // Same filter as the prompt lines: noise/fyi/unknown never seed signals.
-        items: proseEmailItems.filter(isBriefingEmailItem),
+        items: proseEmailItems.filter(
+          (item) => !item.briefingCurrentStatusUnknown && isBriefingEmailItem(item)
+        ),
         now,
         context,
-        settings: emailSettings
+        settings: emailSettings,
+        locale
       })
     : [];
   const priorityCandidates = [
@@ -402,7 +407,8 @@ export async function composeBriefing(
   const emailLines = buildMorningEmailLines({
     signals: prioritizedEmailSignals,
     items: proseEmailItems,
-    suggestionLines: commitmentSuggestions
+    suggestionLines: commitmentSuggestions,
+    locale
   });
   if (includeEmail && (rawEmail.rawItems?.length ?? 0) > 0 && emailLines.lines.length === 0) {
     gaps.push({ source: "email", reason: "filtered_out" });
@@ -613,7 +619,7 @@ export async function composeBriefing(
     MORNING_MAX_OUTPUT_TOKENS
   );
   if (!synth.ok) {
-    return fallback(
+    const result = fallback(
       sections,
       gaps,
       synth.reason,
@@ -629,6 +635,10 @@ export async function composeBriefing(
       editorial,
       plan.planSnapshot
     );
+    return {
+      ...result,
+      sourceMetadata: { ...result.sourceMetadata, emailEvidence: emailAssessment.evidence }
+    };
   }
   return {
     status: "succeeded",
@@ -652,6 +662,21 @@ export async function composeBriefing(
       emailMessageCount: rawEmail.rawItems?.length ?? 0,
       emailSignals: prioritizedEmailSignals,
       emailKept: emailLines.breakdown,
+      emailEvidence: {
+        ...emailAssessment.evidence,
+        items: emailAssessment.evidence.items.map((item) => {
+          const rank = prioritizedEmailSignals.findIndex(
+            (signal) =>
+              signal.connectorAccountId === item.connectorAccountId &&
+              signal.messageIds.includes(item.messageId)
+          );
+          return {
+            ...item,
+            rank: rank < 0 ? null : rank,
+            rankingReasons: rank < 0 ? [] : prioritizedEmailSignals[rank]!.relevanceReasons
+          };
+        })
+      },
       // The next morning run reads completed tasks from here, so work finished while this
       // run was writing is not skipped.
       tasksReadAt: now.toISOString(),

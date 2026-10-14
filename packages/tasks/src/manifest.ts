@@ -68,6 +68,7 @@ import {
 } from "@moss/shared";
 
 import {
+  authorizeTaskBackgroundRead,
   taskAddActivityExecute,
   taskAssignTagExecute,
   taskActivityExecute,
@@ -522,6 +523,7 @@ export const tasksModuleManifest = {
           taskId: { type: "string" }
         }
       },
+      authorizeBackgroundRead: authorizeTaskBackgroundRead,
       execute: taskGetExecute
     },
     {
@@ -807,6 +809,27 @@ export const tasksModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "tasks.quick_capture",
+      description:
+        "Add a task from its title with Enter or Add task, using the focused list when one list is selected. Repeated submissions while saving send once; text typed during a successful save stays in the field.",
+      remediations: [
+        {
+          id: "tasks.quick_capture_retry",
+          description:
+            "Keep the title, correct the reported problem or choose an available list, then press Enter or Add task to retry.",
+          path: "/tasks"
+        }
+      ],
+      errors: [
+        {
+          code: "tasks.capture_failed",
+          class: "transient",
+          description:
+            "A failed quick add keeps the title and explains the failure. Correct the cause, then press Enter or Add task to try again."
+        }
+      ]
+    },
     {
       id: "tasks.list_metadata_refresh",
       description:

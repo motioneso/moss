@@ -93,7 +93,7 @@ describe("ProfilePane merged Account & preferences", () => {
 
   it("offers every supported time zone in a searchable picker and disables unsupported language controls", async () => {
     const { TIME_ZONE_OPTIONS } =
-      await import("../../apps/web/src/settings/settings-personal-panes.js");
+      await import("../../apps/web/src/settings/settings-time-zones.js");
     const offered = new Set(TIME_ZONE_OPTIONS.map((option) => option.value));
     expect(Intl.supportedValuesOf("timeZone").every((timeZone) => offered.has(timeZone))).toBe(
       true
@@ -128,7 +128,9 @@ async function renderProfilePane(
     locale: { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "24" }
   });
   client.setQueryData(queryKeys.settings.quietHours, {
-    quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null }
+    quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null },
+    authority: { status: "default", alerts: null },
+    version: null
   });
   client.setQueryData(queryKeys.weather.location, weatherLocation);
   client.setQueryData(queryKeys.weather.unit, { unit: weatherUnit });

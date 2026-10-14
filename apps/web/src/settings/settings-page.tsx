@@ -2,10 +2,12 @@ import "../styles/settings.css";
 import "../styles/settings-panes.css";
 import "../styles/settings-panes-2.css";
 import "../styles/settings-panes-3.css";
+import "../styles/settings-quiet-hours.css";
 import "../styles/settings-activity.css";
 
 import {
   Activity,
+  Bell,
   Boxes,
   Brain,
   ChevronDown,
@@ -79,7 +81,9 @@ type PersonalSectionId =
   | "appearance"
   | "activity"
   | "skills"
-  | "released";
+  | "released"
+  | "alerts"
+  | "scheduled";
 
 type AdminSectionId =
   | "people"
@@ -118,6 +122,14 @@ const SkillsPane = lazyPane(() =>
 );
 const ReleasedPane = lazyPane(() =>
   import("./settings-released-pane").then((module) => ({ default: module.ReleasedPane }))
+);
+const ScheduledTasksPane = lazyPane(() =>
+  import("./settings-scheduled-tasks-pane").then((module) => ({
+    default: module.ScheduledTasksPane
+  }))
+);
+const AlertsPane = lazyPane(() =>
+  import("./settings-alerts-pane").then((module) => ({ default: module.AlertsPane }))
 );
 
 function PrioritiesPane(_props: PaneProps) {
@@ -195,6 +207,13 @@ const PERSONAL_GROUPS = [
         Pane: AssistantPane
       },
       {
+        id: "scheduled",
+        icon: Bell,
+        label: "Scheduled tasks",
+        description: coreSettingDescription("scheduled"),
+        Pane: ScheduledTasksPane
+      },
+      {
         id: "priorities",
         icon: ListChecks,
         label: "Priorities",
@@ -214,6 +233,13 @@ const PERSONAL_GROUPS = [
         label: "Activity",
         description: coreSettingDescription("activity"),
         Pane: ActivityPane
+      },
+      {
+        id: "alerts",
+        icon: Bell,
+        label: "Alerts & quiet hours",
+        description: coreSettingDescription("alerts"),
+        Pane: AlertsPane
       },
       {
         id: "released",
@@ -342,8 +368,6 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "fahrenheit",
     "celsius",
     "location",
-    "quiet hours",
-    "do not disturb",
     "sessions",
     "sign out",
     "export",
@@ -363,6 +387,8 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "connected accounts"
   ],
   assistant: ["model", "ai", "provider", "assistant name", "personality", "voice"],
+  scheduled: ["reminders", "scheduled tasks", "run history", "past tasks"],
+  alerts: ["email alerts", "notifications", "digest", "quiet hours", "do not disturb"],
   people: ["users", "invite", "roles", "admin", "members"],
   aiproviders: [
     "api key",

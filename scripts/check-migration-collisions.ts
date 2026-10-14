@@ -180,9 +180,10 @@ export function checkCrossPrCollisions(
   }
 
   for (const [version, group] of byVersion) {
-    // Unique claimants by label
-    const uniqueLabels = new Set(group.map((g) => g.label));
-    if (uniqueLabels.size > 1) {
+    // A stacked branch carries its parent PR's migration at the same path, so claimants are
+    // counted by file path. Two different files on one number is the real collision.
+    const uniquePaths = new Set(group.map((g) => g.file.path));
+    if (uniquePaths.size > 1) {
       const claimDetails = group.map((g) => `    - ${g.label}: ${g.file.path}`).join("\n");
       violations.push({
         kind: "cross_pr_collision",

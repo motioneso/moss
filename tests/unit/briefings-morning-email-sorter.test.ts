@@ -1,7 +1,7 @@
 /**
  * #2763 regression: real mail goes through the real sorter, the real email read tool and the
  * real morning composer. Only the model's answers are faked. No test seeds a hand-written
- * triage label, because the sorter no longer produces the old action labels.
+ * triage label; reply and action labels are retained by the real sorter.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -230,70 +230,169 @@ describe("morning briefing email section over the real sorter (#2763)", () => {
     expect(gaps.filter((gap) => gap.source === "email")).toEqual([]);
   });
 
-  it("reuses the stored closer-look decision without asking the model again", async () => {
-    const runChat = fakeSorterModel({});
-    const stored = {
-      id: "row-contract",
-      connector_account_id: "acc-google",
-      owner_user_id: "owner-1",
-      sender: CONTRACT_MAIL.from,
-      recipients: CONTRACT_MAIL.recipients,
-      subject: CONTRACT_MAIL.subject,
-      snippet: CONTRACT_MAIL.snippet,
-      body_excerpt: null,
-      received_at: new Date(CONTRACT_MAIL.receivedAt),
-      external_id: CONTRACT_MAIL.externalId,
-      external_metadata: { threadId: "th-contract" },
-      summary: null,
-      signals: { importance: "normal", confidence: 0.6, pendingJudgement: true },
-      created_at: FIXED_NOW,
-      updated_at: FIXED_NOW,
-      analysis_attempts: 0,
-      judgement_requested_at: null
-    } as EmailMessage;
-    const { prompt } = await composeWith(liveEmailDeps([CONTRACT_MAIL], runChat, [stored]));
+  it.each([false, true])(
+    "reuses the stored closer-look decision with answered=%s without asking the model again",
+    async (answered) => {
+      const runChat = fakeSorterModel({});
+      const stored = {
+        id: "row-contract",
+        connector_account_id: "acc-google",
+        owner_user_id: "owner-1",
+        sender: CONTRACT_MAIL.from,
+        recipients: CONTRACT_MAIL.recipients,
+        subject: CONTRACT_MAIL.subject,
+        snippet: CONTRACT_MAIL.snippet,
+        body_excerpt: null,
+        received_at: new Date(CONTRACT_MAIL.receivedAt),
+        external_id: CONTRACT_MAIL.externalId,
+        external_metadata: { threadId: "th-contract" },
+        summary: "Dana asked for a report.",
+        signals: {
+          importance: "normal",
+          confidence: 0.6,
+          pendingJudgement: true,
+          answered,
+          actionability: { category: "needs_reply" }
+        },
+        created_at: FIXED_NOW,
+        updated_at: FIXED_NOW,
+        analysis_attempts: 0,
+        judgement_requested_at: null
+      } as EmailMessage;
+      const messages = Array.from({ length: 10 }, (_, i) => ({
+        ...CONTRACT_MAIL,
+        externalId: `question-${i}`,
+        subject: `Colleague question ${i}`
+      }));
+      const cached = messages.map((message, i) => ({
+        ...stored,
+        id: `row-${i}`,
+        external_id: message.externalId,
+        subject: message.subject
+      }));
+      const emailDeps = liveEmailDeps(messages, runChat, cached);
+      const read = await listEmailContext(fakeScopedDb, emailDeps, {});
+      expect(read.items).toHaveLength(10);
+      for (const item of read.items) {
+        expect(item.actionability).toBe("needs_reply");
+        expect(item.summary).toBe("Dana asked for a report.");
+        expect(item.answered).toBe(answered);
+      }
+      const { prompt } = await composeWith(emailDeps);
 
-    expect(runChat).not.toHaveBeenCalled();
-    expect(emailBlock(prompt)).toContain("Contract redlines for Thursday");
-  });
+      expect(runChat).toHaveBeenCalledTimes(0);
+      if (answered) expect(emailBlock(prompt)).not.toContain("Colleague question");
+      else expect(emailBlock(prompt)).toContain("Colleague question");
+    }
+  );
 
   it.each([
-    ["judged after it arrived", "2026-06-13T08:00:00.000Z", false],
-    ["judged before it arrived", "2026-06-13T07:00:00.000Z", true]
-  ])("settles closer-look mail by the thread judgement (%s)", async (_label, judgedAt, kept) => {
-    const runChat = fakeSorterModel({
-      "Contract redlines": { gate: "maybe_owed", category: "needs_reply", confidence: 0.6 }
-    });
+    ["item after arrival", "2026-06-13T08:00:00.000Z", "item", false],
+    ["item before arrival", "2026-06-13T07:00:00.000Z", "item", true],
+    ["no item retains reply", "2026-06-13T08:00:00.000Z", "no_item", true],
+    ["legacy outcome stays unknown", "2026-06-13T08:00:00.000Z", undefined, true],
+    ["invalid outcome stays unknown", "2026-06-13T08:00:00.000Z", "other", true],
+    ["invalid date stays unknown", "not-a-date", "item", true],
+    ["future judgement stays unknown", "2027-06-13T08:00:00.000Z", "item", true]
+  ])(
+    "settles closer-look mail by the thread judgement (%s)",
+    async (_label, judgedAt, outcome, kept) => {
+      const runChat = fakeSorterModel({
+        "Contract redlines": { gate: "maybe_owed", category: "needs_reply", confidence: 0.6 }
+      });
+      const seen: string[] = [];
+      const lookups: Record<string, unknown>[] = [];
+      const base = withRealEmailPath(
+        makeFakeDeps({
+          generateChat: async (input: GenerateChatInput) => {
+            seen.push(input.messages.map((m) => m.content).join("\n"));
+            return { text: "synth narrative" };
+          }
+        }),
+        liveEmailDeps([CONTRACT_MAIL], runChat)
+      );
+      const threadJudgements: ToolExecute = async (_db, input) => {
+        lookups.push(input);
+        return { data: { threads: [{ threadRef: "th-contract", judgedAt, outcome }] } };
+      };
+      const deps: ComposeDeps = {
+        ...base,
+        moduleManifests: [...base.moduleManifests, commitmentsManifest({ threadJudgements })]
+      };
+      await composeBriefing(
+        fakeScopedDb,
+        definition({ selected_tool_names: ["email.listVisibleMessages"] }),
+        runInput,
+        deps
+      );
+
+      expect(lookups).toEqual([{ threadRefs: ["th-contract"] }]);
+      const block = emailBlock(seen.join("\n"));
+      if (kept) expect(block).toContain("Contract redlines for Thursday");
+      else expect(block).not.toContain("Contract redlines for Thursday");
+    }
+  );
+
+  it("keeps actionable triage after a no_item thread judgement", async () => {
     const seen: string[] = [];
-    const lookups: Record<string, unknown>[] = [];
-    const base = withRealEmailPath(
-      makeFakeDeps({
-        generateChat: async (input: GenerateChatInput) => {
-          seen.push(input.messages.map((m) => m.content).join("\n"));
-          return { text: "synth narrative" };
-        }
-      }),
-      liveEmailDeps([CONTRACT_MAIL], runChat)
-    );
-    const threadJudgements: ToolExecute = async (_db, input) => {
-      lookups.push(input);
-      return { data: { threads: [{ threadRef: "th-contract", judgedAt }] } };
-    };
+    const base = makeFakeDeps({
+      generateChat: async (input) => {
+        seen.push(input.messages.map((m) => m.content).join("\n"));
+        return { text: "synth narrative" };
+      }
+    });
     const deps: ComposeDeps = {
       ...base,
-      moduleManifests: [...base.moduleManifests, commitmentsManifest({ threadJudgements })]
+      moduleManifests: [
+        ...base.moduleManifests.map((m) => ({
+          ...m,
+          assistantTools: m.assistantTools?.map((t) =>
+            t.name === "email.listVisibleMessages"
+              ? {
+                  ...t,
+                  execute: async () => ({
+                    data: {
+                      messages: [
+                        {
+                          id: "question",
+                          threadId: "th-question",
+                          connectorAccountId: "account",
+                          sender: "Dana",
+                          subject: "Redlines feedback",
+                          receivedAt: FIXED_NOW.toISOString(),
+                          actionability: "needs_reply",
+                          awaitingJudgement: true
+                        }
+                      ]
+                    }
+                  })
+                }
+              : t
+          )
+        })),
+        commitmentsManifest({
+          threadJudgements: async () => ({
+            data: {
+              threads: [
+                {
+                  threadRef: "th-question",
+                  judgedAt: FIXED_NOW.toISOString(),
+                  outcome: "no_item"
+                }
+              ]
+            }
+          })
+        })
+      ]
     };
-    await composeBriefing(
+    const result = await composeBriefing(
       fakeScopedDb,
       definition({ selected_tool_names: ["email.listVisibleMessages"] }),
       runInput,
       deps
     );
-
-    expect(lookups).toEqual([{ threadRefs: ["th-contract"] }]);
-    const block = emailBlock(seen.join("\n"));
-    if (kept) expect(block).toContain("Contract redlines for Thursday");
-    else expect(block).not.toContain("Contract redlines for Thursday");
+    expect(emailBlock(seen.join("\n"))).toContain("Redlines feedback");
+    expect(result.sourceMetadata.emailKept).toMatchObject({ awaitingJudgement: 0 });
   });
 
   it("adds a short worth-knowing line from fyi mail", async () => {

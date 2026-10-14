@@ -11,6 +11,15 @@ async function pickChatMenuItem(drawer: Locator, name: string) {
   await drawer.getByRole("menuitemcheckbox", { name }).click();
 }
 
+async function openConversations(drawer: Locator) {
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+}
+
+async function startNewSideChat(drawer: Locator) {
+  await openConversations(drawer);
+  await drawer.getByRole("button", { name: "New side chat" }).click();
+}
+
 /** Opens the menu, checks the private item's state, and closes the menu again. */
 async function expectPrivateChecked(drawer: Locator, checked: boolean) {
   await drawer.getByRole("button", { name: "More chat options" }).click();
@@ -27,7 +36,7 @@ async function expectPrivateChecked(drawer: Locator, checked: boolean) {
  * What is mocked:
  *  - The full REST surface via mockApi (auth/me/modules/etc.).
  *  - POST /api/chat/turn → { reply } (the drawer ignores this body; the stream renders).
- *  - POST /api/chat/clear → 204 for the "New chat" action.
+ *  - POST /api/chat/clear → 204 for the "New side chat" action.
  *  - GET  /api/chat/stream (SSE) → a one-shot, fulfilled text/event-stream body
  *    containing the user echo and the assistant reply as two `data:` events.
  *
@@ -100,10 +109,10 @@ test("opens the live chat drawer from the nav and renders the streamed records o
   await expect(drawer.getByText("Hi there")).toHaveCount(1);
   await expect(drawer.getByText("Hello from the assistant")).toHaveCount(1);
 
-  // "New chat" clears the transcript. (Assert the streamed records are gone rather than a
+  // "New side chat" clears the transcript. (Assert the streamed records are gone rather than a
   // specific empty-state copy: since v0.1.4 the empty state is onboarding-gated and shows the
   // connect-a-provider explainer when no provider is configured, as in this mock.)
-  await drawer.getByRole("button", { name: "New chat" }).click();
+  await startNewSideChat(drawer);
   await expect(drawer.getByText("Hello from the assistant")).toHaveCount(0);
   await expect(drawer.getByText("Hi there")).toHaveCount(0);
 });
@@ -380,7 +389,7 @@ test("queued chat drain stays stable while SSE records arrive, then sends once a
   await expect(drawer.getByText("Drained queued", { exact: true })).toHaveCount(1);
 });
 
-test("selecting a History row both opens and activates it — no separate resume step", async ({
+test("selecting a side chat both opens and activates it — no separate resume step", async ({
   page
 }) => {
   const model = createMockAiModel("model-1");
@@ -459,11 +468,11 @@ test("selecting a History row both opens and activates it — no separate resume
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
   const composer = drawer.getByLabel("Message Moss");
   const modelTrigger = drawer.locator(".chatd-model__trigger");
-  await pickChatMenuItem(drawer, "Show chat history");
+  await openConversations(drawer);
   await drawer.getByText("Old chat").click();
 
   await expect.poll(() => resumeCalledWith).toBe("thread-old");
-  await expect(drawer.locator(".chatd-sess")).toHaveCount(0);
+  await expect(drawer.locator(".chatd-conversations__overlay")).toHaveCount(0);
   await expect(drawer.locator(".chatd-review")).toHaveCount(0);
   await expect(composer).toBeDisabled();
   await modelTrigger.click();
@@ -489,14 +498,12 @@ test("selecting a History row both opens and activates it — no separate resume
 });
 
 // #1090: resuming a persisted (necessarily non-incognito — ChatRepository.listThreads
-// filters `incognito = false`) History thread while a private session is active must
+// filters `incognito = false`) side chat while a private session is active must
 // invalidate the stale client-side `privateMode` flag. Before the fix, resumeMutation's
 // onSuccess never touched `privateMode`/`privateEnded`, so once the user sent a message in
 // the resumed thread (flipping `reviewing` back to false) the "not saved" private banner and
 // the shield toggle's pressed state kept lying about a thread that IS being saved.
-test("resuming a History thread while private clears the stale privateMode flag", async ({
-  page
-}) => {
+test("resuming a side chat while private clears the stale privateMode flag", async ({ page }) => {
   const thread = createMockChatThread("thread-old", "Old chat");
   const storedMessage = createMockChatMessage("message-old", thread.id, "Earlier context");
 
@@ -531,7 +538,7 @@ test("resuming a History thread while private clears the stale privateMode flag"
   // Sanity: private mode really is active before the resume (server-truth restore, #1036).
   await expectPrivateChecked(drawer, true);
 
-  await pickChatMenuItem(drawer, "Show chat history");
+  await openConversations(drawer);
   await drawer.getByText("Old chat").click();
   await expect(drawer.getByText("Earlier context")).toBeVisible();
 
@@ -549,7 +556,7 @@ test("resuming a History thread while private clears the stale privateMode flag"
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
 });
 
-test("resume failure clears selection and reopens History", async ({ page }) => {
+test("resume failure clears selection and reopens conversations", async ({ page }) => {
   await mockApi(page, {
     authenticated: true,
     chatThreads: [createMockChatThread("thread-old", "Old chat")],
@@ -574,14 +581,19 @@ test("resume failure clears selection and reopens History", async ({ page }) => 
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await pickChatMenuItem(drawer, "Show chat history");
+  await openConversations(drawer);
   await drawer.getByText("Old chat").click();
 
-  await expect(drawer.locator(".chatd-sess")).toBeVisible();
-  await expect(drawer.locator(".chatd-sess__row.is-selected")).toHaveCount(0);
+  await expect(drawer.locator(".chatd-conversations__overlay")).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Old chat" })).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  );
 });
 
-test("History hides the ordinary composer seeds while open", async ({ page }) => {
+test("conversations overlay keeps the covered drawer background inert while open", async ({
+  page
+}) => {
   await mockApi(page, {
     authenticated: true,
     chatThreads: [
@@ -590,6 +602,7 @@ test("History hides the ordinary composer seeds while open", async ({ page }) =>
         ownerUserId: "user-1",
         title: "Old chat",
         incognito: false,
+        isMain: false,
         createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
         lastActiveAt: "2026-07-01T00:00:00.000Z",
@@ -605,13 +618,15 @@ test("History hides the ordinary composer seeds while open", async ({ page }) =>
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await pickChatMenuItem(drawer, "Show chat history");
+  await openConversations(drawer);
 
-  await expect(drawer.locator(".chatd-empty")).toHaveCount(0);
-  await expect(drawer.locator(".chatd-sess")).toBeVisible();
+  await expect(drawer.locator(".chatd-empty")).toHaveCount(1);
+  await expect(drawer.locator(".chatd__body[inert]")).toHaveCount(1);
+  await expect(drawer.locator(".chatd-overlay-background[inert]")).toHaveCount(3);
+  await expect(drawer.locator(".chatd-conversations__overlay")).toBeVisible();
 });
 
-test("empty History explains that there are no past conversations", async ({ page }) => {
+test("empty conversations explains how to start a side chat", async ({ page }) => {
   await mockApi(page, {
     authenticated: true,
     chatThreads: [],
@@ -624,8 +639,59 @@ test("empty History explains that there are no past conversations", async ({ pag
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await pickChatMenuItem(drawer, "Show chat history");
+  await openConversations(drawer);
 
-  await expect(drawer.getByText("No past conversations yet.")).toBeVisible();
-  await expect(drawer.locator(".chatd-empty")).toHaveCount(0);
+  await expect(drawer.getByText("Start a side chat to keep a topic together.")).toBeVisible();
+  await expect(drawer.locator(".chatd-empty")).toHaveCount(1);
+});
+
+test("conversations overlay covers the docked chat panel only at desktop width (#3282)", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  await expect(drawer).toHaveClass(/chatd--docked/);
+  await openConversations(drawer);
+  const overlay = drawer.locator(".chatd-conversations__overlay");
+  await expect(overlay).toBeVisible();
+
+  const panel = (await drawer.boundingBox())!;
+  const box = (await overlay.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(panel.x - 1);
+  expect(box.y).toBeGreaterThanOrEqual(panel.y - 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(panel.x + panel.width + 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(panel.y + panel.height + 1);
+
+  // The page beside the panel stays uncovered.
+  const besidePanel = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest(".chatd-conversations__overlay"),
+    { x: panel.x / 2, y: panel.y + panel.height / 2 }
+  );
+  expect(besidePanel).toBeNull();
+
+  await page.keyboard.press("Escape");
+  await expect(overlay).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Open conversations" })).toBeFocused();
+  await expect(drawer.locator(".chatd-overlay-background[inert]")).toHaveCount(0);
+
+  // A click on the page beside the panel still dismisses the open overlay.
+  await openConversations(drawer);
+  await expect(overlay).toBeVisible();
+  await expect(drawer.locator(".chatd-overlay-background[inert]").first()).toBeAttached();
+  const pageBefore = page.url();
+  await page.mouse.click(panel.x / 2, panel.y + panel.height / 2);
+  await expect(overlay).toHaveCount(0);
+  expect(page.url()).toBe(pageBefore);
+  await expect(page.getByRole("dialog")).toHaveCount(1);
 });

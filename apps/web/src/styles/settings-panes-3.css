@@ -960,3 +960,14 @@
     overflow-wrap: anywhere;
   }
 }
+.alerts-pane__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: var(--space-6);
+}
+
+@media (max-width: 760px) {
+  .alerts-pane__grid {
+    grid-template-columns: 1fr;
+  }
+}

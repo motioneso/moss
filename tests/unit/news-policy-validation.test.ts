@@ -25,6 +25,81 @@ function repo(cached: "approved" | "rejected" | null = null) {
 }
 
 describe("news discovery policy validation", () => {
+  it("reclassifies a reviewed news service without reusing publisher-only rejection", async () => {
+    const ai = aiReturning({ allowed: true, category: "news_publisher" });
+    const verdicts = {
+      ...repo(),
+      readPolicyVerdict: vi.fn(async (_db: DataContextDb, _domain: string, fingerprint: string) =>
+        fingerprint === "fp" ? "rejected" : null
+      )
+    };
+    await expect(
+      decideSourcePolicy(
+        db,
+        { ai, repo: verdicts },
+        {
+          canonicalDomain: "newsapi.org",
+          description: "A news API",
+          sampleHeadlines: ["World news"]
+        }
+      )
+    ).resolves.toEqual({ verdict: "approved", fingerprint: "fp" });
+    expect(verdicts.readPolicyVerdict).toHaveBeenCalledWith(
+      db,
+      "newsapi.org",
+      "fp:reviewed-news-service-v1"
+    );
+    expect(verdicts.upsertPolicyVerdict).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        verdict: "approved",
+        fingerprint: "fp:reviewed-news-service-v1"
+      })
+    );
+    expect(vi.mocked(ai.generateJson).mock.calls[0]?.[1].prompt).toContain(
+      "news aggregation service"
+    );
+    vi.mocked(ai.generateJson).mockClear();
+    await expect(
+      decideSourcePolicy(
+        db,
+        { ai, repo: verdicts },
+        {
+          canonicalDomain: "newsapi.org",
+          description: "A news API",
+          sampleHeadlines: ["World news"]
+        },
+        { allowModelCall: false }
+      )
+    ).resolves.toEqual({ verdict: "unavailable" });
+    expect(ai.generateJson).not.toHaveBeenCalled();
+  });
+
+  it("still requires provider approval for reviewed services and refuses look-alike classification", async () => {
+    for (const canonicalDomain of [
+      "newsapi.org",
+      "www.newsapi.org",
+      "newsapi.org.evil.example",
+      "blog.newsapi.org"
+    ]) {
+      const ai = aiReturning({ allowed: false, category: "news_publisher" });
+      await expect(
+        decideSourcePolicy(
+          db,
+          { ai, repo: repo() },
+          {
+            canonicalDomain,
+            description: "A news API",
+            sampleHeadlines: ["World news"]
+          }
+        )
+      ).resolves.toEqual({ verdict: "rejected", fingerprint: "fp" });
+      const prompt = vi.mocked(ai.generateJson).mock.calls[0]?.[1].prompt ?? "";
+      expect(prompt.includes("news aggregation service")).toBe(
+        canonicalDomain === "newsapi.org" || canonicalDomain === "www.newsapi.org"
+      );
+    }
+  });
   it("approves only an explicit news-publisher decision and caches it", async () => {
     const ai = aiReturning({ allowed: true, category: "news_publisher" });
     const verdicts = repo();

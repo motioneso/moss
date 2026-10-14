@@ -1,11 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { NewsSourcePreviewResponse } from "@moss/shared";
+import type { ListChatThreadMessagesResponse, NewsSourcePreviewResponse } from "@moss/shared";
 import {
   UAT_ADMIN_EMAIL,
   UAT_ADMIN_PASSWORD,
+  UAT_SECOND_OWNER_ID,
   UAT_SECOND_OWNER_EMAIL,
   UAT_SECOND_OWNER_PASSWORD
 } from "../seed/admin.js";
+
+import { bringUpRealChatModel, readUatJson } from "./real-chat-signin.js";
 
 // #1110: withoutNewsJsonBinding leaves module.news unbound to a JSON-capable model so the
 // "declared prerequisite" scenario naturally hits news.add_source.no_json_model — see
@@ -140,15 +143,75 @@ test("transient discovery error is surfaced deterministically via previewOverrid
   expect(body.error?.class).toBe("transient");
 });
 
-// Non-admin containment: a second owner asking the map for "every settings screen" must never be
-// shown admin-only settings surfaces. NOTE (#1121): this is a NEGATIVE assertion. The scripted
-// model answers with fixed text and never calls the map, so it holds trivially today. It only
-// bites once a real model lets the map answer (#1121).
-test("non-admin map query never reveals admin settings", async ({ page }) => {
-  await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
-  await ask(page, "List every settings screen I can use");
-  // Wait for the scripted reply first, so the negative check runs after the turn has finished.
-  await expect(page.getByText("Scripted reply for the settings question.").first()).toBeVisible();
+// A real second-owner turn must consult the map without revealing admin-only surfaces.
+test("non-admin map query never reveals admin settings", async ({ page, browser }) => {
+  const strict = Boolean(process.env.JARVIS_UAT_REQUIRE_REAL_CHAT);
+  if (strict) {
+    test.setTimeout(300_000);
+    const context = await browser.newContext({ baseURL: requireBaseURL() });
+    try {
+      const admin = await context.newPage();
+      await signIn(admin, UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD);
+      const model = await bringUpRealChatModel(admin);
+      await readUatJson(
+        await admin.request.put(`/api/admin/users/${UAT_SECOND_OWNER_ID}/ai-pin`, {
+          data: { modelId: model.id }
+        })
+      );
+      await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
+      for (const capability of ["chat", "tool-use", "json", "summarization"]) {
+        const body = (await readUatJson(
+          await page.request.get(`/api/ai/capability-route/${capability}`)
+        )) as {
+          route: { model: { id: string } | null; reason: string };
+        };
+        expect(body.route.model?.id).toBe(model.id);
+        expect(body.route.reason).toBe("admin-pin");
+      }
+    } finally {
+      await context.close();
+    }
+  } else {
+    await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
+  }
+  const response = strict
+    ? page.waitForResponse(
+        (r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/chat/turn",
+        { timeout: 180_000 }
+      )
+    : null;
+  await ask(page, "Use the app map to list every settings screen I can use");
+  if (response) {
+    const body = (await readUatJson(await response)) as {
+      reply: string;
+      assistantMessageId: string;
+    };
+    expect(body.reply).toMatch(/settings/i);
+    const privacy = (await readUatJson(
+      await page.request.get("/api/chat/privacy?surface=drawer")
+    )) as { threadId: string };
+    const history = (await readUatJson(
+      await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
+    )) as ListChatThreadMessagesResponse;
+    const answer = history.messages.find((message) => message.id === body.assistantMessageId);
+    expect(answer).toBeDefined();
+    const calls = answer!.activity.filter(
+      (entry) =>
+        entry.kind === "tool" && entry.toolName?.includes("getMapSlice") && entry.toolCallId
+    );
+    expect(calls.length).toBeGreaterThan(0);
+    expect(
+      answer!.activity.some(
+        (entry) =>
+          entry.kind === "result" &&
+          calls.some((call) => call.toolCallId === entry.toolCallId) &&
+          /"items"\s*:\s*\[\s*\{|^\|.+\|\s*\n\|[ :|-]+\|/m.test(entry.text)
+      )
+    ).toBe(true);
+    expect(body.reply).not.toMatch(/Advanced host setup|People & access|Instance modules/i);
+  } else {
+    await expect(page.getByText("Scripted reply for the settings question.").first()).toBeVisible();
+  }
   await expect(page.getByText(/Advanced host setup|People & access|Instance modules/i)).toHaveCount(
     0
   );

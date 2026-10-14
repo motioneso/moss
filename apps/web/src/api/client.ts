@@ -1,3 +1,4 @@
+import type { ListScheduledTasksResponse, ListQuietHoursAllowancesResponse } from "@moss/shared";
 import type { MossGoal } from "@moss/goals";
 import type {
   AddTaskActivityRequest,
@@ -88,6 +89,8 @@ import type {
   DeletePushSubscriptionResponse,
   PutQuietHoursSettingsRequest,
   PutQuietHoursSettingsResponse,
+  ResolveQuietHoursConflictRequest,
+  ResolveQuietHoursConflictResponse,
   PutPersonaSettingsRequest,
   PutPersonaSettingsResponse,
   PutSourceBehaviorRequest,
@@ -335,6 +338,15 @@ export async function putQuietHoursSettings(
 ): Promise<PutQuietHoursSettingsResponse> {
   return requestJson<PutQuietHoursSettingsResponse>("/api/me/quiet-hours", {
     method: "PUT",
+    body
+  });
+}
+
+export async function resolveQuietHoursConflict(
+  body: ResolveQuietHoursConflictRequest
+): Promise<ResolveQuietHoursConflictResponse> {
+  return requestJson<ResolveQuietHoursConflictResponse>("/api/me/quiet-hours/resolution", {
+    method: "POST",
     body
   });
 }
@@ -1915,4 +1927,26 @@ export async function requestTerminalTicket(
 export function terminalWsUrl(ticket: string): string {
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
   return `${scheme}://${window.location.host}/api/ai/terminal?ticket=${encodeURIComponent(ticket)}`;
+}
+
+export async function listScheduledTasks(): Promise<ListScheduledTasksResponse> {
+  return requestJson<ListScheduledTasksResponse>("/api/chat/scheduled-tasks");
+}
+
+export async function pauseScheduledTask(id: string): Promise<void> {
+  await requestJson(`/api/chat/scheduled-tasks/${encodeURIComponent(id)}/pause`, {
+    method: "POST"
+  });
+}
+export async function resumeScheduledTask(id: string): Promise<void> {
+  await requestJson(`/api/chat/scheduled-tasks/${encodeURIComponent(id)}/resume`, {
+    method: "POST"
+  });
+}
+export async function deleteScheduledTask(id: string): Promise<void> {
+  await requestJson(`/api/chat/scheduled-tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function listQuietHoursAllowances(): Promise<ListQuietHoursAllowancesResponse> {
+  return requestJson<ListQuietHoursAllowancesResponse>("/api/chat/quiet-hours-allowances");
 }

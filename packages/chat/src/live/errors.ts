@@ -186,6 +186,9 @@ export class ChatTurnInFlightError extends Error {
 export const CHAT_PROVIDER_CHANGED_MESSAGE =
   "The active chat provider changed before your message was sent. Please try again.";
 
+export const CHAT_CHANGED_WHILE_STARTING_MESSAGE =
+  "Your chat changed while it was starting. Please try again.";
+
 export class ChatProviderChangedError extends Error {
   constructor() {
     super(CHAT_PROVIDER_CHANGED_MESSAGE);

@@ -48,6 +48,18 @@ const quietFields: ApprovalFieldMap = {
     present: (value) => (value === null ? "Use your time zone" : timezone.present(value))
   }
 };
+
+// Undo restores the whole Profile row, including whether it settles the alert schedule.
+const quietUndoFields: ApprovalFieldMap = {
+  ...quietFields,
+  authority: {
+    label: "Quiet hours source",
+    present: approvalChoice({
+      canonical: "Profile",
+      unresolved: "Not settled: alerts keep their own schedule"
+    })
+  }
+};
 const modeFields: ApprovalFieldMap = {
   mode: { label: "Appearance", present: approvalChoice({ light: "Light", dark: "Dark" }) }
 };
@@ -318,7 +330,7 @@ export const undoSettingsPresentation: ToolApprovalPresentation = async (
     fields = presentApprovalFields(entry.previousValue, localeFields);
   } else if (entry.key === "quiet-hours") {
     target = "Quiet hours";
-    fields = presentApprovalFields(entry.previousValue, quietFields);
+    fields = presentApprovalFields(entry.previousValue, quietUndoFields);
   } else if (entry.key === "weather-location") {
     target = "Weather";
     fields = presentApprovalFields(entry.previousValue, {

@@ -239,6 +239,7 @@ describe("notification digest settings", () => {
     await seedGoogleAccount();
     await putModule("briefings", false);
     await putModule("settings", false);
+    await putModule("chat", false);
 
     const res = await server.inject({
       method: "PUT",

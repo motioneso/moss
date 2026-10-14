@@ -107,6 +107,308 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
+  it("stops during verified-unavailable healing without canceling shared replacement warmup", async () => {
+    const launching = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    await h.manager.ensureSession("owner", "Owner");
+    vi.mocked(h.engine.submit).mockRejectedValue(
+      new CliChatUnavailableError("verified pre-entry failure")
+    );
+    const replacement = {
+      ...h.engine,
+      launch: vi.fn(async () => {
+        launching.resolve();
+        await released.promise;
+        return { offset: 0 };
+      }),
+      submit: vi.fn(async () => {}),
+      kill: vi.fn(async () => {})
+    };
+    h.engineFactory.mockReturnValue(replacement);
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel this healing wait")
+      .then((result) => {
+        reply = result.reply;
+      });
+    await launching.promise;
+    const prestart = h.manager.ensureSession("owner", "Owner");
+    try {
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).toHaveBeenCalledTimes(1);
+      expect(replacement.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+      expect(replacement.kill).not.toHaveBeenCalled();
+      const next = h.manager.submitTurn("owner", "Owner", "The healing wait released its lock");
+      await h.manager.stopTurn("owner");
+      expect(await next).toEqual({ reply: "" });
+    } finally {
+      released.resolve();
+      await Promise.all([prestart, turn]);
+    }
+    expect((await prestart).threadId).toBe("thread-A");
+    expect(replacement.launch).toHaveBeenCalledTimes(1);
+    expect(replacement.submit).not.toHaveBeenCalled();
+    expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+  });
+
+  it("stops a turn waiting on shared prestart without canceling the shared engine launch", async () => {
+    const launching = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    vi.mocked(h.engine.launch).mockImplementation(async () => {
+      launching.resolve();
+      await released.promise;
+      return { offset: 0 };
+    });
+    const prestart = h.manager.ensureSession("owner", "Owner");
+    await launching.promise;
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel only this waiting turn")
+      .then((result) => {
+        reply = result.reply;
+      });
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+      expect(h.engine.kill).not.toHaveBeenCalled();
+      const next = h.manager.submitTurn("owner", "Owner", "The shared wait released its lock");
+      await h.manager.stopTurn("owner");
+      expect(await next).toEqual({ reply: "" });
+    } finally {
+      released.resolve();
+      await Promise.all([prestart, turn]);
+    }
+    expect((await prestart).threadId).toBe("thread-A");
+    expect(h.engine.launch).toHaveBeenCalledTimes(1);
+    expect(h.engine.submit).not.toHaveBeenCalled();
+    expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+  });
+
+  it("preserves a persistence failure when Stop races with the save", async () => {
+    const recording = deferred<void>();
+    const released = deferred<void>();
+    const failure = new Error("save failed independently of cancellation");
+    const h = harness();
+    h.persistence.recordTurn.mockImplementation(async () => {
+      recording.resolve();
+      await released.promise;
+      throw failure;
+    });
+    const turn = h.manager.submitTurn("owner", "Owner", "Preserve this save error");
+    await recording.promise;
+    await h.manager.stopTurn("owner");
+    released.resolve();
+    await expect(turn).rejects.toBe(failure);
+  });
+
+  it("stops when resume begins during provider validation before the later selection retry", async () => {
+    const validating = deferred<void>();
+    const providerReleased = deferred<void>();
+    const killing = deferred<void>();
+    const killReleased = deferred<void>();
+    const h = harness();
+    await h.manager.ensureSession("owner", "Owner");
+    h.persistence.resolveActiveProvider.mockImplementationOnce(async () => {
+      validating.resolve();
+      await providerReleased.promise;
+      return { provider: "anthropic", model: "test-model" };
+    });
+    vi.mocked(h.engine.kill).mockImplementation(async () => {
+      killing.resolve();
+      await killReleased.promise;
+    });
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel this late selection wait")
+      .then((result) => {
+        reply = result.reply;
+      });
+    await validating.promise;
+    const resume = h.manager.resumeThread("owner", "thread-B");
+    await killing.promise;
+    try {
+      providerReleased.resolve();
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+      const next = h.manager.submitTurn("owner", "Owner", "The canceled turn released its lock");
+      await h.manager.stopTurn("owner");
+      expect(await next).toEqual({ reply: "" });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+    } finally {
+      providerReleased.resolve();
+      killReleased.resolve();
+      await Promise.all([resume, turn]);
+    }
+  });
+
+  it("stops a turn waiting for resume without waiting for the retiring engine", async () => {
+    const killing = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    await h.manager.ensureSession("owner", "Owner");
+    vi.mocked(h.engine.kill).mockImplementation(async () => {
+      killing.resolve();
+      await released.promise;
+    });
+    const resume = h.manager.resumeThread("owner", "thread-B");
+    await killing.promise;
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel this waiting turn")
+      .then((result) => {
+        reply = result.reply;
+      });
+    try {
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+    } finally {
+      released.resolve();
+      await Promise.all([resume, turn]);
+    }
+  });
+
+  it("waits for an overlapping resume before submitting the next turn to its selected engine", async () => {
+    const killing = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    const fresh = {
+      ...h.engine,
+      submit: vi.fn(async () => {}),
+      kill: vi.fn(async () => {})
+    };
+    await h.manager.ensureSession("owner", "Owner");
+    vi.mocked(h.engine.kill).mockImplementation(async () => {
+      killing.resolve();
+      await released.promise;
+    });
+    vi.mocked(h.engine.submit).mockRejectedValue(new Error("retiring transport"));
+    h.engineFactory.mockReturnValue(fresh);
+    h.engineFactory.mockClear();
+    h.deps.persistence.getMainThreadState = async () => ({ id: "thread-A", incognito: false });
+    h.persistence.listPriorTurns.mockClear();
+    const resume = h.manager.resumeThread("owner", "thread-B");
+    await killing.promise;
+    const prestart = h.manager.ensureSession("owner", "Owner");
+    const turn = h.manager.submitTurn("owner", "Owner", "Continue the selected chat");
+    const result = turn.catch((error: unknown) => error);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(h.engine.submit).not.toHaveBeenCalled();
+    } finally {
+      released.resolve();
+      await resume;
+    }
+    expect(await result).toEqual({ reply: "Done." });
+    expect((await prestart).threadId).toBe("thread-B");
+    expect(h.engineFactory).toHaveBeenCalledExactlyOnceWith(
+      "anthropic",
+      "owner:drawer",
+      expect.objectContaining({ conversationId: "thread-B" })
+    );
+    expect(h.persistence.listPriorTurns).toHaveBeenCalledExactlyOnceWith(
+      "owner",
+      { forceReplay: true, threadId: "thread-B" },
+      "drawer"
+    );
+    expect(fresh.submit).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining("Continue the selected chat")
+    );
+    expect(h.persistence.recordTurn).toHaveBeenCalledWith(
+      "owner",
+      "Continue the selected chat",
+      "Done.",
+      expect.anything(),
+      expect.objectContaining({ threadId: "thread-B" }),
+      "drawer"
+    );
+  });
+
+  it("keeps New chat chosen during awaited Main launch validation (#3125)", async () => {
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const h = harness();
+    let reads = 0;
+    h.deps.persistence.getMainThreadState = async () => {
+      if (++reads === 2) {
+        entered.resolve();
+        await release.promise;
+      }
+      return { id: "thread-A", incognito: false };
+    };
+    const prestart = h.manager.ensureSession("user-1", "Ben");
+    await entered.promise;
+    await h.manager.clear("user-1");
+    release.resolve();
+    expect((await prestart).threadId).toBe("new-thread");
+    expect((await h.manager.ensureSession("user-1", "Ben")).threadId).toBe("new-thread");
+    expect(await h.manager.submitTurn("user-1", "Ben", "Keep my new chat")).toMatchObject({
+      reply: "Done."
+    });
+  });
+
+  it("honors New chat chosen during a cold Main stream launch (#3125)", async () => {
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const h = harness();
+    h.deps.persistence.getMainThreadState = async () => ({ id: "thread-A", incognito: false });
+    vi.mocked(h.engine.launch).mockImplementation(async () => {
+      started.resolve();
+      await release.promise;
+      return { offset: 0 };
+    });
+    const prestart = h.manager.ensureSession("user-1", "Ben");
+    await started.promise;
+    await h.manager.clear("user-1");
+    release.resolve();
+    expect((await prestart).threadId).toBe("new-thread");
+    expect(await h.manager.submitTurn("user-1", "Ben", "My new conversation")).toMatchObject({
+      reply: "Done."
+    });
+  });
+
+  it("keeps the first side turn bound while its stream pre-start is still launching (#3125)", async () => {
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const readMode = vi.fn(async () => "off" as const);
+    const h = harness({
+      classifierGate: buildClassifierGateRunner({ readMode, tokens: new SessionTokenRegistry() })
+    });
+    h.deps.persistence.getMainThreadState = async () => ({ id: "thread-A", incognito: false });
+    vi.mocked(h.engine.launch).mockImplementation(async () => {
+      started.resolve();
+      await release.promise;
+      return { offset: 0 };
+    });
+    await h.manager.clear("user-1");
+    const prestart = h.manager.ensureSession("user-1", "Ben");
+    await started.promise;
+    const turn = h.manager.submitTurn("user-1", "Ben", "First side message");
+    await vi.waitFor(() => expect(readMode).toHaveBeenCalledOnce());
+    release.resolve();
+    expect((await prestart).threadId).toBe("new-thread");
+    expect(await turn).toMatchObject({ reply: "Done." });
+    expect(h.persistence.recordTurn).toHaveBeenCalledWith(
+      "user-1",
+      "First side message",
+      "Done.",
+      expect.anything(),
+      expect.objectContaining({ threadId: "new-thread" }),
+      "drawer"
+    );
+  });
+
   it("preserves the old launch binding but returns a fresh session after resume during persona await", async () => {
     const persona = deferred<string>();
     const render = vi.fn(() => persona.promise);
@@ -123,6 +425,8 @@ describe("chat conversation identity binding", () => {
     await vi.waitFor(() => expect(render).toHaveBeenCalledOnce());
     const resume = h.manager.resumeThread("user-1", "thread-B");
     persona.resolve("Moss");
+    releaseResume.resolve();
+    await resume;
     const session = await launch;
 
     expect(mintedOrigins).toEqual(["thread-A", "thread-B"]);
@@ -140,9 +444,6 @@ describe("chat conversation identity binding", () => {
       expect.objectContaining({ threadId: "thread-A" }),
       "drawer"
     );
-
-    releaseResume.resolve();
-    await resume;
   });
 
   it("binds a newly opened conversation and leaves an unavailable identity null", async () => {
@@ -179,6 +480,9 @@ describe("chat conversation identity binding", () => {
     await vi.waitFor(() => expect(readMode).toHaveBeenCalledOnce());
     const resume = h.manager.resumeThread("user-1", "thread-B");
     mode.resolve("on");
+    await vi.waitFor(() => expect(evaluate).toHaveBeenCalledOnce());
+    releaseResume.resolve();
+    await resume;
     expect(await turn).toEqual({ reply: "" });
 
     expect(evaluate).toHaveBeenCalledWith(
@@ -190,8 +494,6 @@ describe("chat conversation identity binding", () => {
     );
     expect(h.engine.submit).not.toHaveBeenCalled();
     expect(h.persistence.recordTurn).not.toHaveBeenCalled();
-    releaseResume.resolve();
-    await resume;
   });
 
   it("keeps missing gate and shadow identities null even when launch creates a thread", async () => {

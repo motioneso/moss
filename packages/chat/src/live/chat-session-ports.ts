@@ -1,3 +1,4 @@
+import type { ScheduledReadPlan } from "../scheduled-reads/request.js";
 /**
  * Persistence + passive-retrieval port interfaces for ChatSessionManager, split out of
  * chat-session-manager.ts (#1157) to keep that file under the repo's 1000-line cap. All
@@ -10,6 +11,7 @@ import type {
   AnswerProvenanceMetadataV1,
   ChatAttachmentDto,
   ChatSurface,
+  ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   LocaleSettingsDto,
@@ -24,12 +26,16 @@ import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
 import type { AcpPermissionDecider } from "@moss/acp";
 import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
+import type { ReminderTurnPlan } from "../reminders/turn.js";
 import type {
   ActionResultMetadata,
   CliChatEngine,
   EngineKillOpts,
   TranscriptRecord
 } from "./types.js";
+
+/** `no_route`: no configured model can summarize, so the conversation cannot be condensed. */
+export type ConversationSummaryRequestStatus = "queued" | "skipped" | "no_route";
 
 export interface PrivateThreadState {
   readonly actorUserId: string;
@@ -48,15 +54,29 @@ export interface ChatPersistencePort {
     acpAgentId?: string | null;
     acpModel?: string;
   }>;
-  /** Prior stored turns split into recent verbatim turns + older rolling summary. */
+  /** The accepted summary plus every stored turn after its covered frontier. */
   listPriorTurns(
     actorUserId: string,
-    opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
+    opts?: {
+      readonly forceReplay?: boolean;
+      readonly threadId?: string | null;
+      /** Read the retained context without logging a replay injection. */
+      readonly measureOnly?: boolean;
+    },
     surface?: ChatSurface
   ): Promise<{
     recent: readonly { role: "user" | "assistant"; content: string }[];
     oldSummary: string | null;
   }>;
+  /**
+   * Ask for the bound conversation's older turns to be condensed into its summary.
+   * Best-effort; the caller never waits on the summary itself.
+   */
+  requestConversationSummary?(
+    actorUserId: string,
+    binding: { readonly threadId?: string | null },
+    surface?: ChatSurface
+  ): Promise<ConversationSummaryRequestStatus | void>;
   /** Persist a completed turn (user text + assistant reply + executing provider/model). */
   recordTurn(
     actorUserId: string,
@@ -74,6 +94,10 @@ export interface ChatPersistencePort {
       readonly activityRecords?: readonly TranscriptRecord[];
       readonly elapsedMs?: number;
       readonly usage?: ChatTurnUsageDto;
+      /** #3311 — reserved reminder message ids this turn was shown; acknowledged with the save. */
+      readonly acknowledgeReminderMessageIds?: readonly string[];
+      /** #3128 — live turn identity; the save clears its in-flight record. */
+      readonly turnId?: string;
     },
     surface?: ChatSurface
   ): Promise<
@@ -85,6 +109,31 @@ export interface ChatPersistencePort {
     | undefined
   >;
   /**
+   * #3128 — record a reply in flight just before the model receives it, so a restart can
+   * store the question and an interrupted note. Optional: embedders without recovery omit it.
+   */
+  beginLiveTurn?(
+    actorUserId: string,
+    turn: {
+      readonly turnId: string;
+      readonly threadId: string;
+      readonly userText: string;
+      readonly attachments?: readonly ChatAttachmentDto[];
+    }
+  ): Promise<void>;
+  /** #3128 — store an unsaved live turn that failed as its question plus the interrupted note. */
+  storeInterruptedLiveTurn?(actorUserId: string, threadId: string, turnId: string): Promise<void>;
+  /** #3128 — drop an unsaved live turn's record, as for a stopped or refused turn. */
+  discardLiveTurn?(actorUserId: string, turnId: string): Promise<void>;
+  /**
+   * #3311 — delivered reminders whose context is still pending in this exact Main chat, oldest
+   * first and bounded. Optional: embedders without reminders omit it.
+   */
+  listPendingMainReminders?(
+    actorUserId: string,
+    threadId: string
+  ): Promise<readonly PendingMainReminder[]>;
+  /**
    * Task 4.1 (#2901) — persist one completed gate-handled turn. The assistant message carries the
    * gate-origin contract instead of an executed provider/model or usage. Optional: embedders that
    * never wire the gate omit it.
@@ -93,7 +142,7 @@ export interface ChatPersistencePort {
     actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1,
+    origin: ChatClassifierGateOriginV1,
     opts?: HandledTurnOptions,
     surface?: ChatSurface
   ): Promise<
@@ -102,6 +151,47 @@ export interface ChatPersistencePort {
         readonly assistantMessageId: string;
         readonly sourceFreshness?: SourceFreshnessV1 | null;
       }
+    | undefined
+  >;
+  /** Resolve an explicit scheduled Tasks check; unmatched selections leave the turn unchanged. */
+  resolveScheduledReadRequest?(
+    actorUserId: string,
+    text: string,
+    signal: AbortSignal
+  ): Promise<ScheduledReadPlan | undefined>;
+  prepareResponsibilityAgreement?(
+    actorUserId: string,
+    text: string,
+    threadId: string,
+    signal?: AbortSignal
+  ): Promise<ReminderTurnPlan | undefined>;
+  hasPendingReminderDeletion?(actorUserId: string, threadId: string): Promise<boolean>;
+  hasQuietHoursReminderTarget?(actorUserId: string, target: string): Promise<boolean>;
+  hasPendingQuietHoursProposal?(actorUserId: string, threadId: string): Promise<boolean>;
+  prepareReminderEdit?(
+    actorUserId: string,
+    text: string,
+    threadId: string,
+    signal?: AbortSignal
+  ): Promise<ReminderTurnPlan | undefined>;
+  /**
+   * #3309 — persist the code-written answer to a recognised reminder request, saving and queuing
+   * an accepted reminder in the same transaction. Optional: embedders without reminders omit it.
+   */
+  recordReminderTurn?(
+    actorUserId: string,
+    userText: string,
+    plan: ReminderTurnPlan,
+    opts?: ReminderTurnOptions,
+    surface?: ChatSurface
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly reply: string;
+        readonly origin: ChatTurnOriginV1;
+      }
+    | "stopped"
     | undefined
   >;
   /** Close the current conversation and open a fresh one (for /clear). */
@@ -113,6 +203,10 @@ export interface ChatPersistencePort {
   getCurrentThreadState?(
     actorUserId: string,
     surface?: ChatSurface
+  ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined>;
+  /** Stable drawer destination for a cold reconnect; explicit resume stays on current-thread state. */
+  getMainThreadState?(
+    actorUserId: string
   ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined>;
   /** Exact owner-scoped lookup; never substitutes the active conversation. */
   getOwnedThreadState?(
@@ -186,6 +280,12 @@ export interface HandledTurnOptions {
   readonly activityRecords?: readonly TranscriptRecord[];
 }
 
+/** A stop that lands before the reminder turn commits rolls the whole turn back. */
+export interface ReminderTurnOptions extends HandledTurnOptions {
+  readonly turnId?: string;
+  readonly stopSignal?: AbortSignal;
+}
+
 export interface ChatSessionManagerDeps {
   readonly engineFactory: (
     provider: ProviderKind,
@@ -241,6 +341,12 @@ export interface ChatSessionManagerDeps {
   /** Refresh the session token's TTL on activity, so a live session's token never
    *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
   readonly touchMcpToken?: (chatSessionId: string) => void;
+  /**
+   * #3335: mark a launch token as replaying until the replay has drained. The gateway refuses
+   * every tool and permission request on a marked token, because no user turn stands behind it.
+   */
+  readonly beginLaunchReplay?: (token: string) => void;
+  readonly endLaunchReplay?: (token: string) => void;
   /** Wait for origin-bound gateway notifications before completing their model/gate turn. */
   readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   /**
@@ -322,4 +428,9 @@ export interface ChatSessionManagerDeps {
   readonly serverOwnsDrain?: boolean;
   // Wall-clock seam for buildEngineText's time context; deliberately separate from `clock` above (idle/heartbeat elapsed time).
   readonly now?: () => Date;
+}
+
+export interface PendingMainReminder {
+  readonly reservedMessageId: string;
+  readonly body: string;
 }

@@ -1,7 +1,15 @@
+import { randomUUID } from "node:crypto";
+import { resolveChatFreshness } from "./source-freshness.js";
+import { typedResponsibilityAgreement } from "../responsibility-agreements/terms.js";
+import { createResponsibilityPreparation } from "../responsibility-agreements/prepare.js";
+import { clearResponsibilityProposals } from "../responsibility-agreements/repository.js";
+import { recognizeReminderEdit } from "../reminders/edit-recognizer.js";
+import { prepareReminderEdit as prepareEdit } from "../reminders/prepare-edit.js";
+import type { GenerateStructuredDeps } from "@moss/ai";
+import { pendingReminderDeletion } from "../reminders/delete-agreement.js";
 /**
  * DataContextChatPersistence — the REAL ChatPersistencePort backing the live
  * ChatSessionManager.
- *
  * Every method builds an AccessContext { actorUserId, requestId } and runs its
  * queries through the DataContextRunner so RLS scopes all reads/writes to the
  * acting owner. Provider routing reuses the AI capability router; turn recording
@@ -9,59 +17,81 @@
  * episodic-embed job (unless the thread is incognito).
  */
 import type { AiConfiguredModelSafeRow, AiRepository, ProviderKind } from "@moss/ai";
-import { resolveEffectiveTimezone } from "../locale-utils.js";
+import { resolveClockFormat, resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
-  resolveMossEnv,
+  type ChatThread,
   type DataContextDb,
   type DataContextRunner,
   type MossDatabase,
   type PreferencesPort
 } from "@moss/db";
-import { CHAT_SETTINGS_PREFERENCE_KEY, normalizeChatSettings } from "@moss/shared";
+import {
+  CHAT_SETTINGS_PREFERENCE_KEY,
+  DEFAULT_CHAT_SURFACE,
+  normalizeChatSettings
+} from "@moss/shared";
 import type {
   AnswerProvenanceMetadataV1,
   AiAuthMethod,
   ChatAttachmentDto,
   ChatSurface,
+  ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   LocaleSettingsDto,
-  SourceFreshnessEntry,
   SourceFreshnessV1
 } from "@moss/shared";
 import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/shared";
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { PgBoss } from "pg-boss";
-
 import { sendJob } from "@moss/jobs";
-
 import {
   CHAT_ARCHIVE_DAY_QUEUE,
   CHAT_EMBED_TURN_QUEUE,
   CHAT_EXTRACT_FACTS_QUEUE,
+  CHAT_SUMMARIZE_CONVERSATION_QUEUE,
   type ArchiveDayJobPayload,
+  type SummarizeConversationJobPayload,
   type EmbedTurnJobPayload,
   type ExtractFactsJobPayload
 } from "../jobs.js";
 import { containsSensitiveMemoryText } from "../memory-distillation.js";
 import type { ChatPersistencePort } from "./chat-session-manager.js";
-import type { HandledTurnOptions } from "./chat-session-ports.js";
+import type {
+  ConversationSummaryRequestStatus,
+  HandledTurnOptions,
+  PendingMainReminder,
+  ReminderTurnOptions
+} from "./chat-session-ports.js";
+import { selectSummaryRoute } from "../summary-job.js";
 import type { ChatRepository } from "../repository.js";
+import { ReminderRepository } from "../reminders/repository.js";
+import {
+  clearQuietHoursProposal,
+  matchQuietHoursReminders,
+  readQuietHoursProposal
+} from "../reminders/quiet-hours-allowances.js";
+import { recognizeQuietHoursCommand } from "../reminders/quiet-hours-recognizer.js";
+import { decideReminderTurn, type ReminderTurnPlan } from "../reminders/turn.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
+import { CHAT_PROCESS_BOOT_ID, deleteLiveTurn, insertLiveTurn } from "../live-turns.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
+import { getReplayK, getReplayTokenCap, type ReplayMessage } from "./replay-window.js";
 import {
-  capSummary,
-  DEFAULT_REPLAY_MESSAGES,
-  REPLAY_TOKEN_CAP,
-  SUMMARY_TOKEN_CAP,
-  selectReplayWindow,
-  type ReplayMessage
-} from "./replay-window.js";
+  SUMMARY_RUN_INPUT_TOKENS,
+  isInterruptedNote,
+  planSummaryCoverage,
+  splitAtSummaryFrontier,
+  storedCoverageTurns,
+  type CoverageTurn
+} from "./summary-coverage.js";
+
+export { getReplayK, getReplayTokenCap } from "./replay-window.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
 const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];
@@ -83,6 +113,11 @@ export interface DataContextChatPersistenceDeps {
   readonly localePreferences?: PreferencesPort;
   /** Reads the user's saved ACP model choice for the live launch. */
   readonly chatPreferences?: PreferencesPort;
+  /** #3128 — this process's boot id; tests pass one per simulated boot. */
+  readonly bootId?: string;
+  readonly canProposeBoundedAction?: (actorUserId: string) => Promise<boolean>;
+  readonly editCliAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
+  readonly resolveScheduledReadRequest?: ChatPersistencePort["resolveScheduledReadRequest"];
 }
 
 /**
@@ -99,71 +134,36 @@ interface PersistTurnOptions {
   readonly elapsedMs?: number;
   readonly usage?: ChatTurnUsageDto;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
+  readonly acknowledgeReminderMessageIds?: readonly string[];
+  readonly turnId?: string;
 }
 
-export function toolNameToSource(toolName: string): string | null {
-  if (toolName.startsWith("email.")) return "email";
-  if (toolName.startsWith("calendar.")) return "calendar";
-  if (toolName.startsWith("vault.") || toolName.startsWith("notes.")) return "vault";
-  if (toolName.startsWith("tasks.")) return "tasks";
-  if (toolName.startsWith("commitments.")) return "commitments";
-  if (toolName.startsWith("chat.")) return "chats";
-  if (toolName.startsWith("goals.")) return "goals";
-  return null;
-}
+/** #3311: at most this many delivered reminders are shown to one Main turn. */
+const MAIN_REMINDER_CONTEXT_LIMIT = 20;
 
-const CONNECTOR_SOURCES_CHAT = new Set(["email", "calendar"]);
-const REALTIME_SOURCES_CHAT = new Set(["tasks", "commitments", "chats", "goals"]);
-
-export async function resolveChatFreshness(
-  scopedDb: DataContextDb,
-  invokedToolNames: ReadonlySet<string>,
-  capturedAt: Date,
-  opts: {
-    connectorSyncAt?: (scopedDb: DataContextDb, kind: "email" | "calendar") => Promise<Date | null>;
-  }
-): Promise<SourceFreshnessV1 | null> {
-  const sourceKeys = new Set<string>();
-  for (const name of invokedToolNames) {
-    const source = toolNameToSource(name);
-    if (source) sourceKeys.add(source);
-  }
-  if (sourceKeys.size === 0) return null;
-
-  const capturedAtIso = capturedAt.toISOString();
-  const entries: SourceFreshnessEntry[] = [];
-  for (const source of sourceKeys) {
-    if (REALTIME_SOURCES_CHAT.has(source)) {
-      entries.push({ source, freshnessKind: "realtime", asOf: capturedAtIso });
-    } else if (CONNECTOR_SOURCES_CHAT.has(source)) {
-      let asOf: string | null = null;
-      try {
-        const t = (await opts.connectorSyncAt?.(scopedDb, source as "email" | "calendar")) ?? null;
-        asOf = t ? t.toISOString() : null;
-      } catch {
-        // keep asOf as null on error
-      }
-      entries.push({ source, freshnessKind: "connector_sync", asOf });
-    } else {
-      // vault — V1: asOf: null (no vaultLastWriteAt dep for chat)
-      entries.push({ source, freshnessKind: "vault_write", asOf: null });
-    }
-  }
-
-  return { version: 1, capturedAt: capturedAtIso, sources: entries };
-}
+export { toolNameToSource, resolveChatFreshness } from "./source-freshness.js";
 
 export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly dataContext: DataContextRunner;
   private readonly rootDb: Kysely<MossDatabase> | undefined;
   private readonly chat: ChatRepository;
+  readonly resolveScheduledReadRequest: ChatPersistencePort["resolveScheduledReadRequest"];
+  readonly prepareResponsibilityAgreement: NonNullable<
+    ChatPersistencePort["prepareResponsibilityAgreement"]
+  >;
+  private readonly reminders = new ReminderRepository();
   private readonly ai: AiRepository;
   private readonly boss: PgBoss | undefined;
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
   private readonly localePreferences: PreferencesPort | undefined;
   private readonly chatPreferences: PreferencesPort | undefined;
+  private readonly bootId: string;
+  private readonly canProposeBoundedAction: DataContextChatPersistenceDeps["canProposeBoundedAction"];
+  private readonly editCliAdapter: GenerateStructuredDeps["createCliStructuredAdapter"];
 
   constructor(deps: DataContextChatPersistenceDeps) {
+    this.prepareResponsibilityAgreement = createResponsibilityPreparation(deps);
+    this.resolveScheduledReadRequest = deps.resolveScheduledReadRequest;
     this.rootDb = deps.rootDb;
     this.dataContext = deps.dataContext;
     this.chat = deps.chatRepository;
@@ -172,6 +172,42 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.connectorSyncAt = deps.connectorSyncAt;
     this.localePreferences = deps.localePreferences;
     this.chatPreferences = deps.chatPreferences;
+    this.bootId = deps.bootId ?? CHAT_PROCESS_BOOT_ID;
+    this.editCliAdapter = deps.editCliAdapter;
+    this.canProposeBoundedAction = deps.canProposeBoundedAction;
+  }
+
+  async prepareReminderEdit(
+    actorUserId: string,
+    text: string,
+    threadId: string,
+    signal?: AbortSignal
+  ): Promise<ReminderTurnPlan | undefined> {
+    const run = await this.run(actorUserId, "prepare-reminder-edit", async (db) => {
+      const thread = await this.chat.getThreadById(db, threadId);
+      if (
+        !thread ||
+        thread.owner_user_id !== actorUserId ||
+        thread.surface !== DEFAULT_CHAT_SURFACE ||
+        thread.incognito
+      )
+        return async () =>
+          recognizeReminderEdit(text) ? { kind: "main_only" as const, manage: true } : undefined;
+      const raw = await this.localePreferences?.get(db, "locale");
+      return prepareEdit(
+        db,
+        this.ai,
+        this.editCliAdapter,
+        text,
+        threadId,
+        {
+          timeZone: resolveEffectiveTimezone(raw),
+          clockFormat: resolveClockFormat(raw)
+        },
+        signal
+      );
+    });
+    return run();
   }
 
   async resolveActiveProvider(actorUserId: string): Promise<{
@@ -215,7 +251,11 @@ export class DataContextChatPersistence implements ChatPersistencePort {
 
   async listPriorTurns(
     actorUserId: string,
-    opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
+    opts?: {
+      readonly forceReplay?: boolean;
+      readonly threadId?: string | null;
+      readonly measureOnly?: boolean;
+    },
     surface?: ChatSurface
   ): Promise<{
     recent: readonly ReplayMessage[];
@@ -241,18 +281,24 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         return { recent: [], oldSummary: null };
       }
 
+      // #3128: a reply an earlier boot left unfinished replays as its question plus the note.
+      await this.chat.reconcileInterruptedTurns(scopedDb, thread.id, this.bootId);
       const messages = await this.chat.listMessages(scopedDb, thread.id);
-      const turns: ReplayMessage[] = messages
-        .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.body }));
+      const turns = storedCoverageTurns(messages);
 
-      const recent = selectReplayWindow(turns, {
-        maxMessages: getReplayK(),
-        maxTokens: getReplayTokenCap()
+      // Replay is the accepted summary plus every turn after its frontier, untruncated.
+      // The launch refuses a replay that overflows its budget instead of dropping turns.
+      const split = splitAtSummaryFrontier(turns, {
+        summary: thread.conversation_summary,
+        coveredThroughMessageId: thread.summary_covered_through_message_id,
+        revision: thread.summary_revision
       });
-      const oldSummary = thread.conversation_summary
-        ? capSummary(thread.conversation_summary, SUMMARY_TOKEN_CAP)
-        : null;
+      const recent: ReplayMessage[] = split.uncovered.map((m) => ({
+        role: m.role,
+        content: m.content
+      }));
+      const oldSummary = split.summary;
+      if (opts?.measureOnly) return { recent, oldSummary };
 
       // D8: visibility only — counts and trigger, never message/summary content.
       // "switch" is a valid trigger value but unreachable in Phase 1: switchProvider
@@ -288,6 +334,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly activityRecords?: readonly TranscriptRecord[];
       readonly elapsedMs?: number;
       readonly usage?: ChatTurnUsageDto;
+      readonly acknowledgeReminderMessageIds?: readonly string[];
+      readonly turnId?: string;
     },
     surface?: ChatSurface
   ): Promise<{ readonly userMessageId: string; readonly assistantMessageId: string } | undefined> {
@@ -302,6 +350,38 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     );
   }
 
+  async beginLiveTurn(
+    actorUserId: string,
+    turn: {
+      readonly turnId: string;
+      readonly threadId: string;
+      readonly userText: string;
+      readonly attachments?: readonly ChatAttachmentDto[];
+    }
+  ): Promise<void> {
+    await this.run(actorUserId, "begin-live-turn", async (scopedDb) => {
+      await clearQuietHoursProposal(scopedDb, turn.threadId);
+      await clearResponsibilityProposals(scopedDb, turn.threadId);
+      await insertLiveTurn(scopedDb, { ...turn, bootId: this.bootId });
+    });
+  }
+
+  async storeInterruptedLiveTurn(
+    actorUserId: string,
+    threadId: string,
+    turnId: string
+  ): Promise<void> {
+    await this.run(actorUserId, "store-interrupted-live-turn", (scopedDb) =>
+      this.chat.storeInterruptedTurn(scopedDb, threadId, turnId)
+    );
+  }
+
+  async discardLiveTurn(actorUserId: string, turnId: string): Promise<void> {
+    await this.run(actorUserId, "discard-live-turn", (scopedDb) =>
+      deleteLiveTurn(scopedDb, turnId)
+    );
+  }
+
   /**
    * Task 4.1 (#2901) — persist a completed turn the classifier gate handled. Same thread/title/
    * summary/background-job post-processing as a model turn, but the assistant message carries the
@@ -312,7 +392,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1,
+    origin: ChatClassifierGateOriginV1,
     opts?: HandledTurnOptions,
     surface?: ChatSurface
   ): Promise<
@@ -335,6 +415,98 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   }
 
   /**
+   * #3309: persist the code-written answer to a recognised reminder request. The reply and origin
+   * are decided inside the turn's transaction, and an accepted reminder commits with the turn.
+   */
+  async hasPendingReminderDeletion(actorUserId: string, threadId: string): Promise<boolean> {
+    return this.run(actorUserId, "reminder-deletion-agreement", async (db) => {
+      const main = await this.chat.getMainThread(db, actorUserId);
+      return main?.id === threadId && Boolean(await pendingReminderDeletion(db, threadId));
+    });
+  }
+
+  async hasQuietHoursReminderTarget(actorUserId: string, target: string): Promise<boolean> {
+    return this.dataContext.withDataContext(
+      { actorUserId },
+      async (db) => (await matchQuietHoursReminders(db, this.reminders, target)).length > 0
+    );
+  }
+
+  async hasPendingQuietHoursProposal(actorUserId: string, threadId: string): Promise<boolean> {
+    return this.dataContext.withDataContext({ actorUserId }, async (db) =>
+      Boolean(await readQuietHoursProposal(db, threadId))
+    );
+  }
+
+  async recordReminderTurn(
+    actorUserId: string,
+    userText: string,
+    plan: ReminderTurnPlan,
+    opts?: ReminderTurnOptions,
+    surface?: ChatSurface
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly reply: string;
+        readonly origin: ChatTurnOriginV1;
+      }
+    | "stopped"
+    | undefined
+  > {
+    if (
+      plan.kind === "scope_agreement" &&
+      (Boolean(opts?.attachments?.length) || typedResponsibilityAgreement(userText) !== plan.agree)
+    )
+      throw new Error("responsibility needs the owner's typed agreement without attachments");
+    if (plan.kind === "quiet_allowance" || plan.kind === "quiet_agreement") {
+      const recognized = recognizeQuietHoursCommand(userText);
+      if (
+        (plan.kind === "quiet_agreement" && Boolean(opts?.attachments?.length)) ||
+        !recognized ||
+        recognized.kind !== plan.kind ||
+        (recognized.kind === "quiet_allowance" &&
+          plan.kind === "quiet_allowance" &&
+          (recognized.target !== plan.target || recognized.allow !== plan.allow)) ||
+        (recognized.kind === "quiet_agreement" &&
+          plan.kind === "quiet_agreement" &&
+          recognized.agree !== plan.agree)
+      ) {
+        throw new Error("quiet-hours command needs the owner's typed agreement");
+      }
+    }
+    const { stopSignal, ...turnOpts } = opts ?? {};
+    let stored: Awaited<ReturnType<typeof this.persistCompletedTurn>>;
+    try {
+      stored = await this.persistCompletedTurn(
+        actorUserId,
+        "record-reminder-turn",
+        userText,
+        "",
+        {
+          ...turnOpts,
+          ...(plan.kind === "scope_proposal" || plan.kind === "scope_agreement"
+            ? { turnId: turnOpts.turnId ?? randomUUID() }
+            : {})
+        },
+        surface,
+        { reminder: plan, stopSignal }
+      );
+    } catch (error) {
+      if (error instanceof ReminderTurnStopped) return "stopped";
+      throw error;
+    }
+    return stored?.reply !== undefined && stored.origin !== undefined
+      ? {
+          userMessageId: stored.userMessageId,
+          assistantMessageId: stored.assistantMessageId,
+          reply: stored.reply,
+          origin: stored.origin
+        }
+      : undefined;
+  }
+
+  /**
    * The one completed-turn pipeline shared by model turns and gate-handled turns. `turn` is a
    * discriminated union: either the executing provider/model or the gate origin, never both, so a
    * handled turn can never accidentally write a fabricated `executed` or `usage`.
@@ -349,11 +521,14 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     turn:
       | { readonly executed: { provider: ProviderKind; model: string } }
       | { readonly origin: ChatTurnOriginV1 }
+      | { readonly reminder: ReminderTurnPlan; readonly stopSignal?: AbortSignal }
   ): Promise<
     | {
         readonly userMessageId: string;
         readonly assistantMessageId: string;
         readonly sourceFreshness?: SourceFreshnessV1 | null;
+        readonly reply?: string;
+        readonly origin?: ChatTurnOriginV1;
       }
     | undefined
   > {
@@ -381,6 +556,10 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         await this.chat.touchCurrentThread(scopedDb, thread.id, chatSurface);
       }
 
+      if (!("reminder" in turn)) {
+        await clearQuietHoursProposal(scopedDb, thread.id);
+        await clearResponsibilityProposals(scopedDb, thread.id);
+      }
       const capturedAt = new Date();
       const sourceFreshness = opts?.invokedToolNames
         ? await resolveChatFreshness(scopedDb, opts.invokedToolNames, capturedAt, {
@@ -395,8 +574,34 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         actionResults: opts?.actionResults,
         activityRecords: opts?.activityRecords,
         elapsedMs: opts?.elapsedMs,
-        usage: opts?.usage
+        usage: opts?.usage,
+        turnId: opts?.turnId
       };
+      const handled =
+        "reminder" in turn
+          ? await decideReminderTurn(
+              scopedDb,
+              {
+                scopeAvailable: async () =>
+                  (await this.canProposeBoundedAction?.(actorUserId)) === true,
+                reminders: this.reminders,
+                boss: this.boss,
+                locale: async () => {
+                  const raw = await this.localePreferences?.get(scopedDb, "locale");
+                  return {
+                    timeZone: resolveEffectiveTimezone(raw),
+                    clockFormat: resolveClockFormat(raw)
+                  };
+                }
+              },
+              actorUserId,
+              thread,
+              turn.reminder,
+              userText
+            )
+          : "origin" in turn
+            ? { reply: assistantReply, origin: turn.origin }
+            : undefined;
       const result = thread.incognito
         ? undefined
         : "executed" in turn
@@ -409,42 +614,48 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               completedOpts,
               chatSurface
             )
-          : await this.chat.recordGateCompletedTurn(
-              scopedDb,
-              thread.id,
-              userText,
-              assistantReply,
-              turn.origin,
-              completedOpts,
-              chatSurface
-            );
+          : handled
+            ? await this.chat.recordGateCompletedTurn(
+                scopedDb,
+                thread.id,
+                userText,
+                handled.reply,
+                handled.origin,
+                completedOpts,
+                chatSurface
+              )
+            : undefined;
+      if (result && handled && "save" in handled) await handled.save?.(result.userMessage.id);
+      // #3311: only a stored model turn acknowledges the reminders it was shown.
+      if (result && "executed" in turn && opts?.acknowledgeReminderMessageIds) {
+        await this.reminders.acknowledgeMain(
+          scopedDb,
+          thread.id,
+          opts.acknowledgeReminderMessageIds
+        );
+      }
+
+      // Throwing here rolls back the turn, the reminder and its delivery job together.
+      if ("reminder" in turn && turn.stopSignal?.aborted) throw new ReminderTurnStopped();
 
       if (thread.incognito) {
         return undefined;
       }
 
-      // Update rolling summary when stored turns exceed the replay window. D3:
-      // the write gate uses the constant, not the (possibly opted-out) env —
-      // summaries keep accruing for long threads regardless of replay overrides.
       const allMessages = await this.chat.listMessages(scopedDb, thread.id);
+      // #3128: an interrupted question is not a finished turn, so it never blocks the title.
+      const interruptedTurnIds = new Set(
+        allMessages.filter(isInterruptedNote).map((m) => m.tool_metadata.turnId)
+      );
       const storedTurns = allMessages.filter(
-        (m) => m.status === "stored" && (m.role === "user" || m.role === "assistant")
+        (m) =>
+          m.status === "stored" &&
+          (m.role === "user" || m.role === "assistant") &&
+          !interruptedTurnIds.has(m.tool_metadata.turnId)
       );
       // Auto-title the thread from the first user turn (#403).
       if (storedTurns.length === 2 && thread.title === DEFAULT_CONVERSATION_TITLE) {
         await this.chat.updateThreadTitle(scopedDb, thread.id, deriveChatTitle(userText));
-      }
-
-      if (storedTurns.length > DEFAULT_REPLAY_MESSAGES) {
-        const oldTurns = storedTurns.slice(0, -DEFAULT_REPLAY_MESSAGES).map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.body
-        }));
-        await this.chat.updateConversationSummary(
-          scopedDb,
-          thread.id,
-          buildRollingSummary(oldTurns)
-        );
       }
 
       if (this.boss && result && !thread.incognito) {
@@ -462,6 +673,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         };
         await sendJob(this.boss, CHAT_EMBED_TURN_QUEUE, embedPayload);
         await sendJob(this.boss, CHAT_EXTRACT_FACTS_QUEUE, extractPayload);
+        await this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(allMessages));
 
         const archiveEnabled = await this.localePreferences?.get(
           scopedDb,
@@ -480,7 +692,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         ? {
             userMessageId: result.userMessage.id,
             assistantMessageId: result.assistantMessage.id,
-            sourceFreshness
+            sourceFreshness,
+            ...(handled ? { reply: handled.reply, origin: handled.origin } : {})
           }
         : undefined;
     });
@@ -513,6 +726,69 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     return found !== undefined;
   }
 
+  /**
+   * Ask for the conversation's uncovered history to be condensed. Used when a fresh
+   * launch refuses an over-budget replay. Private, foreign and other-surface threads
+   * are ignored. `no_route` means no configured model can summarize, so waiting cannot help.
+   * The API cannot see the worker's CLI adapter, so a CLI sign-in route is assumed runnable.
+   */
+  async requestConversationSummary(
+    actorUserId: string,
+    binding: { readonly threadId?: string | null },
+    surface?: ChatSurface
+  ): Promise<ConversationSummaryRequestStatus> {
+    const threadId = binding.threadId;
+    if (!this.boss || threadId === null) return "skipped";
+    const chatSurface = normalizeChatSurface(surface);
+    return this.run(actorUserId, "request-conversation-summary", async (scopedDb) => {
+      const thread =
+        threadId === undefined
+          ? await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)
+          : await this.chat.getThreadById(scopedDb, threadId, chatSurface);
+      if (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface)
+        return "skipped";
+      const messages = await this.chat.listMessages(scopedDb, thread.id);
+      return this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(messages), scopedDb);
+    });
+  }
+
+  /**
+   * Queue one summarization run when the uncovered suffix outgrows the replay window.
+   * With `routeDb`, a due run first checks that a summarization route exists.
+   */
+  private async sendSummaryJobIfDue(
+    actorUserId: string,
+    thread: ChatThread,
+    turns: readonly CoverageTurn[],
+    routeDb?: DataContextDb
+  ): Promise<ConversationSummaryRequestStatus> {
+    if (!this.boss || thread.incognito) return "skipped";
+    const split = splitAtSummaryFrontier(turns, {
+      summary: thread.conversation_summary,
+      coveredThroughMessageId: thread.summary_covered_through_message_id,
+      revision: thread.summary_revision
+    });
+    const plan = planSummaryCoverage(split.uncovered, {
+      keep: getReplayK(),
+      replayTokens: getReplayTokenCap(),
+      maxInputTokens: SUMMARY_RUN_INPUT_TOKENS
+    });
+    if (!plan) return "skipped";
+    if (routeDb && !(await selectSummaryRoute(routeDb, this.ai, { cliAvailable: true })))
+      return "no_route";
+    const payload: SummarizeConversationJobPayload = {
+      actorUserId,
+      threadId: thread.id,
+      expectedRevision: thread.summary_revision,
+      expectedCoveredThroughMessageId: thread.summary_covered_through_message_id,
+      throughMessageId: plan.throughMessageId
+    };
+    await sendJob(this.boss, CHAT_SUMMARIZE_CONVERSATION_QUEUE, payload, {
+      singletonKey: `${thread.id}:${thread.summary_revision}`
+    });
+    return "queued";
+  }
+
   async getCurrentThreadState(
     actorUserId: string,
     surface?: ChatSurface
@@ -520,6 +796,24 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, "get-current-thread-state", async (scopedDb) => {
       const thread = await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface);
+      return thread ? { id: thread.id, incognito: thread.incognito } : undefined;
+    });
+  }
+
+  async listPendingMainReminders(
+    actorUserId: string,
+    threadId: string
+  ): Promise<readonly PendingMainReminder[]> {
+    return this.run(actorUserId, "list-pending-main-reminders", (scopedDb) =>
+      this.reminders.listPendingMain(scopedDb, threadId, MAIN_REMINDER_CONTEXT_LIMIT)
+    );
+  }
+
+  async getMainThreadState(
+    actorUserId: string
+  ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined> {
+    return this.run(actorUserId, "get-main-thread-state", async (scopedDb) => {
+      const thread = await this.chat.getMainThread(scopedDb, actorUserId);
       return thread ? { id: thread.id, incognito: thread.incognito } : undefined;
     });
   }
@@ -670,38 +964,6 @@ function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
   );
 }
 
-/**
- * D1: unset/empty -> DEFAULT_REPLAY_MESSAGES (40); explicit "0" -> 0 (valid
- * opt-out); non-numeric or negative -> 40 plus one console.warn. Exported so
- * tests/unit/chat-replay-window.test.ts can unit-test the parsing directly.
- */
-export function getReplayK(): number {
-  const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_K");
-  if (val === undefined || val === "") return DEFAULT_REPLAY_MESSAGES;
-  const parsed = parseInt(val, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    console.warn(
-      `Invalid JARVIS_CHAT_REPLAY_K value "${val}"; defaulting to ${DEFAULT_REPLAY_MESSAGES}.`
-    );
-    return DEFAULT_REPLAY_MESSAGES;
-  }
-  return parsed;
-}
-
-/** D1: sibling override for REPLAY_TOKEN_CAP. Same resolver, same parse rules. */
-function getReplayTokenCap(): number {
-  const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_TOKENS");
-  if (val === undefined || val === "") return REPLAY_TOKEN_CAP;
-  const parsed = parseInt(val, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    console.warn(
-      `Invalid JARVIS_CHAT_REPLAY_TOKENS value "${val}"; defaulting to ${REPLAY_TOKEN_CAP}.`
-    );
-    return REPLAY_TOKEN_CAP;
-  }
-  return parsed;
-}
-
 function deriveChatTitle(userText: string): string {
   const first = userText.split(/[.!?\n]/)[0] ?? userText;
   const cleaned = first.replace(/[^\S\r\n]+/g, " ").trim();
@@ -711,14 +973,4 @@ function deriveChatTitle(userText: string): string {
   return titled;
 }
 
-function buildRollingSummary(
-  oldTurns: readonly { role: "user" | "assistant"; content: string }[]
-): string {
-  const priorContent = oldTurns
-    .map((m) => `${m.role}: ${m.content.trim()}`)
-    .filter(Boolean)
-    .join(" ");
-  const raw = `As of turn ${oldTurns.length}: ${priorContent}`;
-  // Cap to 2000 chars so the column stays bounded while retaining the oldest summarized facts.
-  return raw.length > 2000 ? `${raw.slice(0, 1997)}...` : raw;
-}
+class ReminderTurnStopped extends Error {}

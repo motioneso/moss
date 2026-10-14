@@ -73,6 +73,20 @@ describe("runCheckTurn", () => {
     expect(await runCheckTurn({ ...noTool, engine })).toEqual({ ok: true, replyText: '{"sum":4}' });
   });
 
+  it("uses the latest cumulative reply without duplicating streamed text", async () => {
+    const engine = fakeEngine({
+      batches: [
+        { records: [{ kind: "reply", text: "Hello" }], complete: false },
+        { records: [{ kind: "reply", text: "Hello there!" }], complete: true }
+      ]
+    });
+    const { toolName: _unused, ...noTool } = base;
+    expect(await runCheckTurn({ ...noTool, engine })).toEqual({
+      ok: true,
+      replyText: "Hello there!"
+    });
+  });
+
   it("ignores a different tool", async () => {
     const engine = fakeEngine({
       batches: [

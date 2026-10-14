@@ -1,3 +1,4 @@
+import { createCliStructuredAdapterFactory } from "./cli-structured-adapter.js";
 /**
  * Live-chat runtime wiring: construct a ChatSessionManager backed by the REAL
  * adapters (tmux CLI engine, DataContext persistence, on-disk persona renderer,
@@ -107,9 +108,9 @@ export const MOSS_PERSONA_APP_MAP = [
   "Treat Moss app structure, behavior, settings, and errors as closed-world facts.",
   "Before answering a question about the Moss app, call app.getMapSlice; when the question concerns the current screen, also call chat.getCurrentView.",
   "When describing the app, use only facts returned by successful map or current-view tool calls. If the map has no matching declaration for such a question, say: I don't know from the current app map.",
-  "For a prerequisite error, resolve its remediationRef through app.getMapSlice and name that declared fix.",
+  "For a prerequisite error, call app.getMapSlice with query set to the exact remediationRef. Name the returned fix and include a Markdown link using its returned path. Never invent a path; if the remediation is missing from the map, say you do not know the declared fix.",
   "For every non-prerequisite error, classify it honestly and never invent a settings fix.",
-  "If the visible snapshot lacks a needed detail, ask the user to paste the exact text; never request or initiate a screenshot."
+  "If the user requests a screenshot, explain that you cannot take one and ask the user to paste the exact text instead. If the visible snapshot lacks a needed detail, ask the user to paste the exact text; never request or initiate a screenshot."
 ].join("\n");
 
 /** App-action instructions — drawer surface only, alongside the app map. */
@@ -406,6 +407,8 @@ export function selectEngineFactory(
       return {
         connection,
         factory: (provider, sessionKey, engineOpts) => {
+          // Structured reminder interpretation uses the one-shot profile on this same connection.
+          if (engineOpts?.needsStructuredOutput) return factory(provider, sessionKey, engineOpts);
           if (!engineOpts?.conversationId || !engineOpts.userId) {
             // Chat has no old-bridge fallback: a launch with no conversation or user id cannot
             // build the ACP session key below, so it refuses outright rather than silently
@@ -479,6 +482,8 @@ export function unavailableEngineFactory(reason: string): ChatEngineFactory {
 export const realEngineFactory: ChatEngineFactory = createRealEngineFactory();
 
 export interface CreateChatSessionRuntimeDeps {
+  readonly canProposeBoundedAction?: (actorUserId: string) => Promise<boolean>;
+  readonly resolveScheduledReadRequest?: DataContextChatPersistence["resolveScheduledReadRequest"];
   readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   readonly rootDb?: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
@@ -520,6 +525,9 @@ export interface CreateChatSessionRuntimeDeps {
     readonly revoke: (chatSessionId: string) => void;
     /** Refresh a session token's TTL on activity (defaults to no-op if omitted). */
     readonly touch?: (chatSessionId: string) => void;
+    /** #3335: refuse tool requests on a launch token until its replay has drained. */
+    readonly beginLaunchReplay?: (token: string) => void;
+    readonly endLaunchReplay?: (token: string) => void;
     /**
      * #2956: file a session's tool rows under its running turn. Wraps the
      * token registry's turn map; the manager sets it per turn and clears it
@@ -643,6 +651,8 @@ export interface ChatSessionRuntime {
  */
 export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): ChatSessionRuntime {
   const persistence = new DataContextChatPersistence({
+    canProposeBoundedAction: deps.canProposeBoundedAction,
+    resolveScheduledReadRequest: deps.resolveScheduledReadRequest,
     rootDb: deps.rootDb,
     dataContext: deps.dataContext,
     chatRepository: new ChatRepository(),
@@ -650,7 +660,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     boss: deps.boss,
     connectorSyncAt: deps.connectorSyncAt,
     chatPreferences: deps.chatPreferences,
-    localePreferences: deps.localePreferences
+    localePreferences: deps.localePreferences,
+    editCliAdapter: createCliStructuredAdapterFactory((...args) => engineFactory(...args))
   });
 
   // Late-bound manager ref so the reconcile hook (read once by RpcConnection at construction) can call
@@ -739,6 +750,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     mintMcpToken: deps.mcpTokenLifecycle?.mint,
     revokeMcpToken: deps.mcpTokenLifecycle?.revoke,
     touchMcpToken: deps.mcpTokenLifecycle?.touch,
+    beginLaunchReplay: deps.mcpTokenLifecycle?.beginLaunchReplay,
+    endLaunchReplay: deps.mcpTokenLifecycle?.endLaunchReplay,
     setCurrentTurnId: deps.mcpTokenLifecycle?.setCurrentTurn,
     clearCurrentTurnId: deps.mcpTokenLifecycle?.clearCurrentTurn,
     reconcileMcpTokens: deps.mcpTokenLifecycle?.reconcile,

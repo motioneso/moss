@@ -6,7 +6,13 @@ import type {
   ClassifierShadowRepository,
   ModelToolObservation
 } from "../classifier-shadow-repository.js";
-import { ClassifierGate, GATE_LIMITS, type GateMode, type GateOutcome } from "./classifier-gate.js";
+import {
+  ClassifierGate,
+  GATE_LIMITS,
+  type GateMode,
+  type GateOutcome,
+  type GateSpeed
+} from "./classifier-gate.js";
 import { gateEligibilityProblem, type GateTool } from "./classifier-gate-arguments.js";
 import type { ClassifierGatePortsFactory } from "./classifier-gate-wiring.js";
 import { fileClassifierTimeoutLine } from "./classifier-gate-wiring.js";
@@ -59,6 +65,8 @@ export interface ClassifierGateShadowRunner {
 export interface ClassifierGateShadowRunnerDeps {
   /** Reads the admin-wide gate mode. Only `shadow` runs an attempt. */
   readMode(actorUserId: string): Promise<GateMode>;
+  /** #3365: the routing-model speed record the live runner shares. Absent, the fixed limit applies. */
+  readonly speed?: GateSpeed;
   /** Builds the attempt ports, already bound to `token` and the attempt's correlation id. */
   createPorts: ClassifierGatePortsFactory;
   readonly repository: ClassifierShadowRepository;
@@ -286,6 +294,7 @@ export function createClassifierGateShadowRunner(
           // #3064: prod runs the classifier in shadow, so a shadow timeout files the
           // same single line as the engine path.
           noteTimeout: (activity) => fileClassifierTimeoutLine(activity),
+          ...(deps.speed ? { speed: deps.speed } : {}),
           now: deps.now
         });
         const outcome = await gate.evaluate({

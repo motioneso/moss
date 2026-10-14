@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 /** Opens the "More chat options" menu, picks one item, and leaves the menu closed (it closes itself). */
 async function pickChatMenuItem(drawer: Locator, name: string) {
@@ -44,6 +45,10 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    test.setTimeout(300_000);
+    await bringUpRealChatModel(page);
+  }
 }
 
 async function openChat(page: Page): Promise<Locator> {
@@ -57,7 +62,8 @@ async function sendAndAwaitReply(page: Page, drawer: Locator, message: string): 
   const turnResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
-      response.request().method() === "POST"
+      response.request().method() === "POST",
+    { timeout: 120_000 }
   );
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill(message);
@@ -65,33 +71,77 @@ async function sendAndAwaitReply(page: Page, drawer: Locator, message: string): 
   const response = await turnResponse;
   expect(response.status()).toBe(200);
   expect(response.request().postDataJSON()).toMatchObject({ text: message });
-  await expect(drawer.getByText(SCRIPTED_REPLY, { exact: true }).last()).toBeVisible();
-  await expect(response.json()).resolves.toMatchObject({ reply: SCRIPTED_REPLY });
+  const body = (await response.json()) as { reply: string };
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    expect(body.reply.trim()).not.toBe("");
+    await expect(
+      drawer.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").last()
+    ).toBeVisible();
+  } else {
+    await expect(drawer.getByText(SCRIPTED_REPLY, { exact: true }).last()).toBeVisible();
+    expect(body.reply).toBe(SCRIPTED_REPLY);
+  }
+}
+
+/** Reads the server's current privacy state and selected conversation for the drawer. */
+async function drawerPrivacy(page: Page): Promise<{ incognito: boolean; threadId?: string }> {
+  const response = await page.request.get(`${requireBaseURL()}/api/chat/privacy?surface=drawer`);
+  expect(response.status()).toBe(200);
+  return (await response.json()) as { incognito: boolean; threadId?: string };
+}
+
+/** Reads the user message bodies persisted in one drawer conversation. */
+async function persistedUserMessages(page: Page, threadId: string): Promise<string[]> {
+  const response = await page.request.get(
+    `${requireBaseURL()}/api/chat/threads/${threadId}/messages?surface=drawer`
+  );
+  expect(response.status()).toBe(200);
+  const { messages } = (await response.json()) as {
+    messages: { role: string; body: string }[];
+  };
+  return messages.filter((message) => message.role === "user").map((message) => message.body);
 }
 
 test.describe.configure({ mode: "serial" });
 
-test("resuming a History thread while private clears the stale privateMode flag (#1090)", async ({
+test("resuming Main from Conversations while private clears the stale privateMode flag (#1090)", async ({
   page
 }) => {
   await signIn(page);
   const drawer = await openChat(page);
 
   await sendAndAwaitReply(page, drawer, FIRST_MESSAGE);
+  const persistent = await drawerPrivacy(page);
+  expect(persistent.incognito).toBe(false);
+  const mainThreadId = persistent.threadId;
+  if (!mainThreadId) throw new Error("the drawer has no persisted Main conversation");
   await pickChatMenuItem(drawer, "Start private chat");
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toBeVisible();
   await expectPrivateChecked(drawer, true);
-  await pickChatMenuItem(drawer, "Show chat history");
-  const threadRow = drawer.getByRole("button", { name: new RegExp(FIRST_MESSAGE) });
-  await expect(threadRow).toBeVisible();
-  await threadRow.click();
+  expect(await drawerPrivacy(page)).toMatchObject({ incognito: true });
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  const conversations = drawer.getByLabel("Conversations", { exact: true });
+  await expect(conversations).toBeVisible();
+  const mainRow = conversations.getByRole("button", { name: "Main chat", exact: true });
+  await expect(mainRow).toBeVisible();
+  await mainRow.click();
 
-  await expect(drawer.getByText(FIRST_MESSAGE)).toBeVisible();
+  await expect(
+    drawer.locator(".chatd-msg--me").getByText(FIRST_MESSAGE, { exact: true })
+  ).toBeVisible();
   await expectPrivateChecked(drawer, false);
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
   await sendAndAwaitReply(page, drawer, CONTINUATION_MESSAGE);
-  await expect(drawer.getByText(CONTINUATION_MESSAGE, { exact: true })).toBeVisible();
+  await expect(
+    drawer.locator(".chatd-msg--me").getByText(CONTINUATION_MESSAGE, { exact: true })
+  ).toBeVisible();
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
+
+  // The resumed conversation is the same persisted Main, and the continuation lands in it.
+  expect(await drawerPrivacy(page)).toEqual({ incognito: false, threadId: mainThreadId });
+  const persisted = await persistedUserMessages(page, mainThreadId);
+  expect(persisted).toContain(FIRST_MESSAGE);
+  expect(persisted).toContain(CONTINUATION_MESSAGE);
 });
 
 test("private activation blocks send until the server confirms, then allows it (#1089)", async ({

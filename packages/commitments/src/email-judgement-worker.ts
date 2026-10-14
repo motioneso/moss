@@ -90,9 +90,21 @@ export async function judgeEmailThread(
   const { actorUserId, threadRef } = payload;
   const messages = await deps.threads.listThreadMessages(scopedDb, actorUserId, threadRef);
   const newest = messages[messages.length - 1];
-  if (!newest || newest.fromIsUser) return "skipped";
+  if (!newest) return "skipped";
   const prior = await deps.repository.getThreadJudgement(scopedDb, actorUserId, threadRef);
   if (prior && prior.lastJudgedExternalId === newest.externalId) return "skipped";
+
+  // An owner reply settles the thread; incoming-only requests stay on the email path.
+  if (newest.fromIsUser || !messages.some((message) => message.fromIsUser)) {
+    await deps.repository.recordThreadJudgement(
+      scopedDb,
+      actorUserId,
+      threadRef,
+      newest.externalId,
+      "no_item"
+    );
+    return "no_item";
+  }
 
   const contextOn = deps.contextEnabled ? await deps.contextEnabled(scopedDb, actorUserId) : true;
   const missing: EmailJudgementMissingContext[] = [];

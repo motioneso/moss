@@ -143,9 +143,9 @@ const MODEL_RESULTS = [
 ] as const;
 
 // What the first-pass gate lets each row keep (spec 2026-09-04-email-chief-of-staff §3.1):
-// maybe_owed rows carry no verdict until the thread judgement runs, worth_knowing rows read as
-// fyi, nothing rows read as noise.
-const GATED_CATEGORIES = [undefined, undefined, "fyi", "fyi", "fyi", "noise", "fyi"];
+// maybe_owed keeps reply/action triage while judgement is pending; worth_knowing reads as
+// fyi, and nothing reads as noise.
+const GATED_CATEGORIES = ["needs_reply", "needs_action", "fyi", "fyi", "fyi", "noise", "fyi"];
 
 describe("compact email extraction batch contract", () => {
   it("completes the exact seven-fixture workload with compact indexed results", async () => {
