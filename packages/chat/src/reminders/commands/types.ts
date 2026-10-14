@@ -1,3 +1,5 @@
+import type { BoundedActionScope } from "@moss/shared";
+import type { ResponsibilityProposal } from "../../responsibility-agreements/repository.js";
 import type { RepeatRequest } from "../repeat-recognizer.js";
 import type { ReminderEditProposal } from "@moss/shared";
 import type { ScheduledReadPlan } from "../../scheduled-reads/request.js";
@@ -12,6 +14,13 @@ import type { ReminderRepository } from "../repository.js";
 
 /** What the raw request asked for, before anything is checked against storage. */
 export type ReminderTurnPlan =
+  | { readonly kind: "scope_proposal"; readonly scope: BoundedActionScope }
+  | {
+      readonly kind: "scope_agreement";
+      readonly proposal: ResponsibilityProposal<BoundedActionScope>;
+      readonly agree: boolean | undefined;
+    }
+  | { readonly kind: "scope_refused"; readonly reply: string; readonly proposalId?: string }
   | ScheduledReadPlan
   | QuietHoursCommand
   | RepeatRequest
@@ -50,6 +59,7 @@ export interface ReminderTurnDecision {
 export interface ReminderCommandContext {
   readonly scopedDb: DataContextDb;
   readonly deps: {
+    readonly scopeAvailable?: () => Promise<boolean>;
     readonly reminders: ReminderRepository;
     readonly boss: Pick<PgBoss, "send"> | undefined;
     readonly locale: () => Promise<ReminderLocale>;

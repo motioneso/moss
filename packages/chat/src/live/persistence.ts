@@ -1,3 +1,8 @@
+import { randomUUID } from "node:crypto";
+import { resolveChatFreshness } from "./source-freshness.js";
+import { typedResponsibilityAgreement } from "../responsibility-agreements/terms.js";
+import { createResponsibilityPreparation } from "../responsibility-agreements/prepare.js";
+import { clearResponsibilityProposals } from "../responsibility-agreements/repository.js";
 import { recognizeReminderEdit } from "../reminders/edit-recognizer.js";
 import { prepareReminderEdit as prepareEdit } from "../reminders/prepare-edit.js";
 import type { GenerateStructuredDeps } from "@moss/ai";
@@ -36,7 +41,6 @@ import type {
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   LocaleSettingsDto,
-  SourceFreshnessEntry,
   SourceFreshnessV1
 } from "@moss/shared";
 import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/shared";
@@ -111,6 +115,7 @@ export interface DataContextChatPersistenceDeps {
   readonly chatPreferences?: PreferencesPort;
   /** #3128 — this process's boot id; tests pass one per simulated boot. */
   readonly bootId?: string;
+  readonly canProposeBoundedAction?: (actorUserId: string) => Promise<boolean>;
   readonly editCliAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
   readonly resolveScheduledReadRequest?: ChatPersistencePort["resolveScheduledReadRequest"];
 }
@@ -136,63 +141,16 @@ interface PersistTurnOptions {
 /** #3311: at most this many delivered reminders are shown to one Main turn. */
 const MAIN_REMINDER_CONTEXT_LIMIT = 20;
 
-export function toolNameToSource(toolName: string): string | null {
-  if (toolName.startsWith("email.")) return "email";
-  if (toolName.startsWith("calendar.")) return "calendar";
-  if (toolName.startsWith("vault.") || toolName.startsWith("notes.")) return "vault";
-  if (toolName.startsWith("tasks.")) return "tasks";
-  if (toolName.startsWith("commitments.")) return "commitments";
-  if (toolName.startsWith("chat.")) return "chats";
-  if (toolName.startsWith("goals.")) return "goals";
-  return null;
-}
-
-const CONNECTOR_SOURCES_CHAT = new Set(["email", "calendar"]);
-const REALTIME_SOURCES_CHAT = new Set(["tasks", "commitments", "chats", "goals"]);
-
-export async function resolveChatFreshness(
-  scopedDb: DataContextDb,
-  invokedToolNames: ReadonlySet<string>,
-  capturedAt: Date,
-  opts: {
-    connectorSyncAt?: (scopedDb: DataContextDb, kind: "email" | "calendar") => Promise<Date | null>;
-  }
-): Promise<SourceFreshnessV1 | null> {
-  const sourceKeys = new Set<string>();
-  for (const name of invokedToolNames) {
-    const source = toolNameToSource(name);
-    if (source) sourceKeys.add(source);
-  }
-  if (sourceKeys.size === 0) return null;
-
-  const capturedAtIso = capturedAt.toISOString();
-  const entries: SourceFreshnessEntry[] = [];
-  for (const source of sourceKeys) {
-    if (REALTIME_SOURCES_CHAT.has(source)) {
-      entries.push({ source, freshnessKind: "realtime", asOf: capturedAtIso });
-    } else if (CONNECTOR_SOURCES_CHAT.has(source)) {
-      let asOf: string | null = null;
-      try {
-        const t = (await opts.connectorSyncAt?.(scopedDb, source as "email" | "calendar")) ?? null;
-        asOf = t ? t.toISOString() : null;
-      } catch {
-        // keep asOf as null on error
-      }
-      entries.push({ source, freshnessKind: "connector_sync", asOf });
-    } else {
-      // vault — V1: asOf: null (no vaultLastWriteAt dep for chat)
-      entries.push({ source, freshnessKind: "vault_write", asOf: null });
-    }
-  }
-
-  return { version: 1, capturedAt: capturedAtIso, sources: entries };
-}
+export { toolNameToSource, resolveChatFreshness } from "./source-freshness.js";
 
 export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly dataContext: DataContextRunner;
   private readonly rootDb: Kysely<MossDatabase> | undefined;
   private readonly chat: ChatRepository;
   readonly resolveScheduledReadRequest: ChatPersistencePort["resolveScheduledReadRequest"];
+  readonly prepareResponsibilityAgreement: NonNullable<
+    ChatPersistencePort["prepareResponsibilityAgreement"]
+  >;
   private readonly reminders = new ReminderRepository();
   private readonly ai: AiRepository;
   private readonly boss: PgBoss | undefined;
@@ -200,9 +158,11 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly localePreferences: PreferencesPort | undefined;
   private readonly chatPreferences: PreferencesPort | undefined;
   private readonly bootId: string;
+  private readonly canProposeBoundedAction: DataContextChatPersistenceDeps["canProposeBoundedAction"];
   private readonly editCliAdapter: GenerateStructuredDeps["createCliStructuredAdapter"];
 
   constructor(deps: DataContextChatPersistenceDeps) {
+    this.prepareResponsibilityAgreement = createResponsibilityPreparation(deps);
     this.resolveScheduledReadRequest = deps.resolveScheduledReadRequest;
     this.rootDb = deps.rootDb;
     this.dataContext = deps.dataContext;
@@ -214,6 +174,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.chatPreferences = deps.chatPreferences;
     this.bootId = deps.bootId ?? CHAT_PROCESS_BOOT_ID;
     this.editCliAdapter = deps.editCliAdapter;
+    this.canProposeBoundedAction = deps.canProposeBoundedAction;
   }
 
   async prepareReminderEdit(
@@ -400,6 +361,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   ): Promise<void> {
     await this.run(actorUserId, "begin-live-turn", async (scopedDb) => {
       await clearQuietHoursProposal(scopedDb, turn.threadId);
+      await clearResponsibilityProposals(scopedDb, turn.threadId);
       await insertLiveTurn(scopedDb, { ...turn, bootId: this.bootId });
     });
   }
@@ -492,6 +454,11 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     | "stopped"
     | undefined
   > {
+    if (
+      plan.kind === "scope_agreement" &&
+      (Boolean(opts?.attachments?.length) || typedResponsibilityAgreement(userText) !== plan.agree)
+    )
+      throw new Error("responsibility needs the owner's typed agreement without attachments");
     if (plan.kind === "quiet_allowance" || plan.kind === "quiet_agreement") {
       const recognized = recognizeQuietHoursCommand(userText);
       if (
@@ -516,7 +483,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         "record-reminder-turn",
         userText,
         "",
-        turnOpts,
+        {
+          ...turnOpts,
+          ...(plan.kind === "scope_proposal" || plan.kind === "scope_agreement"
+            ? { turnId: turnOpts.turnId ?? randomUUID() }
+            : {})
+        },
         surface,
         { reminder: plan, stopSignal }
       );
@@ -584,7 +556,10 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         await this.chat.touchCurrentThread(scopedDb, thread.id, chatSurface);
       }
 
-      if (!("reminder" in turn)) await clearQuietHoursProposal(scopedDb, thread.id);
+      if (!("reminder" in turn)) {
+        await clearQuietHoursProposal(scopedDb, thread.id);
+        await clearResponsibilityProposals(scopedDb, thread.id);
+      }
       const capturedAt = new Date();
       const sourceFreshness = opts?.invokedToolNames
         ? await resolveChatFreshness(scopedDb, opts.invokedToolNames, capturedAt, {
@@ -607,6 +582,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
           ? await decideReminderTurn(
               scopedDb,
               {
+                scopeAvailable: async () =>
+                  (await this.canProposeBoundedAction?.(actorUserId)) === true,
                 reminders: this.reminders,
                 boss: this.boss,
                 locale: async () => {

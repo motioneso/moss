@@ -1,3 +1,4 @@
+import type { ApprovedActionScopeDto } from "./responsibility-agreement.js";
 import { errorResponseSchema } from "./schema-fragments.js";
 
 export type ScheduledTaskState =
@@ -39,6 +40,7 @@ export interface ScheduledTaskDto {
 }
 
 export interface ListScheduledTasksResponse {
+  readonly approvedScopes?: readonly ApprovedActionScopeDto[];
   readonly tasks: readonly ScheduledTaskDto[];
 }
 
@@ -90,6 +92,42 @@ export const listScheduledTasksResponseSchema = {
   additionalProperties: false,
   required: ["tasks"],
   properties: {
+    approvedScopes: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "version", "state", "approvedAt", "scope"],
+        properties: {
+          id: { type: "string" },
+          version: { type: "integer", minimum: 1 },
+          state: { type: "string", enum: ["not_active"] },
+          approvedAt: { type: "string" },
+          scope: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "operation",
+              "taskId",
+              "taskTitle",
+              "status",
+              "dueAt",
+              "timeZone",
+              "destinationThreadId"
+            ],
+            properties: {
+              operation: { type: "string", enum: ["tasks.updateStatus"] },
+              taskId: { type: "string" },
+              taskTitle: { type: "string" },
+              status: { type: "string", enum: ["done"] },
+              dueAt: { type: "string" },
+              timeZone: { type: "string" },
+              destinationThreadId: { type: "string" }
+            }
+          }
+        }
+      }
+    },
     tasks: {
       type: "array",
       items: {

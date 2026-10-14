@@ -1078,6 +1078,23 @@ export interface ChatRemindersTable {
   created_at: TimestampColumn;
 }
 
+export interface ChatResponsibilityProposalsTable {
+  id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  thread_id: string;
+  proposal_kind: string;
+  proposal_version: number;
+  terms_json: JsonColumn;
+  terms_fingerprint: string;
+  valid_until: NullableTimestampColumn;
+  question_user_message_id: string;
+  question_assistant_message_id: string;
+  state: "pending" | "cancelled" | "accepted";
+  acceptance_message_id: ColumnType<string | null, string | null | undefined, string | null>;
+  accepted_at: NullableTimestampColumn;
+  created_at: TimestampColumn;
+}
+
 export interface ChatScheduledReadsTable {
   observation_key: ColumnType<string | null, string | null | undefined, string | null>;
   failure_streak: ColumnType<number, number | undefined, number>;
@@ -2076,6 +2093,7 @@ export interface MossDatabase {
   "app.chat_messages": ChatMessagesTable;
   "app.chat_reminders": ChatRemindersTable;
   "app.chat_scheduled_reads": ChatScheduledReadsTable;
+  "app.chat_responsibility_proposals": ChatResponsibilityProposalsTable;
   "app.chat_reminder_runs": ChatReminderRunsTable;
   "app.chat_reminder_quiet_allowances": ChatReminderQuietAllowancesTable;
   "app.chat_reminder_quiet_proposals": ChatReminderQuietProposalsTable;

@@ -1,3 +1,5 @@
+import { namesBoundedActionRequest } from "../responsibility-agreements/prepare.js";
+import { typedResponsibilityAgreement } from "../responsibility-agreements/terms.js";
 import { recognizeReminderEdit } from "../reminders/edit-recognizer.js";
 import { namesScheduledRead } from "../scheduled-reads/request.js";
 import { typedDeletionAgreement, isDeletionNearMiss } from "../reminders/delete-agreement.js";
@@ -41,7 +43,47 @@ export async function tryPreModelTurn(
 ): ReturnType<typeof tryGatedTurn> {
   const [host, actorUserId, surface, text, opts, controller, flushActions] = args;
   let recognition: ReminderTurnPlan | undefined;
-  if (!opts?.moduleControl && !opts?.attachments?.length && namesScheduledRead(text)) {
+  if (host.deps.persistence.prepareResponsibilityAgreement) {
+    const outsideInput = Boolean(opts?.moduleControl || opts?.attachments?.length);
+    if (outsideInput && namesBoundedActionRequest(text)) {
+      recognition = {
+        kind: "scope_refused",
+        reply: "Nothing is saved or changed. Ask in your own words without attachments."
+      };
+    } else {
+      const thread = await (args[7] ?? selectTurnThread(host, actorUserId, surface));
+      if (thread?.incognito && namesBoundedActionRequest(text))
+        recognition = { kind: "scope_refused", reply: "Nothing is saved or changed." };
+      else if (thread?.id && !thread.incognito) {
+        try {
+          recognition = await host.deps.persistence.prepareResponsibilityAgreement(
+            actorUserId,
+            text,
+            thread.id,
+            controller.signal
+          );
+          if (outsideInput && recognition)
+            recognition = {
+              kind: "scope_refused",
+              reply:
+                "Those terms weren't approved. Nothing is saved or changed. Reply in your own words without attachments."
+            };
+        } catch {
+          if (namesBoundedActionRequest(text) || typedResponsibilityAgreement(text) !== undefined)
+            recognition = {
+              kind: "scope_refused",
+              reply: "I couldn't check that agreement. Nothing is saved or changed. Try again."
+            };
+        }
+      }
+    }
+  }
+  if (
+    !recognition &&
+    !opts?.moduleControl &&
+    !opts?.attachments?.length &&
+    namesScheduledRead(text)
+  ) {
     const thread = await (args[7] ?? selectTurnThread(host, actorUserId, surface));
     const main = await host.deps.persistence.getMainThreadState?.(actorUserId);
     if (!thread?.id || thread.incognito || main?.id !== thread.id)
@@ -192,6 +234,9 @@ export async function tryPreModelTurn(
     return done(emitUnsaved(host, actorUserId, surface, text, reply));
   }
 
+  if (opts?.moduleControl && recognition.kind === "scope_refused")
+    return done(emitUnsaved(host, actorUserId, surface, text, recognition.reply));
+
   // A module-controlled turn speaks for a module, not for the user, so it never saves or cancels.
   const plan: ReminderTurnPlan = opts?.moduleControl
     ? { kind: "main_only", ...(manage ? { manage } : {}) }
@@ -204,6 +249,7 @@ export async function tryPreModelTurn(
       text,
       plan,
       {
+        turnId: opts?.turnId,
         threadId: requestThreadId,
         stopSignal: controller.signal,
         attachments:
