@@ -7,6 +7,7 @@ import {
 } from "./recognizer.js";
 
 export interface RepeatRequest {
+  readonly destination?: string;
   readonly kind: "repeat_request";
   readonly repeat: ReminderRepeat;
   readonly clock: string | null;

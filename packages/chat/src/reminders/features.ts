@@ -63,16 +63,44 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   },
   quietHoursAllowanceFeature,
   {
+    id: "chat.reminder_destinations",
+    description:
+      "Tasks default to Main; append a comma or and before send it to one owned chat, or say in this chat. Results appear only there. Change destination separately. Private, module, foreign and ambiguous chats are refused.",
+    featureFlagId: "chat.module",
+    errors: [
+      {
+        code: "reminder_destination_combined_edit_refused",
+        class: "validation",
+        description:
+          "A destination edit combined with other terms changes nothing. Send the destination in its own message, then edit text, time, repeat or stop time separately."
+      },
+      {
+        code: "reminder_destination_unavailable",
+        class: "validation",
+        description:
+          "A missing, ambiguous or unavailable destination saves nothing. A destination lost before or during a run leaves the task failed without posting to Main."
+      }
+    ],
+    remediations: [
+      {
+        id: "chat.choose_reminder_destination",
+        description:
+          "Name one available conversation you own, say this chat in a regular conversation, or choose Main. If a task already failed, create a replacement with an available destination.",
+        path: "/settings?section=scheduled"
+      }
+    ]
+  },
+  {
     id: "chat.reminder_edits",
     description:
-      "Edit pending or paused reminder text, time, repeat or stop time in Main. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguous targets need a choice. Paused reminders stay paused.",
+      "Edit pending or paused reminder text, time, repeat or stop time in regular chat; change destination separately. Task checks stay one-time. Settings shows saved terms. Old jobs cannot fire; ambiguity needs a choice. Paused stays paused.",
     featureFlagId: "chat.module",
     errors: [
       {
         code: "reminder_edit_unsupported",
         class: "validation",
         description:
-          "Actions, recipients, destinations and attention changes are unsupported. Nothing changed. Ask for a text, time, repeat or stop-time edit instead."
+          "Actions, recipients and attention changes are unsupported. Nothing changed. Ask for a text, time, repeat, stop-time or destination edit instead."
       },
       {
         code: "reminder_edit_unclear",
@@ -96,7 +124,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
       {
         id: "chat.retry_reminder_edit",
         description:
-          "Inspect the current reminder and ask in Main chat using its exact words. If asked which one, type its number or name.",
+          "Inspect the current reminder and ask in an owned regular chat using its exact words. If asked which one, type its number or name.",
         path: "/settings?section=scheduled"
       }
     ]
@@ -105,7 +133,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_notifications",
     description:
-      "Due reminders stay in Main and alert enabled devices. Quiet hours hold alerts unless the owner allowed that task; mutes and device switches win. Retries never repeat chat. Dismissing stops alerts. Opening goes to Today.",
+      "Reminders arrive in the saved chat and alert enabled devices. Quiet hours hold alerts unless the owner allowed that task; mutes and device switches win. Retries never repeat chat. Dismissing stops alerts. Opening goes to Today.",
     featureFlagId: "chat.module",
     remediations: [
       {
@@ -125,13 +153,13 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.relative_reminders",
     description:
-      "In Main, 'remind me in 10 minutes to stretch' posts once, noting if late; Moss's next reply knows it. Up to 20 active schedules, 30 days ahead. One-time relative reminders have no deadline. Private chats cannot create reminders.",
+      "In regular chat, remind me in 10 minutes to stretch posts once to Main by default, noting if late. A reply in its destination frees the slot. Up to 20 schedules, 30 days ahead. No deadline on one-time relative reminders; no private chats.",
     featureFlagId: "chat.module"
   },
   {
     id: "chat.clock_reminders",
     description:
-      "In Main, 'remind me tomorrow at 9am to call Sam' saves a one-time reminder for today, tonight or tomorrow in your time zone. Moss confirms in your 12- or 24-hour clock. Daily and weekly repeats keep a saved local time and zone.",
+      "In regular chat, set a one-time reminder for today, tonight or tomorrow in your time zone. Moss confirms in your chosen clock format. Daily and weekly repeats keep a saved local time and zone.",
     featureFlagId: "chat.module",
     errors: [
       {

@@ -9,7 +9,13 @@ import type { ReminderLocale } from "./clock-wording.js";
 import { normalizeReminderText, matchTarget } from "./cancel.js";
 import { pendingReminderEdit, matchReminderEditSelection } from "./edit-agreement.js";
 import { readEditableReminders } from "./edit.js";
-import { recognizeReminderEdit } from "./edit-recognizer.js";
+import {
+  recognizeReminderEdit,
+  recognizeReminderDestinationEdit,
+  requestsCombinedReminderDestination,
+  combinesReminderDestination,
+  REMINDER_DESTINATION_SEPARATE_REPLY
+} from "./edit-recognizer.js";
 import {
   reminderEditSchema,
   REMINDER_EDIT_GUIDANCE,
@@ -18,7 +24,7 @@ import {
 import type { ReminderTurnPlan } from "./turn.js";
 
 const REFUSED =
-  "I can edit a reminder's text, timing, repetition or stop time only. I can't change its actions, recipients, destination or notification permissions. Nothing changed.";
+  "I can edit a reminder's text, timing, repetition, stop time or destination. I can't change its actions, recipients or notification permissions. Nothing changed.";
 
 /** Prepare under RLS, execute after the transaction closes, and validate again when saving. */
 export async function prepareReminderEdit(
@@ -45,6 +51,36 @@ export async function prepareReminderEdit(
   if (!recognizeReminderEdit(text)) return async () => undefined;
   const owned = await readEditableReminders(scopedDb);
   if (owned.length === 0) return async () => undefined;
+  const destinationOnly = recognizeReminderDestinationEdit(text);
+  if (destinationOnly) {
+    const matches = matchTarget(
+      owned.map((row) => ({ ...row, text: row.reminder_text })),
+      destinationOnly.target
+    );
+    return async () =>
+      matches.length
+        ? {
+            kind: "edit",
+            proposal: {
+              candidates: matches.map((row) => ({ id: row.id, version: row.version })),
+              terms: {
+                text: null,
+                delaySeconds: null,
+                localDue: null,
+                repeat: null,
+                deadline: "keep",
+                localDeadline: null,
+                destination: destinationOnly.destination
+              }
+            }
+          }
+        : {
+            kind: "edit_refused",
+            reply: "I couldn't find a waiting reminder with those words. Nothing changed."
+          };
+  }
+  if (requestsCombinedReminderDestination(text))
+    return async () => ({ kind: "edit_refused", reply: REMINDER_DESTINATION_SEPARATE_REPLY });
   const { model } = await ai.resolveModelForService(scopedDb, "module.chat", {
     capability: "json"
   });
@@ -92,6 +128,16 @@ export async function prepareReminderEdit(
         reply:
           "Name the reminder using its saved words so I can change the right one. Nothing changed."
       };
+    if (
+      interpreted.destination &&
+      !normalizeReminderText(text).includes(normalizeReminderText(interpreted.destination))
+    )
+      return {
+        kind: "edit_refused",
+        reply: "Name the destination chat in your request. Nothing changed."
+      };
+    if (combinesReminderDestination(interpreted))
+      return { kind: "edit_refused", reply: REMINDER_DESTINATION_SEPARATE_REPLY };
     if (interpreted.unsupported) return { kind: "edit_refused", reply: REFUSED };
     const matches =
       interpreted.target === null
@@ -111,11 +157,12 @@ export async function prepareReminderEdit(
       terms.delaySeconds === null &&
       terms.localDue === null &&
       terms.deadline === "keep" &&
-      (terms.repeat === null || terms.repeat === undefined)
+      (terms.repeat === null || terms.repeat === undefined) &&
+      !terms.destination
     )
       return {
         kind: "edit_refused",
-        reply: "Tell me the reminder's new text, time or deadline. Nothing changed."
+        reply: "Tell me the reminder's new text, time, deadline or destination. Nothing changed."
       };
     return {
       kind: "edit",

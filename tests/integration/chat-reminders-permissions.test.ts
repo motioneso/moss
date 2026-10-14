@@ -205,7 +205,7 @@ describe("chat reminder row security", () => {
     ).rejects.toMatchObject({ code: "42501" });
   });
 
-  it("only saves from a user message in the owner's Main chat", async () => {
+  it("requires an owned drawer user source and an explicitly authorized destination", async () => {
     const main = await mainThread(ids.userA);
     const side = await sideThread(ids.userA);
     const hidden = await sideThread(ids.userA, true);
@@ -217,7 +217,7 @@ describe("chat reminder row security", () => {
       { thread_id: side.id, source_message_id: sideSource.id },
       { thread_id: hidden.id, source_message_id: hiddenSource.id },
       { thread_id: main.id, source_message_id: assistantSource.id },
-      { thread_id: main.id, source_message_id: sideSource.id }
+      { thread_id: main.id, source_message_id: hiddenSource.id }
     ];
     for (const attempt of attempts) {
       await expect(

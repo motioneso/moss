@@ -19,6 +19,7 @@ import {
   type QueueDefinition
 } from "@moss/jobs";
 
+import { lockReminderDestination } from "./destination.js";
 import { ChatRepository } from "../repository.js";
 import { notifyReminderArrival } from "./live-arrival.js";
 import { enqueueReminderNotification } from "./notifications.js";
@@ -53,7 +54,7 @@ export type ReminderDeliveryOutcome =
   | "paused"
   | "expired"
   | "stale_version"
-  | "not_main"
+  | "destination_unavailable"
   | "failed";
 
 type ReminderDeliveryDeps = {
@@ -86,6 +87,7 @@ export async function deliverDueReminder(
   payload: DeliverReminderJobPayload,
   deps: ReminderDeliveryDeps
 ): Promise<ReminderDeliveryOutcome> {
+  await deps.chat.lockThreadSelection(scopedDb);
   const reminder = await deps.reminders.lockForDelivery(scopedDb, payload.resourceId);
 
   if (!reminder) return unlockedOutcome(scopedDb, payload, deps);
@@ -109,10 +111,15 @@ export async function deliverDueReminder(
     return "expired";
   }
 
-  const main = await deps.chat.getMainThread(scopedDb, reminder.ownerUserId);
-  if (!main || main.id !== reminder.threadId) {
+  const target = await lockReminderDestination(
+    scopedDb,
+    reminder.ownerUserId,
+    reminder.threadId,
+    reminder.destinationTitle
+  );
+  if (!target) {
     await deps.reminders.markFailed(scopedDb, reminder.id);
-    return "not_main";
+    return "destination_unavailable";
   }
 
   return persistReminderResult(
@@ -210,6 +217,7 @@ export async function runReminderDeliveryJob(
     return await deliverDueReminder(scopedDb, job.data, deps);
   } catch {
     await sql`rollback to savepoint reminder_delivery`.execute(scopedDb.db);
+    await deps.chat.lockThreadSelection(scopedDb);
     const reminder = await deps.reminders.lockForDelivery(scopedDb, job.data.resourceId);
     if (!reminder) return unlockedOutcome(scopedDb, job.data, deps);
     if (reminder.ownerUserId !== job.data.actorUserId) return "missing";

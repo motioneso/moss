@@ -17,6 +17,12 @@ const row = {
 };
 
 describe("Settings reminder records", () => {
+  it("exposes the accepted side destination and omits default Main", () => {
+    expect(
+      scheduledReminder({ ...row, thread_id: "side", destination_title: "Travel" }).destination
+    ).toEqual({ threadId: "side", title: "Travel" });
+    expect(scheduledReminder(row).destination).toBeUndefined();
+  });
   it.each(["success", "refused", "failed", null] as const)(
     "grants a Tasks link only for a successful recorded read: %s",
     (read_outcome) => {

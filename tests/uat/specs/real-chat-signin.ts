@@ -14,7 +14,7 @@
 // tier when none is found.
 
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../model-tier.js";
 import { uatRealChatProvider, uatRealChatProviderKind } from "../real-chat-env.js";
 import {
@@ -46,7 +46,9 @@ export function requireUatProjectName(): string {
   return projectName;
 }
 
-export async function readUatJson(response: APIResponse): Promise<unknown> {
+export async function readUatJson(
+  response: Pick<APIResponse, "ok" | "url" | "status" | "json">
+): Promise<unknown> {
   expect(response.ok(), `${response.url()} -> ${response.status()}`).toBeTruthy();
   return response.json();
 }
@@ -155,27 +157,9 @@ export async function discoverCheapestChatModel(
 }
 
 /**
- * Ben's ruling: every real-chat UAT turn runs through the account's cheapest ("economy") model
- * to preserve usage — never hardcode a model name or fall back to a pricier tier. Admin must
- * enable the override before a user's own selection takes effect (packages/ai/src/routes.ts PUT
- * /api/admin/ai/chat-model-override, PUT /api/ai/chat-model-override).
- */
-export async function selectChatModelOverride(
-  page: Page,
-  model: UatDiscoveredModel
-): Promise<void> {
-  await readUatJson(
-    await page.request.put("/api/admin/ai/chat-model-override", { data: { enabled: true } })
-  );
-  await readUatJson(
-    await page.request.put("/api/ai/chat-model-override", { data: { modelId: model.id } })
-  );
-}
-
-/**
  * The full setup real turns run against: install + log in the selected CLI, discover the cheapest
- * eligible model, and bind it as the account's chat override. Returns the model so a spec can
- * assert against its id.
+ * eligible model, and pin it for chat and worker capabilities through the existing admin API.
+ * Returns the model so a spec can assert against its id.
  */
 export async function bringUpRealChatModel(
   page: Page,
@@ -183,7 +167,22 @@ export async function bringUpRealChatModel(
 ): Promise<UatDiscoveredModel> {
   await bringUpRealChatProvider(page);
   const cheapest = await discoverCheapestChatModel(page, deadlineMs);
-  await selectChatModelOverride(page, cheapest);
+  // A missing worker capability would allow fallback to another model within the provider.
+  for (const capability of ["chat", "tool-use", "json", "summarization"]) {
+    expect(cheapest.capabilities).toContain(capability);
+  }
+  await readUatJson(
+    await page.request.put(`/api/admin/users/${UAT_ADMIN_ID}/ai-pin`, {
+      data: { modelId: cheapest.id }
+    })
+  );
+  for (const capability of ["chat", "tool-use", "json", "summarization"]) {
+    const body = (await readUatJson(
+      await page.request.get(`/api/ai/capability-route/${capability}`)
+    )) as { route: { model: { id: string } | null; reason: string } };
+    expect(body.route.model?.id).toBe(cheapest.id);
+    expect(body.route.reason).toBe("admin-pin");
+  }
   console.log(
     `[uat real-chat] provider=${uatRealChatProvider()}, model=${cheapest.id}, providerModel=${cheapest.providerModelId}, tier=${cheapest.tier}`
   );

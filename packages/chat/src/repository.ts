@@ -874,11 +874,13 @@ export class ChatRepository {
     return this.updateThreadActivity(scopedDb, threadId, chatSurface);
   }
 
-  private async lockThreadSelection(scopedDb: DataContextDb, surface: ChatSurface): Promise<void> {
-    // New-thread selection, explicit resume and bound completion use the same transaction
-    // lock before touching thread rows. The timestamp is generated only after this lock.
+  async lockThreadSelection(scopedDb: DataContextDb, surface?: ChatSurface): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const chatSurface = normalizeChatSurface(surface);
+    // Turns and background delivery take this actor/surface lock before thread or
+    // reminder locks, so a turn holding its thread cannot deadlock with delivery.
     await sql`SELECT pg_advisory_xact_lock(hashtextextended(
-      'chat:thread-selection:' || app.current_actor_user_id()::text || ':' || ${surface}, 0
+      'chat:thread-selection:' || app.current_actor_user_id()::text || ':' || ${chatSurface}, 0
     ))`.execute(scopedDb.db);
   }
 

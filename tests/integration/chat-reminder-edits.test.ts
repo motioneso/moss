@@ -5,6 +5,7 @@ import type { ReminderEditTerms } from "@moss/shared";
 import { vi } from "vitest";
 import { localWallClock } from "../../packages/chat/src/reminders/local-clock.js";
 import {
+  deleteReminderById,
   pauseReminderById,
   resumeReminderById
 } from "../../packages/chat/src/reminders/controls.js";
@@ -115,6 +116,7 @@ async function save(
 
 const keep: ReminderEditTerms = {
   repeat: null,
+  destination: null,
   text: null,
   delaySeconds: null,
   localDue: null,
@@ -323,6 +325,89 @@ describe("editing owner reminders", () => {
         ).toBeUndefined();
     });
     expect(resolve).not.toHaveBeenCalled();
+  });
+  it("refuses combined destination requests atomically before calling the model", async () => {
+    const saved = await save(ids.userA, "atomic destination proof");
+    const ai = new AiRepository();
+    const resolve = vi.spyOn(ai, "resolveModelForService");
+    const before = await asOwner(ids.userA, readEditableReminders);
+    for (const raw of [
+      "change my atomic destination proof reminder text to bring water and send it to Main",
+      "send my atomic destination proof reminder to Main and move it to tomorrow at 9am",
+      "send my atomic destination proof reminder to Main tomorrow at 9am"
+    ]) {
+      const run = await asOwner(ids.userA, (db) =>
+        prepareReminderEdit(db, ai, undefined, raw, saved.threadId, locale)
+      );
+      const plan = await run();
+      expect(plan).toEqual({
+        kind: "edit_refused",
+        reply:
+          "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately."
+      });
+      expect((await turn(saved.threadId, raw, plan!)).origin.event).toBe("refused");
+      expect(await asOwner(ids.userA, readEditableReminders)).toEqual(before);
+    }
+    expect(resolve).not.toHaveBeenCalled();
+    await asOwner(ids.userA, (db) => deleteReminderById(db, saved.id));
+  });
+  it.each([
+    { text: "replacement" },
+    { delaySeconds: 120 },
+    { deadline: "remove" as const },
+    { repeat: "remove" as const }
+  ])("refuses combined accepted terms without a partial update: %j", async (other) => {
+    const saved = await save(ids.userA, "atomic accepted terms");
+    const before = await asOwner(ids.userA, readEditableReminders);
+    expect(await edited(ids.userA, saved, { ...keep, destination: "Main", ...other })).toEqual({
+      kind: "invalid",
+      reply:
+        "Change the destination in its own message. Nothing changed. Then send any text, time, repeat or stop-time edit separately."
+    });
+    expect(await asOwner(ids.userA, readEditableReminders)).toEqual(before);
+    await asOwner(ids.userA, (db) => deleteReminderById(db, saved.id));
+  });
+  it("routes explicit destination edits without a model and preserves target choices", async () => {
+    const first = await save(ids.userA, "direct destination one");
+    const second = await save(ids.userA, "direct destination two");
+    const target = await asOwner(ids.userA, (db) =>
+      chat.openNewThread(db, { title: "Direct owned" })
+    );
+    await asOwner(ids.userB, (db) => chat.openNewThread(db, { title: "Direct foreign" }));
+    const ai = new AiRepository();
+    const resolve = vi.spyOn(ai, "resolveModelForService");
+    const prepare = async (raw: string) => {
+      const run = await asOwner(ids.userA, (db) =>
+        prepareReminderEdit(db, ai, undefined, raw, first.threadId, locale)
+      );
+      return (await run())!;
+    };
+    const ambiguous = "send my direct destination reminder to Main";
+    expect((await turn(first.threadId, ambiguous, await prepare(ambiguous))).origin.event).toBe(
+      "edit_requested"
+    );
+    for (const [raw, threadId] of [
+      ["send my direct destination one reminder to the Direct owned chat", target.id],
+      ["deliver my direct destination one task results to Main", first.threadId],
+      ["post my direct destination one reminder in this chat", first.threadId]
+    ]) {
+      expect((await turn(first.threadId, raw!, await prepare(raw!))).origin.event).toBe("edited");
+      const row = await asOwner(
+        ids.userA,
+        async (db) => (await readEditableReminders(db)).find((r) => r.id === first.id)!
+      );
+      expect(row.thread_id).toBe(threadId);
+      expect(row.reminder_text).toBe("direct destination one");
+      expect(row.due_at).toEqual(first.dueAt);
+    }
+    const foreign = "send my direct destination one reminder to the Direct foreign chat";
+    expect((await turn(first.threadId, foreign, await prepare(foreign))).origin.event).toBe(
+      "refused"
+    );
+    expect(resolve).not.toHaveBeenCalled();
+    await asOwner(ids.userA, (db) =>
+      db.db.deleteFrom("app.chat_reminders").where("id", "in", [first.id, second.id]).execute()
+    );
   });
   it("lets the interpreter distinguish inert replacement words from unsupported capabilities", async () => {
     const saved = await save(ids.userA, "inert replacement");

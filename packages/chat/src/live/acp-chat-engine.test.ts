@@ -16,6 +16,7 @@ import {
 import { serializeSubscriberRecords } from "../../../../tests/unit/helpers/boundary-test-gate.js";
 
 class PromptErrorTunnel implements AcpTunnel {
+  textBeforeError: string | null = null;
   readonly sent: Array<{ method?: string; params?: Record<string, unknown> }> = [];
   private readonly lines: string[] = [];
   private seq = 0;
@@ -64,6 +65,18 @@ class PromptErrorTunnel implements AcpTunnel {
           : { jsonrpc: "2.0", id: message.id, result: { sessionId: "session-1" } }
       );
     } else if (message.method === "session/prompt") {
+      if (this.textBeforeError)
+        this.emit({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId: "session-1",
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: this.textBeforeError }
+            }
+          }
+        });
       this.emit({
         jsonrpc: "2.0",
         id: message.id,
@@ -129,7 +142,7 @@ class PromptErrorTunnel implements AcpTunnel {
 }
 
 class PromptMockTunnel implements AcpTunnel {
-  readonly sent: Array<{ method?: string; params?: Record<string, unknown> }> = [];
+  readonly sent: Array<{ id?: number; method?: string; params?: Record<string, unknown> }> = [];
   readonly spawnedProviders: AcpProviderKind[] = [];
   modelValues: string[] | null = null;
   private readonly lines: string[] = [];
@@ -138,6 +151,7 @@ class PromptMockTunnel implements AcpTunnel {
   private waiting: (() => void) | null = null;
   usageToReturn: Record<string, unknown> | null = null;
   textToStream = "Hello there!";
+  holdPrompt = false;
 
   async spawn(_sessionKey: string, _projectId: string, providerKind: AcpProviderKind) {
     this.spawnedProviders.push(providerKind);
@@ -199,6 +213,7 @@ class PromptMockTunnel implements AcpTunnel {
           }
         }
       });
+      if (this.holdPrompt) return;
       this.emit({
         jsonrpc: "2.0",
         id: message.id,
@@ -258,13 +273,123 @@ class PromptMockTunnel implements AcpTunnel {
 
   async execKill(): Promise<void> {}
 
-  private emit(message: unknown): void {
+  emit(message: unknown): void {
     this.lines.push(JSON.stringify(message));
     this.seq += 1;
     this.waiting?.();
     this.waiting = null;
   }
 }
+
+describe("ACP reply streaming", () => {
+  it("replaces the streamed identity with the completed answer and usage", async () => {
+    const tunnel = new PromptMockTunnel();
+    tunnel.holdPrompt = true;
+    const spawn = vi.spyOn(tunnel, "spawn");
+    const engine = new AcpChatEngine("anthropic", "stream-final", {
+      tunnel,
+      userId: "u1",
+      projectId: "thread-1"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/acp",
+      personaPath: "/tmp/acp/persona.md",
+      personaText: "Trusted Moss persona"
+    });
+    expect(spawn).toHaveBeenCalledWith(
+      "stream-final",
+      "thread-1",
+      "anthropic",
+      "u1",
+      "chat",
+      "Trusted Moss persona"
+    );
+    await engine.submit("hello");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const partial = await engine.readNew(0);
+    expect(partial.complete).toBe(false);
+    expect(partial.records).toHaveLength(1);
+    const prompt = tunnel.sent.find((message) => message.method === "session/prompt")!;
+    tunnel.emit({
+      jsonrpc: "2.0",
+      id: prompt.id,
+      result: {
+        stopReason: "end_turn",
+        usage: { inputTokens: 5, outputTokens: 3 }
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const final = await engine.readNew(0);
+    expect(final.records).toHaveLength(1);
+    expect(final.records[0]).toMatchObject({
+      kind: "reply",
+      text: "Hello there!",
+      id: partial.records[0]!.id,
+      sequence: partial.records[0]!.sequence,
+      usage: { inputTokens: 5, outputTokens: 3 }
+    });
+    expect((await engine.readNew(0)).complete).toBe(true);
+    await engine.kill();
+  });
+
+  it("discards partial replies on failure and ignores late chunks", async () => {
+    const tunnel = new PromptErrorTunnel();
+    tunnel.textBeforeError = "unfinished";
+    const engine = new AcpChatEngine("anthropic", "stream-failure", {
+      tunnel,
+      userId: "u1",
+      projectId: "thread-1",
+      reportLoginRejected: vi.fn()
+    });
+    await engine.launch({ neutralDir: "/tmp/acp", personaPath: "/tmp/acp/persona.md" });
+    await engine.submit("hello");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await expect(engine.readNew(0)).rejects.toThrow();
+    engine.handleSessionUpdate({
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "late" }
+      }
+    });
+    expect((await engine.readNew(0)).records.filter((record) => record.kind === "reply")).toEqual(
+      []
+    );
+    await engine.kill();
+  });
+
+  it("publishes cumulative reply snapshots before completion with one stable identity", async () => {
+    const engine = new AcpChatEngine("anthropic", "stream-test", {
+      tunnel: new PromptMockTunnel(),
+      userId: "u1",
+      projectId: "thread-1"
+    });
+    engine.handleSessionUpdate({
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "Hello" }
+      }
+    });
+    const first = await engine.readNew(0);
+    expect(first.complete).toBe(false);
+    expect(first.records).toHaveLength(1);
+    expect(first.records[0]).toMatchObject({ kind: "reply", text: "Hello" });
+    expect(first.records[0]?.id).toBeTruthy();
+    engine.handleSessionUpdate({
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: " there!" }
+      }
+    });
+    const next = await engine.readNew(0);
+    expect(next.records[0]).toMatchObject({
+      kind: "reply",
+      text: "Hello there!",
+      id: first.records[0]!.id,
+      sequence: first.records[0]!.sequence
+    });
+    expect(next.complete).toBe(false);
+  });
+});
 
 describe("AcpChatEngine", () => {
   it("routes OpenAI-compatible chats to Codex", () => {

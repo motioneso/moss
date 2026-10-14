@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import type { ScheduledTaskDto } from "@moss/shared";
 import { ScheduledTaskList } from "../../apps/web/src/settings/scheduled-task-list.js";
+import { TaskDestination } from "../../apps/web/src/settings/scheduled-task-details/destination.js";
 import { TaskTiming } from "../../apps/web/src/settings/scheduled-task-details/timing.js";
 import { TaskStatus } from "../../apps/web/src/settings/scheduled-task-details/status.js";
 import { TaskHistory } from "../../apps/web/src/settings/scheduled-task-details/history.js";
@@ -44,6 +45,16 @@ function render(node: React.ReactNode, client = new QueryClient()) {
 }
 
 describe("read-only scheduled tasks", () => {
+  it("shows a non-default destination and actionable delivery failure", () => {
+    const destination = { threadId: "side", title: "Travel" };
+    expect(render(createElement(TaskDestination, { task, locale }))).toBe("");
+    expect(
+      render(createElement(TaskDestination, { task: { ...task, destination }, locale }))
+    ).toContain("Travel");
+    expect(
+      render(createElement(TaskStatus, { task: { ...task, destination, state: "failed" }, locale }))
+    ).toContain("set it again with an available chat or Main");
+  });
   it("groups reminder rows and keeps Past tasks collapsed", () => {
     const html = render(
       createElement(ScheduledTaskList, {

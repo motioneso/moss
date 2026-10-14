@@ -23,6 +23,12 @@ import {
 import { REMINDER_OPEN_LIMIT } from "../../packages/chat/src/reminders/wording.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import {
+  barrier,
+  observedTransaction,
+  untilObserved,
+  waitForSessionBlocker
+} from "./reminder-lock-fixture.js";
 
 const { Client } = pg;
 
@@ -179,20 +185,6 @@ function openCount(actorUserId: string): Promise<number> {
   return asOwner(actorUserId, (db) => reminders.openCountLocked(db, actorUserId));
 }
 
-/** Delivery and cancellation serialize on the notification lock before the reminder row. */
-async function waitForLockWaiter(): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const result = await bootstrap.query<{ waiting: number }>(
-      `SELECT count(*)::int AS waiting FROM pg_stat_activity
-        WHERE wait_event_type = 'Lock' AND
-          (query ILIKE '%chat_reminders%' OR query ILIKE '%reminder-notification:%')`
-    );
-    if ((result.rows[0]?.waiting ?? 0) > 0) return;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error("no session started waiting on the reminder lock");
-}
-
 /** A chat repository whose reserved-message insert waits for a gate, then posts or throws. */
 function pausedChat(outcome: "post" | "throw") {
   let release!: () => void;
@@ -200,7 +192,7 @@ function pausedChat(outcome: "post" | "throw") {
   const gate = new Promise<void>((resolve) => (release = resolve));
   const reached = new Promise<void>((resolve) => (paused = resolve));
   const repo = {
-    getMainThread: chat.getMainThread.bind(chat),
+    lockThreadSelection: chat.lockThreadSelection.bind(chat),
     insertReservedAssistantMessage: async (
       ...args: Parameters<ChatRepository["insertReservedAssistantMessage"]>
     ) => {
@@ -214,13 +206,16 @@ function pausedChat(outcome: "post" | "throw") {
 }
 
 /** Cancels the way a turn does, holding the thread lock the turn takes first. */
+async function cancelFromLockedTurn(db: DataContextDb, threadId: string, target: string | null) {
+  await chat.lockThreadSelection(db);
+  await sql`select id from app.chat_threads where id = ${threadId} for no key update`.execute(
+    db.db
+  );
+  return cancelReminder(db, reminders, target);
+}
+
 function cancelInTurn(actorUserId: string, threadId: string, target: string | null) {
-  return asOwner(actorUserId, async (db) => {
-    await sql`select id from app.chat_threads where id = ${threadId} for no key update`.execute(
-      db.db
-    );
-    return cancelReminder(db, reminders, target);
-  });
+  return asOwner(actorUserId, (db) => cancelFromLockedTurn(db, threadId, target));
 }
 
 describe("cancelling before delivery", () => {
@@ -300,17 +295,22 @@ describe("cancel and delivery race on reminder locks", () => {
     await makeDue(saved.id);
     const paused = pausedChat("post");
 
-    const delivery = deliver(saved, ids.userA, paused.repo);
-    await paused.reached;
-    const cancel = cancelInTurn(ids.userA, saved.threadId, "check the oven");
+    const delivery = observedTransaction(worker, ids.userA, (db) =>
+      deliverDueReminder(db, payload(saved, ids.userA), { reminders, chat: paused.repo })
+    );
+    await untilObserved(paused.reached, delivery.result);
+    const cancel = observedTransaction(app, ids.userA, (db) =>
+      cancelFromLockedTurn(db, saved.threadId, "check the oven")
+    );
     try {
-      await waitForLockWaiter();
+      await waitForSessionBlocker(bootstrap, await cancel.pid, await delivery.pid);
     } finally {
       paused.release();
+      await Promise.allSettled([delivery.result, cancel.result]);
     }
 
-    await expect(delivery).resolves.toBe("delivered");
-    await expect(cancel).resolves.toMatchObject({ kind: "already_delivered" });
+    await expect(delivery.result).resolves.toBe("delivered");
+    await expect(cancel.result).resolves.toMatchObject({ kind: "already_delivered" });
     expect(await readRow(saved.id)).toMatchObject({
       state: "delivered",
       context_state: "dismissed"
@@ -323,17 +323,22 @@ describe("cancel and delivery race on reminder locks", () => {
     await makeDue(saved.id);
     const paused = pausedChat("throw");
 
-    const delivery = deliver(saved, ids.userA, paused.repo);
-    await paused.reached;
-    const cancel = cancelInTurn(ids.userA, saved.threadId, "move the car");
+    const delivery = observedTransaction(worker, ids.userA, (db) =>
+      deliverDueReminder(db, payload(saved, ids.userA), { reminders, chat: paused.repo })
+    );
+    await untilObserved(paused.reached, delivery.result);
+    const cancel = observedTransaction(app, ids.userA, (db) =>
+      cancelFromLockedTurn(db, saved.threadId, "move the car")
+    );
     try {
-      await waitForLockWaiter();
+      await waitForSessionBlocker(bootstrap, await cancel.pid, await delivery.pid);
     } finally {
       paused.release();
+      await Promise.allSettled([delivery.result, cancel.result]);
     }
 
-    await expect(delivery).rejects.toThrow("delivery failed after pausing");
-    await expect(cancel).resolves.toMatchObject({ kind: "cancelled" });
+    await expect(delivery.result).rejects.toThrow("delivery failed after pausing");
+    await expect(cancel.result).resolves.toMatchObject({ kind: "cancelled" });
     await expect(deliver(saved, ids.userA)).resolves.toBe("cancelled");
     expect(await readRow(saved.id)).toMatchObject({ state: "cancelled" });
     expect(await deliveredMessages(saved.id)).toEqual([]);
@@ -347,22 +352,95 @@ describe("cancel and delivery race on reminder locks", () => {
     const held = new Promise<void>((resolve) => (releaseCancel = resolve));
     let cancelLocked!: () => void;
     const locked = new Promise<void>((resolve) => (cancelLocked = resolve));
-    const cancel = asOwner(ids.userA, async (db) => {
+    const cancel = observedTransaction(app, ids.userA, async (db) => {
       const result = await cancelReminder(db, reminders, "feed the cat");
       cancelLocked();
       await held;
       return result;
     });
-    await locked;
-    const delivery = deliver(saved, ids.userA);
+    await untilObserved(locked, cancel.result);
+    const delivery = observedTransaction(worker, ids.userA, (db) =>
+      deliverDueReminder(db, payload(saved, ids.userA), deps)
+    );
     try {
-      await waitForLockWaiter();
+      await waitForSessionBlocker(bootstrap, await delivery.pid, await cancel.pid);
     } finally {
       releaseCancel();
+      await Promise.allSettled([delivery.result, cancel.result]);
     }
 
-    await expect(cancel).resolves.toMatchObject({ kind: "cancelled" });
-    await expect(delivery).resolves.toBe("cancelled");
+    await expect(cancel.result).resolves.toMatchObject({ kind: "cancelled" });
+    await expect(delivery.result).resolves.toBe("cancelled");
+    expect(await deliveredMessages(saved.id)).toEqual([]);
+  });
+  it("orders delivery after a turn that holds the thread before cancellation", async () => {
+    const saved = await save(ids.userA, "turn wins before reminder lock");
+    await makeDue(saved.id);
+    const turnLocked = barrier();
+    const releaseTurn = barrier();
+    const cancel = observedTransaction(app, ids.userA, async (db) => {
+      await chat.lockThreadSelection(db);
+      await sql`select id from app.chat_threads where id = ${saved.threadId}
+        for no key update`.execute(db.db);
+      turnLocked.resolve();
+      await releaseTurn.promise;
+      return cancelReminder(db, reminders, "turn wins before reminder lock");
+    });
+    await untilObserved(turnLocked.promise, cancel.result);
+    const delivery = observedTransaction(worker, ids.userA, (db) =>
+      deliverDueReminder(db, payload(saved, ids.userA), deps)
+    );
+    try {
+      await waitForSessionBlocker(bootstrap, await delivery.pid, await cancel.pid);
+    } finally {
+      releaseTurn.resolve();
+      await Promise.allSettled([cancel.result, delivery.result]);
+    }
+    await expect(cancel.result).resolves.toMatchObject({ kind: "cancelled" });
+    await expect(delivery.result).resolves.toBe("cancelled");
+    expect((await readRow(saved.id)).state).toBe("cancelled");
+    expect(await deliveredMessages(saved.id)).toEqual([]);
+  });
+  it("reacquires selection before the responsibility lock after a final-attempt rollback", async () => {
+    const saved = await save(ids.userA, "final attempt lock order");
+    await makeDue(saved.id);
+    class TrackingChat extends ChatRepository {
+      selections = 0;
+      override async lockThreadSelection(
+        db: DataContextDb,
+        surface: Parameters<ChatRepository["lockThreadSelection"]>[1]
+      ) {
+        await super.lockThreadSelection(db, surface);
+        this.selections += 1;
+      }
+    }
+    class BrokenClock extends ReminderRepository {
+      private responsibilities = 0;
+      private failed = false;
+      override async lockForDelivery(db: DataContextDb, id: string) {
+        expect(tracking.selections).toBe(++this.responsibilities);
+        return super.lockForDelivery(db, id);
+      }
+      override async now(db: DataContextDb): Promise<Date> {
+        if (!this.failed) {
+          this.failed = true;
+          throw new Error("clock unavailable");
+        }
+        return super.now(db);
+      }
+    }
+    const tracking = new TrackingChat();
+    const clock = new BrokenClock();
+    expect(
+      await asWorker(ids.userA, (db) =>
+        runReminderDeliveryJob(
+          db,
+          { data: payload(saved, ids.userA), retryCount: 8, retryLimit: 8 },
+          { chat: tracking, reminders: clock }
+        )
+      )
+    ).toBe("failed");
+    expect(tracking.selections).toBe(2);
     expect(await deliveredMessages(saved.id)).toEqual([]);
   });
 });

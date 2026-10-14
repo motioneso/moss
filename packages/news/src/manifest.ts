@@ -567,6 +567,11 @@ export const newsModuleManifest = {
         "Topic filters offer Show all stories when no matching stories loaded. Empty degraded coverage is unavailable. Aged News pages refresh on focus after ten minutes."
     },
     {
+      id: "news.refresh_coalescing",
+      description:
+        "Repeated News reads share an active refresh. Source, preference and manual refresh changes request a newer compilation so an older run cannot publish outdated choices."
+    },
+    {
       id: "news.story_feedback_management",
       description:
         "News settings edits reasons and removes preferences with pending, failed or confirmed outcomes. Writes are serialized per row; failed drafts stay available, and removing the last row retains its receipt."
@@ -663,9 +668,8 @@ export const newsModuleManifest = {
     {
       id: "news.add_source",
       description:
-        "Find a publisher by URL or name, or a subreddit with an r/name input, and add it to " +
-        "personalized News. A subreddit source contributes articles linked from its hot feed. " +
-        "A forward to an unrelated site is refused.",
+        "Add publishers by URL/name or articles linked from subreddit hot feeds via r/name. Reviewed credentialed " +
+        "news services need active-provider policy approval. Redirects to unrelated sites are refused.",
       requires: newsAddSourceRequirement,
       remediations: [
         {
@@ -679,7 +683,8 @@ export const newsModuleManifest = {
           code: "news.add_source.no_json_model",
           class: "prerequisite",
           remediationRef: "news.add_source.configure_json_model",
-          description: "News has no JSON-capable economy model binding."
+          description:
+            "News has no JSON-capable economy model binding. The disabled Add source gate exposes this prerequisite error to current-view capture."
         },
         {
           code: "news.add_source.discovery_unavailable",

@@ -151,9 +151,6 @@ test("real repeating requests, saved groups and one catch-up after worker downti
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       ).toBe(true);
-      await page.screenshot({
-        path: test.info().outputPath(`repeating-${width}-${mode}-${theme}.png`)
-      });
       console.log(
         `[3136] groups and cadence details fit width=${width}, mode=${mode}, theme=${theme}`
       );

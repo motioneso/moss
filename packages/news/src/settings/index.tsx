@@ -816,7 +816,14 @@ export default function NewsSettings() {
                     Add source
                   </Button>
                   {availability ? (
-                    <PrereqGate requirement="Adding sources needs an AI model with structured output." />
+                    <PrereqGate
+                      requirement="Adding sources needs an AI model with structured output."
+                      error={{
+                        code: "news.add_source.no_json_model",
+                        class: "prerequisite",
+                        remediationRef: "news.add_source.configure_json_model"
+                      }}
+                    />
                   ) : null}
                 </div>
               )}
@@ -837,7 +844,14 @@ export default function NewsSettings() {
                 Add source
               </Button>
               {availability ? (
-                <PrereqGate requirement="Adding sources needs an AI model with structured output." />
+                <PrereqGate
+                  requirement="Adding sources needs an AI model with structured output."
+                  error={{
+                    code: "news.add_source.no_json_model",
+                    class: "prerequisite",
+                    remediationRef: "news.add_source.configure_json_model"
+                  }}
+                />
               ) : null}
             </div>
           )}

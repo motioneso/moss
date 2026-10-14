@@ -30,11 +30,28 @@ export function recognizeReminderCommand(raw: string): ReminderCommand {
 
 /** A save request first, then list or cancel. Undefined means ordinary chat for the model. */
 export function recognizeReminderPlan(raw: string): ReminderTurnPlan | undefined {
+  if (raw.length > MAX_REQUEST_LENGTH) return undefined;
   const quiet = recognizeQuietHoursCommand(raw);
   if (quiet) return quiet;
-  const repeat = recognizeRepeatingReminder(raw);
-  if (repeat) return repeat;
-  const save = recognizeRelativeReminder(raw);
+  const delivery =
+    /(?:,\s*|\s+and\s+)(?:send|post|deliver) (?:it|(?:the |its )?results?|(?:the )?reminder) (?:to|in) (.+?)[.!]?$/i.exec(
+      raw
+    );
+  const here = /\s+in (this chat)[.!]?$/i.exec(raw);
+  const clause = delivery ?? here;
+  const destination = /^this chat$/i.test(clause?.[1]?.trim() ?? "")
+    ? "this chat"
+    : clause?.[1]
+        ?.replace(/^(?:the |(?:side )?chat (?:named |called )?)/i, "")
+        .replace(/ (?:side )?chat$/i, "")
+        .trim();
+  const request = clause ? raw.slice(0, clause.index).trim() : raw;
+  const repeat = recognizeRepeatingReminder(request);
+  if (repeat)
+    return destination && repeat.kind === "repeat_request" ? { ...repeat, destination } : repeat;
+  const save = recognizeRelativeReminder(request);
+  if (destination && (save.kind === "request" || save.kind === "clock_request"))
+    return { ...save, destination };
   if (save.kind !== "none") return save;
   const command = recognizeReminderCommand(raw);
   return command.kind === "none" ? undefined : command;

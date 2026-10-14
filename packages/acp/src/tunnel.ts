@@ -29,7 +29,8 @@ export interface AcpTunnel {
     projectId: string,
     providerKind: AcpProviderKind,
     userId: string,
-    profile: AcpProfile
+    profile: AcpProfile,
+    personaText?: string
   ): Promise<{
     cwd: string;
     home: string | null;

@@ -202,15 +202,49 @@ describe("saving a reminder from a chat turn (#3309)", () => {
     expect(await counts(ids.userA)).toMatchObject({ reminders: 20, jobs: 20 });
   });
 
-  it("refuses in a chat that is not Main", async () => {
-    const threadId = await otherThreadId(ids.userA, false);
+  it("saves from an owned side chat with Main as the default delivery destination", async () => {
+    const main = await mainThreadId(ids.userA);
+    const side = await otherThreadId(ids.userA, false);
+    expect(side).not.toBe(main);
     const before = await counts(ids.userA);
-    const refused = await persistenceWith(appBoss).recordReminderTurn(ids.userA, SAY, REQUEST, {
-      threadId
+    const stored = await persistenceWith(appBoss).recordReminderTurn(ids.userA, SAY, REQUEST, {
+      threadId: side
     });
-    assertNotStopped(refused);
-    expect(refused?.reply).toBe(REMINDER_MAIN_ONLY_REPLY);
-    expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
+    assertNotStopped(stored);
+    expect(stored?.reply).toBe(reminderSavedReply(600, "stretch"));
+    expect(stored?.origin).toMatchObject({ kind: "reminder", event: "saved" });
+    const reminderId = (stored!.origin as { reminderId: string }).reminderId;
+    const reminder = await bootstrap.query(
+      `SELECT thread_id, destination_title, source_message_id, state
+         FROM app.chat_reminders WHERE id = $1`,
+      [reminderId]
+    );
+    expect(reminder.rows).toEqual([
+      {
+        thread_id: main,
+        destination_title: null,
+        source_message_id: stored!.userMessageId,
+        state: "queued"
+      }
+    ]);
+    const messages = await bootstrap.query(
+      "SELECT id, thread_id FROM app.chat_messages WHERE id = ANY($1::uuid[])",
+      [[stored!.userMessageId, stored!.assistantMessageId]]
+    );
+    expect(messages.rows).toHaveLength(2);
+    expect(messages.rows.map((message) => message.thread_id)).toEqual([side, side]);
+    const jobs = await bootstrap.query(
+      "SELECT data FROM pgboss.job WHERE name = $1 AND data->>'resourceId' = $2",
+      [CHAT_DELIVER_REMINDER_QUEUE, reminderId]
+    );
+    expect(jobs.rows).toEqual([
+      { data: { actorUserId: ids.userA, resourceId: reminderId, version: 1 } }
+    ]);
+    expect(await counts(ids.userA)).toEqual({
+      reminders: before.reminders + 1,
+      jobs: before.jobs + 1,
+      messages: before.messages + 2
+    });
   });
 
   it("refuses a module-controlled request even in Main", async () => {

@@ -2,6 +2,7 @@ import type { DataContextDb } from "@moss/db";
 
 import type { NewsPersonalizationRepository } from "../personalization-repository.js";
 import { sanitizeFeedText } from "../source/sanitize.js";
+import { PUBLISHER_CONNECTIONS } from "../source/newsapi-connection.js";
 import type { NewsAiPort } from "./ports.js";
 
 export const NEWS_POLICY_VERDICT_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -65,7 +66,22 @@ export async function decideSourcePolicy(
   const subjectKind = options.subjectKind ?? "publisher";
   const fingerprint = await deps.ai.fingerprint(scopedDb);
   if (!fingerprint) return { verdict: "unavailable" };
-  const cached = await deps.repo.readPolicyVerdict(scopedDb, input.canonicalDomain, fingerprint);
+  const reviewedService =
+    subjectKind === "publisher" &&
+    PUBLISHER_CONNECTIONS.some(
+      (connection) =>
+        connection.canonicalDomain === input.canonicalDomain ||
+        `www.${connection.canonicalDomain}` === input.canonicalDomain
+    );
+  // Old publisher-only rejections must not decide the corrected service classification.
+  const cacheFingerprint = reviewedService
+    ? `${fingerprint}:reviewed-news-service-v1`
+    : fingerprint;
+  const cached = await deps.repo.readPolicyVerdict(
+    scopedDb,
+    input.canonicalDomain,
+    cacheFingerprint
+  );
   if (cached) return { verdict: cached, fingerprint };
   // A domain with no saved verdict yet reads as "unavailable" here instead of asking a model,
   // so a caller that must stay model-free end to end (a followed publisher redirect) never
@@ -83,7 +99,9 @@ export async function decideSourcePolicy(
   const subjectDescription =
     subjectKind === "community"
       ? "a legitimate online community devoted to news or current events"
-      : "a legitimate news publisher";
+      : reviewedService
+        ? "a legitimate news aggregation service (classify an allowed service as news_publisher)"
+        : "a legitimate news publisher";
   const generated = await deps.ai.generateJson(scopedDb, {
     schema: subjectKind === "community" ? communitySchema : publisherSchema,
     prompt:
@@ -98,7 +116,7 @@ export async function decideSourcePolicy(
   if (!verdict) return { verdict: "unavailable" };
   await deps.repo.upsertPolicyVerdict(scopedDb, {
     canonicalDomain: input.canonicalDomain,
-    fingerprint,
+    fingerprint: cacheFingerprint,
     verdict,
     ttlMs: NEWS_POLICY_VERDICT_TTL_MS
   });

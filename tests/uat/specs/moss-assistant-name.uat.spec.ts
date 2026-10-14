@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 // #1441's assistant-name live path, updated for #3020/#3032: the per-user name from Settings ->
 // Your assistant -> Persona now also names the sidebar wordmark and browser tab. Prove the real
@@ -49,6 +50,10 @@ async function signIn(page: Page) {
     if (await skipAnyway.isVisible()) await skipAnyway.click();
   }
   await expect(userMenu).toBeVisible();
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) {
+    test.setTimeout(300_000);
+    await bringUpRealChatModel(page);
+  }
 }
 
 // apps/web/src/settings/settings-page.tsx: the "assistant" section id maps to AssistantPane,
