@@ -86,6 +86,7 @@
     "test:sports-sources": "tsx scripts/test-integration.ts tests/integration/sports-sources-repository.test.ts",
     "test:sports-retry-card": "tsx scripts/test-integration.ts tests/integration/sports-retry-source-card.test.ts",
     "test:news-personalization-repository": "tsx scripts/test-integration.ts tests/integration/news-personalization-repository.test.ts",
+    "test:news-read-refresh": "tsx scripts/test-integration.ts tests/integration/news-personalization-routes.test.ts tests/integration/news-personalization-repository.test.ts tests/integration/news-refresh-jobs.test.ts",
     "test:ai": "tsx scripts/test-integration.ts tests/integration/ai.test.ts tests/integration/ai-capability-routes.test.ts tests/integration/ai-structured.test.ts",
     "test:ai-model-refresh": "tsx scripts/test-integration.ts tests/integration/ai-provider-model-refresh.test.ts",
     "test:ai-tools": "tsx scripts/test-integration.ts tests/integration/ai-tools.test.ts",

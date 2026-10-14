@@ -123,7 +123,11 @@ export async function proveScheduledSourceReport(page: Page) {
         ).trim(),
       { timeout: 150_000, intervals: [2_000, 5_000, 10_000] }
     )
-    .toBe("success");
+    .toBe("success")
+    .catch((error: unknown) => {
+      const state = captureJobState(task.id);
+      throw new Error(`Scheduled read delivery: ${state}`, { cause: error });
+    });
   console.info("Scheduled report persisted while every app page was closed.");
   page = await context.newPage();
   await page.goto("/today");

@@ -567,6 +567,11 @@ export const newsModuleManifest = {
         "Topic filters offer Show all stories when no matching stories loaded. Empty degraded coverage is unavailable. Aged News pages refresh on focus after ten minutes."
     },
     {
+      id: "news.refresh_coalescing",
+      description:
+        "Repeated News reads share an active refresh. Source, preference and manual refresh changes request a newer compilation so an older run cannot publish outdated choices."
+    },
+    {
       id: "news.story_feedback_management",
       description:
         "News settings edits reasons and removes preferences with pending, failed or confirmed outcomes. Writes are serialized per row; failed drafts stay available, and removing the last row retains its receipt."

@@ -89,6 +89,51 @@ describe("news personalization routes", () => {
     return app;
   }
 
+  it.each(["/api/news/overview", "/api/news/personalization"])(
+    "polling %s does not supersede a running compilation",
+    async (url) => {
+      const app = buildApp();
+      const repository = new NewsPersonalizationRepository();
+      const dataContext = new DataContextRunner(appDb);
+      const access = { actorUserId: ids.userA, requestId: "poll-news-compilation" };
+      try {
+        expect((await app.inject({ method: "GET", url })).statusCode).toBe(200);
+        const generation = await dataContext.withDataContext(access, (db) =>
+          repository.beginRefreshRun(db)
+        );
+        for (let read = 0; read < 3; read += 1) {
+          expect((await app.inject({ method: "GET", url })).statusCode).toBe(200);
+        }
+        const published = await dataContext.withDataContext(access, (db) =>
+          repository.publishSnapshotIfCurrent(db, generation, {
+            compiledAt: new Date(),
+            expiresAt: new Date(Date.now() + 60_000),
+            payload: {
+              articles: [
+                {
+                  id: "polling-story",
+                  publisher: "Example News",
+                  canonicalDomain: "example.com",
+                  headline: "Compilation survives reads",
+                  url: "https://example.com/story",
+                  publishedAt: new Date().toISOString(),
+                  excerpt: null,
+                  imageUrl: null,
+                  topics: [],
+                  preferred: false,
+                  rank: 1
+                }
+              ]
+            }
+          })
+        );
+        expect(published).toBe(true);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it("previews, confirms, and lists a source through real owner-scoped persistence", async () => {
     const app = buildApp();
     await app.ready();
