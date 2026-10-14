@@ -143,7 +143,7 @@ export const chatModuleManifest = {
     {
       id: "chat.current_view_grounding",
       description:
-        "Moss uses the current view and app map to explain screens and errors. Screenshot requests receive a refusal and guidance to paste the exact text instead.",
+        "Moss uses the current view and app map to explain screens and errors, linking prerequisite fixes to their declared paths. Screenshot requests receive a refusal and guidance to paste the exact text instead.",
       featureFlagId: "chat.module"
     },
     {
