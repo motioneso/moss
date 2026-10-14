@@ -377,3 +377,15 @@ it("keeps revised module-sourced current-question replies out of interpretation 
   expect(model).not.toHaveBeenCalled();
   expect(mocks.candidates).not.toHaveBeenCalled();
 });
+
+it.each([
+  "change my Check task status: repeat boundary proof reminder to repeat every 60 seconds starting in 60 seconds",
+  "update my task check reminder to start in 60 seconds",
+  "change my task reminder text to Review the report every morning"
+])("leaves existing reminder edits to their own preparation: %s", async (text) => {
+  const { prepare, model } = fixture({});
+  expect(await prepare("owner", text, threadId)).toBeUndefined();
+  expect(model).not.toHaveBeenCalled();
+  expect(mocks.candidates).not.toHaveBeenCalled();
+  expect(mocks.prepare).not.toHaveBeenCalled();
+});

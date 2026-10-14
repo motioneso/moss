@@ -12,6 +12,9 @@ async function send(page: Page, text: string) {
     { timeout: 120_000 }
   );
   await composer.fill(text);
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled({
+    timeout: 120_000
+  });
   await composer.press("Enter");
   expect((await response).ok()).toBe(true);
   await expect(composer).toHaveValue("");

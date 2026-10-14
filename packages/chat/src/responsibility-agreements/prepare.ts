@@ -10,6 +10,7 @@ import { type DataContextRunner } from "@moss/db";
 import { authorizeTaskBackgroundRead, listOwnedTasksForScheduledRead } from "@moss/tasks";
 import type { ChatRepository } from "../repository.js";
 import type { ReminderTurnPlan } from "../reminders/turn.js";
+import { recognizeReminderEdit } from "../reminders/edit-recognizer.js";
 import { recognizeRelativeReminder } from "../reminders/recognizer.js";
 import { boundedActionScope, typedResponsibilityAgreement } from "./terms.js";
 import { pendingResponsibilityProposal } from "./repository.js";
@@ -23,6 +24,7 @@ export const SCOPE_REFUSED_MESSAGE =
 export function namesBoundedActionRequest(text: string): boolean {
   return (
     text.length <= 700 &&
+    !recognizeReminderEdit(text) &&
     /^(?:mark|complete|set|update|change|delete|remove)\b/i.test(text.trim()) &&
     /\btask\b/i.test(text) &&
     /\b(?:in|after|at|tomorrow|tonight|every|daily|weekly|approved|scope)\b/i.test(text)
