@@ -46,7 +46,7 @@ export interface ScheduledReadCandidate {
 }
 export interface ScheduledReadPlan {
   readonly kind: "scheduled_read";
-  readonly failure?: "unavailable";
+  readonly failure?: "unavailable" | "invalid";
   readonly taskId: string | null;
   readonly title: string;
   readonly when:
@@ -82,7 +82,7 @@ export const SCHEDULED_READ_SCHEMA = {
       type: "string",
       maxLength: 500,
       description:
-        "The requested timing as a reminder, such as remind me in 30 seconds to check task. Preserve time and deadline."
+        "Use a full reminder request: remind me in 30 seconds to check task, or remind me every 60 seconds to check task. Preserve the owner's exact time, cadence and deadline."
     }
   },
   required: ["taskId", "timingRequest"]
@@ -95,8 +95,10 @@ export async function resolveScheduledReadRequest(
   signal?: AbortSignal
 ): Promise<ScheduledReadPlan | undefined> {
   if (!namesScheduledRead(request)) return undefined;
+  const requestsRepeat = /\b(?:every|each|daily|weekly|monthly|hourly)\b/i.test(request);
   const refused: ScheduledReadPlan = {
     kind: "scheduled_read",
+    ...(requestsRepeat ? { failure: "invalid" as const } : {}),
     taskId: null,
     title: "",
     when: null
@@ -109,8 +111,7 @@ export async function resolveScheduledReadRequest(
   if (
     signal?.aborted ||
     requestedRepeat?.kind === "unsupported" ||
-    (/\b(?:every|each|daily|weekly|monthly|hourly)\b/i.test(request) &&
-      requestedRepeat?.kind !== "repeat_request") ||
+    (requestsRepeat && requestedRepeat?.kind !== "repeat_request") ||
     /\b(?:delete|remove|update|change|complete|mark|monthly)\b/i.test(request)
   )
     return refuse("request");
@@ -125,7 +126,7 @@ export async function resolveScheduledReadRequest(
   const matches = candidates.filter((item) => item.id === taskId);
   if (matches.length !== 1) {
     recordScheduledReadFailure("item_selection", "ValidationError");
-    return undefined;
+    return requestsRepeat ? refused : undefined;
   }
   const task = matches[0]!;
   const titleAt = task.title ? request.toLowerCase().indexOf(task.title.toLowerCase()) : -1;

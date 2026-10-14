@@ -11,6 +11,7 @@ import {
   REMINDER_MANAGE_MAIN_ONLY_REPLY
 } from "../../packages/chat/src/reminders/wording.js";
 import { FakeEngine, makeMinimalDeps } from "./chat-session-manager.test.js";
+import { resolveScheduledReadRequest } from "../../packages/chat/src/scheduled-reads/request.js";
 
 // #3309: a reminder request is answered by code from the raw words before the gate or the model.
 
@@ -136,6 +137,33 @@ describe("chat reminder turn (#3309)", () => {
       expect(recordReminderTurn).not.toHaveBeenCalled();
       expect(read).not.toHaveBeenCalled();
     }
+  });
+  it.each([
+    { taskId: "", timingRequest: "remind me every 60 seconds to check task" },
+    { taskId: "11111111-1111-4111-8111-111111111111", timingRequest: "every 60 seconds" }
+  ])("keeps a refused recurring check out of the live model: %j", async (output) => {
+    const read = vi.fn(async (_actor, text, signal) =>
+      resolveScheduledReadRequest(
+        text,
+        [{ id: "11111111-1111-4111-8111-111111111111", title: "Proof task" }],
+        async () => output,
+        signal
+      )
+    );
+    const refused = {
+      ...SAVED,
+      reply: "I didn't set a check.",
+      origin: { ...SAVED.origin, event: "refused", reminderId: null }
+    };
+    const record = vi.fn().mockResolvedValue(refused);
+    const { manager, engine, recordReminderTurn } = setup({ read, record });
+    const result = await manager.submitTurn("u1", "Ben", "Check my Proof task every 60 seconds");
+    expect(result.reply).toBe(refused.reply);
+    expect(recordReminderTurn.mock.calls[0]?.[2]).toMatchObject({
+      kind: "scheduled_read",
+      taskId: null
+    });
+    expect(engine.launchCount).toBe(0);
   });
   it("falls back to ordinary chat when a check has no confident owned task", async () => {
     const read = vi
