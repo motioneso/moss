@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 export const uatLevel = { level: "admin+data", without: [] } as const;
 
@@ -31,6 +32,16 @@ test("News mosaic renders live photo and no-photo card variants (#1185)", async 
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) await bringUpRealChatModel(page);
+
+  // Check the default source mix before selecting a real source for card-variant coverage.
+  // Live default feeds need not put both image variants among the eight mosaic cards.
+  await page.goto(`${baseURL}/news`);
+  await expect(page.locator(MOSAIC_CARD).first()).toBeVisible({ timeout: 30_000 });
+  const preference = await page.request.post("/api/news/prefs", {
+    data: { kind: "source", key: "npr" }
+  });
+  expect(preference.ok(), `NPR source preference -> ${preference.status()}`).toBeTruthy();
 
   // Poll the live page: reload every few seconds until the first news.refresh job has landed real
   // headlines AND the feed mix has produced both variants. Real RSS output is variable, so we wait

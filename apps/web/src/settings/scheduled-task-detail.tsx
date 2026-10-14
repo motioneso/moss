@@ -4,6 +4,7 @@ import { Button } from "@moss/ui";
 import type { ScheduledTaskDto } from "@moss/shared";
 import { useUserLocale } from "../locale/locale-format";
 import { TaskInstruction } from "./scheduled-task-details/instruction";
+import { TaskDestination } from "./scheduled-task-details/destination";
 import { TaskStatus } from "./scheduled-task-details/status";
 import { TaskTiming } from "./scheduled-task-details/timing";
 import { TaskHistory } from "./scheduled-task-details/history";
@@ -11,6 +12,7 @@ const pieces = [
   { id: "status", Component: TaskStatus },
   { id: "instruction", Component: TaskInstruction },
   { id: "timing", Component: TaskTiming },
+  { id: "destination", Component: TaskDestination },
   { id: "history", Component: TaskHistory },
   { id: "controls", Component: TaskControls }
 ];

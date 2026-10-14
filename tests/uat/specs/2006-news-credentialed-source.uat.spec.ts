@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { bringUpRealChatModel } from "./real-chat-signin.js";
 
 // #2006 live-path proof. The real key is supplied only through the environment and is never
 // included in an assertion message, URL, screenshot, or log.
@@ -44,23 +46,21 @@ async function openNewsSettings(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "News" })).toBeVisible();
 }
 
-async function overviewArticles(page: Page): Promise<readonly { canonicalDomain?: unknown }[]> {
+async function overviewArticles(page: Page): Promise<readonly NewsHeadline[]> {
   const response = await page.request.get("/api/news/overview");
   expect(response.ok(), `news overview -> ${response.status()}`).toBeTruthy();
-  const body = (await response.json()) as {
-    topStories?: readonly { canonicalDomain?: unknown }[];
-    rankedStories?: readonly { canonicalDomain?: unknown }[];
-  };
+  const body = (await response.json()) as NewsOverviewResponse;
   return body.rankedStories ?? body.topStories ?? [];
 }
 
 test("connects, rotates, and revokes a real credentialed News source", async ({ page }) => {
   const key = realKey();
   await signIn(page);
+  if (process.env.JARVIS_UAT_REQUIRE_REAL_CHAT) await bringUpRealChatModel(page);
   await openNewsSettings(page);
 
   await page.getByRole("button", { name: "Add a source" }).click();
-  const sourceInput = page.getByLabel("Publication homepage or domain");
+  const sourceInput = page.getByLabel("Source homepage or domain");
   await sourceInput.fill(CONNECTION_HOST);
   await page.getByRole("button", { name: "Check" }).click();
   await expect(page.getByLabel("Access key")).toBeVisible();
@@ -84,7 +84,7 @@ test("connects, rotates, and revokes a real credentialed News source", async ({ 
     .poll(
       async () => {
         const articles = await overviewArticles(page);
-        return articles.some((article) => article.canonicalDomain === CONNECTION_HOST);
+        return articles.some((article) => article.sourceKey === CONNECTION_HOST);
       },
       { timeout: 180_000, intervals: [1_000, 2_000, 4_000, 8_000] }
     )
@@ -101,7 +101,14 @@ test("connects, rotates, and revokes a real credentialed News source", async ({ 
 
   await page.getByLabel("Access key").fill(key);
   await page.getByLabel("I have permission to use this key here.").check();
+  const replacementResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/credential")
+  );
   await page.getByRole("button", { name: "Save key" }).click();
+  expect((await replacementResponse).ok()).toBe(true);
+  await expect(page.getByRole("button", { name: "Save key" })).toHaveCount(0);
   await expect(page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Revoke access for NewsAPI" }).click();
@@ -113,7 +120,7 @@ test("connects, rotates, and revokes a real credentialed News source", async ({ 
     .poll(
       async () => {
         const articles = await overviewArticles(page);
-        return articles.some((article) => article.canonicalDomain === CONNECTION_HOST);
+        return articles.some((article) => article.sourceKey === CONNECTION_HOST);
       },
       { timeout: 60_000, intervals: [1_000, 2_000, 4_000] }
     )

@@ -93,16 +93,17 @@ test("real repeating requests, saved groups and one catch-up after worker downti
     drawer,
     `change my Check task status: ${title} reminder to repeat every 60 seconds starting in 60 seconds`
   );
-  await expect(
-    drawer.getByText(
-      "Task checks run once. You can change its time, but not make it repeat. Nothing changed.",
-      { exact: true }
-    )
-  ).toBeVisible();
-  const unchangedCheck = (await tasks(page)).find((t) => t.id === sourceCheck.id)!;
-  expect(unchangedCheck.group).toBe("Reminders");
-  expect(unchangedCheck.dueAt).toBe(sourceCheck.dueAt);
-  console.log("[3136] real task-check repeat edit refused, original one-time schedule retained");
+  const changedCheck = (await tasks(page)).find((t) => t.id === sourceCheck.id)!;
+  expect(changedCheck.group).toBe("More often");
+  expect(changedCheck.schedule).toBe("Every 1 minute");
+  expect(new Date(changedCheck.dueAt).getTime()).toBeLessThan(
+    new Date(sourceCheck.dueAt).getTime()
+  );
+  const pausedCheck = await page.request.post(`/api/chat/scheduled-tasks/${sourceCheck.id}/pause`);
+  expect(pausedCheck.ok()).toBe(true);
+  console.log(
+    "[3136] task-check cadence edit supported; disposable check paused before reminder-only proof"
+  );
   await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
   await page.goto("/settings?section=scheduled");
   drawer = await openChat(page);
@@ -151,9 +152,6 @@ test("real repeating requests, saved groups and one catch-up after worker downti
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
       ).toBe(true);
-      await page.screenshot({
-        path: test.info().outputPath(`repeating-${width}-${mode}-${theme}.png`)
-      });
       console.log(
         `[3136] groups and cadence details fit width=${width}, mode=${mode}, theme=${theme}`
       );

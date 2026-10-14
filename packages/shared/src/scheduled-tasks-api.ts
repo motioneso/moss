@@ -18,15 +18,17 @@ export interface ScheduledTaskMessageDto {
 
 export interface ScheduledTaskRunDto {
   readonly at: string;
-  readonly outcome: "delivered" | "expired";
+  readonly outcome: "delivered" | "quiet" | "failed" | "refused" | "expired";
   readonly summary: string;
   readonly message: ScheduledTaskMessageDto | null;
 }
 
 export interface ScheduledTaskDto {
+  readonly destination?: { readonly threadId: string; readonly title: string };
   readonly id: string;
   readonly title: string;
   readonly instruction: string;
+  readonly checkFailure?: string | null;
   readonly group: "Reminders" | "Daily" | "Weekly" | "More often";
   readonly schedule?: string | null;
   readonly timeZone?: string | null;
@@ -143,9 +145,16 @@ export const listScheduledTasksResponseSchema = {
           "runs"
         ],
         properties: {
+          destination: {
+            type: "object",
+            additionalProperties: false,
+            required: ["threadId", "title"],
+            properties: { threadId: { type: "string" }, title: { type: "string" } }
+          },
           id: { type: "string" },
           title: { type: "string" },
           instruction: { type: "string" },
+          checkFailure: { anyOf: [{ type: "string" }, { type: "null" }] },
           schedule: { anyOf: [{ type: "string" }, { type: "null" }] },
           timeZone: { anyOf: [{ type: "string" }, { type: "null" }] },
           group: { type: "string", enum: ["Reminders", "Daily", "Weekly", "More often"] },
@@ -164,7 +173,10 @@ export const listScheduledTasksResponseSchema = {
               required: ["at", "outcome", "summary", "message"],
               properties: {
                 at: { type: "string" },
-                outcome: { type: "string", enum: ["delivered", "expired"] },
+                outcome: {
+                  type: "string",
+                  enum: ["delivered", "quiet", "failed", "refused", "expired"]
+                },
                 summary: { type: "string" },
                 message: { anyOf: [messageSchema, { type: "null" }] }
               }

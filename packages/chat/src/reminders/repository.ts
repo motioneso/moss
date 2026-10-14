@@ -25,6 +25,7 @@ export interface DueReminder {
   readonly id: string;
   readonly ownerUserId: string;
   readonly threadId: string;
+  readonly destinationTitle: string | null;
   readonly reservedMessageId: string;
   readonly text: string;
   readonly state: ChatReminderState;
@@ -108,13 +109,18 @@ export class ReminderRepository {
           join
             .onRef("message.id", "=", "run.message_id")
             .onRef("message.owner_user_id", "=", "run.owner_user_id")
-            .onRef("message.thread_id", "=", "reminder.thread_id")
         )
+        .innerJoin("app.chat_threads as thread", "thread.id", "message.thread_id")
         .select(["run.owner_user_id", "run.version", "message.id", "message.body"])
         .where("run.reminder_id", "=", reminderId)
         .where("run.message_id", "=", messageId)
-        .where("run.outcome", "=", "delivered")
+        .where("run.outcome", "in", ["delivered", "failed", "refused"])
         .where("run.context_state", "!=", "dismissed")
+        .where("run.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("thread.surface", "=", "drawer")
+        .where("thread.incognito", "=", false)
         .where("reminder.state", "in", ["queued", "delivered"])
         .where("message.role", "=", "assistant")
         .where("message.status", "=", "stored")
@@ -168,6 +174,7 @@ export class ReminderRepository {
       readonly id?: string;
       readonly threadId: string;
       readonly sourceMessageId: string;
+      readonly destinationTitle?: string | null;
       readonly when: ReminderTimingInput;
       readonly text: string;
     }
@@ -180,6 +187,7 @@ export class ReminderRepository {
         id: input.id ?? randomUUID(),
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         thread_id: input.threadId,
+        destination_title: input.destinationTitle ?? null,
         source_message_id: input.sourceMessageId,
         reserved_message_id: randomUUID(),
         reminder_text: input.text,
@@ -214,6 +222,7 @@ export class ReminderRepository {
         "id",
         "owner_user_id",
         "thread_id",
+        "destination_title",
         "reserved_message_id",
         "reminder_text",
         "state",
@@ -233,6 +242,7 @@ export class ReminderRepository {
       id: row.id,
       ownerUserId: row.owner_user_id,
       threadId: row.thread_id,
+      destinationTitle: row.destination_title,
       reservedMessageId: row.reserved_message_id,
       text: row.reminder_text,
       state: row.state,
@@ -295,7 +305,7 @@ export class ReminderRepository {
   }
 
   /**
-   * #3311: delivered reminders whose context is pending in this exact Main chat, oldest first.
+   * #3311: delivered reminders whose context is pending in this exact owned drawer chat, oldest first.
    * The body is the reserved assistant message the owner saw.
    */
   async listPendingMain(
@@ -318,7 +328,8 @@ export class ReminderRepository {
       .where("reminder.state", "=", "delivered")
       .where("reminder.repeat_kind", "is", null)
       .where("reminder.context_state", "=", "pending")
-      .where("thread.is_main", "=", true)
+      .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("thread.surface", "=", "drawer")
       .where("thread.incognito", "=", false)
       .orderBy("reminder.delivered_at")
       .orderBy("reminder.id")
@@ -327,19 +338,23 @@ export class ReminderRepository {
     const runs = await scopedDb.db
       .selectFrom("app.chat_reminder_runs as run")
       .innerJoin("app.chat_reminders as reminder", "reminder.id", "run.reminder_id")
-      .innerJoin("app.chat_threads as thread", "thread.id", "reminder.thread_id")
       .innerJoin("app.chat_messages as message", (join) =>
         join
           .onRef("message.id", "=", "run.message_id")
-          .onRef("message.thread_id", "=", "reminder.thread_id")
           .onRef("message.owner_user_id", "=", "run.owner_user_id")
       )
+      .innerJoin("app.chat_threads as thread", "thread.id", "message.thread_id")
       .select(["message.id", "message.body", "run.at"])
-      .where("reminder.thread_id", "=", threadId)
-      .where("thread.is_main", "=", true)
+      .where("message.thread_id", "=", threadId)
+      .where("run.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("thread.surface", "=", "drawer")
       .where("thread.incognito", "=", false)
+      .where("message.role", "=", "assistant")
+      .where("message.status", "=", "stored")
       .where("run.context_state", "=", "pending")
-      .where("run.outcome", "=", "delivered")
+      .where("run.outcome", "in", ["delivered", "failed", "refused"])
       .where("reminder.state", "in", ["queued", "paused", "delivered"])
       .orderBy("run.at")
       .orderBy("run.id")
@@ -364,7 +379,7 @@ export class ReminderRepository {
       .map(({ reservedMessageId, body }) => ({ reservedMessageId, body }));
   }
 
-  /** #3311: acknowledges exactly the shown reminders that are still pending in this Main chat. */
+  /** #3311: acknowledges exactly the shown reminders that are still pending in this owned drawer chat. */
   async acknowledgeMain(
     scopedDb: DataContextDb,
     threadId: string,
@@ -377,10 +392,22 @@ export class ReminderRepository {
       .set({ context_state: "acknowledged" })
       .where("message_id", "in", [...reservedMessageIds])
       .where("context_state", "=", "pending")
+      .where("outcome", "in", ["delivered", "failed", "refused"])
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
       .where(
-        "reminder_id",
+        "message_id",
         "in",
-        scopedDb.db.selectFrom("app.chat_reminders").select("id").where("thread_id", "=", threadId)
+        scopedDb.db
+          .selectFrom("app.chat_messages as message")
+          .innerJoin("app.chat_threads as thread", "thread.id", "message.thread_id")
+          .select("message.id")
+          .where("message.thread_id", "=", threadId)
+          .where("message.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+          .where("message.role", "=", "assistant")
+          .where("message.status", "=", "stored")
+          .where("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+          .where("thread.surface", "=", "drawer")
+          .where("thread.incognito", "=", false)
       )
       .execute();
     await scopedDb.db

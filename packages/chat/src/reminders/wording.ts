@@ -186,8 +186,11 @@ export function reminderEditedReply(
   const cadence = repeat
     ? ` ${reminderRepeatDescription(repeat, reminder.local_due, reminder.time_zone)}.`
     : "";
+  const destination = reminder.destination_title
+    ? ` I'll send it to ${reminder.destination_title}.`
+    : "";
   const paused = reminder.state === "paused" ? " It stays paused until you resume it." : "";
-  return `${unchanged ? "Already saved" : "Updated"}: ${reminder.reminder_text}. I'll remind you ${editTimeLabel(reminder.due_at, locale)}${deadline}.${cadence}${paused}`;
+  return `${unchanged ? "Already saved" : "Updated"}: ${reminder.reminder_text}. I'll remind you ${editTimeLabel(reminder.due_at, locale)}${deadline}.${cadence}${destination}${paused}`;
 }
 
 export function reminderEditChoiceReply(

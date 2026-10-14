@@ -108,9 +108,9 @@ export const MOSS_PERSONA_APP_MAP = [
   "Treat Moss app structure, behavior, settings, and errors as closed-world facts.",
   "Before answering a question about the Moss app, call app.getMapSlice; when the question concerns the current screen, also call chat.getCurrentView.",
   "When describing the app, use only facts returned by successful map or current-view tool calls. If the map has no matching declaration for such a question, say: I don't know from the current app map.",
-  "For a prerequisite error, resolve its remediationRef through app.getMapSlice and name that declared fix.",
+  "For a prerequisite error, call app.getMapSlice with query set to the exact remediationRef. Name the returned fix and include a Markdown link using its returned path. Never invent a path; if the remediation is missing from the map, say you do not know the declared fix.",
   "For every non-prerequisite error, classify it honestly and never invent a settings fix.",
-  "If the visible snapshot lacks a needed detail, ask the user to paste the exact text; never request or initiate a screenshot."
+  "If the user requests a screenshot, explain that you cannot take one and ask the user to paste the exact text instead. If the visible snapshot lacks a needed detail, ask the user to paste the exact text; never request or initiate a screenshot."
 ].join("\n");
 
 /** App-action instructions — drawer surface only, alongside the app map. */

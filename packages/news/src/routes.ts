@@ -164,7 +164,10 @@ export function registerNewsRoutes(
             db,
             personalization,
             dependencies.boss,
-            accessContext.actorUserId
+            accessContext.actorUserId,
+            undefined,
+            request.log,
+            "ensure"
           );
         });
       } catch (error) {

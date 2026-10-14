@@ -11,6 +11,7 @@ import type {
 } from "@moss/shared";
 
 interface ScheduledReminderRow {
+  readonly destination_title?: string | null;
   readonly repeat_kind?: "daily" | "weekly" | "interval" | null;
   readonly repeat_seconds?: number | null;
   readonly local_due?: string | null;
@@ -79,6 +80,9 @@ export function scheduledReminder(
     repeat_seconds: row.repeat_seconds ?? null
   });
   return {
+    ...(row.destination_title
+      ? { destination: { threadId: row.thread_id, title: row.destination_title } }
+      : {}),
     id: row.id,
     title: row.reminder_text,
     instruction: row.reminder_text,
@@ -94,7 +98,19 @@ export function scheduledReminder(
       ? reminderRepeatDescription(repeat, row.local_due ?? null, row.time_zone ?? null, clockFormat)
       : null,
     timeZone: row.time_zone ?? null,
-    state: row.read_outcome && row.read_outcome !== "success" ? "failed" : STATES[row.state],
+    state:
+      !repeat && row.read_outcome && row.read_outcome !== "success" ? "failed" : STATES[row.state],
+    ...(repeat &&
+    (row.state === "queued" || row.state === "paused") &&
+    row.read_outcome &&
+    row.read_outcome !== "success"
+      ? {
+          checkFailure:
+            row.read_outcome === "refused"
+              ? "The last task check could not access its source. Restore Tasks access or choose a new task. This check keeps its saved cadence; you can pause it."
+              : "The last task check failed. Check Tasks and your AI settings. This check keeps its saved cadence; you can pause it."
+        }
+      : {}),
     dueAt: row.due_at.toISOString(),
     deadlineAt: row.deadline_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
@@ -128,6 +144,7 @@ export async function listScheduledReminders(
       "reminder.reminder_text",
       "reminder.state",
       "reminder.thread_id",
+      "reminder.destination_title",
       "reminder.due_at",
       "reminder.deadline_at",
       "reminder.created_at",

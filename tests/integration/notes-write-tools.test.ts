@@ -42,6 +42,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 import { buildChatToolServices } from "@moss/chat";
+import { getBuiltInModuleManifests } from "@moss/module-registry";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
@@ -187,7 +188,8 @@ describe("notes write assistant tools", () => {
       const tokens = new SessionTokenRegistry();
       const confirmations = new ConfirmationRegistry();
       const gateway = new AssistantToolGateway({
-        resolveActiveModules: async () => [notesModuleManifest],
+        resolveActiveModules: async () =>
+          getBuiltInModuleManifests().filter(({ id }) => id === "notes"),
         repository,
         ...conversations.gatewayDependencies,
         tokens,
@@ -276,7 +278,8 @@ describe("notes write assistant tools", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [notesModuleManifest],
+      resolveActiveModules: async () =>
+        getBuiltInModuleManifests().filter(({ id }) => id === "notes"),
       repository,
       ...conversations.gatewayDependencies,
       tokens,

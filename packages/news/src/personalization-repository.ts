@@ -660,21 +660,31 @@ export class NewsPersonalizationRepository {
     };
   }
 
-  async bumpRefreshRequest(scopedDb: DataContextDb): Promise<number> {
+  async bumpRefreshRequest(
+    scopedDb: DataContextDb,
+    mode: "invalidate" | "ensure" = "invalidate"
+  ): Promise<number> {
     assertDataContextDb(scopedDb);
+    // Reads share pending work. Writes still supersede it, so a compile cannot publish
+    // a snapshot using preferences or credentials that changed while it was running.
+    const keepActive = sql<boolean>`${mode === "ensure"}
+      AND app.news_refresh_state.state IN ('queued', 'running')`;
     const result = await sql<{ requested_generation: string }>`
       INSERT INTO app.news_refresh_state
         (owner_user_id, state, requested_generation, updated_at, last_requested_at)
       VALUES (app.current_actor_user_id(), 'queued', 1, now(), now())
       ON CONFLICT (owner_user_id) DO UPDATE
-        SET requested_generation = app.news_refresh_state.requested_generation + 1,
+        SET requested_generation = app.news_refresh_state.requested_generation
+              + CASE WHEN ${keepActive} THEN 0 ELSE 1 END,
             state = CASE WHEN app.news_refresh_state.state = 'running'
                          THEN 'running' ELSE 'queued' END,
             failure_kind = NULL,
-            updated_at = now(),
+            updated_at = CASE WHEN ${keepActive}
+                              THEN app.news_refresh_state.updated_at ELSE now() END,
             -- History (#2030). failure_kind above is live status and is cleared here; the
             -- last_failure_* columns are deliberately left alone.
-            last_requested_at = now()
+            last_requested_at = CASE WHEN ${keepActive}
+                                     THEN app.news_refresh_state.last_requested_at ELSE now() END
       RETURNING requested_generation
     `.execute(scopedDb.db);
     return Number(result.rows[0]!.requested_generation);

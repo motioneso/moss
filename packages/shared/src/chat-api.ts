@@ -207,6 +207,7 @@ export interface TranscriptRecord {
   readonly turnId?: string;
   /** #3195: a message committed outside any turn, such as a delivered reminder. */
   readonly background?: true;
+  readonly backgroundThreadId?: string;
   readonly actionRequestId?: string;
   readonly workflowApprovalId?: string;
   readonly toolName?: string;
@@ -278,6 +279,7 @@ export type ReminderRepeat =
 
 export interface ReminderEditTerms {
   readonly repeat?: ReminderRepeat | "remove" | null;
+  readonly destination?: string | null;
   readonly text: string | null;
   readonly delaySeconds: number | null;
   readonly localDue: string | null;

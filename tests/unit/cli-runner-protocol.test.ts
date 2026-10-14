@@ -335,7 +335,8 @@ describe("serveConnection (§3.4/§3.7)", () => {
       "anthropic",
       "user-1",
       "chat",
-      false
+      false,
+      undefined
     );
 
     channel.triggerClose();

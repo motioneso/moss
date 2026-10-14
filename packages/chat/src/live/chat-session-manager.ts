@@ -50,10 +50,7 @@ import type {
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
-import {
-  routeMainBackgroundMessage,
-  type MainBackgroundMessage
-} from "./background-message-routing.js";
+import { routeBackgroundMessage, type BackgroundMessage } from "./background-message-routing.js";
 import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 import {
   routeOriginRecord,
@@ -412,9 +409,9 @@ export class ChatSessionManager {
     });
   }
 
-  /** #3195: show a stored background message in the owner's open Main drawer, if any. */
-  deliverMainBackgroundMessage(message: MainBackgroundMessage): Promise<void> {
-    return routeMainBackgroundMessage({
+  /** #3195: show a stored background message in the owner's selected drawer destination. */
+  deliverBackgroundMessage(message: BackgroundMessage): Promise<void> {
+    return routeBackgroundMessage({
       ...message,
       shown: (actorUserId) => this.getPrivacyState(actorUserId, DEFAULT_CHAT_SURFACE),
       transitions: this.originTransitions,

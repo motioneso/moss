@@ -381,6 +381,22 @@ blocking	packages/module-sdk/src/time.ts	tests/uat/specs/3136-repeating-reminder
 blocking	apps/web/src/settings/scheduled-task-list.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
 blocking	apps/web/src/settings/scheduled-task-details/timing.tsx	tests/uat/specs/3136-repeating-reminders-real.uat.spec.ts
 
+# #3138: quiet recurring reads, useful changes and real worker recovery.
+blocking	packages/chat/src/scheduled-reads/**	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	packages/chat/sql/0321_chat_repeating_reads.sql	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	packages/chat/src/reminders/runs.ts	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/status.tsx	tests/uat/specs/3138-repeating-useful-checks-real.uat.spec.ts
+
+# #3148: owned reminder destinations and exact background arrival filtering.
+blocking	packages/chat/src/reminders/**	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/background-message-routing.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/chat-session-manager.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/src/live/live-chat-session.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/chat/sql/0320_chat_reminder_destinations.sql	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/chat/use-chat-stream.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/chat/chat-drawer.tsx	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	apps/web/src/settings/scheduled-task-details/**	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
+blocking	packages/shared/src/scheduled-tasks-api.ts	tests/uat/specs/3148-side-chat-destination-real.uat.spec.ts
 blocking	packages/chat/src/responsibility-agreements/**	tests/uat/specs/3142a-bounded-action-agreement.uat.spec.ts
 blocking	packages/chat/sql/0322_chat_responsibility_agreements.sql	tests/uat/specs/3142a-bounded-action-agreement.uat.spec.ts
 blocking	apps/web/src/settings/approved-action-scopes.tsx	tests/uat/specs/3142a-bounded-action-agreement.uat.spec.ts

@@ -315,7 +315,8 @@ export class MossAcpClient {
       projectId,
       providerKind,
       userId,
-      surface
+      surface,
+      personaText
     );
     const stream = createTunnelStream(this.tunnel, sessionKey);
     const connection = new ClientSideConnection(() => this.createClientHandler(), stream);

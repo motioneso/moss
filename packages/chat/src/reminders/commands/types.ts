@@ -27,8 +27,18 @@ export type ReminderTurnPlan =
   | { readonly kind: "edit"; readonly proposal: ReminderEditProposal }
   | { readonly kind: "edit_selection"; readonly selection: string }
   | { readonly kind: "edit_refused"; readonly reply: string }
-  | { readonly kind: "request"; readonly delaySeconds: number; readonly text: string }
-  | { readonly kind: "clock_request"; readonly clock: LocalClockSpec; readonly text: string }
+  | {
+      readonly kind: "request";
+      readonly delaySeconds: number;
+      readonly text: string;
+      readonly destination?: string;
+    }
+  | {
+      readonly kind: "clock_request";
+      readonly clock: LocalClockSpec;
+      readonly text: string;
+      readonly destination?: string;
+    }
   | { readonly kind: "unsupported"; readonly reason: ReminderUnsupportedReason }
   | { readonly kind: "list" }
   | { readonly kind: "cancel"; readonly target: string | null }
@@ -56,7 +66,12 @@ export interface ReminderCommandContext {
   };
   readonly actorUserId: string;
   readonly userText?: string;
-  readonly thread: { readonly id: string; readonly is_main: boolean; readonly incognito: boolean };
+  readonly thread: {
+    readonly id: string;
+    readonly is_main: boolean;
+    readonly incognito: boolean;
+    readonly surface?: string;
+  };
 }
 
 export type ReminderCommandHandler = (

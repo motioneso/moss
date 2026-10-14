@@ -41,10 +41,17 @@ async function setup(page: Page, options: { reason?: string; draftModule?: boole
               navigation: [],
               settings: [],
               external: true,
+              web: { entrypoint: "dist/web/index.js", contractVersion: 2 },
               draft: true
             }
           ]
         }
+      })
+    );
+    await page.route("**/api/modules/draftmod/web/dist/web/index.js*", (route) =>
+      route.fulfill({
+        contentType: "text/javascript; charset=utf-8",
+        body: "export default { contractVersion: 2, Root: () => null };"
       })
     );
   }
@@ -107,6 +114,8 @@ test("with the message box disabled, focus still lands in the panel and Escape w
 test("on a phone beside a running draft, the chat is still a modal dialog", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await setup(page, { draftModule: true });
+  await expect(page.locator(".draft-workshop-page")).toBeVisible();
+  await expect(page).toHaveURL(/\/m\/draftmod$/);
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const dialog = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(dialog).toHaveClass(/chatd--docked/);

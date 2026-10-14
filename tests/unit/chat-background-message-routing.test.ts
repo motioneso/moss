@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  routeMainBackgroundMessage,
+  routeBackgroundMessage,
   type BackgroundRecord,
   type ShownDrawerThread
 } from "../../packages/chat/src/live/background-message-routing.js";
@@ -29,15 +29,16 @@ const switching = (): OriginThreadTransition => ({
 async function route(
   over: {
     shown?: ShownDrawerThread;
+    destinationThreadId?: string;
     transitions?: Map<string, OriginThreadTransition>;
     onShownRead?: () => void;
   } = {}
 ) {
   const emitted: { surface: string; record: TranscriptRecord }[] = [];
   const asked: string[] = [];
-  await routeMainBackgroundMessage({
+  await routeBackgroundMessage({
     actorUserId: "user-1",
-    mainThreadId: "main-1",
+    threadId: over.destinationThreadId ?? "main-1",
     record: reminder,
     shown: async (actorUserId) => {
       asked.push(actorUserId);
@@ -50,12 +51,24 @@ async function route(
   return { emitted, asked };
 }
 
-describe("routeMainBackgroundMessage", () => {
+describe("routeBackgroundMessage", () => {
   it("shows the reminder on the owner's drawer while it shows Main", async () => {
     expect(await route()).toEqual({
       emitted: [{ surface: "drawer", record: reminder }],
       asked: ["user-1"]
     });
+  });
+
+  it("shows an explicit side result only in that selected side thread", async () => {
+    expect(
+      (
+        await route({
+          destinationThreadId: "side-1",
+          shown: { incognito: false, threadId: "side-1" }
+        })
+      ).emitted
+    ).toHaveLength(1);
+    expect((await route({ destinationThreadId: "side-1" })).emitted).toEqual([]);
   });
 
   it("does not show it while the drawer shows a side chat", async () => {

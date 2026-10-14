@@ -20,7 +20,11 @@ export const appGetMapSliceInputSchema = {
     screenId: { type: "string", maxLength: 120 },
     settingId: { type: "string", maxLength: 120 },
     errorCode: { type: "string", maxLength: 160 },
-    query: { type: "string", maxLength: 240 },
+    query: {
+      type: "string",
+      maxLength: 240,
+      description: "Exact reference or text. If no phrase matches, results rank by shared words."
+    },
     limit: { type: "integer", minimum: 1, maximum: 8 }
   }
 } as const;

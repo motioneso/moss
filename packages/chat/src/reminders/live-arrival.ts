@@ -1,8 +1,5 @@
-// #3195: a delivered reminder appears in the owner's open Main chat at once. The delivery
-// worker runs in another process, so it sends ids on a Postgres channel inside the delivery
-// transaction, and Postgres delivers a notification only when that transaction commits. The
-// API listens, re-reads the message under the owner's own access rules, and hands it to the
-// session manager, which shows it only on the owner's drawer while it is on Main.
+// Committed reminder arrivals carry IDs only. The API re-reads the destination and message
+// under owner access; the server and browser both filter by the shown thread.
 
 import type { FastifyInstance } from "fastify";
 import { sql } from "kysely";
@@ -15,7 +12,7 @@ import {
   type OwnedPgClient
 } from "@moss/db";
 
-import type { MainBackgroundMessage } from "../live/background-message-routing.js";
+import type { BackgroundMessage } from "../live/background-message-routing.js";
 import type { ChatSessionManager } from "../live/chat-session-manager.js";
 import { ChatRepository } from "../repository.js";
 import { asRecord, readOrigin, readScheduledReadSource } from "../route-serializers.js";
@@ -70,16 +67,22 @@ export async function readReminderArrival(
   dataContext: DataContextRunner,
   arrival: ReminderArrival,
   chat: ChatRepository = new ChatRepository()
-): Promise<MainBackgroundMessage | undefined> {
+): Promise<BackgroundMessage | undefined> {
   const { actorUserId } = arrival;
   return dataContext.withDataContext({ actorUserId }, async (scopedDb) => {
-    const main = await chat.getMainThread(scopedDb, actorUserId);
-    if (!main || main.incognito || main.id !== arrival.threadId) return undefined;
+    const target = await chat.getOwnedThreadById(scopedDb, actorUserId, arrival.threadId);
+    if (
+      !target ||
+      target.incognito ||
+      target.surface !== "drawer" ||
+      target.id !== arrival.threadId
+    )
+      return undefined;
     const message = await chat.getMessageById(scopedDb, arrival.messageId);
     if (
       !message ||
       message.owner_user_id !== actorUserId ||
-      message.thread_id !== main.id ||
+      message.thread_id !== target.id ||
       message.role !== "assistant" ||
       message.status !== "stored"
     )
@@ -88,13 +91,14 @@ export async function readReminderArrival(
     if (origin?.kind !== "reminder" || origin.event !== "delivered") return undefined;
     return {
       actorUserId,
-      mainThreadId: main.id,
+      threadId: target.id,
       record: {
         kind: "reply",
         text: message.body,
         messageId: message.id,
         background: true,
-        scheduledReadSource: readScheduledReadSource(asRecord(message.model_metadata))
+        scheduledReadSource: readScheduledReadSource(asRecord(message.model_metadata)),
+        backgroundThreadId: target.id
       }
     };
   });
@@ -112,8 +116,8 @@ export interface ReminderArrivalListener {
  */
 export function startReminderArrivalListener(deps: {
   readonly connectionString: string;
-  readonly read: (arrival: ReminderArrival) => Promise<MainBackgroundMessage | undefined>;
-  readonly deliver: (message: MainBackgroundMessage) => Promise<void>;
+  readonly read: (arrival: ReminderArrival) => Promise<BackgroundMessage | undefined>;
+  readonly deliver: (message: BackgroundMessage) => Promise<void>;
   readonly warn: (error: unknown, message: string) => void;
   readonly retryMs?: number;
   readonly createClient?: (connectionString: string) => OwnedPgClient;
@@ -199,7 +203,7 @@ export function registerReminderArrivalLifecycle(
   deps: {
     readonly connectionString?: string;
     readonly dataContext: DataContextRunner;
-    readonly manager: Pick<ChatSessionManager, "deliverMainBackgroundMessage">;
+    readonly manager: Pick<ChatSessionManager, "deliverBackgroundMessage">;
   }
 ): void {
   const { connectionString } = deps;
@@ -209,7 +213,7 @@ export function registerReminderArrivalLifecycle(
     listener = startReminderArrivalListener({
       connectionString,
       read: (arrival) => readReminderArrival(deps.dataContext, arrival),
-      deliver: (message) => deps.manager.deliverMainBackgroundMessage(message),
+      deliver: (message) => deps.manager.deliverBackgroundMessage(message),
       warn: (err, message) => server.log.warn({ err }, message)
     });
     await listener.ready;

@@ -90,12 +90,9 @@ describe("scheduled source request boundary", () => {
       )
     ).toMatchObject({ kind: "scheduled_read", taskId: null });
   });
-  it("refuses recurring and mutating requests without a model call", async () => {
+  it("refuses mutating requests without a model call", async () => {
     const interpret = vi.fn();
-    for (const request of [
-      "Check my task status every day at 5 pm",
-      "Check my task in 30 seconds and delete it"
-    ])
+    for (const request of ["Check my task in 30 seconds and delete it"])
       expect(await resolveScheduledReadRequest(request, candidates, interpret)).toMatchObject({
         taskId: null
       });

@@ -642,13 +642,17 @@ async function invoke(
       if (params.profile !== "chat" && params.profile !== "workshop") {
         throw new BadRequestError("acpSpawn.profile must be chat or workshop");
       }
+      if (params.personaText !== undefined && typeof params.personaText !== "string") {
+        throw new BadRequestError("acpSpawn.personaText must be a string");
+      }
       const spawned = await host.acpSpawn(
         key,
         params.projectId,
         params.providerKind as AcpProviderKind,
         params.userId,
         params.profile,
-        params.useCandidate === true
+        params.useCandidate === true,
+        params.personaText
       );
       if (!recordAcpSpawn(key, spawned.generation)) {
         await host.acpKill(key, { generation: spawned.generation });

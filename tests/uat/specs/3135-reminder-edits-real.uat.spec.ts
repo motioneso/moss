@@ -53,12 +53,6 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
   await page.getByRole("button", { name: "Scheduled tasks", exact: true }).click();
   let drawer = await openChat(page);
   await send(page, drawer, "Reply briefly: ready for reminder edit proof.");
-  console.log(
-    "[3135] " +
-      (await drawer
-        .getByRole("button", { name: /^Chat model:/ })
-        .evaluate((button) => button.getAttribute("aria-label") ?? button.textContent))
-  );
   await send(page, drawer, "remind me in 120 seconds to edit proof original");
   const original = (await tasks(page)).find((row) => row.instruction === "edit proof original")!;
   expect(original.state).toBe("active");
@@ -107,20 +101,44 @@ test("chat edits replace queued terms, appear in Settings and fire once at the r
     (await tasks(page)).filter((row) => row.instruction.startsWith("choice proof"))
   ).toHaveLength(2);
   await expect(drawer.getByText(/Which reminder should I change/).last()).toBeVisible();
-  await send(page, drawer, "2");
-  const selected = (await tasks(page)).find((row) => row.id === before[1]!.id)!;
+  const intended = before.find((row) => row.instruction === "choice proof two")!;
+  expect(intended).toBeDefined();
+  const displayedChoices = await drawer
+    .getByRole("list")
+    .last()
+    .getByRole("listitem")
+    .allTextContents();
+  const intendedChoice = displayedChoices.findIndex((text) => text.startsWith("choice proof two"));
+  expect(intendedChoice).toBeGreaterThanOrEqual(0);
+  expect(displayedChoices.filter((text) => text.startsWith("choice proof two"))).toHaveLength(1);
+  await send(page, drawer, String(intendedChoice + 1));
+  const afterSelection = await tasks(page);
+  const selected = afterSelection.find((row) => row.id === intended.id)!;
   expect(selected.instruction).toBe("chosen proof revised daily vitamins");
+  for (const unselected of before.filter((row) => row.id !== intended.id)) {
+    expect(afterSelection.find((row) => row.id === unselected.id)).toMatchObject({
+      instruction: unselected.instruction,
+      dueAt: unselected.dueAt,
+      state: unselected.state
+    });
+  }
+  expect(afterSelection.find((row) => row.id === original.id)).toMatchObject({
+    instruction: revised.instruction,
+    dueAt: revised.dueAt
+  });
   await send(
     page,
     drawer,
-    "change my chosen proof revised daily vitamins reminder destination to a private chat"
+    "change my chosen proof revised daily vitamins reminder recipients to someone else"
   );
   expect((await tasks(page)).find((row) => row.id === selected.id)?.dueAt).toBe(selected.dueAt);
   await expect(
-    drawer.getByText(/I can edit a reminder's text, timing, repetition or stop time only/).last()
+    drawer
+      .getByText(/I can edit a reminder's text, timing, repetition, stop time or destination/)
+      .last()
   ).toBeVisible();
   console.log(
-    "[3135] ambiguous edits waited for a typed numbered choice; destination changes were refused unchanged"
+    "[3135] ambiguous edits waited for a typed numbered choice; recipient changes were refused unchanged"
   );
   await close(drawer);
   // Wait once across the old due time, then observe the real queue's state.

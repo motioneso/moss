@@ -509,9 +509,9 @@ describe("ChatSessionManager", () => {
       messageId: "reminder-1",
       background: true
     } as const;
-    await manager.deliverMainBackgroundMessage({
+    await manager.deliverBackgroundMessage({
       actorUserId: "user-1",
-      mainThreadId: "thread-0",
+      threadId: "thread-0",
       record: reminder
     });
     expect(drawer.at(-1)).toEqual(reminder);
