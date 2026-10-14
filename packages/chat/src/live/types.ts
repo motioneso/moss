@@ -30,6 +30,7 @@ export interface TranscriptRecord {
   readonly turnId?: string;
   /** #3195: a message committed outside any turn, such as a delivered reminder. */
   readonly background?: true;
+  readonly backgroundThreadId?: string;
   readonly actionRequestId?: string;
   readonly toolName?: string;
   /**

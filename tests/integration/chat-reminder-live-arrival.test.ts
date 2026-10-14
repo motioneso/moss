@@ -8,7 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
 
-import type { MainBackgroundMessage } from "../../packages/chat/src/live/background-message-routing.js";
+import type { BackgroundMessage } from "../../packages/chat/src/live/background-message-routing.js";
 import { deliverDueReminder } from "../../packages/chat/src/reminders/deliver.js";
 import {
   readReminderArrival,
@@ -229,12 +229,13 @@ describe("the API's owner re-read", () => {
     const message = await readReminderArrival(app, arrivalOf(saved));
     expect(message).toEqual({
       actorUserId: ids.userA,
-      mainThreadId: saved.threadId,
+      threadId: saved.threadId,
       record: {
         kind: "reply",
         text: expect.stringContaining("call mum"),
         messageId: saved.reservedMessageId,
-        background: true
+        background: true,
+        backgroundThreadId: saved.threadId
       }
     });
   });
@@ -274,7 +275,7 @@ describe("the API's owner re-read", () => {
 
 describe("the API listener", () => {
   it("hands a committed delivery to the session manager once", async () => {
-    const delivered: MainBackgroundMessage[] = [];
+    const delivered: BackgroundMessage[] = [];
     const running = startReminderArrivalListener({
       connectionString: connectionStrings.app,
       read: (arrival) => readReminderArrival(app, arrival),

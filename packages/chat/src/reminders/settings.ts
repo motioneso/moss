@@ -11,6 +11,7 @@ import type {
 } from "@moss/shared";
 
 interface ScheduledReminderRow {
+  readonly destination_title?: string | null;
   readonly repeat_kind?: "daily" | "weekly" | "interval" | null;
   readonly repeat_seconds?: number | null;
   readonly local_due?: string | null;
@@ -79,6 +80,9 @@ export function scheduledReminder(
     repeat_seconds: row.repeat_seconds ?? null
   });
   return {
+    ...(row.destination_title
+      ? { destination: { threadId: row.thread_id, title: row.destination_title } }
+      : {}),
     id: row.id,
     title: row.reminder_text,
     instruction: row.reminder_text,
@@ -140,6 +144,7 @@ export async function listScheduledReminders(
       "reminder.reminder_text",
       "reminder.state",
       "reminder.thread_id",
+      "reminder.destination_title",
       "reminder.due_at",
       "reminder.deadline_at",
       "reminder.created_at",

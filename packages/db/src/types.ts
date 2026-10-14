@@ -1052,6 +1052,7 @@ export interface ChatRemindersTable {
     "daily" | "weekly" | "interval" | null | undefined
   >;
   repeat_seconds: ColumnType<number | null, number | null | undefined>;
+  destination_title: ColumnType<string | null, string | null | undefined, string | null>;
   id: string;
   owner_user_id: string;
   thread_id: string;

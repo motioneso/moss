@@ -142,7 +142,6 @@ BEGIN
     END IF;
     IF NEW.id IS DISTINCT FROM OLD.id
       OR NEW.owner_user_id IS DISTINCT FROM OLD.owner_user_id
-      OR NEW.thread_id IS DISTINCT FROM OLD.thread_id
       OR NEW.source_message_id IS DISTINCT FROM OLD.source_message_id
       OR NEW.reserved_message_id IS DISTINCT FROM OLD.reserved_message_id
       OR NEW.created_at IS DISTINCT FROM OLD.created_at
@@ -151,6 +150,10 @@ BEGIN
       OR NEW.late IS DISTINCT FROM OLD.late
       OR NEW.expired_at IS DISTINCT FROM OLD.expired_at THEN
       RAISE EXCEPTION 'chat reminder edit cannot change identity or lifecycle';
+    END IF;
+    IF NEW.thread_id IS DISTINCT FROM OLD.thread_id
+      OR NEW.destination_title IS DISTINCT FROM OLD.destination_title THEN
+      PERFORM app.check_chat_reminder_destination(NEW.owner_user_id, NEW.thread_id, NEW.destination_title);
     END IF;
     IF NEW.due_at IS DISTINCT FROM OLD.due_at THEN
       IF NEW.due_at <= now() OR NEW.due_at > now() + interval '30 days' THEN
@@ -172,6 +175,7 @@ BEGIN
   IF NEW.id IS DISTINCT FROM OLD.id
     OR NEW.owner_user_id IS DISTINCT FROM OLD.owner_user_id
     OR NEW.thread_id IS DISTINCT FROM OLD.thread_id
+    OR NEW.destination_title IS DISTINCT FROM OLD.destination_title
     OR NEW.source_message_id IS DISTINCT FROM OLD.source_message_id
     OR NEW.reserved_message_id IS DISTINCT FROM OLD.reserved_message_id
     OR NEW.repeat_kind IS DISTINCT FROM OLD.repeat_kind

@@ -23,6 +23,7 @@ export interface ScheduledTaskRunDto {
 }
 
 export interface ScheduledTaskDto {
+  readonly destination?: { readonly threadId: string; readonly title: string };
   readonly id: string;
   readonly title: string;
   readonly instruction: string;
@@ -106,6 +107,12 @@ export const listScheduledTasksResponseSchema = {
           "runs"
         ],
         properties: {
+          destination: {
+            type: "object",
+            additionalProperties: false,
+            required: ["threadId", "title"],
+            properties: { threadId: { type: "string" }, title: { type: "string" } }
+          },
           id: { type: "string" },
           title: { type: "string" },
           instruction: { type: "string" },

@@ -1,4 +1,5 @@
 import { saveScheduledOperation } from "../../scheduled-reads/repository.js";
+import { resolveReminderDestination } from "../destination.js";
 import { randomUUID } from "node:crypto";
 import { enqueueReminderDelivery } from "../deliver.js";
 import type { ReminderTimingInput } from "../repository.js";
@@ -10,7 +11,8 @@ export async function save(
   prepare: () => Promise<
     | { reply: string; when: ReminderTimingInput; text: string; sourceItemId?: string }
     | ReminderTurnDecision
-  >
+  >,
+  destinationRequest?: string
 ): Promise<ReminderTurnDecision> {
   const { scopedDb, deps, actorUserId, thread } = context;
   const boss = deps.boss;
@@ -21,16 +23,28 @@ export async function save(
       reply: REMINDER_CAPACITY_REPLY,
       origin: { version: 1, kind: "reminder", event: "refused", reminderId: null }
     };
+  const destination = await resolveReminderDestination(
+    scopedDb,
+    actorUserId,
+    destinationRequest,
+    thread.id
+  );
+  if ("reply" in destination)
+    return {
+      reply: destination.reply,
+      origin: { version: 1, kind: "reminder", event: "refused", reminderId: null }
+    };
   const prepared = await prepare();
   if (!("when" in prepared)) return prepared;
   const reminderId = randomUUID();
   return {
-    reply: prepared.reply,
+    reply: prepared.reply + (destination.title ? ` I'll send it to ${destination.title}.` : ""),
     origin: { version: 1, kind: "reminder", event: "saved", reminderId },
     save: async (userMessageId) => {
       const saved = await deps.reminders.create(scopedDb, {
         id: reminderId,
-        threadId: thread.id,
+        threadId: destination.threadId,
+        destinationTitle: destination.title,
         sourceMessageId: userMessageId,
         when: prepared.when,
         text: prepared.text

@@ -60,7 +60,8 @@ const reminder: TranscriptRecord = {
   kind: "reply",
   text: "Reminder: stretch",
   messageId: "reminder-1",
-  background: true
+  background: true,
+  backgroundThreadId: "main-thread"
 };
 
 function message(overrides: Partial<ChatMessageDto> & { id: string }): ChatMessageDto {
@@ -265,28 +266,43 @@ describe("Main stream reconnect", () => {
     expect(text).toContain("Earlier");
   });
 
-  it("never shows a reminder on a drawer that hydrated a side chat", async () => {
-    vi.stubGlobal("EventSource", FakeEventSource);
-    const side = { ...mainThread, id: "side-thread", isMain: false };
-    vi.mocked(listChatThreads).mockResolvedValue({ threads: [side] });
-    vi.mocked(listChatThreadMessages).mockResolvedValue({
-      messages: [message({ id: "s-0", threadId: "side-thread", body: "Side talk" })]
-    });
-    let renderer: ReactTestRenderer;
-    await act(async () => {
-      renderer = create(createElement(Probe, { surface: "drawer" as ChatSurface }));
-    });
-    await vi.waitFor(() => expect(JSON.stringify(renderer!.toJSON())).toContain("Side talk"));
-    const source = FakeEventSource.instances[0]!;
-    await act(async () => {
-      source.onopen?.();
-      source.onmessage?.({ data: JSON.stringify(reminder) });
-      source.onmessage?.({ data: JSON.stringify(liveReply) });
-    });
-    const text = JSON.stringify(renderer!.toJSON());
-    expect(text).toContain("Working on it");
-    expect(text).not.toContain("Reminder: stretch");
-  });
+  it.each(["main-thread", "side-thread"])(
+    "dedupes live and catch-up results only in their destination %s",
+    async (threadId) => {
+      vi.stubGlobal("EventSource", FakeEventSource);
+      const selected = { ...mainThread, id: threadId, isMain: threadId === "main-thread" };
+      vi.mocked(listChatThreads).mockResolvedValue({ threads: [selected] });
+      vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+      let renderer: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(createElement(Probe, { surface: "drawer" as ChatSurface }));
+      });
+      await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalledTimes(1));
+      const own = message({ ...reminderMessage, id: "own-result", threadId, body: "Own result" });
+      const other = message({
+        ...reminderMessage,
+        id: "other-result",
+        threadId: threadId === "main-thread" ? "side-thread" : "main-thread",
+        body: "Other result"
+      });
+      // Even an unexpected cross-thread row from history must not reach this transcript.
+      vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [own, other] });
+      const source = FakeEventSource.instances[0]!;
+      await act(async () => {
+        source.onopen?.();
+        source.onmessage?.({ data: JSON.stringify(recordsFromMessages([own])[0]) });
+        source.onmessage?.({ data: JSON.stringify(recordsFromMessages([other])[0]) });
+        source.onmessage?.({ data: JSON.stringify(liveReply) });
+      });
+      await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalledTimes(2));
+      const text = JSON.stringify(renderer!.toJSON());
+      expect(text.split("Own result")).toHaveLength(2);
+      expect(text).not.toContain("Other result");
+      expect(text).toContain("Working on it");
+      expect(listChatThreadMessages).toHaveBeenLastCalledWith(threadId, "drawer");
+      await act(async () => renderer!.unmount());
+    }
+  );
 
   it("drops reminders after a switch away from Main and shows them again on return", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);

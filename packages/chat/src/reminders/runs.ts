@@ -39,7 +39,15 @@ export async function readReminderRuns(
       join
         .onRef("message.id", "=", "run.message_id")
         .onRef("message.owner_user_id", "=", "run.owner_user_id")
-        .onRef("message.thread_id", "=", "reminder.thread_id")
+        .on("message.role", "=", "assistant")
+        .on("message.status", "=", "stored")
+    )
+    .leftJoin("app.chat_threads as thread", (join) =>
+      join
+        .onRef("thread.id", "=", "message.thread_id")
+        .on("thread.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .on("thread.surface", "=", "drawer")
+        .on("thread.incognito", "=", false)
     )
     .select([
       "source_read.operation",
@@ -48,9 +56,11 @@ export async function readReminderRuns(
       "run.late",
       "message.id",
       "message.body",
-      "reminder.thread_id"
+      "thread.id as destination_thread_id"
     ])
     .where("run.reminder_id", "=", reminderId)
+    .where("run.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+    .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
     .orderBy("run.at", "desc")
     .orderBy("run.id", "desc")
     .limit(20)
@@ -73,10 +83,10 @@ export async function readReminderRuns(
                   ? "Reminder delivered late"
                   : "Reminder delivered",
     message:
-      row.id && row.body !== null
+      row.id && row.body !== null && row.destination_thread_id
         ? {
             id: row.id,
-            threadId: row.thread_id,
+            threadId: row.destination_thread_id,
             body: row.body,
             ...(row.operation && row.outcome === "delivered"
               ? { scheduledReadSource: "tasks" as const }

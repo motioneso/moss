@@ -99,7 +99,7 @@ export interface NewsPersonalizationStore {
   removeExclusion(scopedDb: DataContextDb, id: string): Promise<boolean>;
   readLatestSnapshot(scopedDb: DataContextDb): Promise<NewsSnapshotRecord | null>;
   readRefreshState(scopedDb: DataContextDb): Promise<NewsRefreshStateDto>;
-  bumpRefreshRequest(scopedDb: DataContextDb): Promise<number>;
+  bumpRefreshRequest(scopedDb: DataContextDb, mode?: "invalidate" | "ensure"): Promise<number>;
   pruneSnapshotDomain(scopedDb: DataContextDb, domain: string): Promise<void>;
   updateSourceHealth(
     scopedDb: DataContextDb,
@@ -224,9 +224,10 @@ export async function triggerNewsRefresh(
   boss: PgBoss | null,
   actorUserId: string,
   afterBump?: () => Promise<void>,
-  logger?: Pick<FastifyBaseLogger, "error">
+  logger?: Pick<FastifyBaseLogger, "error">,
+  mode: "invalidate" | "ensure" = "invalidate"
 ): Promise<boolean> {
-  await repository.bumpRefreshRequest(scopedDb);
+  await repository.bumpRefreshRequest(scopedDb, mode);
   await afterBump?.();
   if (!boss) return false;
   // Every personalization write funnels through here, so the per-owner daily
@@ -365,7 +366,8 @@ export function registerNewsPersonalizationRoutes(
               dependencies.boss,
               accessContext.actorUserId,
               undefined,
-              request.log
+              request.log,
+              "ensure"
             );
             refresh = await repository.readRefreshState(db);
           } else if (dependencies.boss) {

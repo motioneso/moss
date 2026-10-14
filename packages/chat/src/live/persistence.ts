@@ -5,7 +5,6 @@ import { pendingReminderDeletion } from "../reminders/delete-agreement.js";
 /**
  * DataContextChatPersistence — the REAL ChatPersistencePort backing the live
  * ChatSessionManager.
- *
  * Every method builds an AccessContext { actorUserId, requestId } and runs its
  * queries through the DataContextRunner so RLS scopes all reads/writes to the
  * acting owner. Provider routing reuses the AI capability router; turn recording
@@ -23,7 +22,11 @@ import {
   type MossDatabase,
   type PreferencesPort
 } from "@moss/db";
-import { CHAT_SETTINGS_PREFERENCE_KEY, normalizeChatSettings } from "@moss/shared";
+import {
+  CHAT_SETTINGS_PREFERENCE_KEY,
+  DEFAULT_CHAT_SURFACE,
+  normalizeChatSettings
+} from "@moss/shared";
 import type {
   AnswerProvenanceMetadataV1,
   AiAuthMethod,
@@ -40,9 +43,7 @@ import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/s
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { PgBoss } from "pg-boss";
-
 import { sendJob } from "@moss/jobs";
-
 import {
   CHAT_ARCHIVE_DAY_QUEUE,
   CHAT_EMBED_TURN_QUEUE,
@@ -223,7 +224,12 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   ): Promise<ReminderTurnPlan | undefined> {
     const run = await this.run(actorUserId, "prepare-reminder-edit", async (db) => {
       const thread = await this.chat.getThreadById(db, threadId);
-      if (!thread || thread.owner_user_id !== actorUserId || !thread.is_main || thread.incognito)
+      if (
+        !thread ||
+        thread.owner_user_id !== actorUserId ||
+        thread.surface !== DEFAULT_CHAT_SURFACE ||
+        thread.incognito
+      )
         return async () =>
           recognizeReminderEdit(text) ? { kind: "main_only" as const, manage: true } : undefined;
       const raw = await this.localePreferences?.get(db, "locale");

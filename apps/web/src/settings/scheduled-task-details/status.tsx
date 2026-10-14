@@ -22,7 +22,9 @@ export function TaskStatus({ task }: TaskDetailProps) {
       {task.checkFailure && <Note variant="practical">{task.checkFailure}</Note>}
       {task.state === "failed" && (
         <Note variant="practical">
-          This reminder could not be sent. Ask Moss in Main chat to set it again.
+          {task.destination
+            ? `This task could not be sent to ${task.destination.title}. Ask Moss to set it again with an available chat or Main.`
+            : "This reminder could not be sent. Ask Moss in Main chat to set it again."}
         </Note>
       )}
     </>

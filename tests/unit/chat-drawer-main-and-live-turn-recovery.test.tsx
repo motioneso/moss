@@ -254,6 +254,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
   vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
   vi.mocked(listChatThreads).mockResolvedValue({ threads: [chatThread("a", "Main", true)] });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const clearRecords = vi.fn();
   const view = (records: readonly TranscriptRecord[]) =>
     createElement(
       QueryClientProvider,
@@ -265,7 +266,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
           open: true,
           onClose: () => undefined,
           records,
-          clearRecords: () => undefined,
+          clearRecords,
           streamErrorCount: 0,
           isFounder: false,
           ownerId: "owner",
@@ -297,6 +298,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
+    expect(clearRecords).toHaveBeenCalledWith("side-1");
     const shown = JSON.stringify(renderer.toJSON());
     expect(shown).toContain("Turn the porch light on");
     expect(findByAriaLabel(renderer, "Action request")).not.toBeNull();
@@ -309,7 +311,7 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
   }
 });
 
-it("keeps the previous conversation's live turn out of a reopened side chat", async () => {
+it("shows only the reopened side chat's background arrivals and excludes the previous live turn", async () => {
   vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false, threadId: "a" });
   vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
   vi.mocked(listChatThreads).mockResolvedValue({
@@ -351,12 +353,65 @@ it("keeps the previous conversation's live turn out of a reopened side chat", as
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await act(async () => {
-      renderer.update(view(mainTurn));
+      renderer.update(
+        view([
+          ...mainTurn,
+          {
+            kind: "reply",
+            text: "Side reminder arrived",
+            messageId: "side-result",
+            background: true,
+            backgroundThreadId: "b"
+          },
+          {
+            kind: "reply",
+            text: "Main reminder arrived",
+            messageId: "main-result",
+            background: true,
+            backgroundThreadId: "a"
+          }
+        ])
+      );
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(vi.mocked(resumeChat)).toHaveBeenCalled();
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Question asked in Main");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Main reminder arrived");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Side reminder arrived");
+
+    const turn = deferred<Awaited<ReturnType<typeof sendChatTurn>>>();
+    vi.mocked(sendChatTurn).mockImplementationOnce(() => turn.promise);
+    await act(async () => {
+      renderer.root.findByType("textarea").props.onChange({ target: { value: "Packing advice" } });
+    });
+    await act(async () => findByAriaLabel(renderer, "Send")!.props.onClick());
+    await act(async () => {
+      renderer.update(view([{ kind: "reply", text: "Packing a travel bag" }]));
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Packing a travel bag");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Side reminder arrived");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Question asked in Main");
+    await act(async () => {
+      turn.reject(new Error("Provider failed"));
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Side reminder arrived");
+    const retry = deferred<Awaited<ReturnType<typeof sendChatTurn>>>();
+    vi.mocked(sendChatTurn).mockImplementationOnce(() => retry.promise);
+    await act(async () => {
+      renderer.root
+        .findByType("textarea")
+        .props.onChange({ target: { value: "Try packing again" } });
+    });
+    await act(async () => findByAriaLabel(renderer, "Send")!.props.onClick());
+    expect(sendChatTurn).toHaveBeenLastCalledWith(
+      "Try packing again",
+      undefined,
+      undefined,
+      DEFAULT_CHAT_SURFACE
+    );
+    expect(JSON.stringify(renderer.toJSON())).toContain("Side reminder arrived");
+    await act(async () => retry.reject(new Error("Provider failed again")));
   } finally {
     await act(async () => renderer?.unmount());
     client.clear();

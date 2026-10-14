@@ -5,6 +5,7 @@ import { Badge } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import { Card, Eyebrow } from "@moss/ui";
 import type {
+  MossError,
   NewsCustomTopicDto,
   NewsPersonalizationAvailabilityDto,
   NewsWebSearchUnavailableReason
@@ -44,9 +45,16 @@ export function PrereqGate(props: {
   /** Where the fix lives; defaults to AI providers (#2228 lets the News gate vary it). */
   readonly href?: string;
   readonly linkLabel?: string;
+  readonly error?: MossError;
 }) {
   return (
-    <span className="nw-set__gate">
+    <span
+      className="nw-set__gate"
+      data-jarvis-capture-text={props.error ? "" : undefined}
+      data-jarvis-error-code={props.error?.code}
+      data-jarvis-error-class={props.error?.class}
+      data-jarvis-error-remediation-ref={props.error?.remediationRef}
+    >
       {props.requirement}{" "}
       <a className="nw-set__gatelink" href={props.href ?? "/settings?section=aiproviders"}>
         {props.linkLabel ?? "Set it up in AI providers"}

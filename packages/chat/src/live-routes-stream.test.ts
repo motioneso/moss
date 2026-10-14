@@ -111,15 +111,16 @@ describe("GET /api/chat/stream session pre-start", () => {
       const running = handler.call(app, request, reply);
       try {
         await started;
-        await manager.deliverMainBackgroundMessage({
+        await manager.deliverBackgroundMessage({
           actorUserId: ACTOR,
-          mainThreadId: "main",
+          threadId: "main",
           record: {
             kind: "reply",
             text,
             ...(source ? { scheduledReadSource: source } : {}),
             messageId: "result",
-            background: true
+            background: true,
+            backgroundThreadId: "main"
           }
         });
         expect(raw.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
