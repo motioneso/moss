@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-14
+
+#### Added
+
+- **Scheduled reminders and task checks.** Create and manage reminders, ask Moss to report meaningful task changes, and inspect saved approvals that remain inactive. [PR #3154](https://github.com/motioneso/moss/pull/3154)
+
 ### 2026-10-12
 
 #### Added
