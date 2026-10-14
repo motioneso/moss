@@ -6,6 +6,7 @@ const fixture = vi.hoisted(() => ({
     id: "check",
     ownerUserId: "owner",
     threadId: "main",
+    destinationTitle: null,
     reservedMessageId: "message",
     text: "Check task status",
     state: "queued",
@@ -32,10 +33,11 @@ vi.mock("../../packages/chat/src/reminders/repository.js", () => ({
 }));
 vi.mock("../../packages/chat/src/repository.js", () => ({
   ChatRepository: class {
-    async getMainThread() {
-      return { id: "main" };
-    }
+    async lockThreadSelection() {}
   }
+}));
+vi.mock("../../packages/chat/src/reminders/destination.js", () => ({
+  lockReminderDestination: async () => ({ id: "main" })
 }));
 vi.mock("../../packages/chat/src/scheduled-reads/repository.js", () => ({
   readScheduledOperation: async () => ({
