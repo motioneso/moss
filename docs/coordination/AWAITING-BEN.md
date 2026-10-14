@@ -75,4 +75,25 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-Nothing open.
+### #3154: #2984 installed acceptance conflicts with approved ACP policy
+
+Blocked on Ben's ruling. The original installed safe-tools case expects a classifier-rated
+light write to run without an approval card, with YOLO off. The exact release image instead
+shows the same tool and arguments with the outside-content disclosure and approval buttons.
+The current engine admits outside context at launch, and the approved policy requires this
+classifier-rated write to ask. The original failure is retained.
+
+Recommendation: authorize replacing only this obsolete no-card ACP expectation with a separately
+reviewed installed proof of current policy: the light request discloses exact tool and arguments,
+does not run before approval, and runs exactly once after approval of that same action; the
+Sensitive destructive reset asks on desktop and phone and never executes. This changes release
+acceptance, not product policy, and does not establish clean automatic execution. The alternative
+is to keep the original acceptance blocker until a capable runtime can establish clean no-card
+execution. The two approved News exceptions do not cover this case.
+
+Basis: `~/Jarv1s/docs/superpowers/specs/2026-10-05-moss-acts-through-app-design.md`, the trust ruling
+and pending no-ask browser replacement; release boundary
+`~/Jarv1s/docs/superpowers/specs/2026-10-14-scheduled-reminders-release-boundary.md`.
+Exact candidate `37c3fa014d7ff2b65b12d0c767c585e6583fb34d`; original case63 failed, and independent
+Spec review confirms the conflict. This is an acceptance decision, not an absent-environment claim.
+Sent through needs-ben as `codex-scheduled-3500`. No new waiver inferred or merge performed.
