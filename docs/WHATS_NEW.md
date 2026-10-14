@@ -29,10 +29,17 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-12
+
+#### Added
+
+- **Judge screenshots with your decision model.** If your focus judge can read pictures, Trail Marker can show it the window directly instead of describing it first. [PR #3491](https://github.com/motioneso/moss/pull/3491)
+
 ### 2026-10-11
 
 #### Fixed
 
+- **Reliable task days and planning feedback.** Tasks preserve scheduled days, calendar navigation advances one month, and planning saves show clearer recovery. [PR #3409](https://github.com/motioneso/moss/pull/3409)
 - **Clearer meeting search and Mac startup feedback.** Meeting search explains which transcript lines it checks, and Mac startup settings show confirmed state with clear recovery. [PR #3406](https://github.com/motioneso/moss/pull/3406)
 - **Clearer setup and account recovery.** Setup and account access offer clearer recovery, and settings search keeps keyboard selection visible. [PR #3407](https://github.com/motioneso/moss/pull/3407)
 - **Recover Wellness history, doses and exports.** Older check-ins stay reachable, summaries include all selected entries, and interrupted dose logs and exports offer clearer recovery. [PR #3405](https://github.com/motioneso/moss/pull/3405)

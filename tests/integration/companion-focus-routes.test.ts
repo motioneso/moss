@@ -243,7 +243,12 @@ describe("nothing is processed until an admin binds a model", () => {
   it("answers 'not ready' with no block, and refuses to judge with zero model calls, even with a default json model present", async () => {
     const context = await post("/api/companion/focus/context", credentialA, {});
     expect(context.statusCode).toBe(200);
-    expect(context.json()).toEqual({ block: null, judgmentReady: false });
+    expect(context.json()).toEqual({
+      block: null,
+      judgmentReady: false,
+      judgeTakesImages: false,
+      judgeName: null
+    });
 
     const judged = await post("/api/companion/focus/judge", credentialA, {
       blockId: blockA,

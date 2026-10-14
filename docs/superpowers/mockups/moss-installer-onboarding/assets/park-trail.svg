@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="130" viewBox="0 0 220 130" fill="none">
+  <title>The trail is ready</title>
+  <desc>A simple directional trail marker beside a winding path and layered hills in forest green, warm bone, and gold.</desc>
+  <!-- Companion to park-welcome.svg, using the same flat Park Press inks. -->
+  <path d="M12 112 51 69l25 24 35-50 43 54 24-24 31 39H12Z" fill="#dbe2d3"/>
+  <path d="m89 74 22-31 22 28-17-8-11 8-5-4-11 7Z" fill="#f2eee4"/>
+  <path d="M13 113c36-15 57-15 87-9 35 7 53-15 109 9H13Z" fill="#294b39"/>
+  <path d="M84 113c27-12 65-11 56-22-4-5-18-5-22-10 13 2 29 6 30 12 3 10-26 12-39 20H84Z" fill="#f2eee4"/>
+  <circle cx="162" cy="36" r="10" fill="#c2872b"/>
+  <!-- A large arrow is legible at onboarding illustration size. -->
+  <path d="M54 39h8v73h-8V39Z" fill="#294b39"/>
+  <path d="M37 41h47l13 13-13 13H37V41Z" fill="#294b39"/>
+  <path d="M44 47h37l7 7-7 7H44V47Z" stroke="#f2eee4" stroke-width="1.5"/>
+  <path d="M53 54h20m-6-5 6 5-6 5" stroke="#f2eee4" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M58 79v24" stroke="#f2eee4" stroke-width="1.5"/>
+  <path d="m185 78 10 18h-6l9 16h-26l9-16h-6l10-18Z" fill="#294b39"/>
+  <g stroke="#294b39" stroke-width="1.5" stroke-linecap="round">
+    <path d="M12 113h197M24 119h29m92 0h44"/>
+    <path d="m23 100 10-9m69-8 6-8m26 8 5 6"/>
+  </g>
+  <g stroke="#f2eee4" stroke-width="1.5" stroke-linecap="round">
+    <path d="m29 109 13-3m114 4 13-2m17-15v12"/>
+  </g>
+</svg>

@@ -56,6 +56,8 @@ docs/superpowers/mockups/classifier-gate/
 docs/superpowers/mockups/integrations-redesign/
 # Theme editor mockups (#3000): static pages, stylesheet and fonts, frozen for review.
 docs/superpowers/mockups/theme-editor-park-press/
+# Moss extensions Customizations mockups: static pages, stylesheet and fonts, frozen for review.
+docs/superpowers/mockups/moss-extensions/
 
 # Preserve the historical Meetings critique without reformatting its original review.
 docs/superpowers/mockups/meetings-minimal/critique.md

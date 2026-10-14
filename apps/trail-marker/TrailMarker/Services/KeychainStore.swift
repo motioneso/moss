@@ -21,8 +21,8 @@ struct KeychainStore: CompanionCredentialStore {
     private let service: String
     private let recordingOrigin: String?
 
-    /// Tests pass their own service, so they never read or prompt for the person's real items.
-    init(service: String = "com.moss.trailmarker") {
+    /// Alternate app identities and tests keep their credentials in separate namespaces.
+    init(service: String = Bundle.main.bundleIdentifier ?? "com.moss.trailmarker") {
         self.service = service
         recordingOrigin = nil
     }

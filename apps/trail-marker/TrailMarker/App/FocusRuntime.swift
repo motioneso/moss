@@ -54,6 +54,10 @@ final class FocusRuntime: ObservableObject {
     /// Screen Recording already granted.
     @Published private(set) var rung3Enabled: Bool
     @Published private(set) var visionSource: VisionSource
+    @Published private(set) var judgeTakesImages = false
+    @Published private(set) var judgeName: String?
+    private var visionTestTask: Task<Void, Never>?
+    private var visionTestGeneration = 0
     @Published private(set) var visionBaseURL: String
     @Published private(set) var visionModel: String
     /// The last "Test vision" result, shown in the Focus pane. Cleared on the next attempt.
@@ -61,7 +65,7 @@ final class FocusRuntime: ObservableObject {
     /// What Test actually captured — kept only for this in-memory debugging view, never sent
     /// anywhere but the vision source, so the person can see whether the wrong window was
     /// captured instead of only trusting the description.
-    @Published private(set) var visionTestCapture: (appName: String, image: Data)?
+    @Published private(set) var visionTestCapture: (appName: String, image: NSImage)?
     /// Whether a key is stored, so the Focus pane can say so. A plain keychain read would not
     /// republish the view on its own; this is updated everywhere the key can change.
     @Published private(set) var hasVisionAPIKey: Bool
@@ -79,7 +83,7 @@ final class FocusRuntime: ObservableObject {
     /// read, never to an observation taken seconds earlier: a Chrome title carries a live unread
     /// count, so a stored snapshot stops matching within minutes (#2643). Injectable for tests.
     private let freshWindowIdentity: (pid_t) -> WindowIdentity?
-    private let visionDescriberFactory: (VisionSource, String, String, String) -> VisionDescribing
+    private let visionDescriberFactory: (VisionSource, String, String, String) -> VisionDescribing?
 
     /// `observer.current` reads nil whenever Trail Marker's own window is frontmost — which it
     /// always is while the person is sitting in Focus settings pressing Test. This is the last
@@ -104,11 +108,13 @@ final class FocusRuntime: ObservableObject {
         transportFactory: @escaping (InstanceURL) -> CompanionTransport = { _ in URLSessionTransport() },
         windowCapture: WindowCapturing = ScreenCaptureKitCapture(),
         freshWindowIdentity: @escaping (pid_t) -> WindowIdentity? = { WorkspaceFrontmostSource.focusedWindowIdentity(pid: $0) },
-        visionDescriberFactory: @escaping (VisionSource, String, String, String) -> VisionDescribing = {
+        visionDescriberFactory: @escaping (VisionSource, String, String, String) -> VisionDescribing? = {
             source, baseURL, model, apiKey in
             switch source {
             case .cli:
                 return CLIVisionDescriber()
+            case .judge:
+                return nil
             case .apiKey:
                 guard let url = URL(string: baseURL), !baseURL.isEmpty else {
                     return HTTPVisionDescriber(baseURL: URL(string: "about:blank")!, model: model, apiKey: "")
@@ -157,6 +163,11 @@ final class FocusRuntime: ObservableObject {
             .sink { [weak self] state in
                 var isConnected = false
                 if case .connected = state { isConnected = true }
+                if !isConnected {
+                    self?.clearVisionTest()
+                    self?.judgeTakesImages = false
+                    self?.judgeName = nil
+                }
                 self?.send(.connectionChanged(isConnected: isConnected))
             }
             .store(in: &cancellables)
@@ -202,8 +213,9 @@ final class FocusRuntime: ObservableObject {
         lastJudgment = nil
         lastKnownApp = nil
         lastSent = nil
-        visionTestResult = nil
-        visionTestCapture = nil
+        clearVisionTest()
+        judgeTakesImages = false
+        judgeName = nil
         machine = FocusMachine(policy: currentPolicy)
         apply(machine.handle(.launched(consent: consent, switchedOff: focusSwitchedOff), now: Date()))
         send(.accessibilityChanged(granted: permissions.accessibility == .granted))
@@ -267,6 +279,7 @@ final class FocusRuntime: ObservableObject {
     }
 
     func setVisionSource(_ value: VisionSource) {
+        clearVisionTest()
         visionSource = value
         preferences.focusVisionSource = value
     }
@@ -281,7 +294,38 @@ final class FocusRuntime: ObservableObject {
         preferences.focusVisionModel = value
     }
 
-    /// `nil` or empty clears the stored key without setting a new one (an empty "Test" field, say).
+    var judgeAvailable: Bool {
+        judgeTakesImages && !(judgeName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    var rung3ConsentSentence: String {
+        let scope = watchEntireDesktop ? "the app in front" : "an allowed app"
+        let destination: String
+        switch visionSource {
+        case .apiKey: destination = visionBaseURL.isEmpty ? "the endpoint you set below" : visionBaseURL
+        case .cli: destination = "Claude Code, signed in on this Mac"
+        case .judge:
+            guard judgeAvailable, let judgeName else {
+                return "Your focus judge in Moss no longer reads pictures. Choose another way to describe the screen."
+            }
+            return "When Trail Marker can't tell from the window title alone, it will take one picture "
+                + "of \(scope) and send it to \(judgeName) through your Moss server to judge. "
+                + "The picture is never saved and never sent anywhere else."
+        }
+        return "When Trail Marker can't tell from the window title alone, it will take one picture "
+            + "of \(scope) and send it to \(destination) to describe. The picture is never "
+            + "saved and never sent anywhere else."
+    }
+
+    func clearVisionTest() {
+        visionTestGeneration += 1
+        visionTestTask?.cancel()
+        visionTestTask = nil
+        visionTestCapture = nil
+        visionTestResult = nil
+    }
+
+    /// `nil` or empty clears the stored key.
     func setVisionAPIKey(_ value: String?) {
         if let value, !value.isEmpty {
             try? keychain.storeVisionKey(value)
@@ -296,7 +340,8 @@ final class FocusRuntime: ObservableObject {
     /// pattern, applied to vision). Saves `enteredAPIKey` first when one was typed but not yet
     /// submitted, so Test never silently runs against an empty key the person can see on screen.
     func testVision(enteredAPIKey: String = "") {
-        if !enteredAPIKey.isEmpty { setVisionAPIKey(enteredAPIKey) }
+        clearVisionTest()
+        if visionSource == .apiKey && !enteredAPIKey.isEmpty { setVisionAPIKey(enteredAPIKey) }
         // A test still takes a picture and sends it to the vision source, so it obeys the pause
         // and the Focus switch like everything else that sends (#2643).
         guard !connectionPaused else {
@@ -342,18 +387,49 @@ final class FocusRuntime: ObservableObject {
             )
             return
         }
-        let describer = visionDescriberFactory(
-            visionSource, visionBaseURL, visionModel, keychain.readVisionKey() ?? ""
-        )
-        track { [weak self] in
+        let source = visionSource
+        let generation = visionTestGeneration
+        visionTestTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let image: Data
+            defer { if generation == self.visionTestGeneration { self.visionTestTask = nil } }
+            var testClient: CompanionClient?
+            var testCredential: String?
+            var testBlock: FocusBlock?
+            if source == .judge {
+                guard let (client, credential) = self.clientAndCredential() else {
+                    self.visionTestResult = .failure(.unreachable)
+                    return
+                }
+                do {
+                    let context = try await client.focusContext(credential: credential)
+                    guard !Task.isCancelled, generation == self.visionTestGeneration else { return }
+                    self.judgeTakesImages = context.judgeTakesImages
+                    self.judgeName = context.judgeName
+                    guard self.judgeAvailable else {
+                        self.visionTestResult = .failure(.judgeUnavailable)
+                        return
+                    }
+                    guard let block = context.block else {
+                        self.visionTestResult = .failure(.noBlock)
+                        return
+                    }
+                    testClient = client
+                    testCredential = credential
+                    testBlock = block
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    self.visionTestResult = .failure(.unreachable)
+                    return
+                }
+            }
+            guard !Task.isCancelled, !self.connectionPaused, self.consent, !self.focusSwitchedOff else { return }
+            let picture: CGImage
             do {
-                let picture = try await self.windowCapture.capture(
+                picture = try await self.windowCapture.capture(
                     window, pid: app.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
                 )
-                image = try JPEGEncoding.encode(picture)
             } catch let error as ScreenCaptureError {
+                guard !Task.isCancelled, generation == self.visionTestGeneration else { return }
                 // Distinct from describe() failing below: this never reached the vision source at
                 // all, so it must never be reported as "couldn't reach the vision source".
                 switch error {
@@ -374,30 +450,47 @@ final class FocusRuntime: ObservableObject {
                 }
                 return
             } catch {
+                guard !Task.isCancelled, generation == self.visionTestGeneration else { return }
                 self.visionTestResult = .failure(.captureFailed(detail: "\(error)"))
                 return
             }
             // Paused, Focus turned off or the Mac slept while the picture was being taken: it is
             // dropped here and never reaches the vision source (#2643).
-            guard !Task.isCancelled, !self.connectionPaused, self.consent, !self.focusSwitchedOff else { return }
+            guard !Task.isCancelled, generation == self.visionTestGeneration,
+                  !self.connectionPaused, self.consent, !self.focusSwitchedOff else { return }
             // Recorded before describe() runs, so a describe failure still shows what was
             // actually captured — the two are separate questions and separate places to be wrong.
-            self.visionTestCapture = (appName: app.appName, image: image)
+            self.visionTestCapture = (appName: app.appName, image: NSImage(cgImage: picture, size: .zero))
             do {
-                let description = try await describer.describe(image)
-                self.visionTestResult = .success(description)
-            } catch let error as VisionError {
-                self.visionTestResult = .failure(error)
+                let result: String
+                if let client = testClient, let credential = testCredential, let block = testBlock {
+                    let request = FocusJudgeRequest(
+                        blockId: block.id, appName: TextRedactor.clean(app.appName, limit: 64),
+                        windowTitle: TextRedactor.clean(app.windowTitle, limit: 200),
+                        test: true, observedAt: ServerTime.format(Date())
+                    )
+                    let judgment = try await self.judgePicture(picture, client: client, credential: credential, request: request)
+                    result = judgment.reason.isEmpty ? judgment.label.rawValue : judgment.reason
+                } else {
+                    guard let describer = self.visionDescriberFactory(
+                        source, self.visionBaseURL, self.visionModel, self.keychain.readVisionKey() ?? ""
+                    ) else { throw VisionError.judgeUnavailable }
+                    result = try await describer.describe(JPEGEncoding.encode(picture))
+                }
+                guard !Task.isCancelled, generation == self.visionTestGeneration else { return }
+                self.visionTestResult = .success(result)
             } catch {
-                self.visionTestResult = .failure(.unreachable)
+                guard !Task.isCancelled, generation == self.visionTestGeneration else { return }
+                self.visionTestResult = .failure(error as? VisionError ?? .unreachable)
             }
+
         }
     }
 
     /// Sends a correction to Moss, so it is refused while paused or with Focus off (#2643).
     func correct(_ verdict: FocusVerdict) {
         guard !connectionPaused, consent, !focusSwitchedOff else { return }
-        guard let remembered = lastJudgment, let identity = connection.identity,
+        guard let remembered = lastJudgment, !remembered.judgment.judgmentId.isEmpty, let identity = connection.identity,
             let credential = keychain.read(for: identity)
         else { return }
         let client = CompanionClient(instance: identity.instance, transport: transportFactory(identity.instance))
@@ -411,6 +504,7 @@ final class FocusRuntime: ObservableObject {
     #if DEBUG
     /// Tests only: a remembered judgment, so "correct is refused while paused" is checked against
     /// a runtime that would otherwise send one.
+    var generationForTesting: Int { machine.generation }
     func seedLastJudgmentForTesting(_ judgment: RememberedJudgment) { lastJudgment = judgment }
     #endif
 
@@ -423,6 +517,16 @@ final class FocusRuntime: ObservableObject {
     // MARK: - Effects
 
     func send(_ event: FocusEvent) {
+        switch event {
+        case .contextLoaded(let context, let generation)
+            where generation == machine.generation && consent && !focusSwitchedOff && isConnected:
+            judgeTakesImages = context.judgeTakesImages
+            judgeName = context.judgeName
+        case .contextFailed(_, let generation) where generation == machine.generation:
+            judgeTakesImages = false
+            judgeName = nil
+        default: break
+        }
         apply(machine.handle(event, now: Date()))
     }
 
@@ -569,10 +673,36 @@ final class FocusRuntime: ObservableObject {
                     return
                 }
 
-                let describer = self.visionDescriberFactory(
+                if self.visionSource == .judge {
+                    guard self.judgeAvailable else {
+                        self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
+                        self.send(.judged(judgment, generation: generation))
+                        return
+                    }
+                    do {
+                        let picture = try await self.windowCapture.capture(
+                            window, pid: observation.pid, maxDimension: ScreenCaptureKitCapture.maxDimension
+                        )
+                        guard !Task.isCancelled, self.shouldObserve, self.visionSource == .judge, self.judgeAvailable else { return }
+                        let second = try await self.judgePicture(picture, client: client, credential: credential, request: request)
+                        guard !Task.isCancelled, self.shouldObserve else { return }
+                        self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
+                        self.send(.judged(second, generation: generation))
+                    } catch {
+                        guard !Task.isCancelled, self.shouldObserve else { return }
+                        self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
+                        self.send(.judged(judgment, generation: generation))
+                    }
+                    return
+                }
+
+                guard let describer = self.visionDescriberFactory(
                     self.visionSource, self.visionBaseURL, self.visionModel,
                     self.keychain.readVisionKey() ?? ""
-                )
+                ) else {
+                    self.send(.judged(judgment, generation: generation))
+                    return
+                }
                 let description: String?
                 do {
                     focusDebug("Capturing \(observation.appName)'s window…")
@@ -627,6 +757,16 @@ final class FocusRuntime: ObservableObject {
         }
     }
 
+    private func judgePicture(
+        _ picture: CGImage, client: CompanionClient, credential: String, request: FocusJudgeRequest
+    ) async throws -> FocusJudgment {
+        var jpeg: Data? = try JPEGEncoding.encode(picture)
+        var body = request
+        defer { jpeg = nil; body.image = nil }
+        body.image = "data:image/jpeg;base64," + jpeg!.base64EncodedString()
+        return try await client.focusJudge(credential: credential, body)
+    }
+
     // MARK: - Debug log text
 
     private static func describe(_ judgment: FocusJudgment) -> String {
@@ -647,7 +787,7 @@ final class FocusRuntime: ObservableObject {
     }
 
     private func remember(_ judgment: FocusJudgment) {
-        guard let sent = lastSent else { return }
+        guard !judgment.judgmentId.isEmpty, let sent = lastSent else { return }
         lastJudgment = RememberedJudgment(
             judgment: judgment, at: Date(), blockTitle: sent.blockTitle, appName: sent.appName,
             windowTitle: sent.windowTitle, screenDescription: sent.description
@@ -678,6 +818,7 @@ final class FocusRuntime: ObservableObject {
     }
 
     private func cancelAllTasks() {
+        clearVisionTest()
         for task in tasks.values { task.cancel() }
         tasks.removeAll()
     }

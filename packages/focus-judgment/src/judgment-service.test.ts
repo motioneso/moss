@@ -147,7 +147,12 @@ describe("no model bound: nothing is processed", () => {
     const h = harness();
     h.setModel(false);
     const context = await h.service.currentContext(DB, T0);
-    expect(context).toEqual({ block: null, judgmentReady: false });
+    expect(context).toEqual({
+      block: null,
+      judgmentReady: false,
+      judgeTakesImages: false,
+      judgeName: null
+    });
   });
 
   it("refuses to judge with the model call count still zero and nothing stored", async () => {
@@ -173,6 +178,36 @@ describe("the block must be the person's current block", () => {
     const h = harness();
     h.setBlock(null);
     await expect(judgeAt(h, 0)).rejects.toBeInstanceOf(FocusError);
+    expect(h.rows).toHaveLength(0);
+  });
+});
+
+describe("test judgments", () => {
+  it("calls the model without reading nudge history or storing a judgment", async () => {
+    const h = harness();
+    const result = await h.service.judge(
+      DB,
+      { ...observation(), test: true },
+      T0,
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ judgmentId: "", label: "distracted", nudge: false });
+    expect(h.calls).toEqual(["model"]);
+    expect(h.rows).toHaveLength(0);
+    expect(h.generateCalls).toHaveLength(1);
+    const normal = await judgeAt(h, 1);
+    expect(normal.judgmentId).not.toBe("");
+    expect(normal.nudge).toBe(false);
+    expect(h.rows).toHaveLength(1);
+  });
+
+  it("still requires a current owned block before a test model call", async () => {
+    const h = harness();
+    h.setBlock(null);
+    await expect(
+      h.service.judge(DB, { ...observation(), test: true }, T0, new AbortController().signal)
+    ).rejects.toMatchObject({ code: "focus_no_block" });
+    expect(h.calls).toEqual([]);
     expect(h.rows).toHaveLength(0);
   });
 });
