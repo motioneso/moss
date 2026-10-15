@@ -196,7 +196,8 @@ export const notesModuleManifest = {
       id: "notes.vault_sync",
       description:
         "Sync Markdown notes from the folder you link in Settings, Connections: new and changed " +
-        "files are read into Moss on a schedule, and notes stay on disk where they are.",
+        "files are read into Moss on a schedule, and notes stay on disk where they are. " +
+        "Requesting a sync also prepares search for later chat recall; chat still skips slow or unavailable recall.",
       errors: [
         {
           code: "notes.folder_missing",

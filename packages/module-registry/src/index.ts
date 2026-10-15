@@ -2934,7 +2934,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
         preferencesRepository: new PreferencesRepository(),
-        boss: deps.boss
+        boss: deps.boss,
+        embeddingProviderFactory: createRuntimeEmbeddingProvider
       }),
     registerWorkers: (boss, deps) => {
       registerVaultIngestRootProvider(notesPrivateExportIngestProvider);
