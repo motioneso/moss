@@ -85,6 +85,7 @@ import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import { registerScheduledTaskRoutes } from "./reminders/routes.js";
+import { registerChatUnreadRoutes } from "./unread-routes.js";
 import { registerReminderArrivalLifecycle } from "./reminders/live-arrival.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import { registerMeetingChatBoundary } from "./meeting-chat-boundary.js";
@@ -681,6 +682,7 @@ export function registerChatRoutes(
   });
 
   registerScheduledTaskRoutes(server, dependencies);
+  registerChatUnreadRoutes(server, dependencies);
 
   registerChatSkillsRoutes(
     server,

@@ -34,6 +34,9 @@ import {
   type AssistantSurfaceHostValue
 } from "../chat/assistant-surface";
 import { useChatStream } from "../chat/use-chat-stream";
+import { useChatUnread } from "../chat/use-chat-unread";
+import { ChatUnreadBadge, unreadMessageDescription } from "../chat/chat-unread-badge";
+import "../styles/kit-chat-unread.css";
 import { usePageContextSync } from "../chat/use-page-context-sync";
 import { ChatControlsProvider } from "./chat-controls-context";
 import { applyThemeTokens } from "../theme/theme-runtime";
@@ -169,6 +172,8 @@ export function AppShell(props: AppShellProps) {
     [meetingSelection]
   );
   const [chatOpen, setChatOpen] = useState(false);
+  const chatUnread = useChatUnread(props.me.user.id);
+  const chatUnreadCount = chatUnread.data?.unreadCount ?? 0;
   // #916 — a module-authored starter draft handed up via ChatControls.openAssistantWithDraft.
   const [moduleDraft, setModuleDraft] = useState<string | undefined>(undefined);
   const [threadToOpen, setThreadToOpen] = useState<string | null>(null);
@@ -491,6 +496,7 @@ export function AppShell(props: AppShellProps) {
         selectionPending={selectionPending}
         isFounder={props.me.user.isBootstrapOwner}
         ownerId={props.me.user.id}
+        unreadByThread={chatUnread.data?.unreadByThread}
         initialText={moduleDraft}
         threadToOpen={threadToOpen}
         onThreadOpenConsumed={() => setThreadToOpen(null)}
@@ -554,7 +560,10 @@ export function AppShell(props: AppShellProps) {
               <button
                 aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
                 aria-pressed={chatOpen}
-                className={`icon-button ${chatOpen ? "active" : ""}`}
+                aria-describedby={
+                  !chatOpen && chatUnreadCount > 0 ? "chat-unread-description" : undefined
+                }
+                className={`icon-button chat-unread-button ${chatOpen ? "active" : ""}`}
                 title={assistantName ? `Ask ${assistantName}` : "Open chat"}
                 type="button"
                 onClick={() => {
@@ -563,7 +572,17 @@ export function AppShell(props: AppShellProps) {
                 }}
               >
                 <MessageSquare size={19} aria-hidden="true" />
+                {!chatOpen && chatUnreadCount > 0 ? (
+                  <span className="chat-unread-button__badge">
+                    <ChatUnreadBadge count={chatUnreadCount} />
+                  </span>
+                ) : null}
               </button>
+              {!chatOpen && chatUnreadCount > 0 ? (
+                <span id="chat-unread-description" className="jds-sr-only">
+                  {unreadMessageDescription(chatUnreadCount)}
+                </span>
+              ) : null}
             </div>
           </header>
 
