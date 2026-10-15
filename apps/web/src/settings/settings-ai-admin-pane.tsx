@@ -845,7 +845,7 @@ export function AiProvidersPane() {
       <YoloAdminGroup />
       <Note icon={<GitCommitHorizontal size={13} />}>
         Each person can override which model powers their own chat under{" "}
-        <b>Personal → Assistant &amp; AI</b>. Background services follow the bindings above.
+        <b>Personal → Your assistant</b>. Background services follow the bindings above.
       </Note>
     </>
   );

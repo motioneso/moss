@@ -1,5 +1,5 @@
 import { Button } from "@moss/ui";
-import { Plug, Radio, ShieldCheck, Terminal } from "lucide-react";
+import { Plug, ShieldCheck, Terminal } from "lucide-react";
 
 import { FootNote, StepHeader } from "./onboarding-ui";
 import { personalize } from "../api/use-assistant-name.js";
@@ -13,23 +13,12 @@ export function WelcomeStep(props: { readonly onSkipAll: () => void }) {
         title={personalize("Let’s get your Moss set up.")}
         lede={
           <>
-            You just need to configure a couple of things: a secure connection to your computer, and
-            the AI provider you want to run. It only takes a few minutes, and you can skip any step
-            to finish it later.
+            Choose an AI provider and, if you want, connect Google for calendar and email. You can
+            finish setup later in Settings.
           </>
         }
       />
       <div className="onb-ahead" aria-label="What setup covers">
-        <div className="onb-ahead__row">
-          <span className="onb-ahead__ic">
-            <Radio size={19} aria-hidden="true" />
-          </span>
-          <div className="onb-ahead__main">
-            <div className="onb-ahead__label">Control channel</div>
-            <div className="onb-ahead__sub">A secure, inspectable connection to your machine.</div>
-          </div>
-          <span className="onb-ahead__n">01</span>
-        </div>
         <div className="onb-ahead__row">
           <span className="onb-ahead__ic">
             <Terminal size={19} aria-hidden="true" />
@@ -40,7 +29,7 @@ export function WelcomeStep(props: { readonly onSkipAll: () => void }) {
               Select the AI tool you want to run. We'll check if it's installed.
             </div>
           </div>
-          <span className="onb-ahead__n">02</span>
+          <span className="onb-ahead__n">01</span>
         </div>
         <div className="onb-ahead__row">
           <span className="onb-ahead__ic">
@@ -52,7 +41,7 @@ export function WelcomeStep(props: { readonly onSkipAll: () => void }) {
               Optional. Sync calendar events and capture tasks from email.
             </div>
           </div>
-          <span className="onb-ahead__n">03</span>
+          <span className="onb-ahead__n">02</span>
         </div>
       </div>
       <FootNote icon={<ShieldCheck size={15} aria-hidden="true" />}>

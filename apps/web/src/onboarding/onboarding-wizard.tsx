@@ -9,9 +9,19 @@ import {
 } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, Flag, LogIn, Minus, Play } from "lucide-react";
 
-import type { MeResponse, OnboardingStatusResponse, OnboardingStepsDto } from "@moss/shared";
+import type {
+  ConnectorAccountDto,
+  MeResponse,
+  OnboardingStatusResponse,
+  OnboardingStepsDto
+} from "@moss/shared";
 
-import { completeOnboarding, getOnboardingStatus, skipOnboarding } from "../api/client";
+import {
+  completeOnboarding,
+  getOnboardingStatus,
+  listConnectorAccounts,
+  skipOnboarding
+} from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { ApiKeyOptOutStep } from "./api-key-opt-out-step";
 import { CliAuthStep } from "./cli-auth-step";
@@ -178,6 +188,17 @@ export function OnboardingWizard(props: {
   // the member step array is selected below (Task 8). One wizard, parameterized by role.
   const founderSteps = statusQuery.data.role === "founder" ? statusQuery.data.steps : undefined;
   const isMember = statusQuery.data.role === "member";
+  // Member status has neutral connector flags; only the saved accounts confirm a connection.
+  const memberAccountsQuery = useQuery({
+    queryKey: queryKeys.connectors.accounts,
+    queryFn: () => listConnectorAccounts(),
+    retry: false,
+    enabled: isMember
+  });
+  const memberConnection = getMemberConnectionStatus(
+    memberAccountsQuery.data?.accounts,
+    memberAccountsQuery.isError
+  );
 
   // Phase 4: the member wizard mounts its OWN step array (no multiplexer/CLI-auth — ADR 0007 §4
   // members inherit the shared host CLI). Every step is optional/skippable; Finish and "Skip
@@ -227,6 +248,7 @@ export function OnboardingWizard(props: {
           key="finish"
           role="member"
           skippedSteps={skippedSteps}
+          memberConnection={memberConnection}
           onFinish={() => startCompletion("finish")}
           pending={completionPending}
         />
@@ -408,10 +430,29 @@ export function OnboardingWizard(props: {
   );
 }
 
+type MemberConnection = "google" | "email" | "none" | "attention" | "pending" | "error";
+
+export function getMemberConnectionStatus(
+  accounts: readonly ConnectorAccountDto[] | undefined,
+  isError: boolean
+): MemberConnection {
+  if (isError) return "error";
+  if (!accounts) return "pending";
+  const active = accounts.filter(
+    (account) => account.status === "active" && account.providerStatus === "available"
+  );
+  if (active.some((account) => account.providerType === "google")) return "google";
+  if (active.some((account) => account.providerType === "imap" || account.providerType === "email"))
+    return "email";
+  if (accounts.some((account) => account.status !== "revoked")) return "attention";
+  return "none";
+}
+
 export function FinishStep(props: {
   readonly role: "founder" | "member";
   readonly skippedSteps: ReadonlySet<string>;
   readonly founderSteps?: OnboardingStepsDto;
+  readonly memberConnection?: MemberConnection;
   readonly pending: boolean;
   readonly onFinish: () => void;
 }) {
@@ -419,9 +460,22 @@ export function FinishStep(props: {
   const recap = isMember
     ? [
         { k: "Assistant", v: "Shared setup", mono: "ready" },
-        props.skippedSteps.has("accounts")
-          ? { k: "Accounts", v: "Skipped for now", skip: true }
-          : { k: "Accounts", v: "Google integration", mono: "private" },
+        {
+          k: "Accounts",
+          v:
+            props.memberConnection === "google"
+              ? "Google connected"
+              : props.memberConnection === "email"
+                ? "Email connected"
+                : props.memberConnection === "pending"
+                  ? "Checking connections…"
+                  : props.memberConnection === "error"
+                    ? "Couldn’t check connections"
+                    : props.memberConnection === "attention"
+                      ? "Connection needs attention"
+                      : "Not connected",
+          skip: props.memberConnection !== "google" && props.memberConnection !== "email"
+        },
         { k: "Tour", v: "Tour finished" }
       ]
     : [
@@ -441,14 +495,10 @@ export function FinishStep(props: {
       <span className="onb-finish__mark">
         <Check size={30} strokeWidth={2.25} aria-hidden="true" />
       </span>
-      <div className="onb-eyebrow">{isMember ? "You’re set" : "You’re set up"}</div>
-      <h1 className="onb-finish__title">
-        {isMember ? "You’re all set." : personalize("Moss is ready.")}
-      </h1>
+      <div className="onb-eyebrow">Final step</div>
+      <h1 className="onb-finish__title">Review your setup.</h1>
       <p className="onb-finish__lede">
-        {isMember
-          ? personalize("Setup complete. You are ready to start using Moss.")
-          : "Here is your setup summary. You can change any of these configurations later in Settings."}
+        Review your setup, then choose Finish setup. You can change these settings later.
       </p>
       <div className="onb-recap">
         {recap.map((item) => (

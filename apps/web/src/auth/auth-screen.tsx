@@ -49,7 +49,13 @@ export function AuthScreen(props: AuthScreenProps) {
       <section className="auth-panel" aria-labelledby="auth-title">
         <div>
           <Eyebrow tone="accent">{assistantName()}</Eyebrow>
-          <h1 id="auth-title">{mode === "sign-up" ? "Create owner account" : "Sign in"}</h1>
+          <h1 id="auth-title">
+            {mode === "sign-up"
+              ? props.needsBootstrap
+                ? "Create owner account"
+                : "Create account"
+              : "Sign in"}
+          </h1>
         </div>
 
         {!props.needsBootstrap ? (
