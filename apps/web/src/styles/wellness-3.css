@@ -58,25 +58,6 @@
   gap: 8px;
 }
 
-@media (max-width: 560px) {
-  /* The trend SVG uses a fixed 760-unit viewBox scaled to 100% width. At phone widths that
-     crushes the whole chart — axis labels and dots become illegible. Give the plot a horizontal
-     scroll and hold the SVG at a readable minimum width instead of letting it shrink to fit. */
-  .wl-chart__plot {
-    overflow-x: auto;
-    overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
-    /* room so absolutely-positioned tooltips above the plot aren't clipped while scrolling */
-    padding-bottom: 4px;
-  }
-
-  .wl-chart__plot svg {
-    min-width: 600px;
-    /* taller aspect at narrow widths so the mood band + meds row breathe */
-    height: auto;
-  }
-}
-
 /* ── Export modal form utilities (#509) ── */
 
 .wl-field {

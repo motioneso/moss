@@ -98,8 +98,8 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
           </div>
           <div className="well__row">
             <div className="well__rowtext">
-              <div className="well__label">Check in with yourself</div>
-              <div className="well__sub">A moment to notice how you are.</div>
+              <div className="well__label">Mood check-in</div>
+              <div className="well__sub">Record how you feel.</div>
             </div>
             <Button size="sm" onClick={() => setCheckinModalOpen(true)}>
               Check in

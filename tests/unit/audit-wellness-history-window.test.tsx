@@ -205,7 +205,7 @@ describe("Wellness complete-window statistics", () => {
       .setState({ status: "error", error: new Error("Second page failed"), fetchStatus: "idle" });
     client.setQueryData(queryKeys.wellness.adherenceSummary(30), { days: [] });
     const { host } = await mount(<WellnessTrends />, client);
-    expect(host.textContent).toContain("Trend data unavailable");
+    expect(host.textContent).toContain("Couldn't load trend data.");
     expect(host.textContent).toContain("Try again");
     expect(host.textContent).not.toContain("View daily values");
   });

@@ -353,6 +353,10 @@
 .wl-chart__title .ic {
   color: var(--text-faint);
 }
+.wl-chart__plot:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: var(--space-1);
+}
 .wl-help__btn {
   border-radius: 50%;
   border: 1px solid var(--border);

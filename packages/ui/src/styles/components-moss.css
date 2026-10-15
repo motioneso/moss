@@ -472,6 +472,7 @@
   color: var(--text-subtle);
 }
 .jds-brief__title {
+  margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-2xl);
   font-weight: var(--weight-semibold);

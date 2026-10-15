@@ -140,7 +140,7 @@ export function WellnessInsights({ onReviewNotes }: Props) {
 
   return (
     <div className="wl-insights">
-      <SectionHead number="02" title="What this month is telling you" meta="30 days" />
+      <SectionHead number="02" title="Patterns in your check-ins" meta="30 days" />
       <div className="wl-insights__body">
         {insightsQuery.isLoading ? (
           <div className="wl-insight" style={{ padding: "16px 0" }}>

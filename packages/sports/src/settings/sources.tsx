@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
+import { SectionHead } from "@moss/ui";
 import type {
   CompetitionRef,
   PreviewSportsSourceAssignmentsResponse,
@@ -519,7 +520,7 @@ export function SportsSourcesSection(props: {
   return (
     <section className="sp-src" aria-label="Sports news sources">
       <div className="sp-src__head">
-        <h2 className="jds-section-title">News sources</h2>
+        <SectionHead title="News sources" titleAs="h3" />
         <p className="jds-section-sub">
           Choose which sports, leagues, and teams each source covers. Matching publishers are mixed
           together in Sports news.

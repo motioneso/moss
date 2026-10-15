@@ -82,6 +82,9 @@ export function WellnessChart({ days, theme = "light" }: Props) {
   const [pinned, setPinned] = useState<number | null>(null);
   const active = pinned != null ? pinned : hover;
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  const [tipPosition, setTipPosition] = useState({ left: 0, top: 0 });
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -120,6 +123,46 @@ export function WellnessChart({ days, theme = "light" }: Props) {
   const labelStep = n <= 16 ? 2 : 5;
   const guides = [5, 2.5, 0, -2.5, -5];
 
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    const tip = tipRef.current;
+    const day = active === null ? null : days[active];
+    if (!container || !canvas || !tip || !day || active === null) return;
+
+    const placeTip = () => {
+      const scale = canvas.clientWidth / VW;
+      const pointX = x(active) * scale;
+      const mood = avgMood(day.checkins);
+      const pointY = (mood === null ? moodTop + 10 : moodY(mood)) * scale;
+      const next = {
+        left: Math.max(
+          0,
+          Math.min(canvas.clientWidth - tip.offsetWidth, pointX - tip.offsetWidth / 2)
+        ),
+        top: Math.max(
+          0,
+          Math.min(canvas.clientHeight - tip.offsetHeight, pointY - tip.offsetHeight)
+        )
+      };
+      setTipPosition((previous) =>
+        previous.left === next.left && previous.top === next.top ? previous : next
+      );
+      if (pinned !== null) {
+        container.scrollLeft = Math.max(
+          0,
+          Math.min(canvas.clientWidth - container.clientWidth, pointX - container.clientWidth / 2)
+        );
+      }
+    };
+    placeTip();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(placeTip);
+    observer.observe(canvas);
+    observer.observe(tip);
+    return () => observer.disconnect();
+  }, [active, days, pinned]);
+
   const pts = days
     .map((d, i) => {
       const v = avgMood(d.checkins);
@@ -155,188 +198,198 @@ export function WellnessChart({ days, theme = "light" }: Props) {
 
   return (
     <>
-      <div className="wl-chart__plot" ref={containerRef}>
-        <svg
-          viewBox={`0 0 ${VW} ${H}`}
-          role="img"
-          aria-label="Mood trend with daily medication adherence"
-        >
-          {guides.map((g) => (
+      <div
+        className="wl-chart__plot"
+        ref={containerRef}
+        role="region"
+        aria-label="Mood and medication chart"
+        tabIndex={0}
+      >
+        <div className="wl-chart__canvas" ref={canvasRef}>
+          <svg
+            viewBox={`0 0 ${VW} ${H}`}
+            role="img"
+            aria-label="Mood trend with daily medication adherence"
+          >
+            {guides.map((g) => (
+              <line
+                key={g}
+                x1={left}
+                y1={moodY(g)}
+                x2={VW - right}
+                y2={moodY(g)}
+                stroke="var(--border)"
+                strokeWidth="1"
+                strokeDasharray={g === 0 ? "0" : "2 4"}
+                opacity={g === 0 ? 1 : 0.7}
+              />
+            ))}
+            <text x={left - 8} y={moodY(5) + 3} textAnchor="end" className="wl-axislbl">
+              Bright
+            </text>
+            <text x={left - 8} y={moodY(0) + 3} textAnchor="end" className="wl-axislbl">
+              Even
+            </text>
+            <text x={left - 8} y={moodY(-5) + 3} textAnchor="end" className="wl-axislbl">
+              Heavy
+            </text>
+
+            {active != null ? (
+              <rect
+                x={x(active) - colW / 2}
+                y={moodTop - 6}
+                width={colW}
+                height={H - moodTop}
+                rx="5"
+                fill="var(--surface-2)"
+              />
+            ) : null}
+
+            <path
+              d={linePath}
+              fill="none"
+              stroke="var(--text-faint)"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+
+            {pts.map((p) => {
+              const c = emoColor(p.d.checkin!.feelingCore, theme);
+              const on = active === p.i;
+              return (
+                <circle
+                  key={p.i}
+                  cx={p.xPos}
+                  cy={moodY(p.v)}
+                  r={on ? 6 : 4.4}
+                  fill={c.tint}
+                  stroke="var(--surface)"
+                  strokeWidth="1.5"
+                  opacity={active == null || on ? 1 : 0.45}
+                  style={{ transition: "opacity .12s" }}
+                />
+              );
+            })}
+
             <line
-              key={g}
               x1={left}
-              y1={moodY(g)}
+              y1={divider}
               x2={VW - right}
-              y2={moodY(g)}
+              y2={divider}
               stroke="var(--border)"
               strokeWidth="1"
-              strokeDasharray={g === 0 ? "0" : "2 4"}
-              opacity={g === 0 ? 1 : 0.7}
             />
-          ))}
-          <text x={left - 8} y={moodY(5) + 3} textAnchor="end" className="wl-axislbl">
-            Bright
-          </text>
-          <text x={left - 8} y={moodY(0) + 3} textAnchor="end" className="wl-axislbl">
-            Even
-          </text>
-          <text x={left - 8} y={moodY(-5) + 3} textAnchor="end" className="wl-axislbl">
-            Heavy
-          </text>
+            <text
+              x={left - 8}
+              y={markMid + 3}
+              textAnchor="end"
+              className="wl-axislbl wl-axislbl--med"
+            >
+              Meds
+            </text>
 
-          {active != null ? (
-            <rect
-              x={x(active) - colW / 2}
-              y={moodTop - 6}
-              width={colW}
-              height={H - moodTop}
-              rx="5"
-              fill="var(--surface-2)"
+            {days.map((d, i) => renderMark(d, i))}
+
+            {days.map((d, i) =>
+              i % labelStep === 0 || d.isToday ? (
+                <text key={`x${i}`} x={x(i)} y={H - 3} textAnchor="middle" className="wl-axislbl">
+                  {d.isToday ? "Today" : d.label}
+                </text>
+              ) : null
+            )}
+
+            <HoverCols
+              n={n}
+              left={left}
+              right={right}
+              vh={H}
+              onHover={setHover}
+              onClick={(i) => setPinned((p) => (p === i ? null : i))}
             />
-          ) : null}
+          </svg>
 
-          <path
-            d={linePath}
-            fill="none"
-            stroke="var(--text-faint)"
-            strokeWidth="1.6"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-
-          {pts.map((p) => {
-            const c = emoColor(p.d.checkin!.feelingCore, theme);
-            const on = active === p.i;
-            return (
-              <circle
-                key={p.i}
-                cx={p.xPos}
-                cy={moodY(p.v)}
-                r={on ? 6 : 4.4}
-                fill={c.tint}
-                stroke="var(--surface)"
-                strokeWidth="1.5"
-                opacity={active == null || on ? 1 : 0.45}
-                style={{ transition: "opacity .12s" }}
-              />
-            );
-          })}
-
-          <line
-            x1={left}
-            y1={divider}
-            x2={VW - right}
-            y2={divider}
-            stroke="var(--border)"
-            strokeWidth="1"
-          />
-          <text
-            x={left - 8}
-            y={markMid + 3}
-            textAnchor="end"
-            className="wl-axislbl wl-axislbl--med"
-          >
-            Meds
-          </text>
-
-          {days.map((d, i) => renderMark(d, i))}
-
-          {days.map((d, i) =>
-            i % labelStep === 0 || d.isToday ? (
-              <text key={`x${i}`} x={x(i)} y={H - 3} textAnchor="middle" className="wl-axislbl">
-                {d.isToday ? "Today" : d.label}
-              </text>
-            ) : null
-          )}
-
-          <HoverCols
-            n={n}
-            left={left}
-            right={right}
-            vh={H}
-            onHover={setHover}
-            onClick={(i) => setPinned((p) => (p === i ? null : i))}
-          />
-        </svg>
-
-        {active != null && days[active] != null
-          ? (() => {
-              const d = days[active]!;
-              const hasCk = !!d.checkin;
-              const v = avgMood(d.checkins);
-              const c = hasCk ? emoColor(d.checkin!.feelingCore, theme) : null;
-              const band = v != null ? moodBand(v) : null;
-              const tipY = v != null ? moodY(v) : moodTop + 10;
-              const isPinned = pinned === active;
-              return (
-                <div
-                  aria-hidden="true"
-                  className={`wl-chart__tip is-on${isPinned ? " is-pinned" : ""}`}
-                  style={{
-                    left: `${(x(active) / VW) * 100}%`,
-                    top: `${(tipY / H) * 100}%`
-                  }}
-                >
-                  <div className="d">{d.isToday ? `Today · ${d.label}` : d.label}</div>
-                  {hasCk && v != null && c && band ? (
-                    <>
-                      <div
-                        className="big"
-                        style={{ display: "flex", alignItems: "center", gap: 7 }}
-                      >
-                        <span
-                          className="sw"
-                          style={{
-                            width: 9,
-                            height: 9,
-                            borderRadius: 9,
-                            background: c.tint
-                          }}
-                        />
-                        {d.checkin!.feelingCore.charAt(0).toUpperCase() +
-                          d.checkin!.feelingCore.slice(1)}
-                        {d.checkin!.feelingSecondary ? ` · ${d.checkin!.feelingSecondary}` : ""}
+          {active != null && days[active] != null
+            ? (() => {
+                const d = days[active]!;
+                const hasCk = !!d.checkin;
+                const v = avgMood(d.checkins);
+                const c = hasCk ? emoColor(d.checkin!.feelingCore, theme) : null;
+                const band = v != null ? moodBand(v) : null;
+                const isPinned = pinned === active;
+                return (
+                  <div
+                    aria-hidden="true"
+                    ref={tipRef}
+                    className={`wl-chart__tip is-on${isPinned ? " is-pinned" : ""}`}
+                    style={{
+                      left: tipPosition.left,
+                      top: tipPosition.top
+                    }}
+                  >
+                    <div className="d">{d.isToday ? `Today · ${d.label}` : d.label}</div>
+                    {hasCk && v != null && c && band ? (
+                      <>
+                        <div
+                          className="big"
+                          style={{ display: "flex", alignItems: "center", gap: 7 }}
+                        >
+                          <span
+                            className="sw"
+                            style={{
+                              width: 9,
+                              height: 9,
+                              borderRadius: 9,
+                              background: c.tint
+                            }}
+                          />
+                          {d.checkin!.feelingCore.charAt(0).toUpperCase() +
+                            d.checkin!.feelingCore.slice(1)}
+                          {d.checkin!.feelingSecondary ? ` · ${d.checkin!.feelingSecondary}` : ""}
+                        </div>
+                        <div className="wl-tiprow" style={{ justifyContent: "space-between" }}>
+                          <span>Mood index</span>
+                          <strong style={{ fontVariantNumeric: "tabular-nums" }}>
+                            {v > 0 ? "+" : ""}
+                            {v} · {MOOD_BAND_LABELS[band] ?? band}
+                          </strong>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="big">{d.isToday ? "No check-in yet" : "No check-in"}</div>
+                    )}
+                    <div className="wl-tipdiv" />
+                    <div className="wl-tiprow" style={{ justifyContent: "space-between" }}>
+                      <span style={{ opacity: 0.75 }}>Medication</span>
+                      <strong style={{ fontVariantNumeric: "tabular-nums" }}>
+                        {d.medTaken}/{d.medDenom}
+                        {d.isToday ? " so far" : " taken"}
+                      </strong>
+                    </div>
+                    {d.doses && d.doses.filter((dos) => !dos.prn).length > 0
+                      ? d.doses
+                          .filter((dos) => !dos.prn)
+                          .map((dos, j) => (
+                            <div
+                              key={j}
+                              className="wl-tiprow"
+                              style={{ opacity: dos.status === "taken" ? 1 : 0.5 }}
+                            >
+                              <span>{dos.name}</span>
+                              <span style={{ textTransform: "capitalize" }}>{dos.status}</span>
+                            </div>
+                          ))
+                      : null}
+                    {isPinned ? (
+                      <div className="wl-tiprow wl-tiprow--more">
+                        Click the day again to dismiss
                       </div>
-                      <div className="wl-tiprow" style={{ justifyContent: "space-between" }}>
-                        <span>Mood index</span>
-                        <strong style={{ fontVariantNumeric: "tabular-nums" }}>
-                          {v > 0 ? "+" : ""}
-                          {v} · {MOOD_BAND_LABELS[band] ?? band}
-                        </strong>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="big">{d.isToday ? "No check-in yet" : "No check-in"}</div>
-                  )}
-                  <div className="wl-tipdiv" />
-                  <div className="wl-tiprow" style={{ justifyContent: "space-between" }}>
-                    <span style={{ opacity: 0.75 }}>Medication</span>
-                    <strong style={{ fontVariantNumeric: "tabular-nums" }}>
-                      {d.medTaken}/{d.medDenom}
-                      {d.isToday ? " so far" : " taken"}
-                    </strong>
+                    ) : null}
                   </div>
-                  {d.doses && d.doses.filter((dos) => !dos.prn).length > 0
-                    ? d.doses
-                        .filter((dos) => !dos.prn)
-                        .map((dos, j) => (
-                          <div
-                            key={j}
-                            className="wl-tiprow"
-                            style={{ opacity: dos.status === "taken" ? 1 : 0.5 }}
-                          >
-                            <span>{dos.name}</span>
-                            <span style={{ textTransform: "capitalize" }}>{dos.status}</span>
-                          </div>
-                        ))
-                    : null}
-                  {isPinned ? (
-                    <div className="wl-tiprow wl-tiprow--more">Click the day again to dismiss</div>
-                  ) : null}
-                </div>
-              );
-            })()
-          : null}
+                );
+              })()
+            : null}
+        </div>
       </div>
       <div className="wl-chart-data">
         <label htmlFor={selectId}>Inspect a day</label>
