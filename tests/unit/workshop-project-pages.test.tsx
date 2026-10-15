@@ -314,7 +314,7 @@ describe("Workshop project browser interactions", () => {
     click("Send");
     await eventually(() =>
       expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-        "could not be confirmed as saved"
+        "couldn’t confirm the project was saved"
       )
     );
     expect(field("project-message").value).toBe("Keep a private list of book ideas.");
@@ -619,12 +619,10 @@ describe("Workshop project browser interactions", () => {
         "could not be loaded"
       )
     );
-    expect(container.textContent).not.toContain("A small idea is a good start.");
+    expect(container.textContent).not.toContain("No projects yet.");
     listStatus = 200;
     click("Try again");
-    await eventually(() =>
-      expect(container.textContent).toContain("A small idea is a good start.")
-    );
+    await eventually(() => expect(container.textContent).toContain("No projects yet."));
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 

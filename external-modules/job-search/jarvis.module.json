@@ -563,6 +563,14 @@
     "toolName": "job-search.briefing"
   },
   "web": { "entrypoint": "dist/web/index.js", "contractVersion": 2 },
+  "appMap": {
+    "features": [
+      {
+        "id": "job-search.resume-fit",
+        "description": "The Profile résumé section explains that adding a résumé enables Fit scores and that Fit is based on the saved résumé. Without a résumé, Fit stays empty."
+      }
+    ]
+  },
   "navigation": [
     {
       "id": "job-search",

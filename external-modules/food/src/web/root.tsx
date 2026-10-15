@@ -651,7 +651,8 @@ function MealsSection(props: {
       <div className="fud-state" role="status">
         <h2 className="jds-empty__title">Nothing logged for this day</h2>
         <p className="jds-empty__sub">
-          Describe what you ate and your assistant estimates the nutrition.
+          Describe what you ate to log a meal.
+          {result.aiEstimates !== false ? " Your assistant estimates the nutrition." : null}
         </p>
         <LogMealButton
           hostActions={props.hostActions}
