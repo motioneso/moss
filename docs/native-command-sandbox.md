@@ -53,6 +53,37 @@ bubblewrap using the distribution package and load the same AppArmor profile. Co
 restart that service. Keep the base unit's capability bounds and `NoNewPrivileges=true`.
 The Docker syscall JSON applies only to containers; do not attach it to the host service.
 
+## Private owner vault access
+
+The overlay also sets `MOSS_NATIVE_VAULT_READS=1` on the supervisor's CLI-runner child. This is
+separate from namespace setup: the app owns private vault directories and files, while native
+commands run as a different, stable account for each person. Namespace setup alone cannot make
+that account read an app-owned `0700` directory or `0600` file.
+
+Before forwarding an ACP line, the runner serializes a metadata preparation step as the vault
+service account, dropping all capabilities. Through `VaultContext`, it grants the authenticated
+session owner's stable CLI UID read/traverse access to that owner's subtree under `/data/vaults`.
+The shared parent grants traversal only. Group and other entries within the subtree stay empty;
+existing foreign/default ACLs, hardlinked files, symlink ancestors, unexpected ownership/types,
+more than 10,000 entries, or a 30-second timeout refuse preparation. Child symlinks are skipped.
+The service account remains the trusted filesystem writer; this is not protection from a hostile
+app process concurrently changing its own directory entries. No file contents reach the launcher.
+
+The image includes the `acl` utilities. The grant is refreshed before each line because an app
+write's `0600` chmod can mask an existing read grant. Grants remain assigned to stable person
+UIDs, which are not recycled; deleting a user's vault removes its grants with the files. Turning
+the opt-in off stops preparation, but does not erase existing ACLs. To revoke those grants, stop
+the affected CLI sessions, then have the vault service account remove the specific named-user
+entries using `setfacl -x u:UID` on that owner's subtree. Do not clear unrelated ACLs blindly.
+
+If preparation refuses, inspect metadata as the vault service account. Correct unexpected ACLs
+or links through the normal vault administration process, or keep native private-vault access
+disabled; never make private files world-readable or share one CLI UID. The shared vault parent
+must already permit traversal (the container's normal parent does); its ACL mask is preserved.
+The host development sandbox drop-in enables namespace support only. Opting a host runner into
+private-vault reads additionally requires `acl`, the same `/data/vaults` service-account topology
+and `MOSS_NATIVE_VAULT_READS=1`; other host vault layouts are not covered by this opt-in.
+
 ## Policy and verification
 
 The syscall delta permits mount setup, pivot-root and unmount operations, a final user-namespace

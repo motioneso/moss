@@ -78,7 +78,7 @@ ENV JARVIS_WEB_DIST_DIR=/app/apps/web/dist
 # carry it already, but this makes it a guaranteed dependency rather than an assumption.
 # --no-install-recommends keeps the layer small.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends tmux git ca-certificates bubblewrap util-linux \
+  && apt-get install -y --no-install-recommends tmux git ca-certificates bubblewrap util-linux acl \
   && pnpm exec playwright install --with-deps chromium \
   && rm -rf /var/lib/apt/lists/*
 # Put the installed provider CLIs (tools volume bin) on PATH for the tmux PANE shells

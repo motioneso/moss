@@ -18,6 +18,7 @@
     "@moss/ai": "workspace:*",
     "@moss/chat": "workspace:*",
     "@moss/db": "workspace:*",
+    "@moss/vault": "workspace:*",
     "node-pty": "^1.1.0",
     "opencode-ai": "1.18.29"
   }

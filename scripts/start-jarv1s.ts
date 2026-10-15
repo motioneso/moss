@@ -58,7 +58,8 @@ const CLI_ENV_KEYS = new Set([
   // deploy (resolveVaultRoots() -> vaultRootsEnvEntry() in claude-permission-hook.ts) and needs
   // the app-validated vault roots to do it; without these, that fix is inert in this topology.
   "JARVIS_NOTES_ROOTS",
-  "MOSS_NOTES_ROOTS"
+  "MOSS_NOTES_ROOTS",
+  "MOSS_NATIVE_VAULT_READS"
 ]);
 
 // The one folder tests/uat/provisioner.ts ever writes into JARVIS_UAT_SCRIPTED_PROVIDER_BIN. See

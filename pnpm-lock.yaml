@@ -614,6 +614,9 @@ importers:
       '@moss/db':
         specifier: workspace:*
         version: link:../db
+      '@moss/vault':
+        specifier: workspace:*
+        version: link:../vault
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0

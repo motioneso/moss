@@ -2,6 +2,8 @@
 # Apply AFTER docker-compose.prod.yml. See docs/native-command-sandbox.md.
 services:
   jarv1s:
+    environment:
+      MOSS_NATIVE_VAULT_READS: "1"
     security_opt:
       - apparmor=moss-native-sandbox
       - seccomp=./security/native-sandbox-seccomp.json
