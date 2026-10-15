@@ -68,6 +68,8 @@ existing foreign/default ACLs, hardlinked files, symlink ancestors, unexpected o
 more than 10,000 entries, or a 30-second timeout refuse preparation. Child symlinks are skipped.
 Non-sticky ancestors writable by another account also refuse preparation. Container startup
 sets the shared vault parent to `0711`, so isolated accounts cannot replace another owner's root.
+The image directory also starts at `0711`: Docker can copy its mode again when another service
+mounts an otherwise empty shared volume, after the main service has already initialized it.
 The service account remains the trusted filesystem writer; this is not protection from a hostile
 app process concurrently changing its own directory entries. No file contents reach the launcher.
 

@@ -2,17 +2,28 @@
 set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 image=${MOSS_NATIVE_SANDBOX_IMAGE:?set MOSS_NATIVE_SANDBOX_IMAGE to the candidate image}
+volume_name="moss-native-vault-probe-$$"
+docker volume create "$volume_name" >/dev/null
+trap 'docker volume rm "$volume_name" >/dev/null' EXIT
+# Model startup followed by the seed service mounting an otherwise empty vault.
+# Docker copies the image directory mode again while the volume is empty.
+docker run --rm --network none --user 1000:1000 --cap-drop ALL \
+  --entrypoint sh -v "$volume_name:/data/vaults" "$image" \
+  -c 'chmod 711 /data/vaults'
 docker run --rm -i --network none --cap-drop ALL \
   --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add FOWNER \
   --security-opt no-new-privileges:true \
   --security-opt "seccomp=$repo_root/infra/security/native-sandbox-seccomp.json" \
   --security-opt apparmor=moss-native-sandbox \
   --tmpfs /sandbox-home:uid=100001,gid=100001,mode=0700 \
+  -v "$volume_name:/data/vaults" \
   --entrypoint sh "$image" -s <<'PROBE'
 set -eu
+test "$(stat -c %a /data/vaults)" = 711 || {
+  echo 'FAIL: mounting the empty shared volume restored a writable vault parent' >&2; exit 1
+}
 mkdir -p /data/vaults
 chown 1000:1000 /data/vaults
-chmod 711 /data/vaults
 as_app() { setpriv --reuid=1000 --regid=1000 --clear-groups --inh-caps=-all --ambient-caps=-all -- "$@"; }
 as_owner() { setpriv --reuid=100001 --regid=100001 --clear-groups --inh-caps=-all --ambient-caps=-all -- "$@"; }
 as_foreign() { setpriv --reuid=100002 --regid=100002 --clear-groups --inh-caps=-all --ambient-caps=-all -- "$@"; }

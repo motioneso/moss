@@ -104,7 +104,8 @@ RUN printf '%s\n' 'export PATH="${JARVIS_UAT_SCRIPTED_PROVIDER_BIN:+$JARVIS_UAT_
 RUN mkdir -p "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth /run/jarv1s /run/moss-sports-browser \
   && chown -R node:node /data /run/jarv1s \
   && chown root:1001 /run/moss-sports-browser \
-  && chmod -R 0777 "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth \
+  && chmod -R 0777 "$HF_HOME" /data/cli-tools /data/cli-auth \
+  && chmod 0711 /data/vaults \
   && chmod 0700 /run/jarv1s \
   && chmod 2770 /run/moss-sports-browser
 # #1936: build provenance for Settings > Host > Technical details. The API already reads
