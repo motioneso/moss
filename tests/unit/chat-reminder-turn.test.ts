@@ -96,6 +96,11 @@ describe("chat reminder turn (#3309)", () => {
     expect(engine.launchCount).toBe(0);
   });
   it.each([
+    [
+      "New chat functionality! Can you remind me in 15 seconds to charge my phone?",
+      15,
+      "charge my phone"
+    ],
     ["Remind me in 20 minutes to check the laundry task", 1200, "check the laundry task"],
     [
       "remind me in 10 minutes to check if the task is complete",

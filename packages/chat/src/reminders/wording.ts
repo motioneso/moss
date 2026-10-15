@@ -43,6 +43,8 @@ export function reminderRefusedReply(reason: ReminderUnsupportedReason): string 
       return `I couldn't tell exactly when you meant, so I didn't set anything. ${tryThis}`;
     case "needs_time":
       return `Tell me how long from now, or a clock time today or tomorrow. ${tryThis}`;
+    case "needs_text":
+      return "What should I remind you about? I haven't set anything yet. Include the message and time in your request.";
   }
 }
 

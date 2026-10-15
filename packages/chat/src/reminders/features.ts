@@ -154,6 +154,12 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
     featureFlagId: "chat.module"
   },
   {
+    id: "chat.reminder_request_recognition",
+    description:
+      "A short introduction may precede a direct reminder question. Quoted, hypothetical or conflicting introductions stay in ordinary chat. A delay without reminder text asks what to remind you about and saves nothing.",
+    featureFlagId: "chat.module"
+  },
+  {
     id: "chat.clock_reminders",
     description:
       "In regular chat, set a one-time reminder for today, tonight or tomorrow in your time zone. Moss confirms in your chosen clock format. Daily and weekly repeats keep a saved local time and zone.",
