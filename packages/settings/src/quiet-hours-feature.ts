@@ -3,7 +3,7 @@ import type { ModuleFeatureManifest } from "@moss/module-sdk";
 export const quietHoursFeature: ModuleFeatureManifest = {
   id: "settings.quietHours",
   description:
-    "One quiet-hours schedule for notifications, focus and alert cards, saved in Settings > Alerts & quiet hours or chat. Chat uses tracked settings Undo in the same conversation; a newer save cancels Undo. Nothing saved means off, 22:00-07:00. A differing older alert schedule holds until picked.",
+    "Quiet hours for notifications, focus and alert cards; save in Settings > Alerts & quiet hours or chat. Same-chat Undo restores once unless a newer save intervenes. Unset: off, 22:00-07:00. Older differing alert hours hold until picked.",
   errors: [
     {
       code: "invalid_schedule",
