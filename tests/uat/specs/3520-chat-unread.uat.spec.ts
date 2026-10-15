@@ -23,7 +23,8 @@ async function send(page: Page, drawer: Locator, text: string) {
   await expect(drawer.getByRole("button", { name: "Send", exact: true })).toBeEnabled({
     timeout: 120_000
   });
-  await drawer.getByLabel("Message Moss").press("Enter");
+  await expect(drawer.getByLabel("Message Moss")).toHaveValue(text);
+  await drawer.getByRole("button", { name: "Send", exact: true }).click();
   expect((await response).ok()).toBe(true);
 }
 async function unread(page: Page) {
@@ -49,7 +50,13 @@ test("real reminders badge closed chat, survive reload, and clear only after vis
     (r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/chat/turn",
     { timeout: 120_000 }
   );
-  await ordinary.getByLabel("Message Moss").press("Enter");
+  const dispatched = page.waitForRequest(
+    (r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/chat/turn",
+    { timeout: 30_000 }
+  );
+  await ordinary.getByRole("button", { name: "Send", exact: true }).click();
+  await dispatched;
+  console.log("[3520] ordinary message dispatched through Send; closing drawer before completion");
   await ordinary.getByRole("button", { name: "Close chat", exact: true }).click();
   expect((await completed).ok()).toBe(true);
   await expect(chatButton(page).locator(".jds-badge")).toHaveText("1", { timeout: 20_000 });
@@ -85,7 +92,7 @@ test("real reminders badge closed chat, survive reload, and clear only after vis
   const main = await open(page);
   await main.getByRole("button", { name: "Open conversations", exact: true }).click();
   await main.getByRole("button", { name: "New side chat", exact: true }).click();
-  await send(page, main, "Remind me in 15 seconds in this chat to side unread proof");
+  await send(page, main, "Remind me in 15 seconds to side unread proof, send it to this chat");
   await expect.poll(async () => (await unread(page)).unreadCount).toBe(0);
   await main.getByRole("button", { name: "Open conversations", exact: true }).click();
   await main.getByRole("button", { name: "Main chat", exact: true }).click();
@@ -109,4 +116,34 @@ test("real reminders badge closed chat, survive reload, and clear only after vis
   console.log(
     "[3520] reading Main preserved side-chat unread count; picker opened the side message and cleared it"
   );
+  await send(page, reopenedMain, "Remind me in 15 seconds to main unread proof");
+  await expect.poll(async () => (await unread(page)).unreadCount).toBe(0);
+  await reopenedMain.getByRole("button", { name: "Close chat", exact: true }).click();
+  await expect(chatButton(page).locator(".jds-badge")).toHaveText("1", { timeout: 45_000 });
+  const reopenedSide = await open(page);
+  await expect(reopenedSide.getByText("Reminder: main unread proof", { exact: true })).toHaveCount(
+    0
+  );
+  expect((await unread(page)).unreadCount).toBe(1);
+  await reopenedSide.getByRole("button", { name: "Close chat", exact: true }).click();
+  const otherClient = await page.context().newPage();
+  try {
+    await otherClient.goto("/today");
+    const otherDrawer = await open(otherClient);
+    await otherDrawer.getByRole("button", { name: "Open conversations", exact: true }).click();
+    const mainRow = otherDrawer.getByRole("button", { name: "Main chat", exact: true });
+    await expect(mainRow.locator(".jds-badge")).toHaveText("1");
+    await expect(mainRow).toHaveAccessibleDescription("1 unread message");
+    await mainRow.click();
+    await expect(
+      otherDrawer.getByText("Reminder: main unread proof", { exact: true })
+    ).toBeVisible();
+    await expect.poll(async () => (await unread(page)).unreadCount).toBe(0);
+    await expect(chatButton(page).locator(".jds-badge")).toHaveCount(0, { timeout: 10_000 });
+    console.log(
+      "[3520] reading side preserved Main unread; reading Main in another client cleared both clients"
+    );
+  } finally {
+    await otherClient.close();
+  }
 });
