@@ -24,6 +24,7 @@ if as_owner cat /data/vaults/owner/proof.md; then
   echo 'FAIL: owner native account could read private vault before grant' >&2; exit 1
 fi
 as_app node --import tsx packages/cli-runner/src/native-vault-prepare.ts owner 100001
+if as_foreign mv /data/vaults/owner /data/vaults/stolen; then echo 'FAIL: foreign account replaced owner root' >&2; exit 1; fi
 test "$(as_owner cat /data/vaults/owner/proof.md)" = owner-synthetic-proof
 if as_owner cat /data/vaults/foreign/proof.md; then echo 'FAIL: foreign vault readable' >&2; exit 1; fi
 if as_foreign cat /data/vaults/owner/proof.md; then echo 'FAIL: foreign account read owner vault' >&2; exit 1; fi

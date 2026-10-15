@@ -66,6 +66,8 @@ session owner's stable CLI UID read/traverse access to that owner's subtree unde
 The shared parent grants traversal only. Group and other entries within the subtree stay empty;
 existing foreign/default ACLs, hardlinked files, symlink ancestors, unexpected ownership/types,
 more than 10,000 entries, or a 30-second timeout refuse preparation. Child symlinks are skipped.
+Non-sticky ancestors writable by another account also refuse preparation. Container startup
+sets the shared vault parent to `0711`, so isolated accounts cannot replace another owner's root.
 The service account remains the trusted filesystem writer; this is not protection from a hostile
 app process concurrently changing its own directory entries. No file contents reach the launcher.
 

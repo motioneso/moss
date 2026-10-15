@@ -23,6 +23,12 @@ async function fixture() {
 }
 
 describe("private vault native read grant", () => {
+  it("refuses a shared writable parent that could replace an owner's root", async () => {
+    const { base, ctx } = await fixture();
+    await chmod(base, 0o777);
+    await expect(grantVaultNativeReadAccess(ctx, UID)).rejects.toThrow("Writable vault ancestor");
+    expect(acl(ctx.vaultRoot)).not.toContain(`user:${UID}:`);
+  });
   it("grants only the stable owner slot read/traverse and refreshes a masked app write", async () => {
     const { base, ctx, file } = await fixture();
     await grantVaultNativeReadAccess(ctx, UID);

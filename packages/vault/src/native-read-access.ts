@@ -21,6 +21,9 @@ export async function grantVaultNativeReadAccess(ctx: VaultContext, uid: number)
   for (let path = root; ; path = dirname(path)) {
     const info = await lstat(path);
     if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Linked vault ancestor");
+    if ((info.mode & 0o022) !== 0 && (info.mode & 0o1000) === 0) {
+      throw new Error("Writable vault ancestor");
+    }
     if (path === dirname(path)) break;
   }
   const entries: { path: string; directory: boolean; ino: number; dev: number }[] = [];
