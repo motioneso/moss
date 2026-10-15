@@ -1,6 +1,6 @@
 # Unread Moss messages on the chat button
 
-Status: approved by Ben in chat on 2026-10-14; implementation underway.
+Status: approved by Ben in chat on 2026-10-14; implemented in PR #3521.
 Task: #3520. Repository: `~/Jarv1s`.
 
 ## Request and intended behavior
@@ -65,8 +65,8 @@ existing behavior; a saved reminder can be unread in Moss even when outward aler
   background arrivals by selected thread. Its records cannot be the unread source for all chats.
 - `packages/chat/src/reminders/live-arrival.ts`: publishes committed reminder arrivals with
   message and thread identity, then re-reads stored messages under owner access.
-- `packages/shared/src/app-map-core.ts`: describe the badge and when messages become read in
-  the same implementation PR. Do not advertise the feature in this docs-only proposal.
+- `packages/chat/src/manifest.ts`: the owning module describes the badge and when messages
+  become read in its app-map feature declaration.
 
 Implementation should keep durable unread/read handling in chat, expose a small shared contract
 for counts and read acknowledgement, and reuse existing synchronization mechanisms where they

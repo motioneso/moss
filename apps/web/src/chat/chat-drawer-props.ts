@@ -13,6 +13,7 @@ export interface ChatDrawerProps {
   readonly selectionPending?: boolean;
   readonly isFounder: boolean;
   readonly ownerId?: string;
+  readonly unreadByThread?: Readonly<Record<string, number>>;
   readonly initialText?: string;
   readonly threadToOpen?: string | null;
   readonly onThreadOpenConsumed?: () => void;

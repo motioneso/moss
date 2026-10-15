@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
+  chatUnreadResponseSchema,
+  readChatMessagesResponseSchema,
   getChatPrivacyStateResponseSchema,
   listScheduledTasksResponseSchema,
   listQuietHoursAllowancesResponseSchema,
@@ -87,12 +89,14 @@ export const chatModuleManifest = {
       "sql/0319_chat_repeating_reminders.sql",
       "sql/0320_chat_reminder_destinations.sql",
       "sql/0321_chat_repeating_reads.sql",
-      "sql/0322_chat_responsibility_agreements.sql"
+      "sql/0322_chat_responsibility_agreements.sql",
+      "sql/0323_chat_unread_messages.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
       "app.chat_threads",
       "app.chat_messages",
+      "app.chat_unread_messages",
       "app.chat_user_memory_settings",
       "app.chat_skills",
       "app.chat_classifier_shadow_records",
@@ -141,6 +145,12 @@ export const chatModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "chat.unread_messages",
+      description:
+        "Closed chat shows unread Moss messages and reminders (99+ cap). Counts persist across reloads/devices. Only visible, loaded conversations clear; others keep picker counts. Private and module chats are excluded.",
+      featureFlagId: "chat.module"
+    },
     REMINDER_CONTROL_FEATURE,
     {
       id: "chat.current_view_grounding",
@@ -484,6 +494,20 @@ export const chatModuleManifest = {
     }
   ],
   routes: [
+    {
+      method: "GET",
+      path: "/api/chat/unread",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      responseSchema: chatUnreadResponseSchema,
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/threads/:id/read",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      responseSchema: readChatMessagesResponseSchema,
+      permissionId: "chat.view"
+    },
     ...REMINDER_CONTROL_ROUTES,
     {
       method: "GET",

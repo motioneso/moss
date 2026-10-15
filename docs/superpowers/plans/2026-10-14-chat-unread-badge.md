@@ -17,4 +17,11 @@ of `~/Jarv1s` on `design/chat-unread-badge`; PR #3521 includes the spec and impl
 5. Run scoped checks and the isolated foundation gate through `verify-gate`, then real UI proof
    on a disposable UAT instance at desktop and phone widths. Record evidence on PR #3521.
 
-Status: implementation starting; design approved. No deployment or merge authorized.
+Status: implementation complete; verification and live-path evidence tracked on PR #3521.
+No deployment or merge authorized.
+
+Focused verification: 16 unit assertions across four suites passed. The first complete isolated
+database run passed all seven scenarios; the expanded suite separates security assertions.
+A temporary test-only migration removed owner SELECT/INSERT/DELETE policies, forced RLS, and
+invoker execution. All five corresponding assertions failed as expected. That temporary migration
+was deleted before final verification. Only migration 0323 ships.

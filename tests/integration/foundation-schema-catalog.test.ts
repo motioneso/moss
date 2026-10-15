@@ -635,7 +635,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0319", name: "0319_chat_repeating_reminders.sql" },
         { version: "0320", name: "0320_chat_reminder_destinations.sql" },
         { version: "0321", name: "0321_chat_repeating_reads.sql" },
-        { version: "0322", name: "0322_chat_responsibility_agreements.sql" }
+        { version: "0322", name: "0322_chat_responsibility_agreements.sql" },
+        { version: "0323", name: "0323_chat_unread_messages.sql" }
       ]);
     } finally {
       await client.end();
