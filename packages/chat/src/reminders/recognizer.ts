@@ -18,6 +18,7 @@ const MAX_REQUEST_LENGTH = 700;
 
 export type ReminderUnsupportedReason =
   | "needs_time"
+  | "needs_text"
   | "out_of_range"
   | "text_length"
   | "recurrence"
@@ -57,13 +58,19 @@ const DURATION = `(\\d{1,8}) ?${UNIT}`;
 const JOINER = "(?: ?(?:,|:|to|that|about))?";
 
 const LEADING_FILLER =
-  /^(?:(?:hey|hi|ok|okay)(?: moss)?[, ]+|moss[, ]+|please[, ]+|(?:can|could|would|will) you(?: please)?[, ]+)+/;
+  /^(?:(?:hey|hi|ok|okay|thanks|thank you)(?: moss)?(?:[,.!?]\s*| +)|moss[, ]+|please[, ]+|(?:can|could|would|will) you(?: please)?[, ]+)+/;
 const TRAILING_FILLER = /(?:[, ]+(?:please|thanks|thank you))+$/;
 
 const TRIGGER = /^(?:remind me|set (?:a|me a) reminder)\b/;
+// A final, direct request may follow a short introductory sentence. Do not extract examples,
+// quoted speech, conditional requests, negations, or another instruction from surrounding prose.
+const INTRODUCED_REQUEST =
+  /^(.{1,160}?[.!]\s+)((?:(?:can|could|would|will) you(?: please)?\s+|please\s+)(?:remind me|set (?:a|me a) reminder)\b.*)$/;
+const UNSAFE_INTRODUCTION =
+  /["“”`:]|\b(?:not|no|never|don['’]t|cannot|can['’]t|if|unless|example|imagine|pretend|quote|say|said|write|explain|translate|remind|reminder|schedule|cancel|delete|ignore)\b/;
 
 const FORMS: readonly RegExp[] = [
-  new RegExp(`^remind me in ${DURATION}${JOINER} (.+)$`),
+  new RegExp(`^remind me(?: again)? in ${DURATION}${JOINER} (.+)$`),
   new RegExp(`^remind me (?:to|that|about) (.+) in ${DURATION}$`),
   new RegExp(`^set (?:a|me a) reminder (?:for|in) ${DURATION}${JOINER} (.+)$`),
   new RegExp(`^set (?:a|me a) reminder (?:to|that|about) (.+) in ${DURATION}$`)
@@ -135,6 +142,8 @@ function fallback(request: string): ReminderRecognition {
 
   const rest = request.replace(/^remind me\b[ ,:;]*/, "");
   if (TASK_LEAD.test(rest)) return needsTime(rest);
+  if (new RegExp(`^(?:again )?in ${DURATION}$`).test(rest))
+    return { kind: "unsupported", reason: "needs_text" };
   if (RECALL_LEAD.test(rest)) return { kind: "none" };
   return TIME_CUE.test(rest) || UNSUPPORTED_DAY.test(rest) ? needsTime(rest) : { kind: "none" };
 }
@@ -186,6 +195,9 @@ export function normalizeReminderRequest(raw: string): string {
   let text = raw.toLowerCase().replace(/\s+/g, " ").trim();
   text = text.replace(/[.!?]+$/, "").trim();
   text = text.replace(LEADING_FILLER, "");
+  const introduced = INTRODUCED_REQUEST.exec(text);
+  if (introduced?.[1] && introduced[2] && !UNSAFE_INTRODUCTION.test(introduced[1]))
+    text = introduced[2].replace(LEADING_FILLER, "");
   text = text
     .replace(TRAILING_FILLER, "")
     .replace(/[.!?]+$/, "")

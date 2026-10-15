@@ -10,11 +10,17 @@ import {
   REMINDER_LATE_AFTER_MS,
   REMINDER_OPEN_LIMIT,
   describeDelay,
+  reminderRefusedReply,
   reminderDeliveredMessage
 } from "../../packages/chat/src/reminders/wording.js";
 
 // The delivery worker polls at the shared default unless the caller sets its own interval.
 const WORKER_POLL_MS = DATA_CONTEXT_WORKER_POLLING_INTERVAL_SECONDS * 1000;
+
+it("asks for missing reminder text without claiming anything was saved", () => {
+  expect(reminderRefusedReply("needs_text")).toContain("What should I remind you about?");
+  expect(reminderRefusedReply("needs_text")).toContain("haven't set anything yet");
+});
 
 describe("reminder late threshold", () => {
   it("stays above one poll plus the first retry, so a normal delivery never reads as late", () => {

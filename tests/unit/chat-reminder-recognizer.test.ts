@@ -8,6 +8,13 @@ describe("relative reminder recognizer", () => {
     ["Remind me in 10 minutes, check the Oven", 600, "check the Oven"],
     ["remind me in 5min take the bread out", 300, "take the bread out"],
     ["Can you please remind me in 2 hours to call Sam?", 7200, "call Sam"],
+    [
+      "New chat functionality! Can you remind me in 15 seconds to charge my phone?",
+      15,
+      "charge my phone"
+    ],
+    ["The oven is on. Please remind me in 10 minutes to check the Oven.", 600, "check the Oven"],
+    ["Thanks! Can you remind me again in 5 minutes to charge my phone?", 300, "charge my phone"],
     ["hey moss, remind me in 30 secs to breathe. thanks", 30, "breathe"],
     ["remind me to water the plants in 3 days", 259_200, "water the plants"],
     ["remind me about the dentist in 1 hr", 3600, "the dentist"],
@@ -33,6 +40,11 @@ describe("relative reminder recognizer", () => {
     "remind me my wifi password",
     "remind me again what the plan was",
     "remind me in which file the config lives",
+    'For example. "Can you remind me in 10 minutes to stretch?"',
+    "Do not schedule anything. Can you remind me in 10 minutes to stretch?",
+    "If this works. Can you remind me in 10 minutes to stretch?",
+    "Explain this example. Can you remind me in 10 minutes to stretch?",
+    "She said: Can you remind me in 10 minutes to stretch?",
     ""
   ])("ignores %j", (raw) => {
     expect(recognizeRelativeReminder(raw)).toEqual({ kind: "none" });
@@ -45,6 +57,7 @@ describe("relative reminder recognizer", () => {
     ["remind me in 1.5 hours to stretch", "needs_time"],
     ["remind me in 2 weeks to stretch", "needs_time"],
     ["remind me in 10 m to stretch", "needs_time"],
+    ["Thanks! Ok, remind me again in 5 minutes", "needs_text"],
     ["remind me on Friday at 9am to stretch", "unsupported_day"],
     ["set a reminder", "needs_time"],
     ["remind me in an hour to stretch", "needs_time"],
