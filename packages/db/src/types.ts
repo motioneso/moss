@@ -1019,6 +1019,12 @@ export interface ChatMessagesTable {
   updated_at: TimestampColumn;
 }
 
+export interface ChatUnreadMessagesTable {
+  message_id: string;
+  thread_id: string;
+  owner_user_id: string;
+}
+
 export type ChatReminderState =
   | "queued"
   | "paused"
@@ -2091,6 +2097,7 @@ export interface MossDatabase {
   "app.chat_conversation_provenance": ChatConversationProvenanceTable;
   "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
+  "app.chat_unread_messages": ChatUnreadMessagesTable;
   "app.chat_reminders": ChatRemindersTable;
   "app.chat_scheduled_reads": ChatScheduledReadsTable;
   "app.chat_responsibility_proposals": ChatResponsibilityProposalsTable;

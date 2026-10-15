@@ -6,6 +6,7 @@ import type { ChatThreadDto } from "@moss/shared";
 
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
 import { trapFocus } from "../shell/command-palette";
+import { ChatUnreadBadge, unreadMessageDescription } from "./chat-unread-badge";
 
 /**
  * Main is the signed-in owner's own designation. A shared thread can carry another owner's
@@ -21,6 +22,7 @@ export function findOwnerMainThread(
 export function SideChatOverlay(props: {
   readonly threads: readonly ChatThreadDto[];
   readonly ownerId: string | undefined;
+  readonly unreadByThread?: Readonly<Record<string, number>>;
   readonly selectedThreadId: string | null;
   readonly onSelect: (threadId: string) => void;
   readonly onNewSideChat: () => void;
@@ -42,6 +44,16 @@ export function SideChatOverlay(props: {
   const { ref } = useDismissableMenu<HTMLDivElement>({ open: props.open, onClose: close });
   const main = findOwnerMainThread(props.threads, props.ownerId);
   const sideChats = props.threads.filter((thread) => thread !== main);
+  const unread = (id: string) => props.unreadByThread?.[id] ?? 0;
+  const unreadBadge = (id: string) =>
+    unread(id) > 0 ? (
+      <>
+        <ChatUnreadBadge count={unread(id)} />
+        <span id={`chat-unread-${id}`} className="jds-sr-only">
+          {unreadMessageDescription(unread(id))}
+        </span>
+      </>
+    ) : undefined;
 
   useEffect(() => {
     if (!props.open) return;
@@ -99,6 +111,8 @@ export function SideChatOverlay(props: {
             <NavIndex ariaLabel="Main conversation" label="Main chat">
               <NavIndexItem
                 ariaLabel="Main chat"
+                count={unreadBadge(main.id)}
+                describedBy={unread(main.id) > 0 ? `chat-unread-${main.id}` : undefined}
                 label={
                   <span className="chatd-conversations__label">
                     <House aria-hidden="true" />
@@ -133,6 +147,8 @@ export function SideChatOverlay(props: {
               {sideChats.map((thread) => (
                 <NavIndexItem
                   ariaLabel={thread.title}
+                  count={unreadBadge(thread.id)}
+                  describedBy={unread(thread.id) > 0 ? `chat-unread-${thread.id}` : undefined}
                   key={thread.id}
                   label={thread.title}
                   selected={props.selectedThreadId === thread.id}

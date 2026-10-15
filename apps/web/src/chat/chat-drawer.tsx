@@ -9,6 +9,7 @@ import { useInitialCallerDraft } from "./use-initial-caller-draft";
 import { useChatSelectionConfirmation } from "./use-chat-selection-confirmation";
 import { useChatDraftBinding } from "./use-chat-draft-binding";
 import { useChatAutoscroll } from "./use-chat-autoscroll";
+import { useReadChatMessages } from "./use-chat-unread";
 import { usePhoneLayout } from "./use-phone-layout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Maximize2, Minimize2, MoreHorizontal, ShieldOff, X } from "lucide-react";
@@ -68,8 +69,6 @@ export function ChatDrawer(props: ChatDrawerProps) {
   const assistantName = useAssistantName("");
   const surfaceRef = useRef(props.surface);
   surfaceRef.current = props.surface;
-  const latestRecordsRef = useRef(props.records);
-  latestRecordsRef.current = props.records;
   const [reviewThreadId, setReviewThreadId] = useState<string | null>(null);
   const [liveThreadId, setLiveThreadId] = useState<string | null>(null);
   const [conversationOverlayOpen, setConversationOverlayOpen] = useState(false);
@@ -367,9 +366,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
                 : {})
             }
           ];
-          setFallbackRecords((current) =>
-            reconcileFallbacks([...current, ...postResponseRecords], latestRecordsRef.current)
-          );
+          // Keep saved IDs for read receipts; display reconciliation removes stream duplicates.
+          setFallbackRecords((current) => [...current, ...postResponseRecords]);
         } catch (caught) {
           if (surfaceRef.current !== initiatingSurface || generation !== generationRef.current)
             return;
@@ -465,6 +463,22 @@ export function ChatDrawer(props: ChatDrawerProps) {
       : [])
   ];
   const isWaiting = isSending || pendingUser !== null;
+  useReadChatMessages({
+    ownerId: props.ownerId,
+    threadId: selectedThreadId,
+    visible:
+      props.open &&
+      !props.meetingContext &&
+      !conversationOverlayOpen &&
+      !privateMode &&
+      !privacyStateQuery.data?.incognito &&
+      !historyActivationPending &&
+      !props.selectionPending &&
+      !transition.pending &&
+      props.surface === DEFAULT_CHAT_SURFACE &&
+      privacyStateQuery.isSuccess,
+    records: [...effectiveRecords, ...fallbackRecords]
+  });
   useEffect(() => {
     if (
       shouldEndPrivateChatOnStreamDisconnect({
@@ -750,6 +764,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
           disabled={transition.pending}
           open={conversationOverlayOpen}
           ownerId={props.ownerId}
+          unreadByThread={props.unreadByThread}
           selectedThreadId={selectedThreadId}
           threads={threadsQuery.data?.threads ?? []}
           loading={threadsQuery.isPending}

@@ -100,6 +100,7 @@ export const queryKeys = {
       ["calendar", "day-plan", localDay, timeZone] as const
   },
   chat: {
+    unread: (ownerId: string) => ["chat", "unread", ownerId] as const,
     scheduledTasks: ["chat", "scheduled-tasks"] as const,
     quietHoursAllowances: ["chat", "quiet-hours-allowances"] as const,
     settings: ["chat", "settings"] as const,
