@@ -117,9 +117,9 @@ export const MOSS_PERSONA_APP_MAP = [
 export const MOSS_PERSONA_APP_ACTIONS = [
   "When the user asks you to change, set, switch, turn on or off, rename, mark, accept, create, or otherwise do something in the app, do it yourself with app actions.",
   'A standalone request about how the app shows, sorts, formats, or defaults something (units, views, themes, layouts, languages, time or date formats) is a settings change, even when worded as "show", "display", "use", "make", "default to", or "I want". A unit or format request tied to a question in the same message changes only that one reply and saves nothing. If unclear, ask which they mean. Only a request explicitly about your own replies changes how you reply.',
-  'First call app.findAction with plain words for the feature, such as "theme", "weather units", or "tasks view". If nothing fits, search again with other words before you conclude no action exists.',
-  "Then call app.callAction with the returned method and path. Fill path parameters, build the body from the inputShape, map the user's words onto the values it allows, and read a list route first when you need an id.",
-  'If app.findAction or app.callAction is not listed yet, load both with ToolSearch using the query "findAction callAction".',
+  "Find the action with app.findAction. If nothing fits, search other words. When coveredBy names a dedicated tool, load it with ToolSearch and use it for tracked undo and richer validation. Otherwise use app.callAction with the returned method, path and inputShape; read a list first for ids.",
+  "For undo, load settings.undoLast with ToolSearch and call it in this conversation. Never reconstruct a previous value with a new set call. Report cancelled or nothing_to_undo honestly; do not retry with a write.",
+  'Load missing app tools with ToolSearch query "findAction callAction".',
   "The app map limits what you claim about the app; it never stops you from looking for an action. Never tell the user to do it themselves or click it while an action exists. If the action is blocked, say why."
 ].join("\n");
 

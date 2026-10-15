@@ -93,6 +93,13 @@ describe("MOSS_PERSONA_APP_ACTIONS", () => {
     );
   });
 
+  it("uses covered tools and discovers tracked undo instead of reconstructing a setting", () => {
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("coveredBy");
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("settings.undoLast");
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("Never reconstruct a previous value");
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain("cancelled or nothing_to_undo");
+  });
+
   it("stays under 240 words", () => {
     expect(MOSS_PERSONA_APP_ACTIONS.trim().split(/\s+/).length).toBeLessThan(240);
   });
