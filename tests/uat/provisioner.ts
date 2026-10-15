@@ -342,6 +342,9 @@ export function buildUatComposeArgs(
     UAT_COMPOSE_FILE,
     "-f",
     "tests/uat/compose.override.yml",
+    ...(process.env.MOSS_NATIVE_SANDBOX === "1"
+      ? ["-f", "infra/docker-compose.native-sandbox.yml"]
+      : []),
     ...extra
   ];
 }

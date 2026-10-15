@@ -1,3 +1,5 @@
+# Restricted Linux sandbox setup: see docs/native-command-sandbox.md and the
+# optional jarv1s-dev-cli-runner-native-sandbox.conf drop-in.
 # NOTE: `User=REPLACE_WITH_INSTALL_USER` and every `REPLACE_WITH_INSTALL_HOME` path
 # below are PLACEHOLDERS the installing operator MUST edit to match their system
 # (user, home folder, repo path, and EnvironmentFile path) at install time. A system
