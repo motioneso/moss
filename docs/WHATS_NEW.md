@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Unread chat badge.** The chat button now shows when Moss has sent new messages or reminders, with unread counts for each conversation. [PR #3521](https://github.com/motioneso/moss/pull/3521)
 
+#### Fixed
+
+- **Reliable quiet-hours Undo and native file reads.** Undo restores your previous quiet-hours schedule, and supported Linux installations can safely let chat read your own files through native commands. [PR #3523](https://github.com/motioneso/moss/pull/3523)
+
 ### 2026-10-14
 
 #### Added
