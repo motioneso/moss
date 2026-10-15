@@ -58,7 +58,7 @@ export const emailModuleManifest = {
       id: "email.module-settings",
       label: "Email",
       description:
-        "Choose briefing signals, task extraction and draft/send preferences. Unknown choices stay unavailable until read successfully; read failures offer Retry separately from save failures. Failed refreshes preserve confirmed choices.",
+        "Choose email and action suggestions in briefings, separate task capture and automatic Gmail drafts. Saving drafts does not send them; sending keeps approval rules. Controls wait for reads. Read retries and stale saved choices stay distinct.",
       path: "/settings?section=modules&module=email",
       scope: "user",
       order: 40,

@@ -100,7 +100,7 @@ export function AuditPane() {
     <>
       <PaneHead
         title="Audit & operations"
-        desc="A record of what's changed, and the operational levers for this instance."
+        desc="Changes to this Moss instance. Filter or export the activity log."
       />
       <Group
         title="Recent activity"

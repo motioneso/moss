@@ -18,11 +18,22 @@
 .scheduled-task-detail {
   display: grid;
   gap: var(--space-5);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
-.scheduled-task-detail h3 {
+.scheduled-task-detail__title {
   margin: 0;
   font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-heavy);
+  line-height: var(--leading-tight);
   overflow-wrap: anywhere;
+}
+.scheduled-task-detail .scheduled-task-detail__section-title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-heavy);
+  line-height: var(--leading-snug);
 }
 .scheduled-task-detail p {
   margin: 0;

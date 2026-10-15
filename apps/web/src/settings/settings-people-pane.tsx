@@ -129,7 +129,9 @@ export function SettingsPeoplePane() {
       setRefreshResult(data);
       queryClient.invalidateQueries({ queryKey: queryKeys.people.list });
       queryClient.invalidateQueries({ queryKey: queryKeys.people.matchCandidates });
-      toast(`Projected ${data.projected}; ${data.candidates} review candidates.`);
+      toast(
+        `Synced ${data.projected} ${data.projected === 1 ? "person" : "people"}. ${data.candidates} ${data.candidates === 1 ? "item needs" : "items need"} review.`
+      );
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
@@ -235,9 +237,9 @@ export function SettingsPeoplePane() {
         {refreshResult ? (
           <div role="status">
             <Note>
-              Discovered {refreshResult.discovered}; projected {refreshResult.projected}; ignored{" "}
-              {refreshResult.ignored}; candidates {refreshResult.candidates}.{" "}
-              {getPeopleRefreshGuidance(refreshResult).join(" ")}
+              Files found: {refreshResult.discovered}; people synced: {refreshResult.projected};{" "}
+              files ignored: {refreshResult.ignored}; items needing review:{" "}
+              {refreshResult.candidates}. {getPeopleRefreshGuidance(refreshResult).join(" ")}
               {refreshResult.candidates > 0 ? (
                 <Button variant="quiet" size="sm" onClick={() => reviewRef.current?.focus()}>
                   Review matches
@@ -267,7 +269,7 @@ export function SettingsPeoplePane() {
         ) : null}
         <Row
           name="Refresh from notes"
-          desc="Scan the configured folder and update projected People records."
+          desc="Read this folder and sync your People list."
           control={
             <Button
               variant="quiet"
