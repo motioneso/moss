@@ -42,6 +42,7 @@ import {
 } from "./acp-private-markers.js";
 import { acpProviderTranscriptDir, defaultPurgeCodexTranscripts } from "./acp-transcript-purge.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
+import { sendAcpLine } from "./native-vault-send.js";
 import { codexAuthPath } from "./acp-codex-auth.js";
 import {
   runAgentHomePrepareAsOwner,
@@ -193,6 +194,7 @@ const MAX_LINE_BYTES = 256 * 1024;
 const KILL_CONFIRM_TIMEOUT_MS = 5000;
 
 interface AcpSession {
+  readonly userId: string;
   readonly child: ChildProcessWithoutNullStreams;
   readonly cwd: string;
   readonly generation: number;
@@ -545,6 +547,7 @@ export class AcpHost {
     }
 
     const session: AcpSession = {
+      userId,
       child,
       cwd: sessionDir,
       identity: switchTo,
@@ -609,17 +612,10 @@ export class AcpHost {
     };
   }
 
-  send(sessionKey: string, line: string): void {
+  send(sessionKey: string, line: string): void | Promise<void> {
     this.sweepIdle();
     const session = this.requireLive(sessionKey);
-    if (line.length === 0 || line.length > MAX_LINE_BYTES) {
-      throw new Error("acpSend.line must be a non-empty line within 256 KiB");
-    }
-    if (line.includes("\n")) {
-      throw new Error("acpSend.line must be a single line");
-    }
-    session.child.stdin.write(`${line}\n`);
-    session.lastActivity = Date.now();
+    return sendAcpLine(session, line, MAX_LINE_BYTES);
   }
 
   read(sessionKey: string, afterSeq: number): AcpReadResult {

@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PgBoss } from "pg-boss";
 
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { EmbeddingProvider } from "@moss/memory";
 import { sendJob } from "@moss/jobs";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 import { postNotesSyncRouteSchema, type PostNotesSyncResponse } from "@moss/shared";
@@ -16,6 +17,7 @@ interface NotesSyncRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly preferencesRepository: PreferencesRepository;
   readonly boss: PgBoss;
+  readonly embeddingProviderFactory?: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
 }
 
 export function registerNotesSyncRoutes(
@@ -41,6 +43,21 @@ export function registerNotesSyncRoutes(
         actorUserId: accessContext.actorUserId,
         sourcePath: storedPath
       };
+
+      // Indexing runs in the worker process. Prepare the API's shared model as well, so the
+      // first chat recall need not spend its 500 ms budget loading a cold model. Resolve
+      // configuration in the owner's transaction, then release it before model loading.
+      if (dependencies.embeddingProviderFactory) {
+        void dependencies.dataContext
+          .withDataContext(accessContext, dependencies.embeddingProviderFactory)
+          .then((provider) => provider.embedQuery(""))
+          .catch(() => {
+            server.log.warn(
+              { event: "notes.recall.prepare-failed" },
+              "Notes recall preparation failed"
+            );
+          });
+      }
 
       const jobId = await sendJob(dependencies.boss, NOTES_SYNC_QUEUE, payload, {
         singletonKey: `notes-sync:${accessContext.actorUserId}`

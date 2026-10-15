@@ -169,8 +169,8 @@ export class CliChatEngineHost {
     );
   }
 
-  acpSend(sessionKey: string, line: string): void {
-    this.acp.send(sessionKey, line);
+  acpSend(sessionKey: string, line: string): void | Promise<void> {
+    return this.acp.send(sessionKey, line);
   }
 
   acpRead(sessionKey: string, afterSeq: number): AcpReadResult {

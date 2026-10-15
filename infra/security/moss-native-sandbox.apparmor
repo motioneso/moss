@@ -1,0 +1,40 @@
+# Based on Moby v24.0.7 profiles/apparmor/template.go (Apache-2.0).
+# Enforced profile for namespace-local bubblewrap setup; not an unconfined profile.
+abi <abi/4.0>,
+#include <tunables/global>
+profile moss-native-sandbox flags=(attach_disconnected,mediate_deleted) {
+  network,
+  capability,
+  file,
+  userns,
+  umount,
+  pivot_root,
+  signal (receive) peer=unconfined,
+  signal (receive) peer=dockerd,
+  signal (send,receive) peer=moss-native-sandbox,
+  ptrace (trace,read,tracedby,readby) peer=moss-native-sandbox,
+  # Namespace-local bubblewrap root construction, not arbitrary mounts.
+  mount options in (rw, rslave, silent) -> /,
+  mount fstype=tmpfs options in (rw, nosuid, nodev) -> /tmp/,
+  mount options in (rw, rbind, silent) /tmp/newroot/ -> /tmp/newroot/,
+  mount options in (rw, bind, rbind, silent) /oldroot/{,**} -> /newroot/{,**},
+  mount options in (ro, rw, remount, bind, silent, nosuid, nodev, noexec, relatime, noatime, nodiratime, strictatime) -> /newroot/{,**},
+  mount fstype=tmpfs options in (rw, nosuid, nodev) -> /newroot/{,**},
+  mount fstype=devpts options in (rw, nosuid, noexec) -> /newroot/dev/pts/,
+  mount options in (rw, rprivate, silent) -> /oldroot/,
+
+  deny @{PROC}/* w,
+  deny @{PROC}/{[^1-9],[^1-9][^0-9],[^1-9s][^0-9y][^0-9s],[^1-9][^0-9][^0-9][^0-9/]*}/** w,
+  deny @{PROC}/sys/[^k]** w,
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/kcore rwklx,
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/devices/virtual/powercap/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+}

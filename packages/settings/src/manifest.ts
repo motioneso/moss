@@ -656,7 +656,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.findAction",
       description:
-        "Find declared app routes by plain words, including their input schemas, blocked categories and existing dedicated tools.",
+        "Find app routes, input schemas, blocked categories and dedicated tools. Chat honors an explicitly requested supported tool and route; otherwise it prefers a dedicated tool for tracked Undo and validation.",
       errors: [
         {
           code: "not_ready",
@@ -809,7 +809,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       name: "app.findAction",
       description:
-        'Find how to change or do anything in the app: settings, preferences, themes, views, units, notifications, projects, any screen or button. Search plain words, such as "weather units". Returns routes, input shapes, blocked reasons and dedicated tools; prefer the dedicated tool named in coveredBy. Run the result with app.callAction.',
+        'Find how to change or do anything in the app: settings, preferences, themes, views, units, notifications, projects, any screen or button. Search plain words, such as "weather units". Returns routes, input shapes, blocked reasons and dedicated tools. Honor an explicitly requested supported tool; otherwise prefer the dedicated tool named in coveredBy, or app.callAction for uncovered routes.',
       permissionId: "settings.view",
       risk: "read",
       content: "user_authored",

@@ -58,7 +58,8 @@ const CLI_ENV_KEYS = new Set([
   // deploy (resolveVaultRoots() -> vaultRootsEnvEntry() in claude-permission-hook.ts) and needs
   // the app-validated vault roots to do it; without these, that fix is inert in this topology.
   "JARVIS_NOTES_ROOTS",
-  "MOSS_NOTES_ROOTS"
+  "MOSS_NOTES_ROOTS",
+  "MOSS_NATIVE_VAULT_READS"
 ]);
 
 // The one folder tests/uat/provisioner.ts ever writes into JARVIS_UAT_SCRIPTED_PROVIDER_BIN. See
@@ -221,6 +222,9 @@ export function prepareRuntimeDirs(uid: number, gid: number): void {
   // owner-only by owned-fs.ts.
   chmodSync("/data/cli-auth", 0o711);
   chmodSync("/data/cli-auth/chat", 0o711);
+  // Only the app service may replace owner vault directories. A world-writable
+  // volume parent would let an isolated CLI account swap another owner's root.
+  chmodSync("/data/vaults", 0o711);
   chmodSync("/run/jarv1s", 0o700);
 }
 

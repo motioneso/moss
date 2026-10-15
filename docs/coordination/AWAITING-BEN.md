@@ -75,4 +75,20 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-Nothing open.
+### 2026-10-15 — #3514 approval-notice acceptance amendment
+
+**Blocked:** completing #3514 and merging PR #3523 as the complete follow-up outcome. The issue
+explicitly requires the unchanged real-provider scenario, but its dedicated/destructive notice
+assertions conflict with the later approved #3338 trust and causal-notice rules. The unchanged
+scenario is still preserved and failed; changing product policy to satisfy it would regress the
+approved behavior.
+
+**Recommendation:** approve the exact test amendment and acceptance reconciliation in
+[PR #3523's reviewed proposal](https://github.com/motioneso/moss/pull/3523#issuecomment-6190092159).
+Keep the generic causal notice, require its absence on already-confirmed dedicated/destructive
+actions, and preserve all other original prompts and assertions. Add the separately tested real
+owner trust phase. The full external supplement passed on the pinned final image, including native
+read, recall, both approval paths, named deletes, blocked authority and trusted execution.
+
+**Options:** approve that amendment, or retain the unchanged criterion and leave #3514 open for a
+separate product/acceptance decision. No production deployment or publication is requested.

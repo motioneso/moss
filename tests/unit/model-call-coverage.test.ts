@@ -180,6 +180,10 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
     "runs agent-home prepare commands, not a model program"
   ],
   [
+    "packages/cli-runner/src/native-vault-send.ts",
+    "runs the fixed capability-free VaultContext metadata preparation script through setpriv; forwards opaque ACP input without starting a model turn"
+  ],
+  [
     "packages/cli-runner/src/owned-fs.ts",
     "runs owner-scoped filesystem commands, not a model program"
   ],
@@ -194,6 +198,10 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
   [
     "packages/module-registry/src/external/worker-runtime.ts",
     "spawns an external module's own child process, not a model program"
+  ],
+  [
+    "packages/vault/src/native-read-access.ts",
+    "runs getfacl and setfacl on validated owner-vault metadata; no model program or content read"
   ]
 ]);
 
