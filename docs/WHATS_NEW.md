@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Scheduled reminders and task checks.** Create and manage reminders, ask Moss to report meaningful task changes, and inspect saved approvals that remain inactive. [PR #3154](https://github.com/motioneso/moss/pull/3154)
 
+#### Fixed
+
+- **Reminder requests with an introduction.** Moss can save a reminder after a short introductory sentence and asks for the reminder message when only a delay is given. [PR #3518](https://github.com/motioneso/moss/pull/3518)
+
 ### 2026-10-12
 
 #### Added
