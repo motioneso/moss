@@ -181,7 +181,7 @@ test("Steady and Full day save the expected blocks and preview unsaved placement
     .getByRole("radiogroup", { name: "Day capacity" })
     .getByLabel(/A steady day/)
     .click();
-  await dialog.getByLabel("The one thing that matters").selectOption(taskId);
+  await dialog.getByLabel("Main task", { exact: true }).selectOption(taskId);
   await dialog.getByRole("button", { name: "Review the plan →" }).click();
   await dialog.getByRole("button", { name: /^Save (tomorrow's|proposed) plan$/ }).click();
   await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");

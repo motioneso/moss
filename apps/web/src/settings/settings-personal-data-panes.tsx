@@ -233,8 +233,7 @@ function ServicePicker(props: { readonly onGoogle: () => void; readonly onImap: 
         </button>
       </div>
       <div className="provpick__foot">
-        Google and email (IMAP) connect through your own credentials — nothing passes through anyone
-        else's servers.
+        Connect Google or an email (IMAP) account using the credentials you provide.
       </div>
     </div>
   );

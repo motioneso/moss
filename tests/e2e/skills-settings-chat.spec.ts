@@ -35,7 +35,7 @@ test("skills settings leads with the list and opens focused authoring flows", as
   );
 
   await page.goto("/settings?section=skills");
-  await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Skills", exact: true })).toBeVisible();
   await expect(page.locator(".set-row__desc").filter({ hasText: "/daily-standup" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create skill" })).toBeVisible();
   await expect(page.getByText("Skill instructions", { exact: false })).toHaveCount(0);

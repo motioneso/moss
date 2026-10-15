@@ -98,7 +98,7 @@ for (const width of [1440, 1080, 768, 390, 320]) {
     }) => {
       await page.setViewportSize({ width, height: 1000 });
       await financeSettings(page);
-      await expect(page.getByLabel("Moss can move up to, per move")).toHaveValue("$250");
+      await expect(page.getByLabel("Maximum per budget move")).toHaveValue("$250");
       await page.evaluate((current) => {
         document.documentElement.dataset.colorMode = current === "dark" ? "dark" : "light";
         document.documentElement.dataset.theme = current === "sage" ? "sage" : "forest";
@@ -145,7 +145,7 @@ test("Finance failed limit read is visible, disabled and recoverable", async ({ 
   await page.setViewportSize({ width: 390, height: 900 });
   await financeSettings(page, true);
   await expect(page.getByRole("alert")).toContainText("Couldn't load your dollar limit.");
-  const limit = page.getByLabel("Moss can move up to, per move");
+  const limit = page.getByLabel("Maximum per budget move");
   await expect(limit).toHaveValue("");
   await expect(limit).toBeDisabled();
   await expect(page.getByRole("radio").first()).toBeDisabled();

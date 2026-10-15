@@ -164,7 +164,9 @@ test("desktop selects both folder domains, recovers stale People, and focuses ex
   await expect(page.getByLabel("Person name")).toBeDisabled();
   await choosePeopleFamily(page);
   await page.getByTitle("Refresh").click();
-  await expect(page.getByText(/Discovered 3; projected 1; ignored 1; candidates 1/)).toBeVisible();
+  await expect(
+    page.getByText(/Files found: 3; people synced: 1; files ignored: 1; items needing review: 1/)
+  ).toBeVisible();
   await expect(page.getByText("Ignored files need valid People-note frontmatter.")).toBeVisible();
   await page.getByRole("button", { name: "Review matches" }).click();
   await expect(
@@ -191,7 +193,7 @@ test("desktop selects both folder domains, recovers stale People, and focuses ex
   await expect(
     page.getByText("This People folder is unavailable.", { exact: false })
   ).toBeVisible();
-  await expect(page.getByText(/Discovered 3;/)).toHaveCount(0);
+  await expect(page.getByText(/Files found: 3;/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Choose another folder" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear folder" }).last()).toBeVisible();
 });
@@ -209,7 +211,9 @@ test("narrow keyboard flow keeps both choosers and exact deletion focus reachabl
   await openPeoplePane(page);
   await choosePeopleFamily(page, true);
   await page.getByTitle("Refresh").press("Enter");
-  await expect(page.getByText(/Discovered 3; projected 1; ignored 1; candidates 1/)).toBeVisible();
+  await expect(
+    page.getByText(/Files found: 3; people synced: 1; files ignored: 1; items needing review: 1/)
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth

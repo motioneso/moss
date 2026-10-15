@@ -58,7 +58,7 @@ export const emailModuleManifest = {
       id: "email.module-settings",
       label: "Email",
       description:
-        "Choose email and action suggestions in briefings, separate task capture and automatic Gmail drafts. Saving drafts does not send them; sending keeps approval rules. Controls wait for reads. Read retries and stale saved choices stay distinct.",
+        "Choose briefing suggestions, task capture and automatic Gmail drafts. Drafts are not sent; sending keeps approval rules. Unknown choices wait for reads; Retry only reads. Failed refreshes keep confirmed choices.",
       path: "/settings?section=modules&module=email",
       scope: "user",
       order: 40,
