@@ -82,6 +82,7 @@ export function WellnessChart({ days, theme = "light" }: Props) {
   const [pinned, setPinned] = useState<number | null>(null);
   const active = pinned != null ? pinned : hover;
   const containerRef = useRef<HTMLDivElement>(null);
+  const dataRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const [tipPosition, setTipPosition] = useState({ left: 0, top: 0 });
@@ -94,7 +95,11 @@ export function WellnessChart({ days, theme = "light" }: Props) {
   useEffect(() => {
     if (pinned === null) return;
     const handler = (ev: PointerEvent) => {
-      if (containerRef.current && !containerRef.current.contains(ev.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(ev.target as Node) &&
+        !dataRef.current?.contains(ev.target as Node)
+      ) {
         setPinned(null);
       }
     };
@@ -391,7 +396,7 @@ export function WellnessChart({ days, theme = "light" }: Props) {
             : null}
         </div>
       </div>
-      <div className="wl-chart-data">
+      <div className="wl-chart-data" ref={dataRef}>
         <label htmlFor={selectId}>Inspect a day</label>
         <Select
           id={selectId}

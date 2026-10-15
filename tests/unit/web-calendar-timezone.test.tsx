@@ -278,7 +278,7 @@ describe("calendar screens in the person's timezone", () => {
     await vi.waitFor(async () => {
       await act(async () => {});
       expect(container.querySelector(".cal-legend__note")?.textContent).toContain(
-        "holding 2 blocks around"
+        "holding 2 flexible blocks today."
       );
     });
   });

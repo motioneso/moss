@@ -172,7 +172,7 @@ describe("core settings recovery and confirmation actions", () => {
       await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(JSON.stringify(renderer.toJSON())).toContain("Nothing here.");
+    expect(JSON.stringify(renderer.toJSON())).toContain("No memories to review.");
     act(() => renderer.unmount());
     queryClient.clear();
   });

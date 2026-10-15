@@ -1,6 +1,6 @@
 # Typography and copy audit verification
 
-Date: 15 October 2026. Status: **code-complete, unverified for the live-path gate**.
+Date: 15 October 2026. Status: **live-path acceptance passed; final CI required before merge**.
 
 The implementation was grounded on current main
 `3b3915e9126092610460852c44c6e0a149b0ad3f`. The source audit was pinned to
@@ -66,9 +66,53 @@ is bounded component evidence, not live end-to-end acceptance.
 The reviewed tracked patch SHA-256 before commits was
 `5bcfbee60cc80192d66ad1ff13c755707ce83b0b1d42d22b4b0c31356e3b2e18`.
 
-## Remaining acceptance
+## Live-path acceptance
 
-Real-account signup, OAuth, persistence and other live application flows were not exercised.
-The 200% fixture used CSS magnification rather than native browser zoom. Screen-reader and
-macOS/native rendering checks remain open. No database gate, merge or deployment was run.
-The draft PR must retain the live-path status above until real UI proof is recorded.
+The tracked `tests/uat/specs/3526-typography-copy.uat.spec.ts` passed against a locally built
+production image and disposable Postgres instance. The complete command returned exit 0;
+Playwright reported **1 passed (54.1s)**. The harness removed its containers and data volumes.
+
+```sh
+JARVIS_UAT_BUILD=0 JARVIS_IMAGE_TAG=uat-pr3526-final2 \
+JARVIS_UAT_CLAIMED_WEB_PORT=5182 MOSS_UAT_CAPTURE_OFF=1 \
+JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE=/tmp/pr3526-no-chat-auth \
+pnpm test:uat 3526-typography-copy.uat.spec.ts
+```
+
+Port 5182 was claimed with `devports` for this run. The deliberately nonexistent auth-file
+override prevents the harness from borrowing host chat credentials. Image SHA-256:
+`53ef1f2dca9bdcb67c83a9bacadd861a2bae1079087bc606df7a85d46fe552ed`.
+
+Executable assertions proved these assembled paths without network interception or replay:
+
+- Real owner signup, setup recap and completion, with the completed state surviving reload.
+- Account menu → Settings → Connections, semantic Accounts heading, neutral connection copy,
+  and the real Google OAuth configuration instructions.
+- Main navigation → Wellness, a check-in saved through its public API and read after reload,
+  selected-day medication/mood status, and the daily-values table at 1280, 390 and 320px.
+  Minimum painted chart text measured 13.87px, 13px and 13px respectively.
+- Finance, Food and Job Search built locally, copied into the disposable module volume,
+  discovered on restart, enabled through Admin / Setup → Instance modules, and restarted.
+- Main navigation → Finance → Finance settings, a $125 budget-move limit saved and verified
+  after reload; main navigation → Food, its actual empty-day heading and meal instructions.
+- No browser page errors.
+
+Live proof exposed a pointer interaction bug: dismissing the selected chart day on a daily-values
+pointer-down shifted the disclosure before its click. The fix includes the chart's data controls
+in its dismissal boundary. A focused regression failed before the fix and passed afterwards,
+while still proving an outside pointer-down dismisses the selection.
+
+Merge preparation also bumped Finance/Food/Job Search to 0.6.10/0.3.12/0.2.20 so changed
+artifacts satisfy immutable registry versions, updated stale unit/browser/UAT copy assertions,
+and removed a remaining unsupported ServicePicker privacy assurance. Local registry checks
+accepted all three artifacts. Full `pnpm verify:static` passed before the final chart fix;
+focused chart/copy regression suites (39 tests), scoped lint and tests/web TypeScript passed
+after it. All 62 affected browser scenarios passed across the final run and focused rerun.
+
+## Remaining platform coverage
+
+No external Google account was authenticated: the proof covers the real setup instructions,
+not an OAuth token exchange. The 200% fixture used CSS magnification rather than native
+browser zoom. Screen-reader and macOS/native rendering checks remain open. These platform
+limits are separate from the passed live application paths above. CI must pass on the final
+PR head before merge; no production deployment was performed as part of this proof.

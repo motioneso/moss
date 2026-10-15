@@ -163,6 +163,14 @@ describe("Wellness Trends states", () => {
     expect(parseFloat(tip.style.top) + tip.offsetHeight).toBeLessThanOrEqual(229);
     expect(plot.scrollLeft).toBeGreaterThan(0);
     expect(plot.scrollLeft).toBeLessThan(760 - plot.clientWidth);
+    await act(async () => {
+      host.querySelector("summary")!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("2026-10-15");
+    await act(async () => {
+      document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    expect(host.querySelector('[role="status"]')).toBeNull();
   });
 });
 
