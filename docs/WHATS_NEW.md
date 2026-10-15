@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Clearer text and consistent typography.** Moss now uses more consistent text styles and clearer setup, connection and review messages. [PR #3526](https://github.com/motioneso/moss/pull/3526)
 - **Reliable quiet-hours Undo and native file reads.** Undo restores your previous quiet-hours schedule, and supported Linux installations can safely let chat read your own files through native commands. [PR #3523](https://github.com/motioneso/moss/pull/3523)
 
 ### 2026-10-14
