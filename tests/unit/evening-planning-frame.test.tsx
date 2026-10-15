@@ -591,7 +591,7 @@ describe("evening steps 2 to 4 (V8)", () => {
     });
     expect(group.querySelectorAll('label[data-state="selected"]').length).toBe(1);
     const priorityLabel = panel.querySelector('label[for="evening-priority"]') as HTMLElement;
-    expect(priorityLabel?.textContent).toBe("The one thing that matters");
+    expect(priorityLabel?.textContent).toBe("Main task");
     const startLabel = panel.querySelector('label[for="evening-start"]') as HTMLElement;
     expect(startLabel?.textContent).toBe("Start task time at");
     expect(panel.querySelector("#evening-priority")).not.toBeNull();
@@ -671,7 +671,7 @@ describe("evening steps 2 to 4 (V8)", () => {
     });
     await vi.waitFor(() =>
       expect(document.getElementById("evening-finished-heading")?.textContent).toBe(
-        "Tomorrow is ready to meet you."
+        "Tomorrow's plan is saved."
       )
     );
     expect(document.body.querySelector('nav[aria-label="Plan steps"]')).toBeNull();

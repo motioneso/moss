@@ -114,6 +114,7 @@ describe("job-search discuss screen", () => {
     const rendered = text(renderer);
     expect(rendered).toContain("Acme");
     expect(rendered).toContain("Senior Engineer");
+    expect(renderer.root.findByType("h4").props.className.split(" ")).toContain("jds-card-title");
     expect(rendered).toContain("Matches your stated skills.");
     expect(rendered).toContain("Aligns with your stated priorities.");
     expect(rendered).not.toContain("RAW-POSTING-BODY-TEXT");

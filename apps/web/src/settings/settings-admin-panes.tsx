@@ -508,7 +508,14 @@ export function PeoplePane({ me }: PaneProps) {
           ))}
         </Group>
       ) : null}
-      <Group title="Members" desc="New people create an account, then wait for approval here.">
+      <Group
+        title="Members"
+        desc={
+          reg?.requiresApproval
+            ? "New accounts appear here. New sign-ups wait here for approval."
+            : "New accounts appear here."
+        }
+      >
         <div className="ppl">
           {usersQuery.isError ? (
             <div className="set2-read-state" role="status">
@@ -885,7 +892,7 @@ export function HostPane() {
         }
       >
         {!ranDiagnostics ? (
-          <Row name="Not run yet" desc="Check system health to check this host." />
+          <Row name="Not run yet" desc="Run a check to see the host’s status." />
         ) : diagQuery.isError ? (
           <Row name="Couldn't check system health" desc={readError(diagQuery.error)} />
         ) : !diag ? (

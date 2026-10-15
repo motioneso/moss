@@ -33,14 +33,14 @@
 
 .kbar__esc {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   color: var(--text-subtle);
   border: 1px solid var(--border);
   border-radius: 5px;
 }
 
 .kbar__group {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -95,7 +95,7 @@
 
 .kbar__foot kbd {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   border-radius: 4px;
   background: var(--surface-2);
   border: 1px solid var(--border);

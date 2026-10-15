@@ -26,7 +26,7 @@ export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
           done
             ? "Your account already has its own AI provider. You can manage it in Settings at any time."
             : personalize(
-                "Moss runs on a shared server, so there is nothing to install on your computer. You are using the shared setup, with nothing to set up."
+                "Moss runs on the shared server. There’s nothing to install on your computer."
               )
         }
       />

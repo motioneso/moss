@@ -137,6 +137,11 @@ export const sportsModuleManifest = {
   },
   features: [
     {
+      id: "sports.settings_sections",
+      description:
+        "Sports settings groups Following, News sources, Story preferences and Configure standings under consistent subsection headings. Saved story preferences can be edited or removed with labeled reason fields and shared controls."
+    },
+    {
       id: "sports.rotation_controls",
       description:
         "Pause or resume either hero carousel without stopping score updates. Hover, focus within and live reduced motion also stop rotation; internal focus moves stay paused. Explicit pause survives manual navigation and motion changes."

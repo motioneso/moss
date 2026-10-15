@@ -333,8 +333,8 @@ describe("meeting summary owner review", () => {
       vi.fn().mockResolvedValue(new Response('{"user":{"isInstanceAdmin":false}}'))
     );
     await click("Refresh summaries");
-    expect(button("Check or retry generation").props.disabled).toBe(false);
-    await click("Check or retry generation");
+    expect(button("Check or retry summary").props.disabled).toBe(false);
+    await click("Check or retry summary");
     expect(vi.mocked(api.generateMeetingOutput).mock.calls[1]![1]).toEqual(first);
   });
 
@@ -371,7 +371,7 @@ describe("meeting summary owner review", () => {
           .findAllByType(Link)
           .filter((node) => node.props.to === "/settings?section=aiproviders")
       ).toHaveLength(0);
-      expect(button("Check or retry generation")).toBeUndefined();
+      expect(button("Check or retry summary")).toBeUndefined();
       await act(async () => renderer.unmount());
       await mount();
       expect(JSON.stringify(renderer.toJSON())).toContain("Contact an instance admin");
@@ -439,7 +439,7 @@ describe("meeting summary owner review", () => {
         "The summary could not be generated. Try again when you’re ready."
       );
       expect(fetch).not.toHaveBeenCalled();
-      expect(button("Check or retry generation")).toBeUndefined();
+      expect(button("Check or retry summary")).toBeUndefined();
     }
   );
 
@@ -459,7 +459,7 @@ describe("meeting summary owner review", () => {
       "The summary model configuration changed during generation"
     );
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Private credentials rotated");
-    expect(button("Check or retry generation")).toBeUndefined();
+    expect(button("Check or retry summary")).toBeUndefined();
     await click("Rewrite summary");
     const calls = vi.mocked(api.generateMeetingOutput).mock.calls;
     expect(calls[1]![1].requestKey).not.toBe(calls[0]![1].requestKey);
@@ -614,7 +614,7 @@ describe("meeting summary owner review", () => {
     await mount();
     await chooseTemplate();
     await click("Rewrite summary");
-    await click("Check or retry generation");
+    await click("Check or retry summary");
     const calls = vi.mocked(api.generateMeetingOutput).mock.calls;
     expect(calls[1]![1]).toEqual(calls[0]![1]);
     await click("Rewrite summary");

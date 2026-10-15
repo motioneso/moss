@@ -346,13 +346,13 @@ export const wellnessModuleManifest = {
     {
       id: "wellness.mood_checkins",
       description:
-        "Log emotions and a note; Today confirms saved reflections. Review and edit older check-ins through paged history. Complete date-window reads feed summaries and trends, with keyboard day selection and daily chart values.",
+        "Log emotions and notes; Today confirms saved reflections. Review and edit paged history. Complete date-window reads feed summaries and trends, with a readable scrollable plot, keyboard day selection and daily chart values.",
       errors: [
         {
           code: "wellness_checkins_unavailable",
           class: "transient",
           description:
-            "Failed reads show unavailable or last-loaded data; a failed later page never becomes a complete statistic."
+            "Trends show one loading status; first-read failures offer retry without a chart, while refresh failures identify the last-loaded chart. A failed later page never becomes a complete statistic."
         }
       ],
       remediations: [

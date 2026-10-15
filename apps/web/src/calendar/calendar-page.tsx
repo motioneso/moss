@@ -166,8 +166,8 @@ export function CalendarPage() {
           </span>
           {view === "day" && isToday(cursor, timeZone) && heldToday > 0 ? (
             <span className="cal-legend__note">
-              {assistantName} is holding {heldToday} block{heldToday === 1 ? "" : "s"} around what
-              matters today.
+              {assistantName} is holding {heldToday} flexible block{heldToday === 1 ? "" : "s"}{" "}
+              today.
             </span>
           ) : null}
         </div>

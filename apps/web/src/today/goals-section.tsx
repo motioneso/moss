@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Target } from "lucide-react";
+import { useId } from "react";
 import { listGoals } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 
 export function GoalsSection() {
+  const titleId = useId();
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.goals.list,
     queryFn: listGoals
@@ -17,11 +19,13 @@ export function GoalsSection() {
   if (activeGoals.length === 0) return null;
 
   return (
-    <section className="jds-brief">
+    <section className="jds-brief" aria-labelledby={titleId}>
       <div className="jds-brief__head">
         <span className="jds-brief__kicker">Focus</span>
       </div>
-      <div className="jds-brief__title">Long-term goals</div>
+      <h2 className="jds-brief__title" id={titleId}>
+        Long-term goals
+      </h2>
       <div className="loose">
         {activeGoals.map((goal) => (
           <div className="jds-task" key={goal.id}>

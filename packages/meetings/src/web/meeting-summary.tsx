@@ -338,7 +338,7 @@ export function MeetingSummary({
                   onClick={() => void generate()}
                 >
                   {retry
-                    ? "Check or retry generation"
+                    ? "Check or retry summary"
                     : data.headVersion
                       ? "Rewrite summary"
                       : "Write summary"}
@@ -396,8 +396,7 @@ export function MeetingSummary({
           ) : null}
           {data.omittedArtifactCount ? (
             <p className="jds-hint">
-              Showing recent versions. Evidence from earlier versions is available from its
-              suggestion.
+              Showing recent versions. Open an older task suggestion to see its source text.
             </p>
           ) : null}
           {data.artifacts.length ? (

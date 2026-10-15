@@ -587,8 +587,7 @@ export function ResumeSection(props: {
       </div>
       <p className="jds-hint">
         {resume === null
-          ? "Nothing on file. Fit stays empty until there is one — it's the only thing Fit is " +
-            "judged against."
+          ? "Add a résumé to see Fit scores. Fit is based on your résumé."
           : "Every open role gets read again against whatever you save here."}
       </p>
       <ResumeEditor

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Note } from "@moss/settings-ui";
+import { Button, Field, FormLabel, SectionHead } from "@moss/ui";
 import type { UsefulnessFeedbackDto } from "@moss/shared";
 
 import { formatDate, useUserLocale } from "../web/locale.js";
@@ -19,6 +20,7 @@ function metadataText(feedback: UsefulnessFeedbackDto, key: string): string | nu
 }
 
 export function StoryPreferencesSection() {
+  const sectionId = useId();
   const queryClient = useQueryClient();
   const locale = useUserLocale();
   const feedbackQuery = useQuery({
@@ -53,8 +55,8 @@ export function StoryPreferencesSection() {
   }
 
   return (
-    <section className="sp-feedback-settings" aria-label="Story preferences">
-      <h2 className="jds-section-title sp-feedback-settings__title">Story preferences</h2>
+    <section className="sp-feedback-settings" aria-labelledby={sectionId}>
+      <SectionHead title="Story preferences" titleAs="h3" titleId={sectionId} />
       <p className="jds-section-sub sp-feedback-settings__note">
         A major story about a subject you asked to see less of may still appear.
       </p>
@@ -65,63 +67,84 @@ export function StoryPreferencesSection() {
             const headline = metadataText(item, "headline") ?? "Saved story";
             const source = metadataText(item, "sourceLabel");
             const isEditing = editingId === item.id;
+            const reasonId = `${sectionId}-${item.id}-reason`;
             return (
               <article className="sp-feedback-settings__row" key={item.id}>
                 <div className="sp-feedback-settings__details">
-                  <strong>{item.kind === "more_like_this" ? "More" : "Less"}</strong>
-                  <span>{headline}</span>
-                  {source ? <span>{source}</span> : null}
-                  {item.reason ? <span>{item.reason}</span> : null}
-                  <time dateTime={item.updatedAt}>
+                  <strong className="jds-label">
+                    {item.kind === "more_like_this" ? "More" : "Less"}
+                  </strong>
+                  <span className="jds-section-sub">{headline}</span>
+                  {source ? <span className="jds-caption">{source}</span> : null}
+                  {item.reason ? <span className="jds-section-sub">{item.reason}</span> : null}
+                  <time className="jds-caption" dateTime={item.updatedAt}>
                     {formatDate(item.updatedAt || item.createdAt, locale)}
                   </time>
                 </div>
                 {isEditing ? (
                   <div className="sp-feedback-settings__editor">
-                    <textarea
-                      aria-label={`Reason for ${headline}`}
-                      value={editReason}
-                      maxLength={500}
-                      onChange={(event) => setEditReason(event.currentTarget.value)}
-                    />
+                    <Field>
+                      <FormLabel htmlFor={reasonId}>Reason for {headline}</FormLabel>
+                      <textarea
+                        id={reasonId}
+                        className="jds-textarea"
+                        value={editReason}
+                        maxLength={500}
+                        onChange={(event) => setEditReason(event.currentTarget.value)}
+                      />
+                    </Field>
                     {editMutation.isError ? (
-                      <span role="alert">Could not update this preference. Try again.</span>
+                      <span className="jds-hint jds-hint--error" role="alert">
+                        Could not update this preference. Try again.
+                      </span>
                     ) : null}
-                    <button
+                    <Button
                       type="button"
+                      size="sm"
                       disabled={editMutation.isPending || editReason.trim().length === 0}
                       onClick={() =>
                         editMutation.mutate({ id: item.id, reason: editReason.trim() })
                       }
                     >
                       Save
-                    </button>
-                    <button type="button" onClick={() => setEditingId(null)}>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setEditingId(null)}
+                    >
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <div className="sp-feedback-settings__actions">
                     {item.kind === "less_like_this" ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => {
                           setEditingId(item.id);
                           setEditReason(item.reason ?? "");
                         }}
                       >
                         Edit reason
-                      </button>
+                      </Button>
                     ) : null}
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
                       disabled={undoMutation.isPending}
                       onClick={() => undoMutation.mutate(item.id)}
                     >
                       Remove
-                    </button>
+                    </Button>
                     {undoMutation.isError ? (
-                      <span role="alert">Could not remove this preference. Try again.</span>
+                      <span className="jds-hint jds-hint--error" role="alert">
+                        Could not remove this preference. Try again.
+                      </span>
                     ) : null}
                   </div>
                 )}

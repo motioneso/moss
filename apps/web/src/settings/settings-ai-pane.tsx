@@ -334,10 +334,24 @@ function Persona({ who }: { readonly who: string }) {
   );
 }
 
-function ChatModel() {
+function ChatModel({
+  isAdmin,
+  onSelectSection
+}: {
+  readonly isAdmin: boolean;
+  readonly onSelectSection?: (id: string) => void;
+}) {
   const { toast } = useFeedback();
   const queryClient = useQueryClient();
   const assistantName = useAssistantName();
+  const providerSettingsLink =
+    isAdmin && onSelectSection ? (
+      <Button variant="link" onClick={() => onSelectSection("aiproviders")}>
+        Admin / Setup → AI providers
+      </Button>
+    ) : (
+      <b>Admin / Setup → AI providers</b>
+    );
   const settingsQuery = useQuery({
     queryKey: queryKeys.ai.chatModelOverride,
     queryFn: getChatModelOverrideSettings,
@@ -447,7 +461,7 @@ function ChatModel() {
           )}
           <Note>
             Providers, credentials and which model handles each kind of work live in{" "}
-            <b>Admin → Assistant &amp; AI</b>. A transcription model enables the microphone in chat.
+            {providerSettingsLink}. A transcription model enables the microphone in chat.
           </Note>
         </>
       ) : (
@@ -459,7 +473,7 @@ function ChatModel() {
             <div className="ai-empty__t">No assistant configured yet</div>
             <div className="ai-empty__d">
               An admin needs to add an AI provider before {assistantName} can chat. Ask whoever set
-              up this instance. If that's you, add one under <b>Admin → Assistant &amp; AI</b>.
+              up this instance. If that's you, add one under {providerSettingsLink}.
             </div>
           </div>
         </div>
@@ -622,7 +636,7 @@ function ChatArchive() {
   );
 }
 
-export function AssistantPane({ me }: PaneProps) {
+export function AssistantPane({ me, onSelectSection }: PaneProps) {
   const who = (me.user.name ?? "").split(/\s+/)[0] || "there";
   const assistantName = useAssistantName();
   return (
@@ -632,7 +646,7 @@ export function AssistantPane({ me }: PaneProps) {
         desc={`Tune how ${assistantName} sounds, and choose which assistant powers your chat.`}
       />
       <Persona who={who} />
-      <ChatModel />
+      <ChatModel isAdmin={me.user.isInstanceAdmin} onSelectSection={onSelectSection} />
       <YoloMode />
       <ChatArchive />
     </>

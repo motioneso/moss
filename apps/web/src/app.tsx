@@ -601,9 +601,9 @@ function FatalState(props: { readonly message: string; readonly onRetry: () => v
       <section className="auth-panel">
         <h1>{assistantName()}</h1>
         <p className="form-error">{props.message}</p>
-        <button className="primary-button" type="button" onClick={props.onRetry}>
+        <Button type="button" onClick={props.onRetry}>
           Retry
-        </button>
+        </Button>
       </section>
     </main>
   );

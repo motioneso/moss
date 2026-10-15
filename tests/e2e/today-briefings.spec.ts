@@ -839,7 +839,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole("heading", { name: "A good place to leave the day." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plan tomorrow" })).toBeVisible();
   await expect(dialog).toContainText("Protect the launch window");
 
   // Reflect: pick a reply and add a note; the note reads back, no task is written.
@@ -878,7 +878,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
     .getByRole("radiogroup", { name: "Day capacity" })
     .getByLabel("A lighter day")
     .click();
-  await dialog.getByLabel("The one thing that matters").selectOption("t2");
+  await dialog.getByLabel("Main task", { exact: true }).selectOption("t2");
   await dialog.getByRole("button", { name: "04 Review", exact: true }).click();
   await expect(dialog.getByRole("heading", { name: "A plan you can leave with." })).toBeFocused();
   await expect(
@@ -896,9 +896,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
   // Widths on the populated page: no sideways scroll, footer stays visible.
   for (const width of [1440, 768, 375, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(
-      page.getByRole("heading", { name: "A good place to leave the day." })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Plan tomorrow" })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       "no sideways scroll at " + width + "px"

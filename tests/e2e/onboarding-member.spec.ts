@@ -97,7 +97,7 @@ test("founder still sees the founder wizard (regression)", async ({ page }) => {
     page.getByLabel("Onboarding progress").getByRole("button", { name: /Assistant/ })
   ).toBeVisible();
   await expect(page.getByLabel("Onboarding progress").getByText("Owner")).toBeVisible();
-  await expect(page.getByText("Control channel")).toBeVisible();
+  await expect(page.getByText("AI provider", { exact: true })).toBeVisible();
 });
 
 test("status-error fall-through: a failing /api/onboarding/status does NOT trap the member", async ({

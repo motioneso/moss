@@ -106,10 +106,7 @@ export function GoogleConnect(props: { readonly onBack: () => void }) {
           <span className="ic">
             <ShieldCheck size={15} aria-hidden="true" />
           </span>
-          <span>
-            {assistantName} reaches Google through <b>an OAuth app you own</b>, so your calendar and
-            email never pass through anyone else's servers. You build it once and paste two values.
-          </span>
+          <span>Create a Google OAuth app, then paste its client ID and secret here.</span>
         </div>
 
         <ol className="onb-guide">
@@ -317,9 +314,11 @@ export function GoogleConnect(props: { readonly onBack: () => void }) {
               Cancel
             </Button>
             <span className="onb-cred__hint">
-              {finishReady
-                ? "Looks good — completing the token exchange."
-                : "Authorize first, then paste the redirect you land on."}
+              {google.completionPending
+                ? "Connecting Google…"
+                : finishReady
+                  ? "Ready to connect."
+                  : "Authorize Google, then paste the redirect address."}
             </span>
           </div>
           {google.error ? <div className="gflow__err">{google.error}</div> : null}

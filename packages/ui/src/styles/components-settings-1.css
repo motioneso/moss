@@ -146,6 +146,7 @@
   color: var(--danger-fg);
 }
 .pane__cardtitle {
+  margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 800;

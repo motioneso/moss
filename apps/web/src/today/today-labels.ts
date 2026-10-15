@@ -284,7 +284,7 @@ export const EVENING_RAIL_HEADING = "Tomorrow, taking shape.";
 export const EVENING_SPEAKER_NOTE = "Looking back with you";
 
 /** Evening steps 2 to 4 (V8): speaker notes, large messages and review groups. */
-export const EVENING_COMMIT_NOTE = "Only the loose ends that matter";
+export const EVENING_COMMIT_NOTE = "Tasks to review";
 export const EVENING_COMMIT_MESSAGE = "Give this a place, or leave it open.";
 export const EVENING_SHAPE_NOTE = "A realistic starting point";
 export const EVENING_SHAPE_MESSAGE = "How much room do you want tomorrow?";
@@ -294,12 +294,12 @@ export const EVENING_SHAPE_REPLY =
   "I've left a short buffer between task blocks. Existing appointments and travel stay protected.";
 export const EVENING_SHAPE_LIGHT_REPLY =
   "A lighter day asks less of you. Other tasks stay open; they aren't deleted or marked complete.";
-export const EVENING_PRIORITY_LABEL = "The one thing that matters";
+export const EVENING_PRIORITY_LABEL = "Main task";
 export const EVENING_START_LABEL = "Start task time at";
 export const EVENING_REVIEW_NOTE = "Here's what will change";
 export const EVENING_REVIEW_MESSAGE = "A plan you can leave with.";
 export const EVENING_DONE_LABEL = "Evening plan saved";
-export const EVENING_FINISHED_MESSAGE = "Tomorrow is ready to meet you.";
+export const EVENING_FINISHED_MESSAGE = "Tomorrow's plan is saved.";
 export const EVENING_FINISHED_REPLY_TITLE = "Morning starts from here.";
 export const EVENING_FINISHED_REPLY =
   "Moss will check overnight changes against tonight's intentions and explain anything that needs adjusting. It won't ask you to plan the day from scratch.";
@@ -409,7 +409,7 @@ export const EVENING_REFLECT_NOTE_PLACEHOLDER =
 export const EVENING_REFLECT_ADD_NOTE_LABEL = "Add note";
 
 /** Evening dialog frame: title, footer actions and the next-step buttons. */
-export const EVENING_DIALOG_TITLE = "A good place to leave the day.";
+export const EVENING_DIALOG_TITLE = "Plan tomorrow";
 export const EVENING_DIALOG_EYEBROW = "Moss / Evening planning";
 export const EVENING_LEAVE_LABEL = "Leave for now";
 export const EVENING_NEXT_LABELS = [

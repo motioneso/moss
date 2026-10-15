@@ -157,7 +157,7 @@ const raceCases = [
     wellness: true
   },
   {
-    label: "Include email signal in briefings",
+    label: "Include important email in briefings",
     index: 0,
     oldValue: true,
     newValue: false,
@@ -165,10 +165,10 @@ const raceCases = [
   },
   ...(
     [
-      ["Create tasks from email signals", "createTasks"],
+      ["Suggest tasks in briefings", "createTasks"],
       ["Suggest replies", "suggestReplies"],
       ["Draft replies", "draftReplies"],
-      ["Auto-send replies", "autoSend"]
+      ["Suggest sending replies", "autoSend"]
     ] as const
   ).map(([label, field]) => ({
     label,

@@ -6,6 +6,7 @@
    packages/ui/src/styles/components-wellness-1.css and components-wellness-2.css (#1392). */
 
 .wl-wrap {
+  min-width: 0;
   max-width: 1220px;
   margin: 0 auto;
   padding: 30px 40px 110px;
@@ -64,6 +65,7 @@
 
 /* ---- section scaffold ---- */
 .wl-sec {
+  min-width: 0;
   margin-top: 30px;
 }
 .wl-sec__head {
@@ -414,6 +416,7 @@
 
 /* ===================== CHARTS ===================== */
 .wl-chartcard {
+  min-width: 0;
   padding: var(--space-5) 0;
 }
 .wl-chartcard + .wl-chartcard {
@@ -532,8 +535,18 @@
   margin: 7px 0 5px;
 }
 .wl-chart__plot {
-  position: relative;
+  min-width: 0;
   margin-top: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--space-1);
+}
+/* Match the 760-unit viewBox at every content width so 11px SVG text never shrinks.
+   The canvas also anchors tooltip percentages to the scrollable plot, not its viewport. */
+.wl-chart__canvas {
+  position: relative;
+  min-width: 760px;
 }
 .wl-chart__plot svg {
   display: block;
@@ -543,11 +556,13 @@
 }
 .wl-chart__tip {
   position: absolute;
-  transform: translate(-50%, -100%);
   pointer-events: none;
   z-index: 5;
   padding: 9px 11px;
   min-width: 150px;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
   opacity: 0;
   transition: opacity 0.1s ease;
 }

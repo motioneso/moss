@@ -617,7 +617,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
     .getByRole("radiogroup", { name: "Day capacity" })
     .getByLabel("Lighter day")
     .click();
-  await planDialog.getByLabel("The one thing that matters").selectOption(taskId);
+  await planDialog.getByLabel("Main task", { exact: true }).selectOption(taskId);
   for (const width of [320, 768]) {
     await page.setViewportSize({ width, height: 900 });
     await checkLayout(page, width);
@@ -656,7 +656,7 @@ test("T22 assembled evening-to-morning handoff plus actor isolation", async ({ p
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const reopened = page.getByRole("dialog");
   await expect(reopened).toContainText("meeting happened, follow-up not sent");
-  await expect(reopened.getByLabel("The one thing that matters")).toHaveValue(taskId);
+  await expect(reopened.getByLabel("Main task", { exact: true })).toHaveValue(taskId);
   await expect(
     reopened.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day")
   ).toBeChecked();
