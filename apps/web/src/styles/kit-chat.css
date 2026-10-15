@@ -596,9 +596,11 @@
 .chatd-md h1,
 .chatd-md h2,
 .chatd-md h3,
-.chatd-md h4 {
+.chatd-md h4,
+.chatd-md h5,
+.chatd-md h6 {
   line-height: 1.3;
-  margin: 16px 0 8px;
+  margin: var(--space-4) 0 var(--space-2);
 }
 
 .chatd-md ul,

@@ -81,7 +81,7 @@ export function buildCommandPaletteCommands(input: {
         id: "task:settings",
         group: "Tasks",
         label: "Open task settings",
-        description: "Open the tasks module setup surface",
+        description: `Choose what ${input.assistantName} can do with your tasks`,
         keywords: ["tasks", "settings", "lists", "preferences"],
         icon: "sliders-horizontal",
         action: { kind: "navigate", to: moduleSettingsHref("tasks") }
@@ -133,7 +133,7 @@ export function buildCommandPaletteCommands(input: {
       id: "settings:modules",
       group: "Settings",
       label: "Open Modules settings",
-      description: "Configure enabled modules",
+      description: "Manage the features you've turned on",
       keywords: ["settings", "modules", "features"],
       icon: "boxes",
       action: { kind: "navigate", to: settingsSectionHref("modules") }
@@ -164,7 +164,7 @@ export function buildCommandPaletteCommands(input: {
       id: "settings:notifications",
       group: "Settings",
       label: "Open notifications settings",
-      description: "Configure notification behavior",
+      description: "Choose which alerts you get",
       keywords: ["settings", "notifications", "alerts"],
       icon: "bell",
       action: { kind: "navigate", to: moduleSettingsHref("notifications") }

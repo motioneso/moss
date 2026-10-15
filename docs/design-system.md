@@ -77,6 +77,11 @@ retains existing values; do not snap it to a different size during an accessibil
   introduction, a short lede that opens the recap.
 - Eyebrows: sans, `--text-2xs`, bold, `--tracking-caps`, uppercase, in `--accent-fg` on paper and
   `--hero-fg` on the hero (see the hero contrast rule under Colour).
+- Masthead eyebrows use the shared eyebrow role. `MastheadDateline` retains its separate date
+  treatment: 12px, weight 700 and 0.18em tracking.
+- EmptyState titles retain 21px, and chat empty, error and provider titles retain 19px. Both use
+  Archivo, weight 600 and tight leading. Source-tray titles use Archivo 17px, weight 600 and
+  1.3 leading. These compact titles do not replace Today's heavier editorial heads.
 
 ## Colour
 

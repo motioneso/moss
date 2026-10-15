@@ -209,6 +209,8 @@
 .chatd-empty__title {
   font-family: var(--font-display);
   font-size: 19px;
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
   color: var(--text);
 }
 
@@ -455,7 +457,9 @@
 .chatd-md h1,
 .chatd-md h2,
 .chatd-md h3,
-.chatd-md h4 {
+.chatd-md h4,
+.chatd-md h5,
+.chatd-md h6 {
   font-family: var(--font-sans);
 }
 
@@ -473,6 +477,14 @@
 
 .chatd-md h4 {
   font-size: 14px;
+}
+
+.chatd-md h5 {
+  font-size: var(--text-sm);
+}
+
+.chatd-md h6 {
+  font-size: var(--text-xs);
 }
 
 .chatd-md a {
@@ -673,6 +685,8 @@
   color: var(--text);
   font-family: var(--font-display);
   font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
 }
 
 .source-tray__snippet {
