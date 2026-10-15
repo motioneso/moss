@@ -33,7 +33,7 @@ export function ScheduledTaskDetail({
       <Button variant="link" onClick={onBack}>
         Back to all tasks
       </Button>
-      <h3 ref={heading} tabIndex={-1}>
+      <h3 className="scheduled-task-detail__title" ref={heading} tabIndex={-1}>
         {task.title}
       </h3>
       {pieces.map(({ id, Component }) => (

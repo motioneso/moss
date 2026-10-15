@@ -833,7 +833,7 @@ export default function SportsSettings() {
         desc="Choose what you follow, where your sports news comes from, and which standings you can browse."
       />
       <div className="sp-follow__head">
-        <SectionHead title="Following" />
+        <SectionHead title="Following" titleAs="h3" />
         <Note>Follow competitions or teams to see them on your Sports page and in briefings.</Note>
       </div>
       <FollowedSummary

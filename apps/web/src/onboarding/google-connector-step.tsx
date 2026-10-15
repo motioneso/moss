@@ -208,11 +208,7 @@ export function GoogleConnectorStep(props: {
             <span className="ic">
               <ShieldCheck size={15} aria-hidden="true" />
             </span>
-            <span>
-              {assistantName} connects to Google using an OAuth application under your control. This
-              ensures your calendar and email data never pass through third-party servers. You only
-              need to set this up once and copy two values.
-            </span>
+            <span>Create a Google OAuth app, then paste its client ID and secret here.</span>
           </div>
           <ol className="onb-guide">
             <li className="onb-guide__step">

@@ -296,7 +296,9 @@ export function CommandPalette(props: {
 
           <div className="kbar__list" role="listbox" aria-label={listboxLabel(stage)}>
             {groups.length === 0 ? (
-              <div className="kbar__empty">No matching commands.</div>
+              <div className="kbar__empty">
+                {stage.kind === "pick-list" ? "No matching task lists." : "No matching commands."}
+              </div>
             ) : (
               groups.map((group) => (
                 <div key={group.label}>

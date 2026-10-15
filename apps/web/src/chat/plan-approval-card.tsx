@@ -54,7 +54,7 @@ export function PlanApprovalCard(props: PlanApprovalCardProps) {
   return (
     <div className="plan-card">
       <Card raised>
-        <Eyebrow tone="gold">Agree this plan?</Eyebrow>
+        <Eyebrow tone="gold">Approve this plan?</Eyebrow>
         <dl className="plan-card__rows">
           {lines.map((line) => (
             <div className="plan-card__row" key={line.label}>

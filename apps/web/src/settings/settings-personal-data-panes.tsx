@@ -233,8 +233,7 @@ function ServicePicker(props: { readonly onGoogle: () => void; readonly onImap: 
         </button>
       </div>
       <div className="provpick__foot">
-        Google and email (IMAP) connect through your own credentials — nothing passes through anyone
-        else's servers.
+        Connect Google or an email (IMAP) account using the credentials you provide.
       </div>
     </div>
   );
@@ -501,7 +500,7 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
             {embedded ? "Notes folder" : "Notes & documents"}
           </span>
         }
-        desc={`Point ${assistantName} at a folder of notes on this server — a Markdown vault, a plain folder of text files, anything.`}
+        desc="Choose a folder of Markdown notes on this server."
       >
         <div className="vault">
           <span className="vault__ic">
@@ -528,7 +527,7 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
                       ? lastSync.lastError
                         ? formatLastSync(lastSync.at, locale, lastSync.lastError)
                         : `${lastSync.ingested} ingested · ${lastSync.skipped} unchanged · ${lastSync.errors} errors · ${formatLastSync(lastSync.at, locale)}`
-                      : "Linked — run Sync now to ingest."}
+                      : "Folder linked. Choose Sync now to sync its notes."}
                 </div>
               </>
             ) : (

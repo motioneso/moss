@@ -193,10 +193,9 @@ export function WellnessPage() {
     <div className="wl-wrap">
       <header className="wl-hero">
         <div className="wl-hero__main">
-          <h1 className="wl-title">How you&apos;re really doing.</h1>
+          <h1 className="wl-title">Mood and medication</h1>
           <p className="wl-lede">
-            Take your medication, name what you&apos;re feeling, and watch the quiet patterns
-            surface over time.
+            Log medication, record how you feel, and review changes over time.
           </p>
         </div>
         <div className="wl-hero__stat">

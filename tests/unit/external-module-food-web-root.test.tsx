@@ -440,6 +440,23 @@ describe("groupByOccasion (#1737)", () => {
 });
 
 describe("AI-estimates note (#1750)", () => {
+  it.each([true, false, undefined])(
+    "describes nutrition estimates in the empty day only when enabled: %s",
+    async (aiEstimates) => {
+      listPayload = {
+        meals: [],
+        totals: null,
+        ...(aiEstimates === undefined ? {} : { aiEstimates })
+      };
+      const renderer = await render();
+      const out = text(renderer);
+      expect(out).toContain("Describe what you ate to log a meal.");
+      expect(out.includes("Your assistant estimates the nutrition.")).toBe(aiEstimates !== false);
+      expect(out.includes("Nutrition estimates are off")).toBe(aiEstimates === false);
+      await act(async () => renderer.unmount());
+    }
+  );
+
   it("says nothing when estimates are on — a permanent 'on' badge is a nag, not information", async () => {
     listPayload = { meals: [], totals: null, aiEstimates: true };
     const text = flatten((await render()).toJSON());

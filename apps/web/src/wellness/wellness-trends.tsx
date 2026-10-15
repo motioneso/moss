@@ -83,6 +83,9 @@ export function WellnessTrends({ theme = "light" }: Props) {
     queryKey: queryKeys.wellness.adherenceSummary(range),
     queryFn: () => getMedicationAdherenceSummary(range)
   });
+  const hasTrendData = !!checkinsQuery.data && !!adherenceQuery.data;
+  const isPending = checkinsQuery.isPending || adherenceQuery.isPending;
+  const isError = checkinsQuery.isError || adherenceQuery.isError;
 
   const checkins = checkinsQuery.data?.checkins ?? [];
 
@@ -135,11 +138,26 @@ export function WellnessTrends({ theme = "light" }: Props) {
         }
       />
 
-      {checkinsQuery.isPending || adherenceQuery.isPending ? (
-        <p role="status">Loading trend data…</p>
-      ) : checkinsQuery.isError || adherenceQuery.isError ? (
+      {isError ? (
         <p role="status">
-          Couldn&apos;t refresh trend data.{" "}
+          {hasTrendData
+            ? "Couldn't refresh trend data. Showing the last loaded data."
+            : "Couldn't load trend data."}{" "}
+          <Button
+            variant="link"
+            onClick={() => {
+              void checkinsQuery.refetch();
+              void adherenceQuery.refetch();
+            }}
+          >
+            Try again
+          </Button>
+        </p>
+      ) : isPending ? (
+        <p role="status">Loading trend data…</p>
+      ) : !hasTrendData ? (
+        <p role="status">
+          Trend data unavailable.{" "}
           <Button
             variant="link"
             onClick={() => {
@@ -151,15 +169,7 @@ export function WellnessTrends({ theme = "light" }: Props) {
           </Button>
         </p>
       ) : null}
-      {!checkinsQuery.data || !adherenceQuery.data ? (
-        <div className="wl-chartcard" style={{ padding: "16px 20px" }}>
-          <span className="wl-subtle-text" role="status">
-            {checkinsQuery.isPending || adherenceQuery.isPending
-              ? "Loading trend data…"
-              : "Trend data unavailable."}
-          </span>
-        </div>
-      ) : (
+      {hasTrendData ? (
         <div className="wl-chartcard">
           <div className="wl-chart__hd">
             <div>
@@ -220,7 +230,7 @@ export function WellnessTrends({ theme = "light" }: Props) {
           </div>
           <WellnessChart days={days} theme={theme} />
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

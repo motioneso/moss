@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -82,14 +82,14 @@
       {
         "id": "finance.settings",
         "label": "Finance settings",
-        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Moss can move up to dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button. Freedom and dollar-limit controls stay unavailable until their reads succeed. Read failures have separate explanations and Retry; unverified fallback values are not presented as confirmed settings.",
+        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Maximum per budget move dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button. Freedom and dollar-limit controls stay unavailable until their reads succeed. Read failures have separate explanations and Retry; unverified fallback values are not presented as confirmed settings.",
         "path": "/settings"
       }
     ],
     "features": [
       {
         "id": "finance.confirm-guesses",
-        "description": "On Transactions, a Needs a look row has a category picker, a Confirm button and an Always for this merchant switch (off by default; on, the new category becomes a rule for that merchant). Confirm all N confirms every Needs a look row the filter and search show, keeps Moss's guessed categories, makes no rules, and disappears when none are left."
+        "description": "On Transactions, a Needs a look row has a category picker, a Confirm button and an Always for this merchant switch (off by default; on, the new category becomes a rule for that merchant). Confirm all N confirms every Needs a look row the filter and search show, keeps Moss's guessed categories, makes no rules, and disappears when none are left. When no rows remain in Needs a look, the empty state says no transactions in this view need review; the current month, search and local confirmations determine that view."
       },
       {
         "id": "finance.budget-typing",
@@ -109,7 +109,7 @@
       },
       {
         "id": "finance.chat-money-actions",
-        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Moss can move up to setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting."
+        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Maximum per budget move setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting."
       },
       {
         "id": "finance.settings-freedom",
@@ -117,7 +117,7 @@
       },
       {
         "id": "finance.settings-limit",
-        "description": "On Finance settings, Moss can move up to, per move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values."
+        "description": "On Finance settings, Maximum per budget move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values."
       },
       {
         "id": "finance.settings-actions",
@@ -140,7 +140,7 @@
   "preferences": [
     {
       "key": "freedomLimitDollars",
-      "label": "Moss can move up to",
+      "label": "Maximum per budget move",
       "description": "Moves above this amount ask first, at every freedom step.",
       "type": "integer",
       "default": 100,

@@ -48,7 +48,7 @@ test("Finance limit settings: unknown reads lock writes, failed saves keep confi
     compose(["exec", "-T", "jarv1s", "cat", "/data/modules/finance/jarvis.module.json"], "pipe")
   ) as { version: string };
   console.log(`PARK_PRESS_FINANCE_VERSION_LOADED=${loadedManifest.version}`);
-  expect(loadedManifest.version).toBe("0.6.9");
+  expect(loadedManifest.version).toBe("0.6.10");
 
   // ---- Reach Settings through the module's header settings link ----
   const nav = page.locator('nav[aria-label="Main"]');
@@ -68,7 +68,7 @@ test("Finance limit settings: unknown reads lock writes, failed saves keep confi
   await openSettings();
   const settings = page.locator('section[aria-label="Finance settings"]');
   await expect(settings).toBeVisible();
-  const limit = page.getByLabel("Moss can move up to, per move");
+  const limit = page.getByLabel("Maximum per budget move");
   await expect(limit).toBeEnabled();
   const confirmed = await limit.inputValue();
   expect(confirmed).toMatch(/^\$\d+$/);
@@ -114,7 +114,7 @@ test("Finance limit settings: unknown reads lock writes, failed saves keep confi
   expect(writes, "recovery retry must not write").toEqual([]);
   // Persisted truth after reload.
   await page.reload();
-  await expect(page.getByLabel("Moss can move up to, per move")).toHaveValue(confirmed);
+  await expect(page.getByLabel("Maximum per budget move")).toHaveValue(confirmed);
 
   // ---- Customize disclosure at phone width: spacing and hit targets ----
   for (const width of [390, 320]) {

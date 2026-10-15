@@ -52,12 +52,16 @@ export function ApprovedActionScopeDetail({
       <Button variant="link" onClick={onBack}>
         Back to all tasks
       </Button>
-      <h3 ref={heading} tabIndex={-1}>
+      <h3 className="scheduled-task-detail__title" ref={heading} tabIndex={-1}>
         Mark {scope.taskTitle} done
       </h3>
       <p>Not active. Scheduled changes aren't available yet, so no change will run.</p>
       <section aria-label="Agreed action scope">
-        <SectionHead title="Agreed action scope" titleAs="h4" />
+        <SectionHead
+          title="Agreed action scope"
+          titleAs="h4"
+          titleClassName="scheduled-task-detail__section-title"
+        />
         <p>Mark this task done once. No other changes are approved.</p>
         <dl>
           <dt>Task</dt>

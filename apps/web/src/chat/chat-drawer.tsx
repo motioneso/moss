@@ -897,7 +897,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
           ) : props.meetingContext ? (
             <div className="chatd-empty">
               <div className="chatd-empty__title">Ask about this meeting</div>
-              <div className="chatd-empty__sub">Meeting questions only</div>
+              <div className="chatd-empty__sub">Ask about the transcript or your saved notes.</div>
             </div>
           ) : (
             <ChatEmptyState

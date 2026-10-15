@@ -493,7 +493,7 @@ export function SettingsScreen(): ReactNodeLike {
             <section className="fnm-block fnm-block--tight">
               <SectionHead title="Dollar limit" rule />
               <Field>
-                <FormLabel htmlFor="fnm-limit">Moss can move up to, per move</FormLabel>
+                <FormLabel htmlFor="fnm-limit">Maximum per budget move</FormLabel>
                 <input
                   id="fnm-limit"
                   className="jds-input fnm-limit"

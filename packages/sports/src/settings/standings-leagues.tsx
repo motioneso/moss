@@ -73,6 +73,7 @@ export function StandingsLeaguesSection(props: {
     <section className="sp-standings-settings" aria-labelledby="sp-standings-settings-title">
       <div className="sp-standings-settings__head">
         <SectionHead
+          titleAs="h3"
           titleId="sp-standings-settings-title"
           title={
             <DisclosureToggle

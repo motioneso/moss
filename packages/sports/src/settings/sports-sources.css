@@ -7,7 +7,7 @@
   margin-top: var(--space-6);
 }
 
-/* Section head matches the other Sports settings sections (jds-section-title + jds-section-sub). */
+/* Shared SectionHead supplies the same title role as the other Sports settings sections. */
 .sp-src__head {
   display: grid;
   gap: var(--space-1);

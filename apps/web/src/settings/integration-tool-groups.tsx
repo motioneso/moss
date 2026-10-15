@@ -177,6 +177,7 @@ export function IntegrationToolsSection(props: {
       <SectionHead
         number="01"
         title="Tools"
+        titleAs="h3"
         titleId="intg-tools-title"
         meta={`${onCount} of ${total} on`}
         rule
@@ -290,6 +291,7 @@ function ToolGroupBlock(props: {
 
   return (
     <Group
+      titleAs="h4"
       title={
         <span className="intg__name">
           {group.title}

@@ -725,7 +725,8 @@ export function SettingsPage({ me }: SettingsPageProps) {
             ))}
             {adminMode ? (
               <div className="set2__navnote">
-                <ShieldCheck size={13} aria-hidden="true" /> You have owner access
+                <ShieldCheck size={13} aria-hidden="true" />{" "}
+                {`You have ${me.user.isBootstrapOwner ? "owner" : "admin"} access`}
               </div>
             ) : null}
           </nav>

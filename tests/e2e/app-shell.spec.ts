@@ -97,6 +97,14 @@ test("people access uses approval model and revokes member sessions", async ({ p
     tasks: []
   });
 
+  await page.route("**/api/admin/registration", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ registrationEnabled: true, requiresApproval: true })
+    });
+  });
+
   await page.route("**/api/admin/users/*/revoke-sessions", async (route) => {
     revokeUrl = route.request().url();
     await route.fulfill({
@@ -112,7 +120,7 @@ test("people access uses approval model and revokes member sessions", async ({ p
   await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Invite/i })).toHaveCount(0);
   await expect(
-    page.getByText("New people create an account, then wait for approval here.")
+    page.getByText("New accounts appear here. New sign-ups wait here for approval.")
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Actions for Member User" }).click();

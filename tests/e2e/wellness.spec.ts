@@ -222,7 +222,7 @@ test("wellness page renders the new screen and a guided check-in can be saved", 
 }) => {
   await page.goto("/wellness");
   // The new screen leads with the editorial hero title, not a generic "Wellness" heading.
-  await expect(page.getByRole("heading", { name: "How you're really doing." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mood and medication" })).toBeVisible();
 
   // Open the check-in modal from the today card.
   await page.getByRole("button", { name: "Start check-in" }).click();
@@ -255,7 +255,7 @@ test("wellness page renders the new screen and a guided check-in can be saved", 
 
 test("manage-meds modal can add a medication", async ({ page }) => {
   await page.goto("/wellness");
-  await expect(page.getByRole("heading", { name: "How you're really doing." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mood and medication" })).toBeVisible();
 
   await page.getByRole("button", { name: "Manage", exact: true }).click();
   const dialog = page.getByRole("dialog");
@@ -277,7 +277,7 @@ test("manage-meds modal can add a medication", async ({ page }) => {
 
 test("a therapy note can be added", async ({ page }) => {
   await page.goto("/wellness");
-  await expect(page.getByRole("heading", { name: "How you're really doing." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mood and medication" })).toBeVisible();
 
   await page.getByPlaceholder("Something to talk through…").fill("Ask about evening dread");
 
@@ -321,7 +321,7 @@ test("wellness nav is hidden when the actor has disabled the module", async ({ p
   // Deep-linking the disabled health-data route must NOT render the wellness UI: the SPA
   // route is gated on the actor's module state and redirects to /tasks once it resolves.
   await expect(page).toHaveURL(/\/tasks$/);
-  await expect(page.getByRole("heading", { name: "How you're really doing." })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Mood and medication" })).toHaveCount(0);
 });
 
 test("wellness route fails closed when the module-state request errors", async ({ page }) => {
@@ -333,12 +333,12 @@ test("wellness route fails closed when the module-state request errors", async (
   await expect(page.getByText("Could not check module access. Try again.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/wellness$/);
-  await expect(page.getByRole("heading", { name: "How you're really doing." })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Mood and medication" })).toHaveCount(0);
 });
 
 test("trends chart renders using adherence summary shape (days[] not logs[])", async ({ page }) => {
   await page.goto("/wellness");
-  await expect(page.getByRole("heading", { name: "How you're really doing." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mood and medication" })).toBeVisible();
   // The Trends section renders a chart card — assert the heading text is present.
   await expect(page.getByText("Mood & medication")).toBeVisible();
   // The chart SVG renders (no crash from mismatched shape).
@@ -362,7 +362,7 @@ test("wellness route fails closed when the module is absent from the state respo
 
   await page.goto("/wellness");
   await expect(page).toHaveURL(/\/tasks$/);
-  await expect(page.getByRole("heading", { name: "How you're really doing." })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Mood and medication" })).toHaveCount(0);
 });
 
 test("Meds dialog opens from the rail, closes on Escape, and returns focus", async ({ page }) => {

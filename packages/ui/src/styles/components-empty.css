@@ -17,6 +17,8 @@
 .jds-empty__title {
   font-family: var(--font-display);
   font-size: 21px;
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
   color: var(--text);
   margin-top: 16px;
 }

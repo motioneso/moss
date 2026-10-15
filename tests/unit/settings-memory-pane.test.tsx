@@ -27,7 +27,7 @@ function renderPane(): string {
 describe("MemoryPane", () => {
   it("shows memory records without feature toggles", () => {
     const html = renderPane();
-    expect(html).toContain("Memory dashboard");
+    expect(html).toContain("Saved memories");
     expect(html).not.toContain("Conversation recall");
     expect(html).not.toContain("Learn patterns");
   });

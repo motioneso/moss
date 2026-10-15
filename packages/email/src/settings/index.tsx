@@ -242,13 +242,13 @@ export default function EmailSettings() {
   return (
     <>
       {head}
-      <Group title="Briefing signal">
+      <Group title="Briefings">
         <Row
-          name="Include email signal in briefings"
-          desc="Surface the specific threads that matter instead of inbox volume."
+          name="Include important email in briefings"
+          desc="Show important email threads in your briefings."
           control={
             <Switch
-              ariaLabel="Include email signal in briefings"
+              ariaLabel="Include important email in briefings"
               checked={behaviorEnabled}
               disabled={disabled}
               onChange={(value) => behaviorMutation.mutate(value)}
@@ -278,11 +278,11 @@ export default function EmailSettings() {
           }
         />
         <Row
-          name="Create tasks from email signals"
-          desc="Allow briefing-worthy email to become task proposals through the normal task action loop."
+          name="Suggest tasks in briefings"
+          desc="Suggest tasks from important email in briefings. Automatic task capture uses the Task creation setting."
           control={
             <Switch
-              ariaLabel="Create tasks from email signals"
+              ariaLabel="Suggest tasks in briefings"
               checked={settings?.createTasks ?? true}
               disabled={disabled}
               onChange={(value) => settingsMutation.mutate({ createTasks: value })}
@@ -303,7 +303,7 @@ export default function EmailSettings() {
         />
         <Row
           name="Draft replies"
-          desc="Permit draft generation through normal email tooling when that path is available."
+          desc="Include reply drafting among the actions suggested in email briefings."
           control={
             <Switch
               ariaLabel="Draft replies"
@@ -314,11 +314,11 @@ export default function EmailSettings() {
           }
         />
         <Row
-          name="Auto-send replies"
-          desc="Sending still follows your email approval rules. Turning this on does not change those rules."
+          name="Suggest sending replies"
+          desc="Include sending among the actions suggested in email briefings. Sending still follows your email approval rules. Turning this on does not change those rules."
           control={
             <Switch
-              ariaLabel="Auto-send replies"
+              ariaLabel="Suggest sending replies"
               checked={settings?.autoSend ?? false}
               disabled={disabled}
               onChange={(value) => settingsMutation.mutate({ autoSend: value })}
@@ -326,10 +326,10 @@ export default function EmailSettings() {
           }
         />
       </Group>
-      <Group title="Reply agency">
+      <Group title="Automatic drafts">
         <Row
           name="Let your assistant draft email replies without asking"
-          desc="When on, your assistant saves reply drafts to the original Gmail thread automatically. Drafts never send on their own — you still open and send them yourself."
+          desc="When on, your assistant saves reply drafts to the original Gmail thread without asking first. This only saves a draft. Sending a reply is a separate action and still follows your email approval rules."
           control={
             <Switch
               ariaLabel="Let your assistant draft email replies without asking"

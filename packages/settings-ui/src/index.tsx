@@ -86,16 +86,19 @@ export function PaneHead(props: { readonly title: string; readonly desc?: string
 
 export function Group(props: {
   readonly title: ReactNode;
+  /** Groups sit below PaneHead; nested groups can choose the next heading level. */
+  readonly titleAs?: "h2" | "h3" | "h4" | "h5" | "h6";
   readonly desc?: ReactNode;
   readonly action?: ReactNode;
   readonly children: ReactNode;
   readonly tone?: "danger";
 }) {
+  const Title = props.titleAs ?? "h3";
   return (
     <section className={props.tone === "danger" ? "pane__card pane__card--danger" : "pane__card"}>
       <header className="pane__cardhead">
         <div className="pane__cardheadmain">
-          <div className="pane__cardtitle">{props.title}</div>
+          <Title className="pane__cardtitle">{props.title}</Title>
           {props.desc ? <div className="pane__carddesc">{props.desc}</div> : null}
         </div>
         {props.action ? <div className="pane__cardaction">{props.action}</div> : null}

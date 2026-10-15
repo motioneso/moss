@@ -331,7 +331,9 @@ function TransactionsBody(props: {
   };
   if (rows.length === 0) {
     if (filter === "look") {
-      return <EmptyState title="Nothing needs a look" body="Moss is sure about everything here." />;
+      return (
+        <EmptyState title="Nothing needs a look" body="No transactions in this view need review." />
+      );
     }
     if (props.searching) {
       return <EmptyState title="No matches" body="No transaction in this month matches." />;

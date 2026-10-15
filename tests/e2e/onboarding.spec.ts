@@ -21,7 +21,9 @@ test("bootstrap owner with incomplete onboarding sees the wizard, then the app s
   await expect(page.getByText("Moss setup")).toBeVisible();
   await expect(page.getByLabel("Onboarding progress").getByText("Owner")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Let’s get your Moss set up." })).toBeVisible();
-  await expect(page.getByText("A secure, inspectable connection to your machine.")).toBeVisible();
+  await expect(
+    page.getByText("Select the AI tool you want to run. We'll check if it's installed.")
+  ).toBeVisible();
   await expect(page.getByText("Skip setup and open the app.")).toBeVisible();
   await expect(page.getByText("Tweaks")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Ask Moss/ })).toHaveCount(0);
@@ -31,7 +33,7 @@ test("bootstrap owner with incomplete onboarding sees the wizard, then the app s
   while (await continueButton.isVisible()) {
     await continueButton.click();
   }
-  await expect(page.getByRole("heading", { name: "Moss is ready." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review your setup." })).toBeVisible();
   // v0.1.3 founder flow: welcome → Assistant (cliAuth) → Google (connectors) → Finish.
   // The multiplexer "Control channel" step is gone; the finish recap shows Provider + Google.
   await expect(

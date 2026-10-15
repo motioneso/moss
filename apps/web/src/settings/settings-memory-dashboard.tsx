@@ -38,8 +38,8 @@ const TAB_STATUS: Record<DashboardTab, MemoryDashboardStatusFilter> = {
 };
 
 const TAB_LABELS: { readonly value: DashboardTab; readonly label: string }[] = [
-  { value: "pending", label: "Review Queue" },
-  { value: "active", label: "Memory Records" },
+  { value: "pending", label: "To review" },
+  { value: "active", label: "Saved memories" },
   { value: "history", label: "History" }
 ];
 
@@ -155,9 +155,9 @@ function CandidateActions(props: {
 
   function handleSuppress() {
     confirm({
-      title: "Suppress this candidate?",
-      description: "It won't appear in your review queue again.",
-      confirmLabel: "Suppress",
+      title: "Stop suggesting this memory?",
+      description: "It won't appear for review again.",
+      confirmLabel: "Stop suggesting",
       danger: true,
       onConfirm: () => suppressMutation.mutate()
     });
@@ -226,7 +226,7 @@ function CandidateActions(props: {
           Reject
         </Button>
         <Button variant="quiet" size="sm" disabled={busy} onClick={handleSuppress}>
-          Suppress
+          Stop suggesting
         </Button>
       </div>
     </div>
@@ -507,7 +507,15 @@ function DashboardList(props: { readonly status: MemoryDashboardStatusFilter }) 
           ))}
         </div>
       ) : !isError ? (
-        <EmptyState title="Nothing here." />
+        <EmptyState
+          title={
+            status === "pending"
+              ? "No memories to review."
+              : status === "active"
+                ? "No saved memories yet."
+                : "No memory history yet."
+          }
+        />
       ) : null}
     </>
   );
@@ -526,13 +534,10 @@ export function MemoryDashboardPane() {
   });
 
   const pendingCount = counts.data?.pending ?? 0;
-  const reviewLabel = pendingCount > 0 ? `Review Queue (${pendingCount})` : "Review Queue";
+  const reviewLabel = pendingCount > 0 ? `To review (${pendingCount})` : "To review";
 
   return (
-    <Group
-      title="Memory dashboard"
-      desc="Review new candidates, inspect your memory graph, and manage records."
-    >
+    <Group title="Saved memories" desc="Review suggested memories and edit or remove saved ones.">
       <div className="memdash">
         <Segmented
           value={tab}
@@ -542,7 +547,7 @@ export function MemoryDashboardPane() {
               : (t as { value: DashboardTab; label: string })
           )}
           onChange={setTab}
-          ariaLabel="Memory dashboard tabs"
+          ariaLabel="Memory views"
         />
         <DashboardList status={TAB_STATUS[tab]} />
       </div>

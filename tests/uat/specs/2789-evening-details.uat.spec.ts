@@ -264,7 +264,7 @@ test("evening finished items and planning side column carry grounded notes", asy
     .getByRole("radiogroup", { name: "Day capacity" })
     .getByLabel(/A steady day/)
     .click();
-  await dialog.getByLabel("The one thing that matters").selectOption(ids[0]!);
+  await dialog.getByLabel("Main task", { exact: true }).selectOption(ids[0]!);
   // Start at 1 pm: the dentist ends 9:45 am (195 free minutes), blocks run 1:00-2:00 pm and
   // 2:30-3:30 pm around the 2:00-2:30 pm call (30 minutes between them).
   await dialog.locator("#evening-start").fill("13:00");
@@ -321,7 +321,7 @@ test("evening finished items and planning side column carry grounded notes", asy
   await dialog.getByRole("button", { name: "Save proposed plan" }).click();
   const saved = dialog.getByRole("region", { name: "Plan saved" });
   await expect(saved).toBeVisible();
-  await expect(saved).toContainText("Tomorrow is ready to meet you.");
+  await expect(saved).toContainText("Tomorrow's plan is saved.");
 
   for (const [name, width, height] of [
     ["1440", 1440, 900],

@@ -285,7 +285,7 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   await settings
     .getByRole("radio", { name: /Handle routine, ask about new/ })
     .click({ force: true });
-  const limitBox = settings.getByLabel("Moss can move up to, per move");
+  const limitBox = settings.getByLabel("Maximum per budget move");
   await limitBox.fill("100");
   await limitBox.press("Enter");
   // Both choices must survive a reload, so they came back from the server.
@@ -294,7 +294,7 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
     await expect(
       settings.getByRole("radio", { name: /Handle routine, ask about new/ })
     ).toBeChecked({ timeout: 5_000 });
-    await expect(settings.getByLabel("Moss can move up to, per move")).toHaveValue("$100", {
+    await expect(settings.getByLabel("Maximum per budget move")).toHaveValue("$100", {
       timeout: 5_000
     });
   }).toPass({ timeout: 60_000, intervals: [3_000] });

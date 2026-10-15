@@ -38,7 +38,7 @@ export function MatchRecordCard(props: { detail: MatchDetail }): ReactNodeLike {
   return (
     <div className="jds-card jds-card--sunken jsm-discuss-card">
       <span className="jds-eyebrow">{detail.company}</span>
-      <h4 className="jsm-discuss-card__title">{detail.title}</h4>
+      <h4 className="jds-card-title jsm-discuss-card__title">{detail.title}</h4>
       {/* Gold, not a badge, here too — the same annotation must not change shape between the
           row, the detail screen and this panel, or it reads as three different flags (match-
           row.tsx's own comment carries the ruling). */}

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "food",
   "name": "Food",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -76,6 +76,14 @@
       "icon": "utensils"
     }
   ],
+  "appMap": {
+    "features": [
+      {
+        "id": "food.empty-day",
+        "description": "An empty day offers Log a meal, which opens an editable assistant draft. Its instructions describe meal logging and mention nutrition estimates only when estimates are enabled; when disabled, a note explains that meals are logged without numbers."
+      }
+    ]
+  },
   "worker": {
     "queues": [
       {

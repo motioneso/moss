@@ -68,9 +68,19 @@ export function SettingsIntegrationsPane({ embedded }: { readonly embedded?: boo
           </Button>
         }
       >
-        {integrations.length === 0 ? (
-          <Row name="No connections yet." />
-        ) : (
+        {listQuery.isError ? (
+          <div className="set2-read-state" role="status">
+            <span>Couldn’t load connections. Try again.</span>
+            <Button variant="quiet" size="sm" onClick={() => void listQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : null}
+        {listQuery.data === undefined && !listQuery.isError ? (
+          <div role="status">
+            <Row name="Loading connections…" />
+          </div>
+        ) : integrations.length > 0 ? (
           integrations.map((integration) => (
             <IntegrationRow
               key={integration.id}
@@ -79,7 +89,11 @@ export function SettingsIntegrationsPane({ embedded }: { readonly embedded?: boo
               onConfigure={() => openIntegration(integration.id)}
             />
           ))
-        )}
+        ) : listQuery.data !== undefined && !listQuery.isError ? (
+          <div role="status">
+            <Row name="No connections yet." />
+          </div>
+        ) : null}
       </Group>
     </>
   );

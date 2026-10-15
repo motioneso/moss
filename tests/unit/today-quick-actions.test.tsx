@@ -228,8 +228,8 @@ describe("TodayQuickActions", () => {
       expect(textOf(root)).toContain("1 of 2 logged");
       expect(textOf(root)).toContain("+");
       expect(root.findByProps({ "aria-label": "Log medication" })).toBeDefined();
-      expect(textOf(root)).toContain("Check in with yourself");
-      expect(textOf(root)).toContain("A moment to notice how you are.");
+      expect(textOf(root)).toContain("Mood check-in");
+      expect(textOf(root)).toContain("Record how you feel.");
       expect(textOf(root)).toContain("Check in");
     } finally {
       renderer.unmount();

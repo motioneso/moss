@@ -41,8 +41,8 @@ describe("MemoryDashboardPane", () => {
   it("renders the tab control", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const html = renderWithQuery(createElement(MemoryDashboardPane), client);
-    expect(html).toContain("Review Queue");
-    expect(html).toContain("Memory Records");
+    expect(html).toContain("To review");
+    expect(html).toContain("Saved memories");
     expect(html).toContain("History");
   });
 
@@ -55,7 +55,7 @@ describe("MemoryDashboardPane", () => {
     );
     client.setQueryData(queryKeys.memory.dashboard({}), makeDashboardResponse([item]));
     const html = renderWithQuery(createElement(MemoryDashboardPane), client);
-    expect(html).toContain("Review Queue (1)");
+    expect(html).toContain("To review (1)");
   });
 
   it("renders empty state when no items", () => {
@@ -66,7 +66,7 @@ describe("MemoryDashboardPane", () => {
     );
     client.setQueryData(queryKeys.memory.dashboard({}), makeDashboardResponse([]));
     const html = renderWithQuery(createElement(MemoryDashboardPane), client);
-    expect(html).toContain("Nothing here");
+    expect(html).toContain("No memories to review.");
   });
 
   it("renders item row with kind and status badges", () => {

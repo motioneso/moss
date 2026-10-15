@@ -114,8 +114,8 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
       ) : null}
       {!query.isPending && !query.isError && projects.length === 0 ? (
         <EmptyState
-          title="A small idea is a good start."
-          description="Your projects will stay here, from the first question to a finished module."
+          title="No projects yet."
+          description="Start with an idea. Your project and its conversation will be saved here."
         >
           <div className="workshop-empty-action">
             <ButtonLink
@@ -289,7 +289,7 @@ export function WorkshopProjectNew({ canMutate }: { canMutate: boolean }) {
         }}
         error={
           mutation.isError
-            ? "The project could not be confirmed as saved. Your text is still here; retry to check the same request."
+            ? "We couldn’t confirm the project was saved. Your text is still here. Try again to check."
             : null
         }
       />

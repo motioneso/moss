@@ -10,7 +10,11 @@ export function TaskHistory({ task, locale }: TaskDetailProps) {
   const { openChatThread } = useChatControls();
   return (
     <section className="scheduled-task-history" aria-label="Run history">
-      <SectionHead title="Run history" titleAs="h3" />
+      <SectionHead
+        title="Run history"
+        titleAs="h4"
+        titleClassName="scheduled-task-detail__section-title"
+      />
       {task.runs.length === 0 ? (
         <p role="status">
           {task.state === "active" || task.state === "paused"

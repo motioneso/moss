@@ -35,6 +35,11 @@ export const goalsModuleManifest: MossModuleManifest = {
   compatibility: { jarv1s: ">=0.0.0" },
   features: [
     {
+      id: "goals.today_section",
+      description:
+        "Today shows active long-term goals in a labeled section with a heading. The section stays hidden while loading or when there are no active goals."
+    },
+    {
       id: "goals.chat_app_actions",
       description:
         "App actions read and create goals. Edit and evidence routes remain blocked for memory synchronization. Dedicated goal tools resolve goals by title; foreign-source evidence references need a supported source resolver."
