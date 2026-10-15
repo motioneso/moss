@@ -23,6 +23,8 @@ import {
 } from "./real-chat-signin.js";
 import { uatRealChatProvider } from "../real-chat-env.js";
 
+// Proposed #3514 acceptance amendment; Ben approval is required before claiming completion.
+// The unchanged 74508da41 failure is retained in PR #3523.
 // Owner-only real-provider proof. Run through test:uat:3065-real, whose preflight must run
 // BEFORE provisioning: the existing provisioner otherwise auto-copies a host Codex login.
 // No scripted provider, response interception, mock server, or screenshot is used here.
@@ -222,7 +224,12 @@ async function approveThemeChange(
   const turn = await startTurn(page, drawer, request);
   const card = pendingCard(drawer);
   await expect(card).toHaveCount(1, { timeout: TURN_TIMEOUT });
-  await expect(card.getByText(NOTICE, { exact: true })).toBeVisible();
+  // #3338: an ask-each-time dedicated tool also asks when clean; outside content is not the cause.
+  if (tool === "app.callAction") {
+    await expect(card.getByText(NOTICE, { exact: true })).toBeVisible();
+  } else {
+    await expect(card.getByText(NOTICE, { exact: true })).toHaveCount(0);
+  }
   expect(await cardTool(card)).toBe(tool);
   await expect(card.getByText(mode === "dark" ? "Dark" : "Light", { exact: true })).toBeVisible();
   await expect(card).not.toContainText("/api/me/themes/mode");
@@ -464,6 +471,51 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
       countApproval();
     });
 
+    await test.step("installed user trust runs the dedicated write after recall", async () => {
+      const policy = {
+        moduleId: "settings",
+        actionFamilyId: "settings.preference-write",
+        tier: "trusted_auto"
+      };
+      expect(
+        await readUatJson(
+          await page.request.patch("/api/ai/action-policy/settings/settings.preference-write", {
+            data: { tier: policy.tier }
+          })
+        )
+      ).toEqual(policy);
+      expect(await readUatJson(await page.request.get("/api/ai/action-policy"))).toEqual(
+        expect.objectContaining({ policies: expect.arrayContaining([policy]) })
+      );
+      const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+      const turn = await startTurn(
+        page,
+        drawer,
+        "Use settings.themeMode.set with mode dark to change my color mode."
+      );
+      const proof = await readTurnProof(page, await turn.completion);
+      expect(proof.tainted).toBe(true);
+      expect(
+        proof.message.activity.some(
+          (event) => event.toolName === "settings.themeMode.set" && event.outcome === "executed"
+        )
+      ).toBe(true);
+      await expect(pendingCard(drawer)).toHaveCount(0);
+      await expect.poll(async () => (await themes(page)).mode).toBe("dark");
+      await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark");
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+      console.log(
+        "[3065 current-policy supplement] real trusted_auto owner policy verified; tainted dedicated write executed without card and UI refreshed without reload"
+      );
+      expect(
+        await readUatJson(
+          await page.request.patch("/api/ai/action-policy/settings/settings.preference-write", {
+            data: { tier: "ask_each_time" }
+          })
+        )
+      ).toEqual({ ...policy, tier: "ask_each_time" });
+    });
+
     await test.step("two destructive cards name different real targets and refresh the gallery", async () => {
       for (const theme of customThemes) {
         const galleryCard = page.locator(".theme-card").filter({ hasText: theme.name });
@@ -478,7 +530,8 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
         await expect(card).toHaveCount(1, { timeout: TURN_TIMEOUT });
         expect(await cardTool(card)).toBe("app.callAction");
         await expect(card.locator(".action-request-target")).toHaveText(theme.name);
-        await expect(card.getByText(NOTICE, { exact: true })).toBeVisible();
+        // Destructive calls ask even when clean; do not attribute this card to outside content.
+        await expect(card.getByText(NOTICE, { exact: true })).toHaveCount(0);
         expect((await themes(page)).custom.some((item) => item.id === theme.id)).toBe(true);
         await card.getByRole("button", { name: "Approve", exact: true }).click();
         countApproval();

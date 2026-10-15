@@ -43,12 +43,14 @@ const APP_ACTIONS: SpecRules = {
   kept: [
     ['expect(message?.status).toBe("stored");', 1],
     ['expect(message?.origin, "classifier handling is not real-model proof").toBeUndefined();', 1],
-    ["await expect(card.getByText(NOTICE, { exact: true })).toBeVisible();", 2],
+    // Proposed #3514 amendment: only the generic per-call write asks because of outside content.
+    ["await expect(card.getByText(NOTICE, { exact: true })).toBeVisible();", 1],
+    ["await expect(card.getByText(NOTICE, { exact: true })).toHaveCount(0);", 2],
     ["expect(await cardTool(card)).toBe(tool);", 1],
     ['await expect(card).not.toContainText("/api/me/themes/mode");', 1],
     ['await expect(card).not.toContainText("app.callAction");', 1],
     ['expect((await themes(page)).mode, "must remain unchanged before approval")', 1],
-    ["expect(proof.tainted).toBe(true);", 2],
+    ["expect(proof.tainted).toBe(true);", 3],
     ['"screen must update without reload"', 1],
     ['"unsupported native permission tool; do not approve"', 1],
     ['"native command summary must match exactly, without normalization or truncation"', 1],
@@ -63,7 +65,7 @@ const APP_ACTIONS: SpecRules = {
     ['await expect(card.locator(".action-request-target")).toHaveText(theme.name);', 1],
     ["expect((await themes(page)).custom.some((item) => item.id === theme.id)).toBe(true);", 1],
     ["await expect(galleryCard).toHaveCount(0);", 1],
-    ["expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);", 1],
+    ["expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);", 2],
     [
       "expect(toolCalls(proof).some((name) => /notes[._]|readAttachment/i.test(name))).toBe(false);",
       1
@@ -72,7 +74,7 @@ const APP_ACTIONS: SpecRules = {
     ["/blocked|self_authority|outside the allowed route policy/i", 1],
     ["expect(toolCalls(proof).some((name) => /app[._]callAction$/.test(name))).toBe(true);", 1],
     ['expect(await readUatJson(await page.request.get("/api/me/yolo"))).toEqual(before);', 1],
-    ["await expect(pendingCard(drawer)).toHaveCount(0);", 2]
+    ["await expect(pendingCard(drawer)).toHaveCount(0);", 3]
   ]
 };
 

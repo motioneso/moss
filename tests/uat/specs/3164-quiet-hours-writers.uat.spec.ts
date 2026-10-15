@@ -69,7 +69,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skip = page.getByRole("button", { name: "Skip setup" });
-  const menu = page.locator(".jds-usermenu__trigger");
+  const menu = page.getByRole("button", { name: /^Account menu(?:, \S+ unread notifications?)?$/ });
   await expect(skip.or(menu).first()).toBeVisible({ timeout: 30_000 });
   if (await skip.isVisible()) {
     await skip.click();
@@ -138,7 +138,12 @@ async function openChat(page: Page): Promise<Locator> {
   return drawer;
 }
 
-async function sendReal(page: Page, drawer: Locator, text: string): Promise<string> {
+async function sendReal(
+  page: Page,
+  drawer: Locator,
+  text: string,
+  expectedTool: string
+): Promise<string> {
   const completed = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -169,7 +174,28 @@ async function sendReal(page: Page, drawer: Locator, text: string): Promise<stri
   }
   const response = await settled;
   expect(response.ok(), `real UI turn returned ${response.status()}`).toBe(true);
-  const result = (await response.json()) as { reply?: string };
+  const result = (await response.json()) as { reply?: string; assistantMessageId: string };
+  const threadId = execUatSql(
+    projectName(),
+    `SELECT thread_id FROM app.chat_messages WHERE id = '${result.assistantMessageId}'::uuid AND owner_user_id = '${UAT_ADMIN_ID}'::uuid`
+  ).trim();
+  const messages = (await (
+    await page.request.get(`/api/chat/threads/${threadId}/messages?surface=drawer`)
+  ).json()) as {
+    messages: {
+      id: string;
+      activity: { kind: string; toolName?: string; outcome?: string; text: string }[];
+    }[];
+  };
+  const activity =
+    messages.messages.find((message) => message.id === result.assistantMessageId)?.activity ?? [];
+  const executed = activity
+    .filter((event) => event.kind === "action_result" && event.outcome === "executed")
+    .map((event) => event.toolName);
+  expect(executed, "ordinary chat must use the tracked settings tool").toContain(expectedTool);
+  console.log(
+    `[3515 tool proof] ${JSON.stringify({ threadId, assistantMessageId: result.assistantMessageId, executed })}`
+  );
   expect(typeof result.reply).toBe("string");
   expect(result.reply?.trim().length).toBeGreaterThan(0);
   await expect(drawer.getByText(result.reply!, { exact: true }).last()).toBeVisible();
@@ -192,17 +218,27 @@ test("Moss chat changes and undoes quiet hours, and undo refuses to overwrite a 
   expect(seeded.status).toBe(200);
 
   const drawer = await openChat(page);
-  await sendReal(page, drawer, "Set my quiet hours from 21:30 to 06:30.");
+  await sendReal(
+    page,
+    drawer,
+    "Set my quiet hours from 21:30 to 06:30.",
+    "settings.quietHours.set"
+  );
   await expect
     .poll(async () => (await quietHours(page)).quietHours, { timeout: 30_000 })
     .toMatchObject({ enabled: true, start: "21:30", end: "06:30", timezone: TIME_ZONE });
 
-  await sendReal(page, drawer, "Undo that quiet hours change.");
+  await sendReal(page, drawer, "Undo that quiet hours change.", "settings.undoLast");
   await expect
     .poll(async () => (await quietHours(page)).quietHours, { timeout: 30_000 })
     .toEqual(baseline);
 
-  await sendReal(page, drawer, "Set my quiet hours from 23:15 to 05:45.");
+  await sendReal(
+    page,
+    drawer,
+    "Set my quiet hours from 23:15 to 05:45.",
+    "settings.quietHours.set"
+  );
   await expect
     .poll(async () => (await quietHours(page)).quietHours, { timeout: 30_000 })
     .toMatchObject({ start: "23:15", end: "05:45" });
@@ -220,7 +256,12 @@ test("Moss chat changes and undoes quiet hours, and undo refuses to overwrite a 
   expect(stale.status).toBe(409);
   expect((await quietHours(page)).quietHours).toEqual(competing);
 
-  const undoReply = await sendReal(page, drawer, "Undo my last quiet hours change.");
+  const undoReply = await sendReal(
+    page,
+    drawer,
+    "Undo my last quiet hours change.",
+    "settings.undoLast"
+  );
   await page.waitForTimeout(2_000);
   expect((await quietHours(page)).quietHours).toEqual(competing);
 
@@ -308,6 +349,7 @@ test("Profile, alert settings and the briefing worker keep quiet hours safe (#31
      ON CONFLICT (owner_user_id, key) DO UPDATE SET value_json = EXCLUDED.value_json`
   );
   const profileRaw = rawPreference("quiet-hours");
+  const beforeLegacy = await quietHours(page);
 
   const emailOnly = await patchAlerts(page, { automaticEmailAlerts: false });
   expect(emailOnly.status).toBe(200);
@@ -318,30 +360,48 @@ test("Profile, alert settings and the briefing worker keep quiet hours safe (#31
     quietHours: LEGACY_ALERTS.quietHours
   });
 
+  const alertSnapshot = rawPreference(ALERTS_KEY);
   const equal = await patchAlerts(page, {
     quietHours: { enabled: true, startLocalTime: "09:00", endLocalTime: "09:00" }
   });
   expect(equal.status).toBe(400);
+  expect(rawPreference(ALERTS_KEY)).toEqual(alertSnapshot);
+  expect(rawPreference("quiet-hours")).toEqual(profileRaw);
+  expect(await quietHours(page)).toEqual(beforeLegacy);
   const loose = await patchAlerts(page, {
     quietHours: { enabled: true, startLocalTime: "7:30", endLocalTime: "08:00" }
   });
   expect(loose.status).toBe(400);
-  expect(rawPreference(ALERTS_KEY)).toMatchObject({ quietHours: LEGACY_ALERTS.quietHours });
+  expect(rawPreference(ALERTS_KEY)).toEqual(alertSnapshot);
+  expect(rawPreference("quiet-hours")).toEqual(profileRaw);
+  expect(await quietHours(page)).toEqual(beforeLegacy);
 
   const legacyPatch = await patchAlerts(page, {
     quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "06:00" }
   });
   expect(legacyPatch.status).toBe(200);
-  expect(rawPreference(ALERTS_KEY)).toMatchObject({
-    automaticEmailAlerts: false,
-    dailyCardCap: 7,
-    sources: LEGACY_ALERTS.sources,
-    quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "06:00" }
+  expect(rawPreference(ALERTS_KEY)).toEqual(alertSnapshot);
+  const canonical = await quietHours(page);
+  expect(canonical).toMatchObject({
+    quietHours: { enabled: true, start: "21:00", end: "06:00", timezone: TIME_ZONE },
+    authority: { status: "canonical", alerts: null }
   });
-  expect(rawPreference("quiet-hours")).toEqual(profileRaw);
+  expect(canonical.version).not.toBe(beforeLegacy.version);
+  expect(rawPreference("quiet-hours")).toEqual({
+    ...(profileRaw as Record<string, unknown>),
+    start: "21:00",
+    end: "06:00"
+  });
+  expect(legacyPatch.body).toMatchObject({
+    settings: {
+      automaticEmailAlerts: false,
+      dailyCardCap: 7,
+      sources: LEGACY_ALERTS.sources,
+      quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "06:00" }
+    }
+  });
   console.log(
-    `[3164 alerts proof] email-only kept raw 24:30/24:30, equal and loose -> ${equal.status}/${loose.status}, ` +
-      `alerts window 21:00-06:00 saved with sources and cap kept, Profile record untouched`
+    `[3164 alerts proof] invalid legacy writes preserved both rows/version; quiet-only PATCH updated canonical Profile 21:00-06:00 and version, API effective schedule matches, legacy snapshot and email/source/cap data unchanged`
   );
 
   // The briefing worker honors the final saved Profile window.
@@ -353,10 +413,13 @@ test("Profile, alert settings and the briefing worker keep quiet hours safe (#31
   const start = hhmm(now);
   const end = hhmm(releaseAt);
 
+  // Fetch the canonical PATCH's new version before editing the local draft.
+  await page.reload();
   await from.fill(start);
-  await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe(start);
   await to.fill(end);
-  await expect.poll(async () => (await quietHours(page)).quietHours.end).toBe(end);
+  expect((await quietHours(page)).quietHours).toEqual(canonical.quietHours);
+  await page.getByRole("button", { name: "Save quiet hours" }).click();
+  await expect(page.getByText("Quiet hours saved.")).toBeVisible();
   await expect
     .poll(async () => (await quietHours(page)).quietHours)
     .toMatchObject({ enabled: true, start, end });

@@ -666,7 +666,7 @@ async function invoke(
       if (typeof params.line !== "string") {
         throw new BadRequestError("acpSend.line must be a string");
       }
-      host.acpSend(key, params.line);
+      await host.acpSend(key, params.line);
       return { accepted: true };
     }
     case "acpRead": {

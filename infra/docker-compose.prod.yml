@@ -13,6 +13,9 @@
 # Notes-enabled deploys must also pass `-f docker-compose.notes.yml`; it mounts
 # JARVIS_NOTES_VAULT_HOST_PATH at the fixed in-container /data/external-notes path.
 #
+# Native commands on restricted Linux hosts: install the enforced profiles and add
+# `-f docker-compose.native-sandbox.yml`; see docs/native-command-sandbox.md.
+#
 # Manual migration recovery:
 #   docker compose -p moss -f docker-compose.prod.yml --env-file ./env.production.local \
 #     --profile ops run --rm migrate

@@ -170,6 +170,11 @@ jobs:
           fi
           exit "$status"
 
+      - name: Install native vault ACL test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends acl
+
       - name: Run unit tests
         run: |
           status=0

@@ -7,6 +7,7 @@ export {
 } from "./vault-context.js";
 export type { VaultContext } from "./vault-context.js";
 export { getVaultBaseDir } from "./vault-config.js";
+export { grantVaultNativeReadAccess } from "./native-read-access.js";
 export {
   createVaultFile,
   deleteUserVaultDir,
