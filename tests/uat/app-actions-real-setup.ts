@@ -40,7 +40,7 @@ export default async function prepareAskingOwner(): Promise<void> {
       expect.objectContaining({ policies: expect.arrayContaining([policy]) })
     );
     expect(await readUatJson(await page.request.get("/api/me/yolo"))).toEqual(
-      expect.objectContaining({ enabled: false })
+      expect.objectContaining({ self: expect.objectContaining({ enabled: false, active: false }) })
     );
     console.log(
       "[3065 owner setup] real owner API saved and verified settings.preference-write=ask_each_time; Auto-approve off"
