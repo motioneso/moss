@@ -23,6 +23,9 @@ export default defineConfig({
     timeout: 10_000
   },
   retries: 0,
+  ...(process.env.MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF === "1"
+    ? { globalSetup: "./app-actions-real-setup.ts" }
+    : {}),
   use: {
     baseURL,
     actionTimeout: 30_000,

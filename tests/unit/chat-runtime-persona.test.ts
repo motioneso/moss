@@ -94,6 +94,9 @@ describe("MOSS_PERSONA_APP_ACTIONS", () => {
   });
 
   it("uses covered tools and discovers tracked undo instead of reconstructing a setting", () => {
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain(
+      "Honor an explicitly requested supported tool and route"
+    );
     expect(MOSS_PERSONA_APP_ACTIONS).toContain("coveredBy");
     expect(MOSS_PERSONA_APP_ACTIONS).toContain("settings.undoLast");
     expect(MOSS_PERSONA_APP_ACTIONS).toContain("Never reconstruct a previous value");
