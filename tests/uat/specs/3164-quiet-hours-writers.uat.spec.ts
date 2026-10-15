@@ -360,17 +360,19 @@ test("Profile, alert settings and the briefing worker keep quiet hours safe (#31
     quietHours: LEGACY_ALERTS.quietHours
   });
 
+  const alertSnapshot = rawPreference(ALERTS_KEY);
   const equal = await patchAlerts(page, {
     quietHours: { enabled: true, startLocalTime: "09:00", endLocalTime: "09:00" }
   });
   expect(equal.status).toBe(400);
+  expect(rawPreference(ALERTS_KEY)).toEqual(alertSnapshot);
+  expect(rawPreference("quiet-hours")).toEqual(profileRaw);
+  expect(await quietHours(page)).toEqual(beforeLegacy);
   const loose = await patchAlerts(page, {
     quietHours: { enabled: true, startLocalTime: "7:30", endLocalTime: "08:00" }
   });
   expect(loose.status).toBe(400);
-  expect(rawPreference(ALERTS_KEY)).toMatchObject({ quietHours: LEGACY_ALERTS.quietHours });
-
-  const alertSnapshot = rawPreference(ALERTS_KEY);
+  expect(rawPreference(ALERTS_KEY)).toEqual(alertSnapshot);
   expect(rawPreference("quiet-hours")).toEqual(profileRaw);
   expect(await quietHours(page)).toEqual(beforeLegacy);
 
