@@ -1,6 +1,6 @@
 # Unread Moss messages on the chat button
 
-Status: proposed; awaiting Ben's approval before implementation.
+Status: approved by Ben in chat on 2026-10-14; implementation underway.
 Task: #3520. Repository: `~/Jarv1s`.
 
 ## Request and intended behavior
@@ -91,4 +91,4 @@ shapes belong in the implementation plan after design approval.
    and a park theme, design-token checks, UI-class checks, scoped tests, lint, and typecheck.
 
 Run DB checks only through the `verify-gate` skill. Record real UI/worker evidence on the product
-PR before merge readiness. This proposal ships no product behavior and authorizes no deployment.
+PR before merge readiness. Approval authorizes implementation, not deployment.

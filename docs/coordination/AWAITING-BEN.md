@@ -75,10 +75,4 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Chat unread badge — #3520 (2026-10-14)
-
-Implementation awaits approval of
-[`2026-10-14-chat-unread-badge.md`](../superpowers/specs/2026-10-14-chat-unread-badge.md),
-as required by `CLAUDE.md`'s spec-before-build rule. Recommended: approve the proposed count
-badge (99+ cap), durable unread state, and clearing only the conversation actually opened.
-Alternative: revise that behavior before implementation. No product code has changed.
+Nothing open.
