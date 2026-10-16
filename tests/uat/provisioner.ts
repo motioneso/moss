@@ -1,3 +1,4 @@
+import { createLifecycleRecorder, type LifecycleAttempt } from "./lifecycle-records.js";
 import { buildUatComposeArgs } from "./compose-args.js";
 export { buildUatComposeArgs } from "./compose-args.js";
 import * as newsFeedbackFixture from "./fixtures/news-feedback-fixture-container.js";
@@ -498,11 +499,19 @@ export async function cleanupUatAttempt(input: {
   readonly teardownCompose: () => Promise<void>;
   readonly assertNoLeaks: () => Promise<void>;
   readonly cleanupEnvFile: () => void;
+  readonly beforeTeardown?: () => Promise<void>;
+  readonly afterTeardown?: (failed: boolean) => Promise<void>;
   readonly error?: unknown;
 }): Promise<void> {
   const errors: unknown[] = Object.hasOwn(input, "error") ? [input.error] : [];
   try {
-    for (const cleanup of [input.teardownCompose, input.assertNoLeaks]) {
+    for (const cleanup of [
+      input.beforeTeardown,
+      input.teardownCompose,
+      input.assertNoLeaks,
+      input.afterTeardown && (() => input.afterTeardown!(errors.length > 0))
+    ]) {
+      if (!cleanup) continue;
       try {
         await cleanup();
       } catch (error) {
@@ -696,6 +705,7 @@ export async function provisionForUat(
     readonly installRealChatAuth?: typeof installUatRealChatAuth;
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
+  const recordLifecycle = await createLifecycleRecorder();
   const overallStart = Date.now();
   // #1024/#1000: bounded by the reserved range itself (100 candidates) — never an unbounded
   // retry. Each failed-on-bind attempt removes its port from the pool; exhausting the pool means
@@ -762,20 +772,19 @@ export async function provisionForUat(
     // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
     Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
 
-    // #2732: set once `jarv1s` is up and the Codex credential copy (if any) has run — read by
-    // teardownCompose below, so declared before it.
+    const attempt: LifecycleAttempt & { failed: boolean } = {
+      projectName,
+      webPort,
+      composeArgs: buildUatComposeArgs(projectName, []),
+      failed: false
+    };
     let realChatAuth: UatRealChatAuth | undefined;
 
     // #1306: the fixture container is removed FIRST — an outside container still attached to the
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
     // follows would then fail on an otherwise clean run.
     const teardownCompose = async () => {
-      // #2732: must run before `down -v` below — it needs the still-running `jarv1s` container to
-      // remove the copied credential; the container going down destroys it anyway, but doing this
-      // first keeps the security property (removed at teardown) true even if `down -v` itself
-      // fails partway through. A failed credential cleanup is now loud (real-chat-env.ts throws),
-      // so it is caught here and rethrown at the end — `down -v` and the network cleanup below
-      // must still run either way, or a failed credential wipe would also leak the whole stack.
+      // Credential cleanup must precede down; retain its error while attempting resource cleanup.
       let realChatCleanupError: unknown;
       if (realChatAuth !== undefined) {
         try {
@@ -829,10 +838,14 @@ export async function provisionForUat(
         teardownCompose,
         assertNoLeaks: () => assertNoLeakedResources(projectName),
         cleanupEnvFile: envFile.cleanup,
+        beforeTeardown: () => recordLifecycle("before-teardown", attempt),
+        afterTeardown: (failed) =>
+          recordLifecycle("after-teardown", { ...attempt, failed: failed || attempt.failed }),
         ...options
       });
 
     try {
+      await recordLifecycle("attempt-created", attempt);
       console.log(
         `[uat] provisioning ${projectName} on port ${webPort} subnet ${subnet.subnet} (${subnet.source})`
       );
@@ -847,17 +860,15 @@ export async function provisionForUat(
         ]);
         imageBuilt = true;
       }
+      await recordLifecycle("image-built", attempt);
       const plan = createUatProvisionPlan({ projectName, seedHook: bareSeedHook });
       for (const step of plan.slice(0, -1)) {
-        // #1024/#1000: the plan's LAST entry is always `down -v` (Task 4) — deliberately excluded
-        // from this loop and run once, in the catch/return paths below. Running it here too would
-        // double-run teardown on the success path.
+        // The final down step belongs to cleanupAttempt, including failed creation.
         console.log(`[uat] ${step.description}`);
         await runCommand(step.command, step.args);
+        await recordLifecycle("resources-created", attempt);
       }
-      // #2732: after the plan loop, because it needs the now-running `jarv1s` container for its
-      // docker exec calls. Codex (default): a no-op unless the operator's own machine has a
-      // signed-in Codex CLI. Claude (#3361): selected explicitly; the spec signs in through Moss.
+      // Auth copy needs the running app; Claude sign-in remains explicit in its spec.
       realChatAuth = (dependencies.installRealChatAuth ?? installUatRealChatAuth)(
         projectName,
         UAT_ADMIN_ID,
@@ -915,6 +926,7 @@ export async function provisionForUat(
           newsFeedbackFixtureBaseUrl
         )
       );
+      await recordLifecycle("resources-created", { ...attempt, requireApp: true });
       const baseURL = `http://127.0.0.1:${webPort}`;
       await waitForReady(`${baseURL}/health/ready`);
       console.log(`[uat] reachable at ${baseURL} after ${Date.now() - overallStart}ms`);
@@ -929,13 +941,17 @@ export async function provisionForUat(
           await cleanupAttempt();
         }
       };
-    } catch (error) {
+    } catch (caught) {
+      attempt.failed = true;
+      let error = caught;
+      try {
+        await recordLifecycle("resources-created", attempt);
+      } catch (metadataError) {
+        error = new AggregateError([error, metadataError], "UAT provisioning and lifecycle failed");
+      }
       if (error instanceof PortBindConflictError) {
         await cleanupAttempt();
-        // #1024/#1000: Coordinator condition 1 — findAvailablePort (Task 2) only proved this port
-        // free at probe time; docker just told us another process won the bind race. Retry with
-        // the next untried candidate instead of flaking the whole gate. The fixture container (if
-        // any) went down with teardownCompose above and is recreated under the next project name.
+        // A successful probe cannot prevent a later bind race; retry only after owned cleanup.
         console.warn(
           `[uat] port ${webPort} lost the bind race after probing free; retrying with next candidate (#1024)`
         );
