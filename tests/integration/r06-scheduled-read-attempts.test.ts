@@ -551,6 +551,48 @@ describe("durable scheduled read admission through the ordinary worker", () => {
     }
   );
 
+  it("app INSERT rejects a shape-valid running ledger with forged authority and receipts", async () => {
+    const saved = await save();
+    const reminder = await owner((db) =>
+      db.db
+        .selectFrom("app.chat_reminders")
+        .select(["reserved_message_id", "version"])
+        .where("id", "=", saved.id)
+        .executeTakeFirstOrThrow()
+    );
+    const token = randomUUID();
+    await bootstrap.query("DELETE FROM app.chat_scheduled_reads WHERE reminder_id=$1", [saved.id]);
+    // This complete running/count2 shape satisfies the independent ledger CHECK constraints.
+    // Removing INSERT privileges/policy protections must let this assertion resolve, not
+    // merely replace the permission error with a different constraint's rejection.
+    await expect(
+      owner((db) =>
+        db.db
+          .insertInto("app.chat_scheduled_reads")
+          .values({
+            reminder_id: saved.id,
+            owner_user_id: ids.userA,
+            operation: "tasks.get",
+            item_id: saved.task.id,
+            outcome: null,
+            attempt_message_id: reminder.reserved_message_id,
+            attempt_state: "running",
+            attempt_count: 2,
+            attempt_token: token,
+            attempt_version: reminder.version,
+            attempt_lease_until: new Date("2099-01-01T00:00:00Z"),
+            recovery_job_id: randomUUID(),
+            watchdog_token: token,
+            watchdog_generation: 1,
+            watchdog_job_id: randomUUID()
+          })
+          .returning(["attempt_state", "attempt_count", "recovery_job_id", "watchdog_job_id"])
+          .executeTakeFirstOrThrow()
+      )
+    ).rejects.toThrow(/permission denied/);
+    expect(await ledger(saved)).toBeUndefined();
+  });
+
   it("real owner RLS hides and refuses mutation of another owner's ledger", async () => {
     const saved = await save();
     expect(
