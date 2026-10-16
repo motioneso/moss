@@ -2,14 +2,11 @@
  * #3529 supplemental seeded-owner proof: signup, nine blocking UATs, N1,
  * cancellation/unsaved/fault/due-worker and routine activation remain OUTSTANDING.
  * BLOCKED: no complete correlated fallback observer. All live entries fail closed.
- * Intended protocol AFTER seam repair and exact executable review (read verify-gate):
- * pnpm exec tsx tests/uat/run-scheduled-read-terminal-uat.ts --launch <NEW-private-evidence-directory>
- * One no-sweep test:uat:3529-real gate, one wait --follow --log; local Docker endpoint,
- * pre-import private roots and source/image/DB identities.
+ * After seam repair/executable review: --launch <NEW-private-evidence-directory> (read verify-gate).
+ * One no-sweep test:uat:3529-real gate/wait; local Docker, pre-import private roots/source/image/DB.
  * Birth/group/session checked before signals/stop; uncertainty retains roots/port/resources (RED).
- * Aggregate 14m includes cleanup. RAW app/DB/transcript/seed-credential evidence is 0700/0600;
- * no zero-capture/erasure claim. Supported auth copying reuses the operator account in a
- * disposable volume; file presence is not readiness.
+ * Aggregate 14m includes cleanup. RAW evidence is 0700/0600, without a zero-capture/erasure claim.
+ * Supported auth copying reuses operator account in disposable volume; presence is not readiness.
  * --self-test: fake/local scratch only; no Docker/DB/browser/port/auth/network/provider.
  */
 import assert from "node:assert/strict";
@@ -29,6 +26,7 @@ import {
   rmSync,
   writeFileSync
 } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,6 +102,30 @@ function record(directory: string, name: string, data: unknown): void {
     mode: 0o600,
     flag: "wx"
   });
+}
+async function beforeDeadline<T>(operation: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const budget = remaining(Infinity);
+    if (!Number.isFinite(budget)) return operation(); // Fake controls have no live protocol.
+    return await Promise.race([
+      operation(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(Error("async deadline; retain ownership")), budget);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function terminalRecord(directory: string, name: string, data: unknown): Promise<void> {
+  const path = join(directory, name);
+  const bytes = JSON.stringify(data, null, 2) + "\n";
+  await beforeDeadline(() => writeFile(path, bytes, { mode: 0o600, flag: "wx" }));
+}
+async function exitCli(result: Promise<number>): Promise<never> {
+  // Bounded terminal receipts precede exit; uncertain child/IO handles cannot extend host lifetime.
+  process.exit(await result);
 }
 function capture(command: string, args: readonly string[], env = process.env): string {
   const result = spawnSync(command, args, {
@@ -212,24 +234,15 @@ function settled(child: ChildProcess): Promise<number> {
   });
 }
 async function boundedChild(child: ChildProcess): Promise<number> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await Promise.race([
-      settled(child),
-      new Promise<number>((resolveResult) => {
-        timer = setTimeout(() => {
-          try {
-            signalOwned(child, "SIGKILL");
-          } catch {
-            /* Identity uncertainty remains RED. */
-          } finally {
-            resolveResult(1);
-          }
-        }, remaining(Infinity));
-      })
-    ]);
-  } finally {
-    clearTimeout(timer);
+    return await beforeDeadline(() => settled(child));
+  } catch {
+    try {
+      signalOwned(child, "SIGKILL");
+    } catch {
+      /* Unknown identity: retain. CLI exit does not wait for this referenced child. */
+    }
+    return 1;
   }
 }
 interface ProcessIdentity {
@@ -339,7 +352,7 @@ async function supervisedWorker(
   }
   const result = await supervision.done;
   const closed = groupClosed(child);
-  write(evidence, "worker-exit.json", { ...result, closed });
+  await terminalRecord(evidence, "worker-exit.json", { ...result, closed });
   return failed || result.interrupted || !closed ? 1 : result.rc;
 }
 function supervise(child: ChildProcess, budget: number, grace = 30_000) {
@@ -502,7 +515,7 @@ async function worker(): Promise<number> {
     cleanup = await cleanupAll([() => stack?.teardown()]);
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
-    record(evidence, "stack-exit.json", { result, cleanup, stopped, phase });
+    await terminalRecord(evidence, "stack-exit.json", { result, cleanup, stopped, phase });
   }
   return result || cleanup ? 1 : 0;
 }
@@ -796,7 +809,7 @@ async function launch(destination: string): Promise<number> {
       ? 0
       : 1;
   try {
-    record(destination, "terminal.json", {
+    await terminalRecord(destination, "terminal.json", {
       start,
       wait,
       raw,
@@ -854,22 +867,13 @@ async function selfTest(): Promise<void> {
   assert.throws(() => validateProcess(undefined, identity));
   controls += 4;
   const seen: number[] = [];
-  assert.equal(
-    await cleanupAll([
-      () => {
-        seen.push(1);
-        throw Error("setup");
-      },
-      async () => {
-        seen.push(2);
-      },
-      () => {
-        seen.push(3);
-        throw Error("teardown");
-      }
-    ]),
-    2
-  );
+  const cleanupStep =
+    (step: number, fail = false) =>
+    () => {
+      seen.push(step);
+      if (fail) throw Error("synthetic cleanup failure");
+    };
+  assert.equal(await cleanupAll([cleanupStep(1, true), cleanupStep(2), cleanupStep(3, true)]), 2);
   assert.deepEqual(seen, [1, 2, 3]);
   controls++;
   const root = mkdtempSync(join(tmpdir(), "n3-fake-"));
@@ -989,9 +993,8 @@ async function selfTest(): Promise<void> {
 if (process.argv[1] && resolve(process.argv[1]) === SELF) {
   const args = process.argv.slice(2);
   if (args.length === 1 && args[0] === "--self-test") await selfTest();
-  else if (args.length === 2 && args[0] === "--launch")
-    process.exitCode = await launch(resolve(args[1]!));
-  else if (args.length === 1 && args[0] === "--worker") process.exitCode = await worker();
-  else if (args.length === 0) process.exitCode = await gateMain();
+  else if (args.length === 2 && args[0] === "--launch") await exitCli(launch(resolve(args[1]!)));
+  else if (args.length === 1 && args[0] === "--worker") await exitCli(worker());
+  else if (args.length === 0) await exitCli(gateMain());
   else throw new Error("invalid N3 runner invocation");
 }
