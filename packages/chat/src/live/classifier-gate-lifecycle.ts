@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import {
+  bindChatAttemptThread,
+  chatAttemptObservationEnabled,
+  observeChatAttempt,
+  registerChatAttemptSites
+} from "./chat-attempt-observer.js";
 
 import type { ChatClassifierGateOriginV1, SourceFreshnessV1 } from "@moss/shared";
 
@@ -14,6 +20,8 @@ import type { GateMode, GateOutcome, GateRequest } from "./classifier-gate.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
 import type { TranscriptRecord } from "./types.js";
 import { getOrOpenSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
+
+registerChatAttemptSites("classifier.evaluate");
 
 /**
  * Task 4.1 (#2901) — the handled-turn lifecycle, extracted from ChatSessionManager so that file
@@ -78,6 +86,7 @@ export async function tryGatedTurn(
   const threadState = await (threadRead ?? selectTurnThread(host, actorUserId, surface));
   const requestIncognito = threadState?.incognito ?? false;
   const requestThreadId = threadState?.id ?? null;
+  bindChatAttemptThread(requestThreadId, { actorUserId, surface, turnId: opts?.turnId });
   const gate = host.deps.classifierGate;
   if (!gate) return { result: undefined, requestIncognito, requestThreadId };
 
@@ -107,7 +116,14 @@ export async function tryGatedTurn(
   };
   let outcome: GateOutcome;
   try {
-    outcome = await gate.evaluate(request);
+    outcome = await (chatAttemptObservationEnabled()
+      ? observeChatAttempt(
+          "classifier.evaluate",
+          () => gate.evaluate(request),
+          { actorUserId, surface, threadId: requestThreadId, turnId: opts?.turnId },
+          controller.signal
+        )
+      : gate.evaluate(request));
   } catch {
     // Gate infrastructure failure is a decline: the default model still answers once — unless the
     // user already stopped the turn, in which case no fallback may run (checked below).
