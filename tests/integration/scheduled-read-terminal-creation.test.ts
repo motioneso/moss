@@ -5,7 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Kysely } from "kysely";
 import pg from "pg";
 import type { PgBoss } from "pg-boss";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AiRepository, createAiSecretCipher, type StructuredProviderAdapter } from "@moss/ai";
 import { ChatRepository, registerChatRoutes } from "@moss/chat";
@@ -262,6 +262,31 @@ function expectNoFallback(admissions: number): void {
   expect(engineAttempts.submits).toBe(0);
 }
 
+interface OwnedTeardown {
+  readonly name: string;
+  readonly close: () => Promise<unknown>;
+}
+
+// Attempts every owned teardown, then fails loudly naming each resource that
+// did not close. Cleanup failure must never leave this suite green.
+async function closeOwnedResources(resources: readonly OwnedTeardown[]): Promise<void> {
+  const results = await Promise.allSettled(
+    resources.map((resource) => Promise.resolve().then(() => resource.close()))
+  );
+  const failures = resources.flatMap((resource, index) => {
+    const result = results[index]!;
+    return result.status === "rejected" ? [{ name: resource.name, reason: result.reason }] : [];
+  });
+  if (failures.length === 0) return;
+  for (const failure of failures) {
+    const errorName = failure.reason instanceof Error ? failure.reason.name : "UnknownError";
+    console.error(`N3_TEARDOWN_FAILURE resource=${failure.name} error=${errorName}`);
+  }
+  throw new Error(
+    `owned teardown failed for: ${failures.map((failure) => failure.name).join(", ")}`
+  );
+}
+
 beforeAll(async () => {
   // Import-time scratch isolation is established by the gate start command,
   // before this module was imported. Assert the inherited receipt here.
@@ -384,18 +409,55 @@ beforeAll(async () => {
 
 afterAll(async () => {
   console.log(`N3_QUEUE_INVENTORY=${JSON.stringify(queueInventory)}`);
-  await Promise.allSettled([
-    server?.close(),
-    boss?.stop({ graceful: false }),
-    appDb?.destroy(),
-    bootstrap?.end()
-  ]);
-  globalThis.fetch = originalFetch;
-  if (previousSecretKey === undefined) delete process.env.JARVIS_AI_SECRET_KEY;
-  else process.env.JARVIS_AI_SECRET_KEY = previousSecretKey;
+  try {
+    await closeOwnedResources([
+      ...(server ? [{ name: "fastify server", close: () => server.close() }] : []),
+      ...(boss
+        ? [{ name: "pg-boss app client", close: () => boss.stop({ graceful: false }) }]
+        : []),
+      ...(appDb ? [{ name: "app database pool", close: () => appDb.destroy() }] : []),
+      ...(bootstrap ? [{ name: "bootstrap pg client", close: () => bootstrap.end() }] : [])
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousSecretKey === undefined) delete process.env.JARVIS_AI_SECRET_KEY;
+    else process.env.JARVIS_AI_SECRET_KEY = previousSecretKey;
+  }
 });
 
 describe("terminal one-time task-check creation (#3529)", () => {
+  it("teardown control attempts every owned resource and reports a rejection by name", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const attempted: string[] = [];
+    try {
+      await expect(
+        closeOwnedResources([
+          {
+            name: "fake-first",
+            close: async () => {
+              attempted.push("fake-first");
+              throw new Error("synthetic close failure");
+            }
+          },
+          {
+            name: "fake-second",
+            close: async () => {
+              attempted.push("fake-second");
+            }
+          }
+        ])
+      ).rejects.toThrow("owned teardown failed for: fake-first");
+      expect(attempted).toHaveLength(2);
+      expect(attempted).toEqual(expect.arrayContaining(["fake-first", "fake-second"]));
+      expect(errorLog).toHaveBeenCalledWith("N3_TEARDOWN_FAILURE resource=fake-first error=Error");
+      await expect(
+        closeOwnedResources([{ name: "fake-ok", close: async () => {} }])
+      ).resolves.toBeUndefined();
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
   it.each(["off", "shadow", "on"] as const)(
     "P1 refuses an absent task selection terminally in gate mode %s",
     async (mode) => {
