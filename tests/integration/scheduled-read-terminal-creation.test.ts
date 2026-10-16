@@ -36,31 +36,15 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 // resolver, validation, repositories, persistence and queue run here. Only the
 // external structured-model adapter and the chat engine are scripted fakes.
 
-// #3529 R3 environment isolation. This initializer must run BEFORE this module's
-// imports: the @moss/chat barrel re-exports live/cli-structured-adapter.js, which
-// captures its one-shot scratch root at import time
-// (`STRUCTURED_ONE_SHOT_ROOT = join(tmpdir(), "jarv1s-structured")`,
-// packages/chat/src/live/cli-structured-adapter.ts:36). A plain top-level statement
-// here would still run after those imports, and beforeAll later again, so only
-// vi.hoisted (lifted above every import by Vitest) is early enough; the global
-// setup file (tests/setup-env.ts) only defaults the embedding provider and never
-// touches these variables. Both supported modes end at the same asserted receipt:
-// - "narrow": the frozen explicit narrow procedure exports N3_RUN_ROOT, its
-//   TMPDIR/home children and the modern MOSS_CHAT_HOME/MOSS_CLI_HOME_BASE aliases
-//   before vitest starts; this block only records that inherited receipt.
-// - "standard": a plain `pnpm test:integration` / CI shard supplies none of them,
-//   so this block establishes the fixture's OWN unique root under the inherited
-//   real tmpdir (the caller-owned parent scratch of a local gate, /tmp in CI) and
-//   aims TMPDIR and both homes at its children before any import evaluates. The
-//   mutation is confined to this file's isolated fork (vitest pool "forks",
-//   isolate default: every test file gets a fresh fork), so it never reaches the
-//   unit phase's process or another file's fork, and afterAll restores the
-//   originals even when setup or teardown fails.
+// The chat barrel captures cli-structured-adapter's scratch root at import time.
+// Hoist isolation above those imports; tests/setup-env.ts only defaults embeddings.
+// Explicit runs retain their caller-owned root. Ordinary integration/CI runs get
+// a fixture-owned root inside this file's isolated Vitest worker.
 type N3EnvIsolation = {
   readonly mode: "narrow" | "standard";
   readonly ownedRoot: string;
   readonly rootCreatedByFixture: boolean;
-  /** What os.tmpdir() resolved to inside this initializer, before any import ran. */
+  /** Scratch location after isolation, before product imports. */
   readonly preImportTmpdir: string;
   /** Pre-mutation values of every variable this fixture sets; restored in afterAll. */
   readonly inheritedEnv: {
@@ -101,12 +85,26 @@ const n3Env = vi.hoisted((): N3EnvIsolation => {
   const ownedTmp = path.join(root, "tmp");
   const ownedChatHome = path.join(root, "chat-home");
   const ownedCliHome = path.join(root, "cli-home");
-  fs.mkdirSync(ownedTmp, { recursive: true });
-  fs.mkdirSync(ownedChatHome, { recursive: true });
-  fs.mkdirSync(ownedCliHome, { recursive: true });
-  process.env.TMPDIR = ownedTmp;
-  process.env.MOSS_CHAT_HOME = ownedChatHome;
-  process.env.MOSS_CLI_HOME_BASE = ownedCliHome;
+  try {
+    fs.mkdirSync(ownedTmp, { mode: 0o700 });
+    fs.mkdirSync(ownedChatHome, { mode: 0o700 });
+    fs.mkdirSync(ownedCliHome, { mode: 0o700 });
+    process.env.TMPDIR = ownedTmp;
+    process.env.MOSS_CHAT_HOME = ownedChatHome;
+    process.env.MOSS_CLI_HOME_BASE = ownedCliHome;
+  } catch (error) {
+    // Hook registration has not happened yet, so unwind partial setup here.
+    for (const [key, value] of Object.entries(inheritedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    try {
+      fs.rmSync(root, { recursive: true, force: true });
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], `N3 setup cleanup failed: ${root}`);
+    }
+    throw error;
+  }
   return {
     mode: "standard",
     ownedRoot: root,
@@ -212,8 +210,8 @@ let app: DataContextRunner;
 let boss: PgBoss;
 let bootstrap: pg.Client;
 let server: FastifyInstance;
-let originalFetch: typeof fetch;
-let previousSecretKey: string | undefined;
+const originalFetch = globalThis.fetch;
+const previousSecretKey = process.env.JARVIS_AI_SECRET_KEY;
 
 const chat = new ChatRepository();
 const tasks = new TasksRepository();
@@ -371,13 +369,7 @@ async function closeOwnedResources(resources: readonly OwnedTeardown[]): Promise
 }
 
 beforeAll(async () => {
-  // #3529 R3 isolation receipt, asserted identically in both modes. Narrow mode:
-  // the gate start command exported the owned root and homes before vitest
-  // started. Standard mode: the hoisted initializer above established them
-  // before any import ran. preImportTmpdir records what os.tmpdir() resolved to
-  // inside that initializer — before this module's imports evaluated — so its
-  // equality here proves the import-time scratch capture in the chat barrel
-  // resolved inside the owned root, not merely the live value below.
+  // Assert both modes against the same resolved homes and pre-import scratch.
   const root = n3Env.ownedRoot;
   expect(
     root,
@@ -386,21 +378,14 @@ beforeAll(async () => {
   expect(process.env.TMPDIR).toBe(join(root, "tmp"));
   expect(tmpdir()).toBe(join(root, "tmp"));
   expect(n3Env.preImportTmpdir).toBe(join(root, "tmp"));
-  // The homes are asserted through the product's own public environment
-  // resolution (the resolveMossEnv seam every consumer reads through), not the
-  // specific variable spelling: both the modern MOSS_* aliases of the frozen
-  // narrow command and the fixture's own standard-mode values pass, while a
-  // fallback to a real home can never satisfy either assertion.
   expect(resolveChatHome()).toBe(join(root, "chat-home"));
   expect(resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE")).toBe(join(root, "cli-home"));
   console.log(`N3_ENV_MODE=${n3Env.mode} N3_OWNED_ROOT=${root} N3_TMPDIR=${process.env.TMPDIR}`);
 
-  originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => {
     throw new Error("n3 fixture forbids network fetch");
   }) as typeof fetch;
 
-  previousSecretKey = process.env.JARVIS_AI_SECRET_KEY;
   process.env.JARVIS_AI_SECRET_KEY = "test-n3-terminal-creation-secret";
 
   await resetFoundationDatabase();
