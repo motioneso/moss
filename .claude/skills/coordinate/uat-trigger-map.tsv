@@ -404,3 +404,10 @@ blocking	apps/trail-marker/TrailMarker/**	tests/uat/specs/3067-judge-screenshot-
 blocking	packages/shared/src/companion-api.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
 blocking	apps/api/src/companion-routes.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
 blocking	packages/focus-judgment/src/judgment-service.ts	tests/uat/specs/3067-judge-screenshot-mac.uat.spec.ts
+
+# #3529 additive terminal-check proof; existing blocking rows remain required.
+blocking	packages/chat/src/live/chat-session-ports.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
+blocking	packages/chat/src/live/pre-model-turn.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
+blocking	packages/chat/src/reminders/features.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
+blocking	packages/chat/src/scheduled-reads/generation.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
+blocking	packages/chat/src/scheduled-reads/request.ts	tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts
