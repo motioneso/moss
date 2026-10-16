@@ -336,6 +336,85 @@ describe("finite owner-scoped cutover on the actual pre-migration schema", () =>
     for (const s of saved) expect(await jobs(s)).toHaveLength(1);
   });
 
+  it.each(["cancelled", "completed", "failed"])(
+    "rejects terminal retained seed jobs (%s) with partial receipts and no replacement",
+    async (state) => {
+      const { saved } = await legacy([{}, { future: true }]);
+      const targets = await targetsFor(saved);
+      for (const t of targets) await seedScheduledReadCutover(t, deps());
+      const pending = saved[1]!;
+      const before = await ledger(pending);
+      const reminder = await row(pending);
+      await bootstrap.query("UPDATE pgboss.job SET state=$2 WHERE id=$1", [
+        before.watchdog_job_id,
+        state
+      ]);
+      const queueBefore = await bootstrap.query(
+        "SELECT * FROM pgboss.job WHERE data->>'resourceId'=$1 ORDER BY id",
+        [pending.id]
+      );
+      const send = vi.spyOn(workerBoss, "send");
+      const invocation = parseRecoveryInvocation(
+        ["seed", "--manifest", "private.json", "--limit", "2"],
+        JSON.stringify(targets)
+      );
+      const receipt = await executeRecoveryInvocation(invocation, deps());
+      expect(receipt.exitCode).toBe(1);
+      expect(receipt.counts).toEqual({ successful: 1, failed: 1, deferred: 0, terminal: 0 });
+      expect(receipt.entries).toEqual([
+        {
+          ...targets[0]!,
+          status: "already_seeded",
+          jobId: (await ledger(saved[0]!)).watchdog_job_id
+        },
+        { ...targets[1]!, status: "error", error: "operation_failed" }
+      ]);
+      expect(send).not.toHaveBeenCalled();
+      expect(await ledger(pending)).toEqual(before);
+      expect(await row(pending)).toEqual(reminder);
+      expect(
+        (
+          await bootstrap.query(
+            "SELECT * FROM pgboss.job WHERE data->>'resourceId'=$1 ORDER BY id",
+            [pending.id]
+          )
+        ).rows
+      ).toEqual(queueBefore.rows);
+    }
+  );
+
+  it.each(["created", "retry", "active"])("retains live seed receipts (%s)", async (state) => {
+    const { saved } = await legacy([{}]);
+    const s = saved[0]!;
+    const t = await target(s);
+    const receipt = await seedScheduledReadCutover(t, deps());
+    await bootstrap.query("UPDATE pgboss.job SET state=$2 WHERE id=$1", [receipt.jobId, state]);
+    const before = await ledger(s);
+    expect(await seedScheduledReadCutover(t, deps())).toEqual({
+      ...t,
+      status: "already_seeded",
+      jobId: receipt.jobId
+    });
+    expect(await ledger(s)).toEqual(before);
+    expect(await jobs(s)).toHaveLength(1);
+  });
+
+  it("preserves completed-occurrence semantics even when its seed job is terminal", async () => {
+    const { saved } = await legacy([{}]);
+    const s = saved[0]!;
+    const t = await target(s);
+    const receipt = await seedScheduledReadCutover(t, deps());
+    expect((await recoverScheduledReadCutover(t, deps())).status).toBe("failed");
+    await bootstrap.query("UPDATE pgboss.job SET state='completed' WHERE id=$1", [receipt.jobId]);
+    const before = await ledger(s);
+    const reminder = await row(s);
+    const send = vi.spyOn(workerBoss, "send");
+    expect(await seedScheduledReadCutover(t, deps())).toEqual({ ...t, status: "terminal" });
+    expect(await ledger(s)).toEqual(before);
+    expect(await row(s)).toEqual(reminder);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("rejects foreign, stale and missing identities in the whole batch before any effects", async () => {
     const { saved } = await legacy([{}, {}]);
     const targets = await targetsFor(saved);

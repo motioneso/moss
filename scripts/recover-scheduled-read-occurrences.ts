@@ -91,7 +91,7 @@ export async function runRecoveryCli(argv: readonly string[]): Promise<number> {
   const invocation = parseRecoveryInvocation(argv, manifest);
   const connectionString = getMossDatabaseUrls().worker;
   const db = createDatabase({ connectionString, maxConnections: 1 });
-  // Keep asynchronous client errors out of receipts; operation failures are scrubbed below.
+  // Supply a no-op handler for internal client error events.
   const boss = createPgBossClient(connectionString, {}, { onError: () => undefined });
   try {
     const role = await sql<{ allowed: boolean }>`select

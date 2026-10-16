@@ -123,7 +123,7 @@ export async function seedScheduledReadCutover(
         and data->>'resourceId' = ${target.resourceId}
         and data->>'idempotencyKey' = ${target.expectedMessageId}
         and (data->>'step')::integer = ${row.watchdog_generation}
-        and not (data ? 'operationId') and state <> 'failed'
+        and not (data ? 'operationId') and state in ('created', 'retry', 'active')
       ) as valid`.execute(db.db);
       if (receipt.rows[0]?.valid !== true)
         throw new Error("Seed job receipt unavailable; recover exact occurrence");
