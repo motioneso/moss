@@ -1,4 +1,9 @@
 import {
+  chatAttemptObservationEnabled,
+  observeChatAttempt,
+  registerChatAttemptSites
+} from "./chat-attempt-observer.js";
+import {
   admissionForActor,
   admitToContext,
   admitOutsideAgentLaunch,
@@ -57,6 +62,8 @@ export interface LaunchChatSessionArgs {
   readonly serverOwnsDrain: boolean;
   readonly pollMs: number;
 }
+
+registerChatAttemptSites("factory", "launch", "replay.submit");
 
 const DEFAULT_SEED_BUDGET_TOKENS = 1500;
 
@@ -155,7 +162,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     sequenceBySession.set(sessionKey, next);
     return next;
   };
-  const engine = await deps.engineFactory(provider, sessionKey, {
+  const factoryOptions = {
     providerConfigId,
     acpAgentId,
     ...(acpModel ? { acpModel } : {}),
@@ -164,7 +171,14 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
       ? { acpPermissionDecider: deps.acpPermissionDeciderForToken(mcpConfig.token) }
       : {}),
     nextSequence
-  });
+  };
+  const engine = await (chatAttemptObservationEnabled()
+    ? observeChatAttempt(
+        "factory",
+        () => deps.engineFactory(provider, sessionKey, factoryOptions),
+        { actorUserId, surface, threadId }
+      )
+    : deps.engineFactory(provider, sessionKey, factoryOptions));
   await assertProviderIdentityBeforeReplay({
     actorUserId,
     sessionKey,
@@ -234,7 +248,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
   if (recentTurns.length > 0) replayParts.push(renderReplayBlock(recentTurns));
   const replayBatch = replayParts.length > 0 ? replayParts.join("\n\n") : undefined;
-  const { offset } = await engine.launch({
+  const launchOptions = {
     neutralDir,
     personaPath,
     personaText: persona,
@@ -245,7 +259,14 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     ...(acpModel ? { acpModel } : {}),
     mcpToken: mcpConfig?.token,
     mcpServerUrl: mcpConfig?.mcpServerUrl
-  });
+  };
+  const { offset } = await (chatAttemptObservationEnabled()
+    ? observeChatAttempt("launch", () => engine.launch(launchOptions), {
+        actorUserId,
+        surface,
+        threadId
+      })
+    : engine.launch(launchOptions));
 
   const startsToolClientPerTurn = engine.startsToolClientPerTurn ?? false;
   if (mcpConfig?.token && !startsToolClientPerTurn) {
@@ -284,7 +305,12 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   // #342 — only in-process engines need manager-owned replay submit + drain.
   if (replayBatch !== undefined && !serverOwnsDrain) {
     try {
-      await engine.submit(replayBatch);
+      await (chatAttemptObservationEnabled()
+        ? observeChatAttempt("replay.submit", () => engine.submit(replayBatch), {
+            actorUserId,
+            surface
+          })
+        : engine.submit(replayBatch));
       // Drain so real turn records start from a clean offset. The replies still count.
       session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs, (r) =>
         noteSessionOutput(session.usage, r)
