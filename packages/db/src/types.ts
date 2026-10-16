@@ -1102,6 +1102,26 @@ export interface ChatResponsibilityProposalsTable {
 }
 
 export interface ChatScheduledReadsTable {
+  attempt_message_id: ColumnType<string | null, string | null | undefined, string | null>;
+  attempt_count: ColumnType<number, number | undefined, number>;
+  attempt_state: ColumnType<
+    "ready" | "running" | "retry_pending" | "bookkeeping_pending" | "legacy_unknown" | "terminal",
+    | "ready"
+    | "running"
+    | "retry_pending"
+    | "bookkeeping_pending"
+    | "legacy_unknown"
+    | "terminal"
+    | undefined,
+    "ready" | "running" | "retry_pending" | "bookkeeping_pending" | "legacy_unknown" | "terminal"
+  >;
+  attempt_token: ColumnType<string | null, string | null | undefined, string | null>;
+  attempt_version: ColumnType<number | null, number | null | undefined, number | null>;
+  attempt_lease_until: NullableTimestampColumn;
+  recovery_job_id: ColumnType<string | null, string | null | undefined, string | null>;
+  watchdog_token: ColumnType<string | null, string | null | undefined, string | null>;
+  watchdog_generation: ColumnType<number, number | undefined, number>;
+  watchdog_job_id: ColumnType<string | null, string | null | undefined, string | null>;
   observation_key: ColumnType<string | null, string | null | undefined, string | null>;
   failure_streak: ColumnType<number, number | undefined, number>;
   reminder_id: string;

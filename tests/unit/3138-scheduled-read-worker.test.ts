@@ -19,7 +19,8 @@ const fixture = vi.hoisted(() => ({
   },
   quiet: vi.fn(),
   observation: vi.fn(),
-  posted: vi.fn()
+  posted: vi.fn(),
+  stopRenewal: vi.fn(async () => {})
 }));
 vi.mock("../../packages/chat/src/reminders/repository.js", () => ({
   ReminderRepository: class {
@@ -52,6 +53,19 @@ vi.mock("../../packages/chat/src/scheduled-reads/repository.js", () => ({
 }));
 vi.mock("../../packages/chat/src/scheduled-reads/recurring.js", () => ({
   persistQuietScheduledRun: fixture.quiet
+}));
+// Persistence/authority/rollback behavior is exercised with real owner-scoped DBs in R06.
+vi.mock("../../packages/chat/src/scheduled-reads/attempts.js", () => ({
+  admitScheduledReadAttempt: async () => ({
+    messageId: "message",
+    token: "token",
+    ordinal: 1,
+    version: 1
+  }),
+  validScheduledReadAttempt: async () => true,
+  dispatchScheduledReadRecovery: vi.fn(),
+  startScheduledReadRenewal: () => fixture.stopRenewal,
+  finishScheduledReadAttempt: vi.fn()
 }));
 vi.mock("../../packages/chat/src/reminders/deliver.js", () => ({
   persistReminderResult: fixture.posted
@@ -97,6 +111,7 @@ describe("registered recurring read worker composition", () => {
     ]);
     expect(read).toHaveBeenCalledTimes(2);
     expect(model).not.toHaveBeenCalled();
+    expect(fixture.stopRenewal).toHaveBeenCalledTimes(1);
     expect(fixture.posted).not.toHaveBeenCalled();
     expect(fixture.quiet).toHaveBeenCalledExactlyOnceWith(
       fixture.db,
