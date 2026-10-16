@@ -1,3 +1,5 @@
+import { prepareN3Observer, type UatProvisionOptions } from "./provisioner-options.js";
+export type { UatProvisionOptions } from "./provisioner-options.js";
 import { createLifecycleRecorder, type LifecycleAttempt } from "./lifecycle-records.js";
 import { buildUatComposeArgs } from "./compose-args.js";
 export { buildUatComposeArgs } from "./compose-args.js";
@@ -613,40 +615,6 @@ async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
   throw new Error(`Timed out waiting for ${url}: ${String(lastError ?? "health check failed")}`);
 }
 
-export interface UatProvisionOptions {
-  /** A port reserved by devports for this isolated live run. */
-  readonly claimedWebPort?: number;
-  readonly excludeChunks?: readonly string[];
-  readonly withoutNewsJsonBinding?: boolean;
-  // #1306 Task 22: opt-in, absent by default, same shape as the Codex credential copy's own
-  // "no-op unless the host has a login" trigger. Job Search enables both the fixture origin and
-  // its scoring provider; ESPN enables only the shared origin for deterministic ESPN responses.
-  readonly withJobSearchFixture?: boolean;
-  readonly withEspnFixture?: boolean;
-  // [task:p8-briefing-writer-unreachable]: opt-in, absent by default. Enables the writer
-  // fixture origin and its synthesis provider, so briefing cards render fixed prose.
-  readonly withBriefingWriterFixture?: boolean;
-  readonly withClassifierFixture?: boolean;
-  readonly withClassifierMcpFixture?: boolean;
-  /** #3410: seed the API-key chat provider from the MOSS_UAT_CHAT_PROVIDER_* host variables. */
-  readonly withApiKeyChatProvider?: boolean;
-  readonly withNewsFeedbackFixture?: boolean;
-  /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
-  readonly withSportsPublicSourceFixtures?: boolean;
-  /** #2015: opt-in pending workflow approval used only by its live-path spec. */
-  readonly withWorkflowApprovalFixture?: boolean;
-  /** #2175: opt-in seeded audit-log rows used only by the Activity outcomes live-path spec. */
-  readonly withActivityOutcomeFixture?: boolean;
-  /** #2267: opt-in trusted owner-draft fixture used only by the Workshop storage proof. */
-  readonly withWorkshopStorageFixture?: boolean;
-  /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS (tests/uat/seed/types.ts). Threads to
-   *  composeSeedHook's chatScript ctx field, and (when set) writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN
-   *  (#1659 defect 4) so the container's profile.d script puts the scripted-provider fixture's
-   *  own bin/ ahead of the real tools bin on PATH — never JARVIS_CLI_TOOLS_PREFIX, which the
-   *  production installer also owns. */
-  readonly chatScript?: string;
-}
-
 export function buildSeedHookInput(
   projectName: string,
   level: UatSeedLevel,
@@ -720,6 +688,7 @@ export async function provisionForUat(
     readonly installRealChatAuth?: typeof installUatRealChatAuth;
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
+  const observer = await prepareN3Observer(opts?.n3Observer, opts?.chatScript);
   const recordLifecycle = await createLifecycleRecorder();
   const lifecycleEnabled = process.env.JARVIS_UAT_LIFECYCLE_DIR !== undefined;
   const overallStart = Date.now();
@@ -777,7 +746,8 @@ export async function provisionForUat(
       webPort,
       subnet: subnet.subnet,
       jobSearchFixtureBaseUrl,
-      chatScript: opts?.chatScript
+      chatScript: opts?.chatScript,
+      n3Observer: opts?.n3Observer
     });
     process.env.JARVIS_ENV_FILE = envFile.path;
     process.env.JARVIS_IMAGE_TAG ??= "uat-smoke";
@@ -888,7 +858,20 @@ export async function provisionForUat(
       for (const step of plan.slice(0, -1)) {
         // The final down step belongs to cleanupAttempt, including failed creation.
         console.log(`[uat] ${step.description}`);
-        await runCommand(step.command, step.args);
+        observer?.checkDeadline();
+        if (observer && step.args.includes("up") && step.args.includes("jarv1s"))
+          await observer.beforeInitialStart({
+            projectName,
+            envPath: envFile.path,
+            recordCreated: () => recordLifecycle("resources-created", attempt)
+          });
+        await runCommand(
+          step.command,
+          observer && step.args.includes("up") && step.args.includes("jarv1s")
+            ? [...step.args, "--no-recreate"]
+            : step.args
+        );
+        observer?.checkDeadline();
         await recordLifecycle("resources-created", attempt);
       }
       // Auth copy needs the running app; Claude sign-in remains explicit in its spec.
