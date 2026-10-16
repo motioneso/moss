@@ -116,3 +116,26 @@ The following exact structural additions resolve the 999-line provisioner/test c
 The complete O2a executable lease is those three paths plus `tests/uat/n3-fallback-observer-bootstrap.mjs`, `tests/uat/provisioner.ts`, `tests/uat/provisioner.test.ts` and `tests/uat/env-file.ts`. All seven files stay at most 1000 lines. Accepted O1’s six files, including its unit file, stay byte-for-byte unchanged. `tests/uat/lifecycle-records.ts` remains exact P. Preserve all 103 retained tests and their original case bodies. This nonsemantic layout amendment is committed separately before source edits and needs no additional plan gate; it adds no user-visible behavior or app-map declaration.
 
 O2a implements only the original nonthrowing subscriber/bootstrap and typed initial-provisioning contract. O2b retains runner/helper/spec wiring, independently owned identity/source/image/producer consumer bindings, windows’ UI/HTTP completion proof and the separate real positive. The original N3 runner/spec hard guards stay unchanged. No consumer relabeling, recreation, arbitrary NODE_OPTIONS, provider/model substitution, weakened bindings, uncaught-exception interception or new lifecycle recorder is permitted. Shared absolute deadlines, private transport, bounded metadata, cumulative correlation/settlement/barrier requirements, decisive offline protection-removal controls and exact restoration remain mandatory. Independent exact-commit review is still required; no Docker/DB/provider/browser/installed/live/socket execution, full gate, CI, push, PR, merge, signup, final O2 acceptance or automatic successor is released.
+
+## O2b serial layout amendment — offline consumer lease
+
+For #3529, the coordinator’s O2b1 R1 brief authorizes a finite offline build on accepted O2a
+`c1739462bc364d0665818a25207d253a9039ebc8`. This nonsemantic amendment supersedes only the
+historical helper-test placement and unsplit O2b layout. Commit it separately before executable edits.
+
+O2b1 leases exactly two new executable paths under `~/Jarv1s`:
+`tests/uat/n3-fallback-observer-runner.ts` for the inert typed consumer, independent receipt and
+identity checks, fixed persistent native bridge, cumulative windows and bounded bridge disposal;
+and `tests/uat/n3-fallback-observer-runner.test.ts` for dedicated fake-only controls. Each stays at
+most 1000 lines without compaction. Expected authoritative pins remain separate from independently
+collected installation, API and producer observations. Preserve the version 1 schema, private
+channel, immutable chain, source/image/volume identity, actual descendant settlement, external
+UI/HTTP completion attestation, barrier and inherited absolute deadline contracts above.
+
+After independent exact-commit O2b1 acceptance, O2b2 requires its own serial ownership transfer
+and lease for minimal existing runner and real UI spec composition, plus finite adapter/test
+integration changes. O2b1 does not lease those paths or an O1 test edit. The original runner/UI
+guards, accepted O1/O2a and exact P bytes remain frozen. O2b1 runs fake-only tests and scoped static
+checks; it opens no actual Docker/socket/DB/provider/browser resources and runs no existing runner
+selftest, full gate or CI. Freeze local evidence for two-axis independent review. O2b2, runtime,
+publication and Stage4 acceptance remain held; no push, PR, merge or automatic successor is granted.
