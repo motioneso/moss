@@ -447,6 +447,7 @@ function lifecycleFixture() {
     labels,
     imageId,
     imageReference: reference,
+    configuredPorts: { "3000/tcp": [{ HostIp: "", HostPort: "5201" }] },
     ports: { "3000/tcp": [{ HostIp: "127.0.0.1", HostPort: "5201" }] },
     Env: ["SECRET_SENTINEL"],
     Mounts: ["SECRET_SENTINEL"],
@@ -554,7 +555,6 @@ describe("N3 private lifecycle producer", () => {
   afterEach(() => {
     f.dispose();
   });
-
   it("disabled opt-in performs no metadata queries or filesystem writes", async () => {
     const record = await createLifecycleRecorder({
       env: {},
@@ -565,7 +565,6 @@ describe("N3 private lifecycle producer", () => {
     expect(f.capture).not.toHaveBeenCalled();
     expect(f.records()).toEqual([]);
   });
-
   it.each([
     "partial",
     "empty",
@@ -590,7 +589,6 @@ describe("N3 private lifecycle producer", () => {
     await expect(f.recorder()).rejects.toThrow(/lifecycle configuration/);
     expect(f.capture).not.toHaveBeenCalled();
   });
-
   it("writes exclusive private monotonic digest-bound receipts and retains immutable app/auth/socket identities", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -627,18 +625,13 @@ describe("N3 private lifecycle producer", () => {
       f.id,
       ...f.volumes.map((v) => v.id)
     ]);
-    expect(
-      final.inventory.every(
-        (r: { observation: { state: string } }) => r.observation.state === "absent"
-      )
-    ).toBe(true);
+    for (const row of final.inventory) expect(row.observation.state).toBe("absent");
     expect(final.inventory[0].creation.imageId).toBe(f.imageId);
     expect(final.inventory[0].creation.imageReference).toBe(f.reference);
     expect(JSON.stringify(records)).not.toContain("SECRET_SENTINEL");
     expect(JSON.stringify(records)).not.toContain('"Env"');
     expect(JSON.stringify(records)).not.toContain('"Mounts"');
   });
-
   it("preserves partial creation on failed attempt and retains it across a fresh retry", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -667,14 +660,12 @@ describe("N3 private lifecycle producer", () => {
     expect(records[6].image.id).toBe(f.imageId);
     expect(records.map((r) => r.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
-
   it("rejects a preexisting tag before any build or creation", async () => {
     f.state.built = true;
     const record = await f.recorder();
     await expect(record("attempt-created", f.attempt)).rejects.toThrow(/lifecycle/);
     expect(f.records()[0].errors).toContain("image-tag-not-absent");
   });
-
   it("writes an error observation instead of absence on selected-daemon lookup failure", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -691,8 +682,7 @@ describe("N3 private lifecycle producer", () => {
     expect(final.errors.length).toBeGreaterThan(0);
     expect(JSON.stringify(final)).not.toContain("SECRET_SENTINEL");
   });
-
-  it.each(["daemon", "image", "port", "source", "compose"])(
+  it.each(["daemon", "image", "port", "source", "compose", "unpublished", "configured-port"])(
     "rejects changed %s identity before a passing receipt",
     async (which) => {
       const record = await f.recorder();
@@ -704,13 +694,35 @@ describe("N3 private lifecycle producer", () => {
       if (which === "image") f.app.imageId = `sha256:${"9".repeat(64)}`;
       if (which === "port") f.app.ports["3000/tcp"][0]!.HostPort = "5202";
       if (which === "source") f.state.dirty = true;
+      if (which === "unpublished") f.app.ports["3000/tcp"] = [];
+      if (which === "configured-port") f.app.configuredPorts["3000/tcp"][0]!.HostPort = "5202";
       if (which === "compose")
         f.app.labels["com.docker.compose.project.config_files"] = "/different.yml";
-      await expect(record("resources-created", f.attempt)).rejects.toThrow(/lifecycle/);
+      await expect(record("resources-created", { ...f.attempt, requireApp: true })).rejects.toThrow(
+        /lifecycle/
+      );
       expect(f.records().at(-1).complete).toBe(false);
     }
   );
-
+  it("observes a created app becoming bound without changing configured identity", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.appPresent = true;
+    f.app.ports["3000/tcp"] = [];
+    await record("resources-created", f.attempt);
+    f.app.ports["3000/tcp"] = [{ HostIp: "127.0.0.1", HostPort: "5201" }];
+    await expect(
+      record("resources-created", { ...f.attempt, requireApp: true })
+    ).resolves.toBeUndefined();
+    expect(f.records().at(-1).inventory[0].creation.webPorts).toEqual([]);
+    expect(f.records().at(-1).inventory[0].observation.metadata.webPorts[0].hostPort).toBe(5201);
+    f.app.configuredPorts["3000/tcp"][0]!.HostPort = "5202";
+    await expect(record("resources-created", { ...f.attempt, requireApp: true })).rejects.toThrow(
+      /lifecycle/
+    );
+  });
   it("requires current app identity before readiness can be released", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -721,14 +733,12 @@ describe("N3 private lifecycle producer", () => {
     );
     expect(f.records().at(-1).errors).toContain("app-build-proof-missing");
   });
-
   it("requires app/build proof on a successful attempt before teardown", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
     await expect(record("before-teardown", f.attempt)).rejects.toThrow(/lifecycle/);
     expect(f.records().at(-1).errors).toContain("app-build-proof-missing");
   });
-
   it.each(["image-built", "invented"])(
     "rejects out-of-order or unknown %s and permanently fails that stream",
     async (phase) => {
@@ -738,14 +748,12 @@ describe("N3 private lifecycle producer", () => {
       expect(f.records().at(-1).errors).toContain("prior-record-failure");
     }
   );
-
   it("does not overwrite a record nominated by the channel owner", async () => {
     const record = await f.recorder();
     writeFileSync(join(f.dir, "000001.json"), "preserved", { mode: 0o600 });
     await expect(record("attempt-created", f.attempt)).rejects.toThrow(/lifecycle/);
     expect(readFileSync(join(f.dir, "000001.json"), "utf8")).toBe("preserved");
   });
-
   it("fails same-daemon absence verification even when every saved resource disappeared", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -759,7 +767,6 @@ describe("N3 private lifecycle producer", () => {
     await expect(record("after-teardown", f.attempt)).rejects.toThrow(/lifecycle/);
     expect(f.records().at(-1).inventory[0].observation.state).toBe("error");
   });
-
   it("retains every discovered identity when one inspection fails, and positively observes absence later", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -789,7 +796,6 @@ describe("N3 private lifecycle producer", () => {
         )
     ).toBe(true);
   });
-
   it("reports extra project residuals without treating them as deletion authority", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -806,7 +812,6 @@ describe("N3 private lifecycle producer", () => {
     ]);
     expect(f.records().at(-1).complete).toBe(false);
   });
-
   it("retains the exact network identity and reports a surviving network", async () => {
     const record = await f.recorder();
     await record("attempt-created", f.attempt);
@@ -824,14 +829,12 @@ describe("N3 private lifecycle producer", () => {
     expect(row.creation.driver).toBe("bridge");
     expect(row.observation.state).toBe("present");
   });
-
   it("rejects a changed channel mode before publication", async () => {
     const record = await f.recorder();
     chmodSync(f.dir, 0o755);
     await expect(record("attempt-created", f.attempt)).rejects.toThrow(/lifecycle/);
     expect(f.records()).toEqual([]);
   });
-
   it("scrubs malformed endpoint output before it can reach an error", async () => {
     const capture: LifecycleCapture = async (command, args, env, root) =>
       args[0] === "context" && args[1] === "inspect"
@@ -844,7 +847,6 @@ describe("N3 private lifecycle producer", () => {
     expect(String(error)).not.toContain("SECRET_SENTINEL");
   });
 });
-
 describe("N3 provisioner integration with fake Docker/ports/auth/health", () => {
   let f: ReturnType<typeof lifecycleFixture>;
   let events: string[];
@@ -853,6 +855,8 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
   let conflict: boolean;
   let appStarts: number;
   let cleanupFails: boolean;
+  let teardownFailure: string | undefined;
+  let lifecycleEnabled: boolean;
   let savedEnv: NodeJS.ProcessEnv;
   beforeEach(async () => {
     savedEnv = { ...process.env };
@@ -862,6 +866,10 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
     conflict = false;
     appStarts = 0;
     cleanupFails = false;
+    teardownFailure = undefined;
+    lifecycleEnabled = true;
+    vi.stubEnv("JARVIS_UAT_LIFECYCLE_DIR", f.env.JARVIS_UAT_LIFECYCLE_DIR);
+    vi.stubEnv("JARVIS_UAT_LIFECYCLE_NONCE", f.env.JARVIS_UAT_LIFECYCLE_NONCE);
     failPhase = undefined;
     vi.stubEnv("JARVIS_IMAGE_TAG", "uat-unique");
     vi.stubEnv("JARVIS_UAT_BUILD", "1");
@@ -876,11 +884,13 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
     const record = await f.recorder();
     vi.spyOn(lifecycleRecords, "createLifecycleRecorder").mockResolvedValue(
       async (phase, input) => {
+        if (!lifecycleEnabled) return;
         events.push(phase);
         if (phase === "attempt-created") {
           f.app.name = `/${input.projectName}-jarv1s-1`;
           f.app.labels["com.docker.compose.project"] = input.projectName;
-          f.app.ports["3000/tcp"][0]!.HostPort = String(input.webPort);
+          f.app.ports["3000/tcp"] = [{ HostIp: "127.0.0.1", HostPort: String(input.webPort) }];
+          f.app.configuredPorts["3000/tcp"] = structuredClone(f.app.ports["3000/tcp"]);
           for (const v of f.volumes) {
             v.id = `${input.projectName}_${v.labels["com.docker.compose.volume"]}`;
             v.name = v.id;
@@ -902,6 +912,7 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
     mocks.spawn.mockImplementation((_command: string, args: string[]) => {
       let rc = 0;
       let stderr = "";
+      let stdout = "";
       if (args[0] === "build") {
         events.push("build");
         f.state.built = true;
@@ -912,11 +923,23 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
         if (conflict && appStarts === 1) {
           rc = 1;
           stderr = "address already in use";
+          f.state.appPresent = true;
+          f.app.ports["3000/tcp"] = [];
         } else f.state.appPresent = true;
       }
       if (args.includes("down")) {
         events.push("delete-resources");
         f.state.appPresent = f.state.volumesPresent = false;
+        if (teardownFailure === "compose-down") rc = 1;
+      }
+      if (args[0] === "network" && args.includes("{{.ID}}")) {
+        events.push("network-discovery");
+        if (teardownFailure === "network-discovery") rc = 1;
+        else stdout = "5".repeat(64);
+      }
+      if (args[0] === "network" && args[1] === "rm") {
+        events.push("network-removal");
+        if (teardownFailure === "network-removal") rc = 1;
       }
       return {
         stderr: {
@@ -924,7 +947,7 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
             if (stderr) fn(Buffer.from(stderr));
           }
         },
-        stdout: { on: () => {} },
+        stdout: { on: (_event: string, fn: (chunk: Buffer) => void) => fn(Buffer.from(stdout)) },
         on: (event: string, fn: (code: number) => void) => {
           if (event === "exit") fn(rc);
         }
@@ -949,7 +972,6 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
         }
       })
     });
-
   it("awaits image and resource receipts before readiness, then observes after credential/resource cleanup", async () => {
     const run = await provision();
     expect(f.records().map((r) => r.phase)).toContain("image-built");
@@ -959,7 +981,6 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
     expect(events.indexOf("after-teardown")).toBeGreaterThan(events.indexOf("delete-resources"));
     expect(f.records().at(-1).complete).toBe(true);
   });
-
   it.each([
     "attempt-created",
     "image-built",
@@ -978,17 +999,26 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
     if (["attempt-created", "image-built", "resources-created"].includes(phase))
       expect(events).not.toContain("ready");
   });
-
   it("retains partial creation and separate retry inventory while building once", async () => {
     conflict = true;
-    const run = await provision();
+    const provisioning = provision();
+    await expect(provisioning).resolves.toMatchObject({ teardown: expect.any(Function) });
+    const run = await provisioning;
     await run.teardown();
     const records = f.records();
     const finals = records.filter((r) => r.phase === "after-teardown");
     expect(finals).toHaveLength(2);
     expect(finals[0].attempt.failed).toBe(true);
     expect(finals[0].complete).toBe(false);
-    expect(finals[0].inventory).toHaveLength(3);
+    expect(finals[0].inventory).toHaveLength(4);
+    const partial = records.find((r) => r.phase === "resources-created" && r.attempt.failed);
+    const app = partial.inventory.find((r: { kind: string }) => r.kind === "container");
+    expect(app.observation.state).toBe("present");
+    expect(app.creation.webPorts).toEqual([]);
+    expect(app.creation.configuredWebPorts[0].hostPort).toBe(finals[0].attempt.port);
+    for (const row of finals[0].inventory) expect(row.observation.state).toBe("absent");
+    expect(finals[1].attempt.port).not.toBe(finals[0].attempt.port);
+    expect(events.indexOf("after-teardown")).toBeLessThan(events.lastIndexOf("attempt-created"));
     expect(finals[1].attempt.number).toBe(2);
     expect(finals[1].complete).toBe(true);
     expect(events.filter((e) => e === "build")).toHaveLength(1);
@@ -996,7 +1026,40 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
       1
     );
   });
-
+  describe.each([true, false])("caught cleanup failures, lifecycle enabled=%s", (enabled) => {
+    it.each(["compose-down", "network-discovery", "network-removal"])(
+      "retains %s despite positive final absence",
+      async (cause) => {
+        lifecycleEnabled = enabled;
+        if (!enabled) {
+          vi.stubEnv("JARVIS_UAT_LIFECYCLE_DIR", undefined);
+          vi.stubEnv("JARVIS_UAT_LIFECYCLE_NONCE", undefined);
+        }
+        teardownFailure = cause;
+        const run = await provision();
+        const envFile = process.env.JARVIS_ENV_FILE!;
+        const result = await run.teardown().catch((e: unknown) => e);
+        expect(events).toContain("network-discovery");
+        if (cause !== "network-discovery") expect(events).toContain("network-removal");
+        expect(() => statSync(envFile)).toThrow();
+        if (enabled) {
+          expect(result).toBeInstanceOf(AggregateError);
+          expect((result as AggregateError).errors.map((e: Error) => e.message)).toContain(
+            `UAT lifecycle cleanup: ${cause}-failed`
+          );
+          const final = f.records().at(-1);
+          expect(final.phase).toBe("after-teardown");
+          expect(final.attempt.failed).toBe(true);
+          expect(final.complete).toBe(false);
+          for (const row of final.inventory) expect(row.observation.state).toBe("absent");
+          expect(JSON.stringify(final)).not.toContain("SECRET_SENTINEL");
+        } else {
+          expect(result).toBeUndefined();
+          expect(f.records()).toEqual([]);
+        }
+      }
+    );
+  });
   it("publishes after-teardown even on credential cleanup error and marks it incomplete", async () => {
     cleanupFails = true;
     const run = await provision();
@@ -1004,10 +1067,6 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
     const final = f.records().at(-1);
     expect(final.phase).toBe("after-teardown");
     expect(final.complete).toBe(false);
-    expect(
-      final.inventory.every(
-        (r: { observation: { state: string } }) => r.observation.state === "absent"
-      )
-    ).toBe(true);
+    for (const row of final.inventory) expect(row.observation.state).toBe("absent");
   });
 });

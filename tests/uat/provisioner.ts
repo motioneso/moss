@@ -721,25 +721,21 @@ export async function provisionForUat(
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
   const recordLifecycle = await createLifecycleRecorder();
+  const lifecycleEnabled = process.env.JARVIS_UAT_LIFECYCLE_DIR !== undefined;
   const overallStart = Date.now();
   const apiKeyChatSeed = opts?.withApiKeyChatProvider
     ? await apiKeyChatEnv.readApiKeyChatUatProvider(process.env)
     : undefined;
-  // #1024/#1000: bounded by the reserved range itself (100 candidates) — never an unbounded
-  // retry. Each failed-on-bind attempt removes its port from the pool; exhausting the pool means
-  // the whole reserved range is hostile, which should fail loudly, not spin forever.
+  // #1024/#1000: retry each candidate once; fail when the reserved port range is exhausted.
   let remainingCandidates =
     opts?.claimedWebPort === undefined
       ? Array.from({ length: UAT_PORT_RANGE_SIZE }, (_, i) => UAT_PORT_RANGE_START + i)
       : [opts.claimedWebPort];
   let remainingSubnetCandidates = [...UAT_SUBNET_CANDIDATES];
   let imageBuilt = false; // build once; a port-bind retry shouldn't rebuild the image
-
-  // #2732: unlike the retired stored-token path this replaces, there is nothing to set up before
-  // the loop — the Codex credential copy needs a running `jarv1s` container (docker exec), so it
-  // happens per-attempt, right after that container comes up, not before the first attempt.
+  // #2732: install the Codex credential copy per attempt, after its app container starts.
+  // There is no stored-token setup before the loop.
   delete process.env[REAL_CHAT_CONFIGURED_ENV];
-
   while (remainingCandidates.length > 0) {
     const { projectName } = generateUatRunId();
     const webPort: number = await findAvailablePort(remainingCandidates);
@@ -789,7 +785,6 @@ export async function provisionForUat(
     // port-bind retry picks a new webPort, and JARVIS_WEB_PORT must track it or compose would
     // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
     Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
-
     const attempt: LifecycleAttempt & { failed: boolean } = {
       projectName,
       webPort,
@@ -797,13 +792,15 @@ export async function provisionForUat(
       failed: false
     };
     let realChatAuth: UatRealChatAuth | undefined;
-
-    // #1306: the fixture container is removed FIRST — an outside container still attached to the
-    // Compose network blocks `down -v` from removing that network, and the leak assertion that
-    // follows would then fail on an otherwise clean run.
+    // #1306: remove owned fixtures before down so they cannot block network removal.
     const teardownCompose = async () => {
       // Credential cleanup must precede down; retain its error while attempting resource cleanup.
       let realChatCleanupError: unknown;
+      const cleanupErrors: unknown[] = [];
+      const retainFailure = (code: string) => {
+        if (lifecycleEnabled)
+          cleanupErrors.push(new Error(`UAT lifecycle cleanup: ${code}-failed`));
+      };
       if (realChatAuth !== undefined) {
         try {
           await realChatAuth.cleanup();
@@ -825,8 +822,7 @@ export async function provisionForUat(
         });
       await mcpFixture.removeClassifierMcpFixtureContainer(projectName, runCommand);
       if (jobSearchFixtureBaseUrl !== undefined) await removeJobSearchFixtureContainer(projectName);
-      // The meeting-chat spec starts this third-party stand-in itself. Remove its exact
-      // project-scoped container even if Playwright was interrupted before its finally block.
+      // Remove exact project-scoped meeting fixtures even after interrupted Playwright.
       await runCommand("docker", ["rm", "--force", `${projectName}-meeting-chat-fixture`]).catch(
         () => {}
       );
@@ -836,6 +832,7 @@ export async function provisionForUat(
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
           console.error(`teardown failed for ${projectName}:`, error);
+          retainFailure("compose-down");
         }
       );
       const ownedNetworks = await runCapture("docker", [
@@ -845,9 +842,18 @@ export async function provisionForUat(
         `label=com.docker.compose.project=${projectName}`,
         "--format",
         "{{.ID}}"
-      ]).catch(() => "");
+      ]).catch(() => {
+        retainFailure("network-discovery");
+        return "";
+      });
       for (const networkId of ownedNetworks.split("\n").filter(Boolean)) {
-        await runCommand("docker", ["network", "rm", networkId]).catch(() => {});
+        await runCommand("docker", ["network", "rm", networkId]).catch(() =>
+          retainFailure("network-removal")
+        );
+      }
+      if (cleanupErrors.length) {
+        if (realChatCleanupError !== undefined) cleanupErrors.push(realChatCleanupError);
+        throw new AggregateError(cleanupErrors, "UAT owned cleanup failed");
       }
       if (realChatCleanupError !== undefined) throw realChatCleanupError;
     };
@@ -861,7 +867,6 @@ export async function provisionForUat(
           recordLifecycle("after-teardown", { ...attempt, failed: failed || attempt.failed }),
         ...options
       });
-
     try {
       await recordLifecycle("attempt-created", attempt);
       console.log(
@@ -952,10 +957,7 @@ export async function provisionForUat(
       return {
         baseURL,
         projectName,
-        // #1026: deferred, not auto-run — a caller running Playwright against this stack needs it
-        // alive between provision and its own explicit teardown() call, so this can no longer live
-        // in a `finally` here. SIGINT/SIGTERM handling moves to the caller (tests/uat/run-uat.ts),
-        // which is the one that knows when a long-running Playwright child should be interrupted.
+        // #1026: caller tears down after Playwright and owns SIGINT/SIGTERM handling.
         teardown: async () => {
           await cleanupAttempt();
         }

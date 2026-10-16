@@ -135,6 +135,7 @@ interface ResourceMetadata {
   readonly imageId?: string;
   readonly imageReference?: string;
   readonly webPorts?: readonly { hostIp: string; hostPort: number }[];
+  readonly configuredWebPorts?: readonly { hostIp: string; hostPort: number }[];
   readonly driver?: string;
 }
 type Observation =
@@ -149,6 +150,8 @@ interface InventoryEntry {
   readonly creationFingerprint: string | null;
   observation: Observation;
 }
+// Active bindings can change as a retained created container starts; configured identity cannot.
+const resourceDigest = (metadata: ResourceMetadata) => digest({ ...metadata, webPorts: undefined });
 interface AttemptState {
   readonly number: number;
   readonly project: string;
@@ -164,7 +167,7 @@ interface AttemptState {
 }
 const formats: Record<Kind, string> = {
   container:
-    '{"id":{{json .Id}},"name":{{json .Name}},"created":{{json .Created}},"labels":{{json .Config.Labels}},"imageId":{{json .Image}},"imageReference":{{json .Config.Image}},"ports":{{json .NetworkSettings.Ports}}}',
+    '{"id":{{json .Id}},"name":{{json .Name}},"created":{{json .Created}},"labels":{{json .Config.Labels}},"imageId":{{json .Image}},"imageReference":{{json .Config.Image}},"ports":{{json .NetworkSettings.Ports}},"configuredPorts":{{json .HostConfig.PortBindings}}}',
   volume:
     '{"id":{{json .Name}},"name":{{json .Name}},"created":{{json .CreatedAt}},"labels":{{json .Labels}},"driver":{{json .Driver}}}',
   network:
@@ -398,22 +401,30 @@ export async function createLifecycleRecorder(
     if (kind !== "container") return { ...base, driver: identifier(raw.driver) };
     const imageId = imageIdentity(raw.imageId);
     const imageReference = text(raw.imageReference, 256);
-    const bindings = object(raw.ports ?? {})["3000/tcp"] ?? [];
-    if (!Array.isArray(bindings) || bindings.length > 8) return fail("invalid-port-bindings");
-    const webPorts = bindings.map((value: unknown) => {
-      const port = object(value);
-      const hostPort = Number(port.HostPort);
-      const hostIp = text(port.HostIp, 64);
-      if (
-        !Number.isInteger(hostPort) ||
-        hostPort < 1 ||
-        hostPort > 65535 ||
-        !/^[a-fA-F0-9:.]+$/.test(hostIp)
-      )
-        return fail("invalid-port-bindings");
-      return { hostIp, hostPort };
-    });
-    return { ...base, imageId, imageReference, webPorts };
+    const bindings = (ports: unknown, configured = false) => {
+      const values = object(ports ?? {})["3000/tcp"] ?? [];
+      if (!Array.isArray(values) || values.length > 8) return fail("invalid-port-bindings");
+      return values.map((value: unknown) => {
+        const port = object(value);
+        const hostPort = Number(port.HostPort);
+        const hostIp = configured && port.HostIp === "" ? "" : text(port.HostIp, 64);
+        if (
+          !Number.isInteger(hostPort) ||
+          hostPort < 1 ||
+          hostPort > 65535 ||
+          (!(configured && hostIp === "") && !/^[a-fA-F0-9:.]+$/.test(hostIp))
+        )
+          return fail("invalid-port-bindings");
+        return { hostIp, hostPort };
+      });
+    };
+    return {
+      ...base,
+      imageId,
+      imageReference,
+      webPorts: bindings(raw.ports),
+      configuredWebPorts: bindings(raw.configuredPorts, true)
+    };
   };
   const observe = async (attempt: AttemptState, entry: InventoryEntry): Promise<Observation> => {
     const args =
@@ -429,7 +440,7 @@ export async function createLifecycleRecorder(
           ];
     if (!lines(await selectedDocker(...args)).includes(entry.id)) return { state: "absent" };
     const metadata = await inspect(attempt, entry.kind, entry.id);
-    if (digest(metadata) !== entry.creationFingerprint)
+    if (resourceDigest(metadata) !== entry.creationFingerprint)
       return fail("resource-fingerprint-mismatch");
     return { state: "present", metadata };
   };
@@ -645,7 +656,7 @@ export async function createLifecycleRecorder(
             }
             await collect(`${kind}-inspection-error`, async () => {
               const metadata = await inspect(attempt, kind, id);
-              if (existing?.creation && existing.creationFingerprint !== digest(metadata))
+              if (existing?.creation && existing.creationFingerprint !== resourceDigest(metadata))
                 return fail("resource-fingerprint-mismatch");
               if (!existing?.creation)
                 attempt.inventory.set(key, {
@@ -653,7 +664,7 @@ export async function createLifecycleRecorder(
                   id,
                   firstSeen: attempt.inventory.get(key)!.firstSeen,
                   creation: metadata,
-                  creationFingerprint: digest(metadata),
+                  creationFingerprint: resourceDigest(metadata),
                   observation: { state: "present", metadata }
                 });
             });
@@ -670,11 +681,13 @@ export async function createLifecycleRecorder(
               !image ||
               app.imageId !== image.id ||
               app.imageReference !== reference ||
-              !app.webPorts?.length ||
-              app.webPorts.some((port) => port.hostPort !== attempt.port)
+              !app.configuredWebPorts?.length ||
+              app.configuredWebPorts.some((port) => port.hostPort !== attempt.port) ||
+              (input.requireApp && !app.webPorts?.length) ||
+              app.webPorts?.some((port) => port.hostPort !== attempt.port)
             )
               return fail("app-build-binding-error");
-            attempt.appSeen = true;
+            attempt.appSeen ||= (app.webPorts?.length ?? 0) > 0;
           }
           if (phase === "after-teardown" && entry.observation.state === "present")
             errors.push("recorded-resource-present");
