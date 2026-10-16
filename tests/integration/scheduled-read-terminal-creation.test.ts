@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +14,7 @@ import {
   AuthSessionResolver,
   createDatabase,
   DataContextRunner,
+  resolveMossEnv,
   type AccessContext,
   type DataContextDb,
   type MossDatabase
@@ -24,6 +26,7 @@ import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/shared";
 import { TasksRepository } from "@moss/tasks";
 
 import { resolveEffectiveGateMode } from "../../packages/chat/src/classifier-shadow-review-repository.js";
+import { resolveChatHome } from "../../packages/chat/src/live/chat-home.js";
 import type { ChatEngineFactory } from "../../packages/chat/src/live/runtime.js";
 import type { CliChatEngine } from "../../packages/chat/src/live/types.js";
 import { createActiveModulesResolver } from "../../packages/module-registry/src/active-modules-resolver.js";
@@ -32,6 +35,86 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 // #3529: public creation oracle for one-time task checks. Real routes, runtime,
 // resolver, validation, repositories, persistence and queue run here. Only the
 // external structured-model adapter and the chat engine are scripted fakes.
+
+// #3529 R3 environment isolation. This initializer must run BEFORE this module's
+// imports: the @moss/chat barrel re-exports live/cli-structured-adapter.js, which
+// captures its one-shot scratch root at import time
+// (`STRUCTURED_ONE_SHOT_ROOT = join(tmpdir(), "jarv1s-structured")`,
+// packages/chat/src/live/cli-structured-adapter.ts:36). A plain top-level statement
+// here would still run after those imports, and beforeAll later again, so only
+// vi.hoisted (lifted above every import by Vitest) is early enough; the global
+// setup file (tests/setup-env.ts) only defaults the embedding provider and never
+// touches these variables. Both supported modes end at the same asserted receipt:
+// - "narrow": the frozen explicit narrow procedure exports N3_RUN_ROOT, its
+//   TMPDIR/home children and the modern MOSS_CHAT_HOME/MOSS_CLI_HOME_BASE aliases
+//   before vitest starts; this block only records that inherited receipt.
+// - "standard": a plain `pnpm test:integration` / CI shard supplies none of them,
+//   so this block establishes the fixture's OWN unique root under the inherited
+//   real tmpdir (the caller-owned parent scratch of a local gate, /tmp in CI) and
+//   aims TMPDIR and both homes at its children before any import evaluates. The
+//   mutation is confined to this file's isolated fork (vitest pool "forks",
+//   isolate default: every test file gets a fresh fork), so it never reaches the
+//   unit phase's process or another file's fork, and afterAll restores the
+//   originals even when setup or teardown fails.
+type N3EnvIsolation = {
+  readonly mode: "narrow" | "standard";
+  readonly ownedRoot: string;
+  readonly rootCreatedByFixture: boolean;
+  /** What os.tmpdir() resolved to inside this initializer, before any import ran. */
+  readonly preImportTmpdir: string;
+  /** Pre-mutation values of every variable this fixture sets; restored in afterAll. */
+  readonly inheritedEnv: {
+    readonly TMPDIR: string | undefined;
+    readonly MOSS_CHAT_HOME: string | undefined;
+    readonly MOSS_CLI_HOME_BASE: string | undefined;
+  };
+};
+
+const n3Env = vi.hoisted((): N3EnvIsolation => {
+  // vi.hoisted runs before this module's imports, so imported bindings are not
+  // usable inside it; the process builtin loader is the supported synchronous
+  // way to reach node built-ins here.
+  if (typeof process.getBuiltinModule !== "function") {
+    throw new Error(
+      "N3 isolation initializer needs process.getBuiltinModule (Node >= 20.16) to run before imports"
+    );
+  }
+  const os = process.getBuiltinModule("node:os");
+  const path = process.getBuiltinModule("node:path");
+  const fs = process.getBuiltinModule("node:fs");
+  const inheritedEnv = {
+    TMPDIR: process.env.TMPDIR,
+    MOSS_CHAT_HOME: process.env.MOSS_CHAT_HOME,
+    MOSS_CLI_HOME_BASE: process.env.MOSS_CLI_HOME_BASE
+  };
+  const callerRoot = process.env.N3_RUN_ROOT;
+  if (callerRoot !== undefined) {
+    return {
+      mode: "narrow",
+      ownedRoot: callerRoot,
+      rootCreatedByFixture: false,
+      preImportTmpdir: os.tmpdir(),
+      inheritedEnv
+    };
+  }
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "moss-n3-terminal-auto."));
+  const ownedTmp = path.join(root, "tmp");
+  const ownedChatHome = path.join(root, "chat-home");
+  const ownedCliHome = path.join(root, "cli-home");
+  fs.mkdirSync(ownedTmp, { recursive: true });
+  fs.mkdirSync(ownedChatHome, { recursive: true });
+  fs.mkdirSync(ownedCliHome, { recursive: true });
+  process.env.TMPDIR = ownedTmp;
+  process.env.MOSS_CHAT_HOME = ownedChatHome;
+  process.env.MOSS_CLI_HOME_BASE = ownedCliHome;
+  return {
+    mode: "standard",
+    ownedRoot: root,
+    rootCreatedByFixture: true,
+    preImportTmpdir: os.tmpdir(),
+    inheritedEnv
+  };
+});
 
 const { Client } = pg;
 
@@ -288,15 +371,29 @@ async function closeOwnedResources(resources: readonly OwnedTeardown[]): Promise
 }
 
 beforeAll(async () => {
-  // Import-time scratch isolation is established by the gate start command,
-  // before this module was imported. Assert the inherited receipt here.
-  const root = process.env.N3_RUN_ROOT;
-  expect(root, "N3_RUN_ROOT must be set by the gate start command").toBeTruthy();
-  expect(process.env.TMPDIR).toBe(join(root!, "tmp"));
-  expect(tmpdir()).toBe(join(root!, "tmp"));
-  expect(process.env.MOSS_CHAT_HOME).toBe(join(root!, "chat-home"));
-  expect(process.env.MOSS_CLI_HOME_BASE).toBe(join(root!, "cli-home"));
-  console.log(`N3_OWNED_ROOT=${root} N3_TMPDIR=${process.env.TMPDIR}`);
+  // #3529 R3 isolation receipt, asserted identically in both modes. Narrow mode:
+  // the gate start command exported the owned root and homes before vitest
+  // started. Standard mode: the hoisted initializer above established them
+  // before any import ran. preImportTmpdir records what os.tmpdir() resolved to
+  // inside that initializer — before this module's imports evaluated — so its
+  // equality here proves the import-time scratch capture in the chat barrel
+  // resolved inside the owned root, not merely the live value below.
+  const root = n3Env.ownedRoot;
+  expect(
+    root,
+    "owned root must be supplied by the narrow gate start command or established by the hoisted initializer"
+  ).toBeTruthy();
+  expect(process.env.TMPDIR).toBe(join(root, "tmp"));
+  expect(tmpdir()).toBe(join(root, "tmp"));
+  expect(n3Env.preImportTmpdir).toBe(join(root, "tmp"));
+  // The homes are asserted through the product's own public environment
+  // resolution (the resolveMossEnv seam every consumer reads through), not the
+  // specific variable spelling: both the modern MOSS_* aliases of the frozen
+  // narrow command and the fixture's own standard-mode values pass, while a
+  // fallback to a real home can never satisfy either assertion.
+  expect(resolveChatHome()).toBe(join(root, "chat-home"));
+  expect(resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE")).toBe(join(root, "cli-home"));
+  console.log(`N3_ENV_MODE=${n3Env.mode} N3_OWNED_ROOT=${root} N3_TMPDIR=${process.env.TMPDIR}`);
 
   originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => {
@@ -416,14 +513,41 @@ afterAll(async () => {
         ? [{ name: "pg-boss app client", close: () => boss.stop({ graceful: false }) }]
         : []),
       ...(appDb ? [{ name: "app database pool", close: () => appDb.destroy() }] : []),
-      ...(bootstrap ? [{ name: "bootstrap pg client", close: () => bootstrap.end() }] : [])
+      ...(bootstrap ? [{ name: "bootstrap pg client", close: () => bootstrap.end() }] : []),
+      // Standard mode only: remove the root THIS fixture created. The narrow
+      // mode's root is caller-owned (the gate caller removes it), and the
+      // caller-owned parent scratch the fixture root lives under is never
+      // touched here either — only a root this file itself created.
+      ...(n3Env.rootCreatedByFixture
+        ? [
+            {
+              name: "n3 fixture-owned environment root",
+              close: () => rm(n3Env.ownedRoot, { recursive: true, force: true })
+            }
+          ]
+        : [])
     ]);
   } finally {
     globalThis.fetch = originalFetch;
     if (previousSecretKey === undefined) delete process.env.JARVIS_AI_SECRET_KEY;
     else process.env.JARVIS_AI_SECRET_KEY = previousSecretKey;
+    restoreN3Env();
   }
 });
+
+// Restores every environment variable the hoisted initializer changed, even when
+// setup or teardown failed above (this runs in afterAll's finally). Narrow mode
+// changed nothing — its root is caller-owned — so it restores nothing there.
+function restoreN3Env(): void {
+  if (!n3Env.rootCreatedByFixture) return;
+  const inherited = n3Env.inheritedEnv;
+  if (inherited.TMPDIR === undefined) delete process.env.TMPDIR;
+  else process.env.TMPDIR = inherited.TMPDIR;
+  if (inherited.MOSS_CHAT_HOME === undefined) delete process.env.MOSS_CHAT_HOME;
+  else process.env.MOSS_CHAT_HOME = inherited.MOSS_CHAT_HOME;
+  if (inherited.MOSS_CLI_HOME_BASE === undefined) delete process.env.MOSS_CLI_HOME_BASE;
+  else process.env.MOSS_CLI_HOME_BASE = inherited.MOSS_CLI_HOME_BASE;
+}
 
 describe("terminal one-time task-check creation (#3529)", () => {
   it("teardown control attempts every owned resource and reports a rejection by name", async () => {
