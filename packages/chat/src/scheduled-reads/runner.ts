@@ -3,23 +3,14 @@ import type { AssistantToolGateway, GatewayToolResponse } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import { ChatRepository } from "../repository.js";
 import { ReminderRepository, type DueReminder } from "../reminders/repository.js";
-import { persistReminderResult, type DeliverReminderJobPayload } from "../reminders/deliver.js";
+import { type DeliverReminderJobPayload } from "../reminders/deliver.js";
 import { lockReminderDestination } from "../reminders/destination.js";
 import { enqueueReminderNotification } from "../reminders/notifications.js";
-import {
-  scheduledObservationKey,
-  scheduledObservationDecision,
-  recurringReadFailureMessage,
-  scheduledFailureNotification
-} from "./observation.js";
-import { persistQuietScheduledRun } from "./recurring.js";
-import { nextReminderOccurrence } from "../reminders/repeating.js";
+import { scheduledObservationKey, scheduledObservationDecision } from "./observation.js";
 import { recordReminderRun } from "../reminders/runs.js";
-import {
-  readScheduledOperation,
-  recordReadOutcome,
-  recordScheduledObservation
-} from "./repository.js";
+import { readScheduledOperation } from "./repository.js";
+import { completeScheduledRead, type ScheduledReadResult } from "./completion.js";
+import { recoverScheduledReadOccurrence } from "./bookkeeping.js";
 import {
   readScheduledTask,
   SCHEDULED_READ_FAILED,
@@ -37,7 +28,6 @@ import {
   validScheduledReadAttempt,
   dispatchScheduledReadRecovery,
   startScheduledReadRenewal,
-  finishScheduledReadAttempt,
   type ScheduledReadAttempt
 } from "./attempts.js";
 
@@ -103,15 +93,27 @@ export async function runScheduledReadJob(
     if (!loaded) return null;
     if (!deps.boss) throw new Error("Scheduled read watchdog queue unavailable");
     const admitted = await admitScheduledReadAttempt(db, loaded.reminder, deps.boss);
-    return admitted ? { ...loaded, admitted } : null;
+    return { ...loaded, admitted };
   });
   if (!snapshot) return "inactive";
-  const recheck = (db: DataContextDb) => load(db, snapshot.admitted);
+  const admitted = snapshot.admitted;
+  if (!admitted) {
+    await recoverScheduledReadOccurrence(
+      {
+        actorUserId: payload.actorUserId,
+        resourceId: payload.resourceId,
+        expectedMessageId: snapshot.reminder.reservedMessageId
+      },
+      deps
+    );
+    return "inactive";
+  }
+  const recheck = (db: DataContextDb) => load(db, admitted);
   const stopRenewal = startScheduledReadRenewal(
     deps.dataContext,
     payload.actorUserId,
     payload.resourceId,
-    snapshot.admitted
+    admitted
   );
   try {
     const read = async (): Promise<GatewayToolResponse | null> => {
@@ -138,11 +140,11 @@ export async function runScheduledReadJob(
         (job.retryCount ?? -1) >= 0 &&
         Number.isInteger(job.retryLimit) &&
         (job.retryCount ?? 0) < Math.min(job.retryLimit ?? 0, 1);
-      if (temporary && eligibleRetry && snapshot.admitted.ordinal === 1) {
+      if (temporary && eligibleRetry && admitted.ordinal === 1) {
         const dispatched = await deps.dataContext.withDataContext(access, async (db) => {
           const current = await recheck(db);
           return current && deps.boss
-            ? dispatchScheduledReadRecovery(db, current.reminder, deps.boss, snapshot.admitted)
+            ? dispatchScheduledReadRecovery(db, current.reminder, deps.boss, admitted)
             : null;
         });
         if (!dispatched) return null;
@@ -161,12 +163,7 @@ export async function runScheduledReadJob(
     const response = await read();
     if (!response) return "inactive";
     const task = readScheduledTask(response, snapshot.operation.item_id);
-    let result: {
-      outcome: "success" | "refused" | "failed";
-      text: string;
-      observationKey?: string;
-      quiet?: boolean;
-    };
+    let result: ScheduledReadResult;
     if (!task) {
       const failure = await readFailure(response);
       if (!failure) return "inactive";
@@ -211,55 +208,18 @@ export async function runScheduledReadJob(
           quiet
         };
     }
-    const { outcome, text } = result;
     return await deps.dataContext.withDataContext(access, async (db) => {
       const current = await recheck(db);
       if (!current) return "inactive";
-      const continues =
-        !current.reminder.repeat ||
-        !current.reminder.deadlineAt ||
-        nextReminderOccurrence(
-          { ...current.reminder, repeat: current.reminder.repeat },
-          current.now
-        ).dueAt <= current.reminder.deadlineAt;
-      const postedText =
-        current.reminder.repeat && outcome !== "success"
-          ? recurringReadFailureMessage(outcome, continues)
-          : text;
-      if (current.reminder.repeat) {
-        if (!deps.boss) throw new Error("Recurring scheduled read queue unavailable");
-        await recordScheduledObservation(
-          db,
-          current.reminder.id,
-          outcome,
-          result.observationKey ?? null
-        );
-        if (
-          result.quiet ||
-          (outcome !== "success" && !scheduledFailureNotification(current.operation.failure_streak))
-        ) {
-          await persistQuietScheduledRun(
-            db,
-            current.reminder,
-            outcome === "success" ? "quiet" : outcome,
-            current.now,
-            reminders,
-            deps.boss
-          );
-          await finishScheduledReadAttempt(db, current.reminder, snapshot.admitted);
-          return outcome === "success" ? "quiet" : outcome;
-        }
-      } else await recordReadOutcome(db, current.reminder.id, outcome);
-      await persistReminderResult(db, current.reminder, postedText, current.now, {
-        chat,
-        reminders,
-        boss: deps.boss,
-        runOutcome: outcome === "success" ? "delivered" : outcome,
-        enqueueNotification: deps.enqueueNotification,
-        ...(outcome === "success" ? { scheduledReadSource: "tasks" as const } : {})
-      });
-      await finishScheduledReadAttempt(db, current.reminder, snapshot.admitted);
-      return outcome;
+      return completeScheduledRead(
+        db,
+        current.reminder,
+        current.now,
+        current.operation.failure_streak,
+        result,
+        deps,
+        admitted
+      );
     });
   } finally {
     await stopRenewal();
