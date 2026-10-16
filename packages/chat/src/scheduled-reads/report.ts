@@ -63,3 +63,24 @@ export const SCHEDULED_REPORT_TIMEOUT =
   "The model took too long to prepare the task report. No source data changed. Ask for a new check.";
 export const SCHEDULED_SOURCE_CHANGED =
   "The task changed while I was preparing its report, so I discarded the outdated result. Ask for a new check.";
+
+export const SCHEDULED_READ_INTERRUPTED =
+  "This task check was interrupted before its result was saved. Its outcome is unknown. Ask for a new check if you still need it.";
+export const SCHEDULED_READ_UNKNOWN =
+  "The outcome of this saved task check is unknown. Ask for a new check if you still need it.";
+
+export function scheduledInterruptionMessage(
+  kind: "interrupted" | "unknown",
+  continues?: boolean
+): string {
+  const text = kind === "unknown" ? SCHEDULED_READ_UNKNOWN : SCHEDULED_READ_INTERRUPTED;
+  if (continues === undefined) return text;
+  return (
+    "Three consecutive task checks could not complete. " +
+    text +
+    " " +
+    (continues
+      ? "I will keep checking on the saved cadence; you can pause this check in Settings."
+      : "No further run fits before its stop time, so this check is now complete.")
+  );
+}
