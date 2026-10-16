@@ -101,7 +101,9 @@ const n3Env = vi.hoisted((): N3EnvIsolation => {
     try {
       fs.rmSync(root, { recursive: true, force: true });
     } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], `N3 setup cleanup failed: ${root}`);
+      throw new AggregateError([error, cleanupError], `N3 setup cleanup failed: ${root}`, {
+        cause: cleanupError
+      });
     }
     throw error;
   }
