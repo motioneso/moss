@@ -1,31 +1,16 @@
 /**
- * #3529 supplemental seeded-owner N3 proof. Signup remains OUTSTANDING, as do
- * the nine existing blocking UATs, advisory, N1, cancellation/unsaved/fault and
- * due-worker proofs. This harness never runs those specs or activates a routine.
- *
- * EXECUTABLE PROTOCOL (only AFTER independent review of the exact clean SHA):
- *   cd ~/Jarv1s/.claude/worktrees/n3-terminal-creation
- *   pnpm exec tsx tests/uat/run-scheduled-read-terminal-uat.ts --launch <NEW-private-evidence-directory>
- * Read verify-gate first. --launch creates pre-import 0700 TMPDIR/chat/CLI/gate
- * roots, claims exactly one devport, then invokes exactly:
- *   scripts/run-gate.sh start --no-sweep --gate test:uat:3529-real
- * It waits ONCE with --follow --log <emitted-log>, records numeric start/wait/raw
- * exits, and checks both gate DB and UAT cleanup. No pipeline or automatic retry.
- * On interruption it stops that exact gate, awaits its children, then cleans only
- * recorded project labels, the unique image, roots and exact port reservation.
- * Linux process birth/group/session identities are rechecked before each signal
- * and gate stop. An uncertain surviving group retains resources and returns RED.
- * One explicit local Docker endpoint is inherited through launch and cleanup;
- * gate DB aliases are removed before importing the independent UAT provisioner.
- *
- * Private evidence includes unavoidable RAW provisioner setup-failure dumps
- * (app/DB/transcripts), seed credentials and assertions; 0700 directory/0600
- * files, no visual capture. Review bounded metadata before publication. This is
- * retention, NOT zero capture or secure erasure. Codex auth path is an identity
- * only; supported copying REUSES THE OPERATOR ACCOUNT in a disposable volume.
- * File presence is not ready authentication. The spec proves ready + real turns.
- * --self-test uses only fake receipts/lifecycle and local scratch: no Docker,
- * DB, browser, port claim, credential read, network or provider calls.
+ * #3529 supplemental seeded-owner proof: signup, nine blocking UATs, N1,
+ * cancellation/unsaved/fault/due-worker and routine activation remain OUTSTANDING.
+ * BLOCKED: no complete correlated fallback observer. All live entries fail closed.
+ * Intended protocol AFTER seam repair and exact executable review (read verify-gate):
+ * pnpm exec tsx tests/uat/run-scheduled-read-terminal-uat.ts --launch <NEW-private-evidence-directory>
+ * One no-sweep test:uat:3529-real gate, one wait --follow --log; local Docker endpoint,
+ * pre-import private roots and source/image/DB identities.
+ * Birth/group/session checked before signals/stop; uncertainty retains roots/port/resources (RED).
+ * Aggregate 14m includes cleanup. RAW app/DB/transcript/seed-credential evidence is 0700/0600;
+ * no zero-capture/erasure claim. Supported auth copying reuses the operator account in a
+ * disposable volume; file presence is not readiness.
+ * --self-test: fake/local scratch only; no Docker/DB/browser/port/auth/network/provider.
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -64,10 +49,36 @@ const LEASE = [
   SPEC,
   ".claude/skills/coordinate/uat-trigger-map.tsv"
 ];
-const RUN_MS = 12 * 60_000; // Entire proof, including build, stays far short of +30m.
+const RUN_MS = 12 * 60_000;
+const TOTAL_MS = RUN_MS + 120_000; // Includes teardown; +30m due retains >10m margin.
+let protocolEnd = Infinity;
+function remaining(max = 120_000): number {
+  const left = protocolEnd - Date.now();
+  check(left > 0, "aggregate protocol deadline exhausted; retain owned resources");
+  return Math.max(1, Math.min(max, left));
+}
+export function requireFallbackObserver(): void {
+  throw new Error(
+    "N3_FALLBACK_OBSERVER_UNAVAILABLE: launch/submission/classifier attempts unobservable"
+  );
+}
+async function protectedLifecycle(body: () => Promise<void>, cleanup: () => Promise<number>) {
+  let failed = false;
+  try {
+    await body();
+  } catch {
+    failed = true;
+  }
+  let errors = 1;
+  try {
+    errors = await cleanup();
+  } catch {
+    /* Explicit RED; retain ownership. */
+  }
+  return { failed, cleanup: errors };
+}
 const DOCKER_HOST = "unix:///var/run/docker.sock";
 const uid = process.getuid?.();
-
 function check(value: unknown, label: string): asserts value {
   if (!value) throw new Error(label);
 }
@@ -98,7 +109,8 @@ function capture(command: string, args: readonly string[], env = process.env): s
   const result = spawnSync(command, args, {
     env,
     encoding: "utf8",
-    timeout: 120_000,
+    timeout: remaining(),
+    killSignal: "SIGKILL",
     maxBuffer: 16 * 1024 * 1024
   });
   // Do not interpolate subprocess output into an error: it may contain secrets.
@@ -121,7 +133,6 @@ function sourceReceipt() {
     "four-path lease mismatch"
   );
   const hashes: Record<string, string> = {};
-  // Freeze every installed product file, not only the five changed chat files.
   for (const path of capture("git", ["ls-files", "apps", "packages"]).split("\n").filter(Boolean)) {
     hashes[path] = digest(readFileSync(path));
   }
@@ -133,58 +144,13 @@ export async function cleanupAll(
   let errors = 0;
   for (const action of actions) {
     try {
+      remaining();
       await action();
     } catch {
       errors++;
     }
   }
   return errors;
-}
-export interface RefusalReceipt {
-  admitted: boolean;
-  structuredOk: number;
-  ordinary: number;
-  assistants: number;
-  refused: boolean;
-  stored: boolean;
-  reminderDelta: number;
-  sourceDelta: number;
-  jobDelta: number;
-}
-export function assertRefusal(r: RefusalReceipt): void {
-  check(r.admitted && r.structuredOk >= 1, "no admitted successful interpretation evidence");
-  check(
-    r.ordinary === 0 && r.assistants === 1 && r.refused && r.stored,
-    "terminal persisted refusal absent"
-  );
-  check(r.reminderDelta === 0 && r.sourceDelta === 0 && r.jobDelta === 0, "refusal created work");
-}
-export interface SavedReceipt {
-  owner: string;
-  expectedOwner: string;
-  item: string;
-  expectedItem: string;
-  repeat: string | null;
-  due: number;
-  submitted: number;
-  finished: number;
-  reminders: number;
-  sources: number;
-  jobs: number;
-  ordinary: number;
-  structuredOk: number;
-}
-export function assertSaved(r: SavedReceipt): void {
-  check(r.owner === r.expectedOwner && r.item === r.expectedItem, "saved identity mismatch");
-  check(
-    r.repeat === null && Math.abs(r.due - r.submitted - 30 * 60_000) <= 90_000,
-    "saved timing mismatch"
-  );
-  check(r.finished < r.due - 10 * 60_000, "proof too close to due time");
-  check(
-    r.reminders === 1 && r.sources === 1 && r.jobs === 1 && r.ordinary === 0 && r.structuredOk >= 1,
-    "saved terminal inventory mismatch"
-  );
 }
 function rejectOverrides(env: NodeJS.ProcessEnv): void {
   check(!env.DOCKER_HOST || env.DOCKER_HOST === DOCKER_HOST, "local Docker daemon required");
@@ -221,12 +187,22 @@ function startChild(
   detached = false
 ): ChildProcess {
   const fd = openSync(log, "wx", 0o600);
+  let child: ChildProcess | undefined;
   try {
-    const child = spawn(args[0]!, args.slice(1), { env, stdio: ["ignore", fd, fd], detached });
-    if (child.pid) births.set(child, processIdentity(child.pid));
+    child = spawn(args[0]!, args.slice(1), { env, stdio: ["ignore", fd, fd], detached });
+    // No post-spawn exception may lose the child. Unknown birth stays uncertain.
+    try {
+      if (child.pid) births.set(child, processIdentity(child.pid));
+    } catch {
+      /* Missing birth remains uncertain. */
+    }
     return child;
   } finally {
-    closeSync(fd);
+    try {
+      closeSync(fd);
+    } catch {
+      if (child) births.delete(child); // Preserve ownership, mark closure uncertain.
+    }
   }
 }
 function settled(child: ChildProcess): Promise<number> {
@@ -234,6 +210,27 @@ function settled(child: ChildProcess): Promise<number> {
     child.once("error", () => resolveResult(1));
     child.once("close", (code) => resolveResult(code ?? 1));
   });
+}
+async function boundedChild(child: ChildProcess): Promise<number> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      settled(child),
+      new Promise<number>((resolveResult) => {
+        timer = setTimeout(() => {
+          try {
+            signalOwned(child, "SIGKILL");
+          } catch {
+            /* Identity uncertainty remains RED. */
+          } finally {
+            resolveResult(1);
+          }
+        }, remaining(Infinity));
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 interface ProcessIdentity {
   pid: number;
@@ -272,6 +269,7 @@ function signalOwned(child: ChildProcess, signal: NodeJS.Signals, group = false)
 }
 function groupClosed(child: ChildProcess): boolean {
   if (!child.pid) return true;
+  if (!births.get(child)) return false;
   return !readdirSync("/proc")
     .filter((name) => /^\d+$/.test(name))
     .some((name) => processIdentity(Number(name))?.group === child.pid);
@@ -289,6 +287,7 @@ function projectsInLog(raw: string, pid: number): string[] {
 }
 
 async function gateMain(): Promise<number> {
+  requireFallbackObserver();
   check(process.env.JARVIS_GATE_RUN === "1", "verify-gate launcher required");
   const root = process.env.N3_UAT_ROOT!;
   const evidence = process.env.N3_UAT_EVIDENCE!;
@@ -308,52 +307,107 @@ async function gateMain(): Promise<number> {
     privateDir(process.env[key!]!);
   }
   check(process.env.JARVIS_IMAGE_TAG?.match(/^uat-n3-[a-f0-9]{24}$/), "unique image tag required");
-  const child = startChild(
-    [process.execPath, "--import", "tsx", SELF, "--worker"],
-    process.env,
-    join(evidence, "worker-raw.log"),
-    true
+  protocolEnd = Number(process.env.N3_UAT_DEADLINE);
+  check(Number.isFinite(protocolEnd), "aggregate deadline missing");
+  return supervisedWorker(
+    evidence,
+    () =>
+      startChild(
+        [process.execPath, "--import", "tsx", SELF, "--worker"],
+        process.env,
+        join(evidence, "worker-raw.log"),
+        true
+      ),
+    remaining(Math.max(1, protocolEnd - 120_000 - Date.now()))
   );
-  record(evidence, "worker.json", { pid: child.pid });
-  const result = await supervise(child, RUN_MS);
-  const closed = groupClosed(child);
-  record(evidence, "worker-exit.json", { ...result, closed });
-  return result.interrupted || !closed ? 1 : result.rc;
 }
-async function supervise(
-  child: ChildProcess,
+async function supervisedWorker(
+  evidence: string,
+  create: () => ChildProcess,
   budget: number,
-  grace = 30_000
-): Promise<{ rc: number; interrupted: boolean }> {
+  write = record
+): Promise<number> {
+  write(evidence, "worker-intent.json", { spawning: true }); // Durable BEFORE spawn.
+  const child = create();
+  const supervision = supervise(child, budget); // Own before any fallible receipt.
+  let failed = false;
+  try {
+    write(evidence, "worker.json", { pid: child.pid });
+  } catch {
+    failed = true;
+    supervision.stop();
+  }
+  const result = await supervision.done;
+  const closed = groupClosed(child);
+  write(evidence, "worker-exit.json", { ...result, closed });
+  return failed || result.interrupted || !closed ? 1 : result.rc;
+}
+function supervise(child: ChildProcess, budget: number, grace = 30_000) {
   let interrupted = false;
   let killer: ReturnType<typeof setTimeout> | undefined;
+  let finish!: (rc: number) => void;
+  const completion = new Promise<number>((resolveResult) => {
+    finish = resolveResult;
+  });
+  void settled(child).then(finish);
   const stop = () => {
     interrupted = true;
-    signalOwned(child, "SIGTERM", true);
-    killer ??= setTimeout(() => signalOwned(child, "SIGKILL", true), grace);
+    try {
+      signalOwned(child, "SIGTERM", true);
+    } catch {
+      /* Unknown identity: retain. */
+    }
+    killer ??= setTimeout(
+      () => {
+        try {
+          signalOwned(child, "SIGKILL", true);
+        } catch {
+          /* Never signal a reused PID. */
+        }
+        // Allow close/reap to settle, but never wait past the aggregate deadline.
+        killer = setTimeout(() => finish(1), Math.max(1, Math.min(100, protocolEnd - Date.now())));
+      },
+      Math.max(1, Math.min(grace, protocolEnd - Date.now()))
+    );
   };
   process.on("SIGTERM", stop);
   process.on("SIGINT", stop);
   const deadline = setTimeout(stop, budget);
-  try {
-    const rc = await settled(child);
-    return { rc, interrupted };
-  } finally {
+  const done = completion.then((rc) => {
     clearTimeout(deadline);
     clearTimeout(killer);
     process.off("SIGTERM", stop);
     process.off("SIGINT", stop);
-    // Covers descendants surviving a failed/killed Playwright or provisioning child.
-    signalOwned(child, "SIGKILL", true);
-  }
+    try {
+      signalOwned(child, "SIGKILL", true);
+    } catch {
+      interrupted = true;
+    }
+    return { rc, interrupted };
+  });
+  return { done, stop };
+}
+function requireWorkerClosure(evidence: string): number {
+  const { pid } = JSON.parse(readFileSync(join(evidence, "worker.json"), "utf8")) as {
+    pid: number;
+  };
+  check(Number.isSafeInteger(pid) && pid > 1, "missing/invalid worker identity; retain resources");
+  const receipt = JSON.parse(readFileSync(join(evidence, "worker-exit.json"), "utf8")) as {
+    closed?: boolean;
+  };
+  check(receipt.closed === true, "worker close receipt missing; retain resources");
+  return pid;
 }
 async function worker(): Promise<number> {
+  requireFallbackObserver();
   check(
     process.env.JARVIS_GATE_RUN === "1" && process.env.N3_UAT_ROOT,
     "worker requires owned gate"
   );
+  protocolEnd = Number(process.env.N3_UAT_DEADLINE);
+  check(Number.isFinite(protocolEnd), "aggregate deadline missing");
+  remaining();
   const evidence = process.env.N3_UAT_EVIDENCE!;
-  // Gate DB URLs belong to migrations, never to the independently provisioned UAT.
   for (const prefix of ["MOSS", "JARVIS"])
     for (const role of ["BOOTSTRAP", "MIGRATION", "APP", "AUTH", "WORKER"])
       delete process.env[`${prefix}_${role}_DATABASE_URL`];
@@ -439,45 +493,42 @@ async function worker(): Promise<number> {
       env,
       join(evidence, "playwright-raw.log")
     );
-    result = await settled(browserChild);
+    result = await boundedChild(browserChild);
     if (stopped) result = 1;
   } catch (error) {
     console.error(error); // Quarantined worker-raw.log only; never relay this output.
     result = 1;
   } finally {
-    cleanup = await cleanupAll([
-      async () => {
-        await stack?.teardown();
-      }
-    ]);
+    cleanup = await cleanupAll([() => stack?.teardown()]);
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
     record(evidence, "stack-exit.json", { result, cleanup, stopped, phase });
   }
   return result || cleanup ? 1 : 0;
 }
+async function removeDocker(list: string[], remove: string[], valid = (_id: string) => true) {
+  const ids = capture("docker", list).split("\n").filter(Boolean);
+  const errors = await cleanupAll(
+    ids.map((id) => () => {
+      check(valid(id), "Docker resource identity changed");
+      capture("docker", [...remove, id]);
+    })
+  );
+  check(errors === 0 && capture("docker", list) === "", "Docker inventory cleanup incomplete");
+}
 async function cleanupProject(project: string): Promise<void> {
   check(/^uat-\d+_[a-f0-9]{8}$/.test(project), "unowned project name");
   const filter = `label=com.docker.compose.project=${project}`;
   let errors = 0;
-  for (const [kind, list, remove] of [
-    ["container", ["ps", "-aq"], ["rm", "--force", "--volumes"]],
-    ["volume", ["volume", "ls", "-q"], ["volume", "rm"]],
-    ["network", ["network", "ls", "-q"], ["network", "rm"]]
-  ] as const) {
-    errors += await cleanupAll([
-      () => {
-        const ids = capture("docker", [...list, "--filter", filter])
-          .split("\n")
-          .filter(Boolean);
-        for (const id of ids) capture("docker", [...remove, id]);
-        check(capture("docker", [...list, "--filter", filter]) === "", `${kind} cleanup failed`);
-      }
-    ]);
+  for (const kind of ["container", "volume", "network"]) {
+    const list = kind === "container" ? ["ps", "-aq"] : [kind, "ls", "-q"];
+    const remove = kind === "container" ? ["rm", "--force", "--volumes"] : [kind, "rm"];
+    errors += await cleanupAll([() => removeDocker([...list, "--filter", filter], remove)]);
   }
   check(errors === 0, "project cleanup incomplete");
 }
 async function launch(destination: string): Promise<number> {
+  requireFallbackObserver();
   process.umask(0o077);
   rejectOverrides(process.env);
   // All launch, observation, fixture, spec and cleanup calls inherit one endpoint.
@@ -488,32 +539,15 @@ async function launch(destination: string): Promise<number> {
     "new absolute private evidence path required"
   );
   privateDir(dirname(destination));
-  mkdirSync(destination, { mode: 0o700 });
-  privateDir(destination);
+  protocolEnd = Date.now() + TOTAL_MS;
+  let root: string | undefined;
+  let env: NodeJS.ProcessEnv = {};
   const nonce = randomBytes(12).toString("hex");
-  const root = mkdtempSync(join(tmpdir(), "moss-n3-live-"));
-  privateDir(root);
-  for (const name of ["tmp", "chat", "cli", "gate"]) mkdirSync(join(root, name), { mode: 0o700 });
   const owner = `moss-n3-live-${nonce}`;
   const imageTag = `uat-n3-${nonce}`;
   const authPath = resolve(
     process.env.JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE ?? join(homedir(), ".codex/auth.json")
   );
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    N3_UAT_ROOT: root,
-    N3_UAT_EVIDENCE: destination,
-    TMPDIR: join(root, "tmp"),
-    JARVIS_CHAT_HOME: join(root, "chat"),
-    JARVIS_CLI_HOME_BASE: join(root, "cli"),
-    JARVIS_GATE_DIR: join(root, "gate"),
-    JARVIS_IMAGE_TAG: imageTag,
-    JARVIS_UAT_BUILD: "1",
-    JARVIS_UAT_REAL_CHAT_PROVIDER: "codex",
-    JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE: authPath
-  };
-  delete env.MOSS_CHAT_HOME;
-  delete env.MOSS_CLI_HOME_BASE;
   let port: number | undefined;
   let log: string | undefined;
   let start = -1;
@@ -521,16 +555,16 @@ async function launch(destination: string): Promise<number> {
   let raw = -1;
   let interrupted = false;
   let operation: ChildProcess | undefined;
-  // Owned resource observer, part of this sole monitor: record anonymous PG
-  // volume IDs BEFORE run-gate's container-only EXIT cleanup loses their identity.
+  // Sole observer captures anonymous PG volumes before gate EXIT removes their container.
   let gateResources: { container: string; id: string; volumes: string[] } | undefined;
   let gateIdentity: ProcessIdentity | undefined;
   let observerFailed = false;
   const observeGate = () => {
     try {
-      const logs = readdirSync(join(root, "gate")).filter((name) => name.endsWith(".log"));
+      const logs = readdirSync(join(root!, "gate")).filter((name) => name.endsWith(".log"));
       if (logs.length !== 1) return;
-      const candidate = join(root, "gate", logs[0]!);
+      const candidate = join(root!, "gate", logs[0]!);
+      log ??= candidate;
       const contents = readFileSync(candidate, "utf8");
       const gatePid = Number(contents.match(/^### PID\s+(\d+)$/m)?.[1]);
       if (!gateIdentity && gatePid) {
@@ -553,7 +587,7 @@ async function launch(destination: string): Promise<number> {
       const result = spawnSync(
         "docker",
         ["inspect", "--format", "{{json .Mounts}}|{{.Id}}", container],
-        { encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"] }
+        { encoding: "utf8", timeout: remaining(2000), stdio: ["ignore", "pipe", "pipe"] }
       );
       if (result.status !== 0) return; // Container can still be in its recorded starting phase.
       const [mounts, id] = result.stdout.trim().split("|");
@@ -566,182 +600,223 @@ async function launch(destination: string): Promise<number> {
       observerFailed = true;
     }
   };
-  const observer = setInterval(observeGate, 500);
+  let observer: ReturnType<typeof setInterval> | undefined;
   const stop = () => {
     interrupted = true;
-    if (operation) signalOwned(operation, "SIGTERM");
+    if (operation) {
+      try {
+        signalOwned(operation, "SIGTERM");
+      } catch {
+        observerFailed = true;
+      }
+    }
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  const timer = setTimeout(stop, RUN_MS + 120_000);
-  let cleanup: number;
+  const timer = setTimeout(stop, RUN_MS);
   let workerClosed = true;
   let projectsClean = true;
-  try {
-    check(existsSync(authPath), "operator auth unavailable (presence only)");
-    port = claimedPort(capture("devports", ["claim", owner]));
-    Object.assign(env, { JARVIS_UAT_CLAIMED_WEB_PORT: String(port) });
-    record(destination, "inputs.json", {
-      ...source,
-      nonce,
-      owner,
-      port,
-      authPath,
-      dockerEndpoint: DOCKER_HOST,
-      root,
-      imageTag,
-      signup: "OUTSTANDING",
-      seededLogin: "supplemental",
-      rawCapture: true
-    });
-    operation = startChild(
-      ["scripts/run-gate.sh", "start", "--no-sweep", "--gate", "test:uat:3529-real"],
-      env,
-      join(destination, "start.out")
-    );
-    start = await settled(operation);
-    observeGate();
-    const receipt = readFileSync(join(destination, "start.out"), "utf8");
-    log = receipt.match(/^LOG=(.+)$/m)?.[1];
-    // Start can fail before emitting LOG. Only this fresh root's sole log is admissible.
-    if (!log) {
-      const logs = readdirSync(join(root, "gate")).filter((name) => name.endsWith(".log"));
-      if (logs.length === 1) log = join(root, "gate", logs[0]!);
-    }
-    check(log && dirname(log) === join(root, "gate"), "missing exact emitted gate log");
-    check(start === 0 && !interrupted, "gate start failed/interrupted");
-    operation = startChild(
-      ["scripts/run-gate.sh", "wait", "--follow", "--log", log],
-      env,
-      join(destination, "wait.out")
-    );
-    wait = await settled(operation);
-    const gate = readFileSync(log, "utf8");
-    raw = Number(gate.match(/^### FINAL rc=(\d+)$/m)?.[1] ?? -1);
-  } catch {
-    // Numeric failure and private receipts are retained; no raw diagnostics on stdout.
-  } finally {
-    clearTimeout(timer);
-    clearInterval(observer);
-    cleanup = await cleanupAll([
-      async () => {
-        if (log && !/^### FINAL rc=/m.test(readFileSync(log, "utf8"))) {
-          const gatePid = Number(readFileSync(log, "utf8").match(/^### PID\s+(\d+)$/m)?.[1]);
-          if (gatePid) {
+  const disposition = await protectedLifecycle(
+    async () => {
+      mkdirSync(destination, { mode: 0o700 });
+      privateDir(destination);
+      root = mkdtempSync(join(tmpdir(), "moss-n3-live-"));
+      privateDir(root);
+      for (const name of ["tmp", "chat", "cli", "gate"])
+        mkdirSync(join(root, name), { mode: 0o700 });
+      env = {
+        ...process.env,
+        N3_UAT_DEADLINE: String(protocolEnd),
+        N3_UAT_ROOT: root,
+        N3_UAT_EVIDENCE: destination,
+        TMPDIR: join(root, "tmp"),
+        JARVIS_CHAT_HOME: join(root, "chat"),
+        JARVIS_CLI_HOME_BASE: join(root, "cli"),
+        JARVIS_GATE_DIR: join(root, "gate"),
+        JARVIS_IMAGE_TAG: imageTag,
+        JARVIS_UAT_BUILD: "1",
+        JARVIS_UAT_REAL_CHAT_PROVIDER: "codex",
+        JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE: authPath
+      };
+      delete env.MOSS_CHAT_HOME;
+      delete env.MOSS_CLI_HOME_BASE;
+      observer = setInterval(observeGate, 500);
+      check(!interrupted, "interrupted during setup");
+      check(existsSync(authPath), "operator auth unavailable (presence only)");
+      port = claimedPort(capture("devports", ["claim", owner]));
+      Object.assign(env, { JARVIS_UAT_CLAIMED_WEB_PORT: String(port) });
+      record(destination, "inputs.json", {
+        ...source,
+        nonce,
+        owner,
+        port,
+        authPath,
+        dockerEndpoint: DOCKER_HOST,
+        root,
+        imageTag,
+        signup: "OUTSTANDING",
+        seededLogin: "supplemental",
+        rawCapture: true
+      });
+      workerClosed = false;
+      projectsClean = false; // Gate may spawn even if every subsequent receipt fails.
+      operation = startChild(
+        ["scripts/run-gate.sh", "start", "--no-sweep", "--gate", "test:uat:3529-real"],
+        env,
+        join(destination, "start.out")
+      );
+      start = await boundedChild(operation);
+      observeGate();
+      const receipt = readFileSync(join(destination, "start.out"), "utf8");
+      log = receipt.match(/^LOG=(.+)$/m)?.[1];
+      // Start can fail before emitting LOG. Only this fresh root's sole log is admissible.
+      if (!log) {
+        const logs = readdirSync(join(root!, "gate")).filter((name) => name.endsWith(".log"));
+        if (logs.length === 1) log = join(root, "gate", logs[0]!);
+      }
+      check(log && dirname(log) === join(root!, "gate"), "missing exact emitted gate log");
+      check(start === 0 && !interrupted, "gate start failed/interrupted");
+      operation = startChild(
+        ["scripts/run-gate.sh", "wait", "--follow", "--log", log],
+        env,
+        join(destination, "wait.out")
+      );
+      wait = await boundedChild(operation);
+      const gate = readFileSync(log, "utf8");
+      raw = Number(gate.match(/^### FINAL rc=(\d+)$/m)?.[1] ?? -1);
+    },
+    async () => {
+      clearInterval(observer);
+      let cleanup = 0;
+      const actions = [
+        async () => {
+          if (log && !/^### FINAL rc=/m.test(readFileSync(log, "utf8"))) {
+            const gatePid = Number(readFileSync(log, "utf8").match(/^### PID\s+(\d+)$/m)?.[1]);
+            check(gatePid, "missing owned gate PID");
             const current = processIdentity(gatePid);
             check(current, "gate PID gone without terminal receipt; do not signal reused group");
             validateProcess(gateIdentity, current);
+            const child = startChild(
+              ["scripts/run-gate.sh", "stop", "--log", log],
+              env,
+              join(destination, "stop.out")
+            );
+            check((await boundedChild(child)) === 0, "gate stop failed");
           }
-          const child = startChild(
-            ["scripts/run-gate.sh", "stop", "--log", log],
-            env,
-            join(destination, "stop.out")
-          );
-          check((await settled(child)) === 0, "gate stop failed");
-        }
-      },
-      async () => {
-        const workerPath = join(destination, "worker.json");
-        if (existsSync(workerPath)) {
-          workerClosed = false;
-          projectsClean = false;
-          const { pid } = JSON.parse(readFileSync(workerPath, "utf8")) as { pid: number };
-          check(Number.isSafeInteger(pid) && pid > 1, "invalid owned child");
-          // run-gate stop waits only 20s; our worker can need 30s to reap children.
-          // Do not tear resources out from under provisioning/build/browser work.
-          const until = Date.now() + 40_000;
-          while (!existsSync(join(destination, "worker-exit.json")) && Date.now() < until)
-            await new Promise((resume) => setTimeout(resume, 250));
-          const exitPath = join(destination, "worker-exit.json");
-          workerClosed =
-            existsSync(exitPath) &&
-            (JSON.parse(readFileSync(exitPath, "utf8")) as { closed?: boolean }).closed === true;
-          check(workerClosed, "worker close receipt missing; retain owned resources");
-          const rawPath = join(destination, "worker-raw.log");
-          const projects = projectsInLog(readFileSync(rawPath, "utf8"), pid);
-          record(destination, "owned-projects.json", projects);
+        },
+        async () => {
+          if (!workerClosed) {
+            // Absence after possible spawn is uncertainty, never closure.
+            const until = Date.now() + remaining(40_000);
+            while (!existsSync(join(destination, "worker-exit.json")) && Date.now() < until) {
+              remaining();
+              await new Promise((resume) => setTimeout(resume, Math.min(250, remaining())));
+            }
+            const pid = requireWorkerClosure(destination);
+            workerClosed = true;
+            const rawPath = join(destination, "worker-raw.log");
+            const projects = projectsInLog(readFileSync(rawPath, "utf8"), pid);
+            record(destination, "owned-projects.json", projects);
+            check(
+              (await cleanupAll(projects.map((project) => () => cleanupProject(project)))) === 0,
+              "owned projects remain"
+            );
+            projectsClean = true;
+          }
+        },
+        async () => {
+          check(workerClosed, "worker not reaped");
+          if (!log) return;
+          const gate = readFileSync(log, "utf8");
+          copyFileSync(log, join(destination, "gate.log"));
+          const container = gate.match(/^### GATE_CONTAINER (jarv1s-gate-[\w-]+)/m)?.[1];
           check(
-            (await cleanupAll(projects.map((project) => () => cleanupProject(project)))) === 0,
-            "owned projects remain"
+            container && gateResources?.container === container,
+            "gate resource inventory missing"
           );
-          projectsClean = true;
-        }
-      },
-      () => {
-        check(workerClosed, "worker not reaped");
-        if (!log) return;
-        const gate = readFileSync(log, "utf8");
-        copyFileSync(log, join(destination, "gate.log"));
-        const container = gate.match(/^### GATE_CONTAINER (jarv1s-gate-[\w-]+)/m)?.[1];
-        check(
-          container && gateResources?.container === container,
-          "gate resource inventory missing"
-        );
-        const ids = capture("docker", [
-          "ps",
-          "-aq",
-          "--no-trunc",
-          "--filter",
-          `name=^/${container}$`
-        ]);
-        if (ids) {
-          check(ids === gateResources!.id, "gate container identity changed");
-          capture("docker", ["rm", "--force", "--volumes", ids]);
-        }
-        for (const volume of gateResources!.volumes) {
-          check(/^[a-f0-9]{64}$/.test(volume), "unexpected gate volume identity");
-          const remains = capture("docker", ["volume", "ls", "-q", "--filter", `name=^${volume}$`]);
-          if (remains) capture("docker", ["volume", "rm", volume]);
-          check(
-            capture("docker", ["volume", "ls", "-q", "--filter", `name=^${volume}$`]) === "",
-            "gate volume remains"
+          await removeDocker(
+            ["ps", "-aq", "--no-trunc", "--filter", `name=^/${container}$`],
+            ["rm", "--force", "--volumes"],
+            (id) => id === gateResources!.id
           );
-        }
-        check(
-          capture("docker", ["ps", "-aq", "--no-trunc", "--filter", `name=^/${container}$`]) === "",
-          "gate container remains"
-        );
-      },
-      () => {
-        check(workerClosed, "worker not reaped");
-        const image = `ghcr.io/motioneso/moss:${imageTag}`;
-        const images = capture("docker", ["image", "ls", "-q", image]);
-        if (images) capture("docker", ["image", "rm", image]);
-        check(capture("docker", ["image", "ls", "-q", image]) === "", "owned image remains");
-      },
-      () => {
-        check(workerClosed, "worker not reaped");
-        check(projectsClean, "retain port reservation while owned stack cleanup is uncertain");
-        if (port === undefined) return;
-        check(
-          readFileSync(`/tmp/devports/${port}/owner`, "utf8").trim() === owner,
-          "port ownership changed"
-        );
-        capture("devports", ["release", String(port)]);
-        check(!existsSync(`/tmp/devports/${port}`), "port reservation remains");
-      }
-    ]);
-    if (observerFailed) cleanup++;
-    if (log && existsSync(log))
-      raw = Number(readFileSync(log, "utf8").match(/^### FINAL rc=(\d+)$/m)?.[1] ?? -1);
-    if (cleanup === 0)
-      cleanup += await cleanupAll([
+          for (const volume of gateResources!.volumes) {
+            check(/^[a-f0-9]{64}$/.test(volume), "unexpected gate volume identity");
+            await removeDocker(
+              ["volume", "ls", "-q", "--filter", `name=^${volume}$`],
+              ["volume", "rm"],
+              (id) => id === volume
+            );
+          }
+        },
         () => {
-          privateDir(root);
-          rmSync(root, { recursive: true });
-          check(!existsSync(root), "owned root remains");
+          check(workerClosed, "worker not reaped");
+          if (!operation) return;
+          const image = `ghcr.io/motioneso/moss:${imageTag}`;
+          return removeDocker(["image", "ls", "-q", image], ["image", "rm"]);
+        },
+        () => {
+          remaining();
+          check(workerClosed, "worker not reaped");
+          check(cleanup === 0 && !observerFailed, "retain port after any uncertain cleanup");
+          check(projectsClean, "retain port reservation while owned stack cleanup is uncertain");
+          if (port === undefined) return;
+          check(
+            readFileSync(`/tmp/devports/${port}/owner`, "utf8").trim() === owner,
+            "port ownership changed"
+          );
+          capture("devports", ["release", String(port)]);
+          check(!existsSync(`/tmp/devports/${port}`), "port reservation remains");
         }
-      ]);
-    // A failed cleanup retains the owned root for diagnosis, and terminal is RED.
-    process.off("SIGINT", stop);
-    process.off("SIGTERM", stop);
+      ];
+      for (const action of actions) cleanup += await cleanupAll([action]);
+      if (observerFailed || Date.now() >= protocolEnd) cleanup++;
+      if (log && existsSync(log))
+        raw = Number(readFileSync(log, "utf8").match(/^### FINAL rc=(\d+)$/m)?.[1] ?? -1);
+      if (cleanup === 0)
+        cleanup += await cleanupAll([
+          () => {
+            remaining();
+            if (!root) return;
+            privateDir(root);
+            rmSync(root, { recursive: true });
+            check(!existsSync(root), "owned root remains");
+          }
+        ]);
+      // A failed cleanup retains the owned root for diagnosis, and terminal is RED.
+      return cleanup;
+    }
+  );
+  clearTimeout(timer);
+  clearInterval(observer);
+  process.off("SIGINT", stop);
+  process.off("SIGTERM", stop);
+  let cleanup = disposition.cleanup;
+  let result =
+    !disposition.failed && start === 0 && wait === 0 && raw === 0 && cleanup === 0 && !interrupted
+      ? 0
+      : 1;
+  try {
+    record(destination, "terminal.json", {
+      start,
+      wait,
+      raw,
+      cleanup,
+      interrupted,
+      result,
+      deadline: protocolEnd,
+      expired: Date.now() >= protocolEnd,
+      workerClosed,
+      projectsClean,
+      rootRetained: root !== undefined && existsSync(root)
+    });
+  } catch {
+    cleanup++;
+    result = 1;
   }
-  const result = start === 0 && wait === 0 && raw === 0 && cleanup === 0 && !interrupted ? 0 : 1;
-  record(destination, "terminal.json", { start, wait, raw, cleanup, interrupted, result });
   console.info(
     JSON.stringify({ n3: "supplemental", start, wait, raw, cleanup, result, signup: "OUTSTANDING" })
   );
-  return result;
+  return cleanup ? 1 : result;
 }
 async function selfTest(): Promise<void> {
   let controls = 0;
@@ -752,65 +827,6 @@ async function selfTest(): Promise<void> {
   assert.equal(claimedPort("5180"), 5180);
   assert.equal(claimedPort("5299"), 5299);
   controls += 2;
-  const refusal: RefusalReceipt = {
-    admitted: true,
-    structuredOk: 1,
-    ordinary: 0,
-    assistants: 1,
-    refused: true,
-    stored: true,
-    reminderDelta: 0,
-    sourceDelta: 0,
-    jobDelta: 0
-  };
-  assertRefusal(refusal);
-  controls++;
-  for (const mutation of [
-    { admitted: false },
-    { structuredOk: 0 },
-    { ordinary: 1 },
-    { assistants: 2 },
-    { refused: false },
-    { stored: false },
-    { reminderDelta: 1 },
-    { sourceDelta: 1 },
-    { jobDelta: 1 }
-  ]) {
-    assert.throws(() => assertRefusal({ ...refusal, ...mutation }));
-    controls++;
-  }
-  const saved: SavedReceipt = {
-    owner: "a",
-    expectedOwner: "a",
-    item: "b",
-    expectedItem: "b",
-    repeat: null,
-    submitted: 0,
-    due: 1_800_000,
-    finished: 10_000,
-    reminders: 1,
-    sources: 1,
-    jobs: 1,
-    ordinary: 0,
-    structuredOk: 1
-  };
-  assertSaved(saved);
-  controls++;
-  for (const mutation of [
-    { owner: "foreign" },
-    { item: "wrong" },
-    { repeat: "interval" },
-    { due: 1000 },
-    { finished: 1_700_000 },
-    { reminders: 0 },
-    { sources: 2 },
-    { jobs: 0 },
-    { ordinary: 1 },
-    { structuredOk: 0 }
-  ]) {
-    assert.throws(() => assertSaved({ ...saved, ...mutation }));
-    controls++;
-  }
   assert.deepEqual(
     projectsInLog(
       "[uat] provisioning uat-123_abcd1234 on port 5180 subnet x\n" +
@@ -863,6 +879,77 @@ async function selfTest(): Promise<void> {
     assert.equal(lstatSync(join(root, "receipt.json")).mode & 0o777, 0o600);
     assert.throws(() => record(root, "receipt.json", { replaced: true }));
     controls++;
+    assert.throws(requireFallbackObserver, /N3_FALLBACK_OBSERVER_UNAVAILABLE/);
+    controls++;
+    for (const failAt of [0, 1, 2]) {
+      let partial: string | undefined;
+      const disposition = await protectedLifecycle(
+        async () => {
+          partial = mkdtempSync(join(root, "partial-"));
+          for (let step = 0; step < 3; step++) {
+            if (step === failAt) throw Error("synthetic setup failure");
+            mkdirSync(join(partial, String(step)));
+          }
+        },
+        async () =>
+          cleanupAll([
+            () => {
+              if (partial) rmSync(partial, { recursive: true });
+            }
+          ])
+      );
+      assert.deepEqual(disposition, { failed: true, cleanup: 0 });
+      assert.equal(existsSync(partial!), false);
+      controls++;
+    }
+    const failedCleanup = await protectedLifecycle(
+      () => Promise.reject(Error("setup")),
+      () => Promise.reject(Error("cleanup"))
+    );
+    assert.deepEqual(failedCleanup, { failed: true, cleanup: 1 });
+    controls++;
+    const receiptRoot = mkdtempSync(join(root, "receipt-failure-"));
+    let owned: ChildProcess | undefined;
+    assert.equal(
+      await supervisedWorker(
+        receiptRoot,
+        () => {
+          owned = startChild(
+            [process.execPath, "-e", "setTimeout(()=>process.exit(0),1000)"],
+            process.env,
+            join(receiptRoot, "child.log"),
+            true
+          );
+          return owned;
+        },
+        2000,
+        (directory, name, data) => {
+          if (name === "worker.json") throw Error("synthetic receipt write failure");
+          record(directory, name, data);
+        }
+      ),
+      1
+    );
+    assert.equal(groupClosed(owned!), true);
+    assert.throws(() => requireWorkerClosure(receiptRoot)); // Exit alone cannot replace identity.
+    controls += 2;
+    const identityRoot = mkdtempSync(join(root, "missing-identity-"));
+    record(identityRoot, "worker.json", { pid: 42 });
+    assert.throws(() => requireWorkerClosure(identityRoot));
+    record(identityRoot, "worker-exit.json", { closed: false });
+    assert.throws(() => requireWorkerClosure(identityRoot));
+    controls += 2;
+    protocolEnd = Date.now() + 80;
+    assert(remaining(10) <= 10);
+    const started = Date.now();
+    assert.throws(() => capture(process.execPath, ["-e", "setTimeout(()=>{},1000)"]));
+    assert(Date.now() - started < 750, "command exceeded aggregate deadline");
+    assert.throws(() => remaining());
+    const retained = mkdtempSync(join(root, "deadline-retains-"));
+    assert.equal(await cleanupAll([() => rmSync(retained, { recursive: true })]), 1);
+    assert.equal(existsSync(retained), true); // Expired cleanup retains actual owned roots.
+    protocolEnd = Infinity;
+    controls += 3;
     const raw = join(root, "child.log");
     const failed = startChild(
       [process.execPath, "-e", 'process.stderr.write("synthetic-private");process.exit(7)'],
@@ -870,7 +957,7 @@ async function selfTest(): Promise<void> {
       raw,
       true
     );
-    assert.deepEqual(await supervise(failed, 5000), { rc: 7, interrupted: false });
+    assert.deepEqual(await supervise(failed, 5000).done, { rc: 7, interrupted: false });
     assert.equal(readFileSync(raw, "utf8"), "synthetic-private");
     assert.equal(lstatSync(raw).mode & 0o777, 0o600);
     controls++;
@@ -880,7 +967,7 @@ async function selfTest(): Promise<void> {
       join(root, "hanging.log"),
       true
     );
-    const killed = await supervise(hanging, 200, 100);
+    const killed = await supervise(hanging, 200, 100).done;
     assert.equal(killed.interrupted, true);
     assert.notEqual(killed.rc, 0);
     assert.throws(() => process.kill(hanging.pid!, 0));
@@ -892,7 +979,7 @@ async function selfTest(): Promise<void> {
       join(root, "absent.log"),
       true
     );
-    assert.equal((await supervise(absent, 5000)).rc, 1);
+    assert.equal((await supervise(absent, 5000).done).rc, 1);
     controls++;
   } finally {
     rmSync(root, { recursive: true });
