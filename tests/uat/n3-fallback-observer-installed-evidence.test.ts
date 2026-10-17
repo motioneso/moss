@@ -225,7 +225,7 @@ function context(data: Buffer) {
         pattern !== pattern.trim() ||
         pattern.startsWith("/") ||
         pattern.endsWith("/") ||
-        /[?\[\]\\]/.test(pattern) ||
+        /[?[\]\\]/.test(pattern) ||
         (pattern.includes("**") && (!pattern.startsWith("**/") || pattern.slice(3).includes("**")))
       )
         throw new Error("unsupported context grammar");
