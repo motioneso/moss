@@ -285,7 +285,11 @@ export class InstalledReads {
             refuse();
           }
         });
-        this.childBirth(child);
+        try {
+          this.childBirth(child);
+        } catch {
+          refuse();
+        }
       });
       const expiry = new Promise<never>((_, reject) => {
         timer = setTimeout(
