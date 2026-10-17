@@ -157,6 +157,7 @@ function fixture() {
   f.app.labels["com.docker.compose.project"] = project;
   for (const [i, v] of f.volumes.entries()) {
     if (i === 1) v.labels["com.docker.compose.volume"] = "jarv1s-cli-socket";
+    if (i === 2) v.labels["com.docker.compose.volume"] = "jarv1s-sports-browser-socket";
     v.id = v.name = `${project}_${v.labels["com.docker.compose.volume"]}`;
     v.labels["com.docker.compose.project"] = project;
   }
@@ -202,10 +203,10 @@ function fixture() {
       sha256: hash(fs.readFileSync(join(f.root, path)))
     })),
     imageReference: f.reference,
-    volumes: f.volumes.slice(0, 2).map((v, i) => ({
+    volumes: f.volumes.slice(0, 3).map((v, i) => ({
       id: v.id,
       role: v.labels["com.docker.compose.volume"],
-      destination: i === 0 ? "/data/cli-auth" : "/run/jarv1s"
+      destination: ["/data/cli-auth", "/run/jarv1s", "/run/moss-sports-browser"][i]!
     })),
     dbBoundary: { endpoint: "owned-compose-postgres" }
   };
