@@ -230,7 +230,7 @@ function fixture() {
     stderrOverflow: false,
     dirty: false,
     drift: false,
-    badBirth: false,
+    badBirth: false as boolean | "malformed",
     bridgeClose: true,
     backpressure: false,
     dropReply: false,
@@ -472,7 +472,8 @@ function fixture() {
     open: ((path: fs.PathLike, flags: number) => {
       const bytes = processFiles.get(String(path));
       if (!bytes) return fs.openSync(path, flags);
-      if (h.badBirth) throw new Error("ambiguous birth");
+      if (h.badBirth === true) throw new Error("ambiguous birth");
+      if (h.badBirth === "malformed") bytes.fill(120);
       const fd = ++nextFd;
       fds.set(fd, { data: bytes, offset: 0 });
       return fd;
@@ -613,60 +614,24 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     await composed.consumer.open();
     for (const [index, mode] of (["terminal", "terminal", "positive"] as const).entries()) {
       const current = [turn, actor, thread][index]!;
-      await composed.consumer.beginWindow(actor, thread, mode);
-      f.event({
-        phase: "entry",
+      const identity = { actorUserId: actor, surface: "drawer", turnId: current, threadId: thread };
+      const turnAttempt = {
+        ...identity,
         site: "turn",
         attemptId: index * 3 + 2,
-        actorUserId: actor,
-        surface: "drawer",
-        turnId: current,
-        threadId: null,
         aborted: false
-      });
-      f.event({
-        phase: "context",
-        actorUserId: actor,
-        surface: "drawer",
-        turnId: current,
-        threadId: thread
-      });
+      };
+      await composed.consumer.beginWindow(actor, thread, mode);
+      f.event({ ...turnAttempt, phase: "entry", threadId: null });
+      f.event({ ...identity, phase: "context" });
       if (mode === "positive")
         for (const [offset, site] of ["shadow.start", "shadow.run"].entries()) {
           const attemptId = index * 3 + offset * 2 + 4;
-          f.event({
-            phase: "entry",
-            site,
-            attemptId,
-            actorUserId: actor,
-            surface: "drawer",
-            turnId: current,
-            threadId: thread,
-            aborted: false
-          });
-          f.event({
-            phase: "settle",
-            site,
-            attemptId,
-            actorUserId: actor,
-            surface: "drawer",
-            turnId: current,
-            threadId: thread,
-            outcome: "ok",
-            aborted: false
-          });
+          const attempt = { ...identity, site, attemptId, aborted: false };
+          f.event({ ...attempt, phase: "entry" });
+          f.event({ ...attempt, phase: "settle", outcome: "ok" });
         }
-      f.event({
-        phase: "settle",
-        site: "turn",
-        attemptId: index * 3 + 2,
-        actorUserId: actor,
-        surface: "drawer",
-        turnId: current,
-        threadId: thread,
-        outcome: "ok",
-        aborted: false
-      });
+      f.event({ ...turnAttempt, phase: "settle", outcome: "ok" });
       const result = await composed.consumer.finishWindow({
         actorUserId: actor,
         threadId: thread,
@@ -717,6 +682,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     "signal",
     "spawn",
     "birth",
+    "malformed-birth",
     "substituted",
     "missing-close",
     "source-close",
@@ -730,6 +696,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     }
     if (kind === "spawn") f.h.spawnError = new Error("original-spawn-error");
     if (kind === "birth") f.h.badBirth = true;
+    if (kind === "malformed-birth") f.h.badBirth = "malformed";
     if (kind === "missing-close") f.h.missingClose = true;
     if (kind === "source-close" || kind === "daemon-close") f.h.holdBuild = true;
     if (kind === "substituted") {
@@ -760,11 +727,14 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     expect(f.events).not.toContain("image-built");
     expect(f.started()).toHaveLength(0);
     if (kind !== "spawn") expect(f.collector.retained.size).toBeGreaterThan(0);
+    if (kind === "birth" || kind === "malformed-birth")
+      expect(f.collector.retained.has(mocks.spawn.mock.results[0]!.value)).toBe(true);
   });
   it.each(["host-source", "channel-mode", "chain", "inventory", "daemon", "source"])(
     "authenticates %s before any new baseline cp",
     async (kind) => {
       const f = fixture();
+      const snapshots: { inventory: unknown[]; digest: string; bytes: string }[] = [];
       f.h.before = () => {
         if (kind === "host-source")
           fs.writeFileSync(join(f.f.root, "tests/uat/lifecycle-records.ts"), "wrong");
@@ -772,15 +742,35 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
         if (kind === "daemon") f.f.state.daemon = "wrong";
         if (kind === "source") f.h.drift = true;
         if (kind === "chain" || kind === "inventory") {
-          const path = join(f.f.dir, "000003.json"),
-            record = JSON.parse(fs.readFileSync(path, "utf8"));
+          const name =
+            kind === "chain"
+              ? "000003.json"
+              : fs
+                  .readdirSync(f.f.dir)
+                  .filter((name) => /^[0-9]{6}\.json$/.test(name))
+                  .sort()
+                  .at(-1)!;
+          const path = join(f.f.dir, name),
+            original = fs.readFileSync(path, "utf8"),
+            record = JSON.parse(original);
+          snapshots.push({ ...record, bytes: original });
           if (kind === "chain") record.previousDigest = "0".repeat(64);
           else record.inventory = [];
           delete record.digest;
-          fs.writeFileSync(path, JSON.stringify({ ...record, digest: digest(record) }));
+          const changed = { ...record, digest: digest(record) },
+            bytes = JSON.stringify(changed);
+          fs.writeFileSync(path, bytes);
+          snapshots.push({ ...changed, bytes });
         }
       };
       await rejectBeforeStart(f);
+      if (kind === "inventory") {
+        expect(snapshots).toHaveLength(2);
+        expect(snapshots[0]!.inventory.length).toBeGreaterThan(0);
+        expect(snapshots[1]!.inventory).toHaveLength(0);
+        expect(snapshots[1]!.bytes).not.toBe(snapshots[0]!.bytes);
+        expect(snapshots[1]!.digest).not.toBe(snapshots[0]!.digest);
+      }
       expect(f.copies()).toHaveLength(0);
     }
   );
@@ -949,8 +939,16 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     }
     await composed.consumer.open();
     f.h.bridgeClose = false;
-    const pending = composed.consumer.close();
-    const assertion = expect(pending).rejects.toThrow();
+    const retained = composed.consumer.retainedBridge;
+    expect(retained).toBeDefined();
+    const pending = composed.consumer.close().then((result) => {
+      expect(result).toEqual({ disposed: false, retained });
+      expect(result.retained).toBe(retained);
+      expect(composed.consumer.failed).toBe(true);
+      if (!result.disposed || result.retained)
+        throw new Error("STRICTTESTLOCAL: bridge close unproven");
+    });
+    const assertion = expect(pending).rejects.toThrow("STRICTTESTLOCAL");
     await vi.advanceTimersByTimeAsync(20001);
     await assertion;
     expect(f.collector.retained.has(f.bridge!)).toBe(true);
@@ -990,6 +988,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     await flush();
     await vi.advanceTimersByTimeAsync(20001);
     await assertion;
+    expect(g.collector.retained.has(g.build!)).toBe(true);
     const before = g.calls.length;
     g.emit(g.build!);
     await flush();

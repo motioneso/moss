@@ -554,7 +554,7 @@ async function runCommand(
   evidence?: N3BuildEvidence
 ): Promise<void> {
   const observation = evidence && (await evidence.observeBuild(command, args, process.cwd()));
-  await new Promise<void>((resolvePromise, reject) => {
+  const exited = new Promise<void>((resolvePromise, reject) => {
     let stderr = "";
     // #1024/#1000: stdout stays "inherit" for live operator visibility; stderr is piped so we can
     // inspect it for the port-bind-conflict signature, but every chunk is still forwarded to the
@@ -587,7 +587,7 @@ async function runCommand(
       reject(new Error(`${command} ${args.join(" ")} exited with status ${code ?? "unknown"}`));
     });
   });
-  if (observation) await observation.closed;
+  await (observation ? Promise.all([exited, observation.closed]) : exited);
 }
 
 async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
