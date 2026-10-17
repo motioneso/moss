@@ -277,7 +277,7 @@ function fixture() {
   cleanups.push(() => observer.close());
   receive({ version: 1, sequence: ++sequence, phase: "coverage", sites: OBSERVER_SITES });
   const processFiles = new Map<string, Buffer>(),
-    fds = new Map<number, { data: Buffer; offset: number }>();
+    fds = new Map<number, { path: string; data: Buffer; offset: number }>();
   let nextPid = 60000,
     pendingCopies = 0,
     nextFd = 1000000;
@@ -475,13 +475,13 @@ function fixture() {
       if (h.badBirth === true) throw new Error("ambiguous birth");
       if (h.badBirth === "malformed") bytes.fill(120);
       const fd = ++nextFd;
-      fds.set(fd, { data: bytes, offset: 0 });
+      fds.set(fd, { path: String(path), data: bytes, offset: 0 });
       return fd;
     }) as typeof fs.openSync,
     // Descriptor and pathname observations preserve the same fake proc identity.
     fstat: ((fd: number) => {
       const entry = fds.get(fd);
-      return entry ? fakeStat(entry.data.toString().split(" ")[0]!) : fs.fstatSync(fd);
+      return entry ? fakeStat(entry.path) : fs.fstatSync(fd);
     }) as typeof fs.fstatSync,
     read: ((
       fd: number,
