@@ -377,7 +377,18 @@ export class InstalledReads {
   }
   producerSnapshot(): ProducerSnapshot {
     const channel = this.identity(this.pins.channelPath, "directory");
-    this.check(digest(channel) === digest(this.pins.channel));
+    const keys = ["device", "inode", "uid", "mode", "type"] as const;
+    this.check(
+      [channel, this.pins.channel].every(
+        (value) =>
+          Reflect.ownKeys(value).length === keys.length &&
+          keys.every(
+            (key) =>
+              Object.hasOwn(value, key) &&
+              typeof value[key] === (key === "type" ? "string" : "number")
+          )
+      ) && keys.every((key) => channel[key] === this.pins.channel[key])
+    );
     const directory = this.io.opendir(this.pins.channelPath);
     const names: string[] = [];
     try {
