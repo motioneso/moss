@@ -391,3 +391,101 @@ actual build/Docker/socket/DB/provider/browser/port/PID-signal work, process sel
 full gate/CI/push/PR/merge/publication and both guard releases remain held. All nine
 blocking UATs remain UNRUN here; runtime/release/Stage4 booleans remain false and
 Stage4 remains NOT_ACCEPTED. No automatic follow-on or successor is authorized.
+
+## O2b2a R4 — six-code layout and aggregate proof treatment
+
+The issued finite offline grant for #3529 activates this exact eight-path slice on
+immutable A `dd6b60dcd458c7d2592b7bb5ecfeeca5ccf82962`, child of accepted K
+`e2b66b672d625221ddd7139d31046372d94d2e8d`. Earlier agreements and source pins
+remain intact. This appendix supersedes only the historical five-path layout,
+commit sequencing and aggregate-only witness classification for this slice.
+
+The exact six code/test paths under `~/Jarv1s`, each at most 1000 complete physical
+canonically formatted lines, are:
+
+- `tests/uat/n3-fallback-observer-installed.ts`: inert original-child capture,
+  trust ordering, baseline and accepted-consumer composition.
+- `tests/uat/n3-fallback-observer-installed-reads.ts`: inert injected bounded
+  transport and closed fixed semantic read allowlist.
+- `tests/uat/n3-fallback-observer-installed-evidence.ts`: typed pure tar, mount
+  and producer authentication, immutable source pins and literal ceilings.
+- `tests/uat/n3-fallback-observer-installed.test.ts`: connected fake controls
+  through the actual provisioner, O2a, producer, bootstrap and consumer.
+- `tests/uat/n3-fallback-observer-installed-evidence.test.ts`: pure policy,
+  immutable Git/context, size/map/arithmetic and sensitivity controls.
+- `tests/uat/provisioner.ts`: only optional typed evidence, observation and
+  awaiting of the original build child, and serial post-O2a/pre-original-up hook.
+
+The other two paths are this canonical document and its matching specification
+or plan. Append this amendment to both and commit docs-only D as a direct child
+of A before executable edits. Freeze D/tree/doc diff; executable candidate F must
+then descend D/A/K/C. F minus D changes only those six code paths; F minus K only
+the eight paths. Preserve all old assertions and every earlier document byte;
+no minification, unrelated extraction, ninth path, package/config change or cap
+waiver. The fixed fourteen installed keys and thirteen source hashes remain
+unchanged. Keep full reviewed source/root/commit/tree/input identity in addition
+to that map, and prove exact tested-versus-F Git bytes and protected correspondence.
+
+### Aggregate80MiB adjudication — exact treatment, no isolated RED claim
+
+Count each of the fourteen baseline archive buffers once, serially; metadata,
+host reads, later running observations and retained receipts do not contribute.
+The exact thirteen immutable K source lengths are 19140, 26903, 19872, 19496,
+11174, 11733, 5278, 6607, 6251, 26118, 13664, 12558 and 20867 bytes. Their sum is
+199661 and their individually 512-rounded sum is 202752. Each archive is bounded
+by the actual transport before accumulation, including malformed archives, at
+one 512-byte header plus rounded payload plus at most 16384 bytes of validated
+zero termination/padding. The single generated bundle remains capped at 67108864
+bytes (64 MiB), with no static or observer-derived expected bundle hash.
+
+The exact safe-integer maximum is
+`202752 + 67108864 + 14*(512+16384) = 67548160 < 83886080`.
+Every nonnegative running partial sum is bounded by that total; the margin is
+16337920 bytes. Metadata retains its separate 256 KiB stdout/stderr limits and
+cannot fill this gap. Retain the delivered 80 MiB guard and every stronger cap.
+Classify it as defense in depth:
+**NO_ISOLATED_AGGREGATE_WITNESS_POSSIBLE_UNDER_FIXED_CAPS**. No independent
+aggregate-guard assertion RED is required or credited; this is no guard waiver.
+
+The named evidence test must independently obtain all thirteen source lengths
+and hashes from immutable K Git blobs and candidate Git inputs, cross-check the
+literal map/lengths, assert thirteen sources plus one bundle and fourteen distinct
+keys, source totals 199661/202752, all fourteen archive ceilings, and the exact
+67548160 maximum strictly below 83886080. Expected paths and numeric results
+cannot come solely from implementation output. Record its actual numeric result
+as arithmetic/model evidence, never aggregate-removal security evidence.
+
+Connected fakes must traverse actual transport and provisioner seams, enforce
+closed key/order/count, one pending cp, source/archive/metadata overflow refusal,
+and malformed-tar controls. The positive receipt retains fourteen ordered archive
+byte counts and their sum below the bound. Independent exact-F structural review
+must establish that no admitted path repeats or adds uncounted archives or bypasses
+those limits. A future map/size/count/transport change invalidating this arithmetic
+requires fresh adjudication. Do not add keys/copies, alter caps, inject oversized
+returns above the real transport or remove another guard to manufacture sensitivity.
+
+Retain every reachable R3 original-child, file/ancestor/final-only overlay and
+link/extra-member tar boundary and its required attributable unchanged-assertion
+removal/restoration. Prepared patches are inputs only. Preserve unrelated guards,
+record numeric exits/durations, patches and original/mutant/restored hashes, restore
+exact source in finally and rerun affected controls. Masked failures, setup errors
+and timeouts are NONDECISIVE. Context-exception removal is in memory only; frozen
+ignore SHA256 remains `c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`.
+
+Pin exact new and retained fake suites and inspect their dependencies before launch.
+Run only finite scoped fake checks, required witnesses, lint/format/strict types,
+root nonincremental noEmit (at most 120 seconds), caps/protected/diff checks, with
+at most 120 seconds per command and 1200 seconds aggregate offline checks. Stop at
+the first unsatisfied source/cap/receipt/context/witness/session obligation; no
+campaign, successor or partial-completion promotion. Freeze F/tree/input/evidence
+before separately owned independent Standards and Spec review of that exact F;
+any repair creates a new candidate requiring renewed exact-commit review.
+
+O2b2b remains separately leased for original runner/UI/source-lock/host-supervisor
+integration, exact Main-thread/message/turn completion, two terminal windows and
+separate harmless real positive, returned teardown plus terminal P absence/chain
+proof, twelve-minute run and two-minute cleanup, credentials before down-v and
+uncertain retention. This slice runs no Docker/build/live socket/DB/provider/browser,
+port/PID-signal work, process selftest, install, full gate, CI, push/PR/merge or
+publication. Both unconditional guards, all runtime/release/Stage4 booleans remain
+false; nine real UATs remain UNRUN/NONLAUNCHABLE and Stage4 NOT_ACCEPTED.
