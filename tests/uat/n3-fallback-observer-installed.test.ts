@@ -316,9 +316,7 @@ function fixture() {
       if (args[0] === "show") return immutable(String(args[1]).split(":").slice(1).join(":"));
       if (args.includes("--show-toplevel")) return Buffer.from(f.root);
       if (args.includes("--porcelain")) return Buffer.from(h.dirty ? " M Dockerfile" : "");
-      return Buffer.from(
-        args.includes("HEAD^{tree}") ? (h.drift ? "5" : "4").repeat(40) : "3".repeat(40)
-      );
+      return Buffer.from((args.includes("HEAD^{tree}") ? (h.drift ? "5" : "4") : "3").repeat(40));
     }
     if (command !== "docker") throw new Error("forbidden executable");
     if (args[0] === "context" && args[1] === "show") return Buffer.from("default");
@@ -326,7 +324,9 @@ function fixture() {
     if (args[0] === "info") return Buffer.from(JSON.stringify(f.state.daemon));
     if (args[0] === "image") return Buffer.from(f.imageId);
     if (args[0] === "container") return Buffer.from(JSON.stringify(info()));
-    if (args[0] === "volume") {
+    if (args[0] === "volume" && args[1] === "ls")
+      return Buffer.from(f.state.volumesPresent ? f.volumes.map((v) => v.id).join("\n") : "");
+    if (args[0] === "volume" && args[1] === "inspect") {
       const v = f.volumes.find((v) => v.id === args[2]);
       if (!v) throw new Error("unknown volume");
       return Buffer.from(JSON.stringify({ Name: v.id, Driver: v.driver, Labels: v.labels }));
@@ -348,32 +348,29 @@ function fixture() {
       }
       if (args.includes("owned-compose-postgres") || args.some((v) => v.includes("const roles")))
         return Buffer.from(h.db);
-      return Buffer.from(
-        JSON.stringify({
-          apis: Array.from({ length: h.apiCount }, () => api),
-          socketDirectory,
-          socket
-        })
-      );
+      const apis = Array.from({ length: h.apiCount }, () => api);
+      return Buffer.from(JSON.stringify({ apis, socketDirectory, socket }));
     }
-    if (args.includes("create")) {
-      events.push("o2a-create");
-      f.state.appPresent = true;
+    if (
+      args.join(" ") ===
+      `compose -p ${project} -f infra/docker-compose.prod.yml -f tests/uat/compose.override.yml config --quiet`
+    )
       return Buffer.alloc(0);
-    }
-    if (args.includes("up")) {
-      if (args.includes("jarv1s")) {
-        events.push("original-up");
-        h.running = true;
+    if (args.includes("create") || args.includes("up")) {
+      const creating = args.includes("create");
+      if (creating || args.includes("jarv1s")) {
+        events.push(creating ? "o2a-create" : "original-up");
+        h.running = !creating;
         f.state.appPresent = true;
       }
       if (args.includes("postgres")) f.state.volumesPresent = true;
       return Buffer.alloc(0);
     }
-    if (args.includes("ps")) return Buffer.from(f.id);
+    if (args[0] === "compose" && args.includes("ps"))
+      return Buffer.from(f.state.appPresent ? f.id : "");
+    if (args[0] === "ps") return Buffer.from(f.state.appPresent ? f.app.name.slice(1) : "");
     if (args.includes("down")) {
-      f.state.appPresent = false;
-      f.state.volumesPresent = false;
+      f.state.appPresent = f.state.volumesPresent = false;
       return Buffer.alloc(0);
     }
     if (args[0] === "network" || args[0] === "rm") return Buffer.alloc(0);
@@ -608,6 +605,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     expect(f.events.indexOf("o2a-create")).toBeLessThan(f.events.indexOf("installed-hook"));
     expect(f.events.indexOf("baseline-ready")).toBeLessThan(f.events.indexOf("original-up"));
     expect(f.copies().map((c) => c.args[1])).toEqual(INSTALLED_PATHS.map((p) => `${f.f.id}:${p}`));
+    expect(f.started()).toHaveLength(1);
     expect(f.started()[0]!.args.at(-1)).toBe("--no-recreate");
     const composed = f.collector.compose();
     await composed.consumer.open();
@@ -756,6 +754,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
     }
     if (kind === "missing-close") await vi.advanceTimersByTimeAsync(20001);
     await rejected;
+    expect(f.f.state).toMatchObject({ appPresent: false, volumesPresent: false });
     expect(f.events).not.toContain("image-built");
     expect(f.started()).toHaveLength(0);
     if (kind !== "spawn") expect(f.collector.retained.size).toBeGreaterThan(0);
