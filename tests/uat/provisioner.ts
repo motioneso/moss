@@ -1,3 +1,4 @@
+import type { N3BuildEvidence } from "./n3-fallback-observer-installed.js";
 import { prepareN3Observer, type UatProvisionOptions } from "./provisioner-options.js";
 export type { UatProvisionOptions } from "./provisioner-options.js";
 import { createLifecycleRecorder, type LifecycleAttempt } from "./lifecycle-records.js";
@@ -546,17 +547,20 @@ class SubnetOverlapConflictError extends Error {}
 const PORT_BIND_CONFLICT_PATTERN = /port is already allocated|address already in use|bind.*failed/i;
 const SUBNET_OVERLAP_CONFLICT_PATTERN = /pool overlaps with other one on this address space/i;
 
-function runCommand(
+async function runCommand(
   command: string,
   args: readonly string[],
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  evidence?: N3BuildEvidence
 ): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
+  const observation = evidence && (await evidence.observeBuild(command, args, process.cwd()));
+  await new Promise<void>((resolvePromise, reject) => {
     let stderr = "";
     // #1024/#1000: stdout stays "inherit" for live operator visibility; stderr is piped so we can
     // inspect it for the port-bind-conflict signature, but every chunk is still forwarded to the
     // real stderr as it arrives so nothing is lost from the operator's view.
     const child = spawn(command, args, { stdio: ["inherit", "inherit", "pipe"], env });
+    observation?.attach(child);
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       stderr += text;
@@ -583,6 +587,7 @@ function runCommand(
       reject(new Error(`${command} ${args.join(" ")} exited with status ${code ?? "unknown"}`));
     });
   });
+  if (observation) await observation.closed;
 }
 
 async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
@@ -684,11 +689,13 @@ export async function provisionForUat(
   level: UatSeedLevel,
   opts?: UatProvisionOptions,
   dependencies: {
+    readonly n3BuildEvidence?: N3BuildEvidence;
     readonly listLiveSubnets?: typeof listLiveDockerSubnets;
     readonly installRealChatAuth?: typeof installUatRealChatAuth;
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
   const observer = await prepareN3Observer(opts?.n3Observer, opts?.chatScript);
+  dependencies.n3BuildEvidence?.validateObserver(opts?.n3Observer, observer);
   const recordLifecycle = await createLifecycleRecorder();
   const lifecycleEnabled = process.env.JARVIS_UAT_LIFECYCLE_DIR !== undefined;
   const overallStart = Date.now();
@@ -843,14 +850,19 @@ export async function provisionForUat(
         `[uat] provisioning ${projectName} on port ${webPort} subnet ${subnet.subnet} (${subnet.source})`
       );
       if (resolveMossEnv(process.env, "JARVIS_UAT_BUILD") !== "0" && !imageBuilt) {
-        await runCommand("docker", [
-          "build",
-          "-t",
-          `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`,
-          "-f",
-          "Dockerfile",
-          "."
-        ]);
+        await runCommand(
+          "docker",
+          [
+            "build",
+            "-t",
+            `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`,
+            "-f",
+            "Dockerfile",
+            "."
+          ],
+          undefined,
+          dependencies.n3BuildEvidence
+        );
         imageBuilt = true;
       }
       await recordLifecycle("image-built", attempt);
@@ -865,6 +877,8 @@ export async function provisionForUat(
             envPath: envFile.path,
             recordCreated: () => recordLifecycle("resources-created", attempt)
           });
+        if (observer && step.args.includes("up") && step.args.includes("jarv1s"))
+          await dependencies.n3BuildEvidence?.beforeInitialStart({ projectName });
         await runCommand(
           step.command,
           observer && step.args.includes("up") && step.args.includes("jarv1s")
