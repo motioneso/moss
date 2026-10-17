@@ -1,9 +1,21 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { lstatSync, readFileSync, readdirSync, existsSync } from "node:fs";
+import {
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  opendirSync
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { InstalledReads, type ReadPins } from "./n3-fallback-observer-installed-reads.js";
 import { lifecycleFixture } from "./provisioner-lifecycle-fixture.js";
 import type { ProducerSnapshot, FileIdentity } from "./n3-fallback-observer-runner.js";
 import {
@@ -26,6 +38,157 @@ const stat = (path: string, type: FileIdentity["type"]): FileIdentity => {
   const s = lstatSync(path);
   return { type, device: s.dev, inode: s.ino, uid: s.uid, mode: s.mode & 0o777 };
 };
+describe("producer channel identity regression:", () => {
+  const fields = ["device", "inode", "uid", "mode", "type"] as const;
+  type Change = (channel: FileIdentity) => void;
+  const invalid: [string, Change][] = fields.flatMap((field): [string, Change][] => [
+    [
+      `changed ${field}`,
+      (channel) => {
+        Reflect.set(channel, field, field === "type" ? "file" : Number(channel[field]) + 1);
+      }
+    ],
+    [
+      `wrong type ${field}`,
+      (channel) => {
+        Reflect.set(
+          channel,
+          field,
+          field === "type" ? Object(channel[field]) : String(channel[field])
+        );
+      }
+    ],
+    [
+      `missing ${field}`,
+      (channel) => {
+        Reflect.deleteProperty(channel, field);
+      }
+    ],
+    [
+      `inherited ${field}`,
+      (channel) => {
+        Object.setPrototypeOf(channel, { [field]: channel[field] });
+        Reflect.deleteProperty(channel, field);
+      }
+    ]
+  ]);
+  invalid.push(
+    [
+      "extra enumerable key",
+      (channel) => {
+        Reflect.set(channel, "extra", 1);
+      }
+    ],
+    [
+      "extra non-enumerable key",
+      (channel) => {
+        Object.defineProperty(channel, "extra", { value: 1 });
+      }
+    ],
+    [
+      "extra symbol key",
+      (channel) => {
+        Reflect.set(channel, Symbol("extra"), 1);
+      }
+    ]
+  );
+  const cases: [string, boolean, Change][] = [
+    ["type-first ordinary snapshot", true, () => {}],
+    ["device-first ordinary snapshot", true, () => {}],
+    [
+      "exact non-enumerable own field",
+      true,
+      (channel) => {
+        Object.defineProperty(channel, "uid", { enumerable: false });
+      }
+    ],
+    ...invalid.map(([name, change]): [string, boolean, Change] => [name, false, change])
+  ];
+  it.each(cases)("%s", (name, accepted, change) => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "n3-channel-identity-"));
+    try {
+      const channelPath = join(fixtureRoot, "channel"),
+        sourcePath = join(fixtureRoot, "tests/uat/lifecycle-records.ts"),
+        raw = '{"fixture":"reader enumeration only; not authenticated P"}',
+        producer = Buffer.from("passive fixture producer\n");
+      mkdirSync(channelPath, { mode: 0o700 });
+      mkdirSync(join(fixtureRoot, "tests/uat"), { recursive: true, mode: 0o700 });
+      writeFileSync(sourcePath, producer, { mode: 0o600 });
+      writeFileSync(join(channelPath, "000001.json"), raw, { mode: 0o600 });
+      const s = lstatSync(channelPath);
+      const channel: FileIdentity =
+        name === "type-first ordinary snapshot"
+          ? { type: "directory", device: s.dev, inode: s.ino, uid: s.uid, mode: 0o700 }
+          : { device: s.dev, inode: s.ino, uid: s.uid, mode: 0o700, type: "directory" };
+      change(channel);
+      const pins: ReadPins = {
+        source: {
+          root: {
+            path: fixtureRoot,
+            device: lstatSync(fixtureRoot).dev,
+            inode: lstatSync(fixtureRoot).ino
+          },
+          commit: "1".repeat(40),
+          tree: "2".repeat(40),
+          inputFingerprint: "3".repeat(64)
+        },
+        daemon: { context: "fixture", endpoint: "fixture", daemonId: "fixture" },
+        channel,
+        channelPath,
+        project: "fixture",
+        imageReference: "fixture",
+        volumes: [],
+        nonce: "4".repeat(64),
+        ignoreSha256: "5".repeat(64),
+        sourceFiles: { "/app/tests/uat/lifecycle-records.ts": [hash(producer), producer.length] }
+      };
+      const spawn = vi.fn(() => {
+          throw new Error("forbidden spawn");
+        }),
+        opendir = vi.fn(opendirSync),
+        refuse = vi.fn((): never => {
+          throw new Error("N3 installed: RED");
+        }),
+        checkpoint = vi.fn();
+      const reads = new InstalledReads(
+        pins,
+        {
+          deadline: 1000,
+          checkpoint,
+          refuse,
+          retain: () => {
+            throw new Error("forbidden retain");
+          },
+          releaseClosed: () => {
+            throw new Error("forbidden release");
+          },
+          environment: () => undefined
+        },
+        { spawn, opendir, now: () => 0 }
+      );
+      if (accepted) {
+        expect(reads.producerSnapshot()).toEqual({
+          channel: { device: s.dev, inode: s.ino, uid: s.uid, mode: 0o700, type: "directory" },
+          producerSha256: hash(producer),
+          records: [
+            { name: "000001.json", stat: stat(join(channelPath, "000001.json"), "file"), raw }
+          ]
+        });
+        expect(opendir).toHaveBeenCalledTimes(1);
+        expect(opendir).toHaveBeenCalledWith(channelPath);
+        expect(refuse).not.toHaveBeenCalled();
+      } else {
+        expect(() => reads.producerSnapshot()).toThrow(/^N3 installed: RED$/);
+        expect(refuse).toHaveBeenCalledTimes(1);
+        expect(opendir).not.toHaveBeenCalled();
+      }
+      expect(checkpoint).toHaveBeenCalled();
+      expect(spawn).not.toHaveBeenCalled();
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+});
 function tar(bytes: Buffer, type = "0", name = "server.js"): Buffer {
   const out = Buffer.alloc(512 + Math.ceil(bytes.length / 512) * 512 + 1024);
   out.write(name, 0, 100);
