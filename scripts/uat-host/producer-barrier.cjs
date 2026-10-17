@@ -13,6 +13,7 @@ const deny = () => { throw Error('A1 refuses unexpected child/worker; esbuild cl
 for (const key of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) cp[key] = deny;
 wt.Worker = deny;
 syncBuiltinESMExports();
+if (!wt.isMainThread) return; // Internal loader replay must never re-enter the process barrier.
 const ready = { type: 'ready', nonce, resource, pid: process.pid, ppid: process.ppid };
 fs.writeSync(5, JSON.stringify(ready) + '\n');
 let input = '', release;
@@ -31,6 +32,7 @@ try {
     release = JSON.parse(input);
     if (release.type !== 'release' || release.nonce !== nonce || release.resource !== resource ||
         release.identity.pid !== process.pid || release.identity.ppid !== process.ppid) throw Error('barrier release mismatch');
+    fs.writeSync(5, JSON.stringify({ type: 'release-consumed', nonce, resource, pid: process.pid, ppid: process.ppid }) + '\n');
     break;
   }
   if (!release || performance.now() > deadline) throw Error('barrier deadline');

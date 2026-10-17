@@ -20,7 +20,7 @@ if (!packet || !/^[a-f0-9]{64}$/.test(nonce || '') || !/^[a-f0-9]{64}$/.test(res
 const control = new net.Socket({ fd: 4, readable: true, writable: false });
 const observation = new net.Socket({ fd: 5, readable: false, writable: true });
 let cleanupTimer;
-let selected, childReady = false, released = false, finished = false, exitCode;
+let selected, childReady = false, barrierConsumed = false, released = false, finished = false, exitCode;
 const nativeExit = process.exit.bind(process);
 const nativeKill = process.kill.bind(process);
 const send = (value) => {
@@ -78,6 +78,13 @@ cp.spawn = (file, args, options) => {
   if (outerTarget === innerTarget) throw Error('inner observation aliases outer');
   child.stdio[5].end();
   core.lines(child.stdio[5], (ready) => {
+    if (ready.type === 'release-consumed') {
+      if (!childReady || !released || barrierConsumed || ready.nonce !== nonce || ready.resource !== resource ||
+          ready.pid !== child.pid || ready.ppid !== process.pid) throw Error('unordered barrier release consumption');
+      barrierConsumed = true;
+      send({ type: 'barrier-consumed', identity: core.snapshot(capability).identity });
+      return;
+    }
     if (childReady || ready.type !== 'ready' || ready.nonce !== nonce || ready.resource !== resource ||
         ready.pid !== child.pid || ready.ppid !== process.pid) throw Error('wrong child barrier readiness');
     const id = core.bind(capability, { executable: '/usr/bin/node', cwd: process.cwd(),
