@@ -637,6 +637,7 @@ describe("MVP foundation schema catalog", () => {
         { version: "0321", name: "0321_chat_repeating_reads.sql" },
         { version: "0322", name: "0322_chat_responsibility_agreements.sql" },
         { version: "0323", name: "0323_chat_unread_messages.sql" },
+        { version: "0324", name: "0324_chat_scheduled_read_attempts.sql" },
         { version: "0325", name: "0325_meeting_recording_imports.sql" },
         { version: "0326", name: "0326_meeting_import_summaries.sql" },
         { version: "0327", name: "0327_chat_voice_requests.sql" },

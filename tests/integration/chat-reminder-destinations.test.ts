@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
@@ -12,7 +13,10 @@ import { editReminderById } from "../../packages/chat/src/reminders/edit.js";
 import { deliverDueReminder } from "../../packages/chat/src/reminders/deliver.js";
 import { readReminderRuns } from "../../packages/chat/src/reminders/runs.js";
 import { runScheduledReadJob } from "../../packages/chat/src/scheduled-reads/runner.js";
-import { saveScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
+import {
+  readScheduledOperation,
+  saveScheduledOperation
+} from "../../packages/chat/src/scheduled-reads/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const chat = new ChatRepository();
@@ -23,6 +27,7 @@ let workerDb: Kysely<MossDatabase>;
 let app: DataContextRunner;
 let worker: DataContextRunner;
 let bootstrap: pg.Client;
+let scheduledBoss: PgBoss;
 beforeAll(async () => {
   await resetFoundationDatabase();
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
@@ -31,12 +36,47 @@ beforeAll(async () => {
   worker = new DataContextRunner(workerDb);
   bootstrap = new pg.Client({ connectionString: connectionStrings.bootstrap });
   await bootstrap.connect();
+  scheduledBoss = createPgBossClient(connectionStrings.worker, { connectionTimeoutMillis: 5000 });
+  await scheduledBoss.start();
 });
 afterAll(async () => {
-  await Promise.allSettled([appDb?.destroy(), workerDb?.destroy(), bootstrap?.end()]);
+  const results = await Promise.allSettled([
+    scheduledBoss?.stop({ graceful: false }),
+    appDb?.destroy(),
+    workerDb?.destroy(),
+    bootstrap?.end()
+  ]);
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length)
+    throw new AggregateError(
+      failures.map((result) => result.reason),
+      "Destination fixture teardown failed"
+    );
 });
 const owner = <T>(work: (db: DataContextDb) => Promise<T>, actorUserId: string = ids.userA) =>
   app.withDataContext({ actorUserId }, work);
+async function expectWatchdog(id: string, version: number, admitted: boolean) {
+  const operation = (await owner((db) => readScheduledOperation(db, id)))!;
+  const jobs = (
+    await bootstrap.query<{ id: string; data: Record<string, unknown> }>(
+      "SELECT id,data FROM pgboss.job WHERE name='chat.scheduled-read-bookkeeping' AND data->>'resourceId'=$1",
+      [id]
+    )
+  ).rows;
+  expect(operation.attempt_count).toBe(admitted ? 1 : 0);
+  expect(jobs).toHaveLength(admitted ? 1 : 0);
+  if (admitted) {
+    expect(operation.watchdog_job_id).toBe(jobs[0]!.id);
+    expect(jobs[0]!.data).toEqual({
+      actorUserId: ids.userA,
+      resourceId: id,
+      version,
+      idempotencyKey: operation.attempt_message_id,
+      operationId: operation.watchdog_token,
+      step: operation.watchdog_generation
+    });
+  } else expect(operation.watchdog_job_id).toBeNull();
+}
 async function side(title: string, actorUserId: string = ids.userA, incognito = false) {
   return owner(async (db) => {
     if (!(await chat.getMainThread(db, actorUserId)))
@@ -193,6 +233,7 @@ describe("owned task destinations", () => {
         },
         {
           dataContext: worker,
+          boss: scheduledBoss,
           gateway: { runBackgroundReadForActor: read },
           generateReport: async () => ({
             ok: true,
@@ -202,6 +243,7 @@ describe("owned task destinations", () => {
       );
       expect(result).toBe(availability === "available" ? "success" : "inactive");
       expect(read).toHaveBeenCalledTimes(availability === "available" ? 2 : 0);
+      await expectWatchdog(saved.id, saved.version + 1, availability === "available");
       const messages = await bootstrap.query(
         "SELECT thread_id, body FROM app.chat_messages WHERE id = $1",
         [saved.reserved_message_id]
@@ -266,12 +308,14 @@ describe("owned task destinations", () => {
           { data: { actorUserId: ids.userA, resourceId: saved.id, version: saved.version } },
           {
             dataContext: worker,
+            boss: scheduledBoss,
             gateway: { runBackgroundReadForActor: read },
             generateReport: async () => ({ ok: true, text: "Private report must be discarded" })
           }
         )
       ).toBe("inactive");
       expect(reads).toBe(2);
+      await expectWatchdog(saved.id, saved.version, true);
       expect((await owner((db) => reminders.readState(db, saved.id)))?.state).toBe("failed");
       const messages = await bootstrap.query("SELECT id FROM app.chat_messages WHERE id = $1", [
         saved.reserved_message_id

@@ -11,6 +11,8 @@ import {
   CHAT_SCHEDULED_READ_QUEUE,
   type ScheduledReadWatchdogPayload
 } from "../../packages/chat/src/scheduled-reads/queue.js";
+import { recoverScheduledReadOccurrence } from "../../packages/chat/src/scheduled-reads/bookkeeping.js";
+import { enqueueReminderNotification } from "../../packages/chat/src/reminders/notifications.js";
 import { runScheduledReadJob } from "../../packages/chat/src/scheduled-reads/runner.js";
 import { readScheduledOperation } from "../../packages/chat/src/scheduled-reads/repository.js";
 import * as attempts from "../../packages/chat/src/scheduled-reads/attempts.js";
@@ -447,23 +449,60 @@ describe("durable scheduled read admission through the ordinary worker", () => {
     await expect(runScheduledReadJob({ data: saved.data }, deps)).rejects.toThrow(
       /completion rollback/
     );
+    const second = (await ledger(saved))!;
+    expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("inactive");
+    expect(await ledger(saved)).toEqual(second);
     await expire(saved);
     const active = (await ledger(saved))!;
     expect(active).toMatchObject({ attempt_count: 2, attempt_state: "running", outcome: null });
-    expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("inactive");
+    const effects = async () => ({
+      ledger: await ledger(saved),
+      reminder: await owner((db) => new ReminderRepository().readState(db, saved.id)),
+      messages: await owner((db) => chat.listMessages(db, saved.threadId)),
+      runs: (
+        await bootstrap.query("SELECT * FROM app.chat_reminder_runs WHERE reminder_id=$1", [
+          saved.id
+        ])
+      ).rows,
+      wakes: await jobs(saved, CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE),
+      notifications: await jobs(saved, "chat.notify-reminder")
+    });
+    const before = await effects();
+    expect(before.wakes.map((j) => j.id)).toContain(active.watchdog_job_id);
+    expect(before.wakes).toHaveLength(2);
+    expect(before.runs).toHaveLength(0);
+    expect(before.messages.some((m) => m.id === active.attempt_message_id)).toBe(false);
+    expect(before.notifications).toHaveLength(0);
+    await expect(runScheduledReadJob({ data: saved.data }, deps)).rejects.toThrow(
+      /completion rollback/
+    );
+    expect(await effects()).toEqual(before);
+    const target = {
+      actorUserId: ids.userA,
+      resourceId: saved.id,
+      expectedMessageId: active.attempt_message_id!
+    };
+    const bookkeeping = {
+      dataContext: worker,
+      boss,
+      enqueueNotification: enqueueReminderNotification.bind(null, boss)
+    };
+    expect(await recoverScheduledReadOccurrence(target, bookkeeping)).toBe("failed");
+    const after = await effects();
+    expect(after.ledger).toMatchObject({
+      attempt_state: "terminal",
+      attempt_count: 2,
+      attempt_message_id: active.attempt_message_id,
+      recovery_job_id: active.recovery_job_id,
+      watchdog_job_id: active.watchdog_job_id,
+      outcome: "failed"
+    });
+    expect(after.messages.filter((m) => m.id === target.expectedMessageId)).toHaveLength(1);
+    expect(after.notifications).toHaveLength(1);
+    expect(await recoverScheduledReadOccurrence(target, bookkeeping)).toBe("inactive");
+    expect(await effects()).toEqual(after);
     expect(read).toHaveBeenCalledTimes(4);
     expect(model).toHaveBeenCalledTimes(2);
-    expect(await ledger(saved)).toEqual(active);
-    expect(await jobs(saved, CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE)).toHaveLength(2);
-    expect(
-      await owner((db) =>
-        db.db
-          .selectFrom("app.chat_messages")
-          .select("id")
-          .where("id", "=", active.attempt_message_id!)
-          .execute()
-      )
-    ).toHaveLength(0);
   });
 
   it("control version changes reuse the same allowance and do not revive old authority", async () => {
@@ -767,10 +806,11 @@ describe("durable scheduled read admission through the ordinary worker", () => {
   it("legacy unknown and a wrong occurrence identity cannot initialize allowance", async () => {
     const saved = await save();
     const read = vi.fn(async () => taskResponse(saved));
+    const model = vi.fn(generateReport);
     const deps = {
       dataContext: worker,
       boss,
-      generateReport,
+      generateReport: model,
       gateway: { runBackgroundReadForActor: read }
     };
     const wrong = { ...saved.data, idempotencyKey: randomUUID() };
@@ -779,16 +819,43 @@ describe("durable scheduled read admission through the ordinary worker", () => {
     await locked(saved, async (db, reminder) => {
       await db.db
         .updateTable("app.chat_scheduled_reads")
-        .set({ attempt_state: "legacy_unknown", attempt_message_id: reminder.reservedMessageId })
+        .set({
+          attempt_state: "legacy_unknown",
+          attempt_message_id: reminder.reservedMessageId,
+          observation_key: "c".repeat(64)
+        })
         .where("reminder_id", "=", saved.id)
         .execute();
     });
+    const queued = await jobs(saved, CHAT_SCHEDULED_READ_QUEUE);
+    const legacy = (await ledger(saved))!;
     expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("inactive");
-    expect(await ledger(saved)).toMatchObject({
-      attempt_state: "legacy_unknown",
-      attempt_count: 0
+    const terminal = (await ledger(saved))!;
+    expect(terminal).toMatchObject({
+      attempt_state: "terminal",
+      attempt_count: 0,
+      attempt_message_id: legacy.attempt_message_id,
+      attempt_token: null,
+      recovery_job_id: null,
+      watchdog_job_id: legacy.watchdog_job_id,
+      observation_key: legacy.observation_key,
+      outcome: "failed"
     });
+    expect((await owner((db) => new ReminderRepository().readState(db, saved.id)))?.state).toBe(
+      "delivered"
+    );
+    const messages = await owner((db) => chat.listMessages(db, saved.threadId));
+    const result = messages.filter((m) => m.id === legacy.attempt_message_id);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.body).toMatch(/outcome .*is unknown/);
+    expect(await jobs(saved, CHAT_SCHEDULED_READ_QUEUE)).toEqual(queued);
+    expect(queued.filter((j) => j.data.idempotencyKey)).toHaveLength(0);
+    expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("inactive");
+    expect(await ledger(saved)).toEqual(terminal);
+    expect(await owner((db) => chat.listMessages(db, saved.threadId))).toEqual(messages);
+    expect(await jobs(saved, CHAT_SCHEDULED_READ_QUEUE)).toEqual(queued);
     expect(read).not.toHaveBeenCalled();
+    expect(model).not.toHaveBeenCalled();
   });
 
   it("only real recurring advancement starts a fresh governed identity", async () => {
