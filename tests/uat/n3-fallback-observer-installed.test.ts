@@ -258,7 +258,7 @@ function fixture() {
     realEntry: () => BUNDLE,
     selfHash: () => option.bootstrapSha256,
     entryHash: () => hash(bundle),
-    identity: () => api,
+    identity: () => ({ pid: api.pid, startTicks: api.startTicks, bootId, containerId: f.id }),
     sameIdentity: () => true,
     makePrivate: vi.fn(),
     privateTransport: () => true,
@@ -617,7 +617,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
       f.event({
         phase: "entry",
         site: "turn",
-        attemptId: index * 10 + 1,
+        attemptId: index * 3 + 2,
         actorUserId: actor,
         surface: "drawer",
         turnId: current,
@@ -633,7 +633,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
       });
       if (mode === "positive")
         for (const [offset, site] of ["shadow.start", "shadow.run"].entries()) {
-          const attemptId = index * 10 + offset + 2;
+          const attemptId = index * 3 + offset * 2 + 4;
           f.event({
             phase: "entry",
             site,
@@ -659,7 +659,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
       f.event({
         phase: "settle",
         site: "turn",
-        attemptId: index * 10 + 1,
+        attemptId: index * 3 + 2,
         actorUserId: actor,
         surface: "drawer",
         turnId: current,
