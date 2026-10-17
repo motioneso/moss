@@ -784,21 +784,21 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
       expect(f.copies()).toHaveLength(0);
     }
   );
-  it.each(["bind", "volume", "tmpfs", "other"])(
-    "rejects all %s file/ancestor overlays before cp/up",
-    async (type) => {
-      for (const destination of [INSTALLED_PATHS[0], "/app", "/", "/app/packages/chat/src/live"]) {
-        const f = fixture();
-        f.h.initial = (info) => {
-          const mounts = info.Mounts as object[];
-          mounts.push({ Type: type, Destination: destination, Source: "/owned", Name: "other" });
-          if (type === "tmpfs") edit(info, "HostConfig.Tmpfs", { [String(destination)]: "" });
-        };
-        await rejectBeforeStart(f);
-        expect(f.copies(), String(destination)).toHaveLength(0);
-      }
-    }
-  );
+  it.each(
+    Array.from({ length: 16 }, (_, i): [string, string] => [
+      ["bind", "volume", "tmpfs", "other"][Math.floor(i / 4)]!,
+      [INSTALLED_PATHS[0], "/app", "/", "/app/packages/chat/src/live"][i % 4]!
+    ])
+  )("rejects all %s file/ancestor overlays at %s before cp/up", async (type, destination) => {
+    const f = fixture();
+    f.h.initial = (info) => {
+      const mounts = info.Mounts as object[];
+      mounts.push({ Type: type, Destination: destination, Source: "/owned", Name: "other" });
+      if (type === "tmpfs") edit(info, "HostConfig.Tmpfs", { [String(destination)]: "" });
+    };
+    await rejectBeforeStart(f);
+    expect(f.copies(), String(destination)).toHaveLength(0);
+  });
   it.each(["relative", "trailing", "duplicate", "incomplete", "auth", "socket", "volume-inspect"])(
     "refuses independent %s mount/config uncertainty",
     async (kind) => {
