@@ -335,3 +335,59 @@ After acceptance K replaces C only as packaging base and `.dockerignore` is froz
 Retain all R2 obligations without reduction: pre-spawn source/command/daemon freeze, attachment to the original ChildProcess, independent raw exit plus separate close before image-built and omitted-hook default parity; original O2a-created never-started API and awaited hook after O2a before original first up; exact state/identity/source/daemon and empty diff plus all-mount canonical file/ancestor/root exclusion before any baseline cp and again immediately pre-up; independent auth/socket expected-volume/P correspondence; final deadline check with no intervening async work except original start dispatch; strict bounded single-requested-regular-member tar validation, rejecting links/extras/extensions/path overrides/truncation/trailing substitution; fixed read allowlist, connected accepted-adapter receipt composition, independent expected/observed pins and inherited deadline/uncertain retention.
 
 Future mount/tar removal controls retain unchanged assertions and unrelated protections, record attributable RED with original/mutant/restored hashes and numeric exits, restore in `finally` and rerun. Neither this static matcher nor its in-memory removal substitutes for future original closed build/image-backed baseline and installed proof. Original runner/UI, both unconditional guards, accepted P/O1/O2a/O2b1 and all package/lock/config bytes stay frozen. O2b2b, real Docker/socket/DB/provider/browser/port/process/signal work, full gate, CI, guard release, publication/push/PR/merge, primary signup, nine blocking UATs, N1, original total-count/async/public-fault proof, final O2 and Stage4 acceptance remain held. No app-visible behavior or app-map change is proposed.
+
+## O2b2a R3 — finite offline provenance implementation
+
+The finite execution grant on accepted packaging K
+`e2b66b672d625221ddd7139d31046372d94d2e8d` authorizes only this serial offline
+slice for #3529. Commit this amendment separately as A before executable edits;
+freeze the final candidate F and its tree through A/K after fake controls. A future
+original build must bind genuine F, never relabel C/K or claim an offline-built image.
+
+The five owned paths under `~/Jarv1s` are this spec, its matching canonical plan,
+new `tests/uat/n3-fallback-observer-installed.ts` (target 750, hard 1000 lines),
+new `tests/uat/n3-fallback-observer-installed.test.ts` (target 800, hard 1000),
+and only the original-child/pre-first-up seam in `tests/uat/provisioner.ts`
+(984 to at most 1000). No compaction, unrelated extraction or sixth path is leased.
+The fourteen-key packaging map above and all thirteen source pins are unchanged.
+The exact K ignore hash remains
+`c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`;
+Dockerfile, P/O1/O2a/O2b1, adapter/tests, original runner/UI guards and every
+package/lock/config input remain frozen except the expressly reopened provisioner seam.
+
+The optional typed `n3BuildEvidence` requires validated observer opt-in. Prepare
+actual argv/cwd/source/root/input/daemon evidence before spawn, attach synchronously
+to the original build ChildProcess, retain its birth/group/session/boot identity,
+and independently await raw zero exit plus separate close before image-built.
+Keep omitted-hook commands/env/retries/errors identical. Await the new pre-start
+hook after O2a's original container creation and before original `up --no-recreate`.
+Never replace the original build, create owner, lifecycle recorder or host supervisor.
+
+Before any new baseline cp and again immediately before original up, require the
+same original never-started container/image/config/source/daemon, empty diff and
+canonical all-mount exclusion for every fixed reviewed file and its ancestors,
+including `/app` and `/`. Independently authenticate auth/socket mounts and volume
+inspect against P inventory. Accept only the single requested regular tar member:
+validate name, checksum, size, type, padding and termination; reject links, extras,
+path overrides, truncation and trailing archives even when payload hashes match.
+Source payload ceilings equal immutable K byte lengths; bundle 64 MiB, aggregate
+archives 80 MiB, metadata per command 256 KiB, one cp pending. Archive allowance is
+one header plus rounded payload and at most 16 KiB zero termination/padding.
+
+Construct the accepted adapter through verified build/baseline receipts and closed
+fixed readers, with independent expected pins. Import/construction stays inert.
+Keep source/DB semantics, exact namespace API/socket identity, projected errors,
+one inherited absolute deadline, bounded output/closure and uncertain-handle retention.
+Fake controls traverse these seams and actual accepted O2a/P/adapter interfaces.
+Require immutable K context membership and exception removal in memory, plus
+attributable unchanged-assertion guard removals for file/ancestor/final-only mounts
+and link/extra-member tars, exact restoration and tested/Git byte correspondence.
+
+Only offline controls and scoped lint/format/types/size/diff checks are authorized;
+root nonincremental TypeScript is capped at 120 seconds. Stop at the first finite
+cap/source/receipt/context/control limitation; do not claim partial collector completion.
+Independent exact-commit Standards and Spec review precedes acceptance. O2b2b,
+actual build/Docker/socket/DB/provider/browser/port/PID-signal work, process selftest,
+full gate/CI/push/PR/merge/publication and both guard releases remain held. All nine
+blocking UATs remain UNRUN here; runtime/release/Stage4 booleans remain false and
+Stage4 remains NOT_ACCEPTED. No automatic follow-on or successor is authorized.
