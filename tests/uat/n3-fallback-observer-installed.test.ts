@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { ChildProcess } from "node:child_process";
+import type * as CP from "node:child_process";
+import type * as Net from "node:net";
+import type * as Crypto from "node:crypto";
 import * as fs from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,8 +22,7 @@ import {
   NATIVE_BRIDGE,
   OBSERVER_SITES,
   initialObserverOption,
-  type FileIdentity,
-  type ExpectedBindings
+  type FileIdentity
 } from "./n3-fallback-observer-runner.js";
 // @ts-expect-error The fixed native bootstrap intentionally has no source-loader declarations.
 import { activateObserver } from "./n3-fallback-observer-bootstrap.mjs";
@@ -32,16 +33,16 @@ vi.mock("node:child_process", () => ({
   execFileSync: mocks.forbidden
 }));
 vi.mock("node:net", async (original) => ({
-  ...(await original<typeof import("node:net")>()),
+  ...(await original<typeof Net>()),
   createServer: mocks.listen,
   createConnection: mocks.forbidden
 }));
 vi.mock("node:crypto", async (original) => ({
-  ...(await original<typeof import("node:crypto")>()),
+  ...(await original<typeof Crypto>()),
   randomBytes: () => Buffer.from("abcdef01", "hex")
 }));
 const { provisionForUat } = await import("./provisioner.js");
-const nativeCP = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+const nativeCP = await vi.importActual<typeof CP>("node:child_process");
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const hash = (v: string | Buffer) => createHash("sha256").update(v).digest("hex");
 const digest = (v: unknown) => hash(JSON.stringify(v));
@@ -280,7 +281,7 @@ function fixture() {
   let nextPid = 60000,
     pendingCopies = 0,
     nextFd = 1000000;
-  let build: ChildProcess | undefined, bridge: ChildProcess | undefined;
+  let build: CP.ChildProcess | undefined, bridge: CP.ChildProcess | undefined;
   const info = () => {
     const v: Record<string, unknown> = {
       Id: f.id,
@@ -379,7 +380,7 @@ function fixture() {
     throw new Error("unexpected fake command");
   }
   const emit = (
-    child: ChildProcess,
+    child: CP.ChildProcess,
     code: number | null = 0,
     signal: NodeJS.Signals | null = null,
     close = true
@@ -424,7 +425,7 @@ function fixture() {
             if (h.bridgeClose) queueMicrotask(() => emit(child));
           }
         }
-      }) as unknown as ChildProcess;
+      }) as unknown as CP.ChildProcess;
       if (args.includes(NATIVE_BRIDGE)) {
         bridge = child;
         events.push("bridge-spawn");
@@ -738,7 +739,7 @@ describe("connected original provisioner, O2a, P and installed collector", () =>
         return {
           ...observation,
           attach: () =>
-            observation.attach(Object.assign(new EventEmitter(), { pid: 999 }) as ChildProcess)
+            observation.attach(Object.assign(new EventEmitter(), { pid: 999 }) as CP.ChildProcess)
         };
       });
     }
