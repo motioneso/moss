@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   aiDiscoverModelsResponseSchema,
+  apiKeyChatReadinessResponseSchema,
   createAiConfiguredModelRequestSchema,
   createAiConfiguredModelResponseSchema,
   createAiProviderConfigRequestSchema,
@@ -445,6 +446,13 @@ export const aiModuleManifest = {
       path: "/api/ai/providers/:id/models/refresh",
       chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: refreshAiProviderModelsResponseSchema,
+      permissionId: "ai.manage"
+    },
+    {
+      method: "GET",
+      path: "/api/ai/providers/:id/chat-readiness",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      responseSchema: apiKeyChatReadinessResponseSchema,
       permissionId: "ai.manage"
     },
     {
