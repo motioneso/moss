@@ -2,6 +2,7 @@ import type { ModuleServiceKey } from "@moss/shared";
 
 import type { ProviderKind } from "./transcript-reader.js";
 import { providerBaseUrl } from "../provider-base-url.js";
+import { unfence } from "../structured/run-helpers.js";
 
 // #915 D6: provider mechanics only. Routing policy and credentials stay outside feature code.
 export const STRUCTURED_TOOL_NAME = "emit_structured_output";
@@ -394,7 +395,7 @@ function extractOpenAiResponsesResult(record: OpenAiResponsesPayload): Structure
 
 function parseJsonOrThrow(text: string, usage: StructuredUsage): unknown {
   try {
-    return JSON.parse(text);
+    return JSON.parse(unfence(text));
   } catch {
     throw new StructuredOutputParseError("model output is not valid JSON", text, usage);
   }
