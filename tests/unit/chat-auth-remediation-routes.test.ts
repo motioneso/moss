@@ -15,6 +15,8 @@ import {
   UnsupportedLegacyCliProviderError
 } from "../../packages/chat/src/live/errors.js";
 import {
+  API_KEY_REJECTED_MESSAGE,
+  API_KEY_UNREADABLE_MESSAGE,
   CODEX_SIGN_IN_REQUIRED_MESSAGE,
   knownAuthFailureMessage
 } from "../../packages/chat/src/live/auth-errors.js";
@@ -24,7 +26,12 @@ const ACTOR_ID = "11111111-1111-4111-8111-111111111111";
 const CLAUDE_SIGN_IN_EXPIRED_MESSAGE =
   "The Claude sign-in has expired; an admin can log it in again under Settings, AI providers";
 
-const AUTH_MESSAGES = [CODEX_SIGN_IN_REQUIRED_MESSAGE, CLAUDE_SIGN_IN_EXPIRED_MESSAGE] as const;
+const AUTH_MESSAGES = [
+  CODEX_SIGN_IN_REQUIRED_MESSAGE,
+  CLAUDE_SIGN_IN_EXPIRED_MESSAGE,
+  API_KEY_REJECTED_MESSAGE,
+  API_KEY_UNREADABLE_MESSAGE
+] as const;
 type InjectRequest = { method: string; url: string; payload?: unknown };
 type InjectResponse = { statusCode: number; json: () => unknown };
 

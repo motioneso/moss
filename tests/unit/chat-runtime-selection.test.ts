@@ -64,6 +64,29 @@ function fakeMux(): Multiplexer & { opened: string[]; killed: MuxHandle[] } {
 }
 
 describe("selectEngineFactory — boot-time fork (§3.5)", () => {
+  it("refuses API-key rows outside the ACP chat path", async () => {
+    const inProcess = selectEngineFactory({ env: {} as NodeJS.ProcessEnv });
+    await expect(
+      Promise.resolve().then(() =>
+        inProcess.factory("anthropic", "user-a", { authMethod: "api_key" })
+      )
+    ).rejects.toBeInstanceOf(CliChatUnavailableError);
+
+    const rpc = selectEngineFactory({
+      env: {
+        JARVIS_CLI_RUNNER_SOCKET: SOCKET,
+        JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
+      } as NodeJS.ProcessEnv
+    });
+    try {
+      await expect(
+        Promise.resolve().then(() => rpc.factory("anthropic", "user-a", { authMethod: "api_key" }))
+      ).rejects.toBeInstanceOf(CliChatUnavailableError);
+    } finally {
+      rpc.connection?.close();
+    }
+  });
+
   it("selects the RPC client when the socket + secret are configured", async () => {
     const { factory, connection } = selectEngineFactory({
       env: {

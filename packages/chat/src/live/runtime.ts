@@ -35,6 +35,7 @@ import {
   normalizeChatSettings,
   renderChatResponseStyleInstruction,
   renderPersonaText,
+  type AiAuthMethod,
   type OnboardingProviderCheckResponse,
   type AiProviderExecutionMode
 } from "@moss/shared";
@@ -56,7 +57,7 @@ import {
   type RpcClientLogger,
   type RpcReconcileDriver
 } from "./chat-engine-rpc-client.js";
-import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
+import type { PersistentRuntimeLaunchConfig, RpcAcpSpawnCredential } from "./rpc-contract.js";
 import { createStructuredEngine } from "./structured-engine-selection.js";
 import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import { CliChatUnavailableError } from "./errors.js";
@@ -152,6 +153,10 @@ export type ChatEngineFactory = (
     readonly acpAgentId?: string | null;
     /** Saved OpenCode ACP model choice for the next live session. */
     readonly acpModel?: string;
+    /** API-key rows run only through the ACP chat factory. */
+    readonly authMethod?: AiAuthMethod;
+    /** The row's decrypted key, address and model; set only for API-key rows. */
+    readonly credential?: RpcAcpSpawnCredential;
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in structured-engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
@@ -237,6 +242,9 @@ export function createRealEngineFactory(
     if (engineOpts?.acpAgentId === "opencode") {
       throw new CliChatUnavailableError("OpenCode requires an ACP chat session.");
     }
+    if (engineOpts?.authMethod === "api_key") {
+      throw new CliChatUnavailableError("API-key chat requires an ACP chat session.");
+    }
     const persistentRuntimeEnabled =
       typeof opts.persistentRuntimeEnabled === "function"
         ? await opts.persistentRuntimeEnabled()
@@ -309,6 +317,9 @@ function createRpcEngineFactory(opts: {
   const factory: ChatEngineFactory = (provider, sessionKey, engineOpts) => {
     if (engineOpts?.acpAgentId === "opencode") {
       throw new CliChatUnavailableError("OpenCode requires an ACP chat session.");
+    }
+    if (engineOpts?.authMethod === "api_key") {
+      throw new CliChatUnavailableError("API-key chat requires an ACP chat session.");
     }
     return new ChatEngineRpcClient(
       provider,
@@ -419,8 +430,14 @@ export function selectEngineFactory(
           }
           const acpSessionKey = `chat:${engineOpts.userId}:${engineOpts.conversationId}`;
           return new AcpChatEngine(provider, acpSessionKey, {
-            tunnel: new RpcAcpTunnel(connection, acpSessionKey),
+            tunnel: new RpcAcpTunnel(
+              connection,
+              acpSessionKey,
+              engineOpts.credential ? { credential: engineOpts.credential } : {}
+            ),
             acpAgentId: engineOpts.acpAgentId ?? undefined,
+            ...(engineOpts.authMethod ? { authMethod: engineOpts.authMethod } : {}),
+            ...(engineOpts.credential ? { apiKey: engineOpts.credential.apiKey } : {}),
             userId: engineOpts.userId,
             projectId: engineOpts.conversationId,
             permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,

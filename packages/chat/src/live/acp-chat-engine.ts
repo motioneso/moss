@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  AcpSessionOpenError,
   MossAcpClient,
   normalizeAcpPromptFailure,
   toolNameFromMeta,
@@ -11,24 +12,25 @@ import {
   toolNameFromRawInput,
   type AcpTunnel
 } from "@moss/acp";
-import { type ProviderKind, redactSecrets } from "@moss/ai";
+import { type ProviderKind, redactExact, redactSecrets } from "@moss/ai";
 import {
   DEFAULT_LOCALE_SETTINGS,
   formatLocaleTime,
+  type AiAuthMethod,
   type ChatTurnUsageDto,
   type LocaleSettingsDto
 } from "@moss/shared";
 import { recordProviderLoginRejected } from "./provider-probe.js";
 
 import { CliChatUnavailableError } from "./errors.js";
-import { authFailureMessage } from "./auth-errors.js";
+import { API_KEY_REJECTED_MESSAGE, authFailureMessage } from "./auth-errors.js";
 import {
   CLI_VERSION_TOO_OLD_MESSAGE,
   isCliVersionTooOldError,
   isCliVersionTooOldReply
 } from "./cli-version-errors.js";
 import type { RpcConnection } from "./chat-engine-rpc-client.js";
-import type { RpcAcpKillParams, RpcAcpSpawnParams } from "./rpc-contract.js";
+import type { RpcAcpKillParams, RpcAcpSpawnCredential, RpcAcpSpawnParams } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 
 const ACP_PROFILE = "chat" as const;
@@ -38,6 +40,10 @@ export interface AcpChatEngineOptions {
   readonly tunnel: AcpTunnel;
   /** Persisted provider configuration identity; OpenCode is never inferred from a model preference. */
   readonly acpAgentId?: string;
+  /** API-key rows run with the row's key; their auth failures never touch CLI login state. */
+  readonly authMethod?: AiAuthMethod;
+  /** The API-key row's key, used only to mask launch error text. */
+  readonly apiKey?: string;
   readonly userId: string;
   readonly projectId: string;
   readonly permissionDecider?: AcpPermissionDecider;
@@ -48,8 +54,25 @@ export interface AcpChatEngineOptions {
   readonly nextSequence?: () => number;
 }
 
+const INCOMPATIBLE_AGENT_MESSAGE = "The selected ACP agent is not compatible with this provider.";
+
+/** API-key rows carry no agent id; the provider kind alone picks the agent. */
+const API_KEY_AGENTS: Partial<Record<ProviderKind, AcpProviderKind>> = {
+  anthropic: "anthropic",
+  "openai-compatible": "opencode"
+};
+
 /** ACP's provider names and Moss's configured provider names are deliberately different. */
-export function toAcpProviderKind(provider: ProviderKind, acpAgentId?: string): AcpProviderKind {
+export function toAcpProviderKind(
+  provider: ProviderKind,
+  acpAgentId?: string,
+  authMethod?: AiAuthMethod
+): AcpProviderKind {
+  if (authMethod === "api_key") {
+    const kind = API_KEY_AGENTS[provider];
+    if (!kind) throw new CliChatUnavailableError(INCOMPATIBLE_AGENT_MESSAGE);
+    return kind;
+  }
   if (provider === "openai-compatible") {
     if (acpAgentId === undefined || acpAgentId === "codex-acp") return "openai";
     if (acpAgentId === "opencode") return "opencode";
@@ -60,7 +83,7 @@ export function toAcpProviderKind(provider: ProviderKind, acpAgentId?: string): 
   if (provider === "google" && (acpAgentId === undefined || acpAgentId === "antigravity-acp")) {
     return "google";
   }
-  throw new CliChatUnavailableError("The selected ACP agent is not compatible with this provider.");
+  throw new CliChatUnavailableError(INCOMPATIBLE_AGENT_MESSAGE);
 }
 
 export function toChatTurnUsageDto(usage: unknown): ChatTurnUsageDto | undefined {
@@ -445,10 +468,24 @@ export class AcpChatEngine implements CliChatEngine {
     this.reportLoginRejected =
       opts.reportLoginRejected ??
       (() => {
-        if (toAcpProviderKind(this.provider, opts.acpAgentId) !== "opencode") {
+        if (toAcpProviderKind(this.provider, opts.acpAgentId, opts.authMethod) !== "opencode") {
           recordProviderLoginRejected(this.provider);
         }
       });
+  }
+
+  private isAuthFailure(error: unknown): boolean {
+    if (isAuthRequired(error)) return true;
+    return this.opts.authMethod === "api_key" && isApiKeyRejected(error);
+  }
+
+  /** A rejected API key names the key and records no CLI login rejection. */
+  private authFailure(kind: AcpProviderKind, error: unknown): CliChatUnavailableError {
+    if (this.opts.authMethod === "api_key") {
+      return new CliChatUnavailableError(API_KEY_REJECTED_MESSAGE);
+    }
+    this.reportLoginRejected();
+    return new CliChatUnavailableError(authFailureMessage(kind), { cause: error });
   }
 
   private wrapPermissionDecider(decider?: AcpPermissionDecider): AcpPermissionDecider | undefined {
@@ -608,7 +645,7 @@ export class AcpChatEngine implements CliChatEngine {
   }
 
   async launch(options: EngineLaunchOpts): Promise<{ offset: number }> {
-    const kind = toAcpProviderKind(this.provider, this.opts.acpAgentId);
+    const kind = toAcpProviderKind(this.provider, this.opts.acpAgentId, this.opts.authMethod);
     try {
       this.handle = await this.client.openSession(
         this.sessionKey,
@@ -638,17 +675,17 @@ export class AcpChatEngine implements CliChatEngine {
       }
       return { offset: 0 };
     } catch (error) {
-      if (isAuthRequired(error)) {
-        this.reportLoginRejected();
+      if (this.isAuthFailure(error)) {
+        const failure = this.authFailure(kind, error);
         await this.closeQuietly();
-        throw new CliChatUnavailableError(authFailureMessage(kind), { cause: error });
+        throw failure;
       }
       if (isCliVersionTooOldError(error)) {
         await this.closeQuietly();
         throw new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
       }
       await this.closeQuietly();
-      throw error;
+      throw this.opts.authMethod === "api_key" ? maskedLaunchError(error, this.opts.apiKey) : error;
     }
   }
 
@@ -697,11 +734,10 @@ export class AcpChatEngine implements CliChatEngine {
       .catch((error: unknown) => {
         this.flushCurrentThought();
         this.discardFailedReply();
-        if (isAuthRequired(error)) {
-          this.reportLoginRejected();
-          this.promptError = new CliChatUnavailableError(
-            authFailureMessage(toAcpProviderKind(this.provider, this.opts.acpAgentId)),
-            { cause: error }
+        if (this.isAuthFailure(error)) {
+          this.promptError = this.authFailure(
+            toAcpProviderKind(this.provider, this.opts.acpAgentId, this.opts.authMethod),
+            error
           );
         } else if (isCliVersionTooOldError(error)) {
           this.promptError = new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
@@ -771,7 +807,10 @@ export class RpcAcpTunnel implements AcpTunnel {
   constructor(
     private readonly connection: RpcConnection,
     _sessionKey: string,
-    private readonly options: { readonly useCandidate?: boolean } = {}
+    private readonly options: {
+      readonly useCandidate?: boolean;
+      readonly credential?: RpcAcpSpawnCredential;
+    } = {}
   ) {}
 
   async spawn(
@@ -788,7 +827,8 @@ export class RpcAcpTunnel implements AcpTunnel {
       userId,
       profile,
       ...(personaText !== undefined ? { personaText } : {}),
-      ...(this.options.useCandidate ? { useCandidate: true } : {})
+      ...(this.options.useCandidate ? { useCandidate: true } : {}),
+      ...(this.options.credential ? { credential: this.options.credential } : {})
     };
     return this.connection.acpSpawn(sessionKey, params);
   }
@@ -833,6 +873,35 @@ function isAuthRequired(error: unknown): boolean {
   return /auth[_ -]?required|authentication required|not logged in|sign-in has expired/i.test(
     message
   );
+}
+
+/**
+ * Provider wording for a refused key; applied only to API-key rows. Both agents report a wrong
+ * key as a JSON-RPC internal error wrapping the provider's 401, not as "Authentication required".
+ */
+function isApiKeyRejected(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /invalid[_ ]?api[_ ]?key|\b401\b|unauthori[sz]ed|authentication_error/i.test(message);
+}
+
+/**
+ * An API-key launch failure keeps only its message, with the key and token patterns masked.
+ * Causes and protocol data are dropped because the agent's error text can echo the request.
+ */
+function maskedLaunchError(error: unknown, apiKey: string | undefined): unknown {
+  if (error instanceof CliChatUnavailableError) return error;
+  const mask = (value: unknown) =>
+    redactSecrets(redactExact(value instanceof Error ? value.message : String(value), apiKey));
+  if (error instanceof AcpSessionOpenError) {
+    return new AcpSessionOpenError(
+      new Error(mask(error.startupError)),
+      new Error(mask(error.cleanupError)),
+      error.cleanup
+    );
+  }
+  const masked = new Error(mask(error));
+  if (error instanceof Error) masked.name = error.name;
+  return masked;
 }
 
 function stopReasonText(reason: string, cancelled: boolean): string {
