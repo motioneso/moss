@@ -124,6 +124,48 @@ describe("API-key chat", () => {
     }
   );
 
+  it.each([
+    ["an authentication_failed kind", { errorKind: "authentication_failed" }],
+    ["a 401 status", { status: 401 }],
+    ["a nested 401 status code", { error: { statusCode: 401 } }]
+  ])(
+    "classifies a generic internal error whose data carries %s as a rejected key",
+    async (_label, data) => {
+      const engine = new AcpChatEngine("anthropic", "chat:u1:api-key-data", {
+        tunnel: new PromptErrorTunnel(false, { code: -32603, message: "Internal error", data }),
+        authMethod: "api_key",
+        userId: "u1",
+        projectId: "api-key-data",
+        reportLoginRejected: vi.fn()
+      });
+      await engine.launch(launchOpts);
+      await engine.submit("hello");
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      await expect(engine.readNew(0)).rejects.toMatchObject({ message: API_KEY_REJECTED_MESSAGE });
+      await engine.kill();
+    }
+  );
+
+  it.each([
+    ["a 500 status", { status: 500, errorKind: "overloaded" }],
+    ["a 401 buried in an unrelated field", { requestId: "req-401", detail: "status 401 earlier" }],
+    ["a 401 number in a non-status field", { retryAfter: 401 }]
+  ])("leaves a generic internal error whose data carries %s alone", async (_label, data) => {
+    const engine = new AcpChatEngine("anthropic", "chat:u1:api-key-other", {
+      tunnel: new PromptErrorTunnel(false, { code: -32603, message: "Internal error", data }),
+      authMethod: "api_key",
+      userId: "u1",
+      projectId: "api-key-other",
+      reportLoginRejected: vi.fn()
+    });
+    await engine.launch(launchOpts);
+    await engine.submit("hello");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const failure = await engine.readNew(0).catch((error: unknown) => error);
+    expect((failure as Error).message).not.toBe(API_KEY_REJECTED_MESSAGE);
+    await engine.kill();
+  });
+
   it("leaves the same internal 401 alone on a CLI-login row", async () => {
     const loginRejected = vi.fn();
     const engine = new AcpChatEngine("anthropic", "chat:u1:cli-internal", {

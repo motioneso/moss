@@ -881,7 +881,31 @@ function isAuthRequired(error: unknown): boolean {
  */
 function isApiKeyRejected(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /invalid[_ ]?api[_ ]?key|\b401\b|unauthori[sz]ed|authentication_error/i.test(message);
+  if (/invalid[_ ]?api[_ ]?key|\b401\b|unauthori[sz]ed|authentication_error/i.test(message)) {
+    return true;
+  }
+  const data = ownField(error, "data");
+  return [error, data, ownField(data, "error")].some(carriesAuthRejection);
+}
+
+const AUTH_REJECTION_KINDS = new Set(["authentication_failed", "authentication_error"]);
+
+/** Matches only named status and kind fields, so a stray 401 elsewhere is ignored. */
+function carriesAuthRejection(value: unknown): boolean {
+  for (const field of ["status", "statusCode", "status_code"]) {
+    const status = ownField(value, field);
+    if (status === 401 || status === "401") return true;
+  }
+  for (const field of ["errorKind", "kind", "type", "code", "error"]) {
+    const kind = ownField(value, field);
+    if (typeof kind === "string" && AUTH_REJECTION_KINDS.has(kind)) return true;
+  }
+  return false;
+}
+
+function ownField(value: unknown, field: string): unknown {
+  if (typeof value !== "object" || value === null) return undefined;
+  return Object.getOwnPropertyDescriptor(value, field)?.value;
 }
 
 /**
