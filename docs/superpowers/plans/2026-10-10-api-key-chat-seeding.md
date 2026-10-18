@@ -1450,7 +1450,7 @@ describe("#3410: API-key chat seed values", () => {
 - [ ] **Step 8: Run the test to verify it fails**
 
 Run: `pnpm test:unit tests/uat/provisioner.test.ts`
-Expected: FAIL. The new cases fail (no child env, no `apiKeyChat` field); the existing cases still pass.
+Expected: FAIL. The new cases fail (no read-only key file mount, no container key-file path variable, no `apiKeyChat` field); the existing cases still pass.
 
 - [ ] **Step 9: Thread the seed value through the provisioner**
 
