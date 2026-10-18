@@ -231,13 +231,6 @@
   margin-bottom: 16px;
 }
 
-/* #3481: the message a reminder link opened keeps a ring until focus moves on. */
-.chatd-msg[data-linked-message]:focus {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 4px;
-  border-radius: var(--radius-md);
-}
-
 .chatd-msg__av {
   grid-column: 1;
   grid-row: 1;
