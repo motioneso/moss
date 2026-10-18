@@ -630,6 +630,17 @@ export interface RpcKillTerminalParams {
 // Slice 1 task 3 — ACP tunnel params/results (interface-pair pattern, mirrors RpcSubmit*).
 // The runner is a line pipe: it never parses the ACP JSON, it only frames stdout lines.
 // Secrets cross only inside these socket payloads, never argv or env of an unrelated process.
+/**
+ * API-key chat credential for one spawn. Lives only in this socket payload and the agent's
+ * process env; never argv, logs or error text.
+ */
+export interface RpcAcpSpawnCredential {
+  /** Stored provider address, or null for the provider's public default. */
+  readonly baseUrl: string | null;
+  readonly apiKey: string;
+  /** Provider model id the agent must use. */
+  readonly model: string;
+}
 /** params for method "acpSpawn": start one provider's agent for this session key. */
 export interface RpcAcpSpawnParams {
   /**
@@ -651,6 +662,8 @@ export interface RpcAcpSpawnParams {
   readonly useCandidate?: boolean;
   /** Trusted Moss persona, delivered to the adapter's working directory before session creation. */
   readonly personaText?: string;
+  /** Present only for API-key chat rows. CLI rows send none. */
+  readonly credential?: RpcAcpSpawnCredential;
 }
 /** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
 export interface RpcAcpSpawnResult {

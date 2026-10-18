@@ -79,6 +79,7 @@ import {
 } from "@moss/acp";
 import { redactSecrets } from "@moss/ai";
 import { sanitizeSessionKey } from "@moss/chat/live";
+import type { RpcAcpSpawnCredential as AcpCredential } from "@moss/chat/live";
 
 // Re-exported so callers that only know acp-host.ts keep working unchanged;
 // the definitions live in acp-execs.ts (task 5b, 2026-09-08 file-size split).
@@ -286,8 +287,10 @@ export class AcpHost {
     userId: string,
     profile: AcpProfile,
     useCandidate = false,
-    personaText?: string
+    personaText?: string,
+    credential: AcpCredential | null = null
   ): Promise<AcpSpawnResult> {
+    void credential;
     if (!providerKind) throw new Error("acpSpawn.providerKind is required: no default provider");
     if (personaText !== undefined && typeof personaText !== "string")
       throw new Error("acpSpawn.personaText must be a string");
