@@ -104,7 +104,7 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
   },
   {
     pattern:
-      /^\/api\/ai\/providers\/[^/]+\/(test|cli-check|discover-models|models\/discover|models\/refresh)$/,
+      /^\/api\/ai\/providers\/[^/]+\/(test|cli-check|discover-models|models\/discover|models\/refresh|chat-readiness)$/,
     category: "external_effect",
     julyPrefixes: ["settings.providerTest.", "settings.providerDiscovery."]
   },

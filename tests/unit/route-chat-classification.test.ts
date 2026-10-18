@@ -169,6 +169,7 @@ const EXPECTED: readonly string[] = [
   "ai POST /api/ai/providers/:id/discover-models blocked external_effect",
   "ai GET /api/ai/providers/:id/models/discover blocked external_effect",
   "ai POST /api/ai/providers/:id/models/refresh blocked external_effect",
+  "ai GET /api/ai/providers/:id/chat-readiness blocked external_effect",
   "ai GET /api/ai/models blocked external_effect",
   "ai POST /api/ai/models blocked assistant_brain",
   "ai PATCH /api/ai/models/:id blocked assistant_brain",
