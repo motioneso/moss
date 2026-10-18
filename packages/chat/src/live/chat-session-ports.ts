@@ -153,7 +153,7 @@ export interface ChatPersistencePort {
       }
     | undefined
   >;
-  /** Resolve an explicit scheduled Tasks check; unmatched selections leave the turn unchanged. */
+  /** Resolve an explicit scheduled Tasks check. A one-time check stays terminal once interpretation starts. */
   resolveScheduledReadRequest?(
     actorUserId: string,
     text: string,

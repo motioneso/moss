@@ -49,12 +49,13 @@ describe("scheduled source request boundary", () => {
       )
     ).toMatchObject({
       kind: "scheduled_read",
+      interpretationStarted: true,
       taskId,
       title: "Proof task",
       when: { kind: "request", delaySeconds: 30 }
     });
   });
-  it("leaves an unresolved owned task to the reminder or normal turn", async () => {
+  it("returns a marked invalid plan for an unresolved owned task", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(
       await resolveScheduledReadRequest(
@@ -62,7 +63,14 @@ describe("scheduled source request boundary", () => {
         candidates,
         async () => ({ taskId: "", timingRequest: "" })
       )
-    ).toBeUndefined();
+    ).toEqual({
+      kind: "scheduled_read",
+      failure: "invalid",
+      interpretationStarted: true,
+      taskId: null,
+      title: "",
+      when: null
+    });
   });
   it.each([
     { owned: [] },
@@ -75,7 +83,49 @@ describe("scheduled source request boundary", () => {
         taskId,
         timingRequest: "remind me in 30 seconds to check task"
       }))
-    ).toBeUndefined();
+    ).toMatchObject({
+      kind: "scheduled_read",
+      failure: "invalid",
+      interpretationStarted: true,
+      taskId: null
+    });
+  });
+  it.each([null, "not an object", []])(
+    "returns a marked invalid plan for a malformed output shape: %j",
+    async (output) => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(
+        await resolveScheduledReadRequest(
+          "Check my task in 30 seconds",
+          candidates,
+          async () => output
+        )
+      ).toMatchObject({
+        kind: "scheduled_read",
+        failure: "invalid",
+        interpretationStarted: true,
+        taskId: null
+      });
+    }
+  );
+  it("keeps a valid repeating check free of one-time provenance", async () => {
+    const plan = await resolveScheduledReadRequest(
+      "Check my Proof task every 60 seconds",
+      candidates,
+      async () => ({ taskId, timingRequest: "remind me every 60 seconds to check task" })
+    );
+    expect(plan).toMatchObject({ kind: "scheduled_read", taskId });
+    expect(plan?.interpretationStarted).toBeUndefined();
+  });
+  it("keeps a refused repeating check free of one-time provenance", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const plan = await resolveScheduledReadRequest(
+      "Check my Proof task every 60 seconds",
+      candidates,
+      async () => ({ taskId: "", timingRequest: "remind me every 60 seconds to check task" })
+    );
+    expect(plan).toMatchObject({ kind: "scheduled_read", failure: "invalid", taskId: null });
+    expect(plan?.interpretationStarted).toBeUndefined();
   });
   it.each([
     { taskId, timingRequest: "remind me every day to check task" },
@@ -88,14 +138,15 @@ describe("scheduled source request boundary", () => {
         candidates,
         async () => output
       )
-    ).toMatchObject({ kind: "scheduled_read", taskId: null });
+    ).toMatchObject({ kind: "scheduled_read", interpretationStarted: true, taskId: null });
   });
   it("refuses mutating requests without a model call", async () => {
     const interpret = vi.fn();
-    for (const request of ["Check my task in 30 seconds and delete it"])
-      expect(await resolveScheduledReadRequest(request, candidates, interpret)).toMatchObject({
-        taskId: null
-      });
+    for (const request of ["Check my task in 30 seconds and delete it"]) {
+      const plan = await resolveScheduledReadRequest(request, candidates, interpret);
+      expect(plan).toMatchObject({ taskId: null });
+      expect(plan?.interpretationStarted).toBeUndefined();
+    }
     expect(interpret).not.toHaveBeenCalled();
   });
 });
