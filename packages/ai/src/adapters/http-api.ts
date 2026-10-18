@@ -27,6 +27,7 @@ import {
   type TranscribeAudioResult
 } from "./http-api-transcription.js";
 import type { ProviderKind } from "./transcript-reader.js";
+import { providerBaseUrl } from "../provider-base-url.js";
 import { transcriptionHttpFailure } from "../transcription-errors.js";
 
 // ---------------------------------------------------------------------------
@@ -173,7 +174,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         }
 
         input.signal?.throwIfAborted();
-        const base = this._baseUrl ?? "https://api.openai.com";
+        const base = providerBaseUrl("openai-compatible", this._baseUrl);
         const form = new FormData();
         form.set("model", input.model.provider_model_id);
         form.set("file", input.audio, "audio");
@@ -220,7 +221,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
     switch (this.providerKind) {
       case "anthropic":
         return {
-          url: "https://api.anthropic.com/v1/messages",
+          url: `${providerBaseUrl("anthropic", this._baseUrl)}/v1/messages`,
           headers: {
             "content-type": "application/json",
             "x-api-key": this.apiKey,
@@ -238,7 +239,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         };
 
       case "openai-compatible": {
-        const base = this._baseUrl ?? "https://api.openai.com";
+        const base = providerBaseUrl("openai-compatible", this._baseUrl);
         if (input.nativeSearch) {
           // #2228: built-in web search is only exposed through the Responses API, not
           // Chat Completions, so this path switches endpoints and body shape.

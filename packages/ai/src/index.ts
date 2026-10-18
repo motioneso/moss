@@ -23,6 +23,7 @@ export * from "./model-activity.js";
 export * from "./provider-validation-routes.js";
 export * from "./provider-validation.js";
 export * from "./provider-identity.js";
+export * from "./provider-base-url.js";
 export * from "./repository.js";
 export * from "./terminal-password-repository.js";
 // #1059 — re-exported so the composition root (packages/module-registry) and its tests can name
