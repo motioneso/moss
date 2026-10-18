@@ -106,6 +106,7 @@ import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import { serializeModel } from "./serialize-model.js";
 export { serializeModel } from "./serialize-model.js";
 import { ModelDiscoveryService } from "./model-discovery.js";
+import { providerBaseUrlHasUserInfo } from "./provider-base-url.js";
 import { registerAiProviderValidationRoutes } from "./provider-validation-routes.js";
 import {
   registerTerminalRoutes,
@@ -1083,6 +1084,15 @@ function assertDecisionModelBaseUrl(providerKind: AiProviderKind, baseUrl: strin
   }
 }
 
+/** The address is stored and later passed to helpers, so it must never carry a login. */
+function optionalProviderBaseUrl(value: unknown): string | null | undefined {
+  const baseUrl = optionalNullableString(value, "baseUrl");
+  if (typeof baseUrl === "string" && providerBaseUrlHasUserInfo(baseUrl)) {
+    throw new HttpError(400, "A provider address cannot include a username or password.");
+  }
+  return baseUrl;
+}
+
 function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
   const value = requireObject(body);
   const providerKind = requiredProviderKind(value.providerKind, "providerKind");
@@ -1102,7 +1112,7 @@ function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
     providerKind,
     displayName: requiredString(value.displayName, "displayName"),
     acpAgentId,
-    baseUrl: optionalNullableString(value.baseUrl, "baseUrl"),
+    baseUrl: optionalProviderBaseUrl(value.baseUrl),
     status: optionalProviderStatus(value.status),
     authMethod,
     credentialPayload:
@@ -1119,7 +1129,7 @@ function parseUpdateProviderBody(body: unknown): UpdateAiProviderConfigRequest {
     providerKind: optionalProviderKind(value.providerKind, "providerKind"),
     displayName: optionalString(value.displayName, "displayName"),
     acpAgentId: optionalNullableString(value.acpAgentId, "acpAgentId"),
-    baseUrl: optionalNullableString(value.baseUrl, "baseUrl"),
+    baseUrl: optionalProviderBaseUrl(value.baseUrl),
     status: optionalProviderStatus(value.status),
     authMethod: optionalAuthMethod(value.authMethod),
     credentialPayload:

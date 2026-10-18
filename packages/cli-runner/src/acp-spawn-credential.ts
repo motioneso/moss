@@ -1,4 +1,4 @@
-import { PROVIDER_MODEL_ID_PATTERN } from "@moss/ai";
+import { PROVIDER_MODEL_ID_PATTERN, providerBaseUrlHasUserInfo } from "@moss/ai";
 import type { RpcAcpSpawnCredential } from "@moss/chat/live";
 
 /** Refusal for a malformed credential. Messages name the field, never its value. */
@@ -38,6 +38,11 @@ export function readAcpSpawnCredential(
   if (baseUrl !== null && !isHttpUrl(baseUrl)) {
     throw new AcpCredentialBadRequestError(
       "acpSpawn.credential.baseUrl must be null or an http(s) URL"
+    );
+  }
+  if (baseUrl !== null && providerBaseUrlHasUserInfo(baseUrl)) {
+    throw new AcpCredentialBadRequestError(
+      "acpSpawn.credential.baseUrl must not include a username or password"
     );
   }
   if (typeof model !== "string" || !PROVIDER_MODEL_ID_PATTERN.test(model)) {

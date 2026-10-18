@@ -105,14 +105,17 @@ function assertOpencodeProvider(spec) {
   if (!MODEL_ID.test(String(entry.model))) {
     throw new Error("opencodeProvider.entry.model is malformed");
   }
-  let protocol;
+  let url;
   try {
-    protocol = new URL(String(entry.baseUrl)).protocol;
+    url = new URL(String(entry.baseUrl));
   } catch {
-    protocol = "";
+    url = null;
   }
-  if (protocol !== "http:" && protocol !== "https:") {
+  if (url?.protocol !== "http:" && url?.protocol !== "https:") {
     throw new Error("opencodeProvider.entry.baseUrl must be an http(s) URL");
+  }
+  if (url.username !== "" || url.password !== "") {
+    throw new Error("opencodeProvider.entry.baseUrl must not include a username or password");
   }
 }
 

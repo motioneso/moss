@@ -132,6 +132,25 @@ describe("agent-home-prepare OpenCode provider entry", () => {
     ).toBe(1);
   });
 
+  it("refuses an address carrying a username or password, naming no part of it", () => {
+    const { configDir, path } = setup();
+    const result = run({
+      dirs: [configDir],
+      denyFile: null,
+      opencodeProvider: {
+        path,
+        id: "moss",
+        entry: { ...entry, baseUrl: "http://user:hunter2pw@proxy.test/v1" }
+      }
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "opencodeProvider.entry.baseUrl must not include a username or password"
+    );
+    expect(result.stderr).not.toContain("hunter2pw");
+    expect(existsSync(path)).toBe(false);
+  });
+
   it("replaces a planted symlink instead of writing through it", () => {
     const { dir, configDir, path } = setup();
     mkdirSync(configDir, { recursive: true });

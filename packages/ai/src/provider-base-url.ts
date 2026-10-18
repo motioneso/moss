@@ -22,3 +22,13 @@ export function providerBaseUrl(
   if (trimmed.length > 0) return trimmed;
   return kind === "anthropic" ? ANTHROPIC_DEFAULT_BASE_URL : OPENAI_DEFAULT_BASE_URL;
 }
+
+/** True when an address embeds a username or password, which would leak into argv and config. */
+export function providerBaseUrlHasUserInfo(value: string): boolean {
+  try {
+    const { username, password } = new URL(value.trim());
+    return username !== "" || password !== "";
+  } catch {
+    return false;
+  }
+}
