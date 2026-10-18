@@ -120,6 +120,25 @@ async function fakeAgentHomePrepare(request: AgentHomePrepareRequest): Promise<v
     config.permission = permission;
     writeFileSync(path, JSON.stringify(config, null, 2), { mode: 0o600 });
   }
+  const spec = request.opencodeProvider;
+  if (spec) {
+    if (!existsSync(spec.path) && spec.entry === null) return;
+    const config: Record<string, unknown> = existsSync(spec.path)
+      ? (JSON.parse(readFileSync(spec.path, "utf8")) as Record<string, unknown>)
+      : {};
+    const provider = { ...((config.provider as Record<string, unknown> | undefined) ?? {}) };
+    if (spec.entry === null) delete provider[spec.id];
+    else
+      provider[spec.id] = {
+        npm: "@ai-sdk/openai-compatible",
+        name: "Moss",
+        options: { baseURL: spec.entry.baseUrl, apiKey: `{env:${spec.entry.apiKeyEnv}}` },
+        models: { [spec.entry.model]: {} }
+      };
+    if (Object.keys(provider).length > 0) config.provider = provider;
+    else delete config.provider;
+    writeFileSync(spec.path, JSON.stringify(config, null, 2), { mode: 0o600 });
+  }
 }
 
 class FakeChild extends EventEmitter {
