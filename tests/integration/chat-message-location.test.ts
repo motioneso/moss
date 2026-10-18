@@ -2,12 +2,14 @@
  * #3481: a reminder alert links to its exact chat message. The location route answers only the
  * message's owner; any other actor, a deleted message or a deleted chat gets the same 404.
  */
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { ChatRepository } from "@moss/chat";
+import type { ChatSurface } from "@moss/shared";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -48,6 +50,19 @@ describe("chat message location (#3481)", () => {
     });
   }
 
+  async function storedMessageIn(opts: { incognito?: boolean; surface?: ChatSurface }) {
+    const target = await dataContext.withDataContext(userA(), (scopedDb) =>
+      repository.openNewThread(scopedDb, { title: "Target chat", ...opts })
+    );
+    const messageId = randomUUID();
+    await bootstrap.query(
+      `INSERT INTO app.chat_messages (id, thread_id, owner_user_id, role, status, body)
+       VALUES ($1, $2, $3, 'assistant', 'stored', 'a')`,
+      [messageId, target.id, ids.userA]
+    );
+    return messageId;
+  }
+
   function locate(messageId: string, session: string) {
     return server.inject({
       method: "GET",
@@ -83,6 +98,15 @@ describe("chat message location (#3481)", () => {
     const deletedChat = await turn("Chat deleted");
     await bootstrap.query("DELETE FROM app.chat_threads WHERE id = $1", [deletedChat.thread.id]);
     expect((await locate(deletedChat.message.id, ids.sessionA)).statusCode).toBe(404);
+  });
+
+  it("answers 404 for the owner's private chat and a non-drawer chat", async () => {
+    // Normal turns never store into these chats, so place a stored message there directly.
+    const privateMessage = await storedMessageIn({ incognito: true });
+    expect((await locate(privateMessage, ids.sessionA)).statusCode).toBe(404);
+
+    const moduleMessage = await storedMessageIn({ surface: "module-test" as ChatSurface });
+    expect((await locate(moduleMessage, ids.sessionA)).statusCode).toBe(404);
   });
 
   it("answers 404 for a malformed id instead of failing", async () => {
