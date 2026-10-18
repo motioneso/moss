@@ -29,6 +29,7 @@ import {
   uatRealChatProvider,
   type UatRealChatAuth
 } from "./real-chat-env.js";
+import * as apiKeyChatEnv from "./api-key-chat-env.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
 import {
@@ -247,6 +248,8 @@ export type SeedHook = (ctx: {
   /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS. Consumed by Task 5's seed/cli.ts wiring
    *  (blocked on #1557) — until then this reaches the seed service but nothing reads it. */
   readonly chatScript?: string;
+  /** #3410: opt-in API-key chat provider. The key reaches the seed container by env only. */
+  readonly apiKeyChat?: apiKeyChatEnv.ApiKeyChatSeed;
 }) => Promise<void>;
 
 // #1024/#1000: Phase 1 ships zero seed data by design (spec §8.1 acceptance = bare level only).
@@ -275,7 +278,8 @@ export const composeSeedHook: SeedHook = async ({
   workflowApprovalFixture,
   activityOutcomeFixture,
   withWorkshopStorageFixture,
-  chatScript
+  chatScript,
+  apiKeyChat
 }) => {
   await runCommand(
     "docker",
@@ -315,10 +319,12 @@ export const composeSeedHook: SeedHook = async ({
       // #1121 Task 4: same "always pass, empty means off" shape. Nothing reads this yet —
       // Task 5 (blocked on #1557) adds the cli.ts consumer.
       `JARVIS_UAT_SEED_CHAT_SCRIPT=${chatScript ?? ""}`,
+      ...apiKeyChatEnv.apiKeyChatSeedArgs(apiKeyChat),
       "-e",
       "JARVIS_UAT_SEED_CONFIRM=1",
       "seed"
-    ])
+    ]),
+    apiKeyChatEnv.apiKeyChatSeedProcessEnv(apiKeyChat)
   );
 };
 
@@ -529,13 +535,17 @@ class SubnetOverlapConflictError extends Error {}
 const PORT_BIND_CONFLICT_PATTERN = /port is already allocated|address already in use|bind.*failed/i;
 const SUBNET_OVERLAP_CONFLICT_PATTERN = /pool overlaps with other one on this address space/i;
 
-function runCommand(command: string, args: readonly string[]): Promise<void> {
+function runCommand(
+  command: string,
+  args: readonly string[],
+  env?: NodeJS.ProcessEnv
+): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     let stderr = "";
     // #1024/#1000: stdout stays "inherit" for live operator visibility; stderr is piped so we can
     // inspect it for the port-bind-conflict signature, but every chunk is still forwarded to the
     // real stderr as it arrives so nothing is lost from the operator's view.
-    const child = spawn(command, args, { stdio: ["inherit", "inherit", "pipe"] });
+    const child = spawn(command, args, { stdio: ["inherit", "inherit", "pipe"], env });
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       stderr += text;
@@ -609,6 +619,8 @@ export interface UatProvisionOptions {
   readonly withBriefingWriterFixture?: boolean;
   readonly withClassifierFixture?: boolean;
   readonly withClassifierMcpFixture?: boolean;
+  /** #3410: seed the API-key chat provider from the MOSS_UAT_CHAT_PROVIDER_* host variables. */
+  readonly withApiKeyChatProvider?: boolean;
   readonly withNewsFeedbackFixture?: boolean;
   /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
   readonly withSportsPublicSourceFixtures?: boolean;
@@ -637,7 +649,8 @@ export function buildSeedHookInput(
   jobSearchAiProviderBaseUrl?: string,
   briefingWriterAiProviderBaseUrl?: string,
   classifierFixtureAiProviderBaseUrl?: string,
-  newsFeedbackFixtureBaseUrl?: string
+  newsFeedbackFixtureBaseUrl?: string,
+  apiKeyChat?: apiKeyChatEnv.ApiKeyChatSeed
 ): {
   projectName: string;
   level: UatSeedLevel;
@@ -652,6 +665,7 @@ export function buildSeedHookInput(
   activityOutcomeFixture?: boolean;
   withWorkshopStorageFixture?: boolean;
   chatScript?: string;
+  apiKeyChat?: apiKeyChatEnv.ApiKeyChatSeed;
 } {
   return {
     projectName,
@@ -666,7 +680,8 @@ export function buildSeedHookInput(
     workflowApprovalFixture: opts?.withWorkflowApprovalFixture,
     activityOutcomeFixture: opts?.withActivityOutcomeFixture,
     withWorkshopStorageFixture: opts?.withWorkshopStorageFixture,
-    chatScript: opts?.chatScript
+    chatScript: opts?.chatScript,
+    apiKeyChat
   };
 }
 
@@ -697,6 +712,9 @@ export async function provisionForUat(
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
   const overallStart = Date.now();
+  const apiKeyChatSeed = opts?.withApiKeyChatProvider
+    ? await apiKeyChatEnv.readApiKeyChatUatProvider(process.env)
+    : undefined;
   // #1024/#1000: bounded by the reserved range itself (100 candidates) — never an unbounded
   // retry. Each failed-on-bind attempt removes its port from the pool; exhausting the pool means
   // the whole reserved range is hostile, which should fail loudly, not spin forever.
@@ -912,7 +930,8 @@ export async function provisionForUat(
           opts?.withJobSearchFixture ? jobSearchFixtureBaseUrl : undefined,
           opts?.withBriefingWriterFixture ? briefingWriterFixtureBaseUrl : undefined,
           opts?.withClassifierFixture ? classifierFixtureBaseUrl : undefined,
-          newsFeedbackFixtureBaseUrl
+          newsFeedbackFixtureBaseUrl,
+          apiKeyChatSeed
         )
       );
       const baseURL = `http://127.0.0.1:${webPort}`;

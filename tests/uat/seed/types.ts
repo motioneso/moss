@@ -128,3 +128,21 @@ export interface SeedOptions {
    */
   readonly chatScript?: UatChatScript;
 }
+
+/**
+ * #3410: seed-container variables for the opt-in API-key chat provider. The key travels as a
+ * name-only `-e` flag with its value in the docker child env, so it never appears in argv.
+ */
+export const API_KEY_CHAT_SEED_ENV = {
+  kind: "MOSS_UAT_API_KEY_CHAT_KIND",
+  baseUrl: "MOSS_UAT_API_KEY_CHAT_BASE_URL",
+  model: "MOSS_UAT_API_KEY_CHAT_MODEL",
+  key: "MOSS_UAT_API_KEY_CHAT_KEY"
+} as const;
+
+export interface ApiKeyChatSeed {
+  readonly providerKind: "anthropic" | "openai-compatible";
+  readonly baseUrl: string;
+  readonly model: string;
+  readonly apiKey: string;
+}
