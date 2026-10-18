@@ -78,6 +78,9 @@ const PENDING_ADMIN_EMAIL = "dev-instance-doctor-pending-admin@example.test";
 function fakeConfig(overrides: Partial<DevInstanceConfig> = {}): DevInstanceConfig {
   return {
     providerKind: "openai-compatible",
+    providerAuth: "cli",
+    providerBaseUrl: null,
+    providerKeyFilePath: null,
     credentialFilePath: "/dev/null",
     adminEmail: ADMIN_EMAIL,
     adminName: "Dev Instance Admin",

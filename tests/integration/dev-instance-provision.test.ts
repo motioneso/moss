@@ -55,6 +55,9 @@ describe("dev-instance provision (#1258)", () => {
   function fakeConfig(overrides: Partial<DevInstanceConfig> = {}): DevInstanceConfig {
     return {
       providerKind: "anthropic",
+      providerAuth: "cli",
+      providerBaseUrl: null,
+      providerKeyFilePath: null,
       credentialFilePath: "/tmp/dev-instance-provision-test-credential.gpg",
       adminEmail: "owner@example.com",
       adminName: "Test Owner",
