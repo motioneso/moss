@@ -508,7 +508,12 @@ export function ChatDrawer(props: ChatDrawerProps) {
   const focusedMessageId = useRef<string | null>(null);
   useEffect(() => {
     const id = props.focusMessageId;
-    if (!props.open || !id || props.threadToOpen || focusedMessageId.current === id) return;
+    if (!props.open || !id) {
+      // The drawer stays mounted while closed, so a reopened link must focus again.
+      focusedMessageId.current = null;
+      return;
+    }
+    if (props.threadToOpen || focusedMessageId.current === id) return;
     const target = bodyRef.current?.querySelector<HTMLElement>("[data-linked-message]");
     if (!target) return;
     focusedMessageId.current = id;

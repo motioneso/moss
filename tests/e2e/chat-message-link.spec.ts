@@ -86,6 +86,23 @@ test("the bell's View opens a side chat focused on its reminder", async ({ page 
   await expect(page).toHaveURL(/\/notifications$/);
 });
 
+test("the same reminder link focuses its message again after the chat closes", async ({ page }) => {
+  await mockLinks(page, { "reminder-side": { threadId: side.id, messageId: "reminder-side" } });
+  await page.goto("/notifications");
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  const linked = drawer.locator("[data-linked-message]");
+
+  await page.getByRole("link", { name: "View" }).click();
+  await expect(linked).toBeFocused();
+  await drawer.getByRole("button", { name: "Close chat" }).click();
+  await expect(drawer).toHaveCount(0);
+
+  await page.getByRole("link", { name: "View" }).click();
+  await expect(linked).toContainText("Reminder: book the train");
+  await expect(linked).toBeFocused();
+  await expect(linked).toBeInViewport();
+});
+
 test("a device alert link opens Main focused on its reminder", async ({ page }) => {
   await mockLinks(page, { "reminder-main": { threadId: main.id, messageId: "reminder-main" } });
   await page.goto("/chat/messages/reminder-main");
