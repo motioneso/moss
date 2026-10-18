@@ -105,7 +105,7 @@ function assertOpencodeProvider(spec) {
   if (!MODEL_ID.test(String(entry.model))) {
     throw new Error("opencodeProvider.entry.model is malformed");
   }
-  let protocol = "";
+  let protocol;
   try {
     protocol = new URL(String(entry.baseUrl)).protocol;
   } catch {
