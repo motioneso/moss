@@ -22,6 +22,7 @@ export * from "./model-discovery.js";
 export * from "./model-activity.js";
 export * from "./provider-validation-routes.js";
 export * from "./provider-validation.js";
+export * from "./api-key-chat-readiness.js";
 export * from "./provider-identity.js";
 export * from "./provider-base-url.js";
 export * from "./repository.js";

@@ -496,7 +496,8 @@ export function registerAiRoutes(
     dataContext: dependencies.dataContext,
     repository,
     secretCipher,
-    modelDiscovery
+    modelDiscovery,
+    cliToolVersionReader: dependencies.cliToolVersionReader
   });
 
   // #1059 — the LOCAL `repository` const (line ~144, above), not `dependencies.repository`
