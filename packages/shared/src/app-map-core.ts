@@ -299,7 +299,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +
       "on the login's default. The provider catalog offers explicit Codex and OpenCode CLI choices " +
       "because they share a protocol family but use separate agent identities; changing an existing " +
-      "OpenAI-compatible provider to CLI auth requires choosing its agent. The Codex ACP row hands " +
+      "OpenAI-compatible provider to CLI auth requires choosing its agent. " +
+      "The catalog also offers Anthropic (API key), whose optional Base URL field points it at any " +
+      "Anthropic-compatible service; background jobs and model lists use that address. The Codex ACP row hands " +
       "the instance's shared Codex connection into each user's own isolated runner home, " +
       "and provides a minus button (disable) and a trash button (remove after confirmation; the provider's " +
       "default entry cannot be removed). The Models section collapses from its header. CLI provider " +
