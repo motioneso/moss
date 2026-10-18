@@ -127,6 +127,11 @@ export interface SeedOptions {
    * byte-for-byte unchanged.
    */
   readonly chatScript?: UatChatScript;
+  /**
+   * #3410: absent by default. When set, seeds an API-key provider at this address with one chat
+   * model and makes it the instance default. Applies at admin+data and multi-user only.
+   */
+  readonly apiKeyChat?: ApiKeyChatSeed;
 }
 
 /**
