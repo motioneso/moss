@@ -155,7 +155,10 @@ function readApiKey(credential: unknown): string | null {
 }
 
 function fetchModels(input: ProviderValidationInput, apiKey: string): Promise<Response> {
-  const f = input.fetch ?? globalThis.fetch;
+  const fetchOnce = input.fetch ?? globalThis.fetch;
+
+  // A redirect would replay the key header to whatever host it names.
+  const f = (url: string, init: RequestInit) => fetchOnce(url, { ...init, redirect: "error" });
   switch (input.providerKind) {
     case "anthropic":
       return f(`${providerBaseUrl("anthropic", input.baseUrl)}/v1/models`, {

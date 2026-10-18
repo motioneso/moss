@@ -27,12 +27,13 @@ describe("apiKeyRejectionProbe", () => {
     await expect(apiKeyRejectionProbe("anthropic", credential, fetcher)()).resolves.toBe(false);
   });
 
-  it("asks the stored address with a time limit", async () => {
+  it("asks the stored address with a time limit and no redirects", async () => {
     const fetcher = fetchAnswering(401);
     await apiKeyRejectionProbe("anthropic", credential, fetcher)();
     const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:5190/v1/models");
     expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.redirect).toBe("error");
   });
 
   it("never asks for a provider kind that has no API-key chat", async () => {

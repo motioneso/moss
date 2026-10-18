@@ -132,7 +132,10 @@ describe("agent-home-prepare OpenCode provider entry", () => {
     ).toBe(1);
   });
 
-  it("refuses an address carrying a username or password, naming no part of it", () => {
+  it.each([
+    ["a username and password", "http://user:hunter2pw@proxy.test/v1"],
+    ["a password alone", "http://:hunter2pw@proxy.test/v1"]
+  ])("refuses an address carrying %s, naming no part of it", (_label, baseUrl) => {
     const { configDir, path } = setup();
     const result = run({
       dirs: [configDir],
@@ -140,7 +143,7 @@ describe("agent-home-prepare OpenCode provider entry", () => {
       opencodeProvider: {
         path,
         id: "moss",
-        entry: { ...entry, baseUrl: "http://user:hunter2pw@proxy.test/v1" }
+        entry: { ...entry, baseUrl }
       }
     });
     expect(result.status).toBe(1);

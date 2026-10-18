@@ -1,3 +1,6 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -207,6 +210,41 @@ describe("OpenAI-compatible key test uses the normalized address", () => {
         fetch
       });
       expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    }
+  );
+});
+
+describe("AI provider validation and redirects", () => {
+  it.each(["anthropic", "openai-compatible"] as const)(
+    "never carries the %s key to the host a redirect points at",
+    async (providerKind) => {
+      const seen: Array<Record<string, string | string[] | undefined>> = [];
+      const target = createServer((request, response) => {
+        seen.push(request.headers);
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ data: [{ id: "m" }] }));
+      });
+      await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
+      const targetPort = (target.address() as AddressInfo).port;
+      const redirector = createServer((_request, response) => {
+        response.writeHead(302, { location: `http://localhost:${targetPort}/v1/models` });
+        response.end();
+      });
+      await new Promise<void>((resolve) => redirector.listen(0, "127.0.0.1", resolve));
+      const redirectorPort = (redirector.address() as AddressInfo).port;
+      try {
+        const result = await testProviderCredential({
+          providerKind,
+          authMethod: "api_key",
+          baseUrl: `http://127.0.0.1:${redirectorPort}`,
+          credential: { apiKey: "test-key-redirect" }
+        });
+        expect(result.ok).toBe(false);
+        expect(seen).toEqual([]);
+      } finally {
+        await new Promise((resolve) => target.close(resolve));
+        await new Promise((resolve) => redirector.close(resolve));
+      }
     }
   );
 });

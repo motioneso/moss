@@ -16,7 +16,8 @@ describe("acpSpawn credential address", () => {
 
   it.each([
     ["a username and password", "http://user:hunter2pw@proxy.test/v1"],
-    ["a username alone", "https://hunter2user@proxy.test"]
+    ["a username alone", "https://hunter2user@proxy.test"],
+    ["a password alone", "http://:hunter2pw@proxy.test/v1"]
   ])("refuses an address carrying %s, naming no part of it", (_label, baseUrl) => {
     let failure: unknown;
     try {

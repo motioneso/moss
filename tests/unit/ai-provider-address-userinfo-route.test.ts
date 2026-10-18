@@ -42,6 +42,12 @@ describe("AI provider address with a username or password", () => {
       "PATCH",
       `/api/ai/providers/${providerId}`,
       { baseUrl: "https://hunter2user@proxy.test" }
+    ],
+    [
+      "update",
+      "PATCH",
+      `/api/ai/providers/${providerId}`,
+      { baseUrl: "http://:hunter2pw@proxy.test" }
     ]
   ] as const)("refuses it on %s without echoing the address", async (_label, method, url, body) => {
     const { server, withDataContext } = harness();
