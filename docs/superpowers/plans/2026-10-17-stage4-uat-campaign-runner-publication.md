@@ -18,8 +18,9 @@ reference copy, reviewed on a draft PR. No product, CI or spec change.
   path, address or account. The fixture account it seeds is the existing public UAT fixture.
 - **Original hashes in the README**, so anyone can check the copy against the private originals.
 - **Older tooling not published.** The command controller and collector pinned for
-  `scripts/uat-host` and `scripts/uat-collector` were not used by R18 or R19, and no accepted
-  receipt depends on them.
+  `scripts/uat-host` and `scripts/uat-collector` were not used by R18 or R19. Earlier N3 lane
+  grants and receipts reference them; the stage 4 acceptance check decides whether any accepted
+  outcome still depends on them. If one does, they get their own cleaned PR.
 
 ## Tasks
 
