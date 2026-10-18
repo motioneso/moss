@@ -119,6 +119,25 @@ describe("provider model listing drops non-chat models", () => {
 
     expect(models.map((model) => model.providerModelId)).toEqual(["gpt-4o"]);
   });
+
+  it("drops OpenAI-compatible ids outside the model id policy and keeps / : @", async () => {
+    const ids = ["test-chat-model", "has space", "org/model:tag@v2", "plus+model"];
+    const models = await discoverProviderModels({
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      baseUrl: "http://proxy.test",
+      credential: { apiKey: "test-key-listing" },
+      fetch: (async () =>
+        new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), {
+          status: 200
+        })) as typeof fetch
+    });
+
+    expect(models.map((model) => model.providerModelId)).toEqual([
+      "test-chat-model",
+      "org/model:tag@v2"
+    ]);
+  });
 });
 
 describe("Anthropic API-key checks use the row's address", () => {

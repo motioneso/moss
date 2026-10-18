@@ -273,6 +273,9 @@ function extractModelEntries(
       entries = customAddress
         ? entries.filter((entry) => PROVIDER_MODEL_ID_PATTERN.test(entry.id))
         : entries.filter((entry) => entry.id.includes("claude-") && !entry.id.includes(":"));
+    } else if (providerKind === "openai-compatible") {
+      // The spawn check refuses ids outside the policy, so discovery never offers them.
+      entries = entries.filter((entry) => PROVIDER_MODEL_ID_PATTERN.test(entry.id));
     }
     return entries;
   }

@@ -397,6 +397,22 @@ describe("API-key discovery model contract", () => {
     expect(result.models.map((model) => model.providerModelId)).toEqual(["claude-test-model"]);
   });
 
+  it("drops OpenAI-compatible ids outside the model id policy and keeps / : @", async () => {
+    const { fetch } = listing(["test-chat-model", "has space", "org/model:tag@v2", "plus+model"]);
+    const result = await new ModelDiscoveryService().discoverModels("u1:p6", {
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl: "http://proxy.test/v1",
+      credential: { apiKey: "test-key-listing" },
+      fetch
+    });
+    expect(result.models.map((model) => model.providerModelId)).toEqual([
+      "test-chat-model",
+      "org/model:tag@v2"
+    ]);
+  });
+
   it("drops embedding, moderation, rerank, speech and image models", async () => {
     const { fetch } = listing([
       "gpt-test-chat",
