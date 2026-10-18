@@ -195,7 +195,7 @@ export interface ChatRoutesDependencies {
    * Unconditional (unlike the RPC connection, `runtime.manager` always exists).
    */
   readonly adoptDropSessionsForProvider?: (
-    dropSessionsForProvider: (provider: ProviderKind) => Promise<void>
+    dropSessionsForProvider: (target: ProviderKind | { providerConfigId: string }) => Promise<void>
   ) => void;
   // #1256 — publishes the wiring's live AssistantToolGateway back to the composition root so the
   // ai module's assistant-action resolve route can go through the same confirmation-registry gate

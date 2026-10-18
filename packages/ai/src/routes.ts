@@ -129,6 +129,8 @@ export interface AiRoutesDependencies {
   readonly repository?: AiRepository;
   readonly secretCipher?: AiSecretCipher;
   readonly modelDiscovery?: ModelDiscoveryService;
+  // Drops live chat sessions bound to one provider row once its key or address changes.
+  readonly dropChatSessionsForProviderConfig?: (providerConfigId: string) => Promise<void>;
   // #2689: installed CLI tool versions for the provider cards; absent off the runner socket path.
   readonly cliToolVersionReader?: CliToolVersionReader;
   readonly tasksCompatibility?: {
@@ -422,6 +424,7 @@ export function registerAiRoutes(
         if (!reconnectChanged) {
           modelDiscovery.invalidate(accessContext.actorUserId, request.params.id);
         }
+        if (reconnectChanged) await dropLiveChatSessions(dependencies, request.params.id);
         return { provider: await serializeProvider(provider) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -449,6 +452,7 @@ export function registerAiRoutes(
         }
 
         modelDiscovery.invalidate(accessContext.actorUserId, request.params.id);
+        await dropLiveChatSessions(dependencies, request.params.id);
         return { provider: await serializeProvider(provider) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -1582,5 +1586,20 @@ export async function assertInstanceAdmin(
   }
   if (!user.is_instance_admin) {
     throw new HttpError(403, "Instance admin permission is required");
+  }
+}
+
+/**
+ * A failed drop never fails a saved provider change. The next turn's revision check still
+ * relaunches the session with the row's current key and address.
+ */
+async function dropLiveChatSessions(
+  dependencies: AiRoutesDependencies,
+  providerConfigId: string
+): Promise<void> {
+  try {
+    await dependencies.dropChatSessionsForProviderConfig?.(providerConfigId);
+  } catch {
+    // Best effort; see above.
   }
 }

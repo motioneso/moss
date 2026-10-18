@@ -1,6 +1,6 @@
 import type { AiConfiguredModelSafeRow, ProviderKind } from "@moss/ai";
 
-import { UnsupportedLegacyCliProviderError } from "./errors.js";
+import { UnsupportedApiKeyChatProviderError, UnsupportedLegacyCliProviderError } from "./errors.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
 const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];
@@ -15,6 +15,7 @@ export function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
   if ((LIVE_PROVIDER_KINDS as readonly string[]).includes(kind)) {
     return kind as ProviderKind;
   }
+  if (model.provider_auth_method === "api_key") throw new UnsupportedApiKeyChatProviderError();
   if (model.provider_auth_method === "cli" && !model.provider_acp_agent_id) {
     throw new UnsupportedLegacyCliProviderError();
   }

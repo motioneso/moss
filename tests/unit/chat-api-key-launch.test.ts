@@ -13,6 +13,7 @@ import {
   openChatCredential,
   providerLaunchRevision
 } from "../../packages/chat/src/live/api-key-launch.js";
+import { UnsupportedApiKeyChatProviderError } from "../../packages/chat/src/live/errors.js";
 import { DataContextChatPersistence } from "../../packages/chat/src/live/persistence.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { makeRecordingDb } from "./helpers/recording-db.js";
@@ -173,6 +174,18 @@ describe("DataContextChatPersistence API-key launch", () => {
       providerConfigRevision: providerLaunchRevision(row)
     });
     expect(select).toHaveBeenCalledWith(expect.anything(), "provider-1");
+  });
+
+  it("names the supported API-key kinds when the row has another kind", async () => {
+    const { persistence, ai } = fixture(() => cipher);
+    vi.spyOn(ai, "selectChatModelForUser").mockResolvedValue({
+      ...apiKeyRow,
+      provider_kind: "ollama",
+      provider_config_id: "provider-1"
+    } as unknown as AiConfiguredModelSafeRow);
+    await expect(persistence.resolveActiveProvider("user-1")).rejects.toBeInstanceOf(
+      UnsupportedApiKeyChatProviderError
+    );
   });
 
   it("gives a CLI row no revision and reads no sealed credential", async () => {

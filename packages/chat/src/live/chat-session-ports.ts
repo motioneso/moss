@@ -27,6 +27,7 @@ import type { PersonaFs } from "./persona.js";
 import type { AcpPermissionDecider } from "@moss/acp";
 import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
 import type { ChatCredential } from "./api-key-launch.js";
+import type { RpcAcpSpawnCredential } from "./rpc-contract.js";
 import type { ReminderTurnPlan } from "../reminders/turn.js";
 import type {
   ActionResultMetadata,
@@ -303,6 +304,9 @@ export interface ChatSessionManagerDeps {
       readonly providerConfigId?: string;
       readonly acpAgentId?: string | null;
       readonly acpModel?: string;
+      readonly authMethod?: AiAuthMethod;
+      /** The row's decrypted key, address and model; set only for API-key rows. */
+      readonly credential?: RpcAcpSpawnCredential;
       readonly nextSequence?: () => number;
     }
   ) => CliChatEngine | Promise<CliChatEngine>;
