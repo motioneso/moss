@@ -8,7 +8,7 @@ import type {
 } from "@moss/shared";
 import { decisionModelDialect } from "@moss/shared";
 
-import { inferWebSearchCapability } from "./model-discovery.js";
+import { inferWebSearchCapability, isNonChatModelId } from "./model-discovery.js";
 import { providerBaseUrl } from "./provider-base-url.js";
 
 export const PROVIDER_CREDENTIAL_MISSING_MESSAGE = "Provider credential is missing.";
@@ -133,7 +133,9 @@ export async function discoverProviderModels(
   try {
     const response = await fetchModels(input, apiKey);
     if (!response.ok) return [];
-    return extractModelIds(await response.json()).map((id) => suggestModel(id, input.providerKind));
+    return extractModelIds(await response.json())
+      .filter((id) => !isNonChatModelId(id))
+      .map((id) => suggestModel(id, input.providerKind));
   } catch {
     return [];
   }

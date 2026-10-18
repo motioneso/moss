@@ -95,6 +95,32 @@ describe("AI provider validation", () => {
   });
 });
 
+describe("provider model listing drops non-chat models", () => {
+  it("lists only chat models when the provider also serves embedding, rerank, speech and image models", async () => {
+    const ids = [
+      "gpt-4o",
+      "text-embedding-3-small",
+      "omni-moderation-latest",
+      "rerank-english-v3",
+      "tts-1",
+      "dall-e-3",
+      "gpt-image-1"
+    ];
+    const models = await discoverProviderModels({
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "test-key-listing" },
+      fetch: (async () =>
+        new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), {
+          status: 200
+        })) as typeof fetch
+    });
+
+    expect(models.map((model) => model.providerModelId)).toEqual(["gpt-4o"]);
+  });
+});
+
 describe("Anthropic API-key checks use the row's address", () => {
   function recordingFetch(status: number) {
     const urls: string[] = [];

@@ -387,6 +387,11 @@ export function inferWebSearchCapability(
 
 const NON_CHAT_MODEL_ID = /embed|moderation|rerank|(^|[-_/.:])tts([-_/.:]|$)|dall-e|gpt-image/;
 
+/** Embedding, moderation, rerank, text-to-speech and image-generation models cannot chat. */
+export function isNonChatModelId(providerModelId: string): boolean {
+  return NON_CHAT_MODEL_ID.test(providerModelId.toLowerCase());
+}
+
 function inferModel(
   providerModelId: string,
   providerKind: AiProviderKind,
@@ -407,7 +412,7 @@ function inferModel(
 
   // Chat is the supported model contract: embedding, moderation, rerank, text-to-speech and
   // image-generation models have no chat capability, so discovery drops them.
-  if (NON_CHAT_MODEL_ID.test(lower)) {
+  if (isNonChatModelId(lower)) {
     return null;
   }
 
