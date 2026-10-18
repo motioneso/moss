@@ -2,6 +2,7 @@ import type { ListScheduledTasksResponse, ListQuietHoursAllowancesResponse } fro
 import type { MossGoal } from "@moss/goals";
 import type {
   AddTaskActivityRequest,
+  ApiKeyChatReadinessResponse,
   ApplyConfirmationRequiredResponse,
   ApplyDayPlanRequest,
   ApplyExecutionReport,
@@ -1308,6 +1309,13 @@ export async function testAiProvider(id: string): Promise<TestAiProviderConfigRe
   return requestJson<TestAiProviderConfigResponse>(
     `/api/ai/providers/${encodeURIComponent(id)}/test`,
     { method: "POST" }
+  );
+}
+
+/** #3410: whether an API-key provider row can drive chat right now. */
+export async function getAiProviderChatReadiness(id: string): Promise<ApiKeyChatReadinessResponse> {
+  return requestJson<ApiKeyChatReadinessResponse>(
+    `/api/ai/providers/${encodeURIComponent(id)}/chat-readiness`
   );
 }
 

@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
   refreshAiProviderModels: vi.fn(async () => ({ models: [] })),
+  getAiProviderChatReadiness: vi.fn(async () => ({ status: "ready" })),
   createAiModel: vi.fn(),
   updateAiModel: vi.fn()
 }));
@@ -203,5 +204,29 @@ describe("ProviderModels chat tag", () => {
       .findAllByType("button")
       .filter((b) => String(b.props.className ?? "").includes("cap--toggle"));
     expect(toggles).toHaveLength(0);
+  });
+
+  it("shows a rejected API key on an API-key chat row", async () => {
+    const clientModule = await import("../../apps/web/src/api/client.js");
+    vi.mocked(clientModule.getAiProviderChatReadiness).mockResolvedValueOnce({
+      status: "rejected_key"
+    });
+    const { renderer } = await render([]);
+
+    expect(clientModule.getAiProviderChatReadiness).toHaveBeenCalledWith("p1");
+    expect(
+      renderer.root
+        .findAllByProps({ role: "status" })
+        .map((node) => node.children.join(" "))
+        .some((text) => text === "The provider rejected the API key")
+    ).toBe(true);
+  });
+
+  it("does not check chat readiness for a CLI row", async () => {
+    const clientModule = await import("../../apps/web/src/api/client.js");
+    vi.mocked(clientModule.getAiProviderChatReadiness).mockClear();
+    await render([], vi.fn(), { ...provider, authMethod: "cli" } as AiProviderConfigDto);
+
+    expect(clientModule.getAiProviderChatReadiness).not.toHaveBeenCalled();
   });
 });
