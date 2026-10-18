@@ -26,9 +26,13 @@ import type { ReminderTurnPlan } from "./turn.js";
 const REFUSED =
   "I can edit a reminder's text, timing, repetition, stop time or destination. I can't change its actions, recipients or notification permissions. Nothing changed.";
 
-/** Only fixed reason codes reach logs; never owner words or provider output. */
-function refuseEdit(reason: string, reply: string): ReminderTurnPlan {
-  console.warn("reminder.edit refused", { reason });
+/** Log only fixed codes and host-schema paths; never owner words or provider output. */
+function refuseEdit(
+  reason: string,
+  reply: string,
+  validation?: { readonly keyword: string; readonly schemaPath: string }
+): ReminderTurnPlan {
+  console.warn("reminder.edit refused", { reason, ...(validation ? { validation } : {}) });
   return { kind: "edit_refused", reply };
 }
 
@@ -122,7 +126,8 @@ export async function prepareReminderEdit(
     if (!interpreted)
       return refuseEdit(
         result.ok ? "invalid_edit_terms" : (result.reason ?? result.error),
-        "I couldn't understand that edit reliably. Nothing changed. Name the reminder and its new text or time."
+        "I couldn't understand that edit reliably. Nothing changed. Name the reminder and its new text or time.",
+        result.ok ? undefined : result.validation
       );
     if (
       interpreted.target !== null &&

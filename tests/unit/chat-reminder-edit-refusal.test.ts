@@ -1,4 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { createReplyNormalizer } from "../../packages/ai/src/structured/normalize-reply.js";
+import {
+  reminderEditSchema,
+  validateReminderEdit
+} from "../../packages/chat/src/reminders/edit-interpretation.js";
 import { createAiSecretCipher, type AiRepository } from "@moss/ai";
 import { prepareReminderEdit } from "../../packages/chat/src/reminders/prepare-edit.js";
 import { makeRecordingDb } from "./helpers/recording-db.js";
@@ -103,7 +108,7 @@ it.each([
   ["schema_validation", JSON.stringify({ ...reply, dueAt: "2026-10-18T12:04:00Z" }), 200],
   ["json_parse", "```json\n{broken}\n```", 200],
   ["json_parse", "```json\n" + JSON.stringify(reply) + "\n``` trailing prose", 200],
-  ["schema_validation", JSON.stringify({ ...reply, localDue: undefined }), 200],
+  ["schema_validation", JSON.stringify({ ...reply, unsupported: undefined }), 200],
   ["schema_validation", JSON.stringify({ ...reply, destination: 42 }), 200],
   [
     "invalid_edit_terms",
@@ -133,7 +138,77 @@ it.each([
     const { run, fetch } = await prepare(content, status);
     expect(await run()).toMatchObject({ kind: "edit_refused" });
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith("reminder.edit refused", { reason });
+    expect(warn).toHaveBeenCalledWith("reminder.edit refused", expect.objectContaining({ reason }));
     expect(fetch).toHaveBeenCalledTimes(1);
   }
 );
+
+it.each([
+  { repeat: JSON.stringify({ kind: "interval", seconds: "300" }) },
+  { repeat: "null" },
+  { localDue: undefined },
+  { delaySeconds: "240" }
+])("accepts unambiguous edit reply repairs: %j", async (quirk) => {
+  const { run } = await prepare(JSON.stringify({ ...reply, ...quirk }));
+  expect(await run()).toMatchObject({ kind: "edit" });
+});
+
+it.each([
+  [{ destination: 42 }, { keyword: "type", schemaPath: "#/properties/destination/type" }],
+  [
+    { repeat: { kind: "daily", OWNER_PRIVATE_SENTINEL: "OWNER_PRIVATE_SENTINEL" } },
+    { keyword: "type", schemaPath: "#/properties/repeat/anyOf/0/type" }
+  ],
+  [
+    { text: "OWNER_PRIVATE_SENTINEL", unsupported: undefined },
+    { keyword: "required", schemaPath: "#/properties/unsupported" }
+  ]
+])(
+  "logs only schema locations and rules for invalid private replies",
+  async (invalid, validation) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { run } = await prepare(JSON.stringify({ ...reply, ...invalid }));
+    expect(await run()).toMatchObject({ kind: "edit_refused" });
+    expect(warn).toHaveBeenCalledWith("reminder.edit refused", {
+      reason: "schema_validation",
+      validation
+    });
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).not.toContain("OWNER_PRIVATE_SENTINEL");
+    expect(logged).not.toContain("edit proof");
+  }
+);
+
+const reportedReply = {
+  repeat: "null",
+  target: "edit proof original",
+  unsupported: false,
+  text: "edit proof revised",
+  delaySeconds: null,
+  localDue: null,
+  deadline: "keep",
+  localDeadline: null,
+  destination: null
+};
+
+it("accepts the coordinator's exact string-null reply through both edit validators", async () => {
+  expect(validateReminderEdit(reportedReply)).toBeUndefined();
+  const normalized = createReplyNormalizer(reminderEditSchema)(reportedReply);
+  expect(normalized).toEqual({ ...reportedReply, repeat: null });
+  expect(validateReminderEdit(normalized)).toEqual(normalized);
+  expect(reportedReply.repeat).toBe("null");
+  const { run } = await prepare(JSON.stringify(reportedReply));
+  expect(await run()).toMatchObject({
+    kind: "edit",
+    proposal: { terms: { repeat: null, text: "edit proof revised", delaySeconds: null } }
+  });
+});
+
+it.each(["text", "target"])("preserves legitimate string-null words in %s", (field) => {
+  const normalized = createReplyNormalizer(reminderEditSchema)({
+    ...reportedReply,
+    [field]: "null"
+  });
+  expect(normalized).toEqual({ ...reportedReply, repeat: null, [field]: "null" });
+  expect(validateReminderEdit(normalized)).toEqual(normalized);
+});
