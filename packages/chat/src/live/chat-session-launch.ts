@@ -41,7 +41,7 @@ import {
 import { drainEngine } from "./session-runtime-helpers.js";
 import {
   getPinnedThreadState,
-  getSelectedThreadState,
+  getOrOpenSelectedThreadState,
   usesMainThreadSelection
 } from "./chat-thread-selection.js";
 
@@ -106,14 +106,14 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     forceReplay: opts?.forceReplay ?? false
   });
   const pinThreadId = opts?.pinThreadId;
-  let threadState = pinThreadId
+  const threadState = pinThreadId
     ? await getPinnedThreadState({
         actorUserId,
         surface,
         threadId: pinThreadId,
         persistence: deps.persistence
       })
-    : await getSelectedThreadState({
+    : await getOrOpenSelectedThreadState({
         actorUserId,
         surface,
         useMain,
@@ -121,15 +121,6 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
       });
   if (pinThreadId && !threadState) {
     throw new CliChatUnavailableError(CHAT_CHANGED_WHILE_STARTING_MESSAGE);
-  }
-  if (!threadState && deps.persistence.getCurrentThreadState) {
-    await deps.persistence.openNewConversation(actorUserId, undefined, surface);
-    threadState = await getSelectedThreadState({
-      actorUserId,
-      surface,
-      useMain,
-      persistence: deps.persistence
-    });
   }
   // Bind once, before persona or tool-menu awaits can overlap a conversation switch.
   const threadId = threadState?.id ?? null;

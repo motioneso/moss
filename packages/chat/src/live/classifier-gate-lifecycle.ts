@@ -13,7 +13,7 @@ import type {
 import type { GateMode, GateOutcome, GateRequest } from "./classifier-gate.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
 import type { TranscriptRecord } from "./types.js";
-import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
+import { getOrOpenSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 
 /**
  * Task 4.1 (#2901) — the handled-turn lifecycle, extracted from ChatSessionManager so that file
@@ -149,7 +149,10 @@ export async function tryGatedTurn(
   };
 }
 
-/** The thread a turn lands in: a warm engine stays bound, a cold drawer reconnect selects Main. */
+/**
+ * The thread a turn lands in: a warm engine stays bound, a cold drawer reconnect selects Main, and
+ * an account with no conversation opens one.
+ */
 export async function selectTurnThread(
   host: GateLifecycleHost,
   actorUserId: string,
@@ -159,7 +162,7 @@ export async function selectTurnThread(
   const existingSession = host.sessions.get(sessionKey);
   if (existingSession)
     return { id: existingSession.threadId, incognito: existingSession.incognito };
-  return getSelectedThreadState({
+  return getOrOpenSelectedThreadState({
     actorUserId,
     surface,
     useMain: usesMainThreadSelection({
