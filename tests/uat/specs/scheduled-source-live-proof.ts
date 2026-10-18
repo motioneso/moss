@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 import { execUatSql } from "./job-search-board-sql.js";
+import { uatRealChatProvider } from "../real-chat-env.js";
 import { spawnSync } from "node:child_process";
 
 function captureReadFailureKinds() {
@@ -64,12 +65,12 @@ export async function proveScheduledSourceReport(page: Page) {
       console.info(`UAT asset request failed: ${path}: ${request.failure()?.errorText}`);
   });
   expect(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED).toBe("1");
-  expect(process.env.JARVIS_UAT_REAL_CHAT_PROVIDER ?? "codex").toBe("codex");
+  const provider = uatRealChatProvider() === "claude" ? "Claude" : "Codex";
   await signInUatAdmin(page);
   const model = await bringUpRealChatModel(page);
   expect(model.tier).toBe("economy");
-  console.info(`Real model proof: Codex economy model ${model.id}`);
-  test.info().annotations.push({ type: "real-model", description: `Codex: ${model.id}` });
+  console.info(`Real model proof: ${provider} economy model ${model.id}`);
+  test.info().annotations.push({ type: "real-model", description: `${provider}: ${model.id}` });
   await page.goto("/settings?section=alerts");
   await page.getByLabel("Quiet hours from").fill("00:00");
   await page.getByLabel("Quiet hours until").fill("23:59");
