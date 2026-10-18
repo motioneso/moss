@@ -60,9 +60,27 @@ test("an API-key provider drives drawer chat, asking only before a destructive a
     const { list } = (await readUatJson(created)) as { list: { id: string } };
 
     const turnResponse = sendTurn(drawer, page, `Delete my task list called "${LIST_NAME}".`);
-    const card = page.locator(ACTION_CARD).last();
+    const card = page.locator(ACTION_CARD).filter({ hasText: LIST_NAME });
     await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({ timeout: 180_000 });
-    await card.getByRole("button", { name: "Approve" }).click();
+    await expect(card).toHaveCount(1);
+    await expect(
+      card.getByRole("heading", { name: "Delete task list", exact: true })
+    ).toBeVisible();
+    await expect(card).toContainText(LIST_NAME);
+    const pendingLists = (await readUatJson(
+      await page.request.get(`${requireUatBaseURL()}/api/tasks/lists`)
+    )) as { lists: Array<{ id: string }> };
+    expect(
+      pendingLists.lists.some((entry) => entry.id === list.id),
+      "the intended list must still exist while deletion awaits approval"
+    ).toBe(true);
+    // Pin the request identity before approving so another card cannot replace this one.
+    const requestId = await card.getAttribute("data-action-request-id");
+    expect(requestId).toBeTruthy();
+    await page
+      .locator(`${ACTION_CARD}[data-action-request-id="${requestId}"]`)
+      .getByRole("button", { name: "Approve" })
+      .click();
 
     const response = await turnResponse;
     expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);

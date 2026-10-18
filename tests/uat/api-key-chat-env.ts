@@ -1,7 +1,19 @@
-import { readSecretFile } from "../../scripts/dev-instance/secrets.js";
+import { stat } from "node:fs/promises";
+import { resolve } from "node:path";
 import { API_KEY_CHAT_SEED_ENV, type ApiKeyChatSeed } from "./seed/types.js";
 
-export type { ApiKeyChatSeed };
+export type ApiKeyChatUatProvider = Omit<ApiKeyChatSeed, "apiKey"> & { readonly keyFile: string };
+
+export const API_KEY_CHAT_CONTAINER_KEY_FILE = "/run/secrets/moss-uat-chat-key";
+
+async function checkKeyFile(path: string): Promise<void> {
+  const info = await stat(path);
+  if (!info.isFile() || (info.mode & 0o077) !== 0) {
+    throw new Error(
+      `The file named by ${API_KEY_CHAT_UAT_ENV.keyFile} must be a regular file with owner-only permissions`
+    );
+  }
+}
 
 /** #3410: host settings for the opt-in API-key chat UAT. All four, or none. */
 export const API_KEY_CHAT_UAT_ENV = {
@@ -24,8 +36,8 @@ export function apiKeyChatUatConfigured(env: NodeJS.ProcessEnv): boolean {
 /** Errors name variables only. Values can be private addresses or paths. */
 export async function readApiKeyChatUatProvider(
   env: NodeJS.ProcessEnv,
-  readKeyFile: (path: string) => Promise<string> = readSecretFile
-): Promise<ApiKeyChatSeed | undefined> {
+  checkFile: (path: string) => Promise<void> = checkKeyFile
+): Promise<ApiKeyChatUatProvider | undefined> {
   const missing = NAMES.filter((name) => value(env, name) === "");
   if (missing.length === NAMES.length) return undefined;
   if (missing.length > 0) {
@@ -40,17 +52,15 @@ export async function readApiKeyChatUatProvider(
   if (!/^https?:\/\//.test(baseUrl)) {
     throw new Error(`${API_KEY_CHAT_UAT_ENV.baseUrl} must start with http:// or https://`);
   }
-  const apiKey = (await readKeyFile(value(env, API_KEY_CHAT_UAT_ENV.keyFile))).trim();
-  if (apiKey === "") {
-    throw new Error(`The file named by ${API_KEY_CHAT_UAT_ENV.keyFile} is empty`);
-  }
-
-  return { providerKind: kind, baseUrl, model: value(env, API_KEY_CHAT_UAT_ENV.model), apiKey };
+  const keyFile = resolve(value(env, API_KEY_CHAT_UAT_ENV.keyFile));
+  await checkFile(keyFile);
+  return { providerKind: kind, baseUrl, model: value(env, API_KEY_CHAT_UAT_ENV.model), keyFile };
 }
 
-/** Always passed, empty means off. The key is a name-only flag. */
-export function apiKeyChatSeedArgs(seed: ApiKeyChatSeed | undefined): string[] {
+/** Only the seed container receives the read-only mount; environment carries its path. */
+export function apiKeyChatSeedArgs(seed: ApiKeyChatUatProvider | undefined): string[] {
   return [
+    ...(seed ? ["--volume", `${seed.keyFile}:${API_KEY_CHAT_CONTAINER_KEY_FILE}:ro`] : []),
     "-e",
     `${API_KEY_CHAT_SEED_ENV.kind}=${seed?.providerKind ?? ""}`,
     "-e",
@@ -58,14 +68,13 @@ export function apiKeyChatSeedArgs(seed: ApiKeyChatSeed | undefined): string[] {
     "-e",
     `${API_KEY_CHAT_SEED_ENV.model}=${seed?.model ?? ""}`,
     "-e",
-    API_KEY_CHAT_SEED_ENV.key
+    `${API_KEY_CHAT_SEED_ENV.keyFile}=${seed ? API_KEY_CHAT_CONTAINER_KEY_FILE : ""}`
   ];
 }
 
-/** The docker child env. The key is set last, so a stray host value never leaks through. */
-export function apiKeyChatSeedProcessEnv(
-  seed: ApiKeyChatSeed | undefined,
-  base: NodeJS.ProcessEnv = process.env
-): NodeJS.ProcessEnv {
-  return { ...base, [API_KEY_CHAT_SEED_ENV.key]: seed?.apiKey ?? "" };
+/** Remove the obsolete plaintext-key variable even if the caller inherited it. */
+export function apiKeyChatSeedProcessEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = { ...base };
+  delete env.MOSS_UAT_API_KEY_CHAT_KEY;
+  return env;
 }

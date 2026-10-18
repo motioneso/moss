@@ -4,7 +4,7 @@
 
 **Goal:** Let a dev instance register an API-key provider (for example, a local model proxy) as its default chat provider from environment variables, and let one opt-in UAT spec prove chat with a confirmation card through such a provider.
 
-**Architecture:** The dev-instance config gains three fields read from `MOSS_DEV_INSTANCE_PROVIDER_AUTH`, `_BASE_URL` and `_KEY_FILE`. When auth is `api_key`, the provision step creates or updates one named API-key row, runs the normal model discovery, makes it the instance default and skips the CLI token step. For UAT, one spec opts in through its `uatLevel`; the host reads four `MOSS_UAT_CHAT_PROVIDER_*` variables, and the seed container receives the key by variable name only, so it never lands in an argv or an error message.
+**Architecture:** The dev-instance config gains three fields read from `MOSS_DEV_INSTANCE_PROVIDER_AUTH`, `_BASE_URL` and `_KEY_FILE`. When auth is `api_key`, the provision step creates or updates one named API-key row, runs the normal model discovery, makes it the instance default and skips the CLI token step. For UAT, one spec opts in through its `uatLevel`; the host reads four `MOSS_UAT_CHAT_PROVIDER_*` variables, and the seed container receives a read-only mount of the restricted-permission key file. Only the container path is passed in its environment; the host does not read the key contents.
 
 **Tech Stack:** TypeScript (strict), Node 24, Vitest, Playwright, Docker Compose, pnpm workspaces (`@moss/*`).
 
@@ -1109,11 +1109,11 @@ Host variables (set by whoever runs the UAT):
 
 **Interfaces:**
 
-- Consumes: `readSecretFile(path)` from `scripts/dev-instance/secrets.ts`.
+- Consumes: `stat(path)` on the host; `readSecretFile(path)` from `scripts/dev-instance/secrets.ts` only inside the seed container.
 - Produces:
-  - In `tests/uat/seed/types.ts`: `API_KEY_CHAT_SEED_ENV = { kind: "MOSS_UAT_API_KEY_CHAT_KIND", baseUrl: "MOSS_UAT_API_KEY_CHAT_BASE_URL", model: "MOSS_UAT_API_KEY_CHAT_MODEL", key: "MOSS_UAT_API_KEY_CHAT_KEY" }` and `ApiKeyChatSeed { providerKind: "anthropic" | "openai-compatible"; baseUrl: string; model: string; apiKey: string }`.
-  - In `tests/uat/api-key-chat-env.ts`: `API_KEY_CHAT_UAT_ENV`, `apiKeyChatUatConfigured(env): boolean`, `readApiKeyChatUatProvider(env, readKeyFile?): Promise<ApiKeyChatSeed | undefined>`, `apiKeyChatSeedArgs(seed?): string[]`, `apiKeyChatSeedProcessEnv(seed?, base?): NodeJS.ProcessEnv`.
-  - `UatProvisionOptions.withApiKeyChatProvider?: boolean`; seed hook ctx `apiKeyChat?: ApiKeyChatSeed`; `buildSeedHookInput(..., apiKeyChat?)` as its seventh parameter.
+  - In `tests/uat/seed/types.ts`: `API_KEY_CHAT_SEED_ENV = { kind: "MOSS_UAT_API_KEY_CHAT_KIND", baseUrl: "MOSS_UAT_API_KEY_CHAT_BASE_URL", model: "MOSS_UAT_API_KEY_CHAT_MODEL", keyFile: "MOSS_UAT_API_KEY_CHAT_KEY_FILE" }` and `ApiKeyChatSeed { providerKind: "anthropic" | "openai-compatible"; baseUrl: string; model: string; apiKey: string }`.
+  - In `tests/uat/api-key-chat-env.ts`: `API_KEY_CHAT_UAT_ENV`, `apiKeyChatUatConfigured(env): boolean`, `ApiKeyChatUatProvider = Omit<ApiKeyChatSeed, "apiKey"> & { keyFile: string }`, `readApiKeyChatUatProvider(env, checkFile?): Promise<ApiKeyChatUatProvider | undefined>`, `apiKeyChatSeedArgs(seed?): string[]`, `apiKeyChatSeedProcessEnv(base?): NodeJS.ProcessEnv`.
+  - `UatProvisionOptions.withApiKeyChatProvider?: boolean`; seed hook ctx `apiKeyChat?: ApiKeyChatUatProvider`; `buildSeedHookInput(..., apiKeyChat?)` as its seventh parameter.
   - `uatLevel` key `withApiKeyChatProvider: true`, parsed as the last optional key.
 
 - [ ] **Step 1: Add the host-gateway name**
@@ -1133,10 +1133,15 @@ The api and the cli-runner both run in the `jarv1s` container, so this one entry
 Create `tests/uat/api-key-chat-env.test.ts`:
 
 ```ts
+import { mkdtemp, writeFile, chmod, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   API_KEY_CHAT_UAT_ENV,
+  API_KEY_CHAT_CONTAINER_KEY_FILE,
   apiKeyChatSeedArgs,
   apiKeyChatSeedProcessEnv,
   apiKeyChatUatConfigured,
@@ -1150,21 +1155,21 @@ const FULL = {
   [API_KEY_CHAT_UAT_ENV.model]: "ada-model",
   [API_KEY_CHAT_UAT_ENV.keyFile]: "/tmp/ada-uat-key"
 };
-const readKey = async () => `${KEY}\n`;
+const checkFile = async () => {};
 
 describe("API-key chat UAT settings (#3410)", () => {
   it("is off when none of the four variables is set", async () => {
     expect(apiKeyChatUatConfigured({})).toBe(false);
-    await expect(readApiKeyChatUatProvider({}, readKey)).resolves.toBeUndefined();
+    await expect(readApiKeyChatUatProvider({}, checkFile)).resolves.toBeUndefined();
   });
 
-  it("reads all four and trims the key", async () => {
+  it("reads all four without loading the key on the host", async () => {
     expect(apiKeyChatUatConfigured(FULL)).toBe(true);
-    await expect(readApiKeyChatUatProvider(FULL, readKey)).resolves.toEqual({
+    await expect(readApiKeyChatUatProvider(FULL, checkFile)).resolves.toEqual({
       providerKind: "openai-compatible",
       baseUrl: "http://proxy.test",
       model: "ada-model",
-      apiKey: KEY
+      keyFile: FULL[API_KEY_CHAT_UAT_ENV.keyFile]
     });
   });
 
@@ -1172,7 +1177,7 @@ describe("API-key chat UAT settings (#3410)", () => {
     const partial = { ...FULL, [API_KEY_CHAT_UAT_ENV.model]: "" };
     expect(apiKeyChatUatConfigured(partial)).toBe(false);
 
-    const error = await readApiKeyChatUatProvider(partial, readKey).catch((e: unknown) => e);
+    const error = await readApiKeyChatUatProvider(partial, checkFile).catch((e: unknown) => e);
 
     expect((error as Error).message).toContain(API_KEY_CHAT_UAT_ENV.model);
     expect((error as Error).message).not.toContain("http://proxy.test");
@@ -1181,31 +1186,46 @@ describe("API-key chat UAT settings (#3410)", () => {
 
   it("refuses a kind chat cannot drive", async () => {
     await expect(
-      readApiKeyChatUatProvider({ ...FULL, [API_KEY_CHAT_UAT_ENV.kind]: "google" }, readKey)
+      readApiKeyChatUatProvider({ ...FULL, [API_KEY_CHAT_UAT_ENV.kind]: "google" }, checkFile)
     ).rejects.toThrow(/anthropic or openai-compatible/);
   });
 
   it("refuses an address that is not http or https", async () => {
     await expect(
-      readApiKeyChatUatProvider({ ...FULL, [API_KEY_CHAT_UAT_ENV.baseUrl]: "proxy.test" }, readKey)
+      readApiKeyChatUatProvider(
+        { ...FULL, [API_KEY_CHAT_UAT_ENV.baseUrl]: "proxy.test" },
+        checkFile
+      )
     ).rejects.toThrow(/http:\/\/ or https:\/\//);
   });
 
-  it("refuses an empty key file", async () => {
-    await expect(readApiKeyChatUatProvider(FULL, async () => "\n")).rejects.toThrow(/is empty/);
+  it("accepts a restricted file and refuses group-readable files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "uat-key-settings-"));
+    const keyFile = join(dir, "key");
+    try {
+      await writeFile(keyFile, KEY, { mode: 0o600 });
+      const env = { ...FULL, [API_KEY_CHAT_UAT_ENV.keyFile]: keyFile };
+      await expect(readApiKeyChatUatProvider(env)).resolves.toMatchObject({ keyFile });
+      await chmod(keyFile, 0o640);
+      await expect(readApiKeyChatUatProvider(env)).rejects.toThrow(/owner-only/);
+      await expect(
+        readApiKeyChatUatProvider({ ...env, [API_KEY_CHAT_UAT_ENV.keyFile]: dir })
+      ).rejects.toThrow(/regular file/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
-  it("builds seed args that carry the key by name only", () => {
+  it("mounts the file read-only and passes only its container path", () => {
     const seed = {
       providerKind: "anthropic",
       baseUrl: "http://proxy.test",
       model: "ada-model",
-      apiKey: KEY
+      keyFile: FULL[API_KEY_CHAT_UAT_ENV.keyFile]
     } as const;
-
-    const args = apiKeyChatSeedArgs(seed);
-
-    expect(args).toEqual([
+    expect(apiKeyChatSeedArgs(seed)).toEqual([
+      "--volume",
+      `${seed.keyFile}:${API_KEY_CHAT_CONTAINER_KEY_FILE}:ro`,
       "-e",
       "MOSS_UAT_API_KEY_CHAT_KIND=anthropic",
       "-e",
@@ -1213,17 +1233,16 @@ describe("API-key chat UAT settings (#3410)", () => {
       "-e",
       "MOSS_UAT_API_KEY_CHAT_MODEL=ada-model",
       "-e",
-      "MOSS_UAT_API_KEY_CHAT_KEY"
+      `MOSS_UAT_API_KEY_CHAT_KEY_FILE=${API_KEY_CHAT_CONTAINER_KEY_FILE}`
     ]);
-    expect(apiKeyChatSeedProcessEnv(seed, {}).MOSS_UAT_API_KEY_CHAT_KEY).toBe(KEY);
   });
 
-  it("blanks the seed key when not opted in, even if the base env has one", () => {
-    expect(
-      apiKeyChatSeedProcessEnv(undefined, { MOSS_UAT_API_KEY_CHAT_KEY: "stray" })
-        .MOSS_UAT_API_KEY_CHAT_KEY
-    ).toBe("");
-    expect(apiKeyChatSeedArgs(undefined)).toContain("MOSS_UAT_API_KEY_CHAT_KIND=");
+  it("removes an inherited plaintext key and does not mount anything when off", () => {
+    const base = { MOSS_UAT_API_KEY_CHAT_KEY: KEY, PATH: "/usr/bin" };
+    expect(apiKeyChatSeedProcessEnv(base)).toEqual({ PATH: "/usr/bin" });
+    expect(base.MOSS_UAT_API_KEY_CHAT_KEY).toBe(KEY);
+    expect(apiKeyChatSeedArgs(undefined)).toContain("MOSS_UAT_API_KEY_CHAT_KEY_FILE=");
+    expect(apiKeyChatSeedArgs(undefined)).not.toContain("--volume");
   });
 });
 ```
@@ -1239,14 +1258,14 @@ Append to `tests/uat/seed/types.ts`:
 
 ```ts
 /**
- * #3410: seed-container variables for the opt-in API-key chat provider. The key travels as a
- * name-only `-e` flag with its value in the docker child env, so it never appears in argv.
+ * #3410: seed-container variables for the opt-in API-key chat provider. The key file is
+ * mounted read-only; only its container path travels in the environment.
  */
 export const API_KEY_CHAT_SEED_ENV = {
   kind: "MOSS_UAT_API_KEY_CHAT_KIND",
   baseUrl: "MOSS_UAT_API_KEY_CHAT_BASE_URL",
   model: "MOSS_UAT_API_KEY_CHAT_MODEL",
-  key: "MOSS_UAT_API_KEY_CHAT_KEY"
+  keyFile: "MOSS_UAT_API_KEY_CHAT_KEY_FILE"
 } as const;
 
 export interface ApiKeyChatSeed {
@@ -1262,8 +1281,22 @@ export interface ApiKeyChatSeed {
 Create `tests/uat/api-key-chat-env.ts`:
 
 ```ts
-import { readSecretFile } from "../../scripts/dev-instance/secrets.js";
+import { stat } from "node:fs/promises";
+import { resolve } from "node:path";
 import { API_KEY_CHAT_SEED_ENV, type ApiKeyChatSeed } from "./seed/types.js";
+
+export type ApiKeyChatUatProvider = Omit<ApiKeyChatSeed, "apiKey"> & { readonly keyFile: string };
+
+export const API_KEY_CHAT_CONTAINER_KEY_FILE = "/run/secrets/moss-uat-chat-key";
+
+async function checkKeyFile(path: string): Promise<void> {
+  const info = await stat(path);
+  if (!info.isFile() || (info.mode & 0o077) !== 0) {
+    throw new Error(
+      `The file named by ${API_KEY_CHAT_UAT_ENV.keyFile} must be a regular file with owner-only permissions`
+    );
+  }
+}
 
 /** #3410: host settings for the opt-in API-key chat UAT. All four, or none. */
 export const API_KEY_CHAT_UAT_ENV = {
@@ -1286,8 +1319,8 @@ export function apiKeyChatUatConfigured(env: NodeJS.ProcessEnv): boolean {
 /** Errors name variables only. Values can be private addresses or paths. */
 export async function readApiKeyChatUatProvider(
   env: NodeJS.ProcessEnv,
-  readKeyFile: (path: string) => Promise<string> = readSecretFile
-): Promise<ApiKeyChatSeed | undefined> {
+  checkFile: (path: string) => Promise<void> = checkKeyFile
+): Promise<ApiKeyChatUatProvider | undefined> {
   const missing = NAMES.filter((name) => value(env, name) === "");
   if (missing.length === NAMES.length) return undefined;
   if (missing.length > 0) {
@@ -1302,17 +1335,15 @@ export async function readApiKeyChatUatProvider(
   if (!/^https?:\/\//.test(baseUrl)) {
     throw new Error(`${API_KEY_CHAT_UAT_ENV.baseUrl} must start with http:// or https://`);
   }
-  const apiKey = (await readKeyFile(value(env, API_KEY_CHAT_UAT_ENV.keyFile))).trim();
-  if (apiKey === "") {
-    throw new Error(`The file named by ${API_KEY_CHAT_UAT_ENV.keyFile} is empty`);
-  }
-
-  return { providerKind: kind, baseUrl, model: value(env, API_KEY_CHAT_UAT_ENV.model), apiKey };
+  const keyFile = resolve(value(env, API_KEY_CHAT_UAT_ENV.keyFile));
+  await checkFile(keyFile);
+  return { providerKind: kind, baseUrl, model: value(env, API_KEY_CHAT_UAT_ENV.model), keyFile };
 }
 
-/** Always passed, empty means off. The key is a name-only flag. */
-export function apiKeyChatSeedArgs(seed: ApiKeyChatSeed | undefined): string[] {
+/** Only the seed container receives the read-only mount; environment carries its path. */
+export function apiKeyChatSeedArgs(seed: ApiKeyChatUatProvider | undefined): string[] {
   return [
+    ...(seed ? ["--volume", `${seed.keyFile}:${API_KEY_CHAT_CONTAINER_KEY_FILE}:ro`] : []),
     "-e",
     `${API_KEY_CHAT_SEED_ENV.kind}=${seed?.providerKind ?? ""}`,
     "-e",
@@ -1320,16 +1351,15 @@ export function apiKeyChatSeedArgs(seed: ApiKeyChatSeed | undefined): string[] {
     "-e",
     `${API_KEY_CHAT_SEED_ENV.model}=${seed?.model ?? ""}`,
     "-e",
-    API_KEY_CHAT_SEED_ENV.key
+    `${API_KEY_CHAT_SEED_ENV.keyFile}=${seed ? API_KEY_CHAT_CONTAINER_KEY_FILE : ""}`
   ];
 }
 
-/** The docker child env. The key is set last, so a stray host value never leaks through. */
-export function apiKeyChatSeedProcessEnv(
-  seed: ApiKeyChatSeed | undefined,
-  base: NodeJS.ProcessEnv = process.env
-): NodeJS.ProcessEnv {
-  return { ...base, [API_KEY_CHAT_SEED_ENV.key]: seed?.apiKey ?? "" };
+/** Remove the obsolete plaintext-key variable even if the caller inherited it. */
+export function apiKeyChatSeedProcessEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = { ...base };
+  delete env.MOSS_UAT_API_KEY_CHAT_KEY;
+  return env;
 }
 ```
 
@@ -1349,7 +1379,7 @@ describe("#3410: API-key chat seed values", () => {
     providerKind: "openai-compatible",
     baseUrl: "http://proxy.test",
     model: "ada-model",
-    apiKey: KEY
+    keyFile: "/tmp/ada-uat-key"
   } as const;
 
   function spawnExits(code: number): void {
@@ -1369,17 +1399,19 @@ describe("#3410: API-key chat seed values", () => {
     delete process.env.MOSS_UAT_API_KEY_CHAT_KEY;
   });
 
-  it("passes the key by name only and puts its value in the child env", async () => {
+  it("mounts the key read-only and keeps its value out of child arguments and environment", async () => {
     spawnExits(0);
 
+    process.env.MOSS_UAT_API_KEY_CHAT_KEY = KEY;
     await composeSeedHook({ projectName: "proj", level: "admin+data", apiKeyChat: seed });
 
     const args = mocks.spawn.mock.calls[0]?.[1] as string[];
     const options = mocks.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
     expect(args.join(" ")).not.toContain(KEY);
-    expect(args).toContain("MOSS_UAT_API_KEY_CHAT_KEY");
+    expect(args).toContain("/tmp/ada-uat-key:/run/secrets/moss-uat-chat-key:ro");
+    expect(args).toContain("MOSS_UAT_API_KEY_CHAT_KEY_FILE=/run/secrets/moss-uat-chat-key");
     expect(args).toContain("MOSS_UAT_API_KEY_CHAT_MODEL=ada-model");
-    expect(options.env?.MOSS_UAT_API_KEY_CHAT_KEY).toBe(KEY);
+    expect(Object.values(options.env ?? {}).some((value) => value?.includes(KEY))).toBe(false);
   });
 
   it("keeps the key out of the failure message", async () => {
@@ -1395,19 +1427,20 @@ describe("#3410: API-key chat seed values", () => {
     expect((error as Error).message).not.toContain(KEY);
   });
 
-  it("sends an empty key when the spec did not opt in", async () => {
+  it("removes an inherited plaintext key when the spec did not opt in", async () => {
     spawnExits(0);
     process.env.MOSS_UAT_API_KEY_CHAT_KEY = "stray-host-value";
 
     await composeSeedHook({ projectName: "proj", level: "admin+data" });
 
     const options = mocks.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
-    expect(options.env?.MOSS_UAT_API_KEY_CHAT_KEY).toBe("");
+    expect(options.env).not.toHaveProperty("MOSS_UAT_API_KEY_CHAT_KEY");
   });
 
   it("buildSeedHookInput threads the seed value", () => {
     expect(
-      buildSeedHookInput("proj", "admin+data", {}, undefined, undefined, undefined, seed).apiKeyChat
+      buildSeedHookInput("proj", "admin+data", {}, undefined, undefined, undefined, undefined, seed)
+        .apiKeyChat
     ).toBe(seed);
     expect(buildSeedHookInput("proj", "admin+data", {}).apiKeyChat).toBeUndefined();
   });
@@ -1431,14 +1464,14 @@ import {
   apiKeyChatSeedProcessEnv,
   readApiKeyChatUatProvider
 } from "./api-key-chat-env.js";
-import type { ApiKeyChatSeed } from "./seed/types.js";
+import type { ApiKeyChatUatProvider } from "./api-key-chat-env.js";
 ```
 
 In the `SeedHook` ctx type, after `readonly chatScript?: string;`:
 
 ```ts
-  /** #3410: opt-in API-key chat provider. The key reaches the seed container by env only. */
-  readonly apiKeyChat?: ApiKeyChatSeed;
+  /** #3410: opt-in API-key chat provider. Mount the restricted-permission key file read-only into the seed container. */
+  readonly apiKeyChat?: ApiKeyChatUatProvider;
 ```
 
 In `composeSeedHook`, add `apiKeyChat` to the destructured parameters after `chatScript`. Insert the seed args before the confirm flag, and pass the child env as the third `runCommand` argument:
@@ -1450,7 +1483,7 @@ In `composeSeedHook`, add `apiKeyChat` to the destructured parameters after `cha
       "JARVIS_UAT_SEED_CONFIRM=1",
       "seed"
     ]),
-    apiKeyChatSeedProcessEnv(apiKeyChat)
+    apiKeyChatSeedProcessEnv()
   );
 ```
 
@@ -1483,11 +1516,11 @@ In `UatProvisionOptions`, after `withClassifierMcpFixture`:
 In `buildSeedHookInput`, add a seventh parameter after `classifierFixtureAiProviderBaseUrl?: string`, add the field to the return type after `chatScript?: string;`, and to the returned object after `chatScript: opts?.chatScript`:
 
 ```ts
-  apiKeyChat?: ApiKeyChatSeed
+  apiKeyChat?: ApiKeyChatUatProvider
 ```
 
 ```ts
-  apiKeyChat?: ApiKeyChatSeed;
+  apiKeyChat?: ApiKeyChatUatProvider;
 ```
 
 ```ts
@@ -1516,27 +1549,13 @@ Expected: PASS, all cases.
 Run: `wc -l tests/uat/provisioner.ts`
 Expected: under 1000 (about 985).
 
-- [ ] **Step 11: Removal step (key by name only)**
+- [ ] **Step 11: Removal step (read-only mount)**
 
-Temporarily change the last entry of `apiKeyChatSeedArgs` to carry the value:
+Temporarily remove `:ro` from the bind mount in `apiKeyChatSeedArgs`. Run `pnpm test:unit tests/uat/provisioner.test.ts`; the read-only mount assertion must fail. Restore the flag and rerun to PASS.
 
-```ts
-`${API_KEY_CHAT_SEED_ENV.key}=${seed?.apiKey ?? ""}`;
-```
+- [ ] **Step 12: Removal step (inherited plaintext key removed)**
 
-Run: `pnpm test:unit tests/uat/provisioner.test.ts`
-Expected: FAIL on "passes the key by name only" and "keeps the key out of the failure message". Revert and rerun to PASS.
-
-- [ ] **Step 12: Removal step (stray host key blanked)**
-
-Temporarily swap the spread order in `apiKeyChatSeedProcessEnv` so the base env wins:
-
-```ts
-return { [API_KEY_CHAT_SEED_ENV.key]: seed?.apiKey ?? "", ...base };
-```
-
-Run: `pnpm test:unit tests/uat/provisioner.test.ts`
-Expected: FAIL on "sends an empty key when the spec did not opt in". Revert and rerun to PASS.
+Temporarily remove `delete env.MOSS_UAT_API_KEY_CHAT_KEY` from `apiKeyChatSeedProcessEnv`. Run `pnpm test:unit tests/uat/provisioner.test.ts`; the child-environment and opt-out assertions must fail. Restore the removal and rerun to PASS. The review fix also observed the child-environment assertion fail against the original implementation before changing it.
 
 - [ ] **Step 13: Write the failing runner test**
 
@@ -1589,7 +1608,7 @@ Expected: PASS, all cases.
 git add tests/uat/compose.override.yml tests/uat/api-key-chat-env.ts \
   tests/uat/api-key-chat-env.test.ts tests/uat/seed/types.ts tests/uat/provisioner.ts \
   tests/uat/provisioner.test.ts tests/uat/run-uat.ts tests/uat/run-uat.test.ts
-git commit -m "test(uat): opt-in API-key chat seed plumbing with name-only key passing (#3410)"
+git commit -m "test(uat): opt-in API-key chat seed plumbing with read-only key file passing (#3410)"
 ```
 
 ### Task 20: Seed the API-key chat provider and the live UAT spec
@@ -1607,14 +1626,18 @@ git commit -m "test(uat): opt-in API-key chat seed plumbing with name-only key p
 **Interfaces:**
 
 - Consumes: Task 19's `API_KEY_CHAT_SEED_ENV`, `ApiKeyChatSeed`, `apiKeyChatUatConfigured`, the `withApiKeyChatProvider` key. Main plan Task 12 (chat accepts API-key rows).
-- Produces: `parseApiKeyChatSeed(env): ApiKeyChatSeed | undefined`, `seedApiKeyChatProviderChunk(runner, actorUserId, seed): Promise<void>`, `UAT_API_KEY_CHAT_PROVIDER_NAME = "UAT API-key chat provider"`, `SeedOptions.apiKeyChat?: ApiKeyChatSeed`.
+- Produces: `parseApiKeyChatSeed(env): Promise<ApiKeyChatSeed | undefined>`, `seedApiKeyChatProviderChunk(runner, actorUserId, seed): Promise<void>`, `UAT_API_KEY_CHAT_PROVIDER_NAME = "UAT API-key chat provider"`, `SeedOptions.apiKeyChat?: ApiKeyChatSeed`.
 
 - [ ] **Step 1: Write the failing parse test**
 
 Create `tests/uat/seed/chunks/api-key-chat-parse.test.ts`:
 
 ```ts
-import { describe, expect, it } from "vitest";
+import { mkdtemp, writeFile, chmod, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
 import { parseApiKeyChatSeed } from "./api-key-chat.js";
 
@@ -1623,23 +1646,32 @@ const FULL = {
   MOSS_UAT_API_KEY_CHAT_KIND: "openai-compatible",
   MOSS_UAT_API_KEY_CHAT_BASE_URL: "http://proxy.test",
   MOSS_UAT_API_KEY_CHAT_MODEL: "ada-model",
-  MOSS_UAT_API_KEY_CHAT_KEY: KEY
+  MOSS_UAT_API_KEY_CHAT_KEY_FILE: ""
 };
 
 describe("parseApiKeyChatSeed (#3410)", () => {
-  it("is off when every value is empty, as the seed hook sends them", () => {
-    expect(
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "uat-seed-key-"));
+    FULL.MOSS_UAT_API_KEY_CHAT_KEY_FILE = join(dir, "key");
+    await writeFile(FULL.MOSS_UAT_API_KEY_CHAT_KEY_FILE, `${KEY}\n`, { mode: 0o600 });
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  it("is off when every value is empty, as the seed hook sends them", async () => {
+    await expect(
       parseApiKeyChatSeed({
         MOSS_UAT_API_KEY_CHAT_KIND: "",
         MOSS_UAT_API_KEY_CHAT_BASE_URL: "",
         MOSS_UAT_API_KEY_CHAT_MODEL: "",
-        MOSS_UAT_API_KEY_CHAT_KEY: ""
+        MOSS_UAT_API_KEY_CHAT_KEY_FILE: ""
       })
-    ).toBeUndefined();
+    ).resolves.toBeUndefined();
   });
 
-  it("returns the seed when all four are set", () => {
-    expect(parseApiKeyChatSeed(FULL)).toEqual({
+  it("returns the seed when all four are set", async () => {
+    await expect(parseApiKeyChatSeed(FULL)).resolves.toEqual({
       providerKind: "openai-compatible",
       baseUrl: "http://proxy.test",
       model: "ada-model",
@@ -1647,10 +1679,10 @@ describe("parseApiKeyChatSeed (#3410)", () => {
     });
   });
 
-  it("refuses a partial set without echoing any value", () => {
+  it("refuses a partial set without echoing any value", async () => {
     let message = "";
     try {
-      parseApiKeyChatSeed({ ...FULL, MOSS_UAT_API_KEY_CHAT_MODEL: "" });
+      await parseApiKeyChatSeed({ ...FULL, MOSS_UAT_API_KEY_CHAT_MODEL: "" });
     } catch (error) {
       message = (error as Error).message;
     }
@@ -1659,10 +1691,17 @@ describe("parseApiKeyChatSeed (#3410)", () => {
     expect(message).not.toContain("http://proxy.test");
   });
 
-  it("refuses a kind chat cannot drive", () => {
-    expect(() => parseApiKeyChatSeed({ ...FULL, MOSS_UAT_API_KEY_CHAT_KIND: "google" })).toThrow(
-      /anthropic or openai-compatible/
-    );
+  it("refuses a kind chat cannot drive", async () => {
+    await expect(
+      parseApiKeyChatSeed({ ...FULL, MOSS_UAT_API_KEY_CHAT_KIND: "google" })
+    ).rejects.toThrow(/anthropic or openai-compatible/);
+  });
+  it("refuses empty and broadly readable key files", async () => {
+    await writeFile(FULL.MOSS_UAT_API_KEY_CHAT_KEY_FILE, "\n");
+    await expect(parseApiKeyChatSeed(FULL)).rejects.toThrow(/is empty/);
+    await writeFile(FULL.MOSS_UAT_API_KEY_CHAT_KEY_FILE, KEY);
+    await chmod(FULL.MOSS_UAT_API_KEY_CHAT_KEY_FILE, 0o644);
+    await expect(parseApiKeyChatSeed(FULL)).rejects.toThrow(/permissions/);
   });
 });
 ```
@@ -1678,17 +1717,21 @@ Create `tests/uat/seed/chunks/api-key-chat.ts`:
 import { AiRepository, createAiSecretCipher } from "@moss/ai";
 import type { DataContextRunner } from "@moss/db";
 
+import { readSecretFile } from "../../../../scripts/dev-instance/secrets.js";
+
 import { API_KEY_CHAT_SEED_ENV, type ApiKeyChatSeed } from "../types.js";
 
 export const UAT_API_KEY_CHAT_PROVIDER_NAME = "UAT API-key chat provider";
 
 /** Reads the four seed variables. All empty means off. Errors never echo a value. */
-export function parseApiKeyChatSeed(env: NodeJS.ProcessEnv): ApiKeyChatSeed | undefined {
+export async function parseApiKeyChatSeed(
+  env: NodeJS.ProcessEnv
+): Promise<ApiKeyChatSeed | undefined> {
   const kind = env[API_KEY_CHAT_SEED_ENV.kind] ?? "";
   const baseUrl = env[API_KEY_CHAT_SEED_ENV.baseUrl] ?? "";
   const model = env[API_KEY_CHAT_SEED_ENV.model] ?? "";
-  const apiKey = env[API_KEY_CHAT_SEED_ENV.key] ?? "";
-  const values = [kind, baseUrl, model, apiKey];
+  const keyFile = env[API_KEY_CHAT_SEED_ENV.keyFile] ?? "";
+  const values = [kind, baseUrl, model, keyFile];
 
   if (values.every((entry) => entry === "")) return undefined;
   if (values.some((entry) => entry === "")) {
@@ -1698,6 +1741,10 @@ export function parseApiKeyChatSeed(env: NodeJS.ProcessEnv): ApiKeyChatSeed | un
   }
   if (kind !== "anthropic" && kind !== "openai-compatible") {
     throw new Error(`${API_KEY_CHAT_SEED_ENV.kind} must be anthropic or openai-compatible`);
+  }
+  const apiKey = (await readSecretFile(keyFile)).trim();
+  if (apiKey === "") {
+    throw new Error(`The file named by ${API_KEY_CHAT_SEED_ENV.keyFile} is empty`);
   }
   return { providerKind: kind, baseUrl, model, apiKey };
 }
@@ -1840,7 +1887,7 @@ After the `chatScript` constant:
 
 ```ts
 // #3410: all four empty (composeSeedHook always passes them) reads as absent.
-const apiKeyChat = parseApiKeyChatSeed(process.env);
+const apiKeyChat = await parseApiKeyChatSeed(process.env);
 ```
 
 Add `apiKeyChat` to the `seedLevel({...})` call after `chatScript`.
@@ -1869,10 +1916,11 @@ Create `tests/uat/specs/3410-api-key-chat.uat.spec.ts`:
 ```ts
 // tests/uat/specs/3410-api-key-chat.uat.spec.ts
 //
-// #3410 live path: with an API-key provider as the instance default, the chat drawer answers,
-// asks for confirmation before a write, and the approved task exists. Opt-in: runs only when the
-// four MOSS_UAT_CHAT_PROVIDER_* host variables are set and a relay answers on the bridge gateway.
-import { expect, test, type Locator } from "@playwright/test";
+// #3410 live path: with an API-key provider as the instance default, the chat drawer runs an
+// ordinary write (add a task) without asking and asks before a destructive one (delete a list).
+// Opt-in: runs only when the four MOSS_UAT_CHAT_PROVIDER_* host variables are set and a relay
+// answers on the bridge gateway.
+import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 
 import { apiKeyChatUatConfigured } from "../api-key-chat-env.js";
 import { readUatJson, requireUatBaseURL, signInUatAdmin } from "./real-chat-signin.js";
@@ -1885,8 +1933,9 @@ export const uatLevel = {
 
 const ACTION_CARD = '[role="region"][aria-label="Action request"]';
 const TASK_TITLE = "Ada's API-key chat task";
+const LIST_NAME = "Ada's API-key chat list";
 
-test("an API-key provider drives drawer chat through a confirmation card (#3410)", async ({
+test("an API-key provider drives drawer chat, asking only before a destructive action (#3410)", async ({
   page
 }) => {
   test.skip(
@@ -1903,26 +1952,9 @@ test("an API-key provider drives drawer chat through a confirmation card (#3410)
     await expect(drawer).toBeVisible({ timeout: 15_000 });
   });
 
-  await test.step("ask for a task and approve the confirmation card", async () => {
-    const composer = drawer.getByLabel("Message Moss");
-    await composer.fill(`Add a task called "${TASK_TITLE}".`);
-    const turnResponse = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
-        response.request().method() === "POST",
-      { timeout: 300_000 }
-    );
-    await composer.press("Enter");
-
-    const card = page.locator(ACTION_CARD).last();
-    await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({ timeout: 180_000 });
-    await card.getByRole("button", { name: "Approve" }).click();
-
-    const response = await turnResponse;
-    expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);
-  });
-
-  await test.step("the approved task exists", async () => {
+  await test.step("an ordinary write runs without a confirmation card", async () => {
+    await sendAndAwaitTurn(drawer, page, `Add a task called "${TASK_TITLE}".`);
+    await expect(page.locator(ACTION_CARD)).toHaveCount(0);
     await expect
       .poll(
         async () => {
@@ -1931,14 +1963,79 @@ test("an API-key provider drives drawer chat through a confirmation card (#3410)
           )) as { tasks: Array<{ title: string }> };
           return body.tasks.some((task) => task.title === TASK_TITLE);
         },
-        { timeout: 30_000, message: "the approved task never appeared" }
+        { timeout: 30_000, message: "the task never appeared" }
       )
       .toBe(true);
   });
+
+  await test.step("a destructive action asks first, and the approved delete happens", async () => {
+    const created = await page.request.post(`${requireUatBaseURL()}/api/tasks/lists`, {
+      data: { name: LIST_NAME }
+    });
+    expect(created.ok(), `create list -> ${created.status()}`).toBe(true);
+    const { list } = (await readUatJson(created)) as { list: { id: string } };
+
+    const turnResponse = sendTurn(drawer, page, `Delete my task list called "${LIST_NAME}".`);
+    const card = page.locator(ACTION_CARD).filter({ hasText: LIST_NAME });
+    await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({ timeout: 180_000 });
+    await expect(card).toHaveCount(1);
+    await expect(
+      card.getByRole("heading", { name: "Delete task list", exact: true })
+    ).toBeVisible();
+    await expect(card).toContainText(LIST_NAME);
+    const pendingLists = (await readUatJson(
+      await page.request.get(`${requireUatBaseURL()}/api/tasks/lists`)
+    )) as { lists: Array<{ id: string }> };
+    expect(
+      pendingLists.lists.some((entry) => entry.id === list.id),
+      "the intended list must still exist while deletion awaits approval"
+    ).toBe(true);
+    // Pin the request identity before approving so another card cannot replace this one.
+    const requestId = await card.getAttribute("data-action-request-id");
+    expect(requestId).toBeTruthy();
+    await page
+      .locator(`${ACTION_CARD}[data-action-request-id="${requestId}"]`)
+      .getByRole("button", { name: "Approve" })
+      .click();
+
+    const response = await turnResponse;
+    expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);
+    await expect
+      .poll(
+        async () => {
+          const body = (await readUatJson(
+            await page.request.get(`${requireUatBaseURL()}/api/tasks/lists`)
+          )) as { lists: Array<{ id: string }> };
+          return body.lists.some((entry) => entry.id === list.id);
+        },
+        { timeout: 30_000, message: "the approved delete never removed the list" }
+      )
+      .toBe(false);
+  });
 });
+
+// Registers the turn waiter before sending. The turn response arrives only after any approval,
+// so a caller that must approve awaits the returned promise after clicking.
+async function sendTurn(drawer: Locator, page: Page, text: string): Promise<Response> {
+  const composer = drawer.getByLabel("Message Moss");
+  await composer.fill(text);
+  const turnResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
+      response.request().method() === "POST",
+    { timeout: 300_000 }
+  );
+  await composer.press("Enter");
+  return turnResponse;
+}
+
+async function sendAndAwaitTurn(drawer: Locator, page: Page, text: string): Promise<void> {
+  const response = await sendTurn(drawer, page, text);
+  expect(response.status(), `chat turn -> ${response.status()}`).toBe(200);
+}
 ```
 
-**Correction (2026-10-18, live run through the relay):** adding a task never shows a confirmation card. Creating a task is an ordinary write, and ordinary writes run without asking; only destructive actions ask. The spec as written above waited three minutes for an Approve button that is correctly never shown, while chat had already added the task. The committed spec keeps the add-a-task step and asserts no card appears, then creates a task list through the API, asks chat to delete it (a destructive action), approves the card, and checks the list is gone.
+**Correction (2026-10-18, live run through the relay):** adding a task never shows a confirmation card. Creating a task is an ordinary write, and ordinary writes run without asking; only destructive actions ask. The earlier spec waited three minutes for an Approve button that is correctly never shown, while chat had already added the task. The committed spec keeps the add-a-task step and asserts no card appears, then creates a task list through the API, asks chat to delete it (a destructive action), checks the pending card names that deletion and the exact list ID still exists, approves that card, and checks the list is gone.
 
 - [ ] **Step 9: Type-check and rerun the pure tests**
 
@@ -2046,7 +2143,7 @@ Say that the proof used a stand-in local proxy that speaks Chat Completions. Nev
 
 ### Deviations from the spec, found in the code
 
-- The UAT key reaches the seed container through its environment, by variable name only, not through the generated env file. The env file feeds the long-running `jarv1s` service and the seed needs the key once (Task 19).
+- The UAT key file is mounted read-only into the seed container. Only its container path is passed through the environment; the key value is read inside the seed process. The generated env file and long-running `jarv1s` service do not receive this key (Task 19).
 - The UAT seed is opt-in per spec through `withApiKeyChatProvider`. Otherwise a host shell with the variables set would replace the default provider for every spec (Task 19).
 - The discovery helper was not exported from `@moss/ai`, so Task 18 exports it.
 - API-key discovery never deletes older model rows, so the discovery outcome now reports this run's chat ids and seeding checks against them (Task 18).

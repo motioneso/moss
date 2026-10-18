@@ -231,7 +231,7 @@ describe("#3410: API-key chat seed values", () => {
     providerKind: "openai-compatible",
     baseUrl: "http://proxy.test",
     model: "ada-model",
-    apiKey: KEY
+    keyFile: "/tmp/ada-uat-key"
   } as const;
 
   function spawnExits(code: number): void {
@@ -251,17 +251,19 @@ describe("#3410: API-key chat seed values", () => {
     delete process.env.MOSS_UAT_API_KEY_CHAT_KEY;
   });
 
-  it("passes the key by name only and puts its value in the child env", async () => {
+  it("mounts the key read-only and keeps its value out of child arguments and environment", async () => {
     spawnExits(0);
 
+    process.env.MOSS_UAT_API_KEY_CHAT_KEY = KEY;
     await composeSeedHook({ projectName: "proj", level: "admin+data", apiKeyChat: seed });
 
     const args = mocks.spawn.mock.calls[0]?.[1] as string[];
     const options = mocks.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
     expect(args.join(" ")).not.toContain(KEY);
-    expect(args).toContain("MOSS_UAT_API_KEY_CHAT_KEY");
+    expect(args).toContain("/tmp/ada-uat-key:/run/secrets/moss-uat-chat-key:ro");
+    expect(args).toContain("MOSS_UAT_API_KEY_CHAT_KEY_FILE=/run/secrets/moss-uat-chat-key");
     expect(args).toContain("MOSS_UAT_API_KEY_CHAT_MODEL=ada-model");
-    expect(options.env?.MOSS_UAT_API_KEY_CHAT_KEY).toBe(KEY);
+    expect(Object.values(options.env ?? {}).some((value) => value?.includes(KEY))).toBe(false);
   });
 
   it("keeps the key out of the failure message", async () => {
@@ -277,14 +279,14 @@ describe("#3410: API-key chat seed values", () => {
     expect((error as Error).message).not.toContain(KEY);
   });
 
-  it("sends an empty key when the spec did not opt in", async () => {
+  it("removes an inherited plaintext key when the spec did not opt in", async () => {
     spawnExits(0);
     process.env.MOSS_UAT_API_KEY_CHAT_KEY = "stray-host-value";
 
     await composeSeedHook({ projectName: "proj", level: "admin+data" });
 
     const options = mocks.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
-    expect(options.env?.MOSS_UAT_API_KEY_CHAT_KEY).toBe("");
+    expect(options.env).not.toHaveProperty("MOSS_UAT_API_KEY_CHAT_KEY");
   });
 
   it("buildSeedHookInput threads the seed value", () => {

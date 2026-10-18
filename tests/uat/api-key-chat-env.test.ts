@@ -1,7 +1,12 @@
+import { mkdtemp, writeFile, chmod, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   API_KEY_CHAT_UAT_ENV,
+  API_KEY_CHAT_CONTAINER_KEY_FILE,
   apiKeyChatSeedArgs,
   apiKeyChatSeedProcessEnv,
   apiKeyChatUatConfigured,
@@ -15,21 +20,21 @@ const FULL = {
   [API_KEY_CHAT_UAT_ENV.model]: "ada-model",
   [API_KEY_CHAT_UAT_ENV.keyFile]: "/tmp/ada-uat-key"
 };
-const readKey = async () => `${KEY}\n`;
+const checkFile = async () => {};
 
 describe("API-key chat UAT settings (#3410)", () => {
   it("is off when none of the four variables is set", async () => {
     expect(apiKeyChatUatConfigured({})).toBe(false);
-    await expect(readApiKeyChatUatProvider({}, readKey)).resolves.toBeUndefined();
+    await expect(readApiKeyChatUatProvider({}, checkFile)).resolves.toBeUndefined();
   });
 
-  it("reads all four and trims the key", async () => {
+  it("reads all four without loading the key on the host", async () => {
     expect(apiKeyChatUatConfigured(FULL)).toBe(true);
-    await expect(readApiKeyChatUatProvider(FULL, readKey)).resolves.toEqual({
+    await expect(readApiKeyChatUatProvider(FULL, checkFile)).resolves.toEqual({
       providerKind: "openai-compatible",
       baseUrl: "http://proxy.test",
       model: "ada-model",
-      apiKey: KEY
+      keyFile: FULL[API_KEY_CHAT_UAT_ENV.keyFile]
     });
   });
 
@@ -37,7 +42,7 @@ describe("API-key chat UAT settings (#3410)", () => {
     const partial = { ...FULL, [API_KEY_CHAT_UAT_ENV.model]: "" };
     expect(apiKeyChatUatConfigured(partial)).toBe(false);
 
-    const error = await readApiKeyChatUatProvider(partial, readKey).catch((e: unknown) => e);
+    const error = await readApiKeyChatUatProvider(partial, checkFile).catch((e: unknown) => e);
 
     expect((error as Error).message).toContain(API_KEY_CHAT_UAT_ENV.model);
     expect((error as Error).message).not.toContain("http://proxy.test");
@@ -46,31 +51,46 @@ describe("API-key chat UAT settings (#3410)", () => {
 
   it("refuses a kind chat cannot drive", async () => {
     await expect(
-      readApiKeyChatUatProvider({ ...FULL, [API_KEY_CHAT_UAT_ENV.kind]: "google" }, readKey)
+      readApiKeyChatUatProvider({ ...FULL, [API_KEY_CHAT_UAT_ENV.kind]: "google" }, checkFile)
     ).rejects.toThrow(/anthropic or openai-compatible/);
   });
 
   it("refuses an address that is not http or https", async () => {
     await expect(
-      readApiKeyChatUatProvider({ ...FULL, [API_KEY_CHAT_UAT_ENV.baseUrl]: "proxy.test" }, readKey)
+      readApiKeyChatUatProvider(
+        { ...FULL, [API_KEY_CHAT_UAT_ENV.baseUrl]: "proxy.test" },
+        checkFile
+      )
     ).rejects.toThrow(/http:\/\/ or https:\/\//);
   });
 
-  it("refuses an empty key file", async () => {
-    await expect(readApiKeyChatUatProvider(FULL, async () => "\n")).rejects.toThrow(/is empty/);
+  it("accepts a restricted file and refuses group-readable files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "uat-key-settings-"));
+    const keyFile = join(dir, "key");
+    try {
+      await writeFile(keyFile, KEY, { mode: 0o600 });
+      const env = { ...FULL, [API_KEY_CHAT_UAT_ENV.keyFile]: keyFile };
+      await expect(readApiKeyChatUatProvider(env)).resolves.toMatchObject({ keyFile });
+      await chmod(keyFile, 0o640);
+      await expect(readApiKeyChatUatProvider(env)).rejects.toThrow(/owner-only/);
+      await expect(
+        readApiKeyChatUatProvider({ ...env, [API_KEY_CHAT_UAT_ENV.keyFile]: dir })
+      ).rejects.toThrow(/regular file/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
-  it("builds seed args that carry the key by name only", () => {
+  it("mounts the file read-only and passes only its container path", () => {
     const seed = {
       providerKind: "anthropic",
       baseUrl: "http://proxy.test",
       model: "ada-model",
-      apiKey: KEY
+      keyFile: FULL[API_KEY_CHAT_UAT_ENV.keyFile]
     } as const;
-
-    const args = apiKeyChatSeedArgs(seed);
-
-    expect(args).toEqual([
+    expect(apiKeyChatSeedArgs(seed)).toEqual([
+      "--volume",
+      `${seed.keyFile}:${API_KEY_CHAT_CONTAINER_KEY_FILE}:ro`,
       "-e",
       "MOSS_UAT_API_KEY_CHAT_KIND=anthropic",
       "-e",
@@ -78,16 +98,15 @@ describe("API-key chat UAT settings (#3410)", () => {
       "-e",
       "MOSS_UAT_API_KEY_CHAT_MODEL=ada-model",
       "-e",
-      "MOSS_UAT_API_KEY_CHAT_KEY"
+      `MOSS_UAT_API_KEY_CHAT_KEY_FILE=${API_KEY_CHAT_CONTAINER_KEY_FILE}`
     ]);
-    expect(apiKeyChatSeedProcessEnv(seed, {}).MOSS_UAT_API_KEY_CHAT_KEY).toBe(KEY);
   });
 
-  it("blanks the seed key when not opted in, even if the base env has one", () => {
-    expect(
-      apiKeyChatSeedProcessEnv(undefined, { MOSS_UAT_API_KEY_CHAT_KEY: "stray" })
-        .MOSS_UAT_API_KEY_CHAT_KEY
-    ).toBe("");
-    expect(apiKeyChatSeedArgs(undefined)).toContain("MOSS_UAT_API_KEY_CHAT_KIND=");
+  it("removes an inherited plaintext key and does not mount anything when off", () => {
+    const base = { MOSS_UAT_API_KEY_CHAT_KEY: KEY, PATH: "/usr/bin" };
+    expect(apiKeyChatSeedProcessEnv(base)).toEqual({ PATH: "/usr/bin" });
+    expect(base.MOSS_UAT_API_KEY_CHAT_KEY).toBe(KEY);
+    expect(apiKeyChatSeedArgs(undefined)).toContain("MOSS_UAT_API_KEY_CHAT_KEY_FILE=");
+    expect(apiKeyChatSeedArgs(undefined)).not.toContain("--volume");
   });
 });

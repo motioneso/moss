@@ -248,8 +248,8 @@ export type SeedHook = (ctx: {
   /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS. Consumed by Task 5's seed/cli.ts wiring
    *  (blocked on #1557) — until then this reaches the seed service but nothing reads it. */
   readonly chatScript?: string;
-  /** #3410: opt-in API-key chat provider. The key reaches the seed container by env only. */
-  readonly apiKeyChat?: apiKeyChatEnv.ApiKeyChatSeed;
+  /** #3410: opt-in API-key chat provider. The key file is mounted read-only into the seed container. */
+  readonly apiKeyChat?: apiKeyChatEnv.ApiKeyChatUatProvider;
 }) => Promise<void>;
 
 // #1024/#1000: Phase 1 ships zero seed data by design (spec §8.1 acceptance = bare level only).
@@ -324,7 +324,7 @@ export const composeSeedHook: SeedHook = async ({
       "JARVIS_UAT_SEED_CONFIRM=1",
       "seed"
     ]),
-    apiKeyChatEnv.apiKeyChatSeedProcessEnv(apiKeyChat)
+    apiKeyChatEnv.apiKeyChatSeedProcessEnv()
   );
 };
 
@@ -650,7 +650,7 @@ export function buildSeedHookInput(
   briefingWriterAiProviderBaseUrl?: string,
   classifierFixtureAiProviderBaseUrl?: string,
   newsFeedbackFixtureBaseUrl?: string,
-  apiKeyChat?: apiKeyChatEnv.ApiKeyChatSeed
+  apiKeyChat?: apiKeyChatEnv.ApiKeyChatUatProvider
 ): {
   projectName: string;
   level: UatSeedLevel;
@@ -665,7 +665,7 @@ export function buildSeedHookInput(
   activityOutcomeFixture?: boolean;
   withWorkshopStorageFixture?: boolean;
   chatScript?: string;
-  apiKeyChat?: apiKeyChatEnv.ApiKeyChatSeed;
+  apiKeyChat?: apiKeyChatEnv.ApiKeyChatUatProvider;
 } {
   return {
     projectName,

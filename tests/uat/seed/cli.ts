@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     resolveMossEnv(process.env, "JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""
   );
   // #3410: all four empty (composeSeedHook always passes them) reads as absent.
-  const apiKeyChat = parseApiKeyChatSeed(process.env);
+  const apiKeyChat = await parseApiKeyChatSeed(process.env);
 
   const newsFeedbackFixtureBaseUrl =
     resolveMossEnv(process.env, "MOSS_UAT_NEWS_FEEDBACK_FIXTURE_BASE_URL") || undefined;
