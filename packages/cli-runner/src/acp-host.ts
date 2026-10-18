@@ -11,7 +11,7 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { readFile, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   AcpExecManager,
@@ -68,7 +68,6 @@ import {
 import { acquireLeases, leaseTargetsForPaths } from "./tools-leases.js";
 import { defaultResolveAdapterTarget, type AcpAdapterTarget } from "./acp-adapter-target.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
-import { providerTokenPath } from "./provider-token-store.js";
 import {
   getAcpProviderRow,
   launchOffList,
@@ -77,9 +76,9 @@ import {
   type AcpProfile,
   type AcpProviderKind
 } from "@moss/acp";
-import { redactSecrets } from "@moss/ai";
 import { sanitizeSessionKey } from "@moss/chat/live";
-import type { RpcAcpSpawnCredential as AcpCredential } from "@moss/chat/live";
+import { applyAgentCredential, type AcpCredential } from "./acp-launch-credential.js";
+import { logRedactedStderr } from "./stderr-redactor.js";
 
 // Re-exported so callers that only know acp-host.ts keep working unchanged;
 // the definitions live in acp-execs.ts (task 5b, 2026-09-08 file-size split).
@@ -290,7 +289,6 @@ export class AcpHost {
     personaText?: string,
     credential: AcpCredential | null = null
   ): Promise<AcpSpawnResult> {
-    void credential;
     if (!providerKind) throw new Error("acpSpawn.providerKind is required: no default provider");
     if (personaText !== undefined && typeof personaText !== "string")
       throw new Error("acpSpawn.personaText must be a string");
@@ -375,10 +373,13 @@ export class AcpHost {
         };
         // One CLI copy: the adapter drives the tools volume CLI when one is installed.
         applyToolsVolumeCli(env, this.deps.toolsPrefix, providerKind, overrides);
-        if (providerKind === "anthropic") {
-          const token = await this.readLoginToken(homeBase);
-          if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
-        }
+        const opencodeProvider = await applyAgentCredential(env, {
+          agentHome,
+          homeBase,
+          providerKind,
+          credential,
+          readTokenFile: this.deps.readTokenFile
+        });
         if (
           providerKind === "openai" &&
           launchOffList(profile).some((name) => lookupAcpToolFamily(name) === "shell")
@@ -394,7 +395,7 @@ export class AcpHost {
               }
             : null;
         const prepareDirs = [sessionDir];
-        if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
+        if (denyFile || opencodeProvider) prepareDirs.push(join(agentHome, ".config", "opencode"));
         if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
         const runAgentHomePrepare: AgentHomePrepareRun =
           this.deps.runAgentHomePrepare ??
@@ -419,21 +420,25 @@ export class AcpHost {
             codexPeerHomesFor(shared, homeBase, userId, access)
           );
         }
-        await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid }, [
-          ...(codexAuth
-            ? [
-                {
-                  path: join(agentHome, ".codex", "auth.json"),
-                  sourcePath: codexAuth,
-                  kind: "codex-auth" as const
-                }
-              ]
-            : []),
-          // codex-acp ignores session/new systemPrompt metadata and reads this cwd's AGENTS.md.
-          ...(providerKind === "openai" && profile === "chat"
-            ? [{ path: join(sessionDir, "AGENTS.md"), content: personaText ?? "" }]
-            : [])
-        ]);
+        await runAgentHomePrepare(
+          { dirs: prepareDirs, denyFile, ...(opencodeProvider ? { opencodeProvider } : {}) },
+          { uid, gid },
+          [
+            ...(codexAuth
+              ? [
+                  {
+                    path: join(agentHome, ".codex", "auth.json"),
+                    sourcePath: codexAuth,
+                    kind: "codex-auth" as const
+                  }
+                ]
+              : []),
+            // codex-acp ignores session/new systemPrompt metadata and reads this cwd's AGENTS.md.
+            ...(providerKind === "openai" && profile === "chat"
+              ? [{ path: join(sessionDir, "AGENTS.md"), content: personaText ?? "" }]
+              : [])
+          ]
+        );
         return { agentHome, sessionDir, env };
       } catch (error) {
         if (agentHomeTop?.createdHere) {
@@ -584,12 +589,11 @@ export class AcpHost {
       }
       session.lastActivity = Date.now();
     });
-    child.stderr.on("data", (chunk: Buffer) => {
-      // Adapter diagnostics ride stderr by design (stdout is protocol). Keep the
-      // tail in the runner log, truncated and redacted, never the full stream.
-      const text = redactSecrets(chunk.toString("utf8")).slice(-2000);
-      console.warn(`[acp-host] ${key} stderr: ${text}`);
-    });
+    // Adapter diagnostics ride stderr by design (stdout is protocol). Keep the
+    // tail in the runner log, truncated and masked across chunk boundaries.
+    logRedactedStderr(child.stderr, credential?.apiKey, (text) =>
+      console.warn(`[acp-host] ${key} stderr: ${text}`)
+    );
     child.on("exit", (code) => {
       session.exited = true;
       session.exitCode = code;
@@ -980,16 +984,6 @@ export class AcpHost {
           console.error(`[acp-host] ${key} idle stop failed: ${(error as Error).message}`);
         });
       }
-    }
-  }
-
-  private async readLoginToken(homeBase: string): Promise<string | null> {
-    try {
-      const read = this.deps.readTokenFile ?? ((p: string) => readFile(p, "utf8"));
-      const token = (await read(providerTokenPath(homeBase, "anthropic"))).trim();
-      return token.length > 0 ? token : null;
-    } catch {
-      return null;
     }
   }
 }
