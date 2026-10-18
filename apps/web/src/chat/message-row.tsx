@@ -48,8 +48,11 @@ export function RecordRow(props: {
   readonly meetingScoped?: boolean;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
+  readonly linkedMessageId?: string | null;
 }) {
   const { kind, text } = props.record;
+  const linked =
+    Boolean(props.record.messageId) && props.record.messageId === props.linkedMessageId;
 
   if (kind === "action_request" && props.record.actionRequestId) {
     return (
@@ -129,7 +132,11 @@ export function RecordRow(props: {
   // reply (and any unforeseen non-activity kind) — assistant bubble, rendered as markdown.
   return (
     <>
-      <div className="chatd-msg">
+      <div
+        className="chatd-msg"
+        data-linked-message={linked || undefined}
+        tabIndex={linked ? -1 : undefined}
+      >
         <span className="chatd-msg__av">
           <BrandMark size={14} />
         </span>

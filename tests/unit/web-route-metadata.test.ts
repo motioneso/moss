@@ -103,6 +103,7 @@ describe("web route metadata", () => {
       "/meetings",
       "/workshop",
       "/settings",
+      "/chat/messages",
       "/link/trail-marker"
     ]);
   });

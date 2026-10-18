@@ -17,6 +17,8 @@ export interface ChatDrawerProps {
   readonly initialText?: string;
   readonly threadToOpen?: string | null;
   readonly onThreadOpenConsumed?: () => void;
+  /** A message to scroll to and focus once, when the opened chat first shows it. */
+  readonly focusMessageId?: string | null;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
   readonly surface: ChatSurface;
