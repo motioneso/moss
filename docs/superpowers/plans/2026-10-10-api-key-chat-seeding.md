@@ -79,7 +79,7 @@ Checked against the code on 2026-10-10. Line numbers are on the planning branch.
 | `tests/uat/run-uat.ts`                              | Modify | Parse `withApiKeyChatProvider`                                         |
 | `tests/uat/seed/chunks/api-key-chat.ts`             | Create | Parse the seed env and seed the provider, model and default            |
 | `tests/uat/seed/cli.ts`, `tests/uat/seed/levels.ts` | Modify | Read and apply the seed value                                          |
-| `tests/uat/specs/3410-api-key-chat.uat.spec.ts`     | Create | Drawer chat, confirmation card, task exists                            |
+| `tests/uat/specs/3410-api-key-chat.uat.spec.ts`     | Create | Drawer chat: task added unasked; list delete asks, then happens        |
 
 ---
 
@@ -1938,6 +1938,8 @@ test("an API-key provider drives drawer chat through a confirmation card (#3410)
 });
 ```
 
+**Correction (2026-10-18, live run through the relay):** adding a task never shows a confirmation card. Creating a task is an ordinary write, and ordinary writes run without asking; only destructive actions ask. The spec as written above waited three minutes for an Approve button that is correctly never shown, while chat had already added the task. The committed spec keeps the add-a-task step and asserts no card appears, then creates a task list through the API, asks chat to delete it (a destructive action), approves the card, and checks the list is gone.
+
 - [ ] **Step 9: Type-check and rerun the pure tests**
 
 Run: `pnpm exec tsc --noEmit -p tsconfig.json`
@@ -1985,7 +1987,7 @@ export MOSS_DEV_INSTANCE_PROVIDER_KEY_FILE="$PROXY_KEY_FILE"
 pnpm dev:instance provision
 ```
 
-Expected output lines: `provider-rows: changed` naming the API-key provider, and `cli-token: unchanged — skipped: API-key provider`. Run `pnpm dev:instance provision` a second time and expect `provider-rows: unchanged`. In the browser, Admin > AI providers shows "Dev instance API key" as the default with chat readiness "ready"; the chat drawer answers a plain question. Repeat once with `MOSS_DEV_INSTANCE_PROVIDER_KIND=anthropic` and the Anthropic-style address.
+Expected output lines: `provider-rows: changed` naming the API-key provider, and `cli-token: unchanged — skipped: API-key provider`. Run `pnpm dev:instance provision` a second time and expect `provider-rows: unchanged`. In the browser, Admin > AI providers shows "Dev instance API key" as Connected and Default with no readiness warning line on its card (a ready API-key row shows no line; the card names only a problem, such as a rejected key or an unreachable address); the chat drawer answers a plain question. Provisioning picks the chat model through the normal chat selection and takes no model setting, so switch the chat model to the cheapest listed one in the app before asking. Repeat once with `MOSS_DEV_INSTANCE_PROVIDER_KIND=anthropic` and the Anthropic-style address.
 
 Then run the key scanner as in main plan Task 16 Step 7, with this instance's log and agent-home directories:
 
