@@ -249,3 +249,74 @@ describe("API-key chat", () => {
     expect(JSON.stringify(failure)).not.toContain(LAUNCH_KEY);
   });
 });
+
+describe("API-key chat confirms an unplaced failure with the provider", () => {
+  const launchOpts = { neutralDir: "/tmp/acp", personaPath: "/tmp/acp/persona.md" };
+
+  // The bare shape the claude agent returned at session start with a wrong key.
+  const BARE_INTERNAL = { code: -32603, message: "Internal error" };
+
+  function engineWith(
+    confirm: () => Promise<boolean>,
+    options: { failOnSessionNew: boolean; authMethod?: "api_key" | "cli" }
+  ) {
+    return new AcpChatEngine("anthropic", "chat:u1:api-key-confirm", {
+      tunnel: new PromptErrorTunnel(options.failOnSessionNew, BARE_INTERNAL, BARE_INTERNAL),
+      ...(options.authMethod === "cli" ? {} : { authMethod: "api_key" as const }),
+      userId: "u1",
+      projectId: "api-key-confirm",
+      reportLoginRejected: vi.fn(),
+      confirmApiKeyRejected: confirm
+    });
+  }
+
+  it("names the key when the session cannot start and the provider refuses the key", async () => {
+    const confirm = vi.fn(async () => true);
+    const failure = await engineWith(confirm, { failOnSessionNew: true })
+      .launch(launchOpts)
+      .catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      name: "CliChatUnavailableError",
+      message: API_KEY_REJECTED_MESSAGE
+    });
+    expect(failure).not.toHaveProperty("cause");
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the key when a prompt fails and the provider refuses the key", async () => {
+    const confirm = vi.fn(async () => true);
+    const engine = engineWith(confirm, { failOnSessionNew: false });
+    await engine.launch(launchOpts);
+    await engine.submit("hello");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const failure = await engine.readNew(0).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ message: API_KEY_REJECTED_MESSAGE });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    await engine.kill();
+  });
+
+  it.each([
+    ["accepts the key", async () => false],
+    [
+      "cannot be asked",
+      async () => {
+        throw new Error("connect ECONNREFUSED");
+      }
+    ]
+  ])("keeps the generic failure when the provider %s", async (_label, confirm) => {
+    const failure = await engineWith(confirm, { failOnSessionNew: true })
+      .launch(launchOpts)
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).not.toBe(API_KEY_REJECTED_MESSAGE);
+  });
+
+  it("never asks the provider for a CLI-login row", async () => {
+    const confirm = vi.fn(async () => true);
+    const failure = await engineWith(confirm, { failOnSessionNew: true, authMethod: "cli" })
+      .launch(launchOpts)
+      .catch((error: unknown) => error);
+    expect((failure as Error).message).not.toBe(API_KEY_REJECTED_MESSAGE);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+});

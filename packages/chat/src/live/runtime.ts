@@ -78,6 +78,7 @@ import { createRealPersonaFs } from "./persona.js";
 import { DataContextChatPersistence } from "./persistence.js";
 
 import type { CliChatEngine, EngineKillOpts } from "./types.js";
+import { apiKeyRejectionProbe } from "./api-key-rejection-probe.js";
 import type { ReapReason } from "./provider-runtime.js";
 import { ChatRepository } from "../repository.js";
 
@@ -438,7 +439,12 @@ export function selectEngineFactory(
             ),
             acpAgentId: engineOpts.acpAgentId ?? undefined,
             ...(engineOpts.authMethod ? { authMethod: engineOpts.authMethod } : {}),
-            ...(engineOpts.credential ? { apiKey: engineOpts.credential.apiKey } : {}),
+            ...(engineOpts.credential
+              ? {
+                  apiKey: engineOpts.credential.apiKey,
+                  confirmApiKeyRejected: apiKeyRejectionProbe(provider, engineOpts.credential)
+                }
+              : {}),
             userId: engineOpts.userId,
             projectId: engineOpts.conversationId,
             permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,

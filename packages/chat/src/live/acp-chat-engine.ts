@@ -49,6 +49,8 @@ export interface AcpChatEngineOptions {
   readonly permissionDecider?: AcpPermissionDecider;
   readonly toolServer?: AcpToolServer;
   readonly reportLoginRejected?: () => void;
+  /** API-key rows only. Asks the provider once whether it refuses the stored key. */
+  readonly confirmApiKeyRejected?: () => Promise<boolean>;
   readonly log?: (line: string) => void;
   /** Shared with ChatSessionManager so injected records retain creation order. */
   readonly nextSequence?: () => number;
@@ -685,8 +687,16 @@ export class AcpChatEngine implements CliChatEngine {
         throw new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
       }
       await this.closeQuietly();
+      if (await this.providerRefusesKey())
+        throw new CliChatUnavailableError(API_KEY_REJECTED_MESSAGE);
       throw this.opts.authMethod === "api_key" ? maskedLaunchError(error, this.opts.apiKey) : error;
     }
+  }
+
+  /** An agent failure the code cannot place still names the key when the provider refuses it. */
+  private async providerRefusesKey(): Promise<boolean> {
+    if (this.opts.authMethod !== "api_key" || !this.opts.confirmApiKeyRejected) return false;
+    return this.opts.confirmApiKeyRejected().catch(() => false);
   }
 
   async submit(text: string): Promise<void> {
@@ -731,7 +741,7 @@ export class AcpChatEngine implements CliChatEngine {
           });
         }
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         this.flushCurrentThought();
         this.discardFailedReply();
         if (this.isAuthFailure(error)) {
@@ -741,6 +751,8 @@ export class AcpChatEngine implements CliChatEngine {
           );
         } else if (isCliVersionTooOldError(error)) {
           this.promptError = new CliChatUnavailableError(CLI_VERSION_TOO_OLD_MESSAGE);
+        } else if (await this.providerRefusesKey()) {
+          this.promptError = new CliChatUnavailableError(API_KEY_REJECTED_MESSAGE);
         } else {
           this.promptError = normalizeAcpPromptFailure(error);
         }
