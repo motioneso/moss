@@ -65,7 +65,9 @@ describe("discoverAndPersistModels (#2208)", () => {
       repository: repository as never,
       modelDiscovery
     });
-    expect(outcome).toEqual({});
+    expect(outcome).toEqual({
+      discoveredModelIds: ["claude-fable-5-1", "claude-haiku-4-5-20251001"]
+    });
     expect(repository.deleteModelsForProviderExceptSentinel).toHaveBeenCalledWith(
       scopedDb,
       "prov-1",
@@ -103,6 +105,36 @@ describe("discoverAndPersistModels (#2208)", () => {
     );
     expect(repository.deleteModelsForProviderExceptSentinel).not.toHaveBeenCalled();
     expect(repository.upsertDiscoveredModels).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports only the chat ids the provider listed on this run", async () => {
+    const repository = fakeRepository();
+    const modelDiscovery = new ModelDiscoveryService();
+    modelDiscovery.discoverModels = async () => ({
+      models: [
+        {
+          providerModelId: "org/model:tag@v2",
+          displayName: "org/model:tag@v2",
+          capabilities: ["chat", "tool-use"],
+          tier: "interactive"
+        },
+        {
+          providerModelId: "org/vision-only",
+          displayName: "org/vision-only",
+          capabilities: ["vision"],
+          tier: "interactive"
+        }
+      ],
+      fromCache: false,
+      fromFallback: false,
+      cacheExpiresAt: null
+    });
+    const outcome = await discoverAndPersistModels(
+      scopedDb,
+      { ...input, providerKind: "openai-compatible", acpAgentId: null, authMethod: "api_key" },
+      { repository: repository as never, modelDiscovery }
+    );
+    expect(outcome).toEqual({ discoveredModelIds: ["org/model:tag@v2"] });
   });
 });
 

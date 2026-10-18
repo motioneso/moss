@@ -17,6 +17,7 @@ export * from "./cli-version-check.js";
 export * from "./cli-live-check.js";
 export * from "./crypto.js";
 export * from "./credentials.js";
+export * from "./discover-and-persist-models.js";
 export * from "./manifest.js";
 export * from "./model-discovery.js";
 export * from "./model-activity.js";
