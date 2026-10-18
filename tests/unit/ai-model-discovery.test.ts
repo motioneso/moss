@@ -333,3 +333,103 @@ describe("Cloudflare decision-model discovery (#3057)", () => {
     ]);
   });
 });
+
+describe("Anthropic API-key discovery address", () => {
+  it("lists models from the row's address", async () => {
+    const urls: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: [{ id: "claude-test-model" }] }), {
+        status: 200
+      });
+    }) as typeof globalThis.fetch;
+
+    const result = await new ModelDiscoveryService().discoverModels("u1:p1", {
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl: "http://proxy.test/",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+
+    expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    expect(result.reason).toBeUndefined();
+  });
+});
+
+describe("API-key discovery model contract", () => {
+  function listing(ids: readonly string[]) {
+    const urls: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), { status: 200 });
+    }) as typeof globalThis.fetch;
+    return { urls, fetch };
+  }
+
+  it("keeps proxy ids at a custom Anthropic address and drops ids outside the policy", async () => {
+    const { fetch } = listing(["org/model:tag@v2", "claude-test-model", "has space"]);
+    const result = await new ModelDiscoveryService().discoverModels("u1:p2", {
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl: "http://proxy.test/v1",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(result.models.map((model) => model.providerModelId)).toEqual([
+      "org/model:tag@v2",
+      "claude-test-model"
+    ]);
+  });
+
+  it("keeps the public Anthropic filter at the default address", async () => {
+    const { fetch } = listing(["org/model:tag@v2", "claude-test-model", "claude-old:1"]);
+    const result = await new ModelDiscoveryService().discoverModels("u1:p3", {
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl: null,
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(result.models.map((model) => model.providerModelId)).toEqual(["claude-test-model"]);
+  });
+
+  it("drops embedding, moderation, rerank, speech and image models", async () => {
+    const { fetch } = listing([
+      "gpt-test-chat",
+      "text-embedding-3-small",
+      "nomic-embed-text",
+      "omni-moderation-latest",
+      "bge-reranker-v2",
+      "gpt-4o-mini-tts",
+      "dall-e-3",
+      "gpt-image-1"
+    ]);
+    const result = await new ModelDiscoveryService().discoverModels("u1:p4", {
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl: "http://proxy.test",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(result.models.map((model) => model.providerModelId)).toEqual(["gpt-test-chat"]);
+  });
+
+  it("returns no chat-capable model, and no error, for an embedding-only list", async () => {
+    const { fetch } = listing(["text-embedding-3-small", "nomic-embed-text"]);
+    const result = await new ModelDiscoveryService().discoverModels("u1:p5", {
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl: "http://proxy.test",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(result.models).toEqual([]);
+    expect(result.reason).toBeUndefined();
+  });
+});

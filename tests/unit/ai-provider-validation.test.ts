@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   discoverProviderModels,
+  PROVIDER_CREDENTIAL_VALID_MESSAGE,
+  PROVIDER_REJECTED_CREDENTIAL_MESSAGE,
   testProviderCredential
 } from "../../packages/ai/src/provider-validation.js";
 
@@ -91,4 +93,75 @@ describe("AI provider validation", () => {
       }
     ]);
   });
+});
+
+describe("Anthropic API-key checks use the row's address", () => {
+  function recordingFetch(status: number) {
+    const urls: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: [{ id: "claude-test-model" }] }), { status });
+    }) as typeof globalThis.fetch;
+    return { urls, fetch };
+  }
+
+  it("tests the key against the stored address", async () => {
+    const { urls, fetch } = recordingFetch(200);
+    const result = await testProviderCredential({
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: "http://proxy.test/v1",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    expect(result).toMatchObject({ ok: true, message: PROVIDER_CREDENTIAL_VALID_MESSAGE });
+  });
+
+  it("reports a 401 from the stored address as a rejected credential", async () => {
+    const { fetch } = recordingFetch(401);
+    const result = await testProviderCredential({
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: "http://proxy.test",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(result).toMatchObject({ ok: false, message: PROVIDER_REJECTED_CREDENTIAL_MESSAGE });
+  });
+
+  it("falls back to the public Anthropic address when none is stored", async () => {
+    const { urls, fetch } = recordingFetch(200);
+    await discoverProviderModels({
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(urls).toEqual(["https://api.anthropic.com/v1/models"]);
+  });
+});
+
+describe("OpenAI-compatible key test uses the normalized address", () => {
+  it.each(["http://proxy.test/v1", "http://proxy.test/v1/"])(
+    "%s gives one /v1",
+    async (baseUrl) => {
+      const urls: string[] = [];
+      const fetch = (async (url: string | URL | Request) => {
+        urls.push(String(url));
+        return new Response(JSON.stringify({ data: [{ id: "org/model:tag@v2" }] }), {
+          status: 200
+        });
+      }) as typeof globalThis.fetch;
+      await testProviderCredential({
+        providerKind: "openai-compatible",
+        authMethod: "api_key",
+        baseUrl,
+        credential: { apiKey: "sk-test" },
+        fetch
+      });
+      expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    }
+  );
 });

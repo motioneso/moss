@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ModelDiscoveryService } from "@moss/ai";
 
@@ -103,5 +103,56 @@ describe("discoverAndPersistModels (#2208)", () => {
     );
     expect(repository.deleteModelsForProviderExceptSentinel).not.toHaveBeenCalled();
     expect(repository.upsertDiscoveredModels).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("discoverAndPersistModels for API-key rows at a proxy address", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubListing(ids: readonly string[]) {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), { status: 200 });
+    });
+    return urls;
+  }
+
+  it.each([
+    ["openai-compatible", "http://proxy.test/v1"],
+    ["openai-compatible", "http://proxy.test/v1/"],
+    ["anthropic", "http://proxy.test/v1"],
+    ["anthropic", "http://proxy.test/v1/"]
+  ] as const)("%s at %s persists the proxy id from one /v1/models", async (kind, baseUrl) => {
+    const urls = stubListing(["org/model:tag@v2", "text-embedding-3-small"]);
+    const repository = {
+      deleteModelsForProviderExceptSentinel: vi.fn().mockResolvedValue(0),
+      upsertDiscoveredModels: vi.fn().mockResolvedValue(0)
+    };
+    const outcome = await discoverAndPersistModels(
+      {} as never,
+      {
+        actorUserId: "user-a",
+        providerId: `prov-${kind}`,
+        providerKind: kind,
+        acpAgentId: null,
+        authMethod: "api_key",
+        baseUrl,
+        credential: { apiKey: "sk-test" }
+      },
+      { repository: repository as never, modelDiscovery: new ModelDiscoveryService() }
+    );
+
+    expect(outcome.reason).toBeUndefined();
+    expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    expect(repository.deleteModelsForProviderExceptSentinel).not.toHaveBeenCalled();
+    const rows = repository.upsertDiscoveredModels.mock.calls[0]?.[2] as {
+      providerModelId: string;
+      capabilities: string[];
+    }[];
+    expect(rows.map((row) => row.providerModelId)).toEqual(["org/model:tag@v2"]);
+    expect(rows[0]?.capabilities).toContain("chat");
   });
 });
