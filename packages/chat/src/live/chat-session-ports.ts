@@ -26,6 +26,7 @@ import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
 import type { AcpPermissionDecider } from "@moss/acp";
 import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
+import type { ChatCredential } from "./api-key-launch.js";
 import type { ReminderTurnPlan } from "../reminders/turn.js";
 import type {
   ActionResultMetadata,
@@ -53,7 +54,13 @@ export interface ChatPersistencePort {
     authMethod?: AiAuthMethod;
     acpAgentId?: string | null;
     acpModel?: string;
+    providerConfigRevision?: string;
   }>;
+  /** Decrypted key and address of an API-key row; `null` when they cannot be read. */
+  resolveChatCredential?(
+    actorUserId: string,
+    providerConfigId: string
+  ): Promise<ChatCredential | null>;
   /** The accepted summary plus every stored turn after its covered frontier. */
   listPriorTurns(
     actorUserId: string,

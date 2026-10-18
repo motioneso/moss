@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 import {
   AiRepository,
+  createAiSecretCipher,
   createRealTmuxIo,
   type ConversationProvenancePort,
   type Multiplexer,
@@ -668,6 +669,7 @@ export interface ChatSessionRuntime {
  */
 export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): ChatSessionRuntime {
   const persistence = new DataContextChatPersistence({
+    resolveAiSecretCipher: () => createAiSecretCipher(),
     canProposeBoundedAction: deps.canProposeBoundedAction,
     resolveScheduledReadRequest: deps.resolveScheduledReadRequest,
     rootDb: deps.rootDb,
