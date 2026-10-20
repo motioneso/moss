@@ -56,6 +56,7 @@ describe("registered queue definitions", () => {
       "notes.sync",
       "meetings.stop-summary",
       "meetings.capture-maintenance",
+      "meetings.recording-import",
       "proactive-scan-source",
       "commitment-extraction",
       "commitment-email-judgement",
