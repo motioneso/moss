@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-20
+
+#### Added
+
+- **Import completed recordings.** Developer-imported recordings can now be transcribed and reviewed in meeting history while preserving their source metadata. [PR #3548](https://github.com/motioneso/moss/pull/3548)
+
 ### 2026-10-15
 
 #### Added
