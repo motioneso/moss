@@ -72,8 +72,39 @@ Rereview counts: Standards 1 medium and 3 low findings/judgments; Spec 2 medium
 findings plus a disclosed nonblocking outage limitation. Worst within Standards:
 prematurely terminal framing failure. Worst within Spec: the same framing failure.
 
+## Final rereview of d8ea8e646
+
+Both independent reviewers again ran with actual `claude-opus-5-5`. Standards
+confirmed the earlier findings fixed or settled and found no blockers. Spec
+confirmed all earlier medium defects fixed, no blockers, no medium defects and
+no scope creep. Reviewers read code only; execution receipts below are separate.
+
+Standards retained one low observation: repeated framing faults early in ring
+inventory can delay later files until the failing source exhausts eight attempts,
+potentially around an hour. This is bounded but not prompt isolation. Abandoned
+or never-completed discoveries retain slots under the documented 100-entry limit.
+
+Spec retained one low gap: an ended sidecar without a positive duration remains
+discovered/pending, consuming a slot and being re-read. No such physical sidecar
+has been observed. This malformed-source case remains a disclosed limitation of
+the developer slice. Moss outage still pauses retrieval because live owner
+verification deliberately precedes source access.
+
+Final counts: Standards 0 blocking/medium, 1 new low plus the retained capacity
+judgment; Spec 0 blocking/medium, 1 low. These do not expand the supported capture
+contract; retention/recovery hardening remains separate from this bounded preview.
+
 ## Verification status
 
-The revised runtime still requires final device/live checks, CI and independent
-Opus rereview before merge. The original hardware run is not evidence that these
-new recovery changes have been exercised through the installed path.
+Final host tests and signed SDK build pass. Installed device assertions pass,
+including interrupted-read retry/backoff, oversized completed duration, durable
+terminal identity conflicts, retained HTTP status, stopped/blocked outcomes and
+frozen-state restart. Removing the server identity guard caused the corresponding
+installed assertion to fail; the restored source passes.
+
+Fresh clean-runtime installed-path gate `vocci_auto_delivery-20261020-073730.log`
+passed with exit 0, including real transcripts/Meetings UI, four independently
+re-downloaded hashes, bookmarks/modes, replay/restart and Stop. One manual Bluetooth
+off/on recovery was required before retrieval; the hardware ledger discloses it.
+Final CI belongs to the exact PR head; original hardware proof alone is not reused
+as evidence for fixes.
