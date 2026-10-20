@@ -1,3 +1,4 @@
+import { androidDeliveryFeature } from "./android-delivery-feature.js";
 import { meetingRecordTarget } from "./chat-targets.js";
 import {
   createMeetingPresentation,
@@ -349,6 +350,7 @@ export const meetingsModuleManifest = {
     }
   ],
   features: [
+    androidDeliveryFeature,
     {
       id: "meetings.recording_imports",
       remediations: [
@@ -360,7 +362,7 @@ export const meetingsModuleManifest = {
         }
       ],
       description:
-        "Developer imports retain packets, sidecars, WAV, bookmarks and normal/voice-request mode. Configured transcription appears in Meetings history. Limit: 120 seconds. No automatic request execution, Android setup or background sync.",
+        "Developer imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Configured transcripts appear in Meetings history. Limit: 120 seconds. No request execution or consumer ring setup.",
       errors: [
         {
           code: "recording_import_invalid",
