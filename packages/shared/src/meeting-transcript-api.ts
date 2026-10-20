@@ -2,7 +2,7 @@
 export interface MeetingTranscriptSource {
   readonly sourceId: string;
   readonly epoch: number;
-  readonly kind: "microphone" | "output";
+  readonly kind: "microphone" | "output" | "recording";
   /** A capture-source label is not a person's identity. */
   readonly label: string;
   readonly startMs: number;

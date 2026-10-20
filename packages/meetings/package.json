@@ -25,7 +25,8 @@
     "kysely": "^0.29.2",
     "react": "^19.0.0",
     "react-router": "^7.0.0",
-    "@moss/jobs": "workspace:*"
+    "@moss/jobs": "workspace:*",
+    "@moss/vault": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.0"

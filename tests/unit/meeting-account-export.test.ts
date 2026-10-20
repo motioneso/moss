@@ -29,6 +29,7 @@ const ctx = {
   requestId: "meeting-account-export-unit"
 };
 const collections = [
+  "recording_imports",
   "records",
   "note_writes",
   "transcript_batches",
@@ -140,7 +141,7 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly thirteen source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads exactly fourteen source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
@@ -156,12 +157,12 @@ describe("Meetings account-export collector", () => {
         );
       }
       expect(queries[0]?.sql).toMatch(/ORDER BY created_at, id/);
-      expect(queries[1]?.sql).toMatch(/ORDER BY meeting_id, expected_revision, request_key/);
-      expect(queries[2]?.sql).toMatch(/ORDER BY meeting_id, version/);
-      expect(queries[4]?.sql).toMatch(/ORDER BY meeting_id, version/);
+      expect(queries[2]?.sql).toMatch(/ORDER BY meeting_id, expected_revision, request_key/);
+      expect(queries[3]?.sql).toMatch(/ORDER BY meeting_id, version/);
+      expect(queries[5]?.sql).toMatch(/ORDER BY meeting_id, version/);
       // An account export includes inactive, older and manual artifacts with no status filter.
-      expect(queries[8]?.sql).not.toMatch(/credential_hash|verifier_hash|session_id/);
-      expect(queries[4]?.sql).toMatch(/WHERE owner_user_id = \$1::uuid\s+ORDER BY/);
+      expect(queries[9]?.sql).not.toMatch(/credential_hash|verifier_hash|session_id/);
+      expect(queries[5]?.sql).toMatch(/WHERE owner_user_id = \$1::uuid\s+ORDER BY/);
     } finally {
       await db.destroy();
     }
@@ -264,6 +265,10 @@ describe("Meetings account-export collector", () => {
   });
 
   it("keeps migration column grants in step with the collector's SELECT lists", async () => {
+    const recordingMigration = await readFile(
+      new URL("../../packages/meetings/sql/0325_meeting_recording_imports.sql", import.meta.url),
+      "utf8"
+    );
     const originalMigration = await readFile(
       new URL("../../packages/meetings/sql/0283_meeting_account_export.sql", import.meta.url),
       "utf8"
@@ -295,6 +300,7 @@ describe("Meetings account-export collector", () => {
       .map((match) => match[0])
       .join("\n");
     const migration =
+      (recordingMigration.match(/-- Recording import account export[\s\S]*$/)?.[0] ?? "") +
       (limiterMigration.match(/-- Rate-limit history[\s\S]*$/)?.[0] ?? "") +
       minimalSelectGrants +
       originalMigration +

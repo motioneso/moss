@@ -37,10 +37,12 @@ export const meetingsModuleManifest = {
       "sql/0284_meeting_capture.sql",
       "sql/0288_meeting_recording_connections.sql",
       "sql/0292_meeting_minimal.sql",
-      "sql/0295_meeting_capture_start_limits.sql"
+      "sql/0295_meeting_capture_start_limits.sql",
+      "sql/0325_meeting_recording_imports.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
+      "app.meeting_recording_imports",
       "app.meeting_records",
       "app.meeting_note_writes",
       "app.meeting_transcript_batches",
@@ -101,8 +103,23 @@ export const meetingsModuleManifest = {
       entry: "./settings"
     }
   ],
-  jobs: [{ queueName: "meetings.stop-summary", metadataOnly: true }],
+  jobs: [
+    { queueName: "meetings.stop-summary", metadataOnly: true },
+    { queueName: "meetings.recording-import", metadataOnly: true }
+  ],
   routes: [
+    {
+      method: "POST",
+      path: "/api/meetings/recording-imports",
+      permissionId: "meetings.write",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/recording-imports/:id",
+      permissionId: "meetings.read",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
     {
       method: "PUT",
       path: "/api/meetings/records/:id/title",
@@ -332,6 +349,59 @@ export const meetingsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "meetings.recording_imports",
+      remediations: [
+        {
+          id: "meetings.restore_import_access",
+          path: "/settings?section=modules&module=meetings",
+          description:
+            "Restore Meetings access and configure transcription in Settings → AI providers before a new import."
+        }
+      ],
+      description:
+        "Developer imports retain packets, sidecars, WAV, bookmarks and normal/voice-request mode. Configured transcription appears in Meetings history. Limit: 120 seconds. No automatic request execution, Android setup or background sync.",
+      errors: [
+        {
+          code: "recording_import_invalid",
+          class: "validation",
+          description:
+            "Use matching legacy filenames, valid hashes and canonical 16 kHz mono PCM WAV. Maximum body 8 MiB, packets 1 MiB, sidecar 64 KiB, audio 120 seconds."
+        },
+        {
+          code: "recording_import_conflict",
+          class: "validation",
+          description:
+            "This device and recording identity already has different evidence. Retained evidence is immutable; restore the original bundle."
+        },
+        {
+          code: "transcription_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.restore_import_access",
+          description:
+            "Configure transcription in Settings → AI providers before importing. A replay does not restart failed work."
+        },
+        {
+          code: "transcription_failed",
+          class: "transient",
+          description:
+            "Transcription failed after bounded attempts. Original evidence remains retained; status is available from the developer import endpoint."
+        },
+        {
+          code: "import_interrupted",
+          class: "transient",
+          description:
+            "Upload publication was interrupted and its abandoned vault files were removed."
+        },
+        {
+          code: "import_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.restore_import_access",
+          description:
+            "Access, Meetings availability or transcription configuration changed. Restore access and inspect retained import status."
+        }
+      ]
+    },
     {
       id: "meetings.chat_app_actions",
       description:
@@ -886,6 +956,7 @@ export const meetingsModuleManifest = {
     deletion: {
       strategy: "cascade",
       tables: [
+        { table: "app.meeting_recording_imports", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_records", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_note_writes", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_transcript_batches", countPredicate: "owner_user_id = $1::uuid" },

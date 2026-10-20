@@ -39,7 +39,7 @@ export function createMeetingTranscriptLedger(
       !integer(source.startMs) ||
       !integer(source.endMs) ||
       source.endMs <= source.startMs ||
-      (source.kind !== "microphone" && source.kind !== "output") ||
+      (source.kind !== "microphone" && source.kind !== "output" && source.kind !== "recording") ||
       keys.has(key)
     ) {
       throw new Error("Invalid transcript source interval");

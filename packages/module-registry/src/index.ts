@@ -1,3 +1,5 @@
+import { createRecordingImportRuntime } from "./recording-import-runtime.js";
+export { createRecordingImportWorkerRuntime } from "./recording-import-runtime.js";
 import { createScheduledReportGenerator } from "@moss/chat";
 import { SessionTokenRegistry, ConfirmationRegistry } from "@moss/ai";
 import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
@@ -28,6 +30,9 @@ import type { PgBoss } from "pg-boss";
 import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
+  RecordingImportService,
+  RECORDING_IMPORT_QUEUES,
+  registerRecordingImportRoutes,
   meetingsModuleManifest,
   meetingsModuleSqlMigrationDirectory,
   registerMeetingCaptureRoutes,
@@ -2985,14 +2990,27 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: meetingsModuleManifest,
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
-    queueDefinitions: [...MEETING_STOP_SUMMARY_QUEUES, ...MEETING_CAPTURE_MAINTENANCE_QUEUES],
+    queueDefinitions: [
+      ...MEETING_STOP_SUMMARY_QUEUES,
+      ...MEETING_CAPTURE_MAINTENANCE_QUEUES,
+      ...RECORDING_IMPORT_QUEUES
+    ],
     registerRoutes: (server, deps) => {
       registerMeetingCaptureRoutes(server, {
         ...createMeetingCaptureRuntime(deps),
         scheduleSummary: createMeetingStopSummaryScheduler(deps.boss)
       });
+      const importRuntime = createRecordingImportRuntime(deps);
+      const recordingImports = new RecordingImportService(importRuntime);
+      registerRecordingImportRoutes(server, {
+        service: recordingImports,
+        resolveAccessContext: deps.resolveAccessContext
+      });
       registerMeetingRecordRoutes(server, {
-        beforeRemove: deleteMeetingChatThreads,
+        beforeRemove: async (db, id, actor) => {
+          await recordingImports.beforeRemove(db, actor, id);
+          await deleteMeetingChatThreads(db, id);
+        },
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });

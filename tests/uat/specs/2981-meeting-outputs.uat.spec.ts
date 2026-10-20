@@ -709,6 +709,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       const exported = archive.sections.meetings;
       expect(Object.keys(exported).sort()).toEqual(
         [
+          "recording_imports",
           "records",
           "note_writes",
           "transcript_batches",
@@ -730,9 +731,11 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(exported.capture_connections).toEqual([]);
       expect(exported.capture_start_cancellations).toEqual([]);
       expect(exported.capture_start_limits).toEqual([]);
+      expect(exported.recording_imports).toEqual([]);
       for (const [name, rows] of Object.entries(exported)) {
         if (
           ![
+            "recording_imports",
             "stop_summaries",
             "capture_grants",
             "capture_connections",
