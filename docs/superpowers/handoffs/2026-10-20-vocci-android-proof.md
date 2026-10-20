@@ -9,7 +9,10 @@ remain outside this change. Review and CI remain separate requirements.
 An isolated `test:recording-live` gate passed with exit 0:
 `vocci_auto_delivery-20261020-052822.log`. Its private browser receipt is
 `~/.local/state/moss/vocci-delivery/auto-browser/final_runs/run_5/result.json`.
-The PR records the final committed-head rerun and its exact gate receipt.
+The PR records exact test receipts and tested commits. A subsequent clean-commit
+live rerun found an empty ring inventory after handback to the official app and
+was stopped; it is not passing evidence. The successful run above remains the
+physical proof. No later change alters Android runtime behavior.
 
 Executable assertions exercised owner signup, Voice Settings and Meetings
 settings through real Firefox UI, then the installed Android foreground client:
@@ -25,7 +28,7 @@ settings through real Firefox UI, then the installed Android foreground client:
 - Exact replay preserved import/meeting IDs. Process restart preserved source
   UUID and exact frozen bundle bytes. A separate executable interruption receipt
   stopped both accepted pending imports and verified their IDs/bytes before
-  resuming the service screen off; the final rerun integrates this assertion.
+  resuming the service screen off.
 - Unauthenticated import returned 401. The driver stopped delivery, restored the
   original official-app connect/scan permissions and Bluetooth state, and removed
   only its own ADB reverse.
