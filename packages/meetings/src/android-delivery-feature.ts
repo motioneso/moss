@@ -54,6 +54,37 @@ export const androidDeliveryFeature = {
         "The Moss session endpoint is unavailable. Delivery retries with backoff; a session rejection requires same-owner refresh and restart."
     },
     {
+      code: "server_rejected",
+      class: "prerequisite",
+      remediationRef: "meetings.android_developer_setup",
+      description:
+        "Moss permanently rejected a request. Delivery is blocked, or the affected recording failed. Inspect the developer setup before restarting; retain source identity."
+    },
+    {
+      code: "retry_exhausted",
+      class: "validation",
+      description:
+        "Eight interrupted upload attempts exhausted the automatic retry budget. The failed recording and frozen evidence remain private on Android."
+    },
+    {
+      code: "transfer_retry",
+      class: "transient",
+      description:
+        "A temporary upload or processing-status read failed. Delivery retains its identity and retries with backoff, up to eight attempts."
+    },
+    {
+      code: "source_size_limit",
+      class: "validation",
+      description:
+        "The stable advertised recording exceeds 1 MiB of packets or 64 KiB of sidecar. It fails visibly without downloading oversized files; other recordings continue."
+    },
+    {
+      code: "duration_limit",
+      class: "validation",
+      description:
+        "The completed sidecar reports more than 120 seconds. The recording fails visibly with that sidecar retained, without downloading its audio."
+    },
+    {
       code: "server_identity_change",
       class: "validation",
       description:
@@ -75,7 +106,7 @@ export const androidDeliveryFeature = {
       code: "ring_file_invalid",
       class: "validation",
       description:
-        "A file violates transfer framing or its advertised size. That recording fails locally; a new connection resumes other recordings."
+        "A read violated framing or its advertised size. It restarts from zero after backoff; eight repeated failures fail that recording while others continue."
     },
     {
       code: "decode_or_input_invalid",

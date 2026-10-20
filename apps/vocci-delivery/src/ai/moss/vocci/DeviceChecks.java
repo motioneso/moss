@@ -77,6 +77,21 @@ public final class DeviceChecks extends Instrumentation {
             check(store.entries.getJSONObject(invalid).getString("error").equals("sidecar_invalid"));
             check(store.needsRetrieval(id));
             check(store.admitSidecar(id, "{\"record\":[1,\"end\"]},{\"duration\":[1,100]}".getBytes(StandardCharsets.UTF_8)));
+            String oversized = "1700000003_long";
+            store.discover(oversized);
+            check(!store.admitSidecar(oversized, "{\"record\":[1,\"end\"]},{\"duration\":[1,120001]}".getBytes(StandardCharsets.UTF_8)));
+            check(store.entries.getJSONObject(oversized).getString("stage").equals("failed"));
+            check(store.entries.getJSONObject(oversized).getString("error").equals("duration_limit"));
+            check(!store.file(oversized, "packets.bin").exists());
+            String interruptedRead = "1700000004_read";
+            store.discover(interruptedRead);
+            store.failure(interruptedRead, "ring_file_invalid", false);
+            check(store.needsRetrieval(interruptedRead) && !store.retrievalDue(interruptedRead));
+            check(store.entries.getJSONObject(interruptedRead).getString("stage").equals("discovered"));
+            store.entries.getJSONObject(interruptedRead).put("nextAt", 0);
+            check(store.retrievalDue(interruptedRead));
+            store.retrieved(interruptedRead, packets, "{}".getBytes(StandardCharsets.UTF_8));
+            check(store.entries.getJSONObject(interruptedRead).optInt("attempts") == 0);
             store.activity("session_refresh_required"); check(store.state.getString("outcome").equals("blocked"));
             store.activity("stopped"); check(store.state.getString("activity").equals("stopped"));
             store.retrieved(id, packets, "{\"duration\":[1,100]}".getBytes(StandardCharsets.UTF_8));
@@ -101,6 +116,9 @@ public final class DeviceChecks extends Instrumentation {
             check(conflict);
             recovered.failure(conflictId, "server_identity_change", true);
             check(new DeliveryStore(isolated).entries.getJSONObject(conflictId).getString("error").equals("server_identity_change"));
+            recovered.httpFailure(conflictId, 409, true);
+            check(recovered.entries.getJSONObject(conflictId).getString("stage").equals("failed"));
+            check(new DeliveryStore(isolated).entries.getJSONObject(conflictId).getInt("httpStatus") == 409);
             recovered.beginAttempt(id);
             recovered.abandonAttempt(id);
             check(recovered.entries.getJSONObject(id).optInt("attempts") == 0);
@@ -119,7 +137,7 @@ public final class DeviceChecks extends Instrumentation {
             catch (IllegalArgumentException expected) { rejected = true; }
             check(rejected);
             remove(isolated.getNoBackupFilesDir());
-            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected");
+            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,oversized_duration,interrupted_read_retry,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected");
             result.putString("result", "PASS"); finish(-1, result);
         } catch (Throwable error) {
             result.putString("result", "FAIL"); result.putString("class", error.getClass().getSimpleName());

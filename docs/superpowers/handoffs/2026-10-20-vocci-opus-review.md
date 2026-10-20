@@ -50,6 +50,28 @@ Initial counts: Standards 3 actionable findings plus labeled judgment calls;
 Spec 4 findings. Worst within Standards: lost terminal conflict identity.
 Worst within Spec: one invalid source poisoning delivery of later sources.
 
+## Rereview of 5a7a42ab7
+
+Standards confirmed all three original actionable findings fixed. It found a
+new medium defect: framing exceptions were made terminal although some reflect
+transient connection faults. Low findings: terminal non-auth session rejection
+looked like active retry, stable local error codes were missing from the map,
+and abandoned discoveries retain queue capacity. Changed framing failures to
+bounded per-source retries, differentiated blocked server rejection, and declared
+stable errors while preserving numeric HTTP status. Abandoned discoveries remain
+retained evidence under the explicit 100-entry/manual-retention limit.
+
+Spec confirmed its four original findings fixed. It independently identified the
+same transient-framing defect and a second medium defect: over-duration completed
+sidecars remained pending forever. It also noted an optional limitation: retrieval
+requires successful live owner verification, so a Moss outage pauses ring retrieval.
+Preserved that authorization ordering. Oversized completed durations and advertised
+sources now become explicit failed entries; their allowed evidence stays retained.
+
+Rereview counts: Standards 1 medium and 3 low findings/judgments; Spec 2 medium
+findings plus a disclosed nonblocking outage limitation. Worst within Standards:
+prematurely terminal framing failure. Worst within Spec: the same framing failure.
+
 ## Verification status
 
 The revised runtime still requires final device/live checks, CI and independent

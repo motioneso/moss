@@ -88,8 +88,8 @@ No phase 2 implementation is planned before phase 1 live acceptance.
 
 - Opus review of `b881facf1`: unsupported inventory names and invalid sidecars/packets
   could poison retrieval; filter unsupported entries and fail only the bad source.
-  Unexpected transfer framing still aborts the connection, with that source failed
-  so the next connection can process other sources.
+  Unexpected transfer framing still aborts the connection; bounded per-source
+  retries restart at zero before isolating a persistently failing source.
 - Reconnect failures must cap delay, not disable retrieval permanently. Uploads
   retain their independent eight-attempt limit. Discovery persists before reads;
   prerequisite failures expose blocked status and notifications count pending work.
@@ -97,3 +97,9 @@ No phase 2 implementation is planned before phase 1 live acceptance.
   after destruction. Server identity/mode changes are typed terminal conflicts.
 - The Meetings settings remediation only enables the receiver; Android instructions
   live in the source README. Declare server availability and local integrity errors.
+- Opus rereview of `5a7a42ab7`: do not make a one-off framing fault terminal;
+  preserve per-source backoff/attempts across discovered reads. Report completed
+  over-duration and oversized advertised sources as failed. Terminal session
+  endpoint rejection is blocked, not a misleading active retry. Preserve HTTP
+  status while declaring stable error codes. Owner verification remains before
+  retrieval intentionally; fetching during a Moss outage is outside this slice.

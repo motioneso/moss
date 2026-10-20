@@ -32,13 +32,18 @@ final class DeliveryStore {
             .put("updatedAt", System.currentTimeMillis()); save();
     }
     private static boolean blocked(String code) {
-        return Arrays.asList("handoff_required", "owner_mismatch", "session_refresh_required", "configuration_or_storage_required", "storage_capacity").contains(code);
+        return Arrays.asList("handoff_required", "owner_mismatch", "session_refresh_required", "configuration_or_storage_required", "storage_capacity", "server_rejected").contains(code);
     }
     List<String> ids() { List<String> ids = new ArrayList<>(); entries.keys().forEachRemaining(ids::add); return ids; }
     boolean contains(String id) { return entries.has(id); }
     boolean hasStorageCapacity() { return root.getUsableSpace() > 150 * 1024 * 1024L && size(root) < 100 * 1024 * 1024L; }
     boolean canDiscover() { return entries.length() < 100 && hasStorageCapacity(); }
     boolean needsRetrieval(String id) throws Exception { return !contains(id) || entries.getJSONObject(id).getString("stage").equals("discovered"); }
+    boolean retrievalDue(String id) throws Exception {
+        if (!contains(id)) return true;
+        JSONObject entry = entries.getJSONObject(id);
+        return needsRetrieval(id) && RetryPolicy.due(entry.optInt("attempts"), entry.optLong("nextAt"), System.currentTimeMillis());
+    }
     void discover(String id) throws Exception {
         if (contains(id)) return;
         if (!canDiscover()) throw new IllegalStateException("storage_capacity");
@@ -46,11 +51,12 @@ final class DeliveryStore {
     }
     boolean admitSidecar(String id, byte[] sidecar) throws Exception {
         try { return CompletedSidecar.isComplete(sidecar); }
-        catch (org.json.JSONException invalid) { rejectSidecar(id, sidecar); return false; }
+        catch (CompletedSidecar.TooLong invalid) { rejectSidecar(id, sidecar, "duration_limit"); return false; }
+        catch (org.json.JSONException invalid) { rejectSidecar(id, sidecar, "sidecar_invalid"); return false; }
     }
-    private void rejectSidecar(String id, byte[] sidecar) throws Exception {
+    private void rejectSidecar(String id, byte[] sidecar, String code) throws Exception {
         PrivateFiles.write(file(id, "sidecar.bin"), sidecar);
-        failure(id, "sidecar_invalid", true);
+        failure(id, code, true);
     }
     private long size(File file) {
         if (!file.isDirectory()) return file.length();
@@ -106,6 +112,10 @@ final class DeliveryStore {
         entry.remove("inFlight");
         entry.put("status", status).put("stage", stage.equals("complete") || stage.equals("failed") ? stage : "accepted")
             .put("attempts", 0).put("nextAt", System.currentTimeMillis() + 30000); save();
+    }
+    void httpFailure(String id, int status, boolean terminal) throws Exception {
+        entries.getJSONObject(id).put("httpStatus", status);
+        failure(id, terminal ? "server_rejected" : "transfer_retry", terminal);
     }
     void failure(String id, String code, boolean terminal) throws Exception {
         JSONObject entry = entries.getJSONObject(id);

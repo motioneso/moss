@@ -74,7 +74,7 @@ public final class DeliveryService extends Service {
                         deliver(client);
                     } else report("storage_capacity");
                 } catch (MossClient.Rejected error) {
-                    report(error.status == 401 || error.status == 403 ? "session_refresh_required" : "server_unavailable");
+                    report(error.status == 401 || error.status == 403 ? "session_refresh_required" : error.terminal() ? "server_rejected" : "server_unavailable");
                     if (error.terminal()) break;
                     reconnectAttempts = RetryPolicy.connectionFailure(reconnectAttempts);
                 } catch (InterruptedException error) { Thread.currentThread().interrupt(); break; }
@@ -111,18 +111,21 @@ public final class DeliveryService extends Service {
                 if (!name.endsWith(".opus")) continue;
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
-                if (!store.needsRetrieval(id) || sidecarSize == null || file.getValue() > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT ||
+                if (!store.retrievalDue(id) || sidecarSize == null ||
                     !file.getValue().equals(previousInventory.get(name)) || !sidecarSize.equals(previousInventory.get(sidecarName))) continue;
                 if (!store.hasStorageCapacity() || stopping) break;
                 if (!store.contains(id) && !store.canDiscover()) continue;
                 store.discover(id);
+                if (file.getValue() > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT) {
+                    store.failure(id, "source_size_limit", true); continue;
+                }
                 byte[] sidecar;
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
-                catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", true); throw invalid; }
+                catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 if (!store.admitSidecar(id, sidecar)) continue;
                 byte[] packets;
                 try { packets = active.retrieve(name, file.getValue()); }
-                catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", true); throw invalid; }
+                catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 store.retrieved(id, packets, sidecar);
             }
             previousInventory.clear(); previousInventory.putAll(inventory);
@@ -149,7 +152,7 @@ public final class DeliveryService extends Service {
                     store.abandonAttempt(id);
                     throw error;
                 }
-                store.failure(id, "http_" + error.status, error.terminal());
+                store.httpFailure(id, error.status, error.terminal());
             } catch (DeliveryStore.Conflict error) { store.failure(id, error.getMessage(), true); }
             catch (InterruptedException error) { throw error; }
             catch (IllegalArgumentException error) { store.failure(id, "decode_or_input_invalid", true); }

@@ -75,12 +75,14 @@ The service stores source identity and delivery entries in
 published before decoding; an immutable `bundle.json` is published before upload.
 No private bytes are sent to Android logs. A lost acceptance response replays the
 same bundle. Accepted status retains import/meeting IDs and is polled to completion.
-Server conflicts and terminal failures stay visible; source identity never changes
+Server conflicts and terminal failures stay visible, including HTTP status; source identity never changes
 to get around a failure. Authentication failure preserves pending work for session
 refresh. Receiver processing failures are not reset by replay.
 
 Unsupported inventory filenames are ignored. Invalid sidecar JSON and packet gaps
 fail only that recording; retained evidence and other recordings remain available.
+Framing failures restart from zero with per-source backoff and an eight-attempt
+limit. Oversized advertised files and completed durations fail visibly.
 Discovered entries survive interrupted retrieval, and prerequisite failures expose
 a blocked service outcome. Stop records stopped without reposting a notification.
 
