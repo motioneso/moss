@@ -75,4 +75,16 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-None.
+### Vocci companion design approval — task #3553
+
+- **Blocked:** feature implementation requires an approved design spec under
+  `CLAUDE.md` → Process gates. The requested outcome and text-only replies are
+  established; the new design is proposed for approval.
+- **Proposal:** [Vocci companion: meetings and text conversations](../superpowers/specs/2026-10-20-vocci-companion-meetings-chat.md).
+- **Decision:** approve the proposed flows/defaults and build order, or identify
+  changes. Recommend approving: processed meetings, explicit hold-to-talk messages
+  in a dedicated Moss conversation, resumable meeting-length audio, companion
+  status/setup, and an independent live-audio investigation. Meetings use existing
+  action review; old voice recordings never execute retroactively.
+- **Agent:** `vocci-companion-design`. No implementation, phone changes or servers
+  are pending in this worktree.
