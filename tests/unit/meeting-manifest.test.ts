@@ -130,6 +130,7 @@ describe("meetings composition", () => {
       supportsUserDisable: true
     });
     expect(meeting?.database?.ownedTables).toEqual([
+      "app.meeting_recording_imports",
       "app.meeting_records",
       "app.meeting_note_writes",
       "app.meeting_transcript_batches",
@@ -163,6 +164,8 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "POST /api/meetings/recording-imports",
+      "GET /api/meetings/recording-imports/:id",
       "PUT /api/meetings/records/:id/title",
       "GET /api/meetings/output-availability",
       "POST /api/meetings/capture/connection",
@@ -197,6 +200,7 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.recording_imports",
       "meetings.chat_app_actions",
       "meetings.link_state",
       "meetings.mac_link_controls",

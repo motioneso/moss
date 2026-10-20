@@ -25,6 +25,8 @@ CREATE POLICY meeting_recording_imports_owner ON app.meeting_recording_imports
   WITH CHECK(owner_user_id=app.current_actor_user_id());
 GRANT SELECT,INSERT,DELETE ON app.meeting_recording_imports TO jarvis_app_runtime;
 GRANT UPDATE(ready,state,attempts,attempt_id,code,retryable,updated_at) ON app.meeting_recording_imports TO jarvis_app_runtime;
+-- Recording import account export: worker reads only the archive projection.
 CREATE POLICY meeting_recording_imports_export_worker ON app.meeting_recording_imports
   FOR SELECT TO jarvis_worker_runtime USING(owner_user_id=app.current_actor_user_id());
-GRANT SELECT ON app.meeting_recording_imports TO jarvis_worker_runtime;
+GRANT SELECT (id, owner_user_id, meeting_id, source_device_id, recording_id, fingerprint, metadata_json, ready, state, attempts, code, created_at)
+  ON app.meeting_recording_imports TO jarvis_worker_runtime;

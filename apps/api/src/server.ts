@@ -111,6 +111,7 @@ export interface CreateApiServerOptions {
   readonly boss?: PgBoss;
   /** Override the maintenance lifecycle; the API still awaits start and drains close. */
   readonly captureMaintenance?: MeetingCaptureMaintenanceRuntime;
+  readonly recordingImportWorker?: ReturnType<typeof createRecordingImportWorkerRuntime>;
   readonly authRuntime?: MossAuthRuntime;
   /** #3065: tests inject a registry with a fake clock. */
   readonly actAsGrants?: ActAsGrantRegistry;
@@ -253,7 +254,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   const ownsWorkerDb = options.workerDb === undefined;
   const workerDataContext = new DataContextRunner(workerDb);
   let externalWorkerRuntime: ExternalModuleWorkerRuntime | undefined;
-  let recordingImportWorker: ReturnType<typeof createRecordingImportWorkerRuntime> | undefined;
+  let recordingImportWorker = options.recordingImportWorker;
   const ownsBoss = options.boss === undefined;
   const dataContext = new DataContextRunner(appDb);
   const aiRepository = new AiRepository();
@@ -604,7 +605,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // #917: externalModuleHolder is computed above (before registerPlatformRoutes),
     // because the /api/modules provider closes over it. registerBuiltInApiRoutes reuses
     // the same holder for the settings module's external-module deps below.
-    recordingImportWorker = createRecordingImportWorkerRuntime(getMossDatabaseUrls().worker, {
+    recordingImportWorker ??= createRecordingImportWorkerRuntime(getMossDatabaseUrls().worker, {
       dataContext,
       boss,
       resolveActiveModules: resolveActiveModulesWithIntegrations

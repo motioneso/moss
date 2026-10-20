@@ -43,7 +43,10 @@ export async function collectMeetingsExportSection(
     scopedDb,
     sql<
       Record<string, unknown>
-    >`SELECT id::text AS id, meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, created_at AS "createdAt" FROM app.meeting_recording_imports WHERE owner_user_id=${ownerUserId}::uuid ORDER BY created_at,id`
+    >`SELECT id::text AS id, owner_user_id::text AS "ownerUserId", meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, created_at AS "createdAt"
+      FROM app.meeting_recording_imports
+      WHERE owner_user_id = ${ownerUserId}::uuid
+      ORDER BY created_at, id`
   );
   const vault = new VaultContextRunner(getVaultBaseDir());
   const recordingImports = imports.some((row) => row.ready === true)
