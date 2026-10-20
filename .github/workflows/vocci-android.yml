@@ -26,6 +26,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: android-actions/setup-android@v3
       - name: Install Android platform tools
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Protocol tests and development APK signature
