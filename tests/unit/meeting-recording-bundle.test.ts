@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { RecordingImportInputError, validateRecordingBundle } from "@moss/meetings";
+import {
+  RECORDING_IMPORT_QUEUES,
+  RecordingImportInputError,
+  validateRecordingBundle
+} from "@moss/meetings";
 import { recordingBundle, recordingFile } from "../fixtures/recording-bundle.js";
 describe("completed legacy recording validation", () => {
   it.each([false, true])("preserves canonical evidence and normalized mode: hold=%s", (hold) => {
@@ -85,5 +89,9 @@ describe("completed legacy recording validation", () => {
         packets: { ...recordingFile(input.packets.name, bytes), base64: "/x==" }
       })
     ).toThrow(RecordingImportInputError);
+  });
+  it("keeps accepted import work queued through a multi-day outage", () => {
+    const retention = RECORDING_IMPORT_QUEUES[0]!.options!.retentionSeconds!;
+    expect(retention).toBeGreaterThanOrEqual(7 * 24 * 60 * 60);
   });
 });

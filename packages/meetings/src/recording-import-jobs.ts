@@ -15,7 +15,9 @@ export const RECORDING_IMPORT_QUEUES: readonly QueueDefinition[] = [
       retryBackoff: true,
       expireInSeconds: 120,
       deleteAfterSeconds: 3600,
-      retentionSeconds: 86400
+
+      // Accepted imports have no other trigger, so queued work must outlast a long outage.
+      retentionSeconds: 1_209_600
     }
   }
 ];
