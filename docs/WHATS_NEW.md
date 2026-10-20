@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Android recording delivery preview.** A developer-installed Android client can send completed ring recordings to Meetings for transcription after a manual handoff from the ring app. [PR #3551](https://github.com/motioneso/moss/pull/3551)
 - **Import completed recordings.** Developer-imported recordings can now be transcribed and reviewed in meeting history while preserving their source metadata. [PR #3548](https://github.com/motioneso/moss/pull/3548)
 
 ### 2026-10-15
