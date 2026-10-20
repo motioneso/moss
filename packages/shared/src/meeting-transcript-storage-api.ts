@@ -50,7 +50,7 @@ const source = {
   properties: {
     sourceId: identifier,
     epoch: { ...counter, minimum: 1 },
-    kind: { type: "string", enum: ["microphone", "output"] },
+    kind: { type: "string", enum: ["microphone", "output", "recording"] },
     label: identifier,
     startMs: counter,
     endMs: counter

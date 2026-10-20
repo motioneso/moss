@@ -27,7 +27,7 @@ afterEach(async () => {
 
 function setup(
   authError?: Error,
-  beforeRemove?: (db: DataContextDb, meetingId: string) => Promise<void>
+  beforeRemove?: (db: DataContextDb, meetingId: string, actor: AccessContext) => Promise<void>
 ) {
   const server = Fastify();
   servers.push(server);
@@ -87,7 +87,10 @@ describe("meeting draft record routes", () => {
       (await server.inject({ method: "DELETE", url: `/api/meetings/records/${id}` })).statusCode
     ).toBe(204);
     expect(repository.get).toHaveBeenCalledExactlyOnceWith(scopedDb, id, { forUpdate: true });
-    expect(beforeRemove).toHaveBeenCalledExactlyOnceWith(scopedDb, id);
+    expect(beforeRemove).toHaveBeenCalledExactlyOnceWith(scopedDb, id, {
+      actorUserId: id,
+      requestId: "test-request"
+    });
     expect(beforeRemove.mock.invocationCallOrder[0]).toBeLessThan(
       repository.remove.mock.invocationCallOrder[0]!
     );

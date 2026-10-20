@@ -6,6 +6,8 @@ export const RECORDS_MODULE_IDS: ReadonlySet<string> = new Set([
 ]);
 
 export const RECORDS_EXPECTED_ROWS = [
+  "meetings POST /api/meetings/recording-imports blocked external_effect",
+  "meetings GET /api/meetings/recording-imports/:id blocked external_effect",
   "meetings POST /api/meetings/capture/connection blocked external_effect",
   "meetings POST /api/meetings/capture/commands blocked external_effect",
   "meetings POST /api/meetings/capture/claim blocked external_effect",

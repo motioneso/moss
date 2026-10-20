@@ -13,6 +13,25 @@ import { MeetingExportsRepository } from "../../packages/meetings/src/export-rep
 /** Independent export contract: original columns only, never the history search projection. */
 export const meetingExportTables = [
   {
+    key: "recording_imports",
+    table: "meeting_recording_imports",
+    columns: [
+      "id",
+      "owner_user_id",
+      "meeting_id",
+      "source_device_id",
+      "recording_id",
+      "fingerprint",
+      "metadata_json",
+      "ready",
+      "state",
+      "attempts",
+      "code",
+      "created_at"
+    ],
+    derived: ["attempt_id", "retryable", "updated_at"]
+  },
+  {
     key: "records",
     table: "meeting_records",
     columns: [
@@ -306,6 +325,13 @@ export async function seedMeetingAccountExport(
     title: `${marker} planning meeting`
   });
   const { personalNotes, firstBatch, content } = buildMeetingAccountExportInput(meeting.id, marker);
+  // An interrupted publication still belongs in the archive, without a retained vault bundle.
+  await sql`INSERT INTO app.meeting_recording_imports
+    (id, meeting_id, source_device_id, recording_id, fingerprint, metadata_json, state, code)
+    VALUES (${randomUUID()}::uuid, ${meeting.id}::uuid, ${randomUUID()}::uuid,
+      ${marker}, ${"a".repeat(64)}, ${JSON.stringify({ marker })}, 'failed', 'import_interrupted')`.execute(
+    db.db
+  );
   await records.putNotes(db, {
     meetingId: meeting.id,
     requestKey: randomUUID(),

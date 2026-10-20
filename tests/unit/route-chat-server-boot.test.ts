@@ -98,11 +98,16 @@ async function bootProbe(
     trustedOrigins: [],
     close: async () => undefined
   } as unknown as MossAuthRuntime;
+  const recordingImportWorker = {
+    start: vi.fn(async () => undefined),
+    close: vi.fn(async () => undefined)
+  };
   const server = createApiServer({
     appDb: db,
     workerDb: db,
     boss: {} as PgBoss,
     captureMaintenance,
+    recordingImportWorker,
     authRuntime,
     logger: false,
     apiServerConfig: { host: "127.0.0.1", port: 0, mcpServerUrl: "", externalModulesDir },
@@ -133,6 +138,7 @@ async function bootProbe(
     server,
     queries,
     captureMaintenance,
+    recordingImportWorker,
     async close() {
       await server.close();
       await db.destroy();
@@ -149,6 +155,7 @@ describe("real API route-chat boot guard", () => {
         /GET \/api\/__chat_policy_probe__.*no chat access/
       );
       expect(probe.captureMaintenance.start).not.toHaveBeenCalled();
+      expect(probe.recordingImportWorker.start).not.toHaveBeenCalled();
       expect(createPgBossClient).not.toHaveBeenCalled();
       expect(
         probe.queries.every((query) =>
@@ -162,6 +169,7 @@ describe("real API route-chat boot guard", () => {
     } finally {
       await probe.close();
       expect(probe.captureMaintenance.close).toHaveBeenCalledOnce();
+      expect(probe.recordingImportWorker.close).toHaveBeenCalledOnce();
     }
   });
   it("awaits injected maintenance readiness and drains it before completing close", async () => {
@@ -235,6 +243,7 @@ describe("real API route-chat boot guard", () => {
     try {
       await probe.server.ready();
       expect(probe.captureMaintenance.start).toHaveBeenCalledOnce();
+      expect(probe.recordingImportWorker.start).toHaveBeenCalledOnce();
       expect(createPgBossClient).not.toHaveBeenCalled();
       expect(
         probe.queries.every((query) =>
