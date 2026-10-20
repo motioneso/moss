@@ -46,16 +46,15 @@ export async function collectMeetingsExportSection(
     >`SELECT id::text AS id, meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, created_at AS "createdAt" FROM app.meeting_recording_imports WHERE owner_user_id=${ownerUserId}::uuid ORDER BY created_at,id`
   );
   const vault = new VaultContextRunner(getVaultBaseDir());
-  const recordingImports = await vault.withVaultContext(
-    { actorUserId: ownerUserId },
-    async (vaultCtx) => {
-      for (const row of imports) {
-        if (row.ready === true && typeof row.id === "string")
-          row.bundleJson = await readVaultFile(vaultCtx, recordingBundlePath(row.id));
-      }
-      return imports;
-    }
-  );
+  const recordingImports = imports.some((row) => row.ready === true)
+    ? await vault.withVaultContext({ actorUserId: ownerUserId }, async (vaultCtx) => {
+        for (const row of imports) {
+          if (row.ready === true && typeof row.id === "string")
+            row.bundleJson = await readVaultFile(vaultCtx, recordingBundlePath(row.id));
+        }
+        return imports;
+      })
+    : imports;
   return {
     recording_imports: recordingImports,
     records: await readRows(
