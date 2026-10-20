@@ -6,20 +6,20 @@ import android.content.*;
 import android.content.pm.PackageManager;
 import android.os.*;
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import org.json.*;
 
 public final class DeliveryService extends Service {
     static final String OFFICIAL = "com.gygeslabs.odinclient";
+    private static final Set<String> SAFE_FAILURES = new HashSet<>(Arrays.asList("ring_connect", "ring_mtu", "ring_services", "ring_subscribe", "ring_identity", "ring_challenge", "ring_start_app", "inventory_limit", "gatt_timeout_or_error", "transfer start", "incomplete", "unexpected file bytes"));
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile RingConnection active;
     private volatile boolean stopping;
     private volatile boolean started;
     private DeliveryStore store;
     private PowerManager.WakeLock wake;
-    private final Map<String, Integer> previous = new HashMap<>();
+    private final Map<String, Integer> previousInventory = new HashMap<>();
     private int reconnectAttempts;
     @Override public void onCreate() {
         super.onCreate();
@@ -34,15 +34,17 @@ public final class DeliveryService extends Service {
             .setSmallIcon(android.R.drawable.stat_sys_upload).setOngoing(true)
             .addAction(new Notification.Action.Builder(null, "Stop", action).build()).build();
     }
-    private void report(String code) throws Exception {
+    private synchronized void report(String code) throws Exception {
+        if (stopping) return;
         store.activity(code);
-        int complete = 0, failed = 0;
+        int complete = 0, failed = 0, pending = 0;
         for (String id : store.ids()) {
             String stage = store.entries.getJSONObject(id).getString("stage");
             if (stage.equals("complete")) complete++;
             if (stage.equals("failed")) failed++;
+            if (!stage.equals("complete") && !stage.equals("failed")) pending++;
         }
-        getSystemService(NotificationManager.class).notify(3550, notification(code.replace('_', ' ') + " · " + complete + " complete · " + failed + " failed"));
+        getSystemService(NotificationManager.class).notify(3550, notification(code.replace('_', ' ') + " · " + complete + " complete · " + failed + " failed · " + pending + " pending"));
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && "stop".equals(intent.getAction())) { stopSelf(); return START_NOT_STICKY; }
@@ -66,35 +68,36 @@ public final class DeliveryService extends Service {
                     // Verify the credential's current owner before touching queued recordings.
                     if (!client.owner().equals(config.getString("ownerId"))) { report("owner_mismatch"); break; }
                     deliver(client);
-                    if (reconnectAttempts < RetryPolicy.MAX_ATTEMPTS && store.capacity()) {
+                    if (store.hasStorageCapacity()) {
                         retrieve(config);
                         reconnectAttempts = 0;
                         deliver(client);
-                    } else if (!store.capacity()) report("storage_capacity");
-                    else report("reconnect_exhausted");
+                    } else report("storage_capacity");
                 } catch (MossClient.Rejected error) {
                     report(error.status == 401 || error.status == 403 ? "session_refresh_required" : "server_unavailable");
                     if (error.terminal()) break;
-                    reconnectAttempts++;
+                    reconnectAttempts = RetryPolicy.connectionFailure(reconnectAttempts);
                 } catch (InterruptedException error) { Thread.currentThread().interrupt(); break; }
                 catch (Exception error) {
+                    if (stopping || Thread.currentThread().isInterrupted()) break;
                     String message = error.getMessage();
-                    Set<String> safe = new HashSet<>(Arrays.asList("ring_connect", "ring_mtu", "ring_services", "ring_subscribe", "ring_identity", "ring_challenge", "ring_start_app", "inventory_limit", "gatt_timeout_or_error", "transfer start", "incomplete", "unexpected file bytes"));
-                    store.state.put("lastFailure", safe.contains(message) ? message : error.getClass().getSimpleName());
-                    reconnectAttempts = Math.min(reconnectAttempts + 1, RetryPolicy.MAX_ATTEMPTS);
-                    report(reconnectAttempts >= RetryPolicy.MAX_ATTEMPTS ? "reconnect_exhausted" : "retry_pending");
+                    store.state.put("lastFailure", SAFE_FAILURES.contains(message) ? message : error.getClass().getSimpleName());
+                    reconnectAttempts = RetryPolicy.connectionFailure(reconnectAttempts);
+                    report("retry_pending");
                 } finally {
                     if (active != null) { active.close(); active = null; }
                     if (wake.isHeld()) wake.release();
                 }
-                long delay = reconnectAttempts == 0 ? 30000 : RetryPolicy.delayMs(Math.min(reconnectAttempts, RetryPolicy.MAX_ATTEMPTS));
-                Thread.sleep(delay);
+                if (stopping || Thread.currentThread().isInterrupted()) break;
+                Thread.sleep(RetryPolicy.connectionDelayMs(reconnectAttempts));
             }
+        } catch (InterruptedException error) { Thread.currentThread().interrupt();
         } catch (Exception error) {
-            if (store != null) try { report("configuration_or_storage_required"); } catch (Exception ignored) { /* No private exception detail is logged. */ }
+            if (!stopping && store != null) try { report("configuration_or_storage_required"); } catch (Exception ignored) { /* No private exception detail is logged. */ }
         } finally {
             if (active != null) active.close();
             if (wake != null && wake.isHeld()) wake.release();
+            if (stopping && store != null) try { store.activity("stopped"); } catch (Exception ignored) { /* Preserve private failures. */ }
             started = false;
         }
     }
@@ -108,36 +111,30 @@ public final class DeliveryService extends Service {
                 if (!name.endsWith(".opus")) continue;
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
-                if (store.contains(id) || sidecarSize == null || file.getValue() > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT ||
-                    !file.getValue().equals(previous.get(name)) || !sidecarSize.equals(previous.get(sidecarName))) continue;
-                if (!store.capacity() || stopping) break;
-                byte[] sidecar = active.retrieve(sidecarName, sidecarSize);
-                if (!completed(sidecar)) continue;
-                byte[] packets = active.retrieve(name, file.getValue());
-                RingProtocol.packetCount(packets);
+                if (!store.needsRetrieval(id) || sidecarSize == null || file.getValue() > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT ||
+                    !file.getValue().equals(previousInventory.get(name)) || !sidecarSize.equals(previousInventory.get(sidecarName))) continue;
+                if (!store.hasStorageCapacity() || stopping) break;
+                if (!store.contains(id) && !store.canDiscover()) continue;
+                store.discover(id);
+                byte[] sidecar;
+                try { sidecar = active.retrieve(sidecarName, sidecarSize); }
+                catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", true); throw invalid; }
+                if (!store.admitSidecar(id, sidecar)) continue;
+                byte[] packets;
+                try { packets = active.retrieve(name, file.getValue()); }
+                catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", true); throw invalid; }
                 store.retrieved(id, packets, sidecar);
             }
-            previous.clear(); previous.putAll(inventory);
+            previousInventory.clear(); previousInventory.putAll(inventory);
         } finally { active.close(); active = null; }
-        report("waiting_for_completed_recordings");
-    }
-    static boolean completed(byte[] sidecar) throws Exception {
-        JSONArray rows = new JSONArray("[" + new String(sidecar, StandardCharsets.UTF_8) + "]");
-        boolean end = false, duration = false;
-        for (int n = 0; n < rows.length(); n++) {
-            JSONObject row = rows.getJSONObject(n);
-            JSONArray record = row.optJSONArray("record"), time = row.optJSONArray("duration");
-            if (record != null && record.length() >= 2 && "end".equals(record.optString(1))) end = true;
-            if (time != null && time.length() >= 2 && time.optDouble(1, -1) > 0 && time.optDouble(1, -1) <= 120000) duration = true;
-        }
-        return end && duration;
+        report(store.canDiscover() ? "waiting_for_completed_recordings" : "storage_capacity");
     }
     private void deliver(MossClient client) throws Exception {
         for (String id : store.ids()) {
             if (stopping || Thread.currentThread().isInterrupted()) return;
             JSONObject entry = store.entries.getJSONObject(id);
             String stage = entry.getString("stage");
-            if (stage.equals("complete") || stage.equals("failed") ||
+            if (stage.equals("discovered") || stage.equals("complete") || stage.equals("failed") ||
                 !RetryPolicy.due(entry.optInt("attempts"), entry.optLong("nextAt"), System.currentTimeMillis())) continue;
             report("delivering");
             try {
@@ -147,19 +144,25 @@ public final class DeliveryService extends Service {
                     client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024));
                 store.accepted(id, status);
             } catch (MossClient.Rejected error) {
+                if (stopping) throw new InterruptedException();
                 if (error.status == 401 || error.status == 403) {
-                    entry.remove("inFlight"); entry.put("attempts", Math.max(0, entry.optInt("attempts") - 1)); store.save();
+                    store.abandonAttempt(id);
                     throw error;
                 }
                 store.failure(id, "http_" + error.status, error.terminal());
-            } catch (IllegalArgumentException error) { store.failure(id, "decode_or_input_invalid", true); }
-            catch (Exception error) { store.failure(id, "transfer_retry", false); }
+            } catch (DeliveryStore.Conflict error) { store.failure(id, error.getMessage(), true); }
+            catch (InterruptedException error) { throw error; }
+            catch (IllegalArgumentException error) { store.failure(id, "decode_or_input_invalid", true); }
+            catch (Exception error) {
+                if (stopping || Thread.currentThread().isInterrupted()) throw new InterruptedException();
+                store.failure(id, "transfer_retry", false);
+            }
         }
     }
-    @Override public void onDestroy() {
+    @Override public synchronized void onDestroy() {
         stopping = true;
-        if (active != null) active.close();
         worker.shutdownNow();
+        if (active != null) active.close();
         super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent) { return null; }

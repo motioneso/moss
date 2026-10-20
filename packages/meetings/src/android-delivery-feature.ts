@@ -9,7 +9,7 @@ export const androidDeliveryFeature = {
       id: "meetings.android_developer_setup",
       path: "/settings?section=modules&module=meetings",
       description:
-        "Use the developer Android setup instructions to restore the permission handoff, same-owner session or local storage, then restart the installed delivery client."
+        "Meetings settings enable the receiver only. For Android permission handoff, session refresh or local storage, use apps/vocci-delivery/README.md in the source checkout and restart the developer client."
     }
   ],
   errors: [
@@ -42,10 +42,46 @@ export const androidDeliveryFeature = {
         "Developer provisioning must refresh the same owner's Moss session and restart delivery. Pending evidence remains on Android."
     },
     {
-      code: "reconnect_exhausted",
+      code: "retry_pending",
       class: "transient",
       description:
-        "After eight unsuccessful sessions, restart delivery when the ring and Bluetooth are available. No ring files are deleted."
+        "The ring connection retries automatically with increasing delays, capped at 30 minutes. Keep the ring and Bluetooth available. No ring files are deleted."
+    },
+    {
+      code: "server_unavailable",
+      class: "transient",
+      description:
+        "The Moss session endpoint is unavailable. Delivery retries with backoff; a session rejection requires same-owner refresh and restart."
+    },
+    {
+      code: "server_identity_change",
+      class: "validation",
+      description:
+        "The server returned a different import or meeting identity. This recording fails visibly; its source identity and frozen evidence stay unchanged."
+    },
+    {
+      code: "server_mode_change",
+      class: "validation",
+      description:
+        "The returned normal or voice-request mode differs from the source filename. This recording fails visibly and retains its evidence."
+    },
+    {
+      code: "sidecar_invalid",
+      class: "validation",
+      description:
+        "A completed-size sidecar contains invalid JSON. That recording fails locally with its sidecar retained; other recordings continue."
+    },
+    {
+      code: "ring_file_invalid",
+      class: "validation",
+      description:
+        "A file violates transfer framing or its advertised size. That recording fails locally; a new connection resumes other recordings."
+    },
+    {
+      code: "decode_or_input_invalid",
+      class: "validation",
+      description:
+        "A retained recording has invalid packet continuity, codec output or duration. It fails locally and other recordings continue."
     },
     {
       code: "storage_capacity",

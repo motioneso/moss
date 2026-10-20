@@ -72,7 +72,8 @@ final class RingConnection implements AutoCloseable {
             stage = "start_app";
             byte[] success = response(RingAuth.AUTH_UUID, 0x82);
             if (success.length != 1 || success[0] != 3) throw new IOException("auth_rejected");
-        } catch (Exception error) { close(); throw new IOException("ring_" + stage, error); }
+        } catch (InterruptedException error) { close(); throw error; }
+        catch (Exception error) { close(); throw new IOException("ring_" + stage, error); }
     }
     private Event next() throws Exception {
         if (closed || overflow) throw new IOException("connection_closed");
@@ -128,6 +129,7 @@ final class RingConnection implements AutoCloseable {
             byte[] payload = response(RingProtocol.UART, 0x11);
             if (RingProtocol.inventoryComplete(payload)) return files;
             RingProtocol.Entry entry = RingProtocol.Entry.parse(payload);
+            if (entry == null) continue; // Unsupported or empty files cannot poison an otherwise valid inventory.
             if (files.put(entry.name, entry.size) != null) throw new IOException("duplicate_inventory");
         }
         throw new IOException("inventory_limit");
@@ -146,7 +148,7 @@ final class RingConnection implements AutoCloseable {
         }
         return transfer.result();
     }
-    @Override public void close() {
+    @Override public synchronized void close() {
         closed = true;
         if (gatt != null) { gatt.disconnect(); gatt.close(); gatt = null; }
         events.offer(new Event("disconnected", -1, null));

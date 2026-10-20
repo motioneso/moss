@@ -36,12 +36,24 @@ public final class ProtocolTest {
             .put((byte) 0).putInt(56464).put((byte) filename.length).put(filename).array();
         RingProtocol.Entry listed = RingProtocol.Entry.parse(inventory);
         check(listed.name.equals(name) && listed.size == 56464);
+        byte[] unsupported = inventory.clone();
+        unsupported[unsupported.length - 1] = 'x';
+        check(RingProtocol.Entry.parse(unsupported) == null);
+        byte[] empty = inventory.clone();
+        Arrays.fill(empty, 1, 5, (byte) 0);
+        check(RingProtocol.Entry.parse(empty) == null);
+        // Filtering one unrelated file must not prevent the next supported entry.
+        check(RingProtocol.Entry.parse(inventory).name.equals(name));
         inventory[5]--;
         rejects(() -> RingProtocol.Entry.parse(inventory));
         byte[] query = RingProtocol.read(name);
         check(query[6] == 0x12 && query[7] == 1);
         rejects(() -> RingProtocol.read("1700000000_mono.exe"));
         check(RetryPolicy.delayMs(1) == 30000 && RetryPolicy.delayMs(8) == 1800000);
+        int failures = 0;
+        for (int n = 0; n < 100; n++) failures = RetryPolicy.connectionFailure(failures);
+        check(failures == 8 && RetryPolicy.connectionDelayMs(failures) == 1800000);
+        check(RetryPolicy.connectionDelayMs(0) == 30000);
         check(!RetryPolicy.due(8, 0, Long.MAX_VALUE));
         check(!RetryPolicy.due(1, 100, 99) && RetryPolicy.due(1, 100, 100));
         System.out.println("PASS: strict transfer, incomplete restart, packet continuity, safe reads and bounded retries");

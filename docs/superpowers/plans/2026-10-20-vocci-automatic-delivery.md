@@ -85,3 +85,15 @@ No phase 2 implementation is planned before phase 1 live acceptance.
   retained credential remains valid. Production storage requires Android Keystore.
 - Official app force-stop alone is insufficient (reconnect services relaunch it).
   Developer permission handoff must be tested, and restored after validation.
+
+- Opus review of `b881facf1`: unsupported inventory names and invalid sidecars/packets
+  could poison retrieval; filter unsupported entries and fail only the bad source.
+  Unexpected transfer framing still aborts the connection, with that source failed
+  so the next connection can process other sources.
+- Reconnect failures must cap delay, not disable retrieval permanently. Uploads
+  retain their independent eight-attempt limit. Discovery persists before reads;
+  prerequisite failures expose blocked status and notifications count pending work.
+- Preserve interruption through ring setup and Stop; do not repost notifications
+  after destruction. Server identity/mode changes are typed terminal conflicts.
+- The Meetings settings remediation only enables the receiver; Android instructions
+  live in the source README. Declare server availability and local integrity errors.

@@ -12,7 +12,8 @@ An isolated `test:recording-live` gate passed with exit 0:
 The PR records exact test receipts and tested commits. A subsequent clean-commit
 live rerun found an empty ring inventory after handback to the official app and
 was stopped; it is not passing evidence. The successful run above remains the
-physical proof. No later change alters Android runtime behavior.
+original physical proof. Subsequent Opus review identified Android recovery defects;
+the revised runtime requires a fresh installed-path run before merge.
 
 Executable assertions exercised owner signup, Voice Settings and Meetings
 settings through real Firefox UI, then the installed Android foreground client:

@@ -79,6 +79,11 @@ Server conflicts and terminal failures stay visible; source identity never chang
 to get around a failure. Authentication failure preserves pending work for session
 refresh. Receiver processing failures are not reset by replay.
 
+Unsupported inventory filenames are ignored. Invalid sidecar JSON and packet gaps
+fail only that recording; retained evidence and other recordings remain available.
+Discovered entries survive interrupted retrieval, and prerequisite failures expose
+a blocked service outcome. Stop records stopped without reposting a notification.
+
 Listing requires two stable snapshots, matching audio/sidecar names, completed
 sidecar end/duration and exact transfer sizes/end frames. Partial reads restart
 at zero after reconnect. Interrupted codec work recovers from the retained sources;
@@ -88,8 +93,8 @@ packet continuity. If the decoder outputs 48 kHz, a three-sample box filter prec
 16 kHz decoder. Original evidence remains unchanged.
 
 Eight automatic upload attempts use exponential backoff (30 seconds to 30 minutes).
-Connection failures similarly stop retrieval after eight unsuccessful sessions;
-explicit restart permits another connection sequence. The queue stops retrieving
+Connection failures continue reconnecting automatically with backoff capped at
+30 minutes, so returning to range after an outage resumes retrieval. The queue stops retrieving
 at 100 retained entries, 100 MiB, or less than 150 MiB free. Sources/bundles are
 retained after success. Automatic retention management is not implemented.
 

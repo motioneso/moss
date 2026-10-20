@@ -10,6 +10,9 @@ import org.json.JSONObject;
 
 /** One service worker owns all writes. Atomic files are recovery boundaries. */
 final class DeliveryStore {
+    static final class Conflict extends Exception {
+        Conflict(String code) { super(code); }
+    }
     private final File root, stateFile;
     final JSONObject state, entries;
     DeliveryStore(Context context) throws Exception {
@@ -24,10 +27,31 @@ final class DeliveryStore {
         save();
     }
     void save() throws Exception { PrivateFiles.json(stateFile, state); }
-    void activity(String code) throws Exception { state.put("activity", code); state.put("updatedAt", System.currentTimeMillis()); save(); }
+    void activity(String code) throws Exception {
+        state.put("activity", code).put("outcome", blocked(code) ? "blocked" : code.equals("stopped") ? "stopped" : "active")
+            .put("updatedAt", System.currentTimeMillis()); save();
+    }
+    private static boolean blocked(String code) {
+        return Arrays.asList("handoff_required", "owner_mismatch", "session_refresh_required", "configuration_or_storage_required", "storage_capacity").contains(code);
+    }
     List<String> ids() { List<String> ids = new ArrayList<>(); entries.keys().forEachRemaining(ids::add); return ids; }
     boolean contains(String id) { return entries.has(id); }
-    boolean capacity() { return entries.length() < 100 && root.getUsableSpace() > 150 * 1024 * 1024L && size(root) < 100 * 1024 * 1024L; }
+    boolean hasStorageCapacity() { return root.getUsableSpace() > 150 * 1024 * 1024L && size(root) < 100 * 1024 * 1024L; }
+    boolean canDiscover() { return entries.length() < 100 && hasStorageCapacity(); }
+    boolean needsRetrieval(String id) throws Exception { return !contains(id) || entries.getJSONObject(id).getString("stage").equals("discovered"); }
+    void discover(String id) throws Exception {
+        if (contains(id)) return;
+        if (!canDiscover()) throw new IllegalStateException("storage_capacity");
+        entries.put(id, new JSONObject().put("stage", "discovered").put("attempts", 0).put("nextAt", 0)); save();
+    }
+    boolean admitSidecar(String id, byte[] sidecar) throws Exception {
+        try { return CompletedSidecar.isComplete(sidecar); }
+        catch (org.json.JSONException invalid) { rejectSidecar(id, sidecar); return false; }
+    }
+    private void rejectSidecar(String id, byte[] sidecar) throws Exception {
+        PrivateFiles.write(file(id, "sidecar.bin"), sidecar);
+        failure(id, "sidecar_invalid", true);
+    }
     private long size(File file) {
         if (!file.isDirectory()) return file.length();
         long sum = 0; File[] files = file.listFiles();
@@ -39,8 +63,9 @@ final class DeliveryStore {
         return new File(new File(root, id), name);
     }
     void retrieved(String id, byte[] packets, byte[] sidecar) throws Exception {
-        if (contains(id)) return;
-        if (!capacity()) throw new IllegalStateException("storage_capacity");
+        if (!needsRetrieval(id)) return;
+        discover(id);
+        if (!hasStorageCapacity()) throw new IllegalStateException("storage_capacity");
         PrivateFiles.write(file(id, "packets.bin"), packets);
         PrivateFiles.write(file(id, "sidecar.bin"), sidecar);
         entries.put(id, new JSONObject().put("stage", "retrieved").put("attempts", 0).put("nextAt", 0)); save();
@@ -68,11 +93,15 @@ final class DeliveryStore {
             .put("nextAt", System.currentTimeMillis() + RetryPolicy.delayMs(attempts));
         save();
     }
+    void abandonAttempt(String id) throws Exception {
+        JSONObject entry = entries.getJSONObject(id);
+        entry.remove("inFlight"); entry.put("attempts", Math.max(0, entry.optInt("attempts") - 1)); save();
+    }
     void accepted(String id, JSONObject status) throws Exception {
         JSONObject entry = entries.getJSONObject(id);
         if (entry.has("status") && (!entry.getJSONObject("status").getString("id").equals(status.getString("id")) ||
-            !entry.getJSONObject("status").getString("meetingId").equals(status.getString("meetingId")))) throw new IllegalStateException("server_identity_change");
-        if (!status.getString("mode").equals(id.startsWith("amsg_") ? "voice-request" : "normal")) throw new IllegalStateException("server_mode_change");
+            !entry.getJSONObject("status").getString("meetingId").equals(status.getString("meetingId")))) throw new Conflict("server_identity_change");
+        if (!status.getString("mode").equals(id.startsWith("amsg_") ? "voice-request" : "normal")) throw new Conflict("server_mode_change");
         String stage = status.getString("state");
         entry.remove("inFlight");
         entry.put("status", status).put("stage", stage.equals("complete") || stage.equals("failed") ? stage : "accepted")

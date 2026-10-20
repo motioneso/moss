@@ -36,8 +36,7 @@ final class RingProtocol {
                 throw new IllegalArgumentException("inventory");
             String name = new String(payload, 6, payload.length - 6, StandardCharsets.UTF_8);
             long size = Integer.toUnsignedLong(ByteBuffer.wrap(payload, 1, 4).getInt());
-            if (!validName(name) || size == 0 || size > Integer.MAX_VALUE)
-                throw new IllegalArgumentException("inventory");
+            if (!validName(name) || size == 0 || size > Integer.MAX_VALUE) return null;
             return new Entry(name, (int) size);
         }
     }
