@@ -39,7 +39,8 @@ export const meetingsModuleManifest = {
       "sql/0288_meeting_recording_connections.sql",
       "sql/0292_meeting_minimal.sql",
       "sql/0295_meeting_capture_start_limits.sql",
-      "sql/0325_meeting_recording_imports.sql"
+      "sql/0325_meeting_recording_imports.sql",
+      "sql/0326_meeting_import_summaries.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -97,7 +98,7 @@ export const meetingsModuleManifest = {
       id: "meetings.module-settings",
       label: "Meetings",
       description:
-        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop on or off, and unlink the Mac.",
+        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop or completed import on or off, and unlink the Mac.",
       path: "/settings?section=modules&module=meetings",
       scope: "user",
       permissionId: "meetings.write",
@@ -351,6 +352,19 @@ export const meetingsModuleManifest = {
   ],
   features: [
     androidDeliveryFeature,
+    {
+      id: "meetings.import_analysis",
+      description:
+        "Completed imports use your automatic-summary setting and template. Analysis status is separate from transcription. Retry with Rewrite summary; review suggestions before Add task.",
+      errors: [
+        {
+          code: "meeting_output_queue_unavailable",
+          class: "transient",
+          description:
+            "Automatic analysis could not be queued. The transcript remains available. Open the meeting and use Rewrite summary to try again."
+        }
+      ]
+    },
     {
       id: "meetings.recording_imports",
       remediations: [

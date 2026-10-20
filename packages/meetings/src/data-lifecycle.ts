@@ -174,7 +174,7 @@ export async function collectMeetingsExportSection(
     stop_summaries: await readRows(
       scopedDb,
       sql<Record<string, unknown>>`
-      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
+      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId", recording_import_id::text AS "recordingImportId",transcript_revision AS "transcriptRevision",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
       FROM app.meeting_stop_summaries WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,meeting_id
     `
     ),

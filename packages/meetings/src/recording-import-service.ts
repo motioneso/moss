@@ -29,6 +29,11 @@ export interface RecordingImportDependencies {
     payload: RecordingImportPayload,
     delaySeconds?: number
   ): Promise<void>;
+  scheduleSummary(
+    db: DataContextDb,
+    actor: AccessContext,
+    input: { meetingId: string; importId: string }
+  ): Promise<void>;
   availability(actor: AccessContext): Promise<{ ready: boolean; modelRoute: string | null }>;
   transcribe(
     actor: AccessContext,
@@ -227,6 +232,7 @@ export class RecordingImportService {
           if (saved.status !== "saved") throw new Error("Imported transcript commit conflict");
         }
         await this.imports.finish(db, row.id, "complete", null);
+        await this.deps.scheduleSummary(db, actor, { meetingId: row.meeting_id, importId: row.id });
       });
     } catch (error) {
       const failure = this.deps.describeFailure(error);

@@ -8,6 +8,7 @@ import {
 } from "@moss/ai";
 import {
   createRecordingImportScheduler,
+  createImportedMeetingSummaryScheduler,
   registerRecordingImportWorker,
   RECORDING_IMPORT_QUEUE,
   type RecordingImportDependencies
@@ -24,6 +25,7 @@ export function createRecordingImportRuntime(deps: {
     dataContext: deps.dataContext,
     vault: new VaultContextRunner(getVaultBaseDir()),
     schedule: createRecordingImportScheduler(deps.boss),
+    scheduleSummary: createImportedMeetingSummaryScheduler(deps.boss),
     availability: transcription.availability,
     transcribe: transcription.transcribe,
     async assertAvailable(actor) {
