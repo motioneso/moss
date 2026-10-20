@@ -29,7 +29,11 @@ export interface MeetingRecordRoutesDependencies extends MeetingHistoryRoutesDep
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   /** Public-module cleanup runs atomically only for an owner-visible record. */
-  readonly beforeRemove?: (db: DataContextDb, meetingId: string) => Promise<void>;
+  readonly beforeRemove?: (
+    db: DataContextDb,
+    meetingId: string,
+    actor: AccessContext
+  ) => Promise<void>;
   readonly preferences?: Pick<PreferencesRepository, "get" | "upsert">;
   readonly repository?: Pick<
     MeetingRecordsRepository,
@@ -57,7 +61,7 @@ export function registerMeetingRecordRoutes(
             dependencies.beforeRemove &&
             (await repository.get(db, request.params.id, { forUpdate: true }))
           ) {
-            await dependencies.beforeRemove(db, request.params.id);
+            await dependencies.beforeRemove(db, request.params.id, actor);
           }
           await repository.remove(db, request.params.id);
         });

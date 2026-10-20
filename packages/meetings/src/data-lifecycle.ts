@@ -1,3 +1,5 @@
+import { getVaultBaseDir, VaultContextRunner, readVaultFile } from "@moss/vault";
+import { recordingBundlePath } from "./recording-import-service.js";
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
@@ -7,6 +9,7 @@ type JsonValue = boolean | null | number | string | JsonValue[] | { [key: string
 type ExportRow = Record<string, JsonValue>;
 
 export interface MeetingsExportSection {
+  readonly recording_imports: readonly ExportRow[];
   readonly records: readonly ExportRow[];
   readonly note_writes: readonly ExportRow[];
   readonly transcript_batches: readonly ExportRow[];
@@ -36,7 +39,25 @@ export async function collectMeetingsExportSection(
   assertDataContextDb(scopedDb);
   const ownerUserId = ctx.actorUserId;
 
+  const imports = await readRows(
+    scopedDb,
+    sql<
+      Record<string, unknown>
+    >`SELECT id::text AS id, meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, created_at AS "createdAt" FROM app.meeting_recording_imports WHERE owner_user_id=${ownerUserId}::uuid ORDER BY created_at,id`
+  );
+  const vault = new VaultContextRunner(getVaultBaseDir());
+  const recordingImports = await vault.withVaultContext(
+    { actorUserId: ownerUserId },
+    async (vaultCtx) => {
+      for (const row of imports) {
+        if (row.ready === true && typeof row.id === "string")
+          row.bundleJson = await readVaultFile(vaultCtx, recordingBundlePath(row.id));
+      }
+      return imports;
+    }
+  );
   return {
+    recording_imports: recordingImports,
     records: await readRows(
       scopedDb,
       sql<Record<string, unknown>>`

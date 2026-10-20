@@ -48,6 +48,7 @@ import {
 import { createPgBossClient, sendModuleControl } from "@moss/jobs";
 import {
   aggregateFocusSignals,
+  createRecordingImportWorkerRuntime,
   createActiveModulesResolver,
   focusSignalProvidersFor,
   getAllQueueDefinitions,
@@ -252,6 +253,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   const ownsWorkerDb = options.workerDb === undefined;
   const workerDataContext = new DataContextRunner(workerDb);
   let externalWorkerRuntime: ExternalModuleWorkerRuntime | undefined;
+  let recordingImportWorker: ReturnType<typeof createRecordingImportWorkerRuntime> | undefined;
   const ownsBoss = options.boss === undefined;
   const dataContext = new DataContextRunner(appDb);
   const aiRepository = new AiRepository();
@@ -284,6 +286,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       auth: authRuntime
     });
   server.addHook("preClose", async () => captureMaintenance.close());
+  server.addHook("preClose", async () => recordingImportWorker?.close());
   const AUTH_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_AUTH_MAX"), 10);
 
   // Security headers via @fastify/helmet.
@@ -601,6 +604,11 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // #917: externalModuleHolder is computed above (before registerPlatformRoutes),
     // because the /api/modules provider closes over it. registerBuiltInApiRoutes reuses
     // the same holder for the settings module's external-module deps below.
+    recordingImportWorker = createRecordingImportWorkerRuntime(getMossDatabaseUrls().worker, {
+      dataContext,
+      boss,
+      resolveActiveModules: resolveActiveModulesWithIntegrations
+    });
     registerBuiltInApiRoutes(server, {
       meetingCaptureAuthorization: {
         resolveBrowser: (input) => authRuntime.sessionBindings.resolveBrowser(input),
@@ -828,6 +836,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // their caller-owned lifecycle; maintenance borrows send and owns its consumer.
     if (ownsBoss) await boss.start();
     await captureMaintenance.start();
+    await recordingImportWorker?.start();
   });
 
   server.addHook("onClose", async () => {

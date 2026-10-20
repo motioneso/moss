@@ -32,3 +32,9 @@ export { readMeetingCaptureCompleteness } from "./capture-repository.js";
 export * from "./stop-summary-jobs.js";
 
 export * from "./capture-maintenance.js";
+
+export * from "./recording-bundle.js";
+export * from "./recording-import-repository.js";
+export * from "./recording-import-service.js";
+export * from "./recording-import-jobs.js";
+export * from "./recording-import-routes.js";

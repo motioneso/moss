@@ -34,7 +34,10 @@ export interface MeetingHistoryItem {
     readonly provisionalSegmentCount: number;
     /** Current text offsets, not recording duration or continuous coverage. */
     readonly span: { readonly startMs: number; readonly endMs: number } | null;
-    readonly sources: readonly { readonly kind: "microphone" | "output"; readonly label: string }[];
+    readonly sources: readonly {
+      readonly kind: "microphone" | "output" | "recording";
+      readonly label: string;
+    }[];
     readonly omittedSourceCount: number;
   };
   readonly summary: {

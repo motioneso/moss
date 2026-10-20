@@ -120,9 +120,10 @@ acceptance is not a claim that transcription finished. Status exposes `queued`,
 `transcribing`, `complete`, or `failed`, with a finite error code and retryability;
 it does not return raw sidecar bytes, audio bytes, credentials, or provider errors.
 
-Persist upload acceptance before scheduling transcription. Use metadata-only jobs
-containing actor and import IDs. Add a bounded recovery sweep for accepted imports
-whose enqueue or worker attempt was interrupted. Stable import IDs and transactional
+Persist a reservation and delayed abandoned-write cleanup atomically before vault publication.
+Mark the bundle ready and schedule transcription in the same actor-scoped transaction;
+this removes the acceptance/enqueue gap instead of adding a separate sweep. Use metadata-only jobs
+containing actor and import IDs. Use the durable cleanup job for interrupted vault publication and pg-boss expiry/retry for interrupted worker attempts. Stable import IDs and transactional
 transcript commits prevent duplicate transcript revisions after a worker restart.
 Provider calls can repeat after a crash before commit; do not promise exactly-once
 provider billing or execution.

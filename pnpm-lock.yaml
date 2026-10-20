@@ -875,6 +875,9 @@ importers:
       '@moss/ui':
         specifier: workspace:*
         version: link:../ui
+      '@moss/vault':
+        specifier: workspace:*
+        version: link:../vault
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
