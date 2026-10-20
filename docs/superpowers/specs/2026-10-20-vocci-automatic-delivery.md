@@ -96,7 +96,8 @@ proof runs only through `scripts/run-gate.sh` under verify-gate instructions.
 Installed-path proof: real owner signup → Voice Settings → Meetings settings →
 Android retrieves real ring normal/hold files → authenticated acceptance → configured
 local transcription → open nonempty transcript articles from history. Assert raw
-source hashes against prior known captures, normal bookmark 13,000 ms, hold mode,
+source hashes against independent fresh authenticated re-downloads, exact bookmark
+offsets derived from the new normal recording sidecar, hold mode,
 replay IDs, screen-off operation and interrupted/restarted delivery. Preserve only
 bounded redacted assertions publicly; private audio, cookies, MACs, keys and text
 stay outside git. Keep app map and release note accurate about developer scope.

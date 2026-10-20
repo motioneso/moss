@@ -1,0 +1,29 @@
+package ai.moss.vocci;
+
+import android.util.AtomicFile;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
+
+final class PrivateFiles {
+    static byte[] read(File file, int limit) throws IOException {
+        try (FileInputStream in = new AtomicFile(file).openRead()) {
+            byte[] bytes = in.readNBytes(limit + 1);
+            if (bytes.length > limit) throw new IOException("file_limit");
+            return bytes;
+        }
+    }
+    static JSONObject json(File file) throws Exception {
+        return new JSONObject(new String(read(file, 8 * 1024 * 1024), StandardCharsets.UTF_8));
+    }
+    static void write(File file, byte[] bytes) throws IOException {
+        if (!file.getParentFile().isDirectory() && !file.getParentFile().mkdirs()) throw new IOException("storage_unavailable");
+        AtomicFile atomic = new AtomicFile(file);
+        FileOutputStream out = atomic.startWrite();
+        try { out.write(bytes); atomic.finishWrite(out); }
+        catch (Exception e) { atomic.failWrite(out); throw e; }
+    }
+    static void json(File file, JSONObject value) throws IOException {
+        write(file, value.toString().getBytes(StandardCharsets.UTF_8));
+    }
+}

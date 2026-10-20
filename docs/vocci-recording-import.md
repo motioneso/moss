@@ -1,6 +1,9 @@
 # Completed Vocci recordings (developer proof)
 
-This slice imports files already retrieved with the diagnostic probe. It does not
+The receiver imports completed files. The developer uploader below imports files
+already retrieved with the diagnostic probe. A separate developer-installed
+[Android foreground client](../apps/vocci-delivery/README.md) can retrieve finished
+recordings automatically after an explicit permission handoff from Vocci. The uploader does not
 connect to a ring, recover credentials, provision ownership, retrieve files in the
 background, or delete source recordings. Imported hold-button recordings are
 classified as voice requests; they never execute instructions or create Tasks.
