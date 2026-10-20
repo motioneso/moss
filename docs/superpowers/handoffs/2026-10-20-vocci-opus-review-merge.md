@@ -1,0 +1,27 @@
+# Vocci: Opus review, merge, then automatic-delivery handoff
+
+## Authorization and ownership
+
+Ben explicitly requested on 2026-10-20: “Please have an opus agent review and merge that, then handoff to a new session for auto delivery.” You are that independent Claude Opus reviewer. Own review and necessary fixes for Moss PR #3548, its merge after verified green, and launching a fresh automatic-delivery session afterward. Do not stop after producing a review report. No production deployment is requested.
+
+You are not alone in this repository. Use only your isolated worktree and preserve other agents' changes and resources. The original builder worktree is not yours. Your review branch initially contains only the PR plus these handoff documents; the product revision to review initially is e082c0c2b53b3542dbd0f177f49c3e00cf6a8d55.
+
+## Start
+
+1. Read AGENTS.md, CLAUDE.md, docs/DEVELOPMENT_STANDARDS.md and applicable skills. Use the code-review skill for independent standards/spec axes, plus the repository maintainability/security requirements. Use Opus for the independent review. Discover source through the codebase graph first. Search Hindsight before changing tests or committing; verify remembered claims against current evidence.
+2. Install dependencies with the repository package-manager command. Read PR #3548, task #3547, its current head, checks, comments and recorded live proof. Compare the actual PR head against its current main merge-base; exclude this review branch's handoff-only commit from product findings.
+3. Review the full product change against docs/superpowers/specs/2026-10-19-vocci-completed-recording-delivery.md and its plan. Inspect auth/owner isolation, retained bundle integrity, transactional publication and scheduling, bounded retries, dispatch admission, export/deletion, API composition and source labels. Hold recordings must remain data, never automatic request execution. Verify the documented live UI evidence and exact code revision; CI alone is insufficient.
+4. Resolve concrete blocking findings, using focused regression tests where appropriate. Keep fixes on your isolated branch and update the existing PR branch with a normal fast-forward push only after checking its remote head has not moved. If needed fetch and integrate concurrent updates; preserve them. Review the final revision again. All DB-touching tests require the verify-gate skill and isolated gate. Use devports claims for any server. Do not repeat the full historical gate without a material reason; run the required checks for any new changes and ensure current-head CI is green.
+5. Record the independent review and evidence on the PR. Ben has authorized these review/merge communications. Ensure the release-note section, spec/task links, app-map truthfulness and live-path proof satisfy repository requirements. Mark the draft ready and merge through the repository's normal protected-main flow, pinned to the reviewed current head. Do not bypass branch protection or failures. Verify the merged state and merge SHA from GitHub. Update task/project status accurately.
+6. Only after the merge is confirmed, read the sibling 2026-10-20-vocci-auto-delivery.md and use herdr-handoff to launch a fresh delivery session. Create its own worktree from updated origin/main. Transfer the committed handoff into the new branch if it did not land with this PR. Start a fresh Codex session with full unattended permissions; no model override is required. Name both its pane and agent session, and verify it has started reading the brief and working rather than waiting at a trust prompt.
+7. Write a compact completion receipt to ~/.local/state/moss/vocci-delivery/opus-review-merge-result.json containing reviewed head, findings/fixes, verification, merge SHA, successor routing name/session ID and handoff branch/path. Keep the receipt updated at meaningful milestones so the originating session can check it without reading pane history. Keep your tree clean and pushed. Report the actual merge and successor details to Ben.
+
+## Evidence and boundaries
+
+- Repository: motioneso/moss; PR #3548; task #3547; PR branch feat/vocci-completed-delivery. Last live check before launch: draft OPEN, mergeable, head e082c0c2b, 19 checks successful and 3 skipped.
+- docs/vocci-recording-import.md documents the developer uploader/receiver contract and 120-second proof limit.
+- ~/.local/state/moss/vocci-delivery/completion-audit.md records both real normal/hold uploads, local CPU Whisper, Meetings history/transcript UI, 13000ms bookmark, stable replay IDs and restart assertions. Inspect underlying receipts as necessary; do not publish recording content, transcripts, cookies or credentials.
+- Current scope is finished-recording import, not live capture or Android transport. The next session owns automatic Android delivery; do not expand this review PR into that feature.
+- The original ring research is in the sibling directory ~/app-research/apk-input-20261010-165133. Its analysis/1.1.24/authentication-validation.md and auth-validation-state.md supersede earlier pre-auth checkpoints. The old moss-onboarding-handoff.md also predates the completed Moss receiver. Do not report its “no ingestion built” claim as current.
+
+If there is a genuine unresolved blocker, preserve findings and continue independent work. For a necessary Ben decision, first check conversation/docs, Hindsight and matching Obsidian passages; use the project's AWAITING-BEN file if present plus needs-ben. Never silently abandon the merge/successor chain.
