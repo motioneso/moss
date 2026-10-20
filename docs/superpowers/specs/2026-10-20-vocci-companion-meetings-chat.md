@@ -1,7 +1,7 @@
 # Vocci Android companion: meetings and text conversations
 
-Status: proposed for Ben's approval. This document extends the merged developer
-delivery slice; it does not authorize implementation until approved.
+Status: approved by Ben on 2026-10-20 ("great, approved"). Implementation is
+authorized for the flows, defaults and phased build order below.
 Tracking task: [#3553](https://github.com/motioneso/moss/issues/3553).
 
 ## Outcome
@@ -90,8 +90,8 @@ outside this scope.
 Persist the relationship between owner/source/recording, transcript revision,
 thread, user message and execution identity before dispatch. The dispatch boundary
 must support recovering an existing turn, not creating a new turn after an ambiguous
-response. Serialize voice requests with other turns through the main chat's existing
-admission/queue behavior, preserving any turn already in progress. Do not promise
+response. Serialize voice requests with other turns through a Chat-owned durable admission queue sharing the main chat's
+existing busy guard, preserving any turn already in progress. Do not promise
 exactly-once external effects beyond the existing action writer guarantees.
 
 New requests use an explicit versioned voice-request intent. Existing version-1
