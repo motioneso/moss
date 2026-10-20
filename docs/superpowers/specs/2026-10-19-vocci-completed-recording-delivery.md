@@ -1,6 +1,8 @@
 # Vocci completed-recording delivery — first slice
 
-Status: **Draft; awaiting Ben's approval. No implementation is authorized by this document alone.**
+Status: **Approved by Ben in chat, 2026-10-19.** Meetings is the initial destination;
+use a local transcription server for verification and continue overnight. Preserve
+the separately running longer tests and the reserved proof instance.
 
 Build task: [#3547](https://github.com/motioneso/moss/issues/3547).
 

@@ -75,16 +75,4 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Vocci completed-recording delivery — #3547 / draft PR #3548
-
-Feature implementation awaits approval of
-`docs/superpowers/specs/2026-10-19-vocci-completed-recording-delivery.md`, as required
-by the spec-before-build rule. The proposal first proves retained recording upload
-and configured transcription using a developer uploader; Android automation and
-consumer onboarding follow separately.
-
-**Decision:** approve that first slice with existing Meetings history as the
-initial destination for both normal recordings and voice requests, or choose a
-different destination before implementation. **Recommendation:** approve the
-bounded receiving slice; hold recordings retain their mode without automatically
-creating tasks or executing requests. Agent: `vocci-delivery`; phone question queued.
+None.
