@@ -8,16 +8,16 @@ Tracking task: [#3553](https://github.com/motioneso/moss/issues/3553).
 
 The Android companion connects an already-owned Vocci ring to Moss. Normal
 recordings become meetings with transcripts, summaries, decisions, and suggested
-tasks/follow-ups. Hold-to-talk becomes a user message in a Moss conversation, where
+tasks/follow-ups. Hold-to-talk becomes a user message in the main Moss chat, where
 Moss responds in text. Ben explicitly selected text-only replies on 2026-10-20.
 Completed-file delivery is the baseline. Investigate live streaming separately.
 
-| Ring interaction                   | Destination               | Result                                                                              |
-| ---------------------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
-| Normal recording, then stop        | Meetings                  | One meeting, transcript, summary and suggested actions                              |
-| Bookmark while recording           | That meeting              | Preserve the original offset and link to the transcript                             |
-| Hold to talk, then release         | Ring conversation in Moss | Transcribed user message, normal Moss processing and text reply                     |
-| Record away from the phone/network | Local queue               | Deliver when connectivity returns, with explicit handling of delayed voice requests |
+| Ring interaction                   | Destination    | Result                                                                              |
+| ---------------------------------- | -------------- | ----------------------------------------------------------------------------------- |
+| Normal recording, then stop        | Meetings       | One meeting, transcript, summary and suggested actions                              |
+| Bookmark while recording           | That meeting   | Preserve the original offset and link to the transcript                             |
+| Hold to talk, then release         | Main Moss chat | Transcribed user message, normal Moss processing and text reply                     |
+| Record away from the phone/network | Local queue    | Deliver when connectivity returns, with explicit handling of delayed voice requests |
 
 Meeting actions use the existing review/Add task workflow. They retain transcript
 evidence and do not invent owners or deadlines. Hold-to-talk intentionally sends a
@@ -73,10 +73,12 @@ decisions, evidence citations and Add task controls remain the review surface.
 
 ## 2. Hold-to-talk to a Moss text conversation
 
-Enable this behavior explicitly in the companion. Bind one durable conversation to
-the authenticated owner and source ring, accessible from normal Moss conversation
-history as "Vocci ring". Subsequent holds continue that conversation until the user
-starts a new one. They do not interrupt the user's currently open unrelated chat.
+Enable this behavior explicitly in the companion. Submit transcribed messages into
+the authenticated owner's main Moss chat using its existing conversation context
+and normal thread lifecycle. Ben selected the main chat on 2026-10-20. Ring speech
+is another input method for that chat; replies appear alongside its other messages.
+Resolve and persist the destination thread when admitting a request so a reconnect
+or retry cannot move an accepted message into a different conversation.
 
 Retain the audio and its provenance, transcribe through the configured service,
 then submit the final nonempty text as a user message through a public Chat-owned
@@ -88,7 +90,8 @@ outside this scope.
 Persist the relationship between owner/source/recording, transcript revision,
 thread, user message and execution identity before dispatch. The dispatch boundary
 must support recovering an existing turn, not creating a new turn after an ambiguous
-response. Serialize new voice requests within the ring conversation. Do not promise
+response. Serialize voice requests with other turns through the main chat's existing
+admission/queue behavior, preserving any turn already in progress. Do not promise
 exactly-once external effects beyond the existing action writer guarantees.
 
 New requests use an explicit versioned voice-request intent. Existing version-1
@@ -101,8 +104,9 @@ Send in Moss. Silence/empty transcripts become "No speech detected" without a tu
 This age policy is a proposed default included in this approval.
 
 Expose pending, transcribing, ready-to-send, responding, replied and failed states
-with a link to the conversation. Transcription and turn retries are distinct. A
-provider outage, account change or revoked access preserves pending work. A request
+with a link to the message in the main chat. Transcription and turn retries are
+distinct. A provider outage, account change or revoked access preserves pending work.
+A request
 already submitted is not silently resubmitted by pressing Retry or reconnecting.
 
 ## 3. Meeting-length recordings
@@ -151,7 +155,7 @@ Vocci companion
   Hold-to-talk messages: On / Off
   Recent recordings
     Meeting recording   Uploading 42%       [View meeting when available]
-    Voice request       Moss replied       [Open conversation]
+    Voice request       Moss replied       [Open main chat]
     Voice request       Waiting to send    [Open in Moss]
     Meeting recording   Storage full       [Manage storage]
 

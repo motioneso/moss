@@ -83,7 +83,7 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 - **Proposal:** [Vocci companion: meetings and text conversations](../superpowers/specs/2026-10-20-vocci-companion-meetings-chat.md).
 - **Decision:** approve the proposed flows/defaults and build order, or identify
   changes. Recommend approving: processed meetings, explicit hold-to-talk messages
-  in a dedicated Moss conversation, resumable meeting-length audio, companion
+  in the main Moss chat, resumable meeting-length audio, companion
   status/setup, and an independent live-audio investigation. Meetings use existing
   action review; old voice recordings never execute retroactively.
 - **Agent:** `vocci-companion-design`. No implementation, phone changes or servers
