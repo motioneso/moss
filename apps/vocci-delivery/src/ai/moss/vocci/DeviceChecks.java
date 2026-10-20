@@ -76,6 +76,17 @@ public final class DeviceChecks extends Instrumentation {
             check(!store.needsRetrieval(invalid));
             check(store.entries.getJSONObject(invalid).getString("error").equals("sidecar_invalid"));
             check(store.needsRetrieval(id));
+            String[] invalidDurations = {"", ",{\"duration\":[1,0]}", ",{\"duration\":[1,-1]}", ",{\"duration\":[1,\"bad\"]}", ",{\"duration\":[1,\"NaN\"]}"};
+            for (int n = 0; n < invalidDurations.length; n++) {
+                String invalidDuration = "1700000010_duration" + n;
+                byte[] sidecar = ("{\"record\":[1,\"end\"]}" + invalidDurations[n]).getBytes(StandardCharsets.UTF_8);
+                store.discover(invalidDuration);
+                check(!store.admitSidecar(invalidDuration, sidecar));
+                check(store.entries.getJSONObject(invalidDuration).getString("stage").equals("failed"));
+                check(store.entries.getJSONObject(invalidDuration).getString("error").equals("sidecar_invalid"));
+                check(Arrays.equals(sidecar, PrivateFiles.read(store.file(invalidDuration, "sidecar.bin"), 1024)));
+                check(!store.file(invalidDuration, "packets.bin").exists());
+            }
             check(store.admitSidecar(id, "{\"record\":[1,\"end\"]},{\"duration\":[1,100]}".getBytes(StandardCharsets.UTF_8)));
             String oversized = "1700000003_long";
             store.discover(oversized);
@@ -88,6 +99,10 @@ public final class DeviceChecks extends Instrumentation {
             store.failure(interruptedRead, "ring_file_invalid", false);
             check(store.needsRetrieval(interruptedRead) && !store.retrievalDue(interruptedRead));
             check(store.entries.getJSONObject(interruptedRead).getString("stage").equals("discovered"));
+            java.util.List<String> inventoryOrder = Arrays.asList(interruptedRead + ".opus", id + ".opus", "1700000020_new.opus", id + ".json");
+            java.util.List<String> healthyFirst = Arrays.asList(id + ".opus", "1700000020_new.opus", interruptedRead + ".opus");
+            check(store.retrievalOrder(inventoryOrder).equals(healthyFirst));
+            check(new DeliveryStore(isolated).retrievalOrder(inventoryOrder).equals(healthyFirst));
             store.entries.getJSONObject(interruptedRead).put("nextAt", 0);
             check(store.retrievalDue(interruptedRead));
             store.retrieved(interruptedRead, packets, "{}".getBytes(StandardCharsets.UTF_8));
@@ -137,7 +152,7 @@ public final class DeviceChecks extends Instrumentation {
             catch (IllegalArgumentException expected) { rejected = true; }
             check(rejected);
             remove(isolated.getNoBackupFilesDir());
-            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,oversized_duration,interrupted_read_retry,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected");
+            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected");
             result.putString("result", "PASS"); finish(-1, result);
         } catch (Throwable error) {
             result.putString("result", "FAIL"); result.putString("class", error.getClass().getSimpleName());

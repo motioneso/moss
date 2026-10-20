@@ -36,6 +36,16 @@ final class DeliveryStore {
     }
     List<String> ids() { List<String> ids = new ArrayList<>(); entries.keys().forEachRemaining(ids::add); return ids; }
     boolean contains(String id) { return entries.has(id); }
+    List<String> retrievalOrder(Collection<String> names) {
+        List<String> order = new ArrayList<>();
+        for (String name : names) if (name.endsWith(".opus")) order.add(name);
+        // Try healthy/new sources before a source that already broke a session.
+        order.sort(Comparator.comparingInt(name -> {
+            JSONObject entry = entries.optJSONObject(name.substring(0, name.length() - 5));
+            return entry == null ? 0 : entry.optInt("attempts");
+        }));
+        return order;
+    }
     boolean hasStorageCapacity() { return root.getUsableSpace() > 150 * 1024 * 1024L && size(root) < 100 * 1024 * 1024L; }
     boolean canDiscover() { return entries.length() < 100 && hasStorageCapacity(); }
     boolean needsRetrieval(String id) throws Exception { return !contains(id) || entries.getJSONObject(id).getString("stage").equals("discovered"); }

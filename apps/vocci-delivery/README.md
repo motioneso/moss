@@ -82,7 +82,10 @@ refresh. Receiver processing failures are not reset by replay.
 Unsupported inventory filenames are ignored. Invalid sidecar JSON and packet gaps
 fail only that recording; retained evidence and other recordings remain available.
 Framing failures restart from zero with per-source backoff and an eight-attempt
-limit. Oversized advertised files and completed durations fail visibly.
+limit. New/healthy sources precede previously failing sources on each session,
+so one repeated framing fault cannot monopolize retrieval. Ended sidecars with
+missing, nonpositive or nonfinite duration fail with their evidence retained.
+Oversized advertised files and completed durations fail visibly.
 Discovered entries survive interrupted retrieval, and prerequisite failures expose
 a blocked service outcome. Stop records stopped without reposting a notification.
 

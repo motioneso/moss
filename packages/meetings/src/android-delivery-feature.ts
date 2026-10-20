@@ -100,13 +100,13 @@ export const androidDeliveryFeature = {
       code: "sidecar_invalid",
       class: "validation",
       description:
-        "A completed-size sidecar contains invalid JSON. That recording fails locally with its sidecar retained; other recordings continue."
+        "A stable sidecar has invalid JSON or ends without a positive finite duration. It fails locally with its sidecar retained; other recordings continue."
     },
     {
       code: "ring_file_invalid",
       class: "validation",
       description:
-        "A read violated framing or its advertised size. It restarts from zero after backoff; eight repeated failures fail that recording while others continue."
+        "A read violated framing or size. Healthy sources go first on reconnect; the faulty source restarts with backoff and fails after eight attempts."
     },
     {
       code: "decode_or_input_invalid",

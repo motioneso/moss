@@ -16,7 +16,9 @@ final class CompletedSidecar {
             if (record != null && record.length() >= 2 && "end".equals(record.optString(1))) end = true;
             if (time != null && time.length() >= 2) duration = Math.max(duration, time.optDouble(1, -1));
         }
-        if (end && duration > 120000) throw new TooLong();
-        return end && duration > 0;
+        if (!end) return false;
+        if (!(duration > 0) || !Double.isFinite(duration)) throw new JSONException("invalid duration");
+        if (duration > 120000) throw new TooLong();
+        return true;
     }
 }

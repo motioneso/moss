@@ -6,13 +6,15 @@ remain outside this change. Review and CI remain separate requirements.
 
 ## Observed path
 
-The final revised runtime `d8ea8e6463a9379dad101a178503008ce85bd404` passed
+The revised runtime `d8ea8e6463a9379dad101a178503008ce85bd404` passed
 an isolated `test:recording-live` gate with exit 0:
 `vocci_auto_delivery-20261020-073730.log`. The gate captured a clean tree and input
 fingerprint `e88db78391cd`. Its private browser receipt is
 `~/.local/state/moss/vocci-delivery/auto-browser/final_runs/run_9/result.json`.
-Two final actual Opus rereviews report no blockers/medium defects; dispositions
-and remaining low observations are in the adjacent Opus review ledger.
+Two actual Opus rereviews at that commit report no blockers/medium defects.
+Subsequent fixes address their two low recovery observations (invalid completed
+duration and healthy-source priority). Exact final runtime review and installed
+execution receipts belong to PR #3551; the earlier run alone does not verify them.
 
 The original runtime passed `vocci_auto_delivery-20261020-052822.log` (run_5).
 A later empty-inventory run and interrupted gate 072950 are not passing evidence.
@@ -78,8 +80,9 @@ Receiver limits remain 120 seconds, 1 MiB packets, 64 KiB sidecar and 8 MiB requ
 Ring reboot, long-term background reliability, OS reclamation and interrupted BLE
 transfer recovery on physical hardware remain unverified beyond the listed proof;
 host assertions cover incomplete-file rejection/restart. Retention management and
-consumer permission handoff/key recovery need separate work. Repeated early
-framing faults can delay later sources until eight attempts exhaust; ended
-sidecars without positive duration remain pending and retained discoveries consume
-the 100-entry limit. Moss outages pause retrieval pending live owner verification.
+consumer permission handoff/key recovery need separate work. Retained discoveries
+consume the 100-entry limit;
+manual retention management remains necessary. The final runtime rejects ended
+invalid-duration sidecars and prioritizes healthy sources over earlier failures.
+Moss outages pause retrieval pending live owner verification.
 No production deploy.

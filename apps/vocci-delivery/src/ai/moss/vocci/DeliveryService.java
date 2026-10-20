@@ -106,17 +106,16 @@ public final class DeliveryService extends Service {
         active = new RingConnection(this, config);
         try {
             Map<String, Integer> inventory = active.inventory();
-            for (Map.Entry<String, Integer> file : inventory.entrySet()) {
-                String name = file.getKey();
-                if (!name.endsWith(".opus")) continue;
+            for (String name : store.retrievalOrder(inventory.keySet())) {
+                Integer packetSize = inventory.get(name);
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
                 if (!store.retrievalDue(id) || sidecarSize == null ||
-                    !file.getValue().equals(previousInventory.get(name)) || !sidecarSize.equals(previousInventory.get(sidecarName))) continue;
+                    !packetSize.equals(previousInventory.get(name)) || !sidecarSize.equals(previousInventory.get(sidecarName))) continue;
                 if (!store.hasStorageCapacity() || stopping) break;
                 if (!store.contains(id) && !store.canDiscover()) continue;
                 store.discover(id);
-                if (file.getValue() > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT) {
+                if (packetSize > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT) {
                     store.failure(id, "source_size_limit", true); continue;
                 }
                 byte[] sidecar;
@@ -124,7 +123,7 @@ public final class DeliveryService extends Service {
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 if (!store.admitSidecar(id, sidecar)) continue;
                 byte[] packets;
-                try { packets = active.retrieve(name, file.getValue()); }
+                try { packets = active.retrieve(name, packetSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 store.retrieved(id, packets, sidecar);
             }

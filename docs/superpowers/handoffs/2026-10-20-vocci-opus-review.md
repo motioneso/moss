@@ -72,7 +72,7 @@ Rereview counts: Standards 1 medium and 3 low findings/judgments; Spec 2 medium
 findings plus a disclosed nonblocking outage limitation. Worst within Standards:
 prematurely terminal framing failure. Worst within Spec: the same framing failure.
 
-## Final rereview of d8ea8e646
+## Third rereview of d8ea8e646
 
 Both independent reviewers again ran with actual `claude-opus-5-5`. Standards
 confirmed the earlier findings fixed or settled and found no blockers. Spec
@@ -86,13 +86,14 @@ or never-completed discoveries retain slots under the documented 100-entry limit
 
 Spec retained one low gap: an ended sidecar without a positive duration remains
 discovered/pending, consuming a slot and being re-read. No such physical sidecar
-has been observed. This malformed-source case remains a disclosed limitation of
-the developer slice. Moss outage still pauses retrieval because live owner
+has been observed. This malformed-source case was subsequently fixed in the final
+follow-up below. Moss outage still pauses retrieval because live owner
 verification deliberately precedes source access.
 
 Final counts: Standards 0 blocking/medium, 1 new low plus the retained capacity
-judgment; Spec 0 blocking/medium, 1 low. These do not expand the supported capture
-contract; retention/recovery hardening remains separate from this bounded preview.
+judgment; Spec 0 blocking/medium, 1 low. The final follow-up below addresses both
+actionable low observations.
+Manual retention and live owner verification remain deliberate preview limits.
 
 ## Verification status
 
@@ -108,3 +109,20 @@ re-downloaded hashes, bookmarks/modes, replay/restart and Stop. One manual Bluet
 off/on recovery was required before retrieval; the hardware ledger discloses it.
 Final CI belongs to the exact PR head; original hardware proof alone is not reused
 as evidence for fixes.
+
+## Final low-severity follow-up
+
+Ended sidecars now require positive finite duration; missing, zero, negative or
+non-numeric duration fails locally as `sidecar_invalid`, retaining the exact
+sidecar and fetching no audio. In-progress sidecars still remain pending.
+
+Each retrieval session now orders new/healthy sources before sources with earlier
+failures. A repeatedly bad early inventory entry therefore cannot monopolize each
+reconnect while later healthy files wait through its entire retry budget. Framing
+faults still abort the session and retry from zero with finite per-source attempts.
+Ordering is derived from durable attempts and survives process restart.
+
+Installed assertions cover all invalid-duration variants, retained evidence and
+absence of audio, plus healthy/new-before-failing priority across store restart.
+The app map and README describe these outcomes. Exact final commit, subsequent
+Opus dispositions and execution/CI receipts are recorded on PR #3551.
