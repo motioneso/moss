@@ -118,7 +118,7 @@ export function routeLiveOriginRecord(
   )
     return false;
   const tag = (next: TranscriptRecord): TranscriptRecord =>
-    !session.incognito && surface === "drawer" ? { ...next, originThreadId } : next;
+    !session.incognito && surface === "drawer" ? { ...next, actionThreadId: originThreadId } : next;
   if (record.kind === "action_result" && record.outcome) {
     injectActionResultRecord(tag(record), {
       sessionKey: key,
@@ -222,7 +222,9 @@ export async function routeOriginRecord(
   if (session && (session.actorUserId !== actorUserId || session.threadId !== originThreadId))
     return receipt;
   const tag = (next: TranscriptRecord): TranscriptRecord =>
-    !origin.incognito && origin.surface === "drawer" ? { ...next, originThreadId } : next;
+    !origin.incognito && origin.surface === "drawer"
+      ? { ...next, actionThreadId: originThreadId }
+      : next;
   if (record.kind === "action_result" && record.outcome) {
     if (input.turnsInFlight.has(key)) {
       const currentSequence = input.sequenceBySession.get(key) ?? 0;

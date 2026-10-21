@@ -153,7 +153,7 @@ describe("origin-bound action delivery", () => {
     const delivered = h.manager.injectLiveOriginRecord("owner", "A", completed, "drawer");
     expect(delivered).toBe(true);
     expect(h.seen.filter((record) => record.kind === "action_result")).toEqual([
-      { ...completed, originThreadId: "A" }
+      { ...completed, actionThreadId: "A" }
     ]);
     expect(actionRefreshQueryKeys(completed, [])).toContainEqual(["settings", "themes"]);
     expect(h.persistence.persistActionRecord).not.toHaveBeenCalled();
@@ -171,7 +171,7 @@ describe("origin-bound action delivery", () => {
     await expect(saved).resolves.toEqual({ historyPersisted: true });
     await turn;
     expect(h.seen.filter((record) => record.kind === "action_result")).toEqual([
-      { ...completed, originThreadId: "A" }
+      { ...completed, actionThreadId: "A" }
     ]);
     expect(h.persistence.recordTurn).toHaveBeenCalledWith(
       "owner",
@@ -410,7 +410,7 @@ describe("origin-bound action delivery", () => {
       historyPersisted: false
     });
     expect(h.seen.filter((record) => record.kind === "action_result")).toEqual([
-      { ...completed, originThreadId: "A" }
+      { ...completed, actionThreadId: "A" }
     ]);
     expect(actionRefreshQueryKeys(completed, [])).toContainEqual(["settings", "themes"]);
     expect(h.history.size).toBe(0);

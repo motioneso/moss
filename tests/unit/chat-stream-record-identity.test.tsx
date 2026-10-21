@@ -229,7 +229,7 @@ describe("Main stream reconnect", () => {
           kind: "action_result",
           text: "Other late approval",
           actionRequestId: "late-other",
-          originThreadId: "other"
+          actionThreadId: "other"
         })
       });
       source.onmessage?.({
@@ -237,7 +237,7 @@ describe("Main stream reconnect", () => {
           kind: "action_result",
           text: "Own late approval",
           actionRequestId: "late-own",
-          originThreadId: "main-thread"
+          actionThreadId: "main-thread"
         })
       });
     });

@@ -194,7 +194,7 @@ export interface TranscriptRecord {
   /** Captured destination for admitted voice turns; never changes browser selection. */
   readonly voiceThreadId?: string;
   /** Captured action origin, including events arriving after its turn completes. */
-  readonly originThreadId?: string;
+  readonly actionThreadId?: string;
   readonly scheduledReadSource?: "tasks";
   readonly nativePermission?: true;
   /** Host-marked connected tool; complete arguments are shown verbatim. */
