@@ -288,12 +288,16 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0292_meeting_minimal.sql", import.meta.url),
       "utf8"
     );
+    const importSummaryMigration = await readFile(
+      new URL("../../packages/meetings/sql/0326_meeting_import_summaries.sql", import.meta.url),
+      "utf8"
+    );
     const limiterMigration = await readFile(
       new URL("../../packages/meetings/sql/0295_meeting_capture_start_limits.sql", import.meta.url),
       "utf8"
     );
-    const minimalSelectGrants = [
-      ...minimalMigration.matchAll(
+    const summarySelectGrants = [
+      ...(minimalMigration + importSummaryMigration).matchAll(
         /GRANT SELECT \([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g
       )
     ]
@@ -302,7 +306,7 @@ describe("Meetings account-export collector", () => {
     const migration =
       (recordingMigration.match(/-- Recording import account export[\s\S]*$/)?.[0] ?? "") +
       (limiterMigration.match(/-- Rate-limit history[\s\S]*$/)?.[0] ?? "") +
-      minimalSelectGrants +
+      summarySelectGrants +
       originalMigration +
       (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "") +
       (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "");

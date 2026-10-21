@@ -201,6 +201,7 @@ describe("meetings composition", () => {
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
       "meetings.android_delivery",
+      "meetings.import_analysis",
       "meetings.recording_imports",
       "meetings.chat_app_actions",
       "meetings.link_state",

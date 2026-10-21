@@ -67,6 +67,34 @@ summary/review UI, stop layering later phases; this agent diagnoses the seam and
 Ben decides any product-scope change. Phase one needs live proof before deeper
 phase implementation. Missing hardware input is reported as unverified, not passed.
 
+## Observed verification, 2026-10-20
+
+The isolated live UI proof passed (`test:recording-live`, exit 0), with a retained
+real ring capture, CPU Whisper base transcription and real Claude inference via a
+disclosed proof-only OpenAI-compatible transport. Signup and provider setup used
+the real UI; the supported uploader submitted the original recording. The proof
+opened its transcript and generated summary through Meetings history and the
+Summary tab, preserved the 13,000 ms bookmark, and replayed the upload without
+changing the import, meeting or single output revision. No task candidates arose
+from this recording, so this run does not demonstrate accepting a suggested task.
+No response interception or screenshot evidence was used.
+
+The harness now starts the canonical worker process as well as the API: import
+transcription is API-owned, while automatic analysis runs in the normal worker.
+It cleans up the worker, API, claimed port, temporary vault and gate container.
+
+Focused verification passed 27 import integration tests, 15 existing summary
+admission tests, and 16 manifest/account-export unit tests. Removing the composite
+import provenance foreign key in a throwaway gate database caused exactly the two
+provenance assertions to fail; restoring it passed. The first full gate exposed
+two outdated manifest/export expectations, now corrected. A pre-existing Skills
+browser test matched two headings; its selector now names the page heading, and
+both tests in that file pass. Full foundation and current-head CI must still pass;
+these focused results do not substitute for them.
+
+Live log: `vocci_companion_design-20261020-170338.log`, exit 0. Private browser
+artifacts retain assertions and diagnostics outside the public repository.
+
 ## Later approved slices and architecture findings
 
 Next: explicit versioned voice requests into Main; resumable meeting-length files;
