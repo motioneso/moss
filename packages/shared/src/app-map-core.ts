@@ -79,6 +79,14 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     scope: "user"
   },
   {
+    id: "chat-message",
+    label: "Chat message link",
+    description:
+      "Opens one chat message from a link, such as a reminder's device alert or its View button in Notifications. A message in the person's own Main chat or side chat opens that chat in the drawer, scrolled to and focused on the message, over Notifications. A message that was deleted, sits in a deleted chat, or belongs to another account shows This message is not available with Open chat, and reveals nothing about it; any other failure shows Could not open this message with Retry.",
+    path: "/chat/messages",
+    scope: "user"
+  },
+  {
     id: "link-trail-marker",
     label: "Link a Mac",
     description:

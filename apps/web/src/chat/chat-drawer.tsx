@@ -504,6 +504,30 @@ export function ChatDrawer(props: ChatDrawerProps) {
       scrollToLatest("auto");
     }
   }, [effectiveRecords.length, isWaiting, reviewThreadId, scrollToLatest, stickToBottom]);
+  // Runs after the scroll-to-latest effects so a linked message wins the first scroll.
+  const focusedMessageId = useRef<string | null>(null);
+  useEffect(() => {
+    const id = props.focusMessageId;
+    if (!props.open || !id) {
+      // The drawer stays mounted while closed, so a reopened link must focus again.
+      focusedMessageId.current = null;
+      return;
+    }
+    if (props.threadToOpen || focusedMessageId.current === id) return;
+    const target = bodyRef.current?.querySelector<HTMLElement>("[data-linked-message]");
+    if (!target) return;
+    focusedMessageId.current = id;
+    setStickToBottom(false);
+    target.scrollIntoView({ block: "center" });
+    target.focus();
+  }, [
+    effectiveRecords,
+    props.open,
+    props.focusMessageId,
+    props.threadToOpen,
+    bodyRef,
+    setStickToBottom
+  ]);
   const asideRef = useRef<HTMLElement | null>(null);
   const phone = usePhoneLayout();
   useEffect(() => {
@@ -887,6 +911,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
                   meetingScoped={Boolean(props.meetingContext)}
                   focusActionRequestId={props.focusActionRequestId}
                   onActionRequestFocused={props.onActionRequestFocused}
+                  linkedMessageId={props.focusMessageId}
                 />
               )}
             />

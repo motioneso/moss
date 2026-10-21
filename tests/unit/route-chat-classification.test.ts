@@ -213,6 +213,7 @@ const EXPECTED: readonly string[] = [
   "chat DELETE /api/chat/scheduled-tasks/:id blocked self_authority",
   "chat GET /api/chat/threads blocked data_scope_consent",
   "chat GET /api/chat/threads/:id/messages blocked data_scope_consent",
+  "chat GET /api/chat/messages/:id/location blocked data_scope_consent",
   "chat GET /api/chat/meeting-context read",
   "chat POST /api/chat/turn blocked prompt_shaping",
   "chat POST /api/chat/attachments blocked prompt_shaping",

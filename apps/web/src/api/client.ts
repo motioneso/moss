@@ -27,6 +27,7 @@ import type {
   ListChatSkillsResponse,
   SetChatSkillEnabledRequest,
   UpdateChatSkillRequest,
+  GetChatMessageLocationResponse,
   GetChatPrivacyStateResponse,
   GetChatSettingsResponse,
   GetPersonaSettingsResponse,
@@ -1233,6 +1234,14 @@ export async function getChatPrivacyState(
 ): Promise<GetChatPrivacyStateResponse> {
   const query = surface ? `?surface=${encodeURIComponent(surface)}` : "";
   return requestJson<GetChatPrivacyStateResponse>(`/api/chat/privacy${query}`);
+}
+
+export async function getChatMessageLocation(
+  messageId: string
+): Promise<GetChatMessageLocationResponse> {
+  return requestJson<GetChatMessageLocationResponse>(
+    `/api/chat/messages/${encodeURIComponent(messageId)}/location`
+  );
 }
 
 // Temporary classifier shadow report (#2957): the viewer's own numbers and disagreements.

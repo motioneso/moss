@@ -64,6 +64,11 @@ const LinkTrailMarkerPage = lazy(() =>
     default: module.LinkTrailMarkerPage
   }))
 );
+const ChatMessageLinkPage = lazy(() =>
+  import("./chat/chat-message-link-page").then((module) => ({
+    default: module.ChatMessageLinkPage
+  }))
+);
 const TodayPage = lazy(() =>
   import("./today/today-page").then((module) => ({ default: module.TodayPage }))
 );
@@ -350,6 +355,10 @@ export function App() {
             ))}
             <Route path={webRoutePath("settings")} element={<SettingsPage me={meQuery.data} />} />
             <Route path={webRoutePath("link-trail-marker")} element={<LinkTrailMarkerPage />} />
+            <Route
+              path={`${webRoutePath("chat-message")}/:messageId`}
+              element={<ChatMessageLinkPage />}
+            />
             <Route
               path="*"
               element={

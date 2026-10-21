@@ -1,4 +1,5 @@
 import {
+  CHAT_MESSAGE_LINK_BASE,
   CORE_APP_SCREENS,
   type LocaleSettingsDto,
   type ModuleDto,
@@ -24,7 +25,9 @@ const HIDDEN_NAV_IDS = new Set([
   "settings",
   "notifications",
   // Reached only from the link a Mac sends you to, never from the rail.
-  "link-trail-marker"
+  "link-trail-marker",
+  // Reached only from a link to one chat message, such as a reminder alert.
+  "chat-message"
 ]);
 
 export interface WebRouteMeta {
@@ -106,6 +109,13 @@ export const webRoutes: readonly WebRouteMeta[] = [
     title: "Settings",
     subtitle: dateEyebrow,
     match: (pathname) => pathname.startsWith("/settings")
+  },
+  {
+    id: "chat-message",
+    path: CHAT_MESSAGE_LINK_BASE,
+    title: "Chat",
+    subtitle: dateEyebrow,
+    match: (pathname) => pathname.startsWith(`${CHAT_MESSAGE_LINK_BASE}/`)
   },
   {
     id: "link-trail-marker",
