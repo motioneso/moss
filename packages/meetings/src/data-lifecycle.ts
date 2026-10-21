@@ -64,7 +64,9 @@ export async function collectMeetingsExportSection(
       scopedDb,
       sql<Record<string, unknown>>`
       SELECT id::text AS id,owner_user_id::text AS "ownerUserId",source_device_id::text AS "sourceDeviceId",request_key::text AS "requestKey",inventory_json AS "inventoryJson",enabled_at AS "enabledAt",disabled_at AS "disabledAt"
-      FROM app.meeting_recording_voice_enablements WHERE owner_user_id=${ownerUserId}::uuid ORDER BY enabled_at,id
+      FROM app.meeting_recording_voice_enablements
+      WHERE owner_user_id = ${ownerUserId}::uuid
+      ORDER BY enabled_at, id
     `
     ),
     recording_imports: recordingImports,

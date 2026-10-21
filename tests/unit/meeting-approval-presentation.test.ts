@@ -262,6 +262,11 @@ describe("Meetings authored action disclosures", () => {
     expect(
       routes.filter((route) => route.chat.access === "blocked").map((route) => route.path)
     ).toEqual([
+      "/api/meetings/voice-recordings/:id/retry",
+      "/api/meetings/voice-enablement",
+      "/api/meetings/voice-enablement/:id/disable",
+      "/api/meetings/voice-recordings",
+      "/api/meetings/voice-recordings/:id",
       "/api/meetings/recording-imports",
       "/api/meetings/recording-imports/:id",
       "/api/meetings/capture/connection",

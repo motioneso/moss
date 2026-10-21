@@ -3,13 +3,13 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "A developer-installed Android foreground client retrieves completed Vocci recordings after an explicit Bluetooth-permission handoff. Delivery retries retain identity and source evidence. No consumer onboarding; maximum 120 seconds.",
+    "Android status/queue screens show setup, permissions and identity; start/stop delivery, opt into Main voice, open Moss, retry transcription and clear completed audio. Existing-binding developer provisioning; maximum 120 seconds.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
       path: "/settings?section=modules&module=meetings",
       description:
-        "Meetings settings enable the receiver only. For Android permission handoff, session refresh or local storage, use apps/vocci-delivery/README.md in the source checkout and restart the developer client."
+        "Meetings settings enable the receiver only. For Android permission handoff, session refresh or local storage, open the Android companion status screen; existing-binding provisioning is documented in apps/vocci-delivery/README.md."
     }
   ],
   errors: [
@@ -40,6 +40,12 @@ export const androidDeliveryFeature = {
       remediationRef: "meetings.android_developer_setup",
       description:
         "Developer provisioning must refresh the same owner's Moss session and restart delivery. Pending evidence remains on Android."
+    },
+    {
+      code: "server_identity_change",
+      class: "validation",
+      description:
+        "A receiver or chat identity changed. Delivery stops for that recording and retains its frozen evidence."
     },
     {
       code: "retry_pending",
@@ -119,7 +125,7 @@ export const androidDeliveryFeature = {
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Android retrieval pauses at 100 retained recordings or 100 MiB, or with less than 150 MiB free space. Developer retention management is required."
+        "Android retrieval pauses at 100 retained recordings, 100 MiB, 1024 identities or under 150 MiB free. Clear completed local audio from the status screen; queued and failed evidence stays retained."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];

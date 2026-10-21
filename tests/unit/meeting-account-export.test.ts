@@ -30,6 +30,7 @@ const ctx = {
 };
 const collections = [
   "recording_imports",
+  "voice_enablements",
   "records",
   "note_writes",
   "transcript_batches",
@@ -141,14 +142,16 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly fourteen source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads exactly fifteen source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
       expect(section).toEqual(Object.fromEntries(collections.map((key) => [key, []])));
       expect(queries).toHaveLength(collections.length);
       for (const [index, query] of queries.entries()) {
-        expect(query.sql).toContain(`FROM app.meeting_${collections[index]}`);
+        expect(query.sql).toContain(
+          `FROM app.meeting_${collections[index] === "voice_enablements" ? "recording_voice_enablements" : collections[index]}`
+        );
         expect(query.sql).toMatch(/WHERE owner_user_id = \$1::uuid/);
         expect(query.parameters).toEqual([ctx.actorUserId]);
         expect(query.sql).toMatch(/ORDER BY/);
@@ -156,13 +159,20 @@ describe("Meetings account-export collector", () => {
           /\*|history_|search_terms|\bJOIN\b|\bLIMIT\b|\bOFFSET\b|\bDELETE\b/i
         );
       }
-      expect(queries[0]?.sql).toMatch(/ORDER BY created_at, id/);
-      expect(queries[2]?.sql).toMatch(/ORDER BY meeting_id, expected_revision, request_key/);
-      expect(queries[3]?.sql).toMatch(/ORDER BY meeting_id, version/);
-      expect(queries[5]?.sql).toMatch(/ORDER BY meeting_id, version/);
+      const queryFor = (table: string) =>
+        queries.find((query) => query.sql.includes(`FROM app.meeting_${table}`))!.sql;
+      expect(queryFor("recording_imports")).toMatch(/ORDER BY created_at, id/);
+      expect(queryFor("recording_voice_enablements")).toMatch(/ORDER BY enabled_at, id/);
+      expect(queryFor("note_writes")).toMatch(
+        /ORDER BY meeting_id, expected_revision, request_key/
+      );
+      expect(queryFor("transcript_batches")).toMatch(/ORDER BY meeting_id, version/);
+      expect(queryFor("output_artifacts")).toMatch(/ORDER BY meeting_id, version/);
       // An account export includes inactive, older and manual artifacts with no status filter.
-      expect(queries[9]?.sql).not.toMatch(/credential_hash|verifier_hash|session_id/);
-      expect(queries[5]?.sql).toMatch(/WHERE owner_user_id = \$1::uuid\s+ORDER BY/);
+      expect(queryFor("capture_connections")).not.toMatch(
+        /credential_hash|verifier_hash|session_id/
+      );
+      expect(queryFor("output_artifacts")).toMatch(/WHERE owner_user_id = \$1::uuid\s+ORDER BY/);
     } finally {
       await db.destroy();
     }
@@ -296,9 +306,13 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0295_meeting_capture_start_limits.sql", import.meta.url),
       "utf8"
     );
+    const voiceMigration = await readFile(
+      new URL("../../packages/meetings/sql/0328_meeting_voice_recordings.sql", import.meta.url),
+      "utf8"
+    );
     const summarySelectGrants = [
-      ...(minimalMigration + importSummaryMigration).matchAll(
-        /GRANT SELECT \([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g
+      ...(minimalMigration + importSummaryMigration + voiceMigration).matchAll(
+        /GRANT SELECT\s*\([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g
       )
     ]
       .map((match) => match[0])
@@ -321,7 +335,7 @@ describe("Meetings account-export collector", () => {
         const grants = [
           ...migration.matchAll(
             new RegExp(
-              `GRANT SELECT \\(([^)]+)\\)\\s+ON app\\.${table} TO jarvis_worker_runtime;`,
+              `GRANT SELECT\\s*\\(([^)]+)\\)\\s+ON app\\.${table} TO jarvis_worker_runtime;`,
               "g"
             )
           )

@@ -18,6 +18,9 @@ public final class DeliveryService extends Service {
     private volatile boolean stopping;
     private volatile boolean started;
     private DeliveryStore store;
+    private VoiceDelivery voice;
+    private final Queue<Intent> commands = new ConcurrentLinkedQueue<>();
+    private final Object signal = new Object();
     private PowerManager.WakeLock wake;
     private final Map<String, Integer> previousInventory = new HashMap<>();
     private int reconnectAttempts;
@@ -31,6 +34,7 @@ public final class DeliveryService extends Service {
         Intent stop = new Intent(this, DeliveryService.class).setAction("stop");
         PendingIntent action = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, "delivery").setContentTitle("Moss recording delivery").setContentText(text)
+            .setContentIntent(PendingIntent.getActivity(this, 2, new Intent(this, DeliveryActivity.class), PendingIntent.FLAG_IMMUTABLE))
             .setSmallIcon(android.R.drawable.stat_sys_upload).setOngoing(true)
             .addAction(new Notification.Action.Builder(null, "Stop", action).build()).build();
     }
@@ -40,36 +44,39 @@ public final class DeliveryService extends Service {
         int complete = 0, failed = 0, pending = 0;
         for (String id : store.ids()) {
             String stage = store.entries.getJSONObject(id).getString("stage");
-            if (stage.equals("complete")) complete++;
+            if (DeliveryStore.completed(stage)) complete++;
             if (stage.equals("failed")) failed++;
-            if (!stage.equals("complete") && !stage.equals("failed")) pending++;
+            if (!DeliveryStore.completed(stage) && !stage.equals("failed") && !stage.equals("interrupted")) pending++;
         }
         getSystemService(NotificationManager.class).notify(3550, notification(code.replace('_', ' ') + " · " + complete + " complete · " + failed + " failed · " + pending + " pending"));
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && "stop".equals(intent.getAction())) { stopSelf(); return START_NOT_STICKY; }
+        if (intent != null && Arrays.asList("voice-on", "voice-off", "clear-completed", "retry-transcription").contains(intent.getAction())) commands.add(new Intent(intent));
+        synchronized (signal) { signal.notifyAll(); }
         if (!started) { started = true; worker.submit(this::run); }
         return START_STICKY;
     }
     private void run() {
         try {
-            store = new DeliveryStore(this);
+            store = new DeliveryStore(this); voice = new VoiceDelivery(store);
             SecretStore secrets = new SecretStore(this);
             secrets.provision(this);
             JSONObject config = secrets.load();
             MossClient client = new MossClient(config);
             wake = getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moss:vocci-delivery");
             while (!stopping && !Thread.currentThread().isInterrupted()) {
-                if (getPackageManager().checkPermission(Manifest.permission.BLUETOOTH_CONNECT, OFFICIAL) == PackageManager.PERMISSION_GRANTED) {
-                    report("handoff_required"); break;
-                }
                 try {
                     wake.acquire(240000);
                     // Verify the credential's current owner before touching queued recordings.
                     if (!client.owner().equals(config.getString("ownerId"))) { report("owner_mismatch"); break; }
+                    consumeCommands(client); voice.synchronize(client);
+                    if (getPackageManager().checkPermission(Manifest.permission.BLUETOOTH_CONNECT, OFFICIAL) == PackageManager.PERMISSION_GRANTED) {
+                        report("handoff_required"); break;
+                    }
                     deliver(client);
                     if (store.hasStorageCapacity()) {
-                        retrieve(config);
+                        retrieve(config, client);
                         reconnectAttempts = 0;
                         deliver(client);
                     } else report("storage_capacity");
@@ -89,7 +96,7 @@ public final class DeliveryService extends Service {
                     if (wake.isHeld()) wake.release();
                 }
                 if (stopping || Thread.currentThread().isInterrupted()) break;
-                Thread.sleep(RetryPolicy.connectionDelayMs(reconnectAttempts));
+                synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(RetryPolicy.connectionDelayMs(reconnectAttempts)); }
             }
         } catch (InterruptedException error) { Thread.currentThread().interrupt();
         } catch (Exception error) {
@@ -101,11 +108,12 @@ public final class DeliveryService extends Service {
             started = false;
         }
     }
-    private void retrieve(JSONObject config) throws Exception {
+    private void retrieve(JSONObject config, MossClient client) throws Exception {
         report("retrieving");
         active = new RingConnection(this, config);
         try {
             Map<String, Integer> inventory = active.inventory();
+            voice.inventory(inventory, client);
             for (String name : store.retrievalOrder(inventory.keySet())) {
                 Integer packetSize = inventory.get(name);
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
@@ -114,7 +122,7 @@ public final class DeliveryService extends Service {
                     !packetSize.equals(previousInventory.get(name)) || !sidecarSize.equals(previousInventory.get(sidecarName))) continue;
                 if (!store.hasStorageCapacity() || stopping) break;
                 if (!store.contains(id) && !store.canDiscover()) continue;
-                store.discover(id);
+                store.discover(id, voice.intent(id));
                 if (packetSize > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT) {
                     store.failure(id, "source_size_limit", true); continue;
                 }
@@ -136,15 +144,20 @@ public final class DeliveryService extends Service {
             if (stopping || Thread.currentThread().isInterrupted()) return;
             JSONObject entry = store.entries.getJSONObject(id);
             String stage = entry.getString("stage");
-            if (stage.equals("discovered") || stage.equals("complete") || stage.equals("failed") ||
+            if (stage.equals("discovered") || DeliveryStore.completed(stage) || stage.equals("failed") || stage.equals("interrupted") ||
                 !RetryPolicy.due(entry.optInt("attempts"), entry.optLong("nextAt"), System.currentTimeMillis())) continue;
             report("delivering");
             try {
                 if (stage.equals("retrieved")) { store.freeze(id); stage = "ready"; }
                 store.beginAttempt(id);
-                JSONObject status = stage.equals("accepted") ? client.poll(entry.getJSONObject("status").getString("id")) :
-                    client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024));
-                store.accepted(id, status);
+                if (stage.equals("voice-status")) {
+                    store.chatStatus(id, client.chat(entry.getJSONObject("status").getString("voiceRequestId")));
+                } else {
+                    boolean voice = entry.has("voiceIntent");
+                    JSONObject status = stage.equals("accepted") ? (voice ? client.pollVoice(entry.getJSONObject("status").getString("id")) : client.poll(entry.getJSONObject("status").getString("id"))) :
+                        (voice ? client.acceptVoice(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)) : client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)));
+                    store.accepted(id, status);
+                }
             } catch (MossClient.Rejected error) {
                 if (stopping) throw new InterruptedException();
                 if (error.status == 401 || error.status == 403) {
@@ -161,8 +174,25 @@ public final class DeliveryService extends Service {
             }
         }
     }
+    private void consumeCommands(MossClient client) throws Exception {
+        Intent command;
+        while ((command = commands.peek()) != null) {
+            String action = command.getAction();
+            if (action.equals("voice-on") || action.equals("voice-off")) voice.desired(action.equals("voice-on"));
+            else if (action.equals("clear-completed")) store.clearCompleted();
+            else if (action.equals("retry-transcription")) {
+                String id = command.getStringExtra("recordingId");
+                JSONObject entry = store.entries.optJSONObject(id == null ? "" : id);
+                if (entry != null && entry.has("voiceIntent") && entry.has("status") &&
+                    entry.getJSONObject("status").getString("state").equals("failed") && entry.getJSONObject("status").optBoolean("retryable"))
+                    store.accepted(id, client.retryVoice(entry.getJSONObject("status").getString("id")));
+            }
+            commands.remove();
+        }
+    }
     @Override public synchronized void onDestroy() {
         stopping = true;
+        synchronized (signal) { signal.notifyAll(); }
         worker.shutdownNow();
         if (active != null) active.close();
         super.onDestroy();

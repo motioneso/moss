@@ -1,3 +1,4 @@
+import { VoiceRequests } from "./voice-requests";
 import type { ChatDrawerProps } from "./chat-drawer-props";
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatTurnResponse } from "@moss/shared";
@@ -921,6 +922,24 @@ export function ChatDrawer(props: ChatDrawerProps) {
           </button>
         ) : null}
       </div>
+      <VoiceRequests
+        ownerId={props.ownerId}
+        surface={props.surface}
+        mainThreadId={mainThreadId}
+        selectedThreadId={selectedThreadId}
+        privateMode={
+          privateMode || Boolean(privacyStateQuery.data?.incognito) || Boolean(props.meetingContext)
+        }
+        selectionPending={
+          sendPending ||
+          historyActivationPending ||
+          conversationOverlayOpen ||
+          activatingPrivate ||
+          privacyStateQuery.isFetching
+        }
+        privacyConfirmed={privacyStateQuery.isSuccess}
+        onOpenThread={selectThread}
+      />
       {props.meetingContext ? (
         <p className="jds-hint">Uses the transcript so far and your saved notes.</p>
       ) : null}

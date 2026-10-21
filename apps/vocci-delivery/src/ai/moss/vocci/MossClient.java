@@ -4,9 +4,10 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.Arrays;
 import org.json.JSONObject;
 
-final class MossClient {
+final class MossClient implements VoiceDelivery.Port {
     static final class Rejected extends IOException {
         final int status;
         Rejected(int status) { super("http_rejected"); this.status = status; }
@@ -23,16 +24,17 @@ final class MossClient {
         origin = uri.toString(); cookie = config.getString("cookie");
         if (cookie.isEmpty() || cookie.length() > 8192 || cookie.contains("\n") || cookie.contains("\r")) throw new IllegalArgumentException("cookie");
     }
-    private JSONObject request(String path, byte[] body) throws Exception {
+    private JSONObject request(String method, String path, byte[] body) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(origin + path).openConnection();
         try {
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(15000); connection.setReadTimeout(60000);
             connection.setRequestProperty("Cookie", cookie);
-            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestMethod(method);
             if (body != null) {
                 if (body.length > 8 * 1024 * 1024) throw new IllegalArgumentException("body_limit");
-                connection.setRequestMethod("POST"); connection.setDoOutput(true); connection.setFixedLengthStreamingMode(body.length);
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setDoOutput(true); connection.setFixedLengthStreamingMode(body.length);
                 try (OutputStream out = connection.getOutputStream()) { out.write(body); }
             }
             int status = connection.getResponseCode();
@@ -44,9 +46,31 @@ final class MossClient {
             }
         } finally { connection.disconnect(); }
     }
-    String owner() throws Exception { return uuid(request("/api/auth/get-session", null).getJSONObject("user").getString("id")); }
-    JSONObject accept(byte[] frozen) throws Exception { return status(request("/api/meetings/recording-imports", frozen)); }
-    JSONObject poll(String id) throws Exception { return status(request("/api/meetings/recording-imports/" + uuid(id), null)); }
+    String owner() throws Exception { return uuid(request("GET", "/api/auth/get-session", null).getJSONObject("user").getString("id")); }
+    JSONObject accept(byte[] frozen) throws Exception { return status(request("POST", "/api/meetings/recording-imports", frozen)); }
+    JSONObject poll(String id) throws Exception { return status(request("GET", "/api/meetings/recording-imports/" + uuid(id), null)); }
+    @Override public JSONObject enable(JSONObject snapshot) throws Exception {
+        return request("POST", "/api/meetings/voice-enablement", snapshot.toString().getBytes(StandardCharsets.UTF_8));
+    }
+    @Override public JSONObject disable(String id) throws Exception {
+        return request("POST", "/api/meetings/voice-enablement/" + uuid(id) + "/disable", null);
+    }
+    JSONObject acceptVoice(byte[] frozen) throws Exception { return voiceStatus(request("POST", "/api/meetings/voice-recordings", frozen)); }
+    JSONObject pollVoice(String id) throws Exception { return voiceStatus(request("GET", "/api/meetings/voice-recordings/" + uuid(id), null)); }
+    JSONObject retryVoice(String id) throws Exception { return voiceStatus(request("POST", "/api/meetings/voice-recordings/" + uuid(id) + "/retry", null)); }
+    JSONObject chat(String id) throws Exception {
+        JSONObject value = request("GET", "/api/chat/voice-requests/" + uuid(id), null);
+        uuid(value.getString("id")); uuid(value.getString("threadId")); uuid(value.getString("sourceDeviceId"));
+        for (String key : new String[]{"userMessageId", "assistantMessageId"}) if (!value.isNull(key)) uuid(value.getString(key));
+        if (!Arrays.asList("no-speech", "ready-to-send", "queued", "dispatching", "replied", "interrupted").contains(value.getString("state"))) throw new IOException("invalid_status");
+        return value;
+    }
+    private JSONObject voiceStatus(JSONObject value) throws Exception {
+        uuid(value.getString("id"));
+        if (!value.isNull("voiceRequestId")) uuid(value.getString("voiceRequestId"));
+        if (!value.getString("intent").equals("voice-request") || !Arrays.asList("queued", "transcribing", "complete", "failed").contains(value.getString("state"))) throw new IOException("invalid_status");
+        return value;
+    }
     static String uuid(String id) { if (!UUID.fromString(id).toString().equals(id)) throw new IllegalArgumentException("uuid"); return id; }
     private JSONObject status(JSONObject value) throws Exception {
         uuid(value.getString("id")); uuid(value.getString("meetingId"));

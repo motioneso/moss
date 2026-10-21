@@ -3,8 +3,8 @@
 This repo-owned Android client retrieves finished legacy Vocci recordings and
 uploads them to Moss's existing Meetings receiver. It is a developer-installed
 foreground service, not consumer ring setup. No ownership, pairing, recording
-control, deletion, destructive sync acknowledgement or request execution commands
-exist. Normal/hold classification and bookmark timing remain receiver metadata.
+control, ring deletion or destructive sync acknowledgement commands exist. Normal
+recordings become Meetings evidence; newly opted-in hold recordings go to Main chat.
 
 From `~/Jarv1s`, run `apps/vocci-delivery/test.sh` (exit 0 expected). Requires JDK
 21, Android SDK platform/build-tools 35.0.0; override `JAVA_HOME` and
@@ -27,7 +27,9 @@ adb -s <serial> shell am instrument -w ai.moss.vocci/.DeviceChecks
 Require `INSTRUMENTATION_RESULT: result=PASS` and code `-1`; ADB can exit zero even
 when instrumentation reports failure. Assertions cover encrypted retention,
 tamper rejection, actual platform decoding, completed-sidecar admission, frozen
-bundle restart, stable UUID, bounded retries and owner-switch rejection.
+bundle restart, stable UUID, bounded retries, owner-switch rejection, immutable
+voice snapshot recovery, uncertain capture, destination preservation and cleanup
+tombstones. The voice journal assertions require installed instrumentation.
 
 Create the app-private `files/` directory with `run-as` on a fresh install.
 A developer provisions a one-use app-private `files/bootstrap.json` over stdin
@@ -57,7 +59,8 @@ consumer-guided handoff needs separate design.
 
 Start `ai.moss.vocci/.DeliveryActivity` from the launcher or ADB. Grant Bluetooth
 and notifications. The ongoing notification reports record-derived progress and
-has Stop. To stop explicitly, launch the activity with action `stop`; physical
+opens the status screen, with Start/Stop, permissions, account/ring identity,
+voice opt-in and recent queue entries. To stop explicitly, launch the activity with action `stop`; physical
 proof cleanup also force-stops this developer package before restoring Vocci.
 The service polls every 30 seconds and retains a partial wake lock only during
 bounded work. Sticky service restart handles OS reclamation; force-stop, permission
@@ -101,19 +104,24 @@ Eight automatic upload attempts use exponential backoff (30 seconds to 30 minute
 Connection failures continue reconnecting automatically with backoff capped at
 30 minutes, so returning to range after an outage resumes retrieval. The queue stops retrieving
 at 100 retained entries, 100 MiB, or less than 150 MiB free. Sources/bundles are
-retained after success. Automatic retention management is not implemented.
+retained after success until Clear completed local audio is selected. That action
+keeps identity tombstones to prevent redownload, and never clears queued, failed or
+interrupted evidence. At 1024 retained identities, enrollment/discovery stops.
+Automatic retention management is not implemented.
 
 Receiver limits remain 120 seconds, 1 MiB packets, 64 KiB sidecar and 8 MiB upload.
 Larger advertised files remain on the ring; over-duration decodes fail locally.
-No large/resumable upload transport, iOS, fresh ownership, bookmark UI, execution
-of voice requests, or live streaming. Ring reboot and background reliability
+No large/resumable upload transport, iOS, fresh ownership or live streaming. Ring reboot and background reliability
 beyond the actual PR proof remain unverified unless explicitly evidenced there.
 
 ## Version-2 voice receiver (developer API)
 
-The Moss server also accepts explicit hold-to-talk intent. This Android client still
-sends version 1; it has no hold-to-talk enablement or review UI yet. Do not switch
-its old queue to the new endpoint. Version-1 files remain meeting evidence forever.
+The companion hold-to-talk switch requests a stable complete inventory twice, then
+saves an immutable request key/inventory before enabling voice delivery. A lost
+response or restart reuses that exact snapshot. Disabling while its result is
+unknown resolves and disables the same epoch. Existing queue entries and baseline
+recordings remain version-1 meeting evidence forever. New `amsg_` recordings get a
+frozen version-2 destination; disabling never rewrites an existing bundle.
 The short version-2 envelope retains the same 120-second and file-size bounds; it
 is separate from the planned resumable long-file transport.
 
@@ -140,12 +148,20 @@ is separate from the planned resumable long-file transport.
    Replaying that enablement's original key does not reactivate it; a new enablement
    needs a fresh full inventory and request key.
 
+The current Android client always supplies `capturedAt: null`: polling a file list
+is not observing a capture. Open Review in Moss, expand Ring voice requests in
+Main, and press Send to Main after checking the transcript. Replies appear as normal
+text messages; Open reply selects the existing Main thread. Private, module and
+other chat selections hide the review list. Voice links resolve owned receipts and
+never auto-send. Retry transcription only applies to failed receiver processing,
+not interrupted Chat turns.
+
 The server checks the phone-supplied capture time against enablement, receipt and
 sidecar timing; missing or inconsistent timing requires Send. These are supplied
 recording evidence, not hardware attestation. Main chat applies its age rule again
 before dispatch and retains its normal action confirmations. These endpoints reject
 delegated model access. A real hold recording reaching a persisted Main reply and
-the companion setup/status screens remain required live-path work.
+installed companion screens remain required live-path work.
 
 ## Installed proof
 

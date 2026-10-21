@@ -56,7 +56,7 @@ export const recordingVoiceFeature = {
     }
   ],
   description:
-    "Explicit version-2 hold recordings retain audio and enter Main chat after transcription. First-enable inventory stays meetings; uncertain or old captures require Send. Developer API only; maximum 120 seconds.",
+    "Opted-in hold recordings retain audio and enter Main after transcription. Stable inventory and old queued files stay Meetings evidence. Android uses explicit Send for unobserved capture timing. Maximum 120 seconds.",
   errors: [
     {
       code: "recording_voice_ineligible",

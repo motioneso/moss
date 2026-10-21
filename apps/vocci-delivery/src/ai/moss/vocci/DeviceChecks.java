@@ -151,8 +151,9 @@ public final class DeviceChecks extends Instrumentation {
             try { SecretStore.assertSameIdentity(identity, new JSONObject(identity.toString()).put("ownerId", "other")); }
             catch (IllegalArgumentException expected) { rejected = true; }
             check(rejected);
+            VoiceDeliveryChecks.run(isolated, packets);
             remove(isolated.getNoBackupFilesDir());
-            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected");
+            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected,voice_snapshot_recovery,voice_disable_unknown,voice_baseline,v1_unchanged,voice_frozen_restart,voice_uncertain_capture,voice_identity,cleanup_tombstones");
             result.putString("result", "PASS"); finish(-1, result);
         } catch (Throwable error) {
             result.putString("result", "FAIL"); result.putString("class", error.getClass().getSimpleName());

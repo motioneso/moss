@@ -710,6 +710,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(Object.keys(exported).sort()).toEqual(
         [
           "recording_imports",
+          "voice_enablements",
           "records",
           "note_writes",
           "transcript_batches",
@@ -736,6 +737,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         if (
           ![
             "recording_imports",
+            "voice_enablements",
             "stop_summaries",
             "capture_grants",
             "capture_connections",

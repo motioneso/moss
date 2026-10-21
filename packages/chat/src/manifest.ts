@@ -187,7 +187,7 @@ export const chatModuleManifest = {
     {
       id: "chat.voice_requests",
       description:
-        "Voice status and Send APIs target Main with ordinary permissions. Old requests need Send; busy or other chats defer. Interrupted turns never auto-replay. Receiver activation and companion screens remain pending.",
+        "Main reviews ring transcripts with Send and Open reply. Private/module/other chats hide review. Companion links open owned receipts without sending. Busy chats defer; interrupted turns never auto-replay.",
       featureFlagId: "chat.module"
     },
     {
