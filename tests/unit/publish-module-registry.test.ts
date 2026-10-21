@@ -202,25 +202,25 @@ describe("packModuleArtifact", () => {
 });
 
 describe("module discovery", () => {
-  // Ruling N47 (#1307): the CLI entrypoint discovers modules generically via
-  // discoverModuleDirs (readdirSync(external-modules/), no per-module allowlist, and
-  // there must never be one — a hardcoded id would go stale the moment a module is
-  // renamed or removed, silently or otherwise). Calling the exported discovery function
-  // instead of re-implementing the walk here means an allowlist filter added to it later
-  // makes this test fail, not just the packing step below. Combined with driving the real
-  // buildRegistryArtifacts (the exact function the CLI calls) against every module it
-  // finds, into a scratch out-dir, and asserting on what actually got published — entries
-  // in the returned index, and a real tarball on disk for each — both halves of "the
-  // publisher finds and packs everything" are now exercised, not assumed. Deliberately
-  // not scoped to job-search alone — a test that only knows about one module has the same
-  // asymmetry problem the publisher would have had. Measured ~50ms end to end for both
-  // real modules (bundling included) — cheap enough not to fake.
+  // Discover new modules generically while honoring explicit catalog withdrawals.
+  // Drive the real CLI discovery and publisher so this checks the emitted index and bundles.
   const scratchOutDirs: string[] = [];
   afterAll(() => {
     for (const dir of scratchOutDirs) rmSync(dir, { recursive: true, force: true });
   });
 
-  it("publishes every known external module, not a hardcoded subset", async () => {
+  it("discovers new module folders without adding them to an allowlist", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "registry-new-module-"));
+    scratchOutDirs.push(repoRoot);
+    for (const id of ["new-module", "job-search"]) {
+      mkdirSync(join(repoRoot, "external-modules", id), { recursive: true });
+    }
+    expect(discoverModuleDirs(repoRoot)).toEqual([
+      join(repoRoot, "external-modules", "new-module")
+    ]);
+  });
+
+  it("omits archived Job Search and its previous versions while publishing other modules", async () => {
     const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
     const moduleDirs = discoverModuleDirs(repoRoot);
 
@@ -230,14 +230,25 @@ describe("module discovery", () => {
     const index = await buildRegistryArtifacts({
       moduleDirs,
       outDir,
-      previousIndex: null,
+      previousIndex: {
+        schemaVersion: 1,
+        generatedAt: "2026-10-20T00:00:00.000Z",
+        modules: [
+          {
+            ...entry("0.2.19", [{ ...ref("0.2.18"), artifact: "job-search-0.2.18.tgz" }]),
+            id: "job-search",
+            artifact: "job-search-0.2.19.tgz"
+          }
+        ]
+      },
       generatedAt: new Date().toISOString(),
       signingKey: null
     });
 
-    expect(index.modules.map((m) => m.id)).toEqual(
-      expect.arrayContaining(["finance", "job-search"])
-    );
+    expect(index.modules.map((m) => m.id)).toEqual(["finance", "food"]);
+    expect(readFileSync(join(outDir, "index.json"), "utf8")).not.toContain("job-search");
+    expect(existsSync(join(outDir, "job-search-0.2.20.tgz"))).toBe(false);
+    expect(existsSync(join(repoRoot, "external-modules/job-search/src"))).toBe(true);
     // Each index entry claims a packed artifact; confirm the tarball actually landed on
     // disk rather than trusting the returned object alone.
     for (const module of index.modules) {
