@@ -204,7 +204,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
     vi.mocked(sendChatTurn).mockClear();
     vi.mocked(cancelChatTurn).mockClear();
     vi.mocked(clearChat).mockClear();
-    vi.mocked(getChatPrivacyState).mockClear();
+    vi.mocked(getChatPrivacyState).mockReset().mockResolvedValue({ incognito: false });
     vi.mocked(listChatThreadMessages).mockClear();
     vi.mocked(listChatThreads).mockClear();
     vi.mocked(resumeChat).mockClear();
@@ -392,10 +392,11 @@ describe("ChatDrawer surface routing (#1533)", () => {
   });
 
   it("seeds a delayed starter and keeps an unselected module draft separate from Main", async () => {
-    vi.mocked(getChatPrivacyState).mockResolvedValueOnce({
+    // Returning to Main refetches identity; that refetch must still identify Main.
+    vi.mocked(getChatPrivacyState).mockImplementation(async (surface) => ({
       incognito: false,
-      threadId: "main-thread"
-    });
+      ...(surface === DEFAULT_CHAT_SURFACE ? { threadId: "main-thread" } : {})
+    }));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clearRecords = vi.fn();
     let renderer!: ReactTestRenderer;
@@ -406,6 +407,10 @@ describe("ChatDrawer surface routing (#1533)", () => {
       );
       await Promise.resolve();
       await Promise.resolve();
+    });
+    // QueryObserver schedules notifications after the fetch promise resolves.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     let textarea = renderer.root.findByType("textarea");
@@ -422,6 +427,10 @@ describe("ChatDrawer surface routing (#1533)", () => {
     await act(async () => textarea.props.onChange({ target: { value: "Module draft" } }));
 
     await flipSurface(renderer, client, DEFAULT_CHAT_SURFACE, clearRecords);
+    await act(async () => {
+      await client.refetchQueries({ queryKey: queryKeys.chat.privacy(DEFAULT_CHAT_SURFACE) });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(renderer.root.findByType("textarea").props.value).toBe("Main draft");
   });
 
