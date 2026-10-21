@@ -167,21 +167,36 @@ Automatic inbox watcher manual trial result (2026-10-21): the user reported
 one phrase match and one newly observed/changed row. This confirms the watcher
 ran and recorded a matching row in the live Outlook layout. Counts alone do not
 prove that the observation was a newly delivered message rather than a changed
-row. Full bodies, calendar events, restart recovery and VM operation remain untested.
+row. Full bodies, restart recovery and VM operation remain untested; calendar
+trials are recorded below.
 
-Calendar watcher live trial (2026-10-21): the user reported that initial appearance
+First calendar watcher live trial (2026-10-21): the user reported that initial appearance
 worked when the event was created on another computer. Rename and deletion were
-not observed; those actions were performed in the watched tab. Live update and
-disappearance handling remain unresolved pending watcher status and a repeat with
-the watched tab left unchanged.
+not observed; those actions were performed in the watched tab. That trial did not
+verify update or disappearance handling.
 
 A synthetic check of the current source confirmed that changing from a calendar
 view URL to an editor URL stops the watcher and clears observations by design.
 The user subsequently reported **Stopped (calendar): Calendar route changed;
 stopped and cleared**, after 46 scans. This confirms a live route interruption;
 the zero observation counters reflect clearing and do not establish extraction
-failure. Rename/disappearance detection still needs an uninterrupted trial.
+failure. An uninterrupted repeat was needed to test rename/disappearance.
 For the isolated collection trial, create, rename and delete on the other
 computer while leaving the watched tab's date/view unchanged. No route guard was
 relaxed on the basis of this report. The initial result does not establish stable
 event identity, reliable cancellation detection, restart recovery or VM operation.
+
+Uninterrupted calendar repeat (2026-10-21): the user reported the following while
+leaving the watched view unchanged and making changes on the other computer.
+The watcher remained Running (calendar) throughout.
+
+| User action | Scans | Rendered items | Phrase matches | Newly observed/changed | No longer displayed |
+| --- | --- | --- | --- | --- | --- |
+| Create | 19 | 15 | 1 | 1 | 0 |
+| Edit | 46 | 15 | 1 | 2 | 0 |
+| Delete | 62 | 14 | 0 | 2 | 1 |
+
+This supports live detection of appearance, a changed summary, and disappearance
+in the displayed Outlook calendar during this bounded trial. It does not establish
+stable event IDs, authoritative cancellation semantics, complete calendar coverage,
+or recovery after session/browser interruption. No event content was supplied.
