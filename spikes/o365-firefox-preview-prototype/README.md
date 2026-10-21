@@ -2,8 +2,8 @@
 
 Question: can a user-invoked Firefox add-on preview one already-opened Outlook Web
 message without a new Microsoft app registration? This is a standalone experiment,
-not a Moss connector. Real Outlook extraction and temporary add-on installation
-remain unverified until the manual trial below.
+not a Moss connector. A user-reported Firefox/Outlook trial succeeded on
+2026-10-21, with the sender field missing; see the result below.
 
 ## Try it (Firefox desktop 142 or later)
 
@@ -62,4 +62,10 @@ rendering, clearing, host validation, and injection errors. Manifest validation:
 npx --yes web-ext@10.8.0 lint --source-dir spikes/o365-firefox-preview-prototype --ignore-files verify.py README.md
 ```
 
-Manual trial result: **pending**. No live mailbox content belongs in this folder.
+Manual trial result (2026-10-21): the user reported the Firefox trial worked, with
+only **From** showing **Not found**. This supports feasibility of the user-invoked
+preview in that account/browser. Sender extraction remains unresolved: the current
+code recognizes only a nearby heading beginning with `From:`; the actual sender
+markup has not been inspected. This trial does not establish full mailbox sync,
+compatibility with other tenants, employer approval, or absence of security alerts.
+No live mailbox content belongs in this folder.
