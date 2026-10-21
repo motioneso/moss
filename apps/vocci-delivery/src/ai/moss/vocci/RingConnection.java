@@ -135,8 +135,16 @@ final class RingConnection implements AutoCloseable {
         throw new IOException("inventory_limit");
     }
     byte[] retrieve(String name, int size) throws Exception {
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        retrieve(name, size, bytes);
+        return bytes.toByteArray();
+    }
+    void retrieve(String name, int size, java.io.File target) throws Exception {
+        PrivateFiles.write(target, output -> retrieve(name, size, output));
+    }
+    private void retrieve(String name, int size, java.io.OutputStream output) throws Exception {
         stage = "file";
-        RingProtocol.Transfer transfer = new RingProtocol.Transfer(name, size);
+        RingProtocol.Transfer transfer = new RingProtocol.Transfer(name, size, output);
         write(RingProtocol.WRITE, RingProtocol.read(name));
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(180);
         while (!transfer.ended() && System.nanoTime() < deadline) {
@@ -146,7 +154,7 @@ final class RingConnection implements AutoCloseable {
                 if (command == 0x12) transfer.control(payload);
             });
         }
-        return transfer.result();
+        if (!transfer.ended()) throw new java.io.IOException("incomplete");
     }
     @Override public synchronized void close() {
         closed = true;

@@ -71,6 +71,7 @@ final class VoiceDeliveryChecks {
         store.chatStatus(fresh, new JSONObject(chat.toString()).put("state", "replied"));
         store.entries.getJSONObject(uncertain).put("stage", "interrupted"); store.save(); store.clearCompleted();
         check(!store.file(fresh, "bundle.json").exists() && store.file(uncertain, "bundle.json").exists());
+        check(!store.file(fresh, "audio.wav").exists() && store.file(uncertain, "audio.wav").exists());
         store = new DeliveryStore(context); check(store.contains(fresh) && !store.needsRetrieval(fresh));
         check(store.entries.getJSONObject(fresh).getBoolean("cleared"));
 

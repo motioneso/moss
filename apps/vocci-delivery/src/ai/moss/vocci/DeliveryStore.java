@@ -90,6 +90,12 @@ final class DeliveryStore {
         discover(id);
         if (!hasStorageCapacity()) throw new IllegalStateException("storage_capacity");
         PrivateFiles.write(file(id, "packets.bin"), packets);
+        retrieved(id, sidecar);
+    }
+    void retrieved(String id, byte[] sidecar) throws Exception {
+        if (!needsRetrieval(id)) return;
+        File packets = file(id, "packets.bin");
+        if (packets.length() < 1 || packets.length() > RingProtocol.PACKET_LIMIT) throw new IllegalArgumentException("packet_size");
         PrivateFiles.write(file(id, "sidecar.bin"), sidecar);
         entries.getJSONObject(id).put("stage", "retrieved").put("attempts", 0).put("nextAt", 0); save();
     }
@@ -100,9 +106,11 @@ final class DeliveryStore {
     void freeze(String id) throws Exception {
         File bundle = file(id, "bundle.json");
         if (!bundle.exists()) {
+            File audio = file(id, "audio.wav");
+            OpusWav.decode(file(id, "packets.bin"), audio);
             byte[] packets = PrivateFiles.read(file(id, "packets.bin"), RingProtocol.PACKET_LIMIT);
             byte[] sidecar = PrivateFiles.read(file(id, "sidecar.bin"), RingProtocol.SIDECAR_LIMIT);
-            byte[] wav = OpusWav.decode(packets);
+            byte[] wav = PrivateFiles.read(audio, 3_840_044);
             JSONObject input = new JSONObject().put("version", 1).put("sourceDeviceId", state.getString("sourceDeviceId")).put("recordingId", id)
                 .put("packets", manifest(id + ".opus", packets)).put("sidecar", manifest(id + ".json", sidecar)).put("wav", manifest(id + ".wav", wav));
             JSONObject intent = entries.getJSONObject(id).optJSONObject("voiceIntent");
@@ -161,7 +169,7 @@ final class DeliveryStore {
         for (String id : ids()) {
             JSONObject entry = entries.getJSONObject(id);
             if (!completed(entry.getString("stage"))) continue;
-            for (String name : new String[]{"packets.bin", "sidecar.bin", "bundle.json"}) {
+            for (String name : new String[]{"packets.bin", "sidecar.bin", "audio.wav", "bundle.json"}) {
                 File file = file(id, name);
                 if (file.exists() && !file.delete()) throw new java.io.IOException("storage_cleanup");
             }

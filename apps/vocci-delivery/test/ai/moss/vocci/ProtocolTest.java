@@ -1,31 +1,49 @@
 package ai.moss.vocci;
 
+import java.io.*;
 import java.nio.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public final class ProtocolTest {
     static void check(boolean value) { if (!value) throw new AssertionError(); }
-    static void rejects(Runnable body) {
+    interface Checked { void run() throws Exception; }
+    static void rejects(Checked body) throws Exception {
         try { body.run(); } catch (IllegalArgumentException | IllegalStateException expected) { return; }
         throw new AssertionError("accepted invalid input");
     }
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         String name = "amsg_1700000000_mono.opus";
         byte[] filename = name.getBytes(StandardCharsets.UTF_8);
         byte[] start = ByteBuffer.allocate(filename.length + 6).order(ByteOrder.LITTLE_ENDIAN)
             .put((byte) 1).put((byte) filename.length).put(filename).putInt(3).array();
-        RingProtocol.Transfer transfer = new RingProtocol.Transfer(name, 3);
+        ByteArrayOutputStream received = new ByteArrayOutputStream();
+        RingProtocol.Transfer transfer = new RingProtocol.Transfer(name, 3, received);
         rejects(() -> transfer.append(new byte[]{1}));
-        rejects(transfer::result);
+        check(!transfer.ended());
         transfer.control(start); transfer.append(new byte[]{1, 2});
         rejects(() -> transfer.control(new byte[]{2}));
         transfer.append(new byte[]{3}); transfer.control(new byte[]{2});
-        check(Arrays.equals(transfer.result(), new byte[]{1, 2, 3}));
+        check(Arrays.equals(received.toByteArray(), new byte[]{1, 2, 3}));
         rejects(() -> transfer.append(new byte[]{4}));
-        rejects(() -> new RingProtocol.Transfer("../private.opus", 3));
-        rejects(() -> new RingProtocol.Transfer(name, RingProtocol.PACKET_LIMIT + 1));
+        rejects(() -> new RingProtocol.Transfer("../private.opus", 3, received));
+        rejects(() -> new RingProtocol.Transfer(name, RingProtocol.PACKET_LIMIT + 1, received));
         check(RingProtocol.packetCount(new byte[]{(byte)255,1,1,0,1,1}) == 2);
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        RingProtocol.Transfer streaming = new RingProtocol.Transfer(name, 3, sink);
+        streaming.control(start); streaming.append(new byte[]{1}); streaming.append(new byte[]{2,3});
+        streaming.control(new byte[]{2});
+        check(streaming.ended() && Arrays.equals(sink.toByteArray(), received.toByteArray()));
+        check(RingProtocol.packetCount(new FilterInputStream(new ByteArrayInputStream(new byte[]{(byte)255,1,1,0,1,1})) {
+            @Override public int read(byte[] bytes, int offset, int length) throws IOException { return super.read(bytes, offset, Math.min(length, 1)); }
+        }) == 2);
+        RingProtocol.Transfer failing = new RingProtocol.Transfer(name, 3, new OutputStream() {
+            @Override public void write(int value) throws IOException { throw new IOException("disk full"); }
+        });
+        failing.control(start);
+        try { failing.append(new byte[]{1}); throw new AssertionError("failed sink accepted"); }
+        catch (IOException expected) { check(!failing.ended()); }
+        rejects(() -> failing.control(new byte[]{2}));
         rejects(() -> RingProtocol.packetCount(new byte[]{0,1,1,2,1,1}));
         rejects(() -> RingProtocol.packetCount(new byte[]{0,5,1}));
         rejects(() -> RingProtocol.packetCount(new byte[0]));

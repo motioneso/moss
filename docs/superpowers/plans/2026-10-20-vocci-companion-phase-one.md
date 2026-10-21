@@ -95,6 +95,13 @@ these focused results do not substitute for them.
 Live log: `vocci_companion_design-20261020-170338.log`, exit 0. Private browser
 artifacts retain assertions and diagnostics outside the public repository.
 
+At committed head `9b010134b`, isolated live gate `225647` exited 0 with generated
+spoken audio through real transcription and analysis. A pending task suggestion
+created no Task before review; editing it and selecting Add to Tasks produced the
+edited Task with its source reference. Repeated review retained the same Task ID,
+and the summary's Tasks link displayed that Task. This closes the task-acceptance
+proof with generated speech; it does not claim hardware capture for that fixture.
+
 ## Later approved slices and architecture findings
 
 Next: explicit versioned voice requests into Main; resumable meeting-length files;

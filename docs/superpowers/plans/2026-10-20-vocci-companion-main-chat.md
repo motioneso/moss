@@ -97,11 +97,20 @@ The source module owns audio/export/deletion; Chat owns transcript/turn/reply st
 Explicit transcription Retry preserves the source and never replays a completed
 chat request. Developer API contracts are documented in the Android README.
 
-Ring input remains inactive in the installed Android client: it still sends only
-version 1. Next, implement its durable enablement snapshot and versioned queue, then
-the Moss review UI and real hold audio reaching a saved Main reply. APIs and isolated
-synthetic receiver tests do not satisfy that live-path gate or the Android screens.
-The resumable two-hour transport remains a separate approved slice.
+The Android client now implements durable enablement snapshots, versioned voice
+bundles, status/queue controls, transcription retry and completed-audio cleanup.
+The Moss Main drawer exposes review, Send to Main and Open reply. Capture timing
+remains uncertain, so newly discovered hold recordings require explicit Send.
+
+At committed head `9b010134b`, isolated live gate `225414` exited 0: retained actual
+ring audio, submitted through the authenticated developer uploader, reached real
+Whisper transcription and ordinary ACP Main execution. Open reply displayed the
+persisted nonempty assistant response, and upload replay preserved exactly one
+user/assistant pair. This proves the receiving/chat path, not installed Android
+delivery. The updated companion is installed on the verified Samsung phone, and
+platform codec, atomic-file, voice journal and cleanup checks pass. Physical
+ring-to-Moss delivery and the installed UI check remain pending. The resumable
+two-hour transport remains a separate approved slice, unimplemented.
 
 The independent static streaming result is recorded in
 [the investigation](../../research/2026-10-20-vocci-legacy-streaming.md): no active

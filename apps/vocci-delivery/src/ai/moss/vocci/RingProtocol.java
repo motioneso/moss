@@ -1,6 +1,8 @@
 package ai.moss.vocci;
 
-import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -44,16 +46,17 @@ final class RingProtocol {
         final String name;
         final int expected;
         private boolean started, ended;
-        private final ByteArrayOutputStream data = new ByteArrayOutputStream();
-        Transfer(String name, int expected) {
+        private final OutputStream data;
+        private int received;
+        Transfer(String name, int expected, OutputStream data) {
             int limit = name.endsWith(".opus") ? PACKET_LIMIT : SIDECAR_LIMIT;
             if (!validName(name) || expected < 1 || expected > limit)
                 throw new IllegalArgumentException("transfer limit");
-            this.name = name; this.expected = expected;
+            this.name = name; this.expected = expected; this.data = java.util.Objects.requireNonNull(data);
         }
         void control(byte[] payload) {
             if (Arrays.equals(payload, new byte[]{2})) {
-                if (!started || ended || data.size() != expected) throw new IllegalArgumentException("incomplete");
+                if (!started || ended || received != expected) throw new IllegalArgumentException("incomplete");
                 ended = true; return;
             }
             int n = name.length();
@@ -63,27 +66,44 @@ final class RingProtocol {
                 throw new IllegalArgumentException("transfer start");
             started = true;
         }
-        void append(byte[] bytes) {
-            if (!started || ended || data.size() + bytes.length > expected)
+        void append(byte[] bytes) throws IOException {
+            if (!started || ended || bytes.length > expected - received)
                 throw new IllegalArgumentException("unexpected file bytes");
-            data.write(bytes, 0, bytes.length);
+            data.write(bytes, 0, bytes.length); received += bytes.length;
         }
         boolean ended() { return ended; }
-        byte[] result() {
-            if (!ended) throw new IllegalStateException("incomplete");
-            return data.toByteArray();
-        }
+
     }
     static int packetCount(byte[] bytes) {
-        int offset = 0, count = 0, previous = -1;
-        while (offset < bytes.length) {
-            if (offset + 2 > bytes.length) throw new IllegalArgumentException("packet header");
-            int sequence = bytes[offset++] & 255, size = bytes[offset++] & 255;
-            if (size == 0 || offset + size > bytes.length || (previous >= 0 && sequence != (previous + 1) % 256))
-                throw new IllegalArgumentException("packet gap/length");
-            previous = sequence; offset += size; count++;
-        }
+        try { return packetCount(new java.io.ByteArrayInputStream(bytes)); }
+        catch (IOException impossible) { throw new IllegalStateException(impossible); }
+    }
+    static int packetCount(InputStream input) throws IOException {
+        PacketReader reader = new PacketReader(input);
+        byte[] packet = new byte[255];
+        int count = 0;
+        while (reader.next(packet) != 0) count++;
         if (count == 0) throw new IllegalArgumentException("empty packets");
         return count;
+    }
+    static final class PacketReader {
+        private final InputStream input;
+        private int previous = -1;
+        PacketReader(InputStream input) { this.input = java.util.Objects.requireNonNull(input); }
+        int next(byte[] packet) throws IOException {
+            int sequence = input.read();
+            if (sequence == -1) return 0;
+            int size = input.read();
+            if (size <= 0 || size > packet.length || (previous >= 0 && sequence != (previous + 1) % 256))
+                throw new IllegalArgumentException("packet gap/length");
+            int offset = 0;
+            while (offset < size) {
+                int read = input.read(packet, offset, size - offset);
+                if (read <= 0) throw new IllegalArgumentException("packet header/length");
+                offset += read;
+            }
+            previous = sequence;
+            return size;
+        }
     }
 }

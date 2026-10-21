@@ -96,7 +96,11 @@ Listing requires two stable snapshots, matching audio/sidecar names, completed
 sidecar end/duration and exact transfer sizes/end frames. Partial reads restart
 at zero after reconnect. Interrupted codec work recovers from the retained sources;
 an already-frozen bundle is reused byte-for-byte. Platform Opus decoding validates
-packet continuity. If the decoder outputs 48 kHz, a three-sample box filter precedes
+packet continuity. Audio retrieval writes into an atomic file sink, and the codec reads
+one packet at a time into a file-backed WAV. PCM conversion uses an 8 KiB buffer,
+carrying partial samples and resampling groups across output buffers. The current
+short JSON upload still loads and base64-encodes its bounded files in memory.
+If the decoder outputs 48 kHz, a three-sample box filter precedes
 16 kHz decimation; derived WAV is not claimed bit-identical to libopus's direct
 16 kHz decoder. Original evidence remains unchanged.
 
@@ -111,6 +115,10 @@ Automatic retention management is not implemented.
 
 Receiver limits remain 120 seconds, 1 MiB packets, 64 KiB sidecar and 8 MiB upload.
 Larger advertised files remain on the ring; over-duration decodes fail locally.
+A host regression writes generated two-hour PCM into a WAV under a 32 MiB Java
+heap. This tests only the WAV writer: production decode still enforces 120 seconds,
+and it does not prove MediaCodec, installed Android, ring transfer or long uploads.
+
 No large/resumable upload transport, iOS, fresh ownership or live streaming. Ring reboot and background reliability
 beyond the actual PR proof remain unverified unless explicitly evidenced there.
 

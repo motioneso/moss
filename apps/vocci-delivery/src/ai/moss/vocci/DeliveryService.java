@@ -130,10 +130,9 @@ public final class DeliveryService extends Service {
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 if (!store.admitSidecar(id, sidecar)) continue;
-                byte[] packets;
-                try { packets = active.retrieve(name, packetSize); }
+                try { active.retrieve(name, packetSize, store.file(id, "packets.bin")); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
-                store.retrieved(id, packets, sidecar);
+                store.retrieved(id, sidecar);
             }
             previousInventory.clear(); previousInventory.putAll(inventory);
         } finally { active.close(); active = null; }

@@ -1,6 +1,6 @@
 # Vocci resumable long recordings implementation plan
 
-Status: planned; implementation has not started. Implements section 3 of the approved [companion spec](../specs/2026-10-20-vocci-companion-meetings-chat.md). Tracking: task #3553, draft PR #3554. Each step must be implemented and verified before claiming support for long recordings.
+Status: file-backed Android retrieval/decoding prerequisites implemented; resumable HTTP transport, expanded retention and windowed transcription have not started. Implements section 3 of the approved [companion spec](../specs/2026-10-20-vocci-companion-meetings-chat.md). Tracking: task #3553, draft PR #3554. Each step must be implemented and verified before claiming support for long recordings.
 
 ## Boundaries
 
@@ -21,8 +21,8 @@ Status: planned; implementation has not started. Implements section 3 of the app
 
 ## Android approach
 
-1. Replace RingProtocol.Transfer byte accumulation with a file sink retaining exact expected sizes/end frames; publish only complete reads. Keep short tests supported without a second protocol implementation.
-2. Decode retained packets incrementally. Use bounded MediaCodec input/output, downsample 48 to 16 kHz with carry across output buffers, write WAV header after successful completion, and atomically publish. Do not keep original PCM or full WAV in memory.
+1. Implemented prerequisite: RingProtocol.Transfer writes to a caller-owned stream, and production retrieval publishes through an atomic file only after exact sizes/end frames. PacketReader shares framing between files and host fixtures. BLE resume remains unverified and reads restart at zero.
+2. Implemented prerequisite: file-backed MediaCodec decode feeds a bounded PCM writer, carries 48-to-16 kHz sample groups across buffers and finalizes the WAV header before atomic publication. Production remains capped at 120 seconds. Host checks generate a two-hour PCM file with a 32 MiB heap; installed MediaCodec and file/journal checks pass. The actual ring connection timed out, so ring retrieval remains unverified. Frozen short JSON bundles still allocate/base64 their bounded files.
 3. Reserve enough local storage for sources and derived audio plus free reserve. Current 100 MiB queue capacity cannot hold a two-hour recording. Expand bounded retention deliberately; failed/queued recordings remain preserved.
 4. Persist immutable manifest/source/destination before first HTTP reserve. Query server progress on restart and send missing chunks from files. Handle lost responses, owner/source mismatch, duplicate/conflicting chunks, expiry and processing status. Do not silently send existing evidence as a new voice command.
 
@@ -38,5 +38,5 @@ Status: planned; implementation has not started. Implements section 3 of the app
 
 - Current RecordingImportService has a 35 second whole-file timeout and 500 segments; current job expiry of 120 seconds.
 - Existing Vault public reads load whole files; range/chunk operations do not exist.
-- Current Android 100 MiB retention, whole-source Transfer and full PCM/WAV buffers must change together.
+- Current Android retention remains 100 MiB, with short whole-JSON/base64 uploads. Retrieval and codec conversion now use file sinks; long transport and deliberate capacity reservation must still replace the short bundle path.
 - Verify source export/delete paths and meeting output transcript budgets before choosing final schema. Do not infer graph snippets are current: this index returned stale line-based source for RecordingImportService.process; bounded source reads verified actual behavior.

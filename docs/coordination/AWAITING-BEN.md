@@ -4,6 +4,13 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
+## Vocci companion — physical Android check (#3553)
+
+Wireless pairing and installed platform/queue checks pass. The phone is currently
+locked, preventing the companion UI check; Bluetooth is enabled, but the ring
+connection timed out. Please unlock the phone and keep the charged ring nearby,
+then reply ready. Code verification continues independently.
+
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the

@@ -32,9 +32,16 @@ public final class DeviceChecks extends Instrumentation {
                         while (names.hasNext()) {
                             String name = names.next();
                             check(inventory.containsKey(name));
-                            byte[] bytes = connection.retrieve(name, inventory.get(name));
-                            String hash = RingAuth.hex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
-                            check(hash.equals(expected.getString(name))); verified++;
+                            File source = new File(getTargetContext().getCacheDir(), "verify-source.bin");
+                            try {
+                                connection.retrieve(name, inventory.get(name), source);
+                                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+                                try (java.io.InputStream input = new java.io.FileInputStream(source)) {
+                                    byte[] chunk = new byte[8192]; int read;
+                                    while ((read = input.read(chunk)) != -1) digest.update(chunk, 0, read);
+                                }
+                                check(RingAuth.hex(digest.digest()).equals(expected.getString(name))); verified++;
+                            } finally { source.delete(); }
                         }
                         result.putInt("verifiedSourceFiles", verified);
                         expectedFile.delete();
@@ -60,8 +67,22 @@ public final class DeviceChecks extends Instrumentation {
                 packets[n * 5] = (byte) n; packets[n * 5 + 1] = 3;
                 packets[n * 5 + 2] = (byte) 0xf8; packets[n * 5 + 3] = (byte) 0xff; packets[n * 5 + 4] = (byte) 0xfe;
             }
-            byte[] wav = OpusWav.decode(packets);
+            File codecPackets = new File(getTargetContext().getCacheDir(), "codec-packets.bin");
+            File codecWav = new File(getTargetContext().getCacheDir(), "codec-audio.wav");
+            byte[] wav;
+            try {
+                PrivateFiles.write(codecPackets, packets); OpusWav.decode(codecPackets, codecWav);
+                wav = PrivateFiles.read(codecWav, 3_840_044);
+            } finally { codecPackets.delete(); codecWav.delete(); }
             check(wav.length == 3244 && ByteBuffer.wrap(wav).order(ByteOrder.LITTLE_ENDIAN).getInt(24) == 16000);
+            File atomicProbe = new File(getTargetContext().getCacheDir(), "atomic-source-check.bin");
+            try {
+                PrivateFiles.write(atomicProbe, new byte[]{1,2,3});
+                try {
+                    PrivateFiles.write(atomicProbe, output -> { output.write(new byte[]{9}); throw new java.io.IOException("interrupted"); });
+                    throw new AssertionError("partial source published");
+                } catch (java.io.IOException expected) { check(Arrays.equals(PrivateFiles.read(atomicProbe, 3), new byte[]{1,2,3})); }
+            } finally { atomicProbe.delete(); }
             android.content.Context isolated = new android.content.ContextWrapper(getTargetContext()) {
                 @Override public File getNoBackupFilesDir() { return new File(super.getNoBackupFilesDir(), "device-checks"); }
             };
@@ -153,7 +174,7 @@ public final class DeviceChecks extends Instrumentation {
             check(rejected);
             VoiceDeliveryChecks.run(isolated, packets);
             remove(isolated.getNoBackupFilesDir());
-            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected,voice_snapshot_recovery,voice_disable_unknown,voice_baseline,v1_unchanged,voice_frozen_restart,voice_uncertain_capture,voice_identity,cleanup_tombstones");
+            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,atomic_file_rollback,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected,voice_snapshot_recovery,voice_disable_unknown,voice_baseline,v1_unchanged,voice_frozen_restart,voice_uncertain_capture,voice_identity,cleanup_tombstones");
             result.putString("result", "PASS"); finish(-1, result);
         } catch (Throwable error) {
             result.putString("result", "FAIL"); result.putString("class", error.getClass().getSimpleName());
