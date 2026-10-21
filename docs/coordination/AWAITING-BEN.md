@@ -75,5 +75,16 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+### Vocci initial ring setup — #3565
+
+Design approval needed before feature implementation, per `CLAUDE.md`'s spec-before-build rule.
+Proposed spec: `docs/superpowers/specs/2026-10-21-vocci-initial-ring-setup.md`.
+Recommendation: native email-code sign-in to the existing Vocci account, read-only binding
+retrieval, ring verification, then explicit Start; retain Moss's existing browser approval.
+Current public configuration advertises native/email-code support, but actual owner-device
+acceptance is the first feasibility gate. Browser return would require vendor package
+registration that has not been established. Approve this focused existing-owner flow or
+choose to wait for vendor-supported browser return. No feature code has been written.
+
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
