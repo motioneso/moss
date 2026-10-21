@@ -141,7 +141,8 @@ or incomplete rendering time out without retaining a result. These markers test
 the synthetic render; they are not authoritative message IDs or proof of complete
 mailbox coverage. Body capture is bounded to 12,000 characters. One result stays
 in tab memory across popup closure until Stop, reload or tab close. Restart and
-session recovery remain unimplemented. Live automatic body testing is pending.
+session recovery remain unimplemented. A live one-shot automatic body trial succeeded
+on 2026-10-21 with version 0.4.3; see the result below.
 
 The automatic test searches up to twelve ancestor wrappers (depths 0–11), comparing
 at most 100 headings per wrapper and 500 characters per heading. It continues past
@@ -173,7 +174,7 @@ This does not change the extractor's boundary or relax subject verification.
 The version 0.4.1 live repeat still reported **Subject heading missing or does not
 match test phrase** after opening one row. The nested-wrapper fix passed its
 synthetic fixture but did not resolve the real layout. The structural report is
-the next diagnostic step; automatic body capture remains unverified.
+the next diagnostic step at that stage; automatic capture was still unverified.
 
 ### Boundaries
 
@@ -253,8 +254,8 @@ Automatic inbox watcher manual trial result (2026-10-21): the user reported
 one phrase match and one newly observed/changed row. This confirms the watcher
 ran and recorded a matching row in the live Outlook layout. Counts alone do not
 prove that the observation was a newly delivered message rather than a changed
-row. Full bodies, restart recovery and VM operation remain untested; calendar
-trials are recorded below.
+row. At that stage full bodies, restart recovery and VM operation were untested;
+subsequent calendar and body trials are recorded below.
 
 First calendar watcher live trial (2026-10-21): the user reported that initial appearance
 worked when the event was created on another computer. Rename and deletion were
@@ -298,8 +299,8 @@ sender/date-only wrappers within the existing five-level single-message boundary
 The subject identity requirement remains in place. Generic diagnostics distinguish
 missing/mismatched subject, unreadable/ambiguous body, size limit, missing body
 phrase/end marker and pending stable snapshots, including after timeout.
-The corrected extractor still needs a live repeat; automatic body capture has
-not yet been established. No mailbox content is retained in these notes.
+At that stage the corrected extractor still needed a live repeat; automatic body
+capture had not yet been established. No mailbox content is retained in these notes.
 
 Version 0.4.2 live layout diagnosis: the report showed one readable body throughout
 depths 0–11, no main/list/navigation boundaries at those levels, and zero phrase
@@ -309,4 +310,20 @@ the matching heading. Unrelated headings earlier in the path also made the prior
 early-exit rule unsuitable for the automatic test. Version 0.4.3 raises the bound
 to twelve wrappers and searches specifically for a unique phrase-matching heading
 in automatic mode. A synthetic fixture reproducing both conditions failed before
-the change. The live corrected automatic capture still needs a repeat.
+the change. The subsequent live repeat succeeded, as recorded below.
+
+
+Successful automatic body repeat (2026-10-21, version 0.4.3): the user reported
+**Stopped: Captured one synthetic body locally; automation finished**, with
+38 scans, one row opened, and **body captured: yes**. This verifies one explicitly
+started live path from a newly displayed matching row through automatic opening
+to local body capture in this account/browser. The capture code requires a matching
+subject heading, the body phrase, the final marker, no truncation and two equal
+snapshots before reporting success. Stopped is the expected one-shot completion.
+No body content was requested or retained for this success report.
+
+This completes the one-message capture experiment. Continuous multi-message
+collection, complete mailbox/calendar coverage, long-lived session reliability,
+reload/browser restart recovery and VM operation remain untested or unimplemented.
+The extension is still a local disposable prototype, with no Moss ingestion.
+Use **Stop & clear body** after checking the result to discard the tab-local capture.
