@@ -76,3 +76,25 @@ Public configuration response SHA-256:
 `dff892f99a5df24c4a353109c7ed703a3da2887a9627eea036f82406262eb236`.
 The response and bounded capability summary are retained in private task evidence.
 No account token, email address, ring key or device identifier is included here.
+
+## Approved phase-one contract trace
+
+Ben approved the native existing-owner approach on 2026-10-21. Official
+`clerk/clerk-android` sources were read for `ClientApi`, `SignInApi`, `SessionApi`
+and `VersioningUserAgentMiddleware` before implementation. They establish:
+
+- Native `GET /v1/client` and subsequent requests use the raw device token from
+  the `Authorization` response header. This is separate from the session JWT.
+- Sign-in creation and email preparation/attempts use URL-encoded forms. Required
+  TOTP goes through `attempt_second_factor`; no reset or sign-up is needed.
+- `POST /client/sessions/{id}/tokens` returns the session JWT used with `Bearer`
+  on the binding backend. `POST /client/sessions/{id}/remove` removes that session;
+  this adapter does not use the all-sessions deletion endpoint.
+- Official native middleware identifies itself as the Clerk SDK. Our direct
+  adapter instead uses its own truthful Moss identity; it does not claim to be
+  Clerk's SDK or the official Vocci package.
+
+A live anonymous native client initialization with Moss's own User-Agent returned
+HTTP 200, an empty client session list and a native Authorization response header.
+This is **not** account authentication, MFA or binding-backend acceptance. No email
+code was sent by that request. The isolated installed proof remains the gate.

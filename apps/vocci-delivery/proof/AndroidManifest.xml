@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ai.moss.vocci.setupproof">
+  <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="35" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application android:label="Moss setup proof" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <activity android:name="ai.moss.vocci.VocciProofActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+  </application>
+  <instrumentation android:name="ai.moss.vocci.VocciAuthChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
+</manifest>
