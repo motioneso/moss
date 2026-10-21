@@ -637,7 +637,12 @@ describe("MVP foundation schema catalog", () => {
         { version: "0321", name: "0321_chat_repeating_reads.sql" },
         { version: "0322", name: "0322_chat_responsibility_agreements.sql" },
         { version: "0323", name: "0323_chat_unread_messages.sql" },
-        { version: "0325", name: "0325_meeting_recording_imports.sql" }
+        { version: "0325", name: "0325_meeting_recording_imports.sql" },
+        { version: "0326", name: "0326_meeting_import_summaries.sql" },
+        { version: "0327", name: "0327_chat_voice_requests.sql" },
+        { version: "0328", name: "0328_meeting_voice_recordings.sql" },
+        { version: "0329", name: "0329_meeting_recording_uploads.sql" },
+        { version: "0330", name: "0330_android_companion_linking.sql" }
       ]);
     } finally {
       await client.end();

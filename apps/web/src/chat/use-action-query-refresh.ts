@@ -42,7 +42,12 @@ export function useActionQueryRefresh(
       const keys = actionRefreshQueryKeys(record, modules);
       if (keys.length === 0) continue;
       refreshed.current.add(id);
-      for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey });
+      for (const queryKey of keys) {
+        // An initial fetch has no cached data: invalidation alone reuses its stale response.
+        void queryClient
+          .cancelQueries({ queryKey })
+          .then(() => queryClient.invalidateQueries({ queryKey }));
+      }
     }
   }, [records, modules, modulesLoading, queryClient]);
 }

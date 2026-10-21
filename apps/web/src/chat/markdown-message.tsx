@@ -37,7 +37,7 @@ interface MarkdownMessageProps {
 }
 
 export function MarkdownMessage(props: MarkdownMessageProps) {
-  const { text, answerProvenance, answerProvenanceCitedIds } = props;
+  const { text = "", answerProvenance, answerProvenanceCitedIds } = props;
 
   // The marker comes only from the worker, never from message/source text. Keep safeUrl unchanged.
   if (props.scheduledReadSource === "tasks") {
@@ -76,7 +76,8 @@ export function MarkdownMessage(props: MarkdownMessageProps) {
           )
         }}
       >
-        {displayText}
+        {/* A standalone numeric answer such as "4." otherwise becomes an empty list. */}
+        {displayText.replace(/^( {0,3}\d{1,9})([.)])([ \t\r\n]*)$/, "$1\\$2$3")}
       </ReactMarkdown>
       {answerProvenance && answerProvenance.length > 0 && (
         <SourceChips

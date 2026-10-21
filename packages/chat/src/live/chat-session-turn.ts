@@ -10,6 +10,7 @@ import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { beginClassifierGateShadowTurn } from "./classifier-gate-shadow.js";
 import { admissionForActor, admitToContext, submitPreparedTurn } from "./context-admission.js";
 import { openLiveTurnRecord, type LiveTurnRecord } from "./live-turn-record.js";
+import { selectTurnThread } from "./classifier-gate-lifecycle.js";
 import { buildEngineText } from "./engine-text.js";
 import { snapshotMainReminders } from "./main-reminder-context.js";
 import {
@@ -87,6 +88,7 @@ export async function runChatTurn(
   opts?: {
     readonly attachments?: readonly StoredAttachmentMeta[];
     readonly moduleControl?: string;
+    readonly admittedTurn?: { readonly turnId: string; readonly threadId: string };
   },
   surface: ChatSurface = DEFAULT_CHAT_SURFACE
 ): Promise<{
@@ -97,7 +99,7 @@ export async function runChatTurn(
 }> {
   const sessionKey = surfaceSessionKey(actorUserId, surface);
   // #2956: one turn id files shadow, audit and answer rows across launch/replay retries.
-  const turnId = randomUUID();
+  const turnId = opts?.admittedTurn?.turnId ?? randomUUID();
   // File this session's tool rows under the turn; cleared in the finally below.
   host.deps.setCurrentTurnId?.(sessionKey, turnId);
   const controller = new AbortController();
@@ -140,6 +142,14 @@ export async function runChatTurn(
     await waitForOriginThreadTransition(host.originTransitions, sessionKey, controller.signal);
     if (controller.signal.aborted)
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, undefined);
+    const pinnedThread = opts?.admittedTurn
+      ? await selectTurnThread(host.lifecycleHost, actorUserId, surface)
+      : undefined;
+    if (
+      opts?.admittedTurn &&
+      (pinnedThread?.id !== opts.admittedTurn.threadId || pinnedThread.incognito)
+    )
+      return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, undefined);
     // #2901: the gate may handle the turn before engine launch; decline keeps the model path.
     // #2934 — the gate captures this turn's privacy before its mode wait and returns it.
     const {
@@ -153,7 +163,8 @@ export async function runChatTurn(
       text,
       { ...opts, turnId, parentId: turnId },
       controller,
-      flushActions
+      flushActions,
+      opts?.admittedTurn ? Promise.resolve(pinnedThread) : undefined
     );
     if (gated) return gated;
     // #2934 finding 1 — a stop during the gate attempt stops the turn pre-emit.

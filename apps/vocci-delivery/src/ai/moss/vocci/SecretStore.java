@@ -51,6 +51,11 @@ final class SecretStore {
         try { return new JSONObject(new String(plain, StandardCharsets.UTF_8)); }
         finally { Arrays.fill(plain, (byte) 0); }
     }
+    boolean exists() { return file.exists(); }
+    void delete() throws Exception {
+        if (file.exists() && !file.delete()) throw new java.io.IOException("secret_cleanup");
+        new android.util.AtomicFile(file).delete();
+    }
     static void assertSameIdentity(JSONObject previous, JSONObject config) throws Exception {
         for (String field : new String[]{"address", "sn", "deviceId", "origin", "ownerId"})
             if (!previous.getString(field).equals(config.getString(field))) throw new IllegalArgumentException("configuration_identity_change");

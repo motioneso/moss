@@ -117,6 +117,7 @@ export interface UserDataExportTables {
   readonly chatMemoryFacts: readonly ExportRow[];
   readonly chatMessages: readonly ExportRow[];
   readonly chatThreads: readonly ExportRow[];
+  readonly chatVoiceRequests: readonly ExportRow[];
   readonly commitments: readonly ExportRow[];
   readonly connectorAccounts: readonly ExportRow[];
   readonly emailMessages: readonly ExportRow[];
@@ -313,6 +314,13 @@ async function readExportTables(
     jarvisActionAuditLog: await readRows(scopedDb.db, jarvisActionAuditLogQuery(userId)),
     chatThreads: await readRows(scopedDb.db, chatThreadsQuery(userId)),
     chatMessages: await readRows(scopedDb.db, chatMessagesQuery(userId)),
+    chatVoiceRequests: await collectModuleExportSection<readonly ExportRow[]>(
+      listModuleManifests,
+      "chat",
+      "voiceRequests",
+      scopedDb,
+      { actorUserId: userId, requestId }
+    ),
     briefingDefinitions: await readRows(scopedDb.db, briefingDefinitionsQuery(userId)),
     briefingRuns: await readRows(scopedDb.db, briefingRunsQuery(userId)),
     memoryChunks: await readRows(scopedDb.db, memoryChunksQuery(userId)),

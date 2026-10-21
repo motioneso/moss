@@ -194,7 +194,9 @@ async function persistGateOutcome(
   surface: ChatSurface,
   threadId: string | null,
   text: string,
-  opts: { readonly attachments?: readonly StoredAttachmentMeta[] } | undefined,
+  opts:
+    | { readonly attachments?: readonly StoredAttachmentMeta[]; readonly turnId?: string }
+    | undefined,
   outcome: Extract<GateOutcome, { kind: "handled" | "terminal_failure" }>,
   actionOptions?: Pick<HandledTurnOptions, "activityRecords" | "actionResults">
 ): Promise<GateTurnResult | undefined> {
@@ -212,6 +214,7 @@ async function persistGateOutcome(
   };
   const handledOpts: HandledTurnOptions = {
     threadId,
+    turnId: opts?.turnId,
     ...actionOptions,
     attachments:
       attachments.length > 0

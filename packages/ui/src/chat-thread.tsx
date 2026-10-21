@@ -249,7 +249,7 @@ function safeThreadUrl(url: string): string {
  * so markup in the source is escaped), URLs pass through {@link safeThreadUrl}, and links open
  * in a new tab with a hardened `rel`.
  */
-function ThreadMarkdown({ text }: { readonly text: string }) {
+function ThreadMarkdown({ text = "" }: { readonly text: string }) {
   return (
     <div className="chatd-md">
       <ReactMarkdown
@@ -261,7 +261,8 @@ function ThreadMarkdown({ text }: { readonly text: string }) {
           )
         }}
       >
-        {text}
+        {/* Keep standalone numeric answers visible, matching the shell renderer. */}
+        {text.replace(/^( {0,3}\d{1,9})([.)])([ \t\r\n]*)$/, "$1\\$2$3")}
       </ReactMarkdown>
     </div>
   );

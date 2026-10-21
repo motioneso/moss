@@ -77,6 +77,7 @@ interface AttemptRow {
   readonly user_id: string | null;
   readonly expires_at: Date;
   readonly recording_policy_version?: number | null;
+  readonly platform: "macos" | "android";
 }
 
 export function createCompanionPairingService(deps: PairingDeps): CompanionPairingService {
@@ -89,6 +90,8 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
 
   return {
     async create(input) {
+      if (input.platform === "android" && input.recordingProofHash !== undefined)
+        throw new RecordingCapabilityError(400);
       if (
         (input.recordingProofHash === undefined) !== (input.recordingPolicyVersion === undefined) ||
         (input.recordingProofHash !== undefined &&
@@ -138,7 +141,7 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
 
     async summarize({ approvalCode }) {
       const result = await pool.query<AttemptRow>(
-        `SELECT id, device_name, status, user_id, expires_at, recording_policy_version
+        `SELECT id, device_name, status, user_id, expires_at, recording_policy_version, platform
            FROM app.companion_pair_attempts
           WHERE approval_code_hash = $1 AND expires_at > $2`,
         [sha256Base64url(approvalCode), now()]
@@ -153,6 +156,7 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
       return {
         deviceName: row.device_name,
         status: row.status,
+        ...(row.platform === "android" ? { platform: "android" as const } : {}),
         ...(row.recording_policy_version === 1 ? { recordingPolicyVersion: 1 as const } : {})
       };
     },
@@ -173,8 +177,8 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
           WHERE approval_code_hash = $3
             AND status = 'pending'
             AND expires_at > $4
-            AND (recording_proof_hash IS NULL OR $1='denied' OR
-              (recording_policy_version=$5::integer AND EXISTS (
+            AND ((recording_proof_hash IS NULL AND platform='macos') OR $1='denied' OR
+              ((platform='android' OR recording_policy_version=$5::integer) AND EXISTS (
                 SELECT 1 FROM app.better_auth_sessions s JOIN app.users u ON u.id=s.user_id
                 WHERE s.id=$6::uuid AND s.user_id=$2::uuid AND s.expires_at>$4 AND u.status='active'
               )))
@@ -215,6 +219,7 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
           device_name: string;
           recording_proof_hash: string | null;
           recording_consent_version: number | null;
+          platform: "macos" | "android";
         }>(
           `UPDATE app.companion_pair_attempts
               SET status = 'redeemed'
@@ -222,7 +227,7 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
               AND status = 'approved'
               AND verifier_hash = $2
               AND expires_at > $3
-            RETURNING user_id, device_name, recording_proof_hash, recording_consent_version`,
+            RETURNING user_id, device_name, recording_proof_hash, recording_consent_version, platform`,
           [attemptId, sha256Base64url(verifier), now()]
         );
 
@@ -232,7 +237,7 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
           return { status: await explainFailedRedeem(pool, attemptId, verifier, now()) };
         }
 
-        const { credential, hash } = mintCompanionCredential();
+        const { credential, hash } = mintCompanionCredential(claim.platform);
         const issuedAt = now();
         const expiresAt = addDays(issuedAt, CREDENTIAL_INACTIVITY_DAYS);
         const absoluteExpiresAt = addDays(issuedAt, CREDENTIAL_ABSOLUTE_DAYS);
@@ -289,7 +294,11 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
           response: {
             credential,
             device: { id: deviceRow.id, displayName: deviceRow.display_name },
-            account: { name: accountRow.name ?? accountRow.email, email: accountRow.email },
+            account: {
+              name: accountRow.name ?? accountRow.email,
+              email: accountRow.email,
+              ...(claim.platform === "android" ? { id: claim.user_id } : {})
+            },
             expiresAt: expiresAt.toISOString(),
             ...(recordingApproved
               ? { recordingCapability: { policyVersion: 1 as const, revision: 1 } }

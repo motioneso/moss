@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessageDto, ChatSurface, ChatThreadDto, TranscriptRecord } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 
 import {
   listChatThreadMessages,
@@ -192,6 +193,60 @@ describe("Main stream reconnect", () => {
     lastActiveAt: new Date(0).toISOString(),
     lastMessagePreview: null
   };
+
+  it("keeps voice activity and actionable approvals in their captured Main thread", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(Probe, { surface: DEFAULT_CHAT_SURFACE }));
+    });
+    await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalled());
+    const source = FakeEventSource.instances[0]!;
+    await act(async () => {
+      source.onmessage?.({
+        data: JSON.stringify({
+          kind: "action_request",
+          text: "Own approval",
+          actionRequestId: "own",
+          voiceThreadId: "main-thread"
+        })
+      });
+      source.onmessage?.({
+        data: JSON.stringify({ kind: "thinking", text: "Other activity", voiceThreadId: "other" })
+      });
+      source.onmessage?.({
+        data: JSON.stringify({
+          kind: "action_request",
+          text: "Other approval",
+          actionRequestId: "other",
+          voiceThreadId: "other"
+        })
+      });
+      source.onmessage?.({
+        data: JSON.stringify({
+          kind: "action_result",
+          text: "Other late approval",
+          actionRequestId: "late-other",
+          actionThreadId: "other"
+        })
+      });
+      source.onmessage?.({
+        data: JSON.stringify({
+          kind: "action_result",
+          text: "Own late approval",
+          actionRequestId: "late-own",
+          actionThreadId: "main-thread"
+        })
+      });
+    });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain("Own approval");
+    expect(text).toContain("Own late approval");
+    expect(text).not.toContain("Other");
+    await act(async () => renderer.unmount());
+  });
 
   it.each([
     ["plain reminder", "Reminder: stretch", undefined],

@@ -4,6 +4,7 @@ import type pg from "pg";
 
 import {
   COMPANION_CREDENTIAL_PREFIX,
+  RING_COMPANION_CREDENTIAL_PREFIX,
   type CompanionErrorCode,
   type CompanionHeartbeatRequest,
   type CompanionHeartbeatResponse
@@ -12,18 +13,9 @@ import {
 import { sha256Base64url } from "./companion-crypto.js";
 
 /**
- * The authenticated half of the Trail Marker companion (#2560).
- *
- * `resolve` is a separate resolver from `resolveAccessContext` and is wired only to
- * `/api/companion/*` and identity-only meeting approval bootstrap. It reads a bearer
- * credential and never a cookie, so a signed-in
- * browser cannot reach these operations, and a companion credential cannot reach any
- * meeting data/control route: the general resolver hands every bearer token to the legacy UUID
- * session lookup, which rejects a `tm1_` value outright.
- *
- * Everything here is scoped to the caller's own device row. There is no operation that
- * names another device, another account, or any user content. Meeting bootstrap only
- * proposes an opaque meeting ID; separate cookie approval and an mm1 grant authorize capture.
+ * Own-device credential lookup, selected explicitly per platform. Mac callers use
+ * tm1 credentials; Android callers use vr1 and a separate recording resolver.
+ * Ordinary browser/CLI account access still uses resolveAccessContext.
  */
 
 const CREDENTIAL_INACTIVITY_DAYS = 90;
@@ -53,7 +45,7 @@ export interface CompanionDevicesService {
   resolve(input: { headers: IncomingHttpHeaders; requestId: string }): Promise<CompanionContext>;
   heartbeat(
     ctx: CompanionContext,
-    input: CompanionHeartbeatRequest
+    input?: CompanionHeartbeatRequest
   ): Promise<CompanionHeartbeatResponse>;
   rename(ctx: CompanionContext, displayName: string): Promise<CompanionDeviceSummary>;
   logoutCredential(input: { headers: IncomingHttpHeaders }): Promise<void>;
@@ -62,6 +54,7 @@ export interface CompanionDevicesService {
 interface CompanionDevicesDeps {
   readonly pool: pg.Pool;
   readonly now?: () => Date;
+  readonly platform?: "macos" | "android";
 }
 
 interface ResolvedRow {
@@ -78,6 +71,9 @@ interface ResolvedRow {
 export function createCompanionDevicesService(deps: CompanionDevicesDeps): CompanionDevicesService {
   const { pool } = deps;
   const now = deps.now ?? (() => new Date());
+  const platform = deps.platform ?? "macos";
+  const prefix =
+    platform === "android" ? RING_COMPANION_CREDENTIAL_PREFIX : COMPANION_CREDENTIAL_PREFIX;
 
   async function loadDevice(deviceId: string): Promise<ResolvedRow> {
     const result = await pool.query<ResolvedRow>(
@@ -95,7 +91,9 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
 
   return {
     async resolve({ headers, requestId }) {
-      const credential = readCompanionCredential(headers);
+      const credential = readCompanionCredential(headers, prefix);
+      if (platform === "android" && headers.cookie !== undefined)
+        throw new CompanionAuthError("companion_credential_invalid", 401);
       if (!credential) throw new CompanionAuthError("companion_credential_invalid", 401);
 
       const at = now();
@@ -109,8 +107,8 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
            JOIN app.users u ON u.id = d.user_id
           WHERE d.credential_hash = $1
             AND d.expires_at > $2
-            AND d.absolute_expires_at > $2`,
-        [sha256Base64url(credential), at]
+            AND d.absolute_expires_at > $2 AND d.platform = $3`,
+        [sha256Base64url(credential), at, platform]
       );
 
       const row = result.rows[0];
@@ -138,9 +136,9 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
       // heartbeat is not something the user did.
       await pool.query(
         `UPDATE app.companion_devices
-            SET last_contact_at = $1, app_version = $2, os_version = $3
+            SET last_contact_at = $1, app_version = COALESCE($2, app_version), os_version = COALESCE($3, os_version)
           WHERE id = $4 AND user_id = $5`,
-        [now(), input.appVersion, input.osVersion, ctx.deviceId, ctx.actorUserId]
+        [now(), input?.appVersion ?? null, input?.osVersion ?? null, ctx.deviceId, ctx.actorUserId]
       );
 
       const row = await loadDevice(ctx.deviceId);
@@ -166,11 +164,11 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
     },
 
     async logoutCredential({ headers }) {
-      const credential = readCompanionCredential(headers);
+      const credential = readCompanionCredential(headers, prefix);
       if (
         headers.cookie !== undefined ||
         !credential ||
-        !/^tm1_[A-Za-z0-9_-]{43}$/.test(credential)
+        !new RegExp(`^${prefix}[A-Za-z0-9_-]{43}$`).test(credential)
       )
         throw new CompanionAuthError("companion_credential_invalid", 401);
       // Logout alone may retire an expired credential or confirm that it was already removed.
@@ -186,13 +184,13 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
  * Reads a companion bearer credential. The prefix check keeps a browser session token
  * or a legacy CLI bearer from even reaching the device lookup.
  */
-function readCompanionCredential(headers: IncomingHttpHeaders): string | null {
+function readCompanionCredential(headers: IncomingHttpHeaders, prefix: string): string | null {
   const header = headers.authorization;
   if (typeof header !== "string") return null;
 
   const match = /^Bearer\s+(\S+)$/i.exec(header.trim());
   const token = match?.[1];
   if (!token) return null;
-  if (!token.startsWith(COMPANION_CREDENTIAL_PREFIX)) return null;
+  if (!new RegExp(`^${prefix}[A-Za-z0-9_-]{43}$`).test(token)) return null;
   return token;
 }

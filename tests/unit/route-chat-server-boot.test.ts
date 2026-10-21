@@ -108,6 +108,7 @@ async function bootProbe(
     boss: {} as PgBoss,
     captureMaintenance,
     recordingImportWorker,
+    voiceRequestWorker: { start: vi.fn(async () => {}), close: vi.fn(async () => {}) },
     authRuntime,
     logger: false,
     apiServerConfig: { host: "127.0.0.1", port: 0, mcpServerUrl: "", externalModulesDir },

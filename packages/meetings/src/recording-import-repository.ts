@@ -1,11 +1,15 @@
 import { sql } from "kysely";
 import { assertDataContextDb, assertUuid, type DataContextDb } from "@moss/db";
-import type { MeetingRecordingImportStatus } from "@moss/shared";
+import type { MeetingRecordingImportStatus, VoiceRecordingImportStatus } from "@moss/shared";
 import type { RecordingBundle } from "./recording-bundle.js";
 
 export interface RecordingImportRow {
   id: string;
-  meeting_id: string;
+  meeting_id: string | null;
+  voice_enablement_id: string | null;
+  voice_automatic: boolean;
+  voice_captured_at: Date | null;
+  voice_request_id: string | null;
   fingerprint: string;
   metadata_json: string;
   ready: boolean;
@@ -14,9 +18,17 @@ export interface RecordingImportRow {
   attempt_id: string | null;
   code: MeetingRecordingImportStatus["code"];
   retryable: boolean;
+  source_manifest_json: string | null;
+  upload_reserved: boolean;
+  upload_expires_at: Date | null;
+  next_window_ms: number;
+  transcript_version: number;
+  transcript_cursor: number;
+  voice_transcript: string;
 }
 export class RecordingImportConflictError extends Error {}
 export function recordingImportStatus(row: RecordingImportRow): MeetingRecordingImportStatus {
+  if (!row.meeting_id) throw new Error("Voice recording has no meeting destination");
   const metadata = JSON.parse(row.metadata_json) as Pick<
     MeetingRecordingImportStatus,
     "mode" | "durationMs" | "bookmarksMs"
@@ -28,6 +40,16 @@ export function recordingImportStatus(row: RecordingImportRow): MeetingRecording
     mode: metadata.mode,
     durationMs: metadata.durationMs,
     bookmarksMs: metadata.bookmarksMs,
+    code: row.code,
+    retryable: row.retryable
+  };
+}
+export function voiceRecordingImportStatus(row: RecordingImportRow): VoiceRecordingImportStatus {
+  return {
+    id: row.id,
+    state: row.state,
+    intent: "voice-request",
+    voiceRequestId: row.voice_request_id,
     code: row.code,
     retryable: row.retryable
   };
@@ -57,7 +79,13 @@ export class RecordingImportRepository {
       ).rows[0] ?? null
     );
   }
-  async insert(db: DataContextDb, id: string, meetingId: string, bundle: RecordingBundle) {
+  async insert(
+    db: DataContextDb,
+    id: string,
+    meetingId: string | null,
+    bundle: RecordingBundle,
+    voice?: { enablementId: string; automatic: boolean; capturedAt: string | null }
+  ) {
     assertDataContextDb(db);
     const { manifest } = bundle;
     const metadata = {
@@ -75,10 +103,22 @@ export class RecordingImportRepository {
       wav: { name: manifest.wav.name, sha256: manifest.wav.sha256 }
     };
     return (
-      await sql<RecordingImportRow>`INSERT INTO app.meeting_recording_imports(id,meeting_id,source_device_id,recording_id,fingerprint,metadata_json) VALUES(${id}::uuid,${meetingId}::uuid,${manifest.sourceDeviceId}::uuid,${manifest.recordingId},${bundle.fingerprint},${JSON.stringify(value)}) RETURNING *`.execute(
+      await sql<RecordingImportRow>`INSERT INTO app.meeting_recording_imports(id,meeting_id,source_device_id,recording_id,fingerprint,metadata_json,voice_enablement_id,voice_automatic,voice_captured_at) VALUES(${id}::uuid,${meetingId}::uuid,${manifest.sourceDeviceId}::uuid,${manifest.recordingId},${bundle.fingerprint},${JSON.stringify(value)},${voice?.enablementId ?? null}::uuid,${voice?.automatic ?? false},${voice?.capturedAt ?? null}::timestamptz) RETURNING *`.execute(
         db.db
       )
     ).rows[0]!;
+  }
+  async retryVoice(db: DataContextDb, id: string) {
+    assertDataContextDb(db);
+    await sql`UPDATE app.meeting_recording_imports SET state='queued',attempts=0,attempt_id=NULL,code=NULL,retryable=false,updated_at=now() WHERE id=${id}::uuid AND meeting_id IS NULL AND state='failed' AND ready`.execute(
+      db.db
+    );
+  }
+  async completeVoice(db: DataContextDb, id: string, requestId: string) {
+    assertDataContextDb(db);
+    await sql`UPDATE app.meeting_recording_imports SET state='complete',code=NULL,retryable=false,voice_request_id=${requestId}::uuid,updated_at=now() WHERE id=${id}::uuid AND meeting_id IS NULL`.execute(
+      db.db
+    );
   }
   async ready(db: DataContextDb, id: string) {
     assertDataContextDb(db);

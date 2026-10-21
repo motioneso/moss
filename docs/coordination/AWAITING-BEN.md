@@ -75,4 +75,5 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-None.
+<!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
+in chat: "great, approved". Implementation proceeds under the approved spec. -->

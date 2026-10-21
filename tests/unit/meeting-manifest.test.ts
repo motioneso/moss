@@ -131,6 +131,8 @@ describe("meetings composition", () => {
     });
     expect(meeting?.database?.ownedTables).toEqual([
       "app.meeting_recording_imports",
+      "app.meeting_recording_chunks",
+      "app.meeting_recording_voice_enablements",
       "app.meeting_records",
       "app.meeting_note_writes",
       "app.meeting_transcript_batches",
@@ -164,6 +166,15 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "POST /api/meetings/recording-uploads",
+      "GET /api/meetings/recording-uploads/:id",
+      "PUT /api/meetings/recording-uploads/:id/:kind/:index",
+      "POST /api/meetings/recording-uploads/:id/finalize",
+      "POST /api/meetings/voice-recordings/:id/retry",
+      "POST /api/meetings/voice-enablement",
+      "POST /api/meetings/voice-enablement/:id/disable",
+      "POST /api/meetings/voice-recordings",
+      "GET /api/meetings/voice-recordings/:id",
       "POST /api/meetings/recording-imports",
       "GET /api/meetings/recording-imports/:id",
       "PUT /api/meetings/records/:id/title",
@@ -200,7 +211,10 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.resumable_recordings",
+      "meetings.voice_recordings",
       "meetings.android_delivery",
+      "meetings.import_analysis",
       "meetings.recording_imports",
       "meetings.chat_app_actions",
       "meetings.link_state",

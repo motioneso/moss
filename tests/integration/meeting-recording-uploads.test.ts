@@ -1,0 +1,576 @@
+import { randomUUID, createHash } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { fastify } from "fastify";
+import { sql, type Kysely } from "kysely";
+import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { createPgBossClient, type PgBoss } from "@moss/jobs";
+import {
+  VaultContextRunner,
+  listVaultFilesRecursive,
+  publishReservedVaultFileBytes,
+  writeVaultFileBytes
+} from "@moss/vault";
+import { HttpError } from "@moss/module-sdk";
+import { VoiceRequestService, createVoiceRequestScheduler } from "@moss/chat";
+import { ACT_AS_GRANT_HEADER } from "@moss/module-sdk/server";
+import {
+  RecordingImportService,
+  RecordingImportRepository,
+  MeetingTranscriptRepository,
+  MeetingOutputsRepository,
+  createRecordingImportScheduler,
+  createImportedMeetingSummaryScheduler,
+  collectMeetingsExportSection,
+  registerRecordingImportRoutes,
+  type RecordingImportDependencies,
+  type RecordingImportPayload
+} from "@moss/meetings";
+import { recordingChunkPath } from "../../packages/meetings/src/recording-upload-manifest.js";
+import { recordingUpload } from "../fixtures/recording-upload.js";
+import { recordingBundle } from "../fixtures/recording-bundle.js";
+import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+
+let app: Kysely<MossDatabase>,
+  bootstrap: Kysely<MossDatabase>,
+  worker: Kysely<MossDatabase>,
+  context: DataContextRunner,
+  vault: VaultContextRunner,
+  root: string,
+  boss: PgBoss;
+const actor = { actorUserId: ids.userA },
+  other = { actorUserId: ids.userB };
+const imports = new RecordingImportRepository(),
+  transcripts = new MeetingTranscriptRepository();
+const previousRoot = process.env.MOSS_VAULT_ROOT;
+beforeAll(async () => {
+  await resetFoundationDatabase();
+  bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });
+  app = createDatabase({ connectionString: connectionStrings.app, maxConnections: 6 });
+  worker = createDatabase({ connectionString: connectionStrings.worker });
+  context = new DataContextRunner(app);
+  root = await mkdtemp(join(tmpdir(), "moss-upload-test-"));
+  vault = new VaultContextRunner(root);
+  process.env.MOSS_VAULT_ROOT = root;
+  boss = createPgBossClient(connectionStrings.app);
+  await boss.start();
+  if (process.env.VOCCI_UPLOAD_NEGATIVE_CONTROL === "owner") {
+    await sql`ALTER POLICY meeting_recording_chunks_owner ON app.meeting_recording_chunks USING(true) WITH CHECK(true)`.execute(
+      bootstrap
+    );
+    await sql`ALTER POLICY meeting_recording_chunks_export_worker ON app.meeting_recording_chunks USING(true)`.execute(
+      bootstrap
+    );
+  }
+});
+afterAll(async () => {
+  await boss?.stop({ graceful: false });
+  await Promise.all([app?.destroy(), bootstrap?.destroy(), worker?.destroy()]);
+  if (root) await rm(root, { recursive: true, force: true });
+  if (previousRoot === undefined) delete process.env.MOSS_VAULT_ROOT;
+  else process.env.MOSS_VAULT_ROOT = previousRoot;
+});
+function setup(overrides: Partial<RecordingImportDependencies> = {}) {
+  const deps: RecordingImportDependencies = {
+    dataContext: context,
+    vault,
+    assertAvailable: async () => {},
+    schedule: createRecordingImportScheduler(boss),
+    scheduleSummary: createImportedMeetingSummaryScheduler(boss),
+    availability: async () => ({ ready: true, modelRoute: "synthetic-test" }),
+    transcribe: vi.fn(async (_actor, input) =>
+      input.dispatch(async () => ({
+        segments: [{ startMs: 0, endMs: 100, text: "Generated window transcript" }]
+      }))
+    ),
+    describeFailure: () => ({ retryable: true, unavailable: false }),
+    ...overrides
+  };
+  return { deps, service: new RecordingImportService(deps) };
+}
+const job = (id: string, windowStartMs = 0): RecordingImportPayload => ({
+  actorUserId: actor.actorUserId,
+  resourceId: id,
+  kind: "transcribe",
+  windowStartMs
+});
+async function upload(service: RecordingImportService, fixture = recordingUpload()) {
+  const reserved = await service.uploads.reserve(actor, fixture.manifest);
+  for (const kind of ["packets", "sidecar", "wav"] as const) {
+    let index = 0;
+    for (const bytes of fixture.chunks(kind))
+      await service.uploads.put(actor, reserved.id, kind, index++, bytes);
+  }
+  return { ...fixture, id: reserved.id };
+}
+async function serverFor(service: RecordingImportService) {
+  const server = fastify();
+  server.addContentTypeParser(
+    "application/octet-stream",
+    { parseAs: "buffer" },
+    (_request, bytes, done) => done(null, bytes)
+  );
+  registerRecordingImportRoutes(server, {
+    service,
+    resolveAccessContext: async (request) => {
+      const id = request.headers.authorization?.slice(7);
+      if (![ids.userA, ids.userB, ids.adminUser].some((allowed) => allowed === id))
+        throw new HttpError(401, "Unauthorized");
+      return { actorUserId: id! };
+    }
+  });
+  await server.ready();
+  return server;
+}
+describe("resumable recording transport and checkpointed transcription", () => {
+  it("admits one short resumable hold transcript through the real Chat boundary after its final window", async () => {
+    const chat = new VoiceRequestService({
+      dataContext: context,
+      bootId: randomUUID(),
+      now: () => new Date(),
+      assertAvailable: async () => {},
+      schedule: createVoiceRequestScheduler(boss),
+      submit: async () => {
+        throw new Error("This receiver test must not invoke a model");
+      }
+    });
+    const admit = vi.fn<NonNullable<RecordingImportDependencies["admitVoiceRequest"]>>(
+      async (db, input) => ({ id: (await chat.admitInTransaction(db, input)).request.id })
+    );
+    const { service, deps } = setup({
+        admitVoiceRequest: admit,
+        describeFailure: () => ({ retryable: false, unavailable: true })
+      }),
+      fixture = recordingUpload(90_000, true);
+    const enabled = await service.enableVoice(actor, {
+      version: 2,
+      sourceDeviceId: fixture.manifest.sourceDeviceId,
+      requestKey: randomUUID(),
+      recordingIds: []
+    });
+    const source = {
+      ...fixture,
+      manifest: {
+        ...fixture.manifest,
+        destination: {
+          intent: "voice-request" as const,
+          enablementId: enabled.id,
+          capturedAt: null
+        }
+      }
+    };
+    const uploaded = await upload(service, source);
+    await service.uploads.finalize(actor, uploaded.id);
+    await service.process(actor, job(uploaded.id));
+    vi.mocked(deps.transcribe).mockRejectedValueOnce(new Error("Provider unavailable"));
+    await service.process(actor, job(uploaded.id, 30_000));
+    const failed = (await service.voiceStatus(actor, uploaded.id))!;
+    expect(failed.state).toBe("failed");
+    expect(failed.retryable).toBe(true);
+    await service.retryVoice(actor, uploaded.id);
+    await service.process(actor, job(uploaded.id, 30_000));
+    expect(admit).not.toHaveBeenCalled();
+    await service.process(actor, job(uploaded.id, 60_000));
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(admit.mock.calls[0]![1].transcript).toBe(
+      [
+        "Generated window transcript",
+        "Generated window transcript",
+        "Generated window transcript"
+      ].join("\n")
+    );
+    const status = (await service.voiceStatus(actor, uploaded.id))!;
+    expect(status.state).toBe("complete");
+    expect(status.voiceRequestId).toBeTruthy();
+    await service.process(actor, job(uploaded.id, 60_000));
+    expect(admit).toHaveBeenCalledTimes(1);
+  });
+  it("concurrently reserves one immutable identity before allocated files and rejects destination/protocol changes", async () => {
+    const { service } = setup(),
+      fixture = recordingUpload();
+    const [first, second] = await Promise.all([
+      service.uploads.reserve(actor, fixture.manifest),
+      service.uploads.reserve(actor, fixture.manifest)
+    ]);
+    expect(first.id).toBe(second.id);
+    expect(first.reserved).toBe(true);
+    expect(first.ready).toBe(false);
+    const files = await vault.withVaultContext(actor, (ctx) =>
+      listVaultFilesRecursive(ctx, `meeting-recordings/${first.id}`)
+    );
+    expect(files.filter((path) => path.endsWith(".reserved")).length).toBe(5);
+    await expect(
+      service.uploads.reserve(actor, {
+        ...fixture.manifest,
+        destination: { intent: "voice-request", enablementId: randomUUID(), capturedAt: null }
+      })
+    ).rejects.toThrow();
+    await expect(
+      service.accept(actor, {
+        ...recordingBundle(),
+        sourceDeviceId: fixture.manifest.sourceDeviceId,
+        recordingId: fixture.manifest.recordingId,
+        packets: { ...recordingBundle().packets, name: `${fixture.manifest.recordingId}.opus` },
+        sidecar: { ...recordingBundle().sidecar, name: `${fixture.manifest.recordingId}.json` },
+        wav: { ...recordingBundle().wav, name: `${fixture.manifest.recordingId}.wav` }
+      })
+    ).rejects.toThrow();
+  });
+  it("repairs bytes published before a lost DB acknowledgement; exact replay succeeds and changed bytes conflict", async () => {
+    const { service } = setup(),
+      fixture = recordingUpload(),
+      reserved = await service.uploads.reserve(actor, fixture.manifest);
+    const bytes = [...fixture.chunks("packets")][0]!;
+    await vault.withVaultContext(actor, (ctx) =>
+      publishReservedVaultFileBytes(ctx, recordingChunkPath(reserved.id, "packets", 0), bytes)
+    );
+    expect((await service.uploads.status(actor, reserved.id)).received.packets).toEqual([]);
+    expect(
+      (
+        await new RecordingImportService(setup().deps).uploads.put(
+          actor,
+          reserved.id,
+          "packets",
+          0,
+          bytes
+        )
+      ).received.packets
+    ).toEqual([0]);
+    const changed = Buffer.from(bytes);
+    changed[2] = 1;
+    await expect(service.uploads.put(actor, reserved.id, "packets", 0, changed)).rejects.toThrow();
+    expect(
+      (await service.uploads.put(actor, reserved.id, "packets", 0, bytes)).received.packets
+    ).toEqual([0]);
+    await expect(service.uploads.finalize(actor, reserved.id)).rejects.toThrow("incomplete");
+  });
+  it("enforces owner/admin isolation on import progress and chunk RLS for app and export workers", async () => {
+    const { service } = setup(),
+      uploaded = await upload(service);
+    for (const owner of [other, { actorUserId: ids.adminUser }]) {
+      await expect(service.uploads.status(owner, uploaded.id)).rejects.toThrow("not found");
+      await expect(service.uploads.finalize(owner, uploaded.id)).rejects.toThrow("not found");
+      for (const runner of [context, new DataContextRunner(worker)]) {
+        const rows = await runner.withDataContext(
+          owner,
+          async (db) =>
+            (
+              await sql`SELECT import_id FROM app.meeting_recording_chunks WHERE import_id=${uploaded.id}::uuid`.execute(
+                db.db
+              )
+            ).rows
+        );
+        expect(rows).toEqual([]);
+      }
+    }
+  });
+  it("requires native user access for reserve, progress, binary chunks and finalize HTTP routes", async () => {
+    const { service } = setup(),
+      uploaded = await upload(service),
+      server = await serverFor(service);
+    try {
+      for (const [method, suffix, payload] of [
+        ["POST", "", uploaded.manifest],
+        ["GET", `/${uploaded.id}`, undefined],
+        ["PUT", `/${uploaded.id}/packets/0`, [...uploaded.chunks("packets")][0]],
+        ["POST", `/${uploaded.id}/finalize`, undefined]
+      ] as const) {
+        const result = await server.inject({
+          method,
+          url: `/api/meetings/recording-uploads${suffix}`,
+          headers: {
+            authorization: `Bearer ${ids.userA}`,
+            [ACT_AS_GRANT_HEADER]: randomUUID(),
+            ...(method === "PUT" ? { "content-type": "application/octet-stream" } : {})
+          },
+          payload
+        });
+        expect(result.statusCode).toBe(403);
+      }
+    } finally {
+      await server.close();
+    }
+  });
+  it("hash-checks retained chunks at finalization and again before each transcription window", async () => {
+    const { service, deps } = setup({
+        describeFailure: () => ({ retryable: false, unavailable: false })
+      }),
+      uploaded = await upload(service);
+    const path = recordingChunkPath(uploaded.id, "wav", 0);
+    const bytes = [...uploaded.chunks("wav")][0]!;
+    bytes[100] = 255;
+    await vault.withVaultContext(actor, (ctx) => writeVaultFileBytes(ctx, path, bytes));
+    await expect(service.uploads.finalize(actor, uploaded.id)).rejects.toThrow("changed");
+    await vault.withVaultContext(actor, (ctx) =>
+      writeVaultFileBytes(ctx, path, [...uploaded.chunks("wav")][0]!)
+    );
+    await service.uploads.finalize(actor, uploaded.id);
+    await vault.withVaultContext(actor, (ctx) => writeVaultFileBytes(ctx, path, bytes));
+    await service.process(actor, job(uploaded.id));
+    expect(deps.transcribe).not.toHaveBeenCalled();
+    expect((await service.status(actor, uploaded.id))!.state).toBe("failed");
+    await vault.withVaultContext(actor, (ctx) =>
+      writeVaultFileBytes(ctx, path, [...uploaded.chunks("wav")][0]!)
+    );
+  });
+  it("checkpoints atomically, preserves external transcript corrections and ignores old window jobs", async () => {
+    const { service, deps } = setup(),
+      uploaded = await upload(service);
+    await service.uploads.finalize(actor, uploaded.id);
+    await service.process(actor, job(uploaded.id));
+    const row = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+    expect(row!.next_window_ms).toBe(30_000);
+    expect(row!.attempts).toBe(0);
+    const meetingId = row!.meeting_id!;
+    await context.withDataContext(actor, async (db) => {
+      const state = (await transcripts.approvalSnapshot(db, meetingId))!;
+      const segment = state.ledger!.revisions[0]!.segment;
+      const saved = await transcripts.ingest(db, {
+        meetingId,
+        requestKey: randomUUID(),
+        expectedVersion: state.receipt.version,
+        sources: state.ledger!.sources,
+        stopCutoffMs: 90_000,
+        events: [
+          {
+            cursor: state.receipt.cursor + 1,
+            segment: { ...segment, revision: 2, provenance: "correction", text: "Owner correction" }
+          }
+        ]
+      });
+      expect(saved.status).toBe("saved");
+    });
+    await service.process(actor, job(uploaded.id));
+    expect(deps.transcribe).toHaveBeenCalledTimes(1);
+    await service.process(actor, job(uploaded.id, 30_000));
+    await service.process(actor, job(uploaded.id, 60_000));
+    expect((await service.status(actor, uploaded.id))!.state).toBe("complete");
+    const snapshot = await context.withDataContext(actor, (db) =>
+      transcripts.snapshot(db, meetingId, { maxSegments: 500, maxCharacters: 100000 })
+    );
+    expect(snapshot!.segments.map((segment) => segment.text)).toEqual([
+      "Owner correction",
+      "Generated window transcript",
+      "Generated window transcript"
+    ]);
+    await service.process(actor, job(uploaded.id, 60_000));
+    expect(deps.transcribe).toHaveBeenCalledTimes(3);
+  });
+  it("preserves a transcript source created before the first imported window", async () => {
+    const { service } = setup(),
+      uploaded = await upload(service, recordingUpload(1000));
+    await service.uploads.finalize(actor, uploaded.id);
+    const row = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+    const meetingId = row!.meeting_id!;
+    await context.withDataContext(actor, async (db) => {
+      const state = (await transcripts.approvalSnapshot(db, meetingId))!;
+      const saved = await transcripts.ingest(db, {
+        meetingId,
+        requestKey: randomUUID(),
+        expectedVersion: state.receipt.version,
+        sources: [
+          {
+            sourceId: "prior-source",
+            epoch: 1,
+            kind: "recording",
+            label: "Prior source",
+            startMs: 0,
+            endMs: 1000
+          }
+        ],
+        events: [
+          {
+            cursor: state.receipt.cursor + 1,
+            segment: {
+              meetingId,
+              segmentId: "prior-segment",
+              sourceId: "prior-source",
+              epoch: 1,
+              revision: 1,
+              finality: "final",
+              provenance: "transcription",
+              startMs: 0,
+              endMs: 100,
+              text: "Prior transcript",
+              speakerId: null
+            }
+          }
+        ],
+        stopCutoffMs: 1000
+      });
+      expect(saved.status).toBe("saved");
+    });
+    await service.process(actor, job(uploaded.id));
+    expect((await service.status(actor, uploaded.id))!.state).toBe("complete");
+    const state = await context.withDataContext(actor, (db) =>
+      transcripts.approvalSnapshot(db, meetingId)
+    );
+    expect(state!.ledger!.sources.map((source) => source.sourceId).sort()).toEqual(
+      ["prior-source", uploaded.id].sort()
+    );
+    const snapshot = await context.withDataContext(actor, (db) =>
+      transcripts.snapshot(db, meetingId, { maxSegments: 500, maxCharacters: 100000 })
+    );
+    expect(snapshot!.segments.map((segment) => segment.text)).toEqual(
+      expect.arrayContaining(["Prior transcript", "Generated window transcript"])
+    );
+  });
+  it("rolls back a checkpoint when scheduling its next job fails and resets retry attempts per window", async () => {
+    const base = setup();
+    let fail = false;
+    const { service } = setup({
+      schedule: async (...args) => {
+        if (fail && args[1].windowStartMs === 30_000)
+          throw new Error("Synthetic scheduling failure");
+        await base.deps.schedule(...args);
+      }
+    });
+    const uploaded = await upload(service);
+    await service.uploads.finalize(actor, uploaded.id);
+    fail = true;
+    await expect(service.process(actor, job(uploaded.id))).rejects.toThrow("retry pending");
+    const failed = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+    expect(failed!.next_window_ms).toBe(0);
+    expect(failed!.attempts).toBe(1);
+    const snapshot = await context.withDataContext(actor, (db) =>
+      transcripts.approvalSnapshot(db, failed!.meeting_id!)
+    );
+    expect(snapshot!.receipt.version).toBe(0);
+    fail = false;
+    await service.process(actor, job(uploaded.id));
+    const advanced = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+    expect(advanced!.next_window_ms).toBe(30_000);
+    expect(advanced!.attempts).toBe(0);
+  });
+  it("expires abandoned allocated files without reopening their immutable identity", async () => {
+    const { service } = setup(),
+      fixture = recordingUpload(),
+      reserved = await service.uploads.reserve(actor, fixture.manifest);
+    await service.uploads.put(actor, reserved.id, "packets", 0, [...fixture.chunks("packets")][0]!);
+    await sql`UPDATE app.meeting_recording_imports SET upload_expires_at=now()-interval '1 second' WHERE id=${reserved.id}::uuid`.execute(
+      bootstrap
+    );
+    await expect(
+      service.uploads.put(actor, reserved.id, "packets", 0, [...fixture.chunks("packets")][0]!)
+    ).rejects.toThrow("expired");
+    await service.process(actor, {
+      actorUserId: actor.actorUserId,
+      resourceId: reserved.id,
+      kind: "abandoned"
+    });
+    const expired = await service.uploads.status(actor, reserved.id);
+    expect(expired.expired).toBe(true);
+    expect(expired.reserved).toBe(false);
+    expect(expired.received).toEqual({ packets: [], sidecar: [], wav: [] });
+    expect(
+      await vault.withVaultContext(actor, async (ctx) =>
+        (await listVaultFilesRecursive(ctx)).filter((path) =>
+          path.startsWith(`meeting-recordings/${reserved.id}/`)
+        )
+      )
+    ).toEqual([]);
+    await expect(service.uploads.reserve(actor, fixture.manifest)).rejects.toThrow("expired");
+  });
+  it("exports long-source bytes in independently hash-checked chunks using actual worker credentials", async () => {
+    const { service } = setup(),
+      uploaded = await upload(service);
+    await service.uploads.finalize(actor, uploaded.id);
+    const section = await new DataContextRunner(worker).withDataContext(actor, (db) =>
+      collectMeetingsExportSection(db, { ...actor, requestId: "upload-export-test" })
+    );
+    const exported = section.recording_imports.find((row) => row.id === uploaded.id)!;
+    const chunks = exported.chunks as { kind: string; sha256: string; base64: string }[];
+    expect(chunks.length).toBe(5);
+    expect(exported.sourceManifestJson).toBeTypeOf("string");
+    for (const chunk of chunks)
+      expect(createHash("sha256").update(Buffer.from(chunk.base64, "base64")).digest("hex")).toBe(
+        chunk.sha256
+      );
+    expect(exported.bundleJson).toBeUndefined();
+  });
+  it("accepts the generated two-hour boundary over binary HTTP and completes 240 durable windows before one summary", async () => {
+    const summary = vi.fn<RecordingImportDependencies["scheduleSummary"]>(async () => {});
+    const transcribe = vi.fn<RecordingImportDependencies["transcribe"]>(async (_actor, input) =>
+      input.dispatch(async () => ({
+        segments: [0, 1, 2].map((i) => ({
+          startMs: i * 100,
+          endMs: i * 100 + 100,
+          text: "Synthetic two-hour transport fixture ".repeat(8)
+        }))
+      }))
+    );
+    const { service } = setup({ scheduleSummary: summary, transcribe }),
+      fixture = recordingUpload(7_200_000),
+      server = await serverFor(service);
+    const headers = { authorization: `Bearer ${ids.userA}` };
+    try {
+      const reservation = await server.inject({
+        method: "POST",
+        url: "/api/meetings/recording-uploads",
+        headers,
+        payload: fixture.manifest
+      });
+      expect(reservation.statusCode).toBe(200);
+      const id = reservation.json<{ id: string }>().id;
+      for (const kind of ["packets", "sidecar", "wav"] as const) {
+        let index = 0;
+        for (const payload of fixture.chunks(kind)) {
+          const response = await server.inject({
+            method: "PUT",
+            url: `/api/meetings/recording-uploads/${id}/${kind}/${index++}`,
+            headers: { ...headers, "content-type": "application/octet-stream" },
+            payload
+          });
+          expect(response.statusCode).toBe(200);
+        }
+      }
+      const finalized = await server.inject({
+        method: "POST",
+        url: `/api/meetings/recording-uploads/${id}/finalize`,
+        headers
+      });
+      expect(finalized.statusCode).toBe(200);
+      expect(finalized.json().ready).toBe(true);
+      // Android sends explicit JSON null to avoid its implicit form Content-Type.
+      const nativeReplay = await server.inject({
+        method: "POST",
+        url: `/api/meetings/recording-uploads/${id}/finalize`,
+        headers: { ...headers, "content-type": "application/json" },
+        payload: "null"
+      });
+      expect(nativeReplay.statusCode).toBe(200);
+      expect(nativeReplay.json().ready).toBe(true);
+      await service.uploads.finalize(actor, id);
+      for (let start = 0; start < 7_200_000; start += 30_000) {
+        expect(summary).not.toHaveBeenCalled();
+        await service.process(actor, job(id, start));
+      }
+      expect(summary).toHaveBeenCalledTimes(1);
+      expect(transcribe).toHaveBeenCalledTimes(240);
+      const status = (await service.status(actor, id))!;
+      expect(status.state).toBe("complete");
+      expect(status.bookmarksMs).toEqual([1000]);
+      const output = await context.withDataContext(actor, (db) =>
+        new MeetingOutputsRepository().inputs(db, status.meetingId)
+      );
+      expect(output.transcript!.segments).toHaveLength(720);
+      expect(output.transcript!.omittedSegments).toBe(0);
+      expect(output.transcript!.segments.at(-1)!.startMs).toBe(7_170_200);
+      const tooLong = recordingUpload(7_200_001);
+      expect(
+        (
+          await server.inject({
+            method: "POST",
+            url: "/api/meetings/recording-uploads",
+            headers,
+            payload: tooLong.manifest
+          })
+        ).statusCode
+      ).toBe(413);
+    } finally {
+      await server.close();
+    }
+  }, 180_000);
+});

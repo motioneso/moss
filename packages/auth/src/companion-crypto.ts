@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { COMPANION_CREDENTIAL_PREFIX } from "@moss/shared";
+import { COMPANION_CREDENTIAL_PREFIX, RING_COMPANION_CREDENTIAL_PREFIX } from "@moss/shared";
 
 /**
  * Secret handling for the Trail Marker pairing exchange (#2560). Every value the
@@ -25,8 +25,10 @@ export interface MintedCredential {
   readonly hash: string;
 }
 
-export function mintCompanionCredential(): MintedCredential {
-  const credential = `${COMPANION_CREDENTIAL_PREFIX}${randomBase64url(32)}`;
+export function mintCompanionCredential(platform: "macos" | "android" = "macos"): MintedCredential {
+  const prefix =
+    platform === "android" ? RING_COMPANION_CREDENTIAL_PREFIX : COMPANION_CREDENTIAL_PREFIX;
+  const credential = `${prefix}${randomBase64url(32)}`;
   return { credential, hash: sha256Base64url(credential) };
 }
 

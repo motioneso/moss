@@ -120,7 +120,7 @@ export const webRoutes: readonly WebRouteMeta[] = [
   {
     id: "link-trail-marker",
     path: "/link/trail-marker",
-    title: "Link a Mac",
+    title: "Link a companion",
     subtitle: dateEyebrow,
     match: (pathname) => pathname.startsWith("/link/trail-marker")
   }

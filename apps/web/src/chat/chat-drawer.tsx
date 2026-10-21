@@ -1,3 +1,4 @@
+import { VoiceRequests } from "./voice-requests";
 import type { ChatDrawerProps } from "./chat-drawer-props";
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatTurnResponse } from "@moss/shared";
@@ -20,7 +21,7 @@ import {
   useRef,
   useState
 } from "react";
-import { BrandMark, Button, Chip, IconButton, Menu } from "@moss/ui";
+import { BrandMark, Chip, IconButton, Menu, Thread } from "@moss/ui";
 import {
   cancelChatTurn,
   beaconEndPrivateChat,
@@ -37,11 +38,11 @@ import { useAssistantName } from "../api/use-assistant-name.js";
 import { DEFAULT_CHAT_SURFACE, type ChatAttachmentDto, type ChatSurface } from "@moss/shared";
 import { ChatModelPill } from "./chat-model-pill";
 import { ChatWaitingIndicator } from "./chat-waiting-indicator";
-import { ChatEmptyState } from "./chat-empty-state";
+import { ChatPrivateStatus } from "./chat-private-status";
+import { ChatConversationError, ChatEmptyState } from "./chat-empty-state";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { useChatRoute } from "./use-chat-route";
-import { Thread } from "@moss/ui";
 import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
@@ -102,7 +103,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
     scrollToLatest,
     jumpToLatest
   } = useChatAutoscroll();
-  const resumeMutation = useMutation({
+  const { mutate: resume, isPending: resumePending } = useMutation({
     mutationFn: (vars: {
       readonly threadId: string;
       readonly surface: ChatSurface;
@@ -188,7 +189,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
   });
   const sendPending = isSending || transition.pending || Boolean(props.selectionPending);
   const historyActivationPending =
-    reviewThreadId !== null && (resumeMutation.isPending || !messagesQuery.isSuccess);
+    reviewThreadId !== null && (resumePending || !messagesQuery.isSuccess);
   const mainThreadId = findOwnerMainThread(threadsQuery.data?.threads ?? [], props.ownerId)?.id;
   const confirmedSelection = selection.current;
   const moduleIdentityPending =
@@ -584,13 +585,16 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setIsSending(false);
       setQueuedSendText(null);
       setSendError(null);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.chat.messages(id, props.surface)
+      });
       setReviewThreadId(id);
       setLiveThreadId(null);
       if (change) {
-        resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
+        resume({ threadId: id, surface: props.surface, transition: change });
       }
     },
-    [props.meetingContext, props.surface, transition, callerDraft, isSending, resumeMutation]
+    [props.meetingContext, props.surface, transition, callerDraft, isSending, resume, queryClient]
   );
   useEffect(() => {
     if (!props.open || !props.threadToOpen || transition.pending) return;
@@ -850,58 +854,22 @@ export function ChatDrawer(props: ChatDrawerProps) {
           ref={bodyRef}
           onScroll={handleBodyScroll}
         >
-          {activatingPrivate ? (
-            <div className="chatd-private is-activating">
-              <span>Starting private chat…</span>
-            </div>
-          ) : null}
-          {privateActivationError ? (
-            <div className="chatd-private is-error">
-              <span>{privateActivationError}</span>
-              <button type="button" onClick={() => setPrivateActivationError(null)}>
-                Dismiss
-              </button>
-            </div>
-          ) : null}
-          {privateMode && !reviewing ? (
-            <div className={`chatd-private${privateEnded ? " is-ended" : ""}`}>
-              <span>
-                {privateEnded
-                  ? "Private chat ended. Start a new chat to continue."
-                  : "Private chat: not saved to history. Approved actions still keep records."}
-              </span>
-              <button type="button" onClick={closePrivateChat}>
-                End
-              </button>
-            </div>
-          ) : null}
+          <ChatPrivateStatus
+            activating={activatingPrivate}
+            error={privateActivationError}
+            active={privateMode && !reviewing}
+            ended={privateEnded}
+            onDismissError={() => setPrivateActivationError(null)}
+            onEnd={closePrivateChat}
+          />
           {moduleIdentityPending && privacyStateQuery.isError ? (
-            <div className="chatd-empty" role="alert">
-              <div className="chatd-empty__title">Could not load module conversation.</div>
-              <Button
-                aria-label="Retry conversation identity"
-                size="sm"
-                type="button"
-                variant="quiet"
-                onClick={() => void privacyStateQuery.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
+            <ChatConversationError
+              moduleConversation
+              onRetry={() => void privacyStateQuery.refetch()}
+            />
           ) : null}
           {messagesQuery.isError ? (
-            <div className="chatd-empty" role="alert">
-              <div className="chatd-empty__title">Could not load conversation.</div>
-              <Button
-                aria-label="Retry conversation"
-                size="sm"
-                type="button"
-                variant="quiet"
-                onClick={() => void messagesQuery.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
+            <ChatConversationError onRetry={() => void messagesQuery.refetch()} />
           ) : null}
           {effectiveRecords.length > 0 ? (
             <Thread
@@ -949,6 +917,24 @@ export function ChatDrawer(props: ChatDrawerProps) {
           </button>
         ) : null}
       </div>
+      <VoiceRequests
+        ownerId={props.ownerId}
+        surface={props.surface}
+        mainThreadId={mainThreadId}
+        selectedThreadId={selectedThreadId}
+        privateMode={
+          privateMode || Boolean(privacyStateQuery.data?.incognito) || Boolean(props.meetingContext)
+        }
+        selectionPending={
+          sendPending ||
+          historyActivationPending ||
+          conversationOverlayOpen ||
+          activatingPrivate ||
+          privacyStateQuery.isFetching
+        }
+        privacyConfirmed={privacyStateQuery.isSuccess}
+        onOpenThread={selectThread}
+      />
       {props.meetingContext ? (
         <p className="jds-hint">Uses the transcript so far and your saved notes.</p>
       ) : null}

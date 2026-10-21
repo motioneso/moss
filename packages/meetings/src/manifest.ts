@@ -1,3 +1,9 @@
+import {
+  recordingDeliveryRoutes,
+  recordingImportFeature,
+  recordingUploadFeature,
+  recordingVoiceFeature
+} from "./recording-delivery-declarations.js";
 import { androidDeliveryFeature } from "./android-delivery-feature.js";
 import { meetingRecordTarget } from "./chat-targets.js";
 import {
@@ -39,11 +45,16 @@ export const meetingsModuleManifest = {
       "sql/0288_meeting_recording_connections.sql",
       "sql/0292_meeting_minimal.sql",
       "sql/0295_meeting_capture_start_limits.sql",
-      "sql/0325_meeting_recording_imports.sql"
+      "sql/0325_meeting_recording_imports.sql",
+      "sql/0326_meeting_import_summaries.sql",
+      "sql/0328_meeting_voice_recordings.sql",
+      "sql/0329_meeting_recording_uploads.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
       "app.meeting_recording_imports",
+      "app.meeting_recording_chunks",
+      "app.meeting_recording_voice_enablements",
       "app.meeting_records",
       "app.meeting_note_writes",
       "app.meeting_transcript_batches",
@@ -97,7 +108,7 @@ export const meetingsModuleManifest = {
       id: "meetings.module-settings",
       label: "Meetings",
       description:
-        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop on or off, and unlink the Mac.",
+        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop or completed import on or off, and unlink the Mac.",
       path: "/settings?section=modules&module=meetings",
       scope: "user",
       permissionId: "meetings.write",
@@ -109,18 +120,7 @@ export const meetingsModuleManifest = {
     { queueName: "meetings.recording-import", metadataOnly: true }
   ],
   routes: [
-    {
-      method: "POST",
-      path: "/api/meetings/recording-imports",
-      permissionId: "meetings.write",
-      chat: { access: "blocked", blockedBecause: "external_effect" }
-    },
-    {
-      method: "GET",
-      path: "/api/meetings/recording-imports/:id",
-      permissionId: "meetings.read",
-      chat: { access: "blocked", blockedBecause: "external_effect" }
-    },
+    ...recordingDeliveryRoutes,
     {
       method: "PUT",
       path: "/api/meetings/records/:id/title",
@@ -350,60 +350,23 @@ export const meetingsModuleManifest = {
     }
   ],
   features: [
+    recordingUploadFeature,
+    recordingVoiceFeature,
     androidDeliveryFeature,
     {
-      id: "meetings.recording_imports",
-      remediations: [
-        {
-          id: "meetings.restore_import_access",
-          path: "/settings?section=modules&module=meetings",
-          description:
-            "Restore Meetings access and configure transcription in Settings → AI providers before a new import."
-        }
-      ],
+      id: "meetings.import_analysis",
       description:
-        "Developer imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Configured transcripts appear in Meetings history. Limit: 120 seconds. No request execution or consumer ring setup.",
+        "Completed imports use your automatic-summary setting and template. Analysis status is separate from transcription. Retry with Rewrite summary; review suggestions before Add task.",
       errors: [
         {
-          code: "recording_import_invalid",
-          class: "validation",
-          description:
-            "Use matching legacy filenames, valid hashes and canonical 16 kHz mono PCM WAV. Maximum body 8 MiB, packets 1 MiB, sidecar 64 KiB, audio 120 seconds."
-        },
-        {
-          code: "recording_import_conflict",
-          class: "validation",
-          description:
-            "This device and recording identity already has different evidence. Retained evidence is immutable; restore the original bundle."
-        },
-        {
-          code: "transcription_unavailable",
-          class: "prerequisite",
-          remediationRef: "meetings.restore_import_access",
-          description:
-            "Configure transcription in Settings → AI providers before importing. A replay does not restart failed work."
-        },
-        {
-          code: "transcription_failed",
+          code: "meeting_output_queue_unavailable",
           class: "transient",
           description:
-            "Transcription failed after bounded attempts. Original evidence remains retained; status is available from the developer import endpoint."
-        },
-        {
-          code: "import_interrupted",
-          class: "transient",
-          description:
-            "Upload publication was interrupted and its abandoned vault files were removed."
-        },
-        {
-          code: "import_unavailable",
-          class: "prerequisite",
-          remediationRef: "meetings.restore_import_access",
-          description:
-            "Access, Meetings availability or transcription configuration changed. Restore access and inspect retained import status."
+            "Automatic analysis could not be queued. The transcript remains available. Open the meeting and use Rewrite summary to try again."
         }
       ]
     },
+    recordingImportFeature,
     {
       id: "meetings.chat_app_actions",
       description:
@@ -959,6 +922,11 @@ export const meetingsModuleManifest = {
       strategy: "cascade",
       tables: [
         { table: "app.meeting_recording_imports", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_recording_chunks", countPredicate: "owner_user_id = $1::uuid" },
+        {
+          table: "app.meeting_recording_voice_enablements",
+          countPredicate: "owner_user_id = $1::uuid"
+        },
         { table: "app.meeting_records", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_note_writes", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_transcript_batches", countPredicate: "owner_user_id = $1::uuid" },

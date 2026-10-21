@@ -12,13 +12,21 @@ import {
   RecordingImportRepository,
   RecordingImportConflictError,
   MeetingRecordsRepository,
+  MeetingTranscriptRepository,
+  MeetingOutputService,
+  MeetingOutputsRepository,
+  MEETING_STOP_SUMMARY_QUEUE,
+  type MeetingOutputGenerator,
   meetingsModuleManifest,
   createRecordingImportScheduler,
+  createImportedMeetingSummaryScheduler,
   RECORDING_IMPORT_QUEUE,
   recordingBundlePath,
   collectMeetingsExportSection,
   type RecordingImportDependencies
 } from "@moss/meetings";
+import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { recordingBundle, recordingFile } from "../fixtures/recording-bundle.js";
 import { deleteUserData } from "../../scripts/delete-user-data.js";
 import { createRecordingImportRuntime } from "../../packages/module-registry/src/recording-import-runtime.js";
@@ -35,6 +43,17 @@ const actor = { actorUserId: ids.userA },
 const priorRoot = process.env.MOSS_VAULT_ROOT;
 beforeAll(async () => {
   await resetFoundationDatabase();
+  // Isolated gate-only negative control: the same provenance test must fail without the FK.
+  if (process.env.VOCCI_SUMMARY_NEGATIVE_CONTROL === "1") {
+    const bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });
+    try {
+      await sql`ALTER TABLE app.meeting_stop_summaries DROP CONSTRAINT meeting_automatic_summary_import`.execute(
+        bootstrap
+      );
+    } finally {
+      await bootstrap.destroy();
+    }
+  }
   app = createDatabase({ connectionString: connectionStrings.app, maxConnections: 6 });
   context = new DataContextRunner(app);
   boss = createPgBossClient(connectionStrings.app);
@@ -56,6 +75,7 @@ function setup(overrides: Partial<RecordingImportDependencies> = {}) {
     vault,
     assertAvailable: async () => {},
     schedule: createRecordingImportScheduler(boss),
+    scheduleSummary: createImportedMeetingSummaryScheduler(boss),
     availability: async () => ({ ready: true, modelRoute: "test-route" }),
     transcribe: vi.fn<RecordingImportDependencies["transcribe"]>(async (_actor, input) =>
       input.dispatch(
@@ -396,6 +416,297 @@ describe("completed recording imports through real owner DB/vault paths", () => 
       await bootstrap.destroy();
     }
   });
+  it("atomically queues import-bound analysis and replays one validated output", async () => {
+    const summaries = new MeetingStopSummaryRepository();
+    await context.withDataContext(actor, (db) =>
+      new MeetingPreferencesRepository().update(db, {
+        summarizeOnStop: true,
+        summaryTemplateId: "project-review"
+      })
+    );
+    const { service, deps, input } = setup();
+    const accepted = await service.accept(actor, input);
+    expect(
+      await context.withDataContext(actor, (db) => summaries.row(db, accepted.meetingId))
+    ).toBeNull();
+    await service.process(actor, payload(accepted.id));
+    await service.process(actor, payload(accepted.id));
+    const row = (await context.withDataContext(actor, (db) =>
+      summaries.row(db, accepted.meetingId)
+    ))!;
+    expect(row).toMatchObject({
+      grant_id: null,
+      recording_import_id: accepted.id,
+      status: "waiting",
+      template_id: "project-review"
+    });
+    const bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });
+    const worker = createDatabase({ connectionString: connectionStrings.worker });
+    try {
+      const jobs = await sql<{
+        data: unknown;
+      }>`SELECT data FROM pgboss.job WHERE name=${MEETING_STOP_SUMMARY_QUEUE} AND data->>'resourceId'=${accepted.meetingId}`.execute(
+        bootstrap
+      );
+      expect(jobs.rows).toEqual([
+        {
+          data: {
+            actorUserId: ids.userA,
+            resourceId: accepted.meetingId,
+            idempotencyKey: row.request_key
+          }
+        }
+      ]);
+      // Queue admission survives an outage beyond the live-capture finalization window.
+      await sql`UPDATE app.meeting_stop_summaries SET due_at=clock_timestamp()-interval '1 hour' WHERE meeting_id=${accepted.meetingId}::uuid`.execute(
+        bootstrap
+      );
+      const generate = vi.fn<MeetingOutputGenerator>(async (_actor, { inputs, template }) => {
+        expect(template.id).toBe("project-review");
+        expect(inputs.transcript?.segments[0]?.text).toBe("Synthetic retained recording");
+        return {
+          modelRoute: "synthetic-summary",
+          content: {
+            overview: "Recording follow-up",
+            decisions: [],
+            openQuestions: [],
+            warnings: [],
+            actions: [
+              {
+                text: "Review recording",
+                ownerPhrase: null,
+                duePhrase: null,
+                evidence: [
+                  {
+                    kind: "transcript",
+                    meetingId: inputs.meetingId,
+                    segmentId: `${accepted.id}:0`,
+                    segmentRevision: 1,
+                    startCharacter: 0,
+                    endCharacter: 9
+                  }
+                ]
+              }
+            ]
+          }
+        };
+      });
+      const output = new MeetingOutputService(new DataContextRunner(worker), generate);
+      const results = await Promise.all([
+        output.generateAutomatic(actor, accepted.meetingId, row.request_key),
+        output.generateAutomatic(actor, accepted.meetingId, row.request_key)
+      ]);
+      expect(results.some((result) => result?.status === "saved")).toBe(true);
+      expect(
+        await output.generateAutomatic(actor, accepted.meetingId, row.request_key)
+      ).toMatchObject({ status: "saved", replayed: true });
+      expect(generate).toHaveBeenCalledOnce();
+      expect(deps.transcribe).toHaveBeenCalledOnce();
+      const outputs = await context.withDataContext(actor, (db) =>
+        new MeetingOutputsRepository().list(db, accepted.meetingId)
+      );
+      expect(outputs.artifacts).toHaveLength(1);
+      expect(
+        await context.withDataContext(actor, (db) => summaries.status(db, accepted.meetingId))
+      ).toMatchObject({ status: "saved" });
+      const exported = await context.withDataContext(actor, (db) =>
+        collectMeetingsExportSection(db, { actorUserId: ids.userA, requestId: randomUUID() })
+      );
+      expect(
+        exported.stop_summaries.find((item) => item.meetingId === accepted.meetingId)
+      ).toMatchObject({ recordingImportId: accepted.id, grantId: null });
+    } finally {
+      await worker.destroy();
+      await bootstrap.destroy();
+    }
+  });
+  it.each(["setting-off", "no-meaningful-transcript", "disabled-before-dispatch"])(
+    "skips imported analysis: %s",
+    async (reason) => {
+      const preferences = new MeetingPreferencesRepository(),
+        summaries = new MeetingStopSummaryRepository();
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { summarizeOnStop: reason !== "setting-off" })
+      );
+      const { service, input } = setup(
+        reason === "no-meaningful-transcript" ? { transcribe: async () => ({ segments: [] }) } : {}
+      );
+      try {
+        const accepted = await service.accept(actor, input);
+        await service.process(actor, payload(accepted.id));
+        const row = (await context.withDataContext(actor, (db) =>
+          summaries.row(db, accepted.meetingId)
+        ))!;
+        if (reason === "disabled-before-dispatch")
+          await context.withDataContext(actor, (db) =>
+            preferences.update(db, { summarizeOnStop: false })
+          );
+        const generate = vi.fn<MeetingOutputGenerator>();
+        expect(
+          await new MeetingOutputService(context, generate).generateAutomatic(
+            actor,
+            accepted.meetingId,
+            row.request_key
+          )
+        ).toBeNull();
+        expect(generate).not.toHaveBeenCalled();
+        expect(
+          await context.withDataContext(actor, (db) => summaries.status(db, accepted.meetingId))
+        ).toMatchObject({
+          status: "skipped",
+          code: reason === "no-meaningful-transcript" ? reason : "setting-off"
+        });
+        expect(await service.status(actor, accepted.id)).toMatchObject({ state: "complete" });
+      } finally {
+        await context.withDataContext(actor, (db) =>
+          preferences.update(db, { summarizeOnStop: true })
+        );
+      }
+    }
+  );
+  it("keeps completed transcript when summary scheduling fails", async () => {
+    const summaries = new MeetingStopSummaryRepository();
+    const { service, input } = setup({
+      scheduleSummary: (db, owner, value) =>
+        summaries.scheduleImport(db, owner, value, async (transaction) => {
+          await sql`SELECT missing_summary_queue()`.execute(transaction.db);
+        })
+    });
+    const accepted = await service.accept(actor, input);
+    await service.process(actor, payload(accepted.id));
+    expect(await service.status(actor, accepted.id)).toMatchObject({ state: "complete" });
+    expect(
+      await context.withDataContext(actor, (db) => summaries.status(db, accepted.meetingId))
+    ).toMatchObject({ status: "failed", code: "meeting_output_queue_unavailable" });
+    const outputs = await context.withDataContext(actor, (db) =>
+      new MeetingOutputsRepository().inputs(db, accepted.meetingId)
+    );
+    expect(outputs.transcript?.segments).toHaveLength(1);
+  });
+  it("replays analysis failure without retranscribing or dispatching another provider request", async () => {
+    const { service, deps, input } = setup();
+    const accepted = await service.accept(actor, input);
+    await service.process(actor, payload(accepted.id));
+    const summaries = new MeetingStopSummaryRepository();
+    const row = (await context.withDataContext(actor, (db) =>
+      summaries.row(db, accepted.meetingId)
+    ))!;
+    const generate = vi.fn<MeetingOutputGenerator>(async () => {
+      throw new Error("Synthetic provider outage");
+    });
+    const output = new MeetingOutputService(context, generate);
+    const first = await output.generateAutomatic(actor, accepted.meetingId, row.request_key);
+    expect(first).toMatchObject({ status: "failed" });
+    expect(await output.generateAutomatic(actor, accepted.meetingId, row.request_key)).toEqual(
+      first
+    );
+    await service.process(actor, payload(accepted.id));
+    expect(generate).toHaveBeenCalledOnce();
+    expect(deps.transcribe).toHaveBeenCalledOnce();
+    expect(await service.status(actor, accepted.id)).toMatchObject({ state: "complete" });
+  });
+  it("cascades import analysis on meeting deletion and ignores queued jobs", async () => {
+    const { service, input } = setup();
+    const accepted = await service.accept(actor, input);
+    await service.process(actor, payload(accepted.id));
+    const summaries = new MeetingStopSummaryRepository();
+    const row = (await context.withDataContext(actor, (db) =>
+      summaries.row(db, accepted.meetingId)
+    ))!;
+    await context.withDataContext(actor, (db) => records.remove(db, accepted.meetingId));
+    const generate = vi.fn<MeetingOutputGenerator>();
+    expect(
+      await new MeetingOutputService(context, generate).generateAutomatic(
+        actor,
+        accepted.meetingId,
+        row.request_key
+      )
+    ).toBeNull();
+    expect(generate).not.toHaveBeenCalled();
+    expect(
+      await context.withDataContext(actor, (db) => summaries.row(db, accepted.meetingId))
+    ).toBeNull();
+  });
+  it("rejects a queued analysis whose completed transcript revision has changed", async () => {
+    const { service, input } = setup();
+    const accepted = await service.accept(actor, input);
+    await service.process(actor, payload(accepted.id));
+    const summaries = new MeetingStopSummaryRepository();
+    const row = (await context.withDataContext(actor, (db) =>
+      summaries.row(db, accepted.meetingId)
+    ))!;
+    expect(row.transcript_revision).toBe(1);
+    await context.withDataContext(actor, async (db) => {
+      const transcripts = new MeetingTranscriptRepository();
+      const saved = await transcripts.ingest(db, {
+        meetingId: accepted.meetingId,
+        requestKey: randomUUID(),
+        expectedVersion: 1,
+        stopCutoffMs: 120,
+        sources: [
+          {
+            sourceId: accepted.id,
+            epoch: 1,
+            kind: "recording",
+            label: "Imported recording",
+            startMs: 0,
+            endMs: 120
+          }
+        ],
+        events: [
+          {
+            cursor: 2,
+            segment: {
+              meetingId: accepted.meetingId,
+              segmentId: `${accepted.id}:0`,
+              sourceId: accepted.id,
+              epoch: 1,
+              revision: 2,
+              startMs: 0,
+              endMs: 120,
+              text: "Revised retained recording",
+              finality: "final",
+              provenance: "correction",
+              speakerId: null
+            }
+          }
+        ]
+      });
+      expect(saved.status).toBe("saved");
+    });
+    const generate = vi.fn<MeetingOutputGenerator>();
+    expect(
+      await new MeetingOutputService(context, generate).generateAutomatic(
+        actor,
+        accepted.meetingId,
+        row.request_key
+      )
+    ).toBeNull();
+    expect(generate).not.toHaveBeenCalled();
+    expect(
+      await context.withDataContext(actor, (db) => summaries.status(db, accepted.meetingId))
+    ).toMatchObject({ status: "skipped", code: "transcript-changed" });
+  });
+  it.each([ids.userA, ids.userD])(
+    "rejects summary provenance for another meeting/owner (%s)",
+    async (actorUserId) => {
+      const { service, input } = setup();
+      const accepted = await service.accept(actor, input);
+      const targetActor = { actorUserId };
+      const target = await context.withDataContext(targetActor, (db) =>
+        records.create(db, { requestKey: randomUUID(), title: "Different meeting" })
+      );
+      await expect(
+        context.withDataContext(targetActor, (db) =>
+          sql`INSERT INTO app.meeting_stop_summaries
+      (meeting_id,recording_import_id,transcript_revision,request_key,template_id,status,due_at)
+      VALUES (${target.meeting.id}::uuid,${accepted.id}::uuid,1,${randomUUID()}::uuid,'general','waiting',clock_timestamp())`.execute(
+            db.db
+          )
+        )
+      ).rejects.toMatchObject({ constraint: "meeting_automatic_summary_import" });
+    }
+  );
   it("account deletion removes retained bundles and cascades import rows", async () => {
     const { service, input } = setup();
     const owner = { actorUserId: ids.userB };

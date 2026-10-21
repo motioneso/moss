@@ -1,8 +1,11 @@
 import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
 import { fileURLToPath } from "node:url";
+import { collectVoiceRequestExport } from "./voice-request-export.js";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
+  chatVoiceRequestStatusSchema,
+  listChatVoiceRequestsResponseSchema,
   chatUnreadResponseSchema,
   readChatMessagesResponseSchema,
   getChatPrivacyStateResponseSchema,
@@ -91,7 +94,8 @@ export const chatModuleManifest = {
       "sql/0320_chat_reminder_destinations.sql",
       "sql/0321_chat_repeating_reads.sql",
       "sql/0322_chat_responsibility_agreements.sql",
-      "sql/0323_chat_unread_messages.sql"
+      "sql/0323_chat_unread_messages.sql",
+      "sql/0327_chat_voice_requests.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -106,6 +110,7 @@ export const chatModuleManifest = {
       "app.chat_conversation_provenance",
       "app.chat_automatic_action_reservations",
       "app.chat_live_turns",
+      "app.chat_voice_requests",
       "app.chat_scheduled_reads",
       "app.chat_reminder_quiet_allowances",
       "app.chat_reminder_quiet_proposals",
@@ -145,7 +150,47 @@ export const chatModuleManifest = {
       defaultEnabled: true
     }
   ],
+  dataLifecycle: {
+    exportSections: [
+      { key: "voiceRequests", displayName: "Voice requests", collect: collectVoiceRequestExport }
+    ],
+    deletion: {
+      strategy: "cascade",
+      tables: [
+        ...[
+          "app.chat_threads",
+          "app.chat_messages",
+          "app.chat_unread_messages",
+          "app.chat_skills",
+          "app.chat_classifier_shadow_records",
+          "app.chat_conversation_provenance",
+          "app.chat_automatic_action_reservations",
+          "app.chat_live_turns",
+          "app.chat_voice_requests",
+          "app.chat_scheduled_reads",
+          "app.chat_reminder_quiet_allowances",
+          "app.chat_reminder_quiet_proposals",
+          "app.chat_responsibility_proposals"
+        ].map((table) => ({ table, countPredicate: "owner_user_id = $1::uuid" })),
+        { table: "app.chat_user_memory_settings", countPredicate: "user_id = $1::uuid" },
+        {
+          table: "app.chat_classifier_release_eligibility",
+          countPredicate: "approved_by_user_id = $1::uuid"
+        },
+        {
+          table: "app.chat_classifier_shadow_reviews",
+          countPredicate: "reviewed_by_user_id = $1::uuid"
+        }
+      ]
+    }
+  },
   features: [
+    {
+      id: "chat.voice_requests",
+      description:
+        "Review ring transcripts in Main with Send and Open reply. Private/module/other chats hide review. Links open owned receipts without sending. Busy chats defer; runner outages keep requests queued. Interrupted turns never auto-replay.",
+      featureFlagId: "chat.module"
+    },
     {
       id: "chat.unread_messages",
       description:
@@ -175,8 +220,8 @@ export const chatModuleManifest = {
     {
       id: "chat.main_conversation",
       description:
-        "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
-        "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
+        "Reopening Moss restores Main. Selecting a chat refreshes saved replies, including arrivals while idle. " +
+        "The composer waits for history and resume. Explicit new and private chats keep their selection.",
       featureFlagId: "chat.module"
     },
     {
@@ -495,6 +540,27 @@ export const chatModuleManifest = {
     }
   ],
   routes: [
+    {
+      method: "GET",
+      path: "/api/chat/voice-requests",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      responseSchema: listChatVoiceRequestsResponseSchema,
+      permissionId: "chat.view"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/voice-requests/:id",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      responseSchema: chatVoiceRequestStatusSchema,
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/voice-requests/:id/send",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      responseSchema: chatVoiceRequestStatusSchema,
+      permissionId: "chat.message"
+    },
     {
       method: "GET",
       path: "/api/chat/unread",

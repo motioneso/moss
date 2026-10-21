@@ -39,6 +39,7 @@ describe("registered queue definitions", () => {
       "calendar.day-plan-apply",
       "ai-purge-audit-log",
       "ai-purge-activity-detail",
+      "chat.voice-request",
       "chat.embed-turn",
       "chat.extract-facts",
       "chat.archive-day",
