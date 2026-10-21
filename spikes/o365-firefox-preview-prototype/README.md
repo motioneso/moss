@@ -327,3 +327,42 @@ collection, complete mailbox/calendar coverage, long-lived session reliability,
 reload/browser restart recovery and VM operation remain untested or unimplemented.
 The extension is still a local disposable prototype, with no Moss ingestion.
 Use **Stop & clear body** after checking the result to discard the tab-local capture.
+
+### Autonomous Chrome continuation (2026-10-21)
+
+With explicit authorization for at most five invented Gmail-to-Outlook messages,
+five messages were sent through Gmail's compose UI to the signed-in Outlook
+account. Existing version 0.4.3 scripts were injected through Chrome DevTools into
+an isolated JavaScript world. No Chrome extension was installed; these results
+exercise the reader and watcher, not Chrome add-on installation or permissions.
+
+| Trial | Result | Scans | Rows opened |
+| --- | --- | --- | --- |
+| Outlook foreground | Synthetic body captured | 13 | 1 |
+| Gmail brought to foreground (visibility unverified) | Synthetic body captured | 15 | 1 |
+| Outlook reload, then explicit reinjection/start | Synthetic body captured | 13 | 1 |
+| Minimized browser, controller disconnected | Synthetic body captured | 13 | 1 |
+
+Each success required the existing subject/body phrase, final marker and stable
+snapshot checks. Only status/count summaries were returned to the controller;
+captures were cleared after each trial. No real message bodies or account
+addresses are retained in this evidence.
+
+A fourth trial disconnected the controller, but Outlook reported itself visible.
+It was stopped while still waiting for delivery (13 scans, zero rows opened);
+this establishes neither capture nor a delivery failure. Bringing Gmail forward
+alone did not establish hidden-tab scheduling in this controlled browser.
+
+For the fifth message, the test browser was minimized and the controller
+disconnected. A page-local two-second visibility sampler subsequently recorded
+24 hidden samples and one visible sample; on reconnection the probe reported
+success with one row opened and 13 scans. This supports a short unattended
+capture with an observed hidden interval, not sustained background reliability.
+The exact visibility at the instant of capture was not separately recorded.
+All five authorized send attempts were used; no further messages were sent.
+
+The reload trial first confirmed that the probe was absent after navigation.
+Recovery therefore required the controller to reinject and explicitly start it;
+the current add-on does not recover automatically. These short trials do not
+establish persistent authentication, hours-long scheduling, a VM deployment,
+complete mailbox coverage or continuous multi-message ingestion.
