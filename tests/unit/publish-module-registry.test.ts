@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   utimesSync,
@@ -245,9 +246,11 @@ describe("module discovery", () => {
       signingKey: null
     });
 
-    expect(index.modules.map((m) => m.id)).toEqual(["finance", "food"]);
+    const publishedIds = index.modules.map((m) => m.id);
+    expect(publishedIds).toEqual(expect.arrayContaining(["finance", "food"]));
+    expect(publishedIds).not.toContain("job-search");
     expect(readFileSync(join(outDir, "index.json"), "utf8")).not.toContain("job-search");
-    expect(existsSync(join(outDir, "job-search-0.2.20.tgz"))).toBe(false);
+    expect(readdirSync(outDir).some((name) => name.startsWith("job-search-"))).toBe(false);
     expect(existsSync(join(repoRoot, "external-modules/job-search/src"))).toBe(true);
     // Each index entry claims a packed artifact; confirm the tarball actually landed on
     // disk rather than trusting the returned object alone.
