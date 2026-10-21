@@ -150,7 +150,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.relative_reminders",
     description:
-      "In regular chat, reminders post once to Main by default, creating Main on the first turn and noting if late. A reply frees the slot. Up to 20 schedules, 30 days ahead. No deadline on one-time relative reminders; no private chats.",
+      "In regular chat, reminders appear live once in Main by default, creating Main on the first turn and noting if late. A reply frees the slot. Up to 20 schedules, 30 days ahead. No deadline on one-time relative reminders; no private chats.",
     featureFlagId: "chat.module"
   },
   {
