@@ -6,8 +6,11 @@ export interface ChatControls {
   readonly openMeetingChat?: (input: OpenMeetingChatInput) => void;
   /** Open the chat drawer without submitting a new user turn. */
   readonly openChat: () => void;
-  /** Open the conversation containing a saved result, without submitting a turn. */
-  readonly openChatThread: (threadId: string) => void;
+  /**
+   * Open the conversation containing a saved result, without submitting a turn. With a
+   * message id, the drawer scrolls to and focuses that message.
+   */
+  readonly openChatThread: (threadId: string, messageId?: string) => void;
   /** Open the chat drawer and send `prompt` as a turn. */
   readonly openChatWith: (prompt: string) => void;
   /**

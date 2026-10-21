@@ -268,7 +268,7 @@ it("notification failure and concurrent retry leave the one delivered chat resul
     module_id: "chat",
     urgency: "normal",
     body: "Reminder: stretch",
-    href: "/today"
+    href: `/chat/messages/${payload.idempotencyKey}`
   });
   await asOwner((db) => notifications.markRead(db, matching[0]!.id));
   expect(await notify(payload)).toBe("already_created");

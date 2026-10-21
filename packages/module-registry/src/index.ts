@@ -726,6 +726,8 @@ export interface BuiltInRouteDependencies {
   readonly getResolveActionRequestFn?: () =>
     | AssistantToolGateway["resolveActionRequest"]
     | undefined;
+  /** Per-server getter over the drop function {@link adoptDropSessionsForProvider} publishes. */
+  readonly getDropSessionsForProvider?: () => DropChatSessions | undefined;
   /** Per-server live waiter lookup for origin-scoped chat-card hydration. */
   readonly getActionRequestPresentationFn?: () =>
     | AssistantToolGateway["getActionRequestPresentation"]
@@ -2238,6 +2240,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       return registerAiRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
+        // A saved key or address must not stay live in a running chat.
+        dropChatSessionsForProviderConfig: async (providerConfigId) => {
+          const drop = deps.getDropSessionsForProvider?.();
+          if (drop) await drop({ providerConfigId });
+        },
         resolveActiveModules: deps.resolveActiveModules,
         // #2208: CLI providers discover models through the cli-runner; share the wired service.
         ...(deps.aiModelDiscovery ? { modelDiscovery: deps.aiModelDiscovery } : {}),
@@ -3619,6 +3626,10 @@ export function getAllQueueDefinitions(): readonly QueueDefinition[] {
   return [...FOUNDATION_QUEUES, ...BUILT_IN_MODULES.flatMap((module) => module.queueDefinitions)];
 }
 
+type DropChatSessions = Parameters<
+  NonNullable<ChatRoutesDependencies["adoptDropSessionsForProvider"]>
+>[0];
+
 export function registerBuiltInApiRoutes(
   server: FastifyInstance,
   dependencies: BuiltInRouteDependencies
@@ -3667,9 +3678,8 @@ export function registerBuiltInApiRoutes(
   // late-bound ref pattern as rpcConnection/getRpcConnection above. Absent (undefined) until
   // the chat module registers (always happens on this same synchronous pass, before any
   // request is served).
-  let dropSessionsForProvider: ((provider: ProviderKind) => Promise<void>) | undefined;
-  const getDropSessionsForProvider = (): ((provider: ProviderKind) => Promise<void>) | undefined =>
-    dropSessionsForProvider;
+  let dropSessionsForProvider: DropChatSessions | undefined;
+  const getDropSessionsForProvider = (): DropChatSessions | undefined => dropSessionsForProvider;
 
   // #1256: same per-server late-bound-ref pattern as rpcConnection/dropSessionsForProvider above.
   // The chat module's live AssistantToolGateway is adopted below (via adoptChatGateway, built
@@ -3914,7 +3924,7 @@ export function registerBuiltInApiRoutes(
     // #1081 H2: mirrors adoptChatRpcConnection immediately above — publishes the chat session
     // manager's dropSessionsForProvider so the onboarding-install seam (built earlier in this
     // function, over getDropSessionsForProvider) can reach it once it exists.
-    adoptDropSessionsForProvider: (fn: (provider: ProviderKind) => Promise<void>) => {
+    adoptDropSessionsForProvider: (fn: DropChatSessions) => {
       dropSessionsForProvider = fn;
     },
     // #1256 — mirrors adoptChatRpcConnection above — publishes the chat module's live
@@ -3926,6 +3936,7 @@ export function registerBuiltInApiRoutes(
       recoverActionRequestsFn = gateway.recoverActionRequests.bind(gateway);
     },
     getResolveActionRequestFn,
+    getDropSessionsForProvider,
     getActionRequestPresentationFn,
     getRecoverActionRequestsFn,
     // #1554 task #6: mirrors adoptDropSessionsForProvider immediately above — publishes the chat

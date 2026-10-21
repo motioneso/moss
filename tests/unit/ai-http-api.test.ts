@@ -64,6 +64,27 @@ describe("HttpApiAdapter — anthropic", () => {
       /sk-secret-key/
     );
   });
+
+  it("sends Anthropic requests to the row's address, with one /v1", async () => {
+    const urls: string[] = [];
+    const fakeFetch = async (url: string | URL | Request) => {
+      urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+      return new Response(JSON.stringify({ content: [{ type: "text", text: "ok" }] }), {
+        status: 200
+      });
+    };
+    const adapter = new HttpApiAdapter("anthropic", "sk-test-anthropic", {
+      fetch: fakeFetch as typeof fetch,
+      baseUrl: "http://proxy.test/v1/"
+    });
+
+    await adapter.generateChat({
+      model: anthropicModel,
+      messages: [{ role: "user", content: "yo" }]
+    });
+
+    expect(urls).toEqual(["http://proxy.test/v1/messages"]);
+  });
 });
 
 describe("HttpApiAdapter — openai-compatible", () => {
@@ -129,6 +150,25 @@ describe("HttpApiAdapter — openai-compatible", () => {
     await expect(adapter.generateChat({ model: openaiModel, messages: [] })).rejects.not.toThrow(
       /sk-super-secret/
     );
+  });
+
+  it("sends OpenAI-compatible requests to the row's address, with one /v1", async () => {
+    const urls: string[] = [];
+    const fakeFetch = async (url: string | URL | Request) => {
+      urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+      return new Response(
+        JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+        { status: 200 }
+      );
+    };
+    const adapter = new HttpApiAdapter("openai-compatible", "sk-test-openai", {
+      fetch: fakeFetch as typeof fetch,
+      baseUrl: "http://proxy.test/v1/"
+    });
+
+    await adapter.generateChat({ model: openaiModel, messages: [{ role: "user", content: "yo" }] });
+
+    expect(urls).toEqual(["http://proxy.test/v1/chat/completions"]);
   });
 });
 

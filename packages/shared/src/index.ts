@@ -9,6 +9,7 @@ export * from "./decision-model-presets.js";
 export * from "./schema-fragments.js";
 export * from "./ai-action-policy-api.js";
 export * from "./ai-api.js";
+export * from "./ai-chat-readiness-api.js";
 export * from "./ai-service-binding-api.js";
 export * from "./ai-voice-api.js";
 export * from "./ai-chat-favorites-api.js";

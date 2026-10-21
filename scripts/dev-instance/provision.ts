@@ -2,8 +2,9 @@ import type { Kysely } from "kysely";
 
 import type { AiAutoRegisterPort } from "@moss/ai";
 import { AiRepository } from "@moss/ai";
-import type { AccessContext, DataContextRunner, MossDatabase } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 
+import type { ApiKeyProviderOutcome } from "./api-key-provider.js";
 import type { DevInstanceConfig } from "./config.js";
 import { resolveActiveAdminUserId } from "./doctor.js";
 import type { OwnerSignUpInput } from "./signup.js";
@@ -37,6 +38,11 @@ export interface ProvisionDeps {
   readonly ensureCliRunner: () => Promise<CliRunnerStatus>;
   readonly persistCliToken: () => Promise<boolean>;
   readonly log: (line: string) => void;
+  /** Registers the API-key provider row. Required when `config.providerAuth` is "api_key". */
+  readonly ensureApiKeyProvider?: (
+    scopedDb: DataContextDb,
+    adminUserId: string
+  ) => Promise<ApiKeyProviderOutcome>;
 }
 
 const repository = new AiRepository();
@@ -85,10 +91,32 @@ async function readProviderRowsSnapshot(
   });
 }
 
+async function ensureApiKeyProviderRowsStep(
+  deps: ProvisionDeps,
+  adminUserId: string
+): Promise<ProvisionStepOutcome> {
+  const ensure = deps.ensureApiKeyProvider;
+  if (!ensure) {
+    throw new Error("API-key provisioning failed: ensureApiKeyProvider is not wired");
+  }
+  const outcome = await deps.runner.withDataContext(
+    provisionContext(adminUserId, "provider-rows"),
+    (scopedDb) => ensure(scopedDb, adminUserId)
+  );
+  const detail = outcome.changed
+    ? `registered API-key provider ${outcome.providerId} as default`
+    : `API-key provider ${outcome.providerId} already default`;
+  deps.log(detail);
+  return { id: "provider-rows", changed: outcome.changed, detail };
+}
+
 async function ensureProviderRowsStep(
   deps: ProvisionDeps,
   adminUserId: string
 ): Promise<ProvisionStepOutcome> {
+  if (deps.config.providerAuth === "api_key") {
+    return ensureApiKeyProviderRowsStep(deps, adminUserId);
+  }
   const context = provisionContext(adminUserId, "provider-rows");
   const before = await readProviderRowsSnapshot(deps, context);
 
@@ -122,6 +150,11 @@ async function ensureCliRunnerStep(deps: ProvisionDeps): Promise<ProvisionStepOu
 }
 
 async function ensureCliTokenStep(deps: ProvisionDeps): Promise<ProvisionStepOutcome> {
+  if (deps.config.providerAuth === "api_key") {
+    const detail = "skipped: API-key provider";
+    deps.log(`cli-token: ${detail}`);
+    return { id: "cli-token", changed: false, detail };
+  }
   const changed = await deps.persistCliToken();
   const detail = changed ? "cli token persisted" : "cli token already up to date";
   deps.log(`cli-token: ${detail}`);

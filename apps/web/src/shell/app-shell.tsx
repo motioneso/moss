@@ -178,6 +178,7 @@ export function AppShell(props: AppShellProps) {
   // #916 — a module-authored starter draft handed up via ChatControls.openAssistantWithDraft.
   const [moduleDraft, setModuleDraft] = useState<string | undefined>(undefined);
   const [threadToOpen, setThreadToOpen] = useState<string | null>(null);
+  const [focusMessageId, setFocusMessageId] = useState<string | null>(null);
   const [focusActionRequestId, setFocusActionRequestId] = useState<string | null>(null);
   const embeddedComposerRef = useRef<((draft: string) => void) | null>(null);
   const openChatWith = useCallback(
@@ -190,10 +191,11 @@ export function AppShell(props: AppShellProps) {
     [routeMeetingId]
   );
   const openChatThread = useCallback(
-    (threadId: string) => {
+    (threadId: string, messageId?: string) => {
       setDismissedMeetingId(routeMeetingId);
       setMeetingSelection(null);
       setThreadToOpen(threadId);
+      setFocusMessageId(messageId ?? null);
       setChatOpen(true);
     },
     [routeMeetingId]
@@ -483,6 +485,7 @@ export function AppShell(props: AppShellProps) {
           setChatOpen(false);
           setChatExpanded(false);
           setFocusActionRequestId(null);
+          setFocusMessageId(null);
           // #916: starters are one-shot — a later manual open starts from a blank composer.
           setModuleDraft(undefined);
         }}
@@ -501,6 +504,7 @@ export function AppShell(props: AppShellProps) {
         initialText={moduleDraft}
         threadToOpen={threadToOpen}
         onThreadOpenConsumed={() => setThreadToOpen(null)}
+        focusMessageId={focusMessageId}
         focusActionRequestId={focusActionRequestId}
         onActionRequestFocused={() => setFocusActionRequestId(null)}
         surface={activeSurface}

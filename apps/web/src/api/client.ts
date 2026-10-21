@@ -2,6 +2,7 @@ import type { ListScheduledTasksResponse, ListQuietHoursAllowancesResponse } fro
 import type { MossGoal } from "@moss/goals";
 import type {
   AddTaskActivityRequest,
+  ApiKeyChatReadinessResponse,
   ApplyConfirmationRequiredResponse,
   ApplyDayPlanRequest,
   ApplyExecutionReport,
@@ -27,6 +28,7 @@ import type {
   ListChatSkillsResponse,
   SetChatSkillEnabledRequest,
   UpdateChatSkillRequest,
+  GetChatMessageLocationResponse,
   GetChatPrivacyStateResponse,
   GetChatSettingsResponse,
   GetPersonaSettingsResponse,
@@ -1235,6 +1237,14 @@ export async function getChatPrivacyState(
   return requestJson<GetChatPrivacyStateResponse>(`/api/chat/privacy${query}`);
 }
 
+export async function getChatMessageLocation(
+  messageId: string
+): Promise<GetChatMessageLocationResponse> {
+  return requestJson<GetChatMessageLocationResponse>(
+    `/api/chat/messages/${encodeURIComponent(messageId)}/location`
+  );
+}
+
 // Temporary classifier shadow report (#2957): the viewer's own numbers and disagreements.
 export async function getClassifierShadowReport(
   days: ClassifierShadowReportRange
@@ -1308,6 +1318,13 @@ export async function testAiProvider(id: string): Promise<TestAiProviderConfigRe
   return requestJson<TestAiProviderConfigResponse>(
     `/api/ai/providers/${encodeURIComponent(id)}/test`,
     { method: "POST" }
+  );
+}
+
+/** #3410: whether an API-key provider row can drive chat right now. */
+export async function getAiProviderChatReadiness(id: string): Promise<ApiKeyChatReadinessResponse> {
+  return requestJson<ApiKeyChatReadinessResponse>(
+    `/api/ai/providers/${encodeURIComponent(id)}/chat-readiness`
   );
 }
 

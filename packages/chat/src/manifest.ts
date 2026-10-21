@@ -11,6 +11,7 @@ import {
   getChatPrivacyStateResponseSchema,
   listScheduledTasksResponseSchema,
   listQuietHoursAllowancesResponseSchema,
+  getChatMessageLocationResponseSchema,
   listChatThreadMessagesResponseSchema,
   listChatThreadsResponseSchema,
   listMemoryCorrectionsResponseSchema
@@ -601,6 +602,13 @@ export const chatModuleManifest = {
       path: "/api/chat/threads/:id/messages",
       chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listChatThreadMessagesResponseSchema,
+      permissionId: "chat.view"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/messages/:id/location",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      responseSchema: getChatMessageLocationResponseSchema,
       permissionId: "chat.view"
     },
     {

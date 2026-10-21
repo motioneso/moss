@@ -9,8 +9,9 @@ import { resolveMossEnv } from "@moss/db";
 
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
 import {
-  assertLiveCliProvider,
+  assertLiveChatProvider,
   assertProviderIdentityBeforeReplay,
+  resolveApiKeyLaunchCredential,
   type ActiveChatProvider,
   type LaunchSessionOpts,
   type UserSession
@@ -100,7 +101,12 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   } = args;
   const sessionKey = surfaceSessionKey(actorUserId, surface);
   const { provider, model, acpModel, providerConfigId, acpAgentId } = providerIdentity;
-  assertLiveCliProvider(providerIdentity);
+  assertLiveChatProvider(providerIdentity);
+  const credential = await resolveApiKeyLaunchCredential(
+    actorUserId,
+    providerIdentity,
+    deps.persistence
+  );
   const useMain = usesMainThreadSelection({
     surface,
     forceReplay: opts?.forceReplay ?? false
@@ -158,6 +164,8 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   const engine = await deps.engineFactory(provider, sessionKey, {
     providerConfigId,
     acpAgentId,
+    ...(providerIdentity.authMethod ? { authMethod: providerIdentity.authMethod } : {}),
+    ...(credential ? { credential } : {}),
     ...(acpModel ? { acpModel } : {}),
     ...(threadId ? { conversationId: threadId, userId: actorUserId } : {}),
     ...(mcpConfig?.token && deps.acpPermissionDeciderForToken

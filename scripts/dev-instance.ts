@@ -12,7 +12,13 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AiAutoRegisterService, AiRepository, createAiSecretCipher } from "@moss/ai";
+import {
+  AiAutoRegisterService,
+  AiRepository,
+  createAiSecretCipher,
+  discoverAndPersistModels,
+  ModelDiscoveryService
+} from "@moss/ai";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { getBuiltInSqlMigrationDirectories } from "@moss/module-registry";
 
@@ -23,6 +29,7 @@ import {
 } from "./dev-instance/guard.js";
 import { readDevInstanceConfig } from "./dev-instance/config.js";
 import { readSecretFile, withDecryptedSecret } from "./dev-instance/secrets.js";
+import { ensureApiKeyProvider } from "./dev-instance/api-key-provider.js";
 import { formatDoctorReport, runDoctor, type DoctorDeps } from "./dev-instance/doctor.js";
 import { runFix } from "./dev-instance/fix.js";
 import { runProvision, type ProvisionDeps } from "./dev-instance/provision.js";
@@ -88,6 +95,7 @@ export async function runDevInstanceCli(
   const cipher = createAiSecretCipher(env);
   const repository = new AiRepository();
   const autoRegister = new AiAutoRegisterService({ repository, cipher });
+  const modelDiscovery = new ModelDiscoveryService();
 
   try {
     const doctorDeps: DoctorDeps = {
@@ -121,7 +129,15 @@ export async function runDevInstanceCli(
               persistCliRunnerToken(config, secret)
             );
           },
-          log: (line) => console.log(line)
+          log: (line) => console.log(line),
+          ensureApiKeyProvider: (scopedDb, adminUserId) =>
+            ensureApiKeyProvider(scopedDb, adminUserId, config, {
+              repository,
+              cipher,
+              discoverModels: (db, input) =>
+                discoverAndPersistModels(db, input, { repository, modelDiscovery }),
+              readKeyFile: readSecretFile
+            })
         };
         const outcomes = await runProvision(provisionDeps);
         for (const outcome of outcomes) {

@@ -123,6 +123,18 @@ export interface ListChatThreadsResponse {
   readonly threads: readonly ChatThreadDto[];
 }
 
+/** The in-app link chat hands out for one stored message, such as a delivered reminder. */
+export const CHAT_MESSAGE_LINK_BASE = "/chat/messages";
+
+export function chatMessageHref(messageId: string): string {
+  return `${CHAT_MESSAGE_LINK_BASE}/${encodeURIComponent(messageId)}`;
+}
+
+export interface GetChatMessageLocationResponse {
+  readonly threadId: string;
+  readonly messageId: string;
+}
+
 export interface GetChatPrivacyStateResponse {
   readonly incognito: boolean;
   /** The owner-scoped conversation currently selected for this chat surface. */
@@ -825,6 +837,24 @@ export const getChatPrivacyStateRouteSchema = {
     200: getChatPrivacyStateResponseSchema,
     400: errorResponseSchema,
     401: errorResponseSchema
+  }
+} as const;
+
+export const getChatMessageLocationResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["threadId", "messageId"],
+  properties: {
+    threadId: { type: "string" },
+    messageId: { type: "string" }
+  }
+} as const;
+
+export const getChatMessageLocationRouteSchema = {
+  response: {
+    200: getChatMessageLocationResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema
   }
 } as const;
 

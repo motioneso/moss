@@ -1,5 +1,6 @@
 import type { ProviderKind } from "@moss/ai";
 
+import { API_KEY_UNREADABLE_MESSAGE } from "./auth-errors.js";
 import type { RpcErrorCode } from "./rpc-contract.js";
 
 export type ChatEngineReadFailureClass =
@@ -135,13 +136,21 @@ export class CliChatUnavailableError extends Error {
   }
 }
 
-export const API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE =
-  "Live chat does not support API-key providers yet. Choose a CLI provider in Admin → AI providers.";
+export const UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE =
+  "Chat supports API-key providers of type Anthropic or OpenAI-compatible. Choose one of those, or a CLI provider, in Admin > AI providers.";
 
-export class ApiKeyLiveChatUnavailableError extends CliChatUnavailableError {
+export class UnsupportedApiKeyChatProviderError extends CliChatUnavailableError {
   constructor() {
-    super(API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE);
-    this.name = "ApiKeyLiveChatUnavailableError";
+    super(UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE);
+    this.name = "UnsupportedApiKeyChatProviderError";
+  }
+}
+
+/** The row's stored key could not be read or decrypted; the message names no value. */
+export class ApiKeyUnreadableError extends CliChatUnavailableError {
+  constructor() {
+    super(API_KEY_UNREADABLE_MESSAGE);
+    this.name = "ApiKeyUnreadableError";
   }
 }
 

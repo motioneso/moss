@@ -1,4 +1,3 @@
-import type { ProviderKind } from "@moss/ai";
 import type { SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
@@ -9,6 +8,7 @@ import {
   ensureSessionForCurrentProvider,
   switchChatProviderSession,
   type ActiveChatProvider,
+  type ChatSessionDropTarget,
   type EnsureSessionOpts,
   type LaunchSessionOpts,
   type UserSession
@@ -412,11 +412,11 @@ export class ChatSessionManager {
     });
   }
 
-  /** #1081 — drop live sessions after a provider binary replacement. */
-  async dropSessionsForProvider(provider: ProviderKind): Promise<void> {
+  /** Drop live sessions for a provider kind or for one provider row. */
+  async dropSessionsForProvider(target: ChatSessionDropTarget): Promise<void> {
     await this.withMaintenanceLock(() =>
       dropSessionsForProvider({
-        provider,
+        target,
         sessions: this.sessions,
         revokeMcpToken: this.deps.revokeMcpToken
       })

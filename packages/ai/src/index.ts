@@ -17,12 +17,15 @@ export * from "./cli-version-check.js";
 export * from "./cli-live-check.js";
 export * from "./crypto.js";
 export * from "./credentials.js";
+export * from "./discover-and-persist-models.js";
 export * from "./manifest.js";
 export * from "./model-discovery.js";
 export * from "./model-activity.js";
 export * from "./provider-validation-routes.js";
 export * from "./provider-validation.js";
+export * from "./api-key-chat-readiness.js";
 export * from "./provider-identity.js";
+export * from "./provider-base-url.js";
 export * from "./repository.js";
 export * from "./terminal-password-repository.js";
 // #1059 — re-exported so the composition root (packages/module-registry) and its tests can name

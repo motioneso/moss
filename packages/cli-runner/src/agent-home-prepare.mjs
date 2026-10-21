@@ -15,7 +15,10 @@
 // every level is still checked.
 //
 // Invoked with exactly one argv element: a JSON string shaped like
-// { dirs: string[], denyFile: null | { path: string, permissionKeys: string[] } }
+// { dirs: string[], denyFile: null | { path: string, permissionKeys: string[] },
+//   opencodeProvider?: { path: string, id: string,
+//                        entry: null | { baseUrl: string, model: string, apiKeyEnv: string } } }
+// The entry names the key's env variable; the key itself is never passed here.
 // Secret files arrive as a JSON array on stdin, never in argv or env.
 // Never invoked through a shell, so no interpolation risk.
 import { O_CREAT, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
@@ -70,6 +73,82 @@ async function readExistingConfig(path) {
   } finally {
     await handle.close();
   }
+}
+
+const PROVIDER_ID = /^[a-z][a-z0-9-]{0,31}$/;
+const ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/;
+// Mirrors PROVIDER_MODEL_ID_PATTERN (packages/ai/src/provider-base-url.ts); .mjs cannot import it.
+const MODEL_ID = /^[A-Za-z0-9._:/@-]{1,200}$/;
+
+async function writeJsonFile(path, value) {
+  const handle = await open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
+  try {
+    await handle.writeFile(JSON.stringify(value, null, 2), "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+function assertOpencodeProvider(spec) {
+  if (!spec || typeof spec.path !== "string" || !PROVIDER_ID.test(String(spec.id))) {
+    throw new Error("opencodeProvider needs a path and a valid id");
+  }
+  if (spec.entry === null) return;
+  const entry = spec.entry;
+  const keys = entry && typeof entry === "object" ? Object.keys(entry).sort().join(",") : "";
+  if (keys !== "apiKeyEnv,baseUrl,model") {
+    throw new Error("opencodeProvider.entry must have exactly baseUrl, model and apiKeyEnv");
+  }
+  if (!ENV_NAME.test(String(entry.apiKeyEnv))) {
+    throw new Error("opencodeProvider.entry.apiKeyEnv is not a valid variable name");
+  }
+  if (!MODEL_ID.test(String(entry.model))) {
+    throw new Error("opencodeProvider.entry.model is malformed");
+  }
+  let url;
+  try {
+    url = new URL(String(entry.baseUrl));
+  } catch {
+    url = null;
+  }
+  if (url?.protocol !== "http:" && url?.protocol !== "https:") {
+    throw new Error("opencodeProvider.entry.baseUrl must be an http(s) URL");
+  }
+  if (url.username !== "" || url.password !== "") {
+    throw new Error("opencodeProvider.entry.baseUrl must not include a username or password");
+  }
+}
+
+async function applyOpencodeProvider(spec) {
+  assertOpencodeProvider(spec);
+  let first;
+  try {
+    first = await lstat(spec.path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  if (!first && spec.entry === null) return;
+  if (first && first.isSymbolicLink()) await rm(spec.path, { force: true });
+  const config = await readExistingConfig(spec.path);
+  const provider =
+    config.provider && typeof config.provider === "object" && !Array.isArray(config.provider)
+      ? { ...config.provider }
+      : {};
+  if (spec.entry === null) {
+    if (!Object.hasOwn(provider, spec.id)) return;
+    delete provider[spec.id];
+  } else {
+    const { baseUrl, model, apiKeyEnv } = spec.entry;
+    provider[spec.id] = {
+      npm: "@ai-sdk/openai-compatible",
+      name: "Moss",
+      options: { baseURL: baseUrl, apiKey: `{env:${apiKeyEnv}}` },
+      models: { [model]: {} }
+    };
+  }
+  if (Object.keys(provider).length > 0) config.provider = provider;
+  else delete config.provider;
+  await writeJsonFile(spec.path, config);
 }
 
 async function readSecretFiles() {
@@ -226,13 +305,10 @@ async function main() {
         : {};
     for (const permissionKey of permissionKeys) permission[permissionKey] = "deny";
     config.permission = permission;
-    const handle = await open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
-    try {
-      await handle.writeFile(JSON.stringify(config, null, 2), "utf8");
-    } finally {
-      await handle.close();
-    }
+    await writeJsonFile(path, config);
   }
+
+  if (request.opencodeProvider) await applyOpencodeProvider(request.opencodeProvider);
 
   for (const file of secretFiles) await writeSecretFile(file);
 }

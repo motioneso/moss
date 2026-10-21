@@ -93,7 +93,10 @@ describe("ensureCliRunnerRunning (#1258 T16)", () => {
       cliHomeBase: "/tmp/dev-instance-cli-runner-test-home",
       cliRunnerSocketPath: socketPath,
       credentialFilePath: "/tmp/dev-instance-cli-runner-test-credential.gpg",
-      providerKind: "anthropic"
+      providerKind: "anthropic",
+      providerAuth: "cli",
+      providerBaseUrl: null,
+      providerKeyFilePath: null
     };
   }
 

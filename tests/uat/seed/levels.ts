@@ -10,6 +10,7 @@ import { seedSharedForeignMainChunk } from "./chunks/shared-main.js";
 import { seedJobSearchAiProviderChunk } from "./chunks/job-search-ai.js";
 import { seedBriefingWriterAiProviderChunk } from "./chunks/briefing-writer-ai.js";
 import { seedClassifierAiProviderChunk } from "./chunks/classifier-ai.js";
+import { seedApiKeyChatProviderChunk } from "./chunks/api-key-chat.js";
 import { seedNewsChunk } from "./chunks/news.js";
 import { seedSportsChunk, seedSportsPublicSourceFixtures } from "./chunks/sports.js";
 import { seedTasksChunk } from "./chunks/tasks.js";
@@ -140,6 +141,10 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
     await seedAiProviderChunk(runner, adminUserId, {
       bindNews: options.withoutNewsJsonBinding !== true
     });
+    // #3410: opt-in. Runs after the default AI chunk so its instance default wins.
+    if (options.apiKeyChat) {
+      await seedApiKeyChatProviderChunk(runner, adminUserId, options.apiKeyChat);
+    }
     // N42/#57: opt-in, absent by default — see SeedOptions.jobSearchAiProviderBaseUrl's doc
     // comment and ./chunks/job-search-ai.ts's header. Ordered with the other AI-binding call
     // above for the same reason (no downstream chunk depends on it either way today, but a

@@ -58,6 +58,8 @@ export const queryKeys = {
     providers: ["ai", "providers"] as const,
     providerInitialization: (providerId: string) =>
       ["ai", "provider-initialization", providerId] as const,
+    providerChatReadiness: (providerId: string, updatedAt: string) =>
+      ["ai", "provider-chat-readiness", providerId, updatedAt] as const,
     models: ["ai", "models"] as const,
     chatModelOverride: ["ai", "chat-model-override"] as const,
     chatModelFavorites: ["ai", "chat-model-favorites"] as const,
@@ -106,6 +108,7 @@ export const queryKeys = {
     settings: ["chat", "settings"] as const,
     threads: (surface?: string) => ["chat", "threads", surface ?? "drawer"] as const,
     privacy: (surface?: string) => ["chat", "privacy", surface ?? "drawer"] as const,
+    messageLocation: (messageId: string) => ["chat", "message-location", messageId] as const,
     messages: (threadId: string, surface?: string) =>
       ["chat", "threads", threadId, "messages", surface ?? "drawer"] as const,
     memorySettings: ["chat", "memory-settings"] as const,

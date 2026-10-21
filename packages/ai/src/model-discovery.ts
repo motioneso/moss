@@ -7,6 +7,11 @@ import type {
 } from "@moss/shared";
 import { CLOUDFLARE_DECISION_MODELS, decisionModelDialect } from "@moss/shared";
 import type { AiAuthMethod, AiProviderKind } from "@moss/db";
+import {
+  ANTHROPIC_DEFAULT_BASE_URL,
+  PROVIDER_MODEL_ID_PATTERN,
+  providerBaseUrl
+} from "./provider-base-url.js";
 
 const CACHE_TTL_MS = 3_600_000; // 1 hour
 
@@ -177,7 +182,9 @@ async function fetchApiKeyModels(input: ModelDiscoveryInput): Promise<{
   try {
     // #874 HIGH-2: inferModel returns null for pure speech-to-text models (dropped from assistant
     // discovery); filter them out so only assistant-bindable models reach the admin UI.
-    const models = extractModelEntries(input.providerKind, await response.json())
+    const customAddress =
+      providerBaseUrl("anthropic", input.baseUrl) !== ANTHROPIC_DEFAULT_BASE_URL;
+    const models = extractModelEntries(input.providerKind, await response.json(), customAddress)
       .map((entry) => inferModel(entry.id, input.providerKind, entry.releasedAt))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
     return { models };
@@ -197,7 +204,7 @@ function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> 
   const signal = AbortSignal.timeout(MODEL_DISCOVERY_FETCH_TIMEOUT_MS);
   switch (input.providerKind) {
     case "anthropic":
-      return f("https://api.anthropic.com/v1/models", {
+      return f(`${providerBaseUrl("anthropic", input.baseUrl)}/v1/models`, {
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
         signal
       });
@@ -215,7 +222,7 @@ function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> 
     case "openai-compatible":
     case "ollama":
     case "custom": {
-      const base = (input.baseUrl ?? "https://api.openai.com").replace(/\/+$/, "");
+      const base = providerBaseUrl("openai-compatible", input.baseUrl);
       return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` }, signal });
     }
   }
@@ -244,7 +251,11 @@ function readReleasedAt(item: Record<string, unknown>): string | null {
   return null;
 }
 
-function extractModelEntries(providerKind: AiProviderKind, json: unknown): DiscoveredModelEntry[] {
+function extractModelEntries(
+  providerKind: AiProviderKind,
+  json: unknown,
+  customAddress = false
+): DiscoveredModelEntry[] {
   if (!json || typeof json !== "object") return [];
 
   const data = (json as { data?: unknown }).data;
@@ -257,8 +268,14 @@ function extractModelEntries(providerKind: AiProviderKind, json: unknown): Disco
       )
       .map((item) => ({ id: item.id, releasedAt: readReleasedAt(item) }));
     if (providerKind === "anthropic") {
-      // Include only current claude- models; exclude legacy snapshot versions (contain ":")
-      entries = entries.filter((entry) => entry.id.includes("claude-") && !entry.id.includes(":"));
+      // The public API lists current claude- models plus legacy ":" snapshots. A custom address
+      // (proxy, router) names models freely, so keep every id the model id policy accepts.
+      entries = customAddress
+        ? entries.filter((entry) => PROVIDER_MODEL_ID_PATTERN.test(entry.id))
+        : entries.filter((entry) => entry.id.includes("claude-") && !entry.id.includes(":"));
+    } else if (providerKind === "openai-compatible") {
+      // The spawn check refuses ids outside the policy, so discovery never offers them.
+      entries = entries.filter((entry) => PROVIDER_MODEL_ID_PATTERN.test(entry.id));
     }
     return entries;
   }
@@ -371,6 +388,13 @@ export function inferWebSearchCapability(
   return false;
 }
 
+const NON_CHAT_MODEL_ID = /embed|moderation|rerank|(^|[-_/.:])tts([-_/.:]|$)|dall-e|gpt-image/;
+
+/** Embedding, moderation, rerank, text-to-speech and image-generation models cannot chat. */
+export function isNonChatModelId(providerModelId: string): boolean {
+  return NON_CHAT_MODEL_ID.test(providerModelId.toLowerCase());
+}
+
 function inferModel(
   providerModelId: string,
   providerKind: AiProviderKind,
@@ -386,6 +410,12 @@ function inferModel(
   // entirely (caller filters nulls) rather than surfacing an unbindable, non-chat row.
   const isPureTranscription = lower.includes("whisper") || lower.includes("transcribe");
   if (isPureTranscription) {
+    return null;
+  }
+
+  // Chat is the supported model contract: embedding, moderation, rerank, text-to-speech and
+  // image-generation models have no chat capability, so discovery drops them.
+  if (isNonChatModelId(lower)) {
     return null;
   }
 

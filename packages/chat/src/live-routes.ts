@@ -55,14 +55,14 @@ import {
   ChatTurnInFlightError
 } from "./live/chat-session-manager.js";
 import {
-  API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE,
-  ApiKeyLiveChatUnavailableError,
   CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   CHAT_PROVIDER_CHANGED_MESSAGE,
   ChatProviderChangedError,
   ChatEngineReadError,
   CliChatUnavailableError,
+  UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE,
   UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE,
+  UnsupportedApiKeyChatProviderError,
   UnsupportedLegacyCliProviderError
 } from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
@@ -770,8 +770,8 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
     }
   }
 
-  if (error instanceof ApiKeyLiveChatUnavailableError) {
-    return reply.code(400).send({ error: API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE });
+  if (error instanceof UnsupportedApiKeyChatProviderError) {
+    return reply.code(400).send({ error: UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE });
   }
 
   if (error instanceof UnsupportedLegacyCliProviderError) {

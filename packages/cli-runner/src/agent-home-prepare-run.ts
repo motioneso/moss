@@ -8,10 +8,22 @@ import { createRequire } from "node:module";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 
+/** OpenCode provider entry to write (entry set) or remove (entry null). Never holds a key. */
+export interface AgentHomeOpencodeProvider {
+  readonly path: string;
+  readonly id: string;
+  readonly entry: {
+    readonly baseUrl: string;
+    readonly model: string;
+    readonly apiKeyEnv: string;
+  } | null;
+}
+
 /** Argument passed as one JSON string to agent-home-prepare.mjs. */
 export interface AgentHomePrepareRequest {
   readonly dirs: readonly string[];
   readonly denyFile: { readonly path: string; readonly permissionKeys: readonly string[] } | null;
+  readonly opencodeProvider?: AgentHomeOpencodeProvider;
 }
 
 export interface AgentHomeSecretFile {

@@ -134,6 +134,13 @@
   background: var(--surface-2);
 }
 
+/* The message a chat link opened keeps a ring until focus moves on. */
+.chatd-msg[data-linked-message]:focus {
+  outline: none;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
 .chatd-msg__av {
   border-radius: 8px;
   background: var(--forest-soft);

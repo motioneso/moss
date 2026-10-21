@@ -6,10 +6,18 @@ import type { PgBoss } from "pg-boss";
 import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 import { createAppActionsService } from "./app-actions.js";
 
-import type { AccessContext, DataContextRunner, MossDatabase, PreferencesPort } from "@moss/db";
+import {
+  isUuid,
+  type AccessContext,
+  type DataContextRunner,
+  type MossDatabase,
+  type PreferencesPort
+} from "@moss/db";
 import {
   AI_MODEL_CAPABILITIES,
   CHAT_SETTINGS_PREFERENCE_KEY,
+  DEFAULT_CHAT_SURFACE,
+  getChatMessageLocationRouteSchema,
   getChatSettingsRouteSchema,
   listChatThreadMessagesRouteSchema,
   listChatThreadsRouteSchema,
@@ -200,7 +208,7 @@ export interface ChatRoutesDependencies {
    * Unconditional (unlike the RPC connection, `runtime.manager` always exists).
    */
   readonly adoptDropSessionsForProvider?: (
-    dropSessionsForProvider: (provider: ProviderKind) => Promise<void>
+    dropSessionsForProvider: (target: ProviderKind | { providerConfigId: string }) => Promise<void>
   ) => void;
   // #1256 — publishes the wiring's live AssistantToolGateway back to the composition root so the
   // ai module's assistant-action resolve route can go through the same confirmation-registry gate
@@ -750,6 +758,36 @@ export function registerChatRoutes(
         );
         if (!messages) return reply.code(404).send({ error: "Chat thread not found" });
         return { messages: messages.map(serializeMessage) };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // #3481: a reminder alert opens its exact message. Only the owner's own regular chats answer;
+  // every other case gets the same 404 so a link never reveals another account's message.
+  server.get<{ Params: { id: string } }>(
+    "/api/chat/messages/:id/location",
+    { schema: getChatMessageLocationRouteSchema },
+    async (request, reply) => {
+      try {
+        const access = await dependencies.resolveAccessContext(request);
+        const location = isUuid(request.params.id)
+          ? await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
+              const message = await repository.getMessageById(scopedDb, request.params.id);
+              if (!message || message.owner_user_id !== access.actorUserId) return null;
+              const thread = await repository.getOwnedThreadById(
+                scopedDb,
+                access.actorUserId,
+                message.thread_id
+              );
+              if (!thread || thread.surface !== DEFAULT_CHAT_SURFACE || thread.incognito)
+                return null;
+              return { threadId: thread.id, messageId: message.id };
+            })
+          : null;
+        if (!location) return reply.code(404).send({ error: "Chat message not found" });
+        return location;
       } catch (error) {
         return handleRouteError(error, reply);
       }

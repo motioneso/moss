@@ -10,12 +10,14 @@ import {
 } from "./chat-surface.js";
 import { getPinnedThreadState, getSelectedThreadState } from "./chat-thread-selection.js";
 import {
-  ApiKeyLiveChatUnavailableError,
+  ApiKeyUnreadableError,
   CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   ChatProviderChangedError,
   CliChatUnavailableError,
+  UnsupportedApiKeyChatProviderError,
   UnsupportedLegacyCliProviderError
 } from "./errors.js";
+import type { RpcAcpSpawnCredential } from "./rpc-contract.js";
 import type { SessionUsageMeter } from "./chat-session-usage.js";
 import type { CliChatEngine } from "./types.js";
 
@@ -52,7 +54,8 @@ export function sameActiveChatProvider(
     left.providerConfigId === right.providerConfigId &&
     left.authMethod === right.authMethod &&
     left.acpAgentId === right.acpAgentId &&
-    left.acpModel === right.acpModel
+    left.acpModel === right.acpModel &&
+    left.providerConfigRevision === right.providerConfigRevision
   );
 }
 
@@ -65,11 +68,37 @@ export async function assertProviderIdentityForPendingTurn(
 
 export class ActiveProviderChangedDuringLaunchError extends Error {}
 
-export function assertLiveCliProvider(provider: ActiveChatProvider): void {
-  if (provider.authMethod === "api_key") throw new ApiKeyLiveChatUnavailableError();
+/** Kinds whose API-key rows have an agent: the claude agent and OpenCode. */
+const API_KEY_CHAT_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible"];
+
+export function assertLiveChatProvider(provider: ActiveChatProvider): void {
+  if (provider.authMethod === "api_key") {
+    if (!API_KEY_CHAT_KINDS.includes(provider.provider)) {
+      throw new UnsupportedApiKeyChatProviderError();
+    }
+    return;
+  }
   if (provider.authMethod === "cli" && !provider.acpAgentId) {
     throw new UnsupportedLegacyCliProviderError();
   }
+}
+
+/** The credential an API-key launch sends to the runner; `undefined` for CLI rows. */
+export async function resolveApiKeyLaunchCredential(
+  actorUserId: string,
+  provider: ActiveChatProvider,
+  persistence: ChatPersistencePort
+): Promise<RpcAcpSpawnCredential | undefined> {
+  if (provider.authMethod !== "api_key") return undefined;
+  const opened = provider.providerConfigId
+    ? await persistence.resolveChatCredential?.(actorUserId, provider.providerConfigId)
+    : null;
+  if (!opened) throw new ApiKeyUnreadableError();
+  // The key must come from the row revision this launch's identity names.
+  if (opened.revision !== provider.providerConfigRevision) {
+    throw new ActiveProviderChangedDuringLaunchError();
+  }
+  return { apiKey: opened.apiKey, baseUrl: opened.baseUrl, model: provider.model };
 }
 
 export async function discardChatSession(
@@ -108,13 +137,20 @@ export async function switchChatProviderSession(input: {
   );
 }
 
+/** A provider kind (binary replacement) or one provider row (key or address change). */
+export type ChatSessionDropTarget = ProviderKind | { readonly providerConfigId: string };
+
 export async function dropSessionsForProvider(input: {
-  readonly provider: ProviderKind;
+  readonly target: ChatSessionDropTarget;
   readonly sessions: Map<string, UserSession>;
   readonly revokeMcpToken?: (sessionKey: string) => void;
 }): Promise<void> {
   for (const [sessionKey, session] of input.sessions) {
-    if (session.provider !== input.provider) continue;
+    const matches =
+      typeof input.target === "string"
+        ? session.provider === input.target
+        : session.providerIdentity.providerConfigId === input.target.providerConfigId;
+    if (!matches) continue;
     try {
       await session.engine.kill();
     } catch {
