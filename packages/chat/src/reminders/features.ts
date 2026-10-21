@@ -130,7 +130,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   {
     id: "chat.reminder_notifications",
     description:
-      "Reminders arrive in the saved chat and alert enabled devices. Quiet hours hold alerts unless the owner allowed that task; mutes and device switches win. Retries never repeat chat. Dismissing stops alerts. Opening goes to Today.",
+      "Reminders arrive in the saved chat and alert enabled devices. Quiet hours hold alerts unless the owner allowed that task; mutes and device switches win. Retries never repeat chat. Dismissing stops alerts. Opening one shows its chat message.",
     featureFlagId: "chat.module",
     remediations: [
       {

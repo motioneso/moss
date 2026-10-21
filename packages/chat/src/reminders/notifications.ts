@@ -13,6 +13,7 @@ import {
   type QuietHoursAllowancePolicy,
   type NotificationWithReadState
 } from "@moss/notifications";
+import { chatMessageHref } from "@moss/shared";
 
 import { hasQuietHoursAllowance } from "./quiet-hours-allowances.js";
 import { ReminderRepository, type DueReminder } from "./repository.js";
@@ -72,7 +73,7 @@ export async function runReminderNotificationJob(
     body: result.body,
     urgency: "normal",
     eventKey: result.messageId,
-    href: "/today",
+    href: chatMessageHref(result.messageId),
     metadata: { kind: "chat_reminder", reminderId: payload.resourceId, messageId: result.messageId }
   });
   return notification ? "created" : "muted";
