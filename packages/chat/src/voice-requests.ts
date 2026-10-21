@@ -4,19 +4,8 @@ import { assertDataContextDb, type DataContextDb, type MossDatabase } from "@mos
 
 export const VOICE_AUTOMATIC_MAX_AGE_MS = 15 * 60_000;
 
-/** Internal composition contract: only explicit v2 voice intent may reach Chat. */
-export interface VoiceRequestInput {
-  readonly version: 2;
-  readonly intent: "voice-request";
-  readonly sourceDeviceId: string;
-  readonly recordingId: string;
-  readonly sourceFingerprint: string;
-  readonly transcriptRevision: number;
-  readonly transcript: string;
-  readonly capturedAt: string | null;
-  /** Set by the versioned receiver only after checking the enablement baseline. */
-  readonly automatic: boolean;
-}
+import type { VoiceRequestInput } from "@moss/shared";
+export type { VoiceRequestInput } from "@moss/shared";
 
 function parseVoiceRequest(value: VoiceRequestInput): VoiceRequestInput {
   const fields = [

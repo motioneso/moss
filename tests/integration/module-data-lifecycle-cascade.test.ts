@@ -120,6 +120,23 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
     const tableNames = cascadeTables.map((entry) => entry.table).sort();
     expect(tableNames).toEqual(
       [
+        "app.chat_automatic_action_reservations",
+        "app.chat_classifier_release_eligibility",
+        "app.chat_classifier_shadow_records",
+        "app.chat_classifier_shadow_reviews",
+        "app.chat_conversation_provenance",
+        "app.chat_live_turns",
+        "app.chat_messages",
+        "app.chat_reminder_quiet_allowances",
+        "app.chat_reminder_quiet_proposals",
+        "app.chat_responsibility_proposals",
+        "app.chat_scheduled_reads",
+        "app.chat_skills",
+        "app.chat_threads",
+        "app.chat_unread_messages",
+        "app.chat_user_memory_settings",
+        "app.chat_voice_requests",
+        "app.meeting_recording_voice_enablements",
         "app.wellness_checkins",
         "app.medications",
         "app.medication_logs",

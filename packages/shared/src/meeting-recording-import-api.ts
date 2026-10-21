@@ -27,3 +27,21 @@ export interface MeetingRecordingImportStatus {
   readonly code: MeetingRecordingImportErrorCode | null;
   readonly retryable: boolean;
 }
+
+/** Intent must be opted into after a complete ring inventory snapshot. */
+export interface VoiceRecordingImportInput {
+  readonly version: 2;
+  readonly intent: "voice-request";
+  readonly enablementId: string;
+  /** Phone-observed capture time, or null when timing is uncertain. */
+  readonly capturedAt: string | null;
+  readonly recording: MeetingRecordingImportInput;
+}
+export interface VoiceRecordingImportStatus {
+  readonly id: string;
+  readonly state: MeetingRecordingImportStatus["state"];
+  readonly intent: "voice-request";
+  readonly voiceRequestId: string | null;
+  readonly code: MeetingRecordingImportStatus["code"];
+  readonly retryable: boolean;
+}

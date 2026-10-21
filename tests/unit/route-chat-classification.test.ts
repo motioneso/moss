@@ -50,6 +50,9 @@ const CLASSIFIED_MODULES: ReadonlySet<string> = new Set([
 ]);
 
 const EXPECTED: readonly string[] = [
+  "chat GET /api/chat/voice-requests blocked data_scope_consent",
+  "chat GET /api/chat/voice-requests/:id blocked data_scope_consent",
+  "chat POST /api/chat/voice-requests/:id/send blocked prompt_shaping",
   ...PRIVACY_EXPECTED_ROWS,
   ...SCHEDULING_EXPECTED_ROWS,
   ...FEEDS_EXPECTED_ROWS,

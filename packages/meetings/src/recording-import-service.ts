@@ -6,11 +6,16 @@ import {
   readVaultFile,
   type VaultContextRunner
 } from "@moss/vault";
-import { validateRecordingBundle } from "./recording-bundle.js";
+import { HttpError } from "@moss/module-sdk";
+import type { VoiceRequestInput } from "@moss/shared";
+import { RecordingVoiceEnablementRepository } from "./recording-voice-enablement.js";
+import { validateVoiceRecordingBundle } from "./recording-voice-bundle.js";
+import { validateRecordingBundle, type RecordingBundle } from "./recording-bundle.js";
 import {
   RecordingImportConflictError,
   RecordingImportRepository,
-  recordingImportStatus
+  recordingImportStatus,
+  voiceRecordingImportStatus
 } from "./recording-import-repository.js";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
@@ -34,6 +39,7 @@ export interface RecordingImportDependencies {
     actor: AccessContext,
     input: { meetingId: string; importId: string }
   ): Promise<void>;
+  admitVoiceRequest?(db: DataContextDb, input: VoiceRequestInput): Promise<{ id: string }>;
   availability(actor: AccessContext): Promise<{ ready: boolean; modelRoute: string | null }>;
   transcribe(
     actor: AccessContext,
@@ -57,6 +63,61 @@ export class RecordingImportService {
   async accept(actor: AccessContext, value: unknown) {
     await this.deps.assertAvailable(actor);
     const bundle = validateRecordingBundle(value);
+    const result = await this.acceptBundle(actor, bundle);
+    return { created: result.created, ...recordingImportStatus(result.row) };
+  }
+  async enableVoice(actor: AccessContext, value: unknown) {
+    await this.deps.assertAvailable(actor);
+    return this.deps.dataContext.withDataContext(actor, (db) =>
+      new RecordingVoiceEnablementRepository().enable(db, value)
+    );
+  }
+  async disableVoice(actor: AccessContext, id: string) {
+    await this.deps.assertAvailable(actor);
+    return this.deps.dataContext.withDataContext(actor, (db) =>
+      new RecordingVoiceEnablementRepository().disable(db, id)
+    );
+  }
+  async acceptVoice(actor: AccessContext, value: unknown) {
+    await this.deps.assertAvailable(actor);
+    if (!this.deps.admitVoiceRequest) throw new HttpError(503, "Voice admission unavailable");
+    const bundle = validateVoiceRecordingBundle(value);
+    const result = await this.acceptBundle(actor, bundle, bundle.voice);
+    return { created: result.created, ...voiceRecordingImportStatus(result.row) };
+  }
+  async voiceStatus(actor: AccessContext, id: string) {
+    await this.deps.assertAvailable(actor);
+    const row = await this.deps.dataContext.withDataContext(actor, (db) =>
+      this.imports.get(db, id)
+    );
+    return row && !row.meeting_id ? voiceRecordingImportStatus(row) : null;
+  }
+  async retryVoice(actor: AccessContext, id: string) {
+    await this.deps.assertAvailable(actor);
+    return this.deps.dataContext.withDataContext(actor, async (db) => {
+      const row = await this.imports.get(db, id, true);
+      if (!row || row.meeting_id) return null;
+      if (row.state !== "failed" || !row.ready) return voiceRecordingImportStatus(row);
+      await this.imports.retryVoice(db, id);
+      await this.deps.schedule(db, {
+        actorUserId: actor.actorUserId,
+        resourceId: id,
+        kind: "transcribe"
+      });
+      return voiceRecordingImportStatus({
+        ...row,
+        state: "queued",
+        attempts: 0,
+        code: null,
+        retryable: false
+      });
+    });
+  }
+  private async acceptBundle(
+    actor: AccessContext,
+    bundle: RecordingBundle,
+    voice?: { enablementId: string; capturedAt: string | null }
+  ) {
     // The durable reservation schedules abandoned-write cleanup BEFORE any vault publication.
     const reservation = await this.deps.dataContext.withDataContext(actor, async (db) => {
       const existing = await this.imports.lockIdentity(
@@ -69,11 +130,25 @@ export class RecordingImportService {
         return { row: existing, created: false };
       }
       const id = randomUUID();
-      const { meeting } = await this.records.create(db, {
-        requestKey: id,
-        title: bundle.mode === "voice-request" ? "Imported voice request" : "Imported recording"
-      });
-      const row = await this.imports.insert(db, id, meeting.id, bundle);
+      const policy = voice
+        ? await new RecordingVoiceEnablementRepository().admit(db, {
+            ...voice,
+            sourceDeviceId: bundle.manifest.sourceDeviceId,
+            recordingId: bundle.manifest.recordingId,
+            startMs: bundle.startMs,
+            endMs: bundle.endMs
+          })
+        : undefined;
+      const meeting = policy
+        ? null
+        : (
+            await this.records.create(db, {
+              requestKey: id,
+              title:
+                bundle.mode === "voice-request" ? "Imported voice request" : "Imported recording"
+            })
+          ).meeting;
+      const row = await this.imports.insert(db, id, meeting?.id ?? null, bundle, policy);
       await this.deps.schedule(
         db,
         { actorUserId: actor.actorUserId, resourceId: id, kind: "abandoned" },
@@ -99,14 +174,14 @@ export class RecordingImportService {
       });
       return { ...current, ready: true };
     });
-    return { created: reservation.created, ...recordingImportStatus(row) };
+    return { created: reservation.created, row };
   }
   async status(actor: AccessContext, id: string) {
     await this.deps.assertAvailable(actor);
     const row = await this.deps.dataContext.withDataContext(actor, (db) =>
       this.imports.get(db, id)
     );
-    return row ? recordingImportStatus(row) : null;
+    return row?.meeting_id ? recordingImportStatus(row) : null;
   }
   async beforeRemove(db: DataContextDb, actor: AccessContext, meetingId: string) {
     for (const row of await this.imports.forMeeting(db, meetingId)) {
@@ -149,13 +224,22 @@ export class RecordingImportService {
         await this.deps.dataContext.withDataContext(actor, async (db) => {
           const current = await this.imports.get(db, row.id, true);
           if (current?.attempt_id === attemptId && current.state === "transcribing")
-            await this.imports.finish(db, row.id, "failed", "transcription_unavailable");
+            await this.imports.finish(
+              db,
+              row.id,
+              "failed",
+              "transcription_unavailable",
+              !row.meeting_id
+            );
         });
         return;
       }
-      const bundle = await this.deps.vault.withVaultContext(actor, async (ctx) =>
-        validateRecordingBundle(JSON.parse(await readVaultFile(ctx, recordingBundlePath(row.id))))
-      );
+      const bundle = await this.deps.vault.withVaultContext(actor, async (ctx) => {
+        const retained: unknown = JSON.parse(await readVaultFile(ctx, recordingBundlePath(row.id)));
+        return row.meeting_id
+          ? validateRecordingBundle(retained)
+          : validateVoiceRecordingBundle(retained);
+      });
       if (bundle.fingerprint !== row.fingerprint) throw new Error("Retained recording mismatch");
       const result = await this.deps.transcribe(actor, {
         audio: Buffer.from(bundle.manifest.wav.base64, "base64"),
@@ -164,7 +248,10 @@ export class RecordingImportService {
         dispatch: async (send, validate) => {
           const dispatched = await this.deps.dataContext.withDataContext(actor, async (db) => {
             // Match deletion/transcript lock ordering. Authorization is checked at actual fetch initiation.
-            if (!(await this.records.get(db, row.meeting_id, { forUpdate: true })))
+            if (
+              row.meeting_id &&
+              !(await this.records.get(db, row.meeting_id, { forUpdate: true }))
+            )
               throw new Error("Recording removed");
             const current = await this.imports.get(db, row.id, true);
             if (current?.attempt_id !== attemptId || current.state !== "transcribing")
@@ -191,16 +278,34 @@ export class RecordingImportService {
       )
         throw new Error("Invalid imported transcript");
       await this.deps.dataContext.withDataContext(actor, async (db) => {
-        if (!(await this.records.get(db, row.meeting_id, { forUpdate: true }))) return;
+        if (row.meeting_id && !(await this.records.get(db, row.meeting_id, { forUpdate: true })))
+          return;
         const current = await this.imports.get(db, row.id, true);
         if (current?.attempt_id !== attemptId || current.state !== "transcribing") return;
         await this.deps.assertAvailable(actor);
+        if (!row.meeting_id) {
+          if (!this.deps.admitVoiceRequest) throw new HttpError(503, "Voice admission unavailable");
+          const receipt = await this.deps.admitVoiceRequest(db, {
+            version: 2,
+            intent: "voice-request",
+            sourceDeviceId: bundle.manifest.sourceDeviceId,
+            recordingId: bundle.manifest.recordingId,
+            sourceFingerprint: row.fingerprint,
+            transcriptRevision: 1,
+            transcript: result.segments.map((segment) => segment.text).join("\n"),
+            capturedAt: row.voice_captured_at?.toISOString() ?? null,
+            automatic: row.voice_automatic
+          });
+          await this.imports.completeVoice(db, row.id, receipt.id);
+          return;
+        }
+        const meetingId = row.meeting_id;
         const transcript = new MeetingTranscriptRepository();
         const events = result.segments.map((segment, i) => ({
           cursor: i + 1,
           segment: {
             ...segment,
-            meetingId: row.meeting_id,
+            meetingId,
             segmentId: `${row.id}:${i}`,
             sourceId: row.id,
             epoch: 1,
@@ -212,7 +317,7 @@ export class RecordingImportService {
         }));
         for (let offset = 0; offset < Math.max(events.length, 1); offset += 100) {
           const saved = await transcript.ingest(db, {
-            meetingId: row.meeting_id,
+            meetingId,
             requestKey: randomUUID(),
             expectedVersion: offset / 100,
             sources: [
@@ -232,7 +337,7 @@ export class RecordingImportService {
           if (saved.status !== "saved") throw new Error("Imported transcript commit conflict");
         }
         await this.imports.finish(db, row.id, "complete", null);
-        await this.deps.scheduleSummary(db, actor, { meetingId: row.meeting_id, importId: row.id });
+        await this.deps.scheduleSummary(db, actor, { meetingId, importId: row.id });
       });
     } catch (error) {
       const failure = this.deps.describeFailure(error);
@@ -248,7 +353,7 @@ export class RecordingImportService {
           row.id,
           retry ? "queued" : "failed",
           failure.unavailable ? "import_unavailable" : "transcription_failed",
-          retry
+          retry || (!row.meeting_id && row.ready)
         );
       });
     }

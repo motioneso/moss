@@ -619,6 +619,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     );
     registerBuiltInApiRoutes(server, {
       adoptVoiceRequestService: companionDelivery.adoptVoiceRequestService,
+      admitVoiceRequest: companionDelivery.admitVoiceRequest,
       meetingCaptureAuthorization: {
         resolveBrowser: (input) => authRuntime.sessionBindings.resolveBrowser(input),
         resolveCompanion: (input) => authRuntime.companionDevices.resolve(input),

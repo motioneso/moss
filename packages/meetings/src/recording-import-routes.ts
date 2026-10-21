@@ -4,6 +4,7 @@ import { handleRouteError } from "@moss/module-sdk";
 import { RECORDING_IMPORT_BODY_LIMIT, RecordingImportInputError } from "./recording-bundle.js";
 import { RecordingImportConflictError } from "./recording-import-repository.js";
 import type { RecordingImportService } from "./recording-import-service.js";
+import { registerRecordingVoiceRoutes } from "./recording-voice-routes.js";
 export function registerRecordingImportRoutes(
   server: FastifyInstance,
   deps: {
@@ -51,4 +52,5 @@ export function registerRecordingImportRoutes(
       }
     }
   );
+  registerRecordingVoiceRoutes(server, deps);
 }

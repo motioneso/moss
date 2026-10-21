@@ -82,3 +82,17 @@ export const chatVoiceRequestRouteSchema = {
     503: errorResponseSchema
   }
 } as const;
+
+/** Internal composition contract: only explicit v2 voice intent may reach Chat. */
+export interface VoiceRequestInput {
+  readonly version: 2;
+  readonly intent: "voice-request";
+  readonly sourceDeviceId: string;
+  readonly recordingId: string;
+  readonly sourceFingerprint: string;
+  readonly transcriptRevision: number;
+  readonly transcript: string;
+  readonly capturedAt: string | null;
+  /** Set by the versioned receiver only after checking the enablement baseline. */
+  readonly automatic: boolean;
+}

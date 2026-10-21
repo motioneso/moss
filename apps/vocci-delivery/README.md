@@ -109,6 +109,44 @@ No large/resumable upload transport, iOS, fresh ownership, bookmark UI, executio
 of voice requests, or live streaming. Ring reboot and background reliability
 beyond the actual PR proof remain unverified unless explicitly evidenced there.
 
+## Version-2 voice receiver (developer API)
+
+The Moss server also accepts explicit hold-to-talk intent. This Android client still
+sends version 1; it has no hold-to-talk enablement or review UI yet. Do not switch
+its old queue to the new endpoint. Version-1 files remain meeting evidence forever.
+The short version-2 envelope retains the same 120-second and file-size bounds; it
+is separate from the planned resumable long-file transport.
+
+1. After reading the complete ring inventory, POST `/api/meetings/voice-enablement`
+   with `{ version: 2, sourceDeviceId, requestKey, recordingIds }`. Keep the request
+   key and response ID durably before attempting voice delivery. Retrying the same
+   key returns the same snapshot and enablement time; changed inventory conflicts.
+2. Existing inventory members remain meeting imports across later enablements.
+   For a new hold file only, POST `/api/meetings/voice-recordings` with
+   `{ version: 2, intent: "voice-request", enablementId, capturedAt, recording }`.
+   `recording` is the original version-1 bundle, including exact source evidence.
+   Use a real phone-observed capture time in canonical ISO form, or `null` when it
+   was not observed. Do not substitute a ring file timestamp for that observation.
+3. Poll `/api/meetings/voice-recordings/:id`. The receiver retains the audio without
+   creating a meeting. Its transcription and Chat-owned admission commit together;
+   the completed receipt includes `voiceRequestId`. Review that request through
+   `/api/chat/voice-requests/:id`. Uncertain or stale captures require explicit
+   `POST /api/chat/voice-requests/:id/send` in Moss, without a replacement body.
+4. `POST /api/meetings/voice-recordings/:id/retry`, without a body, retries failed
+   transcription. It preserves the source and returns an already-completed receipt
+   unchanged. It never resubmits a chat turn.
+5. `POST /api/meetings/voice-enablement/:id/disable`, without a body, prevents new
+   intakes. Previously accepted requests keep their existing admission state.
+   Replaying that enablement's original key does not reactivate it; a new enablement
+   needs a fresh full inventory and request key.
+
+The server checks the phone-supplied capture time against enablement, receipt and
+sidecar timing; missing or inconsistent timing requires Send. These are supplied
+recording evidence, not hardware attestation. Main chat applies its age rule again
+before dispatch and retains its normal action confirmations. These endpoints reject
+delegated model access. A real hold recording reaching a persisted Main reply and
+the companion setup/status screens remain required live-path work.
+
 ## Installed proof
 
 Use `verify-gate` and `scripts/run-gate.sh` for the isolated `test:recording-live`

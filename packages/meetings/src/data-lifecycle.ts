@@ -9,6 +9,7 @@ type JsonValue = boolean | null | number | string | JsonValue[] | { [key: string
 type ExportRow = Record<string, JsonValue>;
 
 export interface MeetingsExportSection {
+  readonly voice_enablements: readonly ExportRow[];
   readonly recording_imports: readonly ExportRow[];
   readonly records: readonly ExportRow[];
   readonly note_writes: readonly ExportRow[];
@@ -43,7 +44,7 @@ export async function collectMeetingsExportSection(
     scopedDb,
     sql<
       Record<string, unknown>
-    >`SELECT id::text AS id, owner_user_id::text AS "ownerUserId", meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, created_at AS "createdAt"
+    >`SELECT id::text AS id, owner_user_id::text AS "ownerUserId", meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, voice_enablement_id::text AS "voiceEnablementId", voice_automatic AS "voiceAutomatic", voice_captured_at AS "voiceCapturedAt", voice_request_id::text AS "voiceRequestId", created_at AS "createdAt"
       FROM app.meeting_recording_imports
       WHERE owner_user_id = ${ownerUserId}::uuid
       ORDER BY created_at, id`
@@ -59,6 +60,13 @@ export async function collectMeetingsExportSection(
       })
     : imports;
   return {
+    voice_enablements: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT id::text AS id,owner_user_id::text AS "ownerUserId",source_device_id::text AS "sourceDeviceId",request_key::text AS "requestKey",inventory_json AS "inventoryJson",enabled_at AS "enabledAt",disabled_at AS "disabledAt"
+      FROM app.meeting_recording_voice_enablements WHERE owner_user_id=${ownerUserId}::uuid ORDER BY enabled_at,id
+    `
+    ),
     recording_imports: recordingImports,
     records: await readRows(
       scopedDb,

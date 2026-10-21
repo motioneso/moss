@@ -32,6 +32,7 @@ import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
   RecordingImportService,
+  type RecordingImportDependencies,
   RECORDING_IMPORT_QUEUES,
   registerRecordingImportRoutes,
   meetingsModuleManifest,
@@ -694,6 +695,7 @@ export interface BuiltInRouteDependencies {
   /** Publishes the chat runtime's ACP initialize check to the Settings probe. */
   readonly adoptAcpProviderInitialization?: ChatRoutesDependencies["adoptAcpProviderInitialization"];
   readonly adoptVoiceRequestService?: ChatRoutesDependencies["adoptVoiceRequestService"];
+  readonly admitVoiceRequest?: RecordingImportDependencies["admitVoiceRequest"];
   /**
    * #1081 H2 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * the same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the

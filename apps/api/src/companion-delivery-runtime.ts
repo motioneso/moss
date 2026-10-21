@@ -23,9 +23,15 @@ export function createCompanionDeliveryRuntime(
   overrides: CompanionDeliveryOverrides = {}
 ) {
   let voiceRequests: VoiceRequestService | undefined;
+  const admitVoiceRequest: NonNullable<
+    Parameters<typeof createRecordingImportWorkerRuntime>[1]["admitVoiceRequest"]
+  > = async (db, input) => {
+    if (!voiceRequests) throw new Error("Chat voice admission unavailable");
+    return { id: (await voiceRequests.admitInTransaction(db, input)).request.id };
+  };
   const recording =
     overrides.recordingImportWorker ??
-    createRecordingImportWorkerRuntime(deps.workerConnectionString, deps);
+    createRecordingImportWorkerRuntime(deps.workerConnectionString, { ...deps, admitVoiceRequest });
   const voice =
     overrides.voiceRequestWorker ??
     createVoiceRequestWorkerRuntime(deps.workerConnectionString, () => voiceRequests);
@@ -37,6 +43,7 @@ export function createCompanionDeliveryRuntime(
     if (errors.length) throw new AggregateError(errors, "Companion delivery shutdown failed");
   };
   return {
+    admitVoiceRequest,
     adoptVoiceRequestService(service: VoiceRequestService) {
       voiceRequests = service;
     },

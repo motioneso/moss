@@ -1,3 +1,7 @@
+import {
+  recordingDeliveryRoutes,
+  recordingVoiceFeature
+} from "./recording-delivery-declarations.js";
 import { androidDeliveryFeature } from "./android-delivery-feature.js";
 import { meetingRecordTarget } from "./chat-targets.js";
 import {
@@ -40,11 +44,13 @@ export const meetingsModuleManifest = {
       "sql/0292_meeting_minimal.sql",
       "sql/0295_meeting_capture_start_limits.sql",
       "sql/0325_meeting_recording_imports.sql",
-      "sql/0326_meeting_import_summaries.sql"
+      "sql/0326_meeting_import_summaries.sql",
+      "sql/0328_meeting_voice_recordings.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
       "app.meeting_recording_imports",
+      "app.meeting_recording_voice_enablements",
       "app.meeting_records",
       "app.meeting_note_writes",
       "app.meeting_transcript_batches",
@@ -110,18 +116,7 @@ export const meetingsModuleManifest = {
     { queueName: "meetings.recording-import", metadataOnly: true }
   ],
   routes: [
-    {
-      method: "POST",
-      path: "/api/meetings/recording-imports",
-      permissionId: "meetings.write",
-      chat: { access: "blocked", blockedBecause: "external_effect" }
-    },
-    {
-      method: "GET",
-      path: "/api/meetings/recording-imports/:id",
-      permissionId: "meetings.read",
-      chat: { access: "blocked", blockedBecause: "external_effect" }
-    },
+    ...recordingDeliveryRoutes,
     {
       method: "PUT",
       path: "/api/meetings/records/:id/title",
@@ -351,6 +346,7 @@ export const meetingsModuleManifest = {
     }
   ],
   features: [
+    recordingVoiceFeature,
     androidDeliveryFeature,
     {
       id: "meetings.import_analysis",
@@ -973,6 +969,10 @@ export const meetingsModuleManifest = {
       strategy: "cascade",
       tables: [
         { table: "app.meeting_recording_imports", countPredicate: "owner_user_id = $1::uuid" },
+        {
+          table: "app.meeting_recording_voice_enablements",
+          countPredicate: "owner_user_id = $1::uuid"
+        },
         { table: "app.meeting_records", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_note_writes", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_transcript_batches", countPredicate: "owner_user_id = $1::uuid" },

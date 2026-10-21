@@ -88,11 +88,20 @@ derives the owner from that transaction. Status/list/Send APIs expose an explici
 projection; reserved messages are linked only after a real reply commits. Delegated
 model access to these review endpoints is rejected, including Send.
 
-This is still inactive for ring input. Next, the versioned receiver must preserve
-the enablement inventory baseline and immutable intent, then admit transcription
-completion through this public transaction-aware method. Never route existing
-version-1 files into it. Status APIs alone are not the approved review UI or Android
-screens. Real hold audio reaching a saved Main reply remains an unmet live-path gate.
+The short version-2 receiver now snapshots enablement inventory and retains explicit
+voice audio without creating a Meeting. Baseline members from every enablement stay
+meeting evidence. The immutable envelope and source fingerprint prevent version-1
+imports from becoming voice commands. Transcript persistence, Chat admission and
+the receiver completion receipt share a transaction through the public port.
+The source module owns audio/export/deletion; Chat owns transcript/turn/reply status.
+Explicit transcription Retry preserves the source and never replays a completed
+chat request. Developer API contracts are documented in the Android README.
+
+Ring input remains inactive in the installed Android client: it still sends only
+version 1. Next, implement its durable enablement snapshot and versioned queue, then
+the Moss review UI and real hold audio reaching a saved Main reply. APIs and isolated
+synthetic receiver tests do not satisfy that live-path gate or the Android screens.
+The resumable two-hour transport remains a separate approved slice.
 
 The independent static streaming result is recorded in
 [the investigation](../../research/2026-10-20-vocci-legacy-streaming.md): no active

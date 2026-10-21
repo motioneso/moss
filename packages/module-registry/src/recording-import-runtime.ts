@@ -19,10 +19,12 @@ export function createRecordingImportRuntime(deps: {
   dataContext: DataContextRunner;
   boss: PgBoss;
   resolveActiveModules: ActiveModulesResolver;
+  admitVoiceRequest?: RecordingImportDependencies["admitVoiceRequest"];
 }): RecordingImportDependencies {
   const transcription = createConfiguredTranscription({ dataContext: deps.dataContext });
   return {
     dataContext: deps.dataContext,
+    admitVoiceRequest: deps.admitVoiceRequest,
     vault: new VaultContextRunner(getVaultBaseDir()),
     schedule: createRecordingImportScheduler(deps.boss),
     scheduleSummary: createImportedMeetingSummaryScheduler(deps.boss),
