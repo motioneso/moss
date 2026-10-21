@@ -16,7 +16,7 @@ public final class VocciProofActivity extends Activity {
     private VocciAccount account;
     private EditText email, code;
     private TextView status, codeLabel;
-    private Button send, verify, resend, cleanup;
+    private Button send, verify, resend, finishLookup, cleanup;
     private boolean busy = true;
     private int found = -1;
     @Override public void onCreate(Bundle saved) {
@@ -47,14 +47,13 @@ public final class VocciProofActivity extends Activity {
             perform(() -> {
                 account.verify(value);
                 if (account.step() == VocciAccount.Step.TOTP) return "Enter the code from your authenticator app.";
-                found = account.bindings().size();
-                evidence(false);
-                account.cleanup();
-                evidence(true);
-                return "Sign-in proof passed: " + found + " owned ring(s). Temporary Vocci session removed. No ring binding was changed.";
+                return finishLookup();
             });
         }, true);
         resend = button(body, "Resend code", () -> perform(() -> { account.resend(); return "New code sent. Use the latest email."; }), false);
+        finishLookup = button(body, "Finish ring lookup", () -> perform(() -> {
+            account.resumeLookup(); return finishLookup();
+        }), true);
         cleanup = button(body, "Cancel / clean up session", () -> perform(() -> {
             account.cleanup();
             if (found >= 0) evidence(true);
@@ -65,7 +64,7 @@ public final class VocciProofActivity extends Activity {
             String message;
             try {
                 account = new VocciAccount(this);
-                message = account.step() == VocciAccount.Step.CLEANUP ? "An interrupted attempt needs cleanup before a new code can be sent." : "Ready. Sending a code starts Vocci sign-in for this test.";
+                message = account.canResumeLookup() ? "Email verification is saved. Finish ring lookup to continue without another code, or cancel to remove this session." : account.step() == VocciAccount.Step.CLEANUP ? "An interrupted attempt needs cleanup before a new code can be sent." : "Ready. Sending a code starts Vocci sign-in for this test.";
             } catch (Exception error) { message = "Encrypted setup state could not be opened. Existing companion data is unaffected."; }
             String ready = message; runOnUiThread(() -> { busy = false; status.setText(ready); render(); });
         });
@@ -84,6 +83,13 @@ public final class VocciProofActivity extends Activity {
         Button view = theme.button(action, primary); view.setText(title); add(body, view); return view;
     }
     interface Work { String run() throws Exception; }
+    private String finishLookup() throws Exception {
+        found = account.bindings().size();
+        evidence(false);
+        account.cleanup();
+        evidence(true);
+        return "Sign-in proof passed: " + found + " owned ring(s). Temporary Vocci session removed. No ring binding was changed.";
+    }
     private void evidence(boolean cleaned) throws Exception {
         PrivateFiles.json(new File(getNoBackupFilesDir(), "auth-proof-result.json"), new JSONObject()
             .put("bindingBackendAccepted", true).put("ownedRingCount", found).put("cleanupConfirmed", cleaned)
@@ -113,6 +119,8 @@ public final class VocciProofActivity extends Activity {
         codeLabel.setText(step == VocciAccount.Step.TOTP ? "Authenticator code" : "Email code");
         code.setEnabled(ready && (step == VocciAccount.Step.CODE || step == VocciAccount.Step.TOTP));
         verify.setEnabled(code.isEnabled()); resend.setEnabled(ready && step == VocciAccount.Step.CODE);
+        finishLookup.setVisibility(account != null && account.canResumeLookup() ? View.VISIBLE : View.GONE);
+        finishLookup.setEnabled(ready && account.canResumeLookup());
         cleanup.setEnabled(ready && step != VocciAccount.Step.EMAIL);
     }
     private static String explanation(String code) {
@@ -128,6 +136,7 @@ public final class VocciProofActivity extends Activity {
             case "auth_method_unsupported": return "This account requires a sign-in method this test does not support. Clean up this attempt.";
             case "auth_service_rejected": return "Vocci rejected this client's request. Setup is blocked; no workaround has been attempted.";
             case "auth_network_unavailable": return "Could not reach Vocci. Check your connection. Cleanup remains available if the attempt was interrupted.";
+            case "auth_session_expired": return "The saved Vocci session expired. Clean up this attempt before requesting another code.";
             case "binding_identity_ambiguous": case "binding_response_invalid": return "Vocci returned ring details that cannot be verified. Clean up this attempt.";
             default: return "Vocci setup could not be confirmed. Clean up this attempt before starting again.";
         }

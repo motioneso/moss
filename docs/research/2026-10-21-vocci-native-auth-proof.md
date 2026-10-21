@@ -1,8 +1,9 @@
 # Vocci native sign-in proof: phase-one evidence
 
 Part of #3565 / draft PR #3566. Ben approved the existing-owner setup design on
-2026-10-21. **Status: adapter and isolated proof built; real owner sign-in and
-binding-backend acceptance pending.** The remainder of the wizard is not built.
+2026-10-21. **Status: native owner sign-in, real binding-backend acceptance and temporary
+session cleanup passed on the installed proof.** The remainder of the wizard is
+not built.
 
 ## Implemented experiment
 
@@ -35,7 +36,7 @@ package's last-update timestamp was unchanged after installing the proof.
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Existing host crypto, transfer/protocol and WAV tests  | Pass; includes generated two-hour file                                              | No new two-hour hardware test                          |
 | Development APK and isolated proof APK build/signature | Pass                                                                                | Development signing only                               |
-| Installed synthetic native contracts                   | `contracts=29`, `result=PASS`, instrumentation `-1`                                 | Fixtures do not prove owner/backend acceptance         |
+| Installed synthetic native contracts                   | `contracts=39`, `result=PASS`, instrumentation `-1`                                 | Fixtures do not prove owner/backend acceptance         |
 | Real native initialization on the Samsung              | HTTP 200, `nativeInitialization=PASS`; native token returned, empty sessions        | Anonymous client only; no email sent                   |
 | Manifest isolation assertions                          | Separate package; Internet only; no service/receiver; production manifest unchanged | Installed product upgrade remains later work           |
 | Scoped Markdown, shell syntax and diff checks          | Pass                                                                                | Full repository gate/CI follows product implementation |
@@ -52,28 +53,41 @@ failing assertion before restoring the guard:
 The client-identity control initially failed on the fixture's request queue rather
 than its intended assertion. The fixture was corrected to allow the hypothetical
 confirmation request; rerunning produced the missing-guard assertion above. All
-protections were restored; final installed baseline passed all 29 contracts.
+protections were restored; final installed baseline passed all 29 contracts at that checkpoint.
 
-The final installed proof APK SHA-256 is:
-`822dcb4877c84bd544e9ec4503fc9f8f61321ebe08da36f0a935b7d69dccd3c9`.
+The final installed proof APK SHA-256 is recorded below with the live retry.
 
 Private local logs retain build output, the installed assertion summaries and
 control results. Public evidence includes no account email, device address,
 serial, account token, code or ring key. A bounded app-private result record can
 prove real binding acceptance and cleanup after the owner completes the real UI.
 
-## Remaining gate
+## Gate result and remaining work
 
-The owner must sign into the installed proof through its real email-code UI,
-satisfy required supported MFA, obtain actual binding-backend acceptance using
-this client identity, and confirm removal of the setup-created session. No private
-file injection, browser-token extraction or replayed network response can pass
-this gate. A service-policy rejection stops this approach for a supported
-integration decision.
+The owner completed native email-code sign-in in the installed proof. After a
+local token-response parser correction, the explicit **Finish ring lookup** UI
+resumed that same verified session. The actual binding backend accepted the
+truthful client identity and returned one validated owned ring. The proof removed
+its temporary session and confirmed cleanup. The executable UI showed the passed
+result and re-enabled **Send code**; the safe result record agreed:
+
+```json
+{
+  "bindingBackendAccepted": true,
+  "ownedRingCount": 1,
+  "cleanupConfirmed": true,
+  "clientIdentity": "MossRingCompanion/1.0 (Android native setup)",
+  "time": "2026-10-21T22:01:11.969259Z"
+}
+```
+
+This clears the native-auth feasibility gate. No developer credential injection,
+network interception or browser-token extraction was used. Required TOTP was
+covered by contracts; the live account did not request it.
 
 Do not close #3565, merge this product PR or describe initial setup as finished.
-Only after acceptance should the remaining staging/linking, selection, physical
-ring proof, polished wizard, app map, recovery, upgrade and delivery proofs proceed.
+The remaining staging/linking, selection, physical proof, polished wizard, app map,
+recovery, upgrade and delivery proofs must still be implemented and verified.
 
 ## First owner attempt: local validation correction
 
@@ -87,7 +101,7 @@ initial adapter/fixtures incorrectly assumed `signin_`.
 The fixtures were changed to the observed real format first. Installed checks
 then failed with `auth_response_invalid`, reproducing the production path. After
 correcting the validator and route allowlist, all 29 installed checks passed.
-The corrected build is installed; the real owner retry is still pending. This was
+The corrected build was installed before the second owner attempt. This was
 a local client bug, not a vendor-policy rejection. No email was sent by the failed
 attempt, and no user session or ring binding was created/changed.
 
@@ -96,3 +110,32 @@ uses clearer error messages. It keeps the screen on while foreground for the
 interactive test; system timeout settings were not changed. The bounded read-only
 diagnostic is development-only and reports field-presence booleans/statuses, never
 account addresses, tokens, full identifiers or binding details.
+
+## Second owner attempt: token response correction
+
+The owner successfully verified the email code and created a temporary native
+session. The next request failed locally: the adapter expected a `response`
+wrapper on every Clerk response, but the session-token endpoint returns a direct
+`{ "object": "token", "jwt": "..." }` resource. An in-app diagnostic observed HTTP
+200 and only these structural facts; it did not expose the JWT or raw body.
+The temporary token-shape diagnostic was removed afterward; the retained
+`diagnose` option still only fetches the native client.
+
+Changing the synthetic token fixture to the actual direct-resource shape first
+reproduced the exact installed failure: `result=FAIL`,
+`check=auth_response_invalid`, instrumentation code `1`. The adapter now uses the
+direct resource only for the exact session-token route and validates its resource
+type and JWT. Other routes still require their existing response envelope.
+
+The proof adds explicit **Finish ring lookup** recovery after verified sign-in.
+It fetches the pinned native client and requires exactly the saved active session
+before resuming. Missing verification state, a changed client, another session,
+multiple sessions or an expired session cannot resume lookup. The successful live
+retry used this UI without sending another email. Removing the saved-session
+identity comparison produced `guard_missing_auth_cleanup_conflict` in the installed
+contracts; the guard was restored. Final baseline: 39 contracts passed.
+
+After confirming remote cleanup and the absence of the separate encrypted attempt
+record, the isolated proof app was uninstalled. The working companion remains in place.
+
+Final proof APK SHA-256: `17cc16d786d0514cb1f4ebcd198e2dacd3d5c194cd586493fe7cd3c09237c249`.

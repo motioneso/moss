@@ -23,8 +23,10 @@ after lookup and does not physically connect a ring. A passing lookup is a phase
 result, not completed product onboarding. Zero rings is a successful empty account
 lookup; it does not prove that an owned ring can complete setup.
 
-**Cancel / clean up session** retries cleanup. An interrupted attempt must be
-cleaned up before a new sign-in. Offline or unconfirmed cleanup keeps the separate
+After verified sign-in is interrupted, **Finish ring lookup** explicitly resumes
+only the saved active session after checking its native client and session identity.
+It sends no new code. Other interrupted attempts require cleanup before a new sign-in.
+**Cancel / clean up session** retries cleanup. Offline or unconfirmed cleanup keeps the separate
 encrypted retry record. A changed native client/session is rejected. Never
 uninstall or clear this test app while cleanup remains pending.
 

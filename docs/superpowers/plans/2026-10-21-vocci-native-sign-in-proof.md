@@ -44,7 +44,7 @@ request/session/cleanup contract before coding; do not guess callback behavior.
    Bound responses and timeouts, reject redirects, identify Moss truthfully and
    turn remote failures into safe local status codes. Never render raw responses.
 2. Retain only cleanup/session material in a separate encrypted record. An
-   interrupted attempt starts afresh without automatic email sends; discover and
+   interrupted unverified attempt requires cleanup without automatic email sends; discover and
    clean up any session created by a lost verification response before discarding
    the device credential. Failed cleanup remains retryable. No session belonging
    to another client is removed. No promise of JVM string erasure.
@@ -95,3 +95,10 @@ detail. This phase alone is not finished initial setup and cannot close #3565.
 - 2026-10-21: Ben approved existing-owner native email-code feasibility first.
 - Existing configured owners do not repeat sign-in or key recovery (approved spec).
 - Cloud binding retrieval is not physical ring verification (approved spec).
+
+- 2026-10-21: Native owner sign-in, real binding lookup (one ring) and confirmed
+  temporary-session removal passed in the installed proof. Session-token responses
+  are direct token resources, unlike the other Clerk envelopes. Explicit lookup
+  recovery can reuse the saved verified session only after checking the pinned
+  client and its sole active session. This avoids repeating a successful email
+  verification after a lookup failure; it never sends a code automatically.

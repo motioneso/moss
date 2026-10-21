@@ -20,6 +20,18 @@ final class VocciAccount {
         step = secrets.exists() ? Step.CLEANUP : Step.EMAIL;
     }
     Step step() { return step; }
+    boolean canResumeLookup() {
+        return (step == Step.CLEANUP || step == Step.CONNECTED) && record.has("clientId") && record.optBoolean("isolatedClient") && record.optBoolean("verificationStarted") && record.has("sessionId");
+    }
+    void resumeLookup() throws Exception {
+        if (!canResumeLookup()) throw new VocciHttp.Failure("auth_step_invalid");
+        JSONObject client = clerk("GET", "client", "");
+        JSONArray sessions = client.getJSONArray("sessions");
+        if (sessions.length() != 1 || !record.getString("sessionId").equals(sessions.getJSONObject(0).optString("id")))
+            throw new VocciHttp.Failure("auth_cleanup_conflict");
+        if (!"active".equals(sessions.getJSONObject(0).optString("status"))) throw new VocciHttp.Failure("auth_session_expired");
+        step = Step.CONNECTED;
+    }
     long resendAfter() { return record.optLong("resendAfter", 0); }
     private void save() throws Exception { secrets.save(record); }
     private JSONObject clerk(String method, String path, String form) throws Exception {
@@ -33,7 +45,12 @@ final class VocciAccount {
         }
         VocciHttp.success(reply);
         try {
-            JSONObject body = new JSONObject(reply.body), response = body.getJSONObject("response");
+            JSONObject body = new JSONObject(reply.body);
+            // Clerk's session-token endpoint returns the token resource directly.
+            boolean sessionToken = path.matches("client/sessions/sess_[A-Za-z0-9]+/tokens");
+            JSONObject response = sessionToken ? body : body.getJSONObject("response");
+            if (sessionToken && (!"token".equals(body.optString("object")) || !(body.opt("jwt") instanceof String)))
+                throw new VocciHttp.Failure("auth_response_invalid");
             JSONObject client = path.equals("client") ? response : body.optJSONObject("client");
             if (record.has("clientId") && client != null && !record.getString("clientId").equals(client.optString("id"))) {
                 if (record.has("previousDeviceToken")) record.put("deviceToken", record.getString("previousDeviceToken"));

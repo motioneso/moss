@@ -64,7 +64,7 @@ public final class VocciAuthChecks extends Instrumentation {
         }
         secrets = new SecretStore(getTargetContext(), "moss-vocci-auth-contract-test", "vocci-auth-contract-test.enc");
         try {
-            secrets.delete(); emailAndBindings(); requiredMfa(); invalidAndThrottled(); unsupportedMfa(); lostVerificationRecovery(); cleanupOffline(); malformedBindings(); transportGuards();
+            secrets.delete(); emailAndBindings(); resumedLookup(); tokenShapeGuards(); requiredMfa(); invalidAndThrottled(); unsupportedMfa(); lostVerificationRecovery(); cleanupOffline(); malformedBindings(); transportGuards();
             result.putString("result", "PASS"); result.putInt("contracts", passed); finish(-1, result);
         } catch (Throwable failure) {
             result.putString("result", "FAIL"); result.putString("check", failure instanceof AssertionError ? failure.getMessage() : failure instanceof VocciHttp.Failure ? ((VocciHttp.Failure) failure).code : failure.getClass().getSimpleName()); finish(1, result);
@@ -125,12 +125,48 @@ public final class VocciAuthChecks extends Instrumentation {
     }
     private void emailAndBindings() throws Exception {
         Fake fake = begin().add("POST", "client/sign_ins/sia_test/attempt_first_factor", signIn("complete", ",\"created_session_id\":\"sess_test\""))
-            .add("POST", "client/sessions/sess_test/tokens", "{\"jwt\":\"aaa.bbb.ccc\"}")
+            .raw("POST", "client/sessions/sess_test/tokens", 200, "{\"object\":\"token\",\"jwt\":\"aaa.bbb.ccc\"}")
             .raw("GET", "bindings", 200, "[" + ROW + "]"); cleanup(fake);
         VocciAccount account = new VocciAccount(secrets, fake); account.begin(EMAIL);
         check(account.step() == VocciAccount.Step.CODE, "email_code_sent");
         account.verify("123456"); check(account.bindings().size() == 1, "one_owned_ring");
         account.cleanup(); check(!secrets.exists(), "cleanup_record_deleted_after_confirmation"); fake.complete(); passed++;
+    }
+    private void savedVerifiedSession() throws Exception {
+        secrets.save(new JSONObject().put("deviceToken", "synthetic-device-token").put("clientId", "client_test")
+            .put("isolatedClient", true).put("verificationStarted", true).put("sessionId", "sess_test"));
+    }
+    private void resumedLookup() throws Exception {
+        savedVerifiedSession();
+        Fake fake = new Fake().add("GET", "client", client("[{\"id\":\"sess_test\",\"status\":\"active\"}]"))
+            .raw("POST", "client/sessions/sess_test/tokens", 200, "{\"object\":\"token\",\"jwt\":\"aaa.bbb.ccc\"}")
+            .raw("GET", "bindings", 200, "[" + ROW + "]"); cleanup(fake);
+        VocciAccount account = new VocciAccount(secrets, fake);
+        check(account.canResumeLookup(), "verified_session_can_resume"); account.resumeLookup();
+        check(account.bindings().size() == 1, "resumed_backend_lookup"); account.cleanup(); fake.complete(); passed++;
+        savedVerifiedSession();
+        Fake wrong = new Fake().add("GET", "client", client("[{\"id\":\"sess_other\",\"status\":\"active\"}]"));
+        rejects("auth_cleanup_conflict", () -> new VocciAccount(secrets, wrong).resumeLookup()); wrong.complete();
+        Fake changed = new Fake().add("GET", "client", client("[{\"id\":\"sess_test\",\"status\":\"active\"}]").replace("client_test", "client_other"));
+        rejects("auth_client_changed", () -> new VocciAccount(secrets, changed).resumeLookup()); changed.complete();
+        Fake expired = new Fake().add("GET", "client", client("[{\"id\":\"sess_test\",\"status\":\"expired\"}]"));
+        rejects("auth_session_expired", () -> new VocciAccount(secrets, expired).resumeLookup()); expired.complete();
+        Fake multiple = new Fake().add("GET", "client", client("[{\"id\":\"sess_test\",\"status\":\"active\"},{\"id\":\"sess_other\",\"status\":\"active\"}]"));
+        rejects("auth_cleanup_conflict", () -> new VocciAccount(secrets, multiple).resumeLookup()); multiple.complete();
+        JSONObject incomplete = secrets.load(); incomplete.remove("verificationStarted"); secrets.save(incomplete);
+        Fake unused = new Fake();
+        VocciAccount notVerified = new VocciAccount(secrets, unused);
+        check(!notVerified.canResumeLookup(), "unverified_session_cannot_resume");
+        rejects("auth_step_invalid", () -> notVerified.resumeLookup()); unused.complete(); secrets.delete();
+    }
+    private void tokenShapeGuards() throws Exception {
+        for (String body : new String[]{"{\"jwt\":\"aaa.bbb.ccc\"}", "{\"object\":\"client\",\"jwt\":\"aaa.bbb.ccc\"}", "{\"object\":\"token\",\"jwt\":123}", "{\"response\":{\"jwt\":\"aaa.bbb.ccc\"}}"}) {
+            savedVerifiedSession();
+            Fake fake = new Fake().add("GET", "client", client("[{\"id\":\"sess_test\",\"status\":\"active\"}]"))
+                .raw("POST", "client/sessions/sess_test/tokens", 200, body);
+            VocciAccount account = new VocciAccount(secrets, fake); account.resumeLookup();
+            rejects("auth_response_invalid", () -> account.bindings()); fake.complete(); secrets.delete();
+        }
     }
     private void requiredMfa() throws Exception {
         Fake fake = begin().add("POST", "client/sign_ins/sia_test/attempt_first_factor", signIn("needs_second_factor", ",\"supported_second_factors\":[{\"strategy\":\"totp\"}]"))

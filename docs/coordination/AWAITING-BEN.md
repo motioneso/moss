@@ -75,18 +75,5 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Vocci setup — existing-account sign-in (#3565)
-
-The approved phase-one proof is installed separately as **Moss setup proof**.
-Installed native client initialization returns HTTP 200; 29 synthetic contracts
-pass, with three observed protection-removal controls. The first owner attempt
-found a local sign-in-ID validator bug before email send; the installed fix passes
-the real-format regression and all 29 contracts. Real owner authentication and
-binding acceptance still require Ben's retry on the Samsung.
-Open the proof, use the existing Vocci email, send/verify the email code and any
-required authenticator code, then report the displayed result. The working
-companion has not been replaced. No code has been sent automatically. This is
-interactive account verification, not another design-approval request.
-
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
