@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_CHAT_SURFACE,
@@ -12,6 +12,7 @@ import {
 import { VoiceRequests } from "../../apps/web/src/chat/voice-requests.js";
 import { VoiceRequestLink } from "../../apps/web/src/chat/voice-request-link.js";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
+import { HomeRedirect } from "../../apps/web/src/home-redirect.js";
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("@moss/module-web-sdk", async (importOriginal) => ({
@@ -79,6 +80,34 @@ afterEach(async () => {
 });
 
 describe("Main voice request review", () => {
+  it("keeps a root deep link across the Today redirect while its owned lookup is pending", async () => {
+    let resolve!: (value: ChatVoiceRequestStatus) => void;
+    request.mockReturnValue(new Promise<ChatVoiceRequestStatus>((done) => (resolve = done)));
+    function Location() {
+      const location = useLocation();
+      return <output>{location.pathname + location.search + location.hash}</output>;
+    }
+    await mount(
+      <MemoryRouter initialEntries={[`/?voiceRequest=${receipt.id}#ring`]}>
+        <VoiceRequestLink ownerId="owner" enabled onOpenThread={open} />
+        <Location />
+        <Routes>
+          <Route index element={<HomeRedirect />} />
+          <Route path="today" element={null} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(container.querySelector("output")?.textContent).toBe(
+      `/today?voiceRequest=${receipt.id}#ring`
+    );
+    expect(open).not.toHaveBeenCalled();
+    await act(async () => resolve(receipt));
+    await vi.waitFor(() => expect(open).toHaveBeenCalledWith(receipt.threadId));
+    await vi.waitFor(() =>
+      expect(container.querySelector("output")?.textContent).toBe("/today#ring")
+    );
+    expect(request.mock.calls.every((call) => call[1]?.method !== "POST")).toBe(true);
+  });
   it("loads and discloses evidence without sending; only the explicit button dispatches", async () => {
     request.mockImplementation(async (_path: string, options?: { method: string }) =>
       options?.method === "POST" ? receipt : { requests: [receipt] }
