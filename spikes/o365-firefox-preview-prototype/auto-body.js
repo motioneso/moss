@@ -44,7 +44,10 @@
     if (!mailRoute() || (state.phase === "waiting" && currentRoute() !== route)) {
       stop("Mail route changed; stopped and cleared."); return;
     }
-    if (Date.now() >= deadline) { stop("Timed out; stopped and cleared. Use a fresh phrase to retry."); return; }
+    if (Date.now() >= deadline) {
+      const detail = state.phase === "reading" ? ` Last check: ${state.reason}.` : "";
+      stop(`Timed out; stopped and cleared.${detail} Use a fresh phrase to retry.`); return;
+    }
     if (state.phase === "waiting") {
       const rows = matches();
       if (!rows) { stop("Message list unavailable or ambiguous; stopped and cleared."); return; }
@@ -58,10 +61,15 @@
       return;
     }
     const capture = globalThis.__mossReadOpenedMessage(phrase);
-    if (!capture.ok || capture.truncated || !capture.body.toLowerCase().includes(phrase.toLowerCase())
-      || !capture.body.trimEnd().endsWith("MOSS BODY END")) { previousBody = ""; return; }
+    let pending = "";
+    if (!capture.ok) pending = capture.reason === "identity" ? "Subject heading missing or does not match test phrase"
+      : capture.reason === "ambiguous" ? "Several readable message bodies" : "No readable message body";
+    else if (capture.truncated) pending = "Body exceeds the preview limit";
+    else if (!capture.body.toLowerCase().includes(phrase.toLowerCase())) pending = "Body test phrase not found";
+    else if (!capture.body.trimEnd().endsWith("MOSS BODY END")) pending = "Final body marker not found";
+    if (pending) { state.reason = pending; previousBody = ""; return; }
     const signature = JSON.stringify(capture);
-    if (signature !== previousBody) { previousBody = signature; return; }
+    if (signature !== previousBody) { state.reason = "Waiting for a second equal body snapshot"; previousBody = signature; return; }
     state.capture = capture;
     state.phase = "captured";
     finish("Captured one synthetic body locally; automation finished");

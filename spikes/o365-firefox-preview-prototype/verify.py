@@ -20,6 +20,27 @@ MESSAGE = '''<article><h3>Synthetic subject</h3><h3>From: Example Sender</h3>
 </div></article>'''
 
 
+def verify_nested_headers(page):
+    phrase = "MOSS BODY TEST nested"
+    inner = MESSAGE.replace('<h3>Synthetic subject</h3>', '').replace(
+        'From: Example Sender', 'Example Sender&lt;sender@example.invalid&gt;').replace(
+        'Synthetic body', phrase + '<p>MOSS BODY END</p>')
+    page.set_content('<section><h2>' + phrase + '</h2>' + inner + '</section>')
+    capture = page.evaluate(EXTRACT)
+    assert capture["subject"] == phrase, "Nested sender header hid the outer subject"
+    assert capture["sender"] == 'Example Sender<sender@example.invalid>'
+    assert page.evaluate("phrase => __mossReadOpenedMessage(phrase).ok", phrase)
+    # Missing subject stays unknown rather than taking the sender as its value.
+    page.set_content(inner)
+    assert page.evaluate(EXTRACT)["subject"] == ""
+    assert page.evaluate("phrase => __mossReadOpenedMessage(phrase).reason", phrase) == "identity"
+    # An Inbox title or heading inside the body must not provide identity.
+    page.set_content('<main><h2>' + phrase + '</h2>' + inner + '</main>')
+    assert page.evaluate(EXTRACT)["subject"] == ""
+    page.set_content(inner.replace('<p>MOSS BODY END</p>', '<h2>' + phrase + '</h2><p>MOSS BODY END</p>'))
+    assert page.evaluate(EXTRACT)["subject"] == ""
+
+
 def verify_auto_body(browser, run):
     reader = (SOURCE / "read-message.js").read_text()
     auto = (SOURCE / "auto-body.js").read_text()
@@ -36,7 +57,8 @@ def verify_auto_body(browser, run):
     page.evaluate(reader)
     page.evaluate(auto)
     phrase = "MOSS BODY TEST 3141"
-    message = MESSAGE.replace("Synthetic subject", phrase).replace(
+    message = ('<section><h2>' + phrase + '</h2>' + MESSAGE.replace('<h3>Synthetic subject</h3>', '').replace(
+        "From: Example Sender", "Example Sender&lt;sender@example.invalid&gt;") + '</section>').replace(
         "Synthetic body", phrase + "<p>" + "Invented paragraph. " * 100 + "</p><p>MOSS BODY END</p>")
     fixture = '<div role="listbox" aria-label="Message list"><div role="option">Unrelated synthetic mail</div></div><section id="pane"></section>'
 
@@ -152,10 +174,17 @@ def verify_auto_body(browser, run):
                 if variant == "ambiguous": content += message
                 if variant == "compose": content = '<div contenteditable="true">' + message + '</div>'
                 page.locator("#pane").evaluate("(node, html) => node.innerHTML = html", content)
-        assert ticks(3)["capture"] is None, variant
+        result = ticks(3)
+        assert result["capture"] is None, variant
+        expected_reasons = {"stale":"Subject heading", "no-end":"Final body marker", "ambiguous":"Several readable", "compose":"No readable"}
+        if variant in expected_reasons:
+            assert expected_reasons[variant] in result["reason"], variant
         assert page.evaluate("clicks") == (1 if variant in ["stale", "no-end", "ambiguous", "compose"] else 0), variant
         page.evaluate("now = 400000")
-        assert not ticks()["running"], variant
+        result = ticks()
+        assert not result["running"], variant
+        if variant in expected_reasons:
+            assert expected_reasons[variant] in result["reason"], variant
 
     # Removing subject identity verification must break the stale-pane assertion.
     reset()
@@ -181,7 +210,8 @@ def main():
               "Automatic list observation, filtering, deduplication and stop", "Watcher popup controls and route shutdown",
               "Calendar appearance/change/disappearance and filtering", "Calendar popup mode and control wiring",
               "One-shot body arrival, route change, stable complete capture and popup",
-              "Body isolation, ambiguity, interaction, stop and timeout guards"]
+              "Body isolation, ambiguity, interaction, stop and timeout guards",
+              "Nested sender and outer subject identification"]
     (workspace / "plan.md").write_text("\n".join(f"- [ ] CP{i}: {p}" for i, p in enumerate(points, 1)))
     log = []
 
@@ -207,6 +237,8 @@ def main():
         bounded = page.evaluate(EXTRACT)
         assert bounded["truncated"] and len(bounded["body"]) == 12000
         passed(3)
+        verify_nested_headers(page)
+        passed(12)
 
         # Mock only the browser API: this is popup logic verification, not proof
         # of Firefox extension installation or activeTab permission behavior.

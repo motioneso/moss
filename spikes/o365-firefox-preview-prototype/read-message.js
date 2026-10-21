@@ -13,6 +13,10 @@ globalThis.__mossReadOpenedMessage = (expectedPhrase = "") => {
   const body = bodies[0];
 
   // Only inspect headings in a nearby message wrapper, never the whole page.
+  const isSender = (heading) => /^From:\s*\S/i.test(heading)
+    || /^(?:[^<>\n]*<[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+>|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)$/.test(heading);
+  const isDate = (heading) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i.test(heading) && /\d/.test(heading);
+  const isSubject = (heading) => !isSender(heading) && !isDate(heading) && !/^(To|Cc|Bcc):/i.test(heading);
   let headings = [];
   let scope = body.parentElement;
   for (let depth = 0; scope && depth < 5; depth++, scope = scope.parentElement) {
@@ -21,11 +25,13 @@ globalThis.__mossReadOpenedMessage = (expectedPhrase = "") => {
     headings = [...scope.querySelectorAll('h1, h2, h3, [role="heading"]')]
       .filter((heading) => !body.contains(heading) && readable(heading))
       .map((heading) => heading.innerText.trim().slice(0, 500)).filter(Boolean);
-    if (headings.length) break;
+    // A nested message header can contain only sender/date. Keep looking within
+    // the same bounded, single-message wrappers for its outer subject heading.
+    if (headings.some(isSubject)) break;
   }
-  const sender = headings.find((heading) => /^From:\s*\S/i.test(heading)) || "";
-  const date = headings.find((heading) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i.test(heading) && /\d/.test(heading)) || "";
-  const subjects = headings.filter((heading) => heading !== sender && heading !== date && !/^(To|Cc|Bcc):/i.test(heading));
+  const sender = headings.find(isSender) || "";
+  const date = headings.find(isDate) || "";
+  const subjects = headings.filter(isSubject);
   const subject = subjects.length === 1 ? subjects[0] : "";
   if (expectedPhrase && !subject.toLowerCase().includes(expectedPhrase.toLowerCase())) return { ok: false, reason: "identity" };
 

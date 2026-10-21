@@ -110,7 +110,7 @@ Two absent scans reduce brief rerender noise but cannot establish deletion or
 cancellation. This experiment does not open, create, edit or delete events, click
 through dates, read invitations from mail, or sync a complete calendar.
 
-## Try the automatic body test (version 0.4.0)
+## Try the automatic body test (version 0.4.1)
 
 1. Reload the add-on in `about:debugging`, then reload Outlook and leave it on
    **Inbox**. No permissions have been added.
@@ -155,7 +155,9 @@ session recovery remain unimplemented. Live automatic body testing is pending.
   compose editors and list/navigation ancestors. Multiple visible bodies fail.
   Unsupported layouts and localized labels fail without a page-text fallback.
 - Sender, subject, and displayed date use nearby headings only; they may be
-  missing or incorrectly identified in an unfamiliar Outlook layout. No address
+  missing or incorrectly identified in an unfamiliar Outlook layout. A sender
+  heading may use `From:` or a displayed email address. Sender/date-only nested
+  wrappers do not end the bounded search for an outer subject heading. No address
   book access or date conversion. Hidden descendants and controls are omitted
   from body text; body preview is limited to 12,000 characters.
 - Quoted history inside the selected message can appear in the body. This is
@@ -188,6 +190,11 @@ trusted interaction, Stop, timeout and navigation shutdown. Removing the subject
 identity guard exposes a stale-pane capture in the synthetic fixture, demonstrating
 that the guard matters. Popup retrieval and tab-memory retention are checked with
 mocked browser APIs; installed Firefox/Outlook behavior still needs the live trial.
+Nested-header checks reproduce a sender heading hiding an outer subject in the
+previous reader, then verify separate subject/sender fields and automatic capture.
+Missing subjects stay unknown; main-region titles and body headings cannot provide
+subject identity. Pending/timeout statuses name the failed capture check without
+including message text.
 Manifest validation:
 
 ```sh
@@ -240,3 +247,17 @@ This supports live detection of appearance, a changed summary, and disappearance
 in the displayed Outlook calendar during this bounded trial. It does not establish
 stable event IDs, authoritative cancellation semantics, complete calendar coverage,
 or recovery after session/browser interruption. No event content was supplied.
+
+First automatic body trial (2026-10-21, version 0.4.0): the user confirmed the
+matching email opened automatically, while capture remained pending. A manual
+preview could read the body through its final test marker, but labelled a sender
+heading as Subject and left From unknown. This explains rejection by the automatic
+subject-phrase check. Actual DOM structure was not inspected. A synthetic nested
+sender/date wrapper with a subject in its parent reproduced that field mix-up.
+Version 0.4.1 recognizes address-shaped sender headings and continues through
+sender/date-only wrappers within the existing five-level single-message boundary.
+The subject identity requirement remains in place. Generic diagnostics distinguish
+missing/mismatched subject, unreadable/ambiguous body, size limit, missing body
+phrase/end marker and pending stable snapshots, including after timeout.
+The corrected extractor still needs a live repeat; automatic body capture has
+not yet been established. No mailbox content is retained in these notes.
