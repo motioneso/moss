@@ -26,6 +26,16 @@ import type { ReminderTurnPlan } from "./turn.js";
 const REFUSED =
   "I can edit a reminder's text, timing, repetition, stop time or destination. I can't change its actions, recipients or notification permissions. Nothing changed.";
 
+/** Log only fixed codes and host-schema paths; never owner words or provider output. */
+function refuseEdit(
+  reason: string,
+  reply: string,
+  validation?: { readonly keyword: string; readonly schemaPath: string }
+): ReminderTurnPlan {
+  console.warn("reminder.edit refused", { reason, ...(validation ? { validation } : {}) });
+  return { kind: "edit_refused", reply };
+}
+
 /** Prepare under RLS, execute after the transaction closes, and validate again when saving. */
 export async function prepareReminderEdit(
   scopedDb: DataContextDb,
@@ -74,22 +84,22 @@ export async function prepareReminderEdit(
               }
             }
           }
-        : {
-            kind: "edit_refused",
-            reply: "I couldn't find a waiting reminder with those words. Nothing changed."
-          };
+        : refuseEdit(
+            "no_matching_reminder",
+            "I couldn't find a waiting reminder with those words. Nothing changed."
+          );
   }
   if (requestsCombinedReminderDestination(text))
-    return async () => ({ kind: "edit_refused", reply: REMINDER_DESTINATION_SEPARATE_REPLY });
+    return async () => refuseEdit("combined_destination", REMINDER_DESTINATION_SEPARATE_REPLY);
   const { model } = await ai.resolveModelForService(scopedDb, "module.chat", {
     capability: "json"
   });
   if (!model)
-    return async () => ({
-      kind: "edit_refused",
-      reply:
+    return async () =>
+      refuseEdit(
+        "needs_config",
         "No model is configured to understand that edit. Nothing changed. Check your AI settings and try again."
-    });
+      );
   const now = await scopedDb.db
     .selectNoFrom(({ fn }) => fn<Date>("now", []).as("now"))
     .executeTakeFirstOrThrow();
@@ -114,31 +124,30 @@ export async function prepareReminderEdit(
     const result = await run();
     const interpreted = result.ok ? validateReminderEdit(result.object) : undefined;
     if (!interpreted)
-      return {
-        kind: "edit_refused",
-        reply:
-          "I couldn't understand that edit reliably. Nothing changed. Name the reminder and its new text or time."
-      };
+      return refuseEdit(
+        result.ok ? "invalid_edit_terms" : (result.reason ?? result.error),
+        "I couldn't understand that edit reliably. Nothing changed. Name the reminder and its new text or time.",
+        result.ok ? undefined : result.validation
+      );
     if (
       interpreted.target !== null &&
       !normalizeReminderText(text).includes(normalizeReminderText(interpreted.target))
     )
-      return {
-        kind: "edit_refused",
-        reply:
-          "Name the reminder using its saved words so I can change the right one. Nothing changed."
-      };
+      return refuseEdit(
+        "target_not_in_request",
+        "Name the reminder using its saved words so I can change the right one. Nothing changed."
+      );
     if (
       interpreted.destination &&
       !normalizeReminderText(text).includes(normalizeReminderText(interpreted.destination))
     )
-      return {
-        kind: "edit_refused",
-        reply: "Name the destination chat in your request. Nothing changed."
-      };
+      return refuseEdit(
+        "destination_not_in_request",
+        "Name the destination chat in your request. Nothing changed."
+      );
     if (combinesReminderDestination(interpreted))
-      return { kind: "edit_refused", reply: REMINDER_DESTINATION_SEPARATE_REPLY };
-    if (interpreted.unsupported) return { kind: "edit_refused", reply: REFUSED };
+      return refuseEdit("combined_destination", REMINDER_DESTINATION_SEPARATE_REPLY);
+    if (interpreted.unsupported) return refuseEdit("unsupported_edit", REFUSED);
     const matches =
       interpreted.target === null
         ? owned
@@ -147,10 +156,10 @@ export async function prepareReminderEdit(
             interpreted.target
           );
     if (!matches.length)
-      return {
-        kind: "edit_refused",
-        reply: "I couldn't find a waiting reminder with those words. Nothing changed."
-      };
+      return refuseEdit(
+        "no_matching_reminder",
+        "I couldn't find a waiting reminder with those words. Nothing changed."
+      );
     const { target: _target, unsupported: _unsupported, ...terms } = interpreted;
     if (
       terms.text === null &&
@@ -160,10 +169,10 @@ export async function prepareReminderEdit(
       (terms.repeat === null || terms.repeat === undefined) &&
       !terms.destination
     )
-      return {
-        kind: "edit_refused",
-        reply: "Tell me the reminder's new text, time, deadline or destination. Nothing changed."
-      };
+      return refuseEdit(
+        "no_changes",
+        "Tell me the reminder's new text, time, deadline or destination. Nothing changed."
+      );
     return {
       kind: "edit",
       proposal: { candidates: matches.map((row) => ({ id: row.id, version: row.version })), terms }

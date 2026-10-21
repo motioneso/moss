@@ -106,6 +106,7 @@ import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import { serializeModel } from "./serialize-model.js";
 export { serializeModel } from "./serialize-model.js";
 import { ModelDiscoveryService } from "./model-discovery.js";
+import { providerBaseUrlHasUserInfo } from "./provider-base-url.js";
 import { registerAiProviderValidationRoutes } from "./provider-validation-routes.js";
 import {
   registerTerminalRoutes,
@@ -129,6 +130,8 @@ export interface AiRoutesDependencies {
   readonly repository?: AiRepository;
   readonly secretCipher?: AiSecretCipher;
   readonly modelDiscovery?: ModelDiscoveryService;
+  // Drops live chat sessions bound to one provider row once its key or address changes.
+  readonly dropChatSessionsForProviderConfig?: (providerConfigId: string) => Promise<void>;
   // #2689: installed CLI tool versions for the provider cards; absent off the runner socket path.
   readonly cliToolVersionReader?: CliToolVersionReader;
   readonly tasksCompatibility?: {
@@ -422,6 +425,7 @@ export function registerAiRoutes(
         if (!reconnectChanged) {
           modelDiscovery.invalidate(accessContext.actorUserId, request.params.id);
         }
+        if (reconnectChanged) await dropLiveChatSessions(dependencies, request.params.id);
         return { provider: await serializeProvider(provider) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -449,6 +453,7 @@ export function registerAiRoutes(
         }
 
         modelDiscovery.invalidate(accessContext.actorUserId, request.params.id);
+        await dropLiveChatSessions(dependencies, request.params.id);
         return { provider: await serializeProvider(provider) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -492,7 +497,8 @@ export function registerAiRoutes(
     dataContext: dependencies.dataContext,
     repository,
     secretCipher,
-    modelDiscovery
+    modelDiscovery,
+    cliToolVersionReader: dependencies.cliToolVersionReader
   });
 
   // #1059 — the LOCAL `repository` const (line ~144, above), not `dependencies.repository`
@@ -1078,6 +1084,15 @@ function assertDecisionModelBaseUrl(providerKind: AiProviderKind, baseUrl: strin
   }
 }
 
+/** The address is stored and later passed to helpers, so it must never carry a login. */
+function optionalProviderBaseUrl(value: unknown): string | null | undefined {
+  const baseUrl = optionalNullableString(value, "baseUrl");
+  if (typeof baseUrl === "string" && providerBaseUrlHasUserInfo(baseUrl)) {
+    throw new HttpError(400, "A provider address cannot include a username or password.");
+  }
+  return baseUrl;
+}
+
 function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
   const value = requireObject(body);
   const providerKind = requiredProviderKind(value.providerKind, "providerKind");
@@ -1097,7 +1112,7 @@ function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
     providerKind,
     displayName: requiredString(value.displayName, "displayName"),
     acpAgentId,
-    baseUrl: optionalNullableString(value.baseUrl, "baseUrl"),
+    baseUrl: optionalProviderBaseUrl(value.baseUrl),
     status: optionalProviderStatus(value.status),
     authMethod,
     credentialPayload:
@@ -1114,7 +1129,7 @@ function parseUpdateProviderBody(body: unknown): UpdateAiProviderConfigRequest {
     providerKind: optionalProviderKind(value.providerKind, "providerKind"),
     displayName: optionalString(value.displayName, "displayName"),
     acpAgentId: optionalNullableString(value.acpAgentId, "acpAgentId"),
-    baseUrl: optionalNullableString(value.baseUrl, "baseUrl"),
+    baseUrl: optionalProviderBaseUrl(value.baseUrl),
     status: optionalProviderStatus(value.status),
     authMethod: optionalAuthMethod(value.authMethod),
     credentialPayload:
@@ -1582,5 +1597,20 @@ export async function assertInstanceAdmin(
   }
   if (!user.is_instance_admin) {
     throw new HttpError(403, "Instance admin permission is required");
+  }
+}
+
+/**
+ * A failed drop never fails a saved provider change. The next turn's revision check still
+ * relaunches the session with the row's current key and address.
+ */
+async function dropLiveChatSessions(
+  dependencies: AiRoutesDependencies,
+  providerConfigId: string
+): Promise<void> {
+  try {
+    await dependencies.dropChatSessionsForProviderConfig?.(providerConfigId);
+  } catch {
+    // Best effort; see above.
   }
 }

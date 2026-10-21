@@ -5,28 +5,156 @@ import {
   type ChatSessionManagerDeps
 } from "../../packages/chat/src/live/chat-session-manager.js";
 import {
-  ApiKeyLiveChatUnavailableError,
-  CliChatUnavailableError
+  ApiKeyUnreadableError,
+  ChatProviderChangedError,
+  UnsupportedApiKeyChatProviderError
 } from "../../packages/chat/src/live/errors.js";
+import { assertProviderIdentityForPendingTurn } from "../../packages/chat/src/live/chat-session-provider-identity.js";
 import { FakeEngine, makeMinimalDeps } from "./chat-session-manager.test.js";
 
 describe("ChatSessionManager provider identity", () => {
-  it("rejects API-key live chat before creating or launching an engine", async () => {
-    const engineFactory = vi.fn(() => new FakeEngine(0));
-    const deps = makeMinimalDeps({ engineFactory });
-    vi.mocked(deps.persistence.resolveActiveProvider).mockResolvedValue({
-      provider: "openai-compatible",
-      model: "gpt-5.6",
-      authMethod: "api_key",
-      acpAgentId: null
-    });
-    const manager = new ChatSessionManager(deps);
+  const KEY = "sk-test-never-echo-0004";
+  const NEW_KEY = "localproxy0006neverlog";
+  const apiKeyProvider = {
+    provider: "anthropic",
+    model: "claude-test-model",
+    providerConfigId: "provider-1",
+    authMethod: "api_key",
+    acpAgentId: null,
+    providerConfigRevision: "rev-1"
+  } as const;
+  type TestCredential = { apiKey: string; baseUrl: string | null; revision: string };
 
-    await expect(manager.ensureSession("u1", "Ben")).rejects.toBeInstanceOf(
-      CliChatUnavailableError
-    );
+  function apiKeyManager(credential: TestCredential | null) {
+    const engine = new FakeEngine(0);
+    const engineFactory = vi.fn(() => engine);
+    const deps = makeMinimalDeps({ engineFactory });
+    const resolveChatCredential = vi.fn().mockResolvedValue(credential);
+    const persistence = {
+      ...deps.persistence,
+      resolveChatCredential,
+      getCurrentThreadState: vi.fn().mockResolvedValue(null)
+    };
+    vi.mocked(persistence.resolveActiveProvider).mockResolvedValue(apiKeyProvider);
+    const manager = new ChatSessionManager({ ...deps, persistence });
+    return { manager, engine, engineFactory, persistence, resolveChatCredential };
+  }
+
+  it("refuses an API-key row whose key cannot be read, before any conversation or engine", async () => {
+    const { manager, engineFactory, persistence } = apiKeyManager(null);
+    await expect(manager.ensureSession("u1", "Ada")).rejects.toBeInstanceOf(ApiKeyUnreadableError);
     expect(engineFactory).not.toHaveBeenCalled();
-    expect(deps.persistence.openNewConversation).not.toHaveBeenCalled();
+    expect(persistence.openNewConversation).not.toHaveBeenCalled();
+  });
+
+  it("launches an API-key row with its key, address and model", async () => {
+    const { manager, engineFactory, resolveChatCredential } = apiKeyManager({
+      apiKey: KEY,
+      baseUrl: "http://proxy.test",
+      revision: "rev-1"
+    });
+    await manager.ensureSession("u1", "Ada");
+    expect(resolveChatCredential).toHaveBeenCalledWith("u1", "provider-1");
+    expect(engineFactory).toHaveBeenCalledWith(
+      "anthropic",
+      "u1:drawer",
+      expect.objectContaining({
+        authMethod: "api_key",
+        credential: { apiKey: KEY, baseUrl: "http://proxy.test", model: "claude-test-model" }
+      })
+    );
+  });
+
+  it("keeps the key out of logs, stored calls and the agent's input", async () => {
+    const logged: unknown[] = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        logged.push(args);
+      });
+    }
+    try {
+      const { manager, engine, persistence } = apiKeyManager({
+        apiKey: KEY,
+        baseUrl: null,
+        revision: "rev-1"
+      });
+      await manager.ensureSession("u1", "Ada");
+      const storedCalls = Object.entries(persistence)
+        .filter(([name]) => name !== "resolveChatCredential")
+        .map(([, fn]) => vi.mocked(fn).mock.calls);
+      expect(JSON.stringify(logged)).not.toContain(KEY);
+      expect(JSON.stringify(storedCalls)).not.toContain(KEY);
+      expect(JSON.stringify(engine.submitted)).not.toContain(KEY);
+      expect(JSON.stringify(engine.launchOpts)).not.toContain(KEY);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it.each([
+    ["a new key", { apiKey: NEW_KEY, baseUrl: "http://proxy.test" }],
+    ["a new address", { apiKey: KEY, baseUrl: "http://proxy.test/other" }]
+  ])("discards the engine and relaunches when the same row gets %s", async (_label, next) => {
+    const engines: FakeEngine[] = [];
+    const engineFactory = vi.fn(() => {
+      const engine = new FakeEngine(0);
+      engines.push(engine);
+      return engine;
+    });
+    const deps = makeMinimalDeps({ engineFactory });
+    let revision = "rev-1";
+    let credential: TestCredential = { apiKey: KEY, baseUrl: "http://proxy.test", revision };
+    const persistence = {
+      ...deps.persistence,
+      resolveChatCredential: vi.fn(async () => credential),
+      getCurrentThreadState: vi.fn().mockResolvedValue(null)
+    };
+    vi.mocked(persistence.resolveActiveProvider).mockImplementation(async () => ({
+      ...apiKeyProvider,
+      providerConfigRevision: revision
+    }));
+    const manager = new ChatSessionManager({ ...deps, persistence });
+
+    await manager.ensureSession("u1", "Ada");
+    revision = "rev-2";
+    credential = { ...next, revision };
+    await manager.ensureSession("u1", "Ada");
+
+    expect(engines).toHaveLength(2);
+    expect(engines[0]?.killed).toBe(true);
+    expect(engineFactory).toHaveBeenLastCalledWith(
+      "anthropic",
+      "u1:drawer",
+      expect.objectContaining({ credential: { ...next, model: "claude-test-model" } })
+    );
+  });
+
+  it("retries with the new row when the key changes between the provider read and the key read", async () => {
+    const { manager, engineFactory, persistence, resolveChatCredential } = apiKeyManager(null);
+    vi.mocked(persistence.resolveActiveProvider)
+      .mockResolvedValueOnce(apiKeyProvider)
+      .mockResolvedValue({ ...apiKeyProvider, providerConfigRevision: "rev-2" });
+    resolveChatCredential.mockResolvedValue({ apiKey: NEW_KEY, baseUrl: null, revision: "rev-2" });
+
+    await manager.ensureSession("u1", "Ada");
+
+    expect(engineFactory).toHaveBeenCalledTimes(1);
+    expect(engineFactory).toHaveBeenCalledWith(
+      "anthropic",
+      "u1:drawer",
+      expect.objectContaining({
+        credential: { apiKey: NEW_KEY, baseUrl: null, model: "claude-test-model" }
+      })
+    );
+  });
+
+  it("refuses a pending turn once the row's key or address changed", async () => {
+    await expect(
+      assertProviderIdentityForPendingTurn(apiKeyProvider, {
+        ...apiKeyProvider,
+        providerConfigRevision: "rev-2"
+      })
+    ).rejects.toBeInstanceOf(ChatProviderChangedError);
   });
 
   it("relaunches a cached session when the ACP agent changes and replays the conversation", async () => {
@@ -70,7 +198,7 @@ describe("ChatSessionManager provider identity", () => {
     expect(newEngine.submitted.some((text) => text.includes("previous turn"))).toBe(true);
   });
 
-  it("evicts a cached CLI engine when the provider changes to API-key auth", async () => {
+  it("evicts a cached CLI engine when the provider changes to an unsupported API-key kind", async () => {
     const oldEngine = new FakeEngine(0);
     const engineFactory = vi.fn(() => oldEngine);
     const deps = makeMinimalDeps({ engineFactory });
@@ -82,17 +210,22 @@ describe("ChatSessionManager provider identity", () => {
       acpAgentId: "codex-acp",
       executionMode: "non_interactive"
     } as const;
-    const apiKeyProvider = { ...cliProvider, authMethod: "api_key", acpAgentId: null } as const;
-    let activeProvider: typeof cliProvider | typeof apiKeyProvider = cliProvider;
+    const googleKey = {
+      ...cliProvider,
+      provider: "google",
+      authMethod: "api_key",
+      acpAgentId: null
+    } as const;
+    let activeProvider: typeof cliProvider | typeof googleKey = cliProvider;
     vi.mocked(deps.persistence.resolveActiveProvider).mockImplementation(
       async () => activeProvider
     );
     const manager = new ChatSessionManager(deps);
 
-    await manager.ensureSession("u1", "Ben");
-    activeProvider = apiKeyProvider;
-    await expect(manager.ensureSession("u1", "Ben")).rejects.toBeInstanceOf(
-      ApiKeyLiveChatUnavailableError
+    await manager.ensureSession("u1", "Ada");
+    activeProvider = googleKey;
+    await expect(manager.ensureSession("u1", "Ada")).rejects.toBeInstanceOf(
+      UnsupportedApiKeyChatProviderError
     );
 
     expect(oldEngine.killed).toBe(true);

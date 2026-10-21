@@ -29,7 +29,8 @@ describe("ChatSessionManager.dropSessionsForProvider (#1081 H2)", () => {
     const persistence = {
       resolveActiveProvider: vi.fn().mockImplementation(async (userId: string) => ({
         provider: userId === "u-codex" ? "openai-compatible" : "anthropic",
-        model: "default"
+        model: "default",
+        providerConfigId: `row-${userId}`
       })),
       listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
       recordTurn: vi.fn().mockResolvedValue(undefined),
@@ -71,6 +72,19 @@ describe("ChatSessionManager.dropSessionsForProvider (#1081 H2)", () => {
     const codexEngineBefore = engines.get("u-codex:drawer");
     await manager.ensureSession("u-codex", "Cara");
     expect(engines.get("u-codex:drawer")).toBe(codexEngineBefore); // same engine instance, no relaunch
+  });
+
+  it("drops only the sessions bound to the given provider row", async () => {
+    const { manager, engines } = makeMultiProviderManager();
+    await manager.ensureSession("u-claude-1", "Alice");
+    await manager.ensureSession("u-claude-2", "Bob");
+    await manager.ensureSession("u-codex", "Cara");
+
+    await manager.dropSessionsForProvider({ providerConfigId: "row-u-claude-1" });
+
+    expect(engines.get("u-claude-1:drawer")?.kill).toHaveBeenCalledTimes(1);
+    expect(engines.get("u-claude-2:drawer")?.kill).not.toHaveBeenCalled();
+    expect(engines.get("u-codex:drawer")?.kill).not.toHaveBeenCalled();
   });
 
   it("revokes the MCP token for every dropped session, not for untouched ones", async () => {

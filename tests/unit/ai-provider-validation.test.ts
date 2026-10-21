@@ -1,7 +1,12 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
 import { describe, expect, it } from "vitest";
 
 import {
   discoverProviderModels,
+  PROVIDER_CREDENTIAL_VALID_MESSAGE,
+  PROVIDER_REJECTED_CREDENTIAL_MESSAGE,
   testProviderCredential
 } from "../../packages/ai/src/provider-validation.js";
 
@@ -91,4 +96,155 @@ describe("AI provider validation", () => {
       }
     ]);
   });
+});
+
+describe("provider model listing drops non-chat models", () => {
+  it("lists only chat models when the provider also serves embedding, rerank, speech and image models", async () => {
+    const ids = [
+      "gpt-4o",
+      "text-embedding-3-small",
+      "omni-moderation-latest",
+      "rerank-english-v3",
+      "tts-1",
+      "dall-e-3",
+      "gpt-image-1"
+    ];
+    const models = await discoverProviderModels({
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "test-key-listing" },
+      fetch: (async () =>
+        new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), {
+          status: 200
+        })) as typeof fetch
+    });
+
+    expect(models.map((model) => model.providerModelId)).toEqual(["gpt-4o"]);
+  });
+
+  it("drops OpenAI-compatible ids outside the model id policy and keeps / : @", async () => {
+    const ids = ["test-chat-model", "has space", "org/model:tag@v2", "plus+model"];
+    const models = await discoverProviderModels({
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      baseUrl: "http://proxy.test",
+      credential: { apiKey: "test-key-listing" },
+      fetch: (async () =>
+        new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), {
+          status: 200
+        })) as typeof fetch
+    });
+
+    expect(models.map((model) => model.providerModelId)).toEqual([
+      "test-chat-model",
+      "org/model:tag@v2"
+    ]);
+  });
+});
+
+describe("Anthropic API-key checks use the row's address", () => {
+  function recordingFetch(status: number) {
+    const urls: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: [{ id: "claude-test-model" }] }), { status });
+    }) as typeof globalThis.fetch;
+    return { urls, fetch };
+  }
+
+  it("tests the key against the stored address", async () => {
+    const { urls, fetch } = recordingFetch(200);
+    const result = await testProviderCredential({
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: "http://proxy.test/v1",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    expect(result).toMatchObject({ ok: true, message: PROVIDER_CREDENTIAL_VALID_MESSAGE });
+  });
+
+  it("reports a 401 from the stored address as a rejected credential", async () => {
+    const { fetch } = recordingFetch(401);
+    const result = await testProviderCredential({
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: "http://proxy.test",
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(result).toMatchObject({ ok: false, message: PROVIDER_REJECTED_CREDENTIAL_MESSAGE });
+  });
+
+  it("falls back to the public Anthropic address when none is stored", async () => {
+    const { urls, fetch } = recordingFetch(200);
+    await discoverProviderModels({
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "sk-test" },
+      fetch
+    });
+    expect(urls).toEqual(["https://api.anthropic.com/v1/models"]);
+  });
+});
+
+describe("OpenAI-compatible key test uses the normalized address", () => {
+  it.each(["http://proxy.test/v1", "http://proxy.test/v1/"])(
+    "%s gives one /v1",
+    async (baseUrl) => {
+      const urls: string[] = [];
+      const fetch = (async (url: string | URL | Request) => {
+        urls.push(String(url));
+        return new Response(JSON.stringify({ data: [{ id: "org/model:tag@v2" }] }), {
+          status: 200
+        });
+      }) as typeof globalThis.fetch;
+      await testProviderCredential({
+        providerKind: "openai-compatible",
+        authMethod: "api_key",
+        baseUrl,
+        credential: { apiKey: "sk-test" },
+        fetch
+      });
+      expect(urls).toEqual(["http://proxy.test/v1/models"]);
+    }
+  );
+});
+
+describe("AI provider validation and redirects", () => {
+  it.each(["anthropic", "openai-compatible"] as const)(
+    "never carries the %s key to the host a redirect points at",
+    async (providerKind) => {
+      const seen: Array<Record<string, string | string[] | undefined>> = [];
+      const target = createServer((request, response) => {
+        seen.push(request.headers);
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ data: [{ id: "m" }] }));
+      });
+      await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
+      const targetPort = (target.address() as AddressInfo).port;
+      const redirector = createServer((_request, response) => {
+        response.writeHead(302, { location: `http://localhost:${targetPort}/v1/models` });
+        response.end();
+      });
+      await new Promise<void>((resolve) => redirector.listen(0, "127.0.0.1", resolve));
+      const redirectorPort = (redirector.address() as AddressInfo).port;
+      try {
+        const result = await testProviderCredential({
+          providerKind,
+          authMethod: "api_key",
+          baseUrl: `http://127.0.0.1:${redirectorPort}`,
+          credential: { apiKey: "test-key-redirect" }
+        });
+        expect(result.ok).toBe(false);
+        expect(seen).toEqual([]);
+      } finally {
+        await new Promise((resolve) => target.close(resolve));
+        await new Promise((resolve) => redirector.close(resolve));
+      }
+    }
+  );
 });

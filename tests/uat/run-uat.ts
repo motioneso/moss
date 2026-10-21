@@ -70,10 +70,12 @@ async function readUatLevel(specPath: string): Promise<{
   // #2936 (plan 2b.6): same pattern — lets a spec opt into the fake tool-server fixture.
   withClassifierMcpFixture: boolean;
   withNewsFeedbackFixture: boolean;
+  // #3410: same trailing-optional-key pattern; opts into the API-key chat provider seed.
+  withApiKeyChatProvider: boolean;
 }> {
   const source = await readFile(specPath, "utf8");
   const match = source.match(
-    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*withWorkflowApprovalFixture:\s*(true|false))?\s*(?:,\s*withActivityOutcomeFixture:\s*(true|false))?\s*(?:,\s*withWorkshopStorageFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*(?:,\s*withEspnFixture:\s*(true|false))?\s*(?:,\s*withBriefingWriterFixture:\s*(true|false))?\s*(?:,\s*withClassifierFixture:\s*(true|false))?\s*(?:,\s*withClassifierMcpFixture:\s*(true|false))?\s*(?:,\s*withNewsFeedbackFixture:\s*(true|false))?\s*\}\s+as const/
+    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*withWorkflowApprovalFixture:\s*(true|false))?\s*(?:,\s*withActivityOutcomeFixture:\s*(true|false))?\s*(?:,\s*withWorkshopStorageFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*(?:,\s*withEspnFixture:\s*(true|false))?\s*(?:,\s*withBriefingWriterFixture:\s*(true|false))?\s*(?:,\s*withClassifierFixture:\s*(true|false))?\s*(?:,\s*withClassifierMcpFixture:\s*(true|false))?\s*(?:,\s*withNewsFeedbackFixture:\s*(true|false))?\s*(?:,\s*withApiKeyChatProvider:\s*(true|false))?\s*\}\s+as const/
   );
   const level = match?.[1];
   const withoutSource = match?.[2];
@@ -117,7 +119,8 @@ async function readUatLevel(specPath: string): Promise<{
     withBriefingWriterFixture: withBriefingWriterFixtureSource === "true",
     withClassifierFixture: withClassifierFixtureSource === "true",
     withClassifierMcpFixture: withClassifierMcpFixtureSource === "true",
-    withNewsFeedbackFixture: match?.[14] === "true"
+    withNewsFeedbackFixture: match?.[14] === "true",
+    withApiKeyChatProvider: match?.[15] === "true"
   };
 }
 
@@ -138,7 +141,8 @@ async function runSpec(specPath: string): Promise<number> {
       withBriefingWriterFixture: uatLevel.withBriefingWriterFixture,
       withClassifierFixture: uatLevel.withClassifierFixture,
       withClassifierMcpFixture: uatLevel.withClassifierMcpFixture,
-      withNewsFeedbackFixture: uatLevel.withNewsFeedbackFixture
+      withNewsFeedbackFixture: uatLevel.withNewsFeedbackFixture,
+      withApiKeyChatProvider: uatLevel.withApiKeyChatProvider
     },
     specPath,
     ({ baseURL, projectName }) => ({

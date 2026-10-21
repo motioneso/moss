@@ -224,3 +224,76 @@ describe("#2732 P1-1: cleanupUatAttempt still verifies the stack after a failed 
     expect(cleanupEnvFile).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("#3410: API-key chat seed values", () => {
+  const KEY = "ada-uat-key-0001";
+  const seed = {
+    providerKind: "openai-compatible",
+    baseUrl: "http://proxy.test",
+    model: "ada-model",
+    keyFile: "/tmp/ada-uat-key"
+  } as const;
+
+  function spawnExits(code: number): void {
+    mocks.spawn.mockReturnValue({
+      stderr: { on: vi.fn() },
+      on: (event: string, listener: (exitCode: number) => void) => {
+        if (event === "exit") listener(code);
+      }
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    delete process.env.MOSS_UAT_API_KEY_CHAT_KEY;
+  });
+
+  it("mounts the key read-only and keeps its value out of child arguments and environment", async () => {
+    spawnExits(0);
+
+    process.env.MOSS_UAT_API_KEY_CHAT_KEY = KEY;
+    await composeSeedHook({ projectName: "proj", level: "admin+data", apiKeyChat: seed });
+
+    const args = mocks.spawn.mock.calls[0]?.[1] as string[];
+    const options = mocks.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
+    expect(args.join(" ")).not.toContain(KEY);
+    expect(args).toContain("/tmp/ada-uat-key:/run/secrets/moss-uat-chat-key:ro");
+    expect(args).toContain("MOSS_UAT_API_KEY_CHAT_KEY_FILE=/run/secrets/moss-uat-chat-key");
+    expect(args).toContain("MOSS_UAT_API_KEY_CHAT_MODEL=ada-model");
+    expect(Object.values(options.env ?? {}).some((value) => value?.includes(KEY))).toBe(false);
+  });
+
+  it("keeps the key out of the failure message", async () => {
+    spawnExits(1);
+
+    const error = await composeSeedHook({
+      projectName: "proj",
+      level: "admin+data",
+      apiKeyChat: seed
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).not.toContain(KEY);
+  });
+
+  it("removes an inherited plaintext key when the spec did not opt in", async () => {
+    spawnExits(0);
+    process.env.MOSS_UAT_API_KEY_CHAT_KEY = "stray-host-value";
+
+    await composeSeedHook({ projectName: "proj", level: "admin+data" });
+
+    const options = mocks.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv };
+    expect(options.env).not.toHaveProperty("MOSS_UAT_API_KEY_CHAT_KEY");
+  });
+
+  it("buildSeedHookInput threads the seed value", () => {
+    expect(
+      buildSeedHookInput("proj", "admin+data", {}, undefined, undefined, undefined, undefined, seed)
+        .apiKeyChat
+    ).toBe(seed);
+    expect(buildSeedHookInput("proj", "admin+data", {}).apiKeyChat).toBeUndefined();
+  });
+});

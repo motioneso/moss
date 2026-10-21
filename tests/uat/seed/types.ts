@@ -127,4 +127,27 @@ export interface SeedOptions {
    * byte-for-byte unchanged.
    */
   readonly chatScript?: UatChatScript;
+  /**
+   * #3410: absent by default. When set, seeds an API-key provider at this address with one chat
+   * model and makes it the instance default. Applies at admin+data and multi-user only.
+   */
+  readonly apiKeyChat?: ApiKeyChatSeed;
+}
+
+/**
+ * #3410: seed-container variables for the opt-in API-key chat provider. The key file is
+ * mounted read-only; only its container path travels in the environment.
+ */
+export const API_KEY_CHAT_SEED_ENV = {
+  kind: "MOSS_UAT_API_KEY_CHAT_KIND",
+  baseUrl: "MOSS_UAT_API_KEY_CHAT_BASE_URL",
+  model: "MOSS_UAT_API_KEY_CHAT_MODEL",
+  keyFile: "MOSS_UAT_API_KEY_CHAT_KEY_FILE"
+} as const;
+
+export interface ApiKeyChatSeed {
+  readonly providerKind: "anthropic" | "openai-compatible";
+  readonly baseUrl: string;
+  readonly model: string;
+  readonly apiKey: string;
 }

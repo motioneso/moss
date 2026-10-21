@@ -11,10 +11,11 @@ import {
 import { useState } from "react";
 
 import { Button } from "@moss/ui";
-import { refreshAiProviderModels } from "../api/client.js";
+import { getAiProviderChatReadiness, refreshAiProviderModels } from "../api/client.js";
 import { checkOnboardingProvider } from "../api/onboarding-connect-client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { readError } from "./settings-types.js";
+import { describeChatReadiness, showsChatReadiness } from "./settings-ai-chat-readiness.js";
 import { AddModelForm, CAP_SHORT, EditModelForm, TIERS } from "./settings-ai-edit-model-form.js";
 import type {
   AiConfiguredModelDto,
@@ -161,6 +162,13 @@ export function ProviderModels(props: {
     staleTime: 60_000,
     retry: false
   });
+  const chatReadinessQuery = useQuery({
+    queryKey: queryKeys.ai.providerChatReadiness(provider.id, provider.updatedAt),
+    queryFn: () => getAiProviderChatReadiness(provider.id),
+    enabled: showsChatReadiness(provider),
+    staleTime: 60_000,
+    retry: false
+  });
   const refreshMutation = useMutation({
     mutationFn: () => refreshAiProviderModels(provider.id),
     onSuccess: (result) => {
@@ -181,6 +189,10 @@ export function ProviderModels(props: {
         : initializationQuery.data?.status === "error" || initializationQuery.isError
           ? "Could not reach the provider"
           : null;
+  const chatReadinessOutcome = chatReadinessQuery.data
+    ? describeChatReadiness(chatReadinessQuery.data.status)
+    : null;
+  const statusLine = initializationOutcome ?? chatReadinessOutcome;
   return (
     <div className="prov__models">
       <div className="prov__modelshd">
@@ -220,9 +232,9 @@ export function ProviderModels(props: {
           </Button>
         </span>
       </div>
-      {initializationOutcome !== null ? (
+      {statusLine !== null ? (
         <div className="prov__synced" role="status">
-          {initializationOutcome}
+          {statusLine}
         </div>
       ) : null}
       {!open ? null : (

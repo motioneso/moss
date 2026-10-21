@@ -78,6 +78,21 @@ describe("buildStructuredRequest", () => {
     expect(body.generationConfig.responseMimeType).toBe("application/json");
     expect(body.generationConfig.responseSchema).toBe(schema);
   });
+
+  it("anthropic: uses the row's address without doubling /v1", () => {
+    expect(
+      buildStructuredRequest("anthropic", "sk-a", "http://proxy.test/v1/", makeInput()).url
+    ).toBe("http://proxy.test/v1/messages");
+    expect(buildStructuredRequest("anthropic", "sk-a", null, makeInput()).url).toBe(
+      "https://api.anthropic.com/v1/messages"
+    );
+  });
+
+  it("openai-compatible: uses the row's address without doubling /v1", () => {
+    expect(
+      buildStructuredRequest("openai-compatible", "sk-o", "http://proxy.test/v1", makeInput()).url
+    ).toBe("http://proxy.test/v1/chat/completions");
+  });
 });
 
 describe("extractStructuredResult", () => {

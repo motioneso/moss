@@ -3,12 +3,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError as handleModuleRouteError } from "@moss/module-sdk";
 import {
+  apiKeyChatReadinessRouteSchema,
   aiDiscoverModelsRouteSchema,
   discoverAiProviderModelsRouteSchema,
   refreshAiProviderModelsRouteSchema,
   testAiProviderConfigRouteSchema
 } from "@moss/shared";
 
+import { ApiKeyChatReadiness, isApiKeyChatProviderKind } from "./api-key-chat-readiness.js";
+import type { CliToolVersionReader } from "./cli-tool-versions.js";
 import type { AiSecretCipher } from "./crypto.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import type { ModelDiscoveryService } from "./model-discovery.js";
@@ -20,18 +23,29 @@ interface IdParams {
   readonly id: string;
 }
 
+const CHAT_READINESS_NOT_APPLICABLE_MESSAGE =
+  "Chat readiness applies only to Anthropic and OpenAI-compatible API-key providers";
+
 export interface AiProviderValidationRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly repository: AiRepository;
   readonly secretCipher: AiSecretCipher;
   readonly modelDiscovery: ModelDiscoveryService;
+  /** Installed agent programs, from the cli-runner. Absent when the runner is not configured. */
+  readonly cliToolVersionReader?: CliToolVersionReader;
+  /** Test seam. Production builds one per registration so its cache spans requests. */
+  readonly chatReadiness?: ApiKeyChatReadiness;
 }
 
 export function registerAiProviderValidationRoutes(
   server: FastifyInstance,
   dependencies: AiProviderValidationRouteDependencies
 ): void {
+  const chatReadiness =
+    dependencies.chatReadiness ??
+    new ApiKeyChatReadiness({ cliToolVersionReader: dependencies.cliToolVersionReader });
+
   server.post<{ Params: IdParams }>(
     "/api/ai/providers/:id/test",
     { schema: testAiProviderConfigRouteSchema },
@@ -57,6 +71,35 @@ export function registerAiProviderValidationRoutes(
         );
 
         return { result };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.get<{ Params: IdParams }>(
+    "/api/ai/providers/:id/chat-readiness",
+    { schema: apiKeyChatReadinessRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const provider = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          loadTestableProvider(dependencies, scopedDb, accessContext, request.params.id)
+        );
+        const providerKind = provider.provider_kind;
+        if (provider.auth_method !== "api_key" || !isApiKeyChatProviderKind(providerKind)) {
+          throw new HttpError(400, CHAT_READINESS_NOT_APPLICABLE_MESSAGE);
+        }
+
+        // The provider call runs outside the database transaction.
+        const status = await chatReadiness.check({
+          providerId: provider.id,
+          providerKind,
+          baseUrl: provider.base_url,
+          updatedAt: provider.updated_at,
+          openCredential: () => dependencies.secretCipher.decryptJson(provider.encrypted_credential)
+        });
+        return { status };
       } catch (error) {
         return handleRouteError(error, reply);
       }

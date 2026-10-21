@@ -27,6 +27,7 @@ import {
 } from "./schema-bounds.js";
 import { CLI_STRUCTURED_TIMEOUT_MESSAGE } from "./transport-timeouts.js";
 import { raceAbort, unfence } from "./run-helpers.js";
+import { createReplyNormalizer } from "./normalize-reply.js";
 
 export const STRUCTURED_MAX_REPAIR_RETRIES = 2;
 
@@ -468,6 +469,7 @@ async function runPreparedModel(
   let validationReason: StructuredFailureReason = "schema_validation";
   const ajv = new Ajv({ strict: false, validateFormats: false });
   const validate = ajv.compile(input.replySchema ?? input.schema);
+  const normalizeReply = createReplyNormalizer(input.replySchema ?? input.schema);
   const maxOutputTokens = input.maxOutputTokens ?? STRUCTURED_DEFAULT_MAX_OUTPUT_TOKENS;
   const messages: StructuredChatTurn[] = [{ role: "user", content: input.prompt }];
   const usage = { inputTokens: 0, outputTokens: 0 };
@@ -576,7 +578,8 @@ async function runPreparedModel(
       return failure("validation_failed", "oversized_output");
     }
 
-    if (validate(result.rawObject)) {
+    const object = normalizeReply(result.rawObject);
+    if (validate(object)) {
       logger?.info(
         {
           service: input.service,
@@ -589,19 +592,43 @@ async function runPreparedModel(
         "ai.structured usage"
       );
       const sources = "sources" in result ? result.sources : undefined;
-      return { ok: true, object: result.rawObject, usage, ...(sources ? { sources } : {}) };
+      return { ok: true, object, usage, ...(sources ? { sources } : {}) };
     }
 
     validationReason = "schema_validation";
     const error = validate.errors?.[0];
     // Schema paths come from the host schema; instance paths can contain private output keys.
-    validation = error ? { keyword: error.keyword, schemaPath: error.schemaPath } : undefined;
+    validation = error
+      ? structuredValidationDetail(error, input.replySchema ?? input.schema)
+      : undefined;
     messages.push({ role: "assistant", content: serialized.slice(0, 4000) });
     messages.push({ role: "user", content: formatValidationErrors(validate.errors ?? []) });
     input.telemetry?.emit({ kind: "repair" });
   }
 
   return failure("validation_failed", validationReason);
+}
+
+/** Required-field names are resolved against the host schema, never copied from output keys. */
+function structuredValidationDetail(error: ErrorObject, schema: Record<string, unknown>) {
+  let schemaPath = error.schemaPath;
+  if (error.keyword === "required") {
+    let node: unknown = schema;
+    const parentPath = schemaPath.slice(0, -"/required".length);
+    for (const segment of parentPath.split("/").slice(1)) {
+      const key = decodeURIComponent(segment).replace(/~1/g, "/").replace(/~0/g, "~");
+      node = node && typeof node === "object" ? Reflect.get(node, key) : undefined;
+    }
+    if (node && typeof node === "object" && "required" in node && Array.isArray(node.required)) {
+      const index = node.required.indexOf(error.params.missingProperty);
+      const key: unknown = node.required[index];
+      if (typeof key === "string") {
+        const escaped = encodeURIComponent(key.replace(/~/g, "~0").replace(/\//g, "~1"));
+        schemaPath = `${parentPath}/properties/${escaped}`;
+      }
+    }
+  }
+  return { keyword: error.keyword, schemaPath };
 }
 
 function formatValidationErrors(errors: readonly ErrorObject[]): string {

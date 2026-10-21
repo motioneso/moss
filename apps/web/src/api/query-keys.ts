@@ -58,6 +58,8 @@ export const queryKeys = {
     providers: ["ai", "providers"] as const,
     providerInitialization: (providerId: string) =>
       ["ai", "provider-initialization", providerId] as const,
+    providerChatReadiness: (providerId: string, updatedAt: string) =>
+      ["ai", "provider-chat-readiness", providerId, updatedAt] as const,
     models: ["ai", "models"] as const,
     chatModelOverride: ["ai", "chat-model-override"] as const,
     chatModelFavorites: ["ai", "chat-model-favorites"] as const,

@@ -307,7 +307,14 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +
       "on the login's default. The provider catalog offers explicit Codex and OpenCode CLI choices " +
       "because they share a protocol family but use separate agent identities; changing an existing " +
-      "OpenAI-compatible provider to CLI auth requires choosing its agent. The Codex ACP row hands " +
+      "OpenAI-compatible provider to CLI auth requires choosing its agent. " +
+      "The catalog also offers Anthropic (API key), whose optional Base URL field points it at any " +
+      "Anthropic-compatible service; chat, background jobs and model lists use that address. " +
+      "A provider address that includes a username or password is refused when saved. " +
+      "An Anthropic or OpenAI-compatible API-key provider card also shows whether chat can use it. " +
+      "When chat cannot, a line on the card reads 'The provider rejected the API key', 'Could " +
+      "not reach the provider', 'No API key is saved', 'The chat program for this provider is " +
+      "not installed', or 'The sign-in helper is not running'. The Codex ACP row hands " +
       "the instance's shared Codex connection into each user's own isolated runner home, " +
       "and provides a minus button (disable) and a trash button (remove after confirmation; the provider's " +
       "default entry cannot be removed). The Models section collapses from its header. CLI provider " +
@@ -321,8 +328,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "note are hidden even when an old setting is saved. The selected choice is passed to the ACP " +
       "chat launch only when that provider is selected and is applied when the agent advertises that option. " +
       "Codex chat supports the newer models listed after a refresh without requiring a new sign-in or separate installation. " +
-      "General live chat reports that API-key providers are not available yet and does not start an engine; " +
-      "choose a CLI provider for general live chat. The normal docked drawer automatically attaches the open meeting as removable context, using its saved notes even before a transcript exists. Answers link transcript timestamps back to the exact line. These selected-meeting questions require the selected API-key chat model and run without tools; subscription meeting chat is not supported yet. Remove the About this meeting chip to continue ordinary chat with a subscription model. The chip announces the attached meeting title to screen readers. Failed meeting questions remain visible above their error in the open chat. A migrated legacy CLI provider without a supported " +
+      "General live chat runs on a CLI provider or on an Anthropic or OpenAI-compatible API-key " +
+      "provider. API-key chat runs the claude agent or OpenCode with the provider's saved address, " +
+      "key and model, and keeps Moss tools and confirmation cards. " +
+      "The normal docked drawer automatically attaches the open meeting as removable context, using its saved notes even before a transcript exists. Answers link transcript timestamps back to the exact line. These selected-meeting questions require the selected API-key chat model and run without tools; subscription meeting chat is not supported yet. Remove the About this meeting chip to continue ordinary chat with a subscription model. The chip announces the attached meeting title to screen readers. Failed meeting questions remain visible above their error in the open chat. A migrated legacy CLI provider without a supported " +
       "ACP agent remains configured but cannot start chat; the response tells the admin to add a " +
       "supported CLI provider. If the active provider changes while a message is being prepared, " +
       "the message is left unsent and the user is asked to retry. " +
@@ -506,11 +515,31 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
       "The chat model an admin locked is unavailable. The chat panel header reads Model unavailable, the message box is disabled, and a warning explains how to restore it."
   },
   {
-    code: "core.ai.api_key_live_chat_unavailable",
+    code: "core.ai.api_key_chat_provider_unsupported",
     class: "prerequisite",
     remediationRef: "core.ai.connect_cli_provider",
     description:
-      "General live chat cannot start with an API-key provider; it requires a supported CLI provider. Selected-meeting questions are the separate API-key-only capability in the same drawer."
+      "General live chat cannot start with an API-key provider of a type other than Anthropic or OpenAI-compatible. Selected-meeting questions are the separate API-key-only capability in the same drawer."
+  },
+
+  {
+    code: "core.ai.api_key_rejected",
+    class: "prerequisite",
+    remediationRef: "core.ai.check_api_key",
+    description:
+      "The provider refused the saved API key during a chat. Chat reads 'The provider rejected " +
+      "the API key. An admin can check it under Settings, AI providers.' When the saved key " +
+      "cannot be read, chat reads 'The API key for this provider could not be read. An admin " +
+      "can enter it again under Settings, AI providers.'"
+  },
+
+  {
+    code: "core.ai.provider_address_has_login",
+    class: "validation",
+    description:
+      "Saving an AI provider is refused when its address includes a username or password. The " +
+      "message reads 'A provider address cannot include a username or password.' Remove them " +
+      "from the address and save again."
   },
   {
     code: "core.ai.unsupported_legacy_cli_provider",
@@ -599,10 +628,19 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
   {
     id: "core.ai.connect_cli_provider",
     description:
-      "Ask an administrator to choose a supported CLI provider for general live chat. API-key models currently support selected-meeting questions only.",
+      "Ask an administrator to choose an Anthropic or OpenAI-compatible API-key provider, or a supported CLI provider, for general live chat.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
+  {
+    id: "core.ai.check_api_key",
+    description:
+      "Ask an administrator to open Settings > AI providers, check the provider's API key with " +
+      "Test, and enter a new key if it was rejected or cannot be read.",
+    path: "/settings?section=aiproviders",
+    scope: "admin"
+  },
+
   {
     id: "core.ai.add_supported_cli_provider",
     description:
