@@ -41,6 +41,36 @@ def verify_nested_headers(page):
     assert page.evaluate(EXTRACT)["subject"] == ""
 
 
+def deep_message(phrase, depth=11, boundary=None):
+    content = MESSAGE.replace('<h3>Synthetic subject</h3>', '').replace(
+        'From: Example Sender', 'Example Sender&lt;sender@example.invalid&gt;').replace(
+        'Synthetic body', phrase + '<p>' + 'Invented paragraph. ' * 100 + '</p><p>MOSS BODY END</p>')
+    for level in range(1, depth + 1):
+        heading = '<h3>Other displayed heading</h3>' if level in [2, 4] else ''
+        if level == depth: heading += '<h2>' + phrase + '</h2>'
+        tag = 'main' if boundary == 'main' and level == 7 else 'section'
+        if level == 7 and boundary == 'list': heading += '<div role="listbox">Other mail</div>'
+        if level == 7 and boundary == 'navigation': heading += '<nav>Navigation</nav>'
+        content = '<' + tag + '>' + heading + content + '</' + tag + '>'
+    return content
+
+
+def verify_deep_headers(page):
+    phrase = 'MOSS BODY TEST deep'
+    page.set_content(deep_message(phrase))
+    page.evaluate((SOURCE / 'read-message.js').read_text())
+    capture = page.evaluate('phrase => __mossReadOpenedMessage(phrase)', phrase)
+    assert capture['ok'], 'Depth-11 subject blocked by earlier unrelated headings or shallow bound'
+    assert capture['subject'] == phrase and capture['body'].endswith('MOSS BODY END')
+    for boundary in ['main', 'list', 'navigation']:
+        page.set_content(deep_message(phrase, boundary=boundary))
+        assert page.evaluate('phrase => __mossReadOpenedMessage(phrase).reason', phrase) == 'identity', boundary
+    page.set_content(deep_message(phrase, depth=12))
+    assert page.evaluate('phrase => __mossReadOpenedMessage(phrase).reason', phrase) == 'identity'
+    page.set_content(deep_message(phrase).replace('<h2>' + phrase + '</h2>', ('<h2>' + phrase + '</h2>') * 2))
+    assert page.evaluate('phrase => __mossReadOpenedMessage(phrase).reason', phrase) == 'identity'
+
+
 def verify_layout(page):
     source = (SOURCE / "layout.js").read_text()
     phrase = "MOSS BODY TEST layout"
@@ -89,9 +119,7 @@ def verify_auto_body(browser, run):
     page.evaluate(reader)
     page.evaluate(auto)
     phrase = "MOSS BODY TEST 3141"
-    message = ('<section><h2>' + phrase + '</h2>' + MESSAGE.replace('<h3>Synthetic subject</h3>', '').replace(
-        "From: Example Sender", "Example Sender&lt;sender@example.invalid&gt;") + '</section>').replace(
-        "Synthetic body", phrase + "<p>" + "Invented paragraph. " * 100 + "</p><p>MOSS BODY END</p>")
+    message = deep_message(phrase)
     fixture = '<div role="listbox" aria-label="Message list"><div role="option">Unrelated synthetic mail</div></div><section id="pane"></section>'
 
     def reset():
@@ -253,7 +281,8 @@ def main():
               "One-shot body arrival, route change, stable complete capture and popup",
               "Body isolation, ambiguity, interaction, stop and timeout guards",
               "Nested sender and outer subject identification",
-              "Layout diagnosis counts, exclusions, bounds and popup wiring"]
+              "Layout diagnosis counts, exclusions, bounds and popup wiring",
+              "Depth-11 subject lookup through unrelated headings with boundaries"]
     (workspace / "plan.md").write_text("\n".join(f"- [ ] CP{i}: {p}" for i, p in enumerate(points, 1)))
     log = []
 
@@ -283,6 +312,8 @@ def main():
         passed(12)
         verify_layout(page)
         passed(13)
+        verify_deep_headers(page)
+        passed(14)
 
         # Mock only the browser API: this is popup logic verification, not proof
         # of Firefox extension installation or activeTab permission behavior.

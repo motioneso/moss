@@ -110,7 +110,7 @@ Two absent scans reduce brief rerender noise but cannot establish deletion or
 cancellation. This experiment does not open, create, edit or delete events, click
 through dates, read invitations from mail, or sync a complete calendar.
 
-## Try the automatic body test (version 0.4.1)
+## Try the automatic body test (version 0.4.3)
 
 1. Reload the add-on in `about:debugging`, then reload Outlook and leave it on
    **Inbox**. No permissions have been added.
@@ -142,6 +142,14 @@ the synthetic render; they are not authoritative message IDs or proof of complet
 mailbox coverage. Body capture is bounded to 12,000 characters. One result stays
 in tab memory across popup closure until Stop, reload or tab close. Restart and
 session recovery remain unimplemented. Live automatic body testing is pending.
+
+The automatic test searches up to twelve ancestor wrappers (depths 0–11), comparing
+at most 100 headings per wrapper and 500 characters per heading. It continues past
+unrelated intermediate headings until one subject-like heading contains the full
+test phrase. Multiple matching headings fail identity validation. Main/page,
+message-list/navigation and multiple-body boundaries still stop the search.
+Manual preview without a phrase retains its first-subject-candidate heuristic;
+its subject field can still be missing or inaccurate in unfamiliar layouts.
 
 ## Deliberately narrow behavior
 
@@ -223,6 +231,9 @@ Layout-report checks cover outer/main headings, excluded hidden/list/body
 headings, ancestor bounds, ambiguous bodies, exact report serialization, and
 popup wiring without starting a test. Appending raw body text in an isolated
 mutated diagnostic makes the exact-report assertion fail.
+The depth-11 fixture reproduces the reported shallow search failure with unrelated
+intermediate headings. It covers automatic capture, rejected duplicate subjects,
+the depth-12 limit, and main/list/navigation boundaries.
 Manifest validation:
 
 ```sh
@@ -289,3 +300,13 @@ missing/mismatched subject, unreadable/ambiguous body, size limit, missing body
 phrase/end marker and pending stable snapshots, including after timeout.
 The corrected extractor still needs a live repeat; automatic body capture has
 not yet been established. No mailbox content is retained in these notes.
+
+Version 0.4.2 live layout diagnosis: the report showed one readable body throughout
+depths 0–11, no main/list/navigation boundaries at those levels, and zero phrase
+headings through depth 10. At depth 11 there were five readable headings with one
+phrase match. This establishes that the prior five-wrapper search could not reach
+the matching heading. Unrelated headings earlier in the path also made the prior
+early-exit rule unsuitable for the automatic test. Version 0.4.3 raises the bound
+to twelve wrappers and searches specifically for a unique phrase-matching heading
+in automatic mode. A synthetic fixture reproducing both conditions failed before
+the change. The live corrected automatic capture still needs a repeat.

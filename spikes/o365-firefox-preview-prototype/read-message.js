@@ -18,20 +18,23 @@ globalThis.__mossReadOpenedMessage = (expectedPhrase = "") => {
   const isDate = (heading) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i.test(heading) && /\d/.test(heading);
   const isSubject = (heading) => !isSender(heading) && !isDate(heading) && !/^(To|Cc|Bcc):/i.test(heading);
   let headings = [];
+  let subjects = [];
   let scope = body.parentElement;
-  for (let depth = 0; scope && depth < 5; depth++, scope = scope.parentElement) {
+  // Live layout diagnostics located the synthetic subject at depth 11.
+  for (let depth = 0; scope && depth < 12; depth++, scope = scope.parentElement) {
     if (scope.matches('body, html, main, [role="main"]') || scope.querySelector('[role="listbox"], [role="navigation"], nav')) break;
     if (scope.querySelectorAll('[role="document"][aria-label="Message body"]').length !== 1) break;
-    headings = [...scope.querySelectorAll('h1, h2, h3, [role="heading"]')]
+    headings = [...scope.querySelectorAll('h1, h2, h3, [role="heading"]')].slice(0, 100)
       .filter((heading) => !body.contains(heading) && readable(heading))
       .map((heading) => heading.innerText.trim().slice(0, 500)).filter(Boolean);
-    // A nested message header can contain only sender/date. Keep looking within
-    // the same bounded, single-message wrappers for its outer subject heading.
-    if (headings.some(isSubject)) break;
+    // In the automatic test, intermediate headings must not end the search.
+    // Require a unique subject-like heading containing the supplied test phrase.
+    subjects = headings.filter(isSubject).filter((heading) => !expectedPhrase
+      || heading.toLowerCase().includes(expectedPhrase.toLowerCase()));
+    if (subjects.length) break;
   }
   const sender = headings.find(isSender) || "";
   const date = headings.find(isDate) || "";
-  const subjects = headings.filter(isSubject);
   const subject = subjects.length === 1 ? subjects[0] : "";
   if (expectedPhrase && !subject.toLowerCase().includes(expectedPhrase.toLowerCase())) return { ok: false, reason: "identity" };
 
