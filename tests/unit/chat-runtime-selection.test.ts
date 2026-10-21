@@ -64,6 +64,19 @@ function fakeMux(): Multiplexer & { opened: string[]; killed: MuxHandle[] } {
 }
 
 describe("selectEngineFactory — boot-time fork (§3.5)", () => {
+  it("refuses voice admission before a missing or disconnected ACP runner can consume its receipt", () => {
+    const missing = selectEngineFactory({ env: {}, acpChat: true });
+    expect(() => missing.assertReady?.()).toThrow(CliChatUnavailableError);
+    const selected = selectEngineFactory({
+      env: { JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret" },
+      acpChat: true
+    });
+    try {
+      expect(() => selected.assertReady?.()).toThrow(CliChatUnavailableError);
+    } finally {
+      selected.connection?.close();
+    }
+  });
   it("selects the RPC client when the socket + secret are configured", async () => {
     const { factory, connection } = selectEngineFactory({
       env: {

@@ -62,6 +62,24 @@ function setup(overrides: Partial<ChatSessionManagerDeps> = {}) {
   return { manager, engines, persistence };
 }
 describe("admitted Main voice turns", () => {
+  it("keeps the claim untouched during a known runner outage and can send after recovery", async () => {
+    let available = false;
+    const assertRuntimeReady = vi.fn(() => {
+      if (!available) throw new Error("runner unavailable");
+    });
+    const { manager, engines } = setup({ assertRuntimeReady });
+    const claim = vi.fn(async () => true);
+    await expect(
+      manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, claim)
+    ).rejects.toThrow("runner unavailable");
+    expect(claim).not.toHaveBeenCalled();
+    expect(engines).toHaveLength(0);
+    available = true;
+    await expect(
+      manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, claim)
+    ).resolves.toBe("executed");
+    expect(claim).toHaveBeenCalledOnce();
+  });
   it("does not claim or launch while the configured provider is unavailable", async () => {
     const { manager, persistence, engines } = setup();
     const claim = vi.fn(async () => true);

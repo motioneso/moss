@@ -366,7 +366,7 @@ export function selectEngineFactory(
     readonly acpChat?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
   } = {}
-): { factory: ChatEngineFactory; connection?: RpcConnection } {
+): { factory: ChatEngineFactory; connection?: RpcConnection; assertReady?: () => void } {
   const env = opts.env ?? process.env;
   // Chat has no old-bridge fallback (§ task 7 plan): an unset socket for ACP chat still points at
   // the same default path prod and the dev-instance script already start the runner on, instead of
@@ -382,6 +382,11 @@ export function selectEngineFactory(
       // in-process bridge. An explicitly configured socket remains a hard boot failure.
       if (opts.acpChat && !env.JARVIS_CLI_RUNNER_SOCKET?.trim()) {
         return {
+          assertReady: () => {
+            throw new CliChatUnavailableError(
+              "JARVIS_CLI_RUNNER_RPC_SECRET is required for the ACP chat runner"
+            );
+          },
           factory: unavailableEngineFactory(
             "JARVIS_CLI_RUNNER_RPC_SECRET is required for the ACP chat runner"
           )
@@ -406,6 +411,7 @@ export function selectEngineFactory(
     if (opts.acpChat && connection) {
       return {
         connection,
+        assertReady: () => connection.assertReady(),
         factory: (provider, sessionKey, engineOpts) => {
           // Structured reminder interpretation uses the one-shot profile on this same connection.
           if (engineOpts?.needsStructuredOutput) return factory(provider, sessionKey, engineOpts);
@@ -705,6 +711,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
   // RPC client (socket set, fail-fast on a missing secret — §6.6) else in-process.
   let connection: RpcConnection | undefined;
   let engineFactory: ChatEngineFactory;
+  let assertRuntimeReady: (() => void) | undefined;
   if (deps.engineFactory) {
     engineFactory = deps.engineFactory;
   } else if (deps.engineSelection) {
@@ -720,6 +727,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     });
     engineFactory = selected.factory;
     connection = selected.connection;
+    assertRuntimeReady = selected.assertReady;
   } else {
     engineFactory = realEngineFactory;
   }
@@ -737,6 +745,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     engineFactory(provider, sessionKey, options);
 
   manager = new ChatSessionManager({
+    assertRuntimeReady,
     flushActionRecords: deps.flushActionRecords,
     engineFactory: managerEngineFactory,
     persistence,

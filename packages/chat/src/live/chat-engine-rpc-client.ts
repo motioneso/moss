@@ -284,6 +284,13 @@ export class RpcConnection {
 
   // ─── public RPC surface ──────────────────────────────────────────────────────
 
+  /** A snapshot for durable admission; boot/reconnect owns establishing the connection. */
+  assertReady(): void {
+    if (this.state !== "ready" || this.reconciling) {
+      throw new CliChatUnavailableError("cli-runner is not ready for dispatch");
+    }
+  }
+
   launch(sessionKey: string, params: RpcLaunchParams): Promise<RpcLaunchResult> {
     return this.call<RpcLaunchResult>("launch", sessionKey, params);
   }

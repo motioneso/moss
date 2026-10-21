@@ -287,6 +287,8 @@ export interface ReminderTurnOptions extends HandledTurnOptions {
 }
 
 export interface ChatSessionManagerDeps {
+  /** Refuse known runtime outages before claiming a durable voice request. */
+  readonly assertRuntimeReady?: () => void;
   readonly engineFactory: (
     provider: ProviderKind,
     sessionKey: string,

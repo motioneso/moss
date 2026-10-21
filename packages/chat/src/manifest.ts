@@ -187,7 +187,7 @@ export const chatModuleManifest = {
     {
       id: "chat.voice_requests",
       description:
-        "Main reviews ring transcripts with Send and Open reply. Private/module/other chats hide review. Companion links open owned receipts without sending. Busy chats defer; interrupted turns never auto-replay.",
+        "Review ring transcripts in Main with Send and Open reply. Private/module/other chats hide review. Links open owned receipts without sending. Busy chats defer; runner outages keep requests queued. Interrupted turns never auto-replay.",
       featureFlagId: "chat.module"
     },
     {
