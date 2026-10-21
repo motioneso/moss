@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Header states — design reference</title>
+    <link rel="stylesheet" href="mockups.css" />
+  </head>
+  <body>
+    <main class="state-list">
+      <h1>Header states</h1>
+      <div class="state-row">
+        <strong>Default</strong
+        ><a
+          class="jds-iconbtn mock-cog is-default"
+          href="#"
+          aria-label="Job Search settings"
+          title="Job Search settings"
+          ><svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M9.7 4.3 10.3 2h3.4l.6 2.3 2 .9 2.1-.6 1.7 2.9-1.5 1.7.2 2.2 1.7 1.6-1.7 3-2.2-.5-1.9 1-.5 2.3h-3.4l-.7-2.2-2-.9-2.1.6-1.7-3 1.5-1.7-.2-2.2-1.7-1.5 1.7-3 2.2.5z"
+            />
+            <circle cx="12" cy="10.8" r="3" /></svg
+        ></a>
+      </div>
+      <div class="state-row">
+        <strong>Hover</strong
+        ><a
+          class="jds-iconbtn mock-cog is-hover"
+          href="#"
+          aria-label="Job Search settings"
+          title="Job Search settings"
+          ><svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M9.7 4.3 10.3 2h3.4l.6 2.3 2 .9 2.1-.6 1.7 2.9-1.5 1.7.2 2.2 1.7 1.6-1.7 3-2.2-.5-1.9 1-.5 2.3h-3.4l-.7-2.2-2-.9-2.1.6-1.7-3 1.5-1.7-.2-2.2-1.7-1.5 1.7-3 2.2.5z"
+            />
+            <circle cx="12" cy="10.8" r="3" /></svg
+        ></a>
+      </div>
+      <div class="state-row">
+        <strong>Focus</strong
+        ><a
+          class="jds-iconbtn mock-cog is-focus"
+          href="#"
+          aria-label="Job Search settings"
+          title="Job Search settings"
+          ><svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M9.7 4.3 10.3 2h3.4l.6 2.3 2 .9 2.1-.6 1.7 2.9-1.5 1.7.2 2.2 1.7 1.6-1.7 3-2.2-.5-1.9 1-.5 2.3h-3.4l-.7-2.2-2-.9-2.1.6-1.7-3 1.5-1.7-.2-2.2-1.7-1.5 1.7-3 2.2.5z"
+            />
+            <circle cx="12" cy="10.8" r="3" /></svg
+        ></a>
+      </div>
+      <div class="state-row">
+        <strong>Active</strong
+        ><a
+          class="jds-iconbtn mock-cog is-active"
+          href="#"
+          aria-label="Job Search settings"
+          title="Job Search settings"
+          ><svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M9.7 4.3 10.3 2h3.4l.6 2.3 2 .9 2.1-.6 1.7 2.9-1.5 1.7.2 2.2 1.7 1.6-1.7 3-2.2-.5-1.9 1-.5 2.3h-3.4l-.7-2.2-2-.9-2.1.6-1.7-3 1.5-1.7-.2-2.2-1.7-1.5 1.7-3 2.2.5z"
+            />
+            <circle cx="12" cy="10.8" r="3" /></svg
+        ></a>
+      </div>
+      <div class="state-row">
+        <strong>Disabled</strong
+        ><button class="jds-iconbtn mock-cog" disabled aria-label="Job Search settings unavailable">
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M9.7 4.3 10.3 2h3.4l.6 2.3 2 .9 2.1-.6 1.7 2.9-1.5 1.7.2 2.2 1.7 1.6-1.7 3-2.2-.5-1.9 1-.5 2.3h-3.4l-.7-2.2-2-.9-2.1.6-1.7-3 1.5-1.7-.2-2.2-1.7-1.5 1.7-3 2.2.5z"
+            />
+            <circle cx="12" cy="10.8" r="3" />
+          </svg>
+        </button>
+      </div>
+      <div class="state-row">
+        <strong>Loading</strong>
+        <div class="mock-status" data-tone="loading" role="status">Searching for new roles…</div>
+      </div>
+      <div class="state-row">
+        <strong>Error</strong>
+        <div class="mock-status" data-tone="error" role="status">Search couldn’t finish</div>
+      </div>
+      <div class="state-row">
+        <strong>Success</strong>
+        <div class="mock-status" data-tone="success" role="status">Search complete</div>
+      </div>
+      <p class="mock-quiet">
+        Static design reference. Loading, error and success belong to status; the settings cog
+        remains available.
+      </p>
+    </main>
+  </body>
+</html>
