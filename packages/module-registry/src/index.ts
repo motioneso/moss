@@ -3264,7 +3264,6 @@ export const LIFECYCLE_MIGRATION_PENDING: readonly string[] = [
   "ai",
   "briefings",
   "calendar",
-  "chat",
   "connectors",
   "email",
   "jarvis.commitments",

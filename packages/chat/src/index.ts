@@ -110,6 +110,9 @@ export * from "./memory-distillation.js";
 export * from "./memory-settings-repository.js";
 export * from "./recall-port.js";
 export * from "./repository.js";
+export * from "./voice-requests.js";
+export * from "./voice-request-service.js";
+export { collectVoiceRequestExport } from "./voice-request-export.js";
 export * from "./routes.js";
 export * from "./skills/repository.js";
 

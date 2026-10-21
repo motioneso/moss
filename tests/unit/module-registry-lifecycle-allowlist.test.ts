@@ -18,7 +18,6 @@ describe("LIFECYCLE_MIGRATION_PENDING allowlist", () => {
         "ai",
         "briefings",
         "calendar",
-        "chat",
         "connectors",
         "email",
         "jarvis.commitments",

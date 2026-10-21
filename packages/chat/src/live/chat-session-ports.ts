@@ -272,6 +272,7 @@ export interface Clock {
  * along, because a handled read/write is a real module action with a real result.
  */
 export interface HandledTurnOptions {
+  readonly turnId?: string;
   /** Captured conversation; null refuses persistence, omitted keeps legacy lookup. */
   readonly threadId?: string | null;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
@@ -282,7 +283,6 @@ export interface HandledTurnOptions {
 
 /** A stop that lands before the reminder turn commits rolls the whole turn back. */
 export interface ReminderTurnOptions extends HandledTurnOptions {
-  readonly turnId?: string;
   readonly stopSignal?: AbortSignal;
 }
 

@@ -209,6 +209,10 @@ export function useChatStream(
         const record = parseRecord(event.data);
         if (
           record &&
+          (!record.originThreadId || record.originThreadId === hydratedDrawerThread.current) &&
+          (!record.voiceThreadId ||
+            (!hydratedSideThread.current &&
+              record.voiceThreadId === hydratedDrawerThread.current)) &&
           (!record.background ||
             (!hydratedSideThread.current &&
               record.backgroundThreadId === hydratedDrawerThread.current))
@@ -491,6 +495,8 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
+      voiceThreadId: typeof parsed.voiceThreadId === "string" ? parsed.voiceThreadId : undefined,
+      originThreadId: typeof parsed.originThreadId === "string" ? parsed.originThreadId : undefined,
       background: parsed.background === true ? true : undefined,
       scheduledReadSource: parsed.scheduledReadSource === "tasks" ? "tasks" : undefined,
       backgroundThreadId:

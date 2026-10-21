@@ -97,7 +97,8 @@ export function routeLiveOriginRecord(
     readonly surface: string;
   }
 ): boolean {
-  const { actorUserId, originThreadId, record } = input;
+  const { actorUserId, originThreadId } = input;
+  const record = input.record;
   if (!originThreadId || !record.actionRequestId || !input.surface) return false;
   if (record.kind !== "action_request" && record.kind !== "action_result") return false;
   let surface: ChatSurface;
@@ -116,17 +117,19 @@ export function routeLiveOriginRecord(
     input.transitions.get(key)?.pending
   )
     return false;
+  const tag = (next: TranscriptRecord): TranscriptRecord =>
+    !session.incognito && surface === "drawer" ? { ...next, originThreadId } : next;
   if (record.kind === "action_result" && record.outcome) {
-    injectActionResultRecord(record, {
+    injectActionResultRecord(tag(record), {
       sessionKey: key,
       sequenceBySession: input.sequenceBySession,
       turnRecords: input.turnRecords.get(key),
       actionResults: input.actionResults.get(key),
       locale: session.locale,
-      emit: (next) => input.emit(surface, next)
+      emit: (next) => input.emit(surface, tag(next))
     });
   } else {
-    input.emit(surface, record);
+    input.emit(surface, tag(record));
   }
   return true;
 }
@@ -154,7 +157,8 @@ export async function routeOriginRecord(
     readonly historyOnly?: boolean;
   }
 ): Promise<OriginRecordReceipt> {
-  const { actorUserId, originThreadId, record, persistence } = input;
+  const { actorUserId, originThreadId, persistence } = input;
+  const record = input.record;
   const receipt: { historyPersisted: boolean; historyIgnored?: boolean } = {
     historyPersisted: false
   };
@@ -217,6 +221,8 @@ export async function routeOriginRecord(
   const session = input.sessions.get(key);
   if (session && (session.actorUserId !== actorUserId || session.threadId !== originThreadId))
     return receipt;
+  const tag = (next: TranscriptRecord): TranscriptRecord =>
+    !origin.incognito && origin.surface === "drawer" ? { ...next, originThreadId } : next;
   if (record.kind === "action_result" && record.outcome) {
     if (input.turnsInFlight.has(key)) {
       const currentSequence = input.sequenceBySession.get(key) ?? 0;
@@ -224,11 +230,11 @@ export async function routeOriginRecord(
       approvalSequence ??= Math.max(currentSequence, recordSequence) + 1;
       input.sequenceBySession.set(key, Math.max(currentSequence, approvalSequence));
       const pending = input.pendingBySession.get(key) ?? [];
-      pending.push({ record, recordSequence, approvalSequence, locale });
+      pending.push({ record: tag(record), recordSequence, approvalSequence, locale });
       input.pendingBySession.set(key, pending);
       return receipt;
     }
-    injectActionResultRecord(record, {
+    injectActionResultRecord(tag(record), {
       sessionKey: key,
       sequenceBySession: input.sequenceBySession,
       recordSequence,
@@ -236,10 +242,10 @@ export async function routeOriginRecord(
       turnRecords: input.turnRecords.get(key),
       actionResults: input.actionResults.get(key),
       locale,
-      emit: (next) => input.emit(origin.surface, next)
+      emit: (next) => input.emit(origin.surface, tag(next))
     });
     return receipt;
   }
-  input.emit(origin.surface, record);
+  input.emit(origin.surface, tag(record));
   return receipt;
 }

@@ -1150,6 +1150,28 @@ export interface ChatLiveTurnsTable {
   started_at: TimestampColumn;
 }
 
+export interface ChatVoiceRequestsTable {
+  id: string;
+  owner_user_id: string;
+  thread_id: string;
+  source_device_id: string;
+  recording_id: string;
+  fingerprint: string;
+  transcript_revision: number;
+  transcript: string;
+  captured_at: TimestampColumn | null;
+  automatic: boolean;
+  turn_id: string;
+  user_message_id: string;
+  assistant_message_id: string;
+  state: "no-speech" | "ready-to-send" | "queued" | "dispatching" | "replied" | "interrupted";
+  confirmed_at: TimestampColumn | null;
+  dispatch_boot_id: string | null;
+  dispatched_at: TimestampColumn | null;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
 export type ChatSkillSource = "authored" | "uploaded";
 
 export interface ChatSkillsTable {
@@ -2105,6 +2127,7 @@ export interface MossDatabase {
   "app.chat_reminder_quiet_allowances": ChatReminderQuietAllowancesTable;
   "app.chat_reminder_quiet_proposals": ChatReminderQuietProposalsTable;
   "app.chat_live_turns": ChatLiveTurnsTable;
+  "app.chat_voice_requests": ChatVoiceRequestsTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;
   "app.chat_classifier_shadow_reviews": ChatClassifierShadowReviewsTable;

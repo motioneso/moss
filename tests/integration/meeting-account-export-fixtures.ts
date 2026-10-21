@@ -176,7 +176,9 @@ export const meetingExportTables = [
       "due_at",
       "created_at",
       "early_enqueued",
-      "input_json"
+      "input_json",
+      "recording_import_id",
+      "transcript_revision"
     ],
     derived: []
   },
