@@ -76,7 +76,8 @@ export function MarkdownMessage(props: MarkdownMessageProps) {
           )
         }}
       >
-        {displayText}
+        {/* A standalone numeric answer such as "4." otherwise becomes an empty list. */}
+        {displayText.replace(/^( {0,3}\d{1,9})([.)])([ \t\r\n]*)$/, "$1\\$2$3")}
       </ReactMarkdown>
       {answerProvenance && answerProvenance.length > 0 && (
         <SourceChips

@@ -261,7 +261,8 @@ function ThreadMarkdown({ text }: { readonly text: string }) {
           )
         }}
       >
-        {text}
+        {/* Keep standalone numeric answers visible, matching the shell renderer. */}
+        {text.replace(/^( {0,3}\d{1,9})([.)])([ \t\r\n]*)$/, "$1\\$2$3")}
       </ReactMarkdown>
     </div>
   );
