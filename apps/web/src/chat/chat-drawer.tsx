@@ -103,7 +103,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
     scrollToLatest,
     jumpToLatest
   } = useChatAutoscroll();
-  const resumeMutation = useMutation({
+  const { mutate: resume, isPending: resumePending } = useMutation({
     mutationFn: (vars: {
       readonly threadId: string;
       readonly surface: ChatSurface;
@@ -189,7 +189,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
   });
   const sendPending = isSending || transition.pending || Boolean(props.selectionPending);
   const historyActivationPending =
-    reviewThreadId !== null && (resumeMutation.isPending || !messagesQuery.isSuccess);
+    reviewThreadId !== null && (resumePending || !messagesQuery.isSuccess);
   const mainThreadId = findOwnerMainThread(threadsQuery.data?.threads ?? [], props.ownerId)?.id;
   const confirmedSelection = selection.current;
   const moduleIdentityPending =
@@ -564,18 +564,10 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setReviewThreadId(id);
       setLiveThreadId(null);
       if (change) {
-        resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
+        resume({ threadId: id, surface: props.surface, transition: change });
       }
     },
-    [
-      props.meetingContext,
-      props.surface,
-      transition,
-      callerDraft,
-      isSending,
-      resumeMutation,
-      queryClient
-    ]
+    [props.meetingContext, props.surface, transition, callerDraft, isSending, resume, queryClient]
   );
   useEffect(() => {
     if (!props.open || !props.threadToOpen || transition.pending) return;
