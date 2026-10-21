@@ -37,7 +37,7 @@ interface MarkdownMessageProps {
 }
 
 export function MarkdownMessage(props: MarkdownMessageProps) {
-  const { text, answerProvenance, answerProvenanceCitedIds } = props;
+  const { text = "", answerProvenance, answerProvenanceCitedIds } = props;
 
   // The marker comes only from the worker, never from message/source text. Keep safeUrl unchanged.
   if (props.scheduledReadSource === "tasks") {

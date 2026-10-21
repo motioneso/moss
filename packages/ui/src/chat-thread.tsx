@@ -249,7 +249,7 @@ function safeThreadUrl(url: string): string {
  * so markup in the source is escaped), URLs pass through {@link safeThreadUrl}, and links open
  * in a new tab with a hardened `rel`.
  */
-function ThreadMarkdown({ text }: { readonly text: string }) {
+function ThreadMarkdown({ text = "" }: { readonly text: string }) {
   return (
     <div className="chatd-md">
       <ReactMarkdown

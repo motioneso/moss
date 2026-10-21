@@ -9,6 +9,22 @@ import { Thread } from "@moss/ui";
 import { MarkdownMessage } from "../../apps/web/src/chat/markdown-message.js";
 
 describe("numeric Moss replies", () => {
+  it("keeps Main available when a response has no reply text", () => {
+    expect(() =>
+      // @ts-expect-error Exercise an incomplete runtime response, as in the hydration browser test.
+      renderToString(createElement(MarkdownMessage, { text: undefined }))
+    ).not.toThrow();
+  });
+
+  it("keeps shared threads available when a response has no reply text", () => {
+    expect(() =>
+      renderToString(
+        // @ts-expect-error Exercise an incomplete runtime response at the rendering boundary.
+        createElement(Thread, { records: [{ kind: "reply", text: undefined }] })
+      )
+    ).not.toThrow();
+  });
+
   for (const text of ["4.", "42.", "4)"]) {
     it(`keeps ${text} visible in Main`, () => {
       expect(renderToString(createElement(MarkdownMessage, { text }))).toContain(`<p>${text}</p>`);
