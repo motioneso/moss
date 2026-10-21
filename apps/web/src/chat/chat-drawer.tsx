@@ -21,7 +21,7 @@ import {
   useRef,
   useState
 } from "react";
-import { BrandMark, Button, Chip, IconButton, Menu } from "@moss/ui";
+import { BrandMark, Button, Chip, IconButton, Menu, Thread } from "@moss/ui";
 import {
   cancelChatTurn,
   beaconEndPrivateChat,
@@ -38,11 +38,10 @@ import { useAssistantName } from "../api/use-assistant-name.js";
 import { DEFAULT_CHAT_SURFACE, type ChatAttachmentDto, type ChatSurface } from "@moss/shared";
 import { ChatModelPill } from "./chat-model-pill";
 import { ChatWaitingIndicator } from "./chat-waiting-indicator";
-import { ChatEmptyState } from "./chat-empty-state";
+import { ChatConversationError, ChatEmptyState } from "./chat-empty-state";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { useChatRoute } from "./use-chat-route";
-import { Thread } from "@moss/ui";
 import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
@@ -877,32 +876,13 @@ export function ChatDrawer(props: ChatDrawerProps) {
             </div>
           ) : null}
           {moduleIdentityPending && privacyStateQuery.isError ? (
-            <div className="chatd-empty" role="alert">
-              <div className="chatd-empty__title">Could not load module conversation.</div>
-              <Button
-                aria-label="Retry conversation identity"
-                size="sm"
-                type="button"
-                variant="quiet"
-                onClick={() => void privacyStateQuery.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
+            <ChatConversationError
+              moduleConversation
+              onRetry={() => void privacyStateQuery.refetch()}
+            />
           ) : null}
           {messagesQuery.isError ? (
-            <div className="chatd-empty" role="alert">
-              <div className="chatd-empty__title">Could not load conversation.</div>
-              <Button
-                aria-label="Retry conversation"
-                size="sm"
-                type="button"
-                variant="quiet"
-                onClick={() => void messagesQuery.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
+            <ChatConversationError onRetry={() => void messagesQuery.refetch()} />
           ) : null}
           {effectiveRecords.length > 0 ? (
             <Thread

@@ -1,9 +1,33 @@
 import { useQuery } from "@tanstack/react-query";
-import { BrandMark } from "@moss/ui";
+import { BrandMark, Button } from "@moss/ui";
 import { listCalendarEvents, listTasks } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useUserLocale } from "../locale/locale-format";
 import { buildChatSeeds } from "./seeds";
+
+export function ChatConversationError(props: {
+  readonly moduleConversation?: boolean;
+  readonly onRetry: () => void;
+}) {
+  return (
+    <div className="chatd-empty" role="alert">
+      <div className="chatd-empty__title">
+        {props.moduleConversation
+          ? "Could not load module conversation."
+          : "Could not load conversation."}
+      </div>
+      <Button
+        aria-label={props.moduleConversation ? "Retry conversation identity" : "Retry conversation"}
+        size="sm"
+        type="button"
+        variant="quiet"
+        onClick={props.onRetry}
+      >
+        Retry
+      </Button>
+    </div>
+  );
+}
 
 export function ChatEmptyState(props: {
   readonly onSend: (text: string) => void;

@@ -94,8 +94,7 @@ import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import { registerScheduledTaskRoutes } from "./reminders/routes.js";
 import { registerChatUnreadRoutes } from "./unread-routes.js";
-import { createVoiceRequestService } from "./voice-request-runtime.js";
-import { registerVoiceRequestRoutes } from "./voice-request-routes.js";
+import { registerVoiceRequestRuntime } from "./voice-request-runtime.js";
 import type { VoiceRequestService } from "./voice-request-service.js";
 import { registerReminderArrivalLifecycle } from "./reminders/live-arrival.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
@@ -616,20 +615,7 @@ export function registerChatRoutes(
     wiring?.aiRepository
   );
 
-  if (dependencies.boss) {
-    const voiceRequests = createVoiceRequestService({
-      dataContext: dependencies.dataContext,
-      boss: dependencies.boss,
-      runtime,
-      resolveActiveModules
-    });
-    dependencies.adoptVoiceRequestService?.(voiceRequests);
-    registerVoiceRequestRoutes(server, {
-      service: voiceRequests,
-      resolveRingRecordingAccessContext: dependencies.resolveRingRecordingAccessContext,
-      resolveAccessContext: dependencies.resolveAccessContext
-    });
-  }
+  registerVoiceRequestRuntime(server, dependencies, runtime);
 
   registerReminderArrivalLifecycle(server, {
     connectionString: dependencies.reminderArrivalConnectionString,
