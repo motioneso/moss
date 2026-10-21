@@ -21,7 +21,7 @@ import {
   useRef,
   useState
 } from "react";
-import { BrandMark, Button, Chip, IconButton, Menu, Thread } from "@moss/ui";
+import { BrandMark, Chip, IconButton, Menu, Thread } from "@moss/ui";
 import {
   cancelChatTurn,
   beaconEndPrivateChat,
