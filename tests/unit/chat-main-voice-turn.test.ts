@@ -5,6 +5,10 @@ import {
   type ChatSessionManagerDeps
 } from "../../packages/chat/src/live/chat-session-manager.js";
 import type { TranscriptRecord, CliChatEngine } from "../../packages/chat/src/live/types.js";
+import {
+  UnsupportedApiKeyChatProviderError,
+  UnsupportedLegacyCliProviderError
+} from "../../packages/chat/src/live/errors.js";
 
 const binding = { threadId: "main", turnId: "reserved-turn" };
 function setup(overrides: Partial<ChatSessionManagerDeps> = {}) {
@@ -62,6 +66,57 @@ function setup(overrides: Partial<ChatSessionManagerDeps> = {}) {
   return { manager, engines, persistence };
 }
 describe("admitted Main voice turns", () => {
+  it.each(["anthropic", "openai-compatible"] as const)(
+    "admits a supported %s API-key provider through the ordinary Main turn",
+    async (provider) => {
+      const { manager, persistence, engines } = setup();
+      persistence.resolveActiveProvider = async () => ({
+        provider,
+        model: "test",
+        authMethod: "api_key",
+        providerConfigId: "configured-provider",
+        providerConfigRevision: "revision"
+      });
+      persistence.resolveChatCredential = vi.fn(async () => ({
+        apiKey: "test-key",
+        baseUrl: null,
+        revision: "revision"
+      }));
+      const claim = vi.fn(async () => true);
+      await expect(
+        manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, claim)
+      ).resolves.toBe("executed");
+      expect(claim).toHaveBeenCalledOnce();
+      expect(persistence.resolveChatCredential).toHaveBeenCalledWith(
+        "owner",
+        "configured-provider"
+      );
+      expect(engines).toHaveLength(1);
+      expect(engines[0]?.submit).toHaveBeenCalledOnce();
+      expect(persistence.recordTurn).toHaveBeenCalledOnce();
+    }
+  );
+  it.each([
+    { authMethod: "api_key", error: UnsupportedApiKeyChatProviderError },
+    { authMethod: "cli", error: UnsupportedLegacyCliProviderError }
+  ] as const)(
+    "keeps the claim queued for an unsupported $authMethod provider",
+    async ({ authMethod, error }) => {
+      const { manager, persistence, engines } = setup();
+      persistence.resolveActiveProvider = async () => ({
+        provider: "google",
+        model: "test",
+        authMethod
+      });
+      const claim = vi.fn(async () => true);
+      await expect(
+        manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, claim)
+      ).rejects.toBeInstanceOf(error);
+      expect(claim).not.toHaveBeenCalled();
+      expect(engines).toHaveLength(0);
+      expect(persistence.recordTurn).not.toHaveBeenCalled();
+    }
+  );
   it("keeps the claim untouched during a known runner outage and can send after recovery", async () => {
     let available = false;
     const assertRuntimeReady = vi.fn(() => {

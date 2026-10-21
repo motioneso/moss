@@ -2,7 +2,7 @@ import type { SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import {
-  assertLiveCliProvider,
+  assertLiveChatProvider,
   discardChatSession,
   dropSessionsForProvider,
   ensureSessionForCurrentProvider,
@@ -263,7 +263,7 @@ export class ChatSessionManager {
       )
         return "deferred";
       // Known configuration outages must leave the receipt queued, before any effects.
-      assertLiveCliProvider(await this.deps.persistence.resolveActiveProvider(actorUserId));
+      assertLiveChatProvider(await this.deps.persistence.resolveActiveProvider(actorUserId));
       this.deps.assertRuntimeReady?.();
       if (!unchanged() || this.launching.has(key)) return "deferred";
       if (!(await claim())) return "unclaimed";
