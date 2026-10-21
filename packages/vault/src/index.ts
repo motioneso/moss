@@ -10,6 +10,7 @@ export { getVaultBaseDir } from "./vault-config.js";
 export { grantVaultNativeReadAccess } from "./native-read-access.js";
 export {
   createVaultFile,
+  createVaultFileBytes,
   deleteUserVaultDir,
   deleteVaultDir,
   deleteVaultFile,
@@ -17,9 +18,12 @@ export {
   listVaultDirectories,
   listVaultFilesRecursive,
   listVaultOwnerIds,
+  getVaultAvailableBytes,
   makeVaultDir,
   readVaultFile,
   readVaultFileBytes,
+  readVaultFileRange,
+  VAULT_READ_RANGE_LIMIT,
   vaultFileExists,
   writeVaultFile,
   writeVaultFileBytes

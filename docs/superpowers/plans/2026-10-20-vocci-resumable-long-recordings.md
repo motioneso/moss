@@ -1,11 +1,11 @@
 # Vocci resumable long recordings implementation plan
 
-Status: file-backed Android retrieval/decoding prerequisites implemented; resumable HTTP transport, expanded retention and windowed transcription have not started. Implements section 3 of the approved [companion spec](../specs/2026-10-20-vocci-companion-meetings-chat.md). Tracking: task #3553, draft PR #3554. Each step must be implemented and verified before claiming support for long recordings.
+Status: file-backed Android retrieval/decoding, bounded Vault I/O and incremental source-validation prerequisites implemented. Durable upload admission, resumable HTTP transport, expanded retention and windowed transcription are not implemented. Implements section 3 of the approved [companion spec](../specs/2026-10-20-vocci-companion-meetings-chat.md). Tracking: task #3553, draft PR #3554. Each step must be implemented and verified before claiming support for long recordings.
 
 ## Boundaries
 
 - Meetings owns immutable source reservation, binary chunks, completion validation and transcript-window checkpoints. Chat continues through its public admission boundary.
-- Vault filesystem access remains inside VaultContext. Add bounded immutable byte publication and bounded reads/capacity operations there; never raw filesystem in Meetings.
+- Vault filesystem access remains inside VaultContext. Immutable byte publication, exact range reads capped at 1 MiB, and an available-space snapshot now exist there. The snapshot is not a reservation; upload admission still needs concurrency-safe capacity accounting. Never raw filesystem in Meetings.
 - Android retrieval writes temporary files, restarts BLE reads from zero, then streams MediaCodec output into canonical 16 kHz mono WAV. HTTP resumes independently.
 - A two-hour recording may have 32 MiB packets, 256 KiB sidecar and 256 MiB WAV; chunks <= 1 MiB. Validate exact hashes, packet continuity, sidecar completion and WAV geometry before transcription. Supplied WAV is evidence, not hardware attestation.
 
@@ -34,9 +34,17 @@ Status: file-backed Android retrieval/decoding prerequisites implemented; resuma
 - Android host framing tests, APK build and installed MediaCodec/instrumentation. Device proof needs an attached authorized ring/phone.
 - Live UI: real meeting longer than 2 minutes, then the 2h boundary; retain bookmarks, transcript and summary/action review. Separate generated stress fixtures from hardware claims.
 
+### Storage/source prerequisite evidence (October 21)
+
+- Focused unit suites: 75 tests in five files passed, including split WAV headers, UTF8 sidecars, packet sequence wrap and maximum-length payload splits, whole-file hash/size changes, incomplete metadata, two-hour generated source and two-hour-plus-1-ms refusal. Generated zero PCM is a parser fixture, not hardware or ASR proof.
+- Shared Vault binary publication covers concurrent creation, partial writes, file/directory sync failures and exact replay after a lost acknowledgement. Range reads include invalid bounds, early EOF and a sparse two-hour-sized file. Removing the symlink-containment guard made both named binary-read/publication assertions fail; restoring source returned both green.
+- Isolated canonical `test:voice-requests` gate `083451`: exit 0, 230 tests in ten files, tested at `b8eba6ced` with dirty-input fingerprint `c2f36e8c9bdb`. Covers existing import/voice behavior, Chat admission, account export/deletion and schema regressions. Root TypeScript, scoped ESLint, Prettier and file-size checks also passed. This is scoped prerequisite evidence, not a full foundation or live long-upload verdict.
+
 ## Open implementation facts
 
 - Current RecordingImportService has a 35 second whole-file timeout and 500 segments; current job expiry of 120 seconds.
-- Existing Vault public reads load whole files; range/chunk operations do not exist.
+- Vault now exposes `createVaultFileBytes`, `readVaultFileRange` and `getVaultAvailableBytes`. Immutable string and byte publication share temporary-file/link publication, file sync and directory ancestry sync. Lost directory-sync acknowledgement is replayable; callers still have to compare existing bytes and record durable progress before acknowledging a chunk. Temporary files left by a killed process still require the upload's directory-expiry cleanup.
+- `validateRecordingSource` is an internal completion validator, with no upload route or worker connected yet. It checks exact sizes/SHA256 incrementally, packet sequence across arbitrary splits, canonical WAV geometry and complete sidecar metadata under the approved long-source limits. Only the sidecar (at most 256 KiB) and the 44-byte WAV header are buffered by the validator. The reader must provide chunks at most 1 MiB. Shared packet/WAV/sidecar helpers preserve version-1 limits, including six-digit sidecar duration; the future long transport permits seven digits.
+- Generated two-hour zero-PCM and packet fixtures exercise source validation and bounded allocation only. They do not prove a two-hour ring capture, HTTP resume, native storage capacity or transcription.
 - Current Android retention remains 100 MiB, with short whole-JSON/base64 uploads. Retrieval and codec conversion now use file sinks; long transport and deliberate capacity reservation must still replace the short bundle path.
 - Verify source export/delete paths and meeting output transcript budgets before choosing final schema. Do not infer graph snippets are current: this index returned stale line-based source for RecordingImportService.process; bounded source reads verified actual behavior.
