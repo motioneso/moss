@@ -23,9 +23,11 @@ final class RecoveryChecks {
         DeliveryRecovery receiver = new DeliveryRecovery();
         try {
             choices.enabled(false);
+            for (String action : new String[]{null, "recover", "voice-on", "voice-off", "clear-completed", "retry-transcription", "unknown"})
+                DeviceChecks.check(!choices.applyAction(action));
             receiver.onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
             DeviceChecks.check(context.starts == 0);
-            choices.enabled(true);
+            DeviceChecks.check(choices.applyAction("start"));
             context.permission = PackageManager.PERMISSION_DENIED;
             receiver.onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
             DeviceChecks.check(context.starts == 0 && !choices.recovery().isEmpty());
@@ -37,7 +39,7 @@ final class RecoveryChecks {
             context.refuse = true;
             receiver.onReceive(context, new Intent(Intent.ACTION_BOOT_COMPLETED));
             DeviceChecks.check(context.starts == 2 && choices.enabled() && !choices.recovery().isEmpty());
-            choices.enabled(false);
+            DeviceChecks.check(!choices.applyAction("stop"));
             receiver.onReceive(context, new Intent(Intent.ACTION_MY_PACKAGE_REPLACED));
             receiver.onReceive(context, new Intent("arbitrary"));
             DeviceChecks.check(context.starts == 2 && !new DeliveryPreferences(context).enabled());

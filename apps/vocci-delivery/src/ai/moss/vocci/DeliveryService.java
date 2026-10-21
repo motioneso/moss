@@ -52,9 +52,7 @@ public final class DeliveryService extends Service {
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         DeliveryPreferences choices = new DeliveryPreferences(this);
-        if (intent != null && "stop".equals(intent.getAction())) { choices.enabled(false); stopSelf(); return START_NOT_STICKY; }
-        if (intent != null && !"recover".equals(intent.getAction())) choices.enabled(true);
-        if (!choices.enabled()) { stopSelf(); return START_NOT_STICKY; }
+        if (!choices.applyAction(intent == null ? null : intent.getAction())) { stopSelf(); return START_NOT_STICKY; }
         if (intent != null && Arrays.asList("voice-on", "voice-off", "clear-completed", "retry-transcription").contains(intent.getAction())) commands.add(new Intent(intent));
         synchronized (signal) { signal.notifyAll(); }
         if (!started) { started = true; worker.submit(this::run); }

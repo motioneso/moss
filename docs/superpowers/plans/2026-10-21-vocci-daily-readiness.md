@@ -8,7 +8,8 @@ draft. No merge, production deployment, ownership or firmware change is authoriz
 
 1. Remember an explicit Start/Stop choice. Resume a previously started foreground
    connection after boot/unlock or an app update when prerequisites permit. Stop
-   disables automatic recovery. Force-stop still needs a manual launch. Expose
+   disables automatic recovery. Maintenance actions cannot enable recovery and ask
+   for Start while stopped. Force-stop still needs a manual launch. Expose
    battery restrictions, permission recovery and the official app handoff in the
    existing Park Press Connection section. Preserve queue identities and bindings.
 2. Add opt-in automatic cleanup of completed local copies, after seven days, with

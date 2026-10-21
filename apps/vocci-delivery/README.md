@@ -74,7 +74,9 @@ The service polls every 30 seconds and retains a partial wake lock only during
 bounded work. Sticky service restart handles OS reclamation. An explicit Start also enables
 recovery after boot/unlock and app update; Stop disables recovery. Android can
 refuse a background start, which leaves an Open app/Start delivery reminder.
-Force-stop still requires a manual launch. Permissions and background settings opens App settings
+Only **Start delivery** enables recovery. While stopped, voice changes, manual cleanup
+and transcription retries ask you to Start first; maintenance actions never enable
+restart recovery. Force-stop still requires a manual launch. Permissions and background settings opens App settings
 for battery/permission recovery and Vocci settings for Nearby devices handoff.
 Choose Unrestricted battery use and remove Moss from Samsung Sleeping apps for
 daily use. Device-specific endurance remains a live validation requirement.

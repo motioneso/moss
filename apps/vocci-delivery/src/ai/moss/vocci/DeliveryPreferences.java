@@ -9,6 +9,11 @@ final class DeliveryPreferences {
     DeliveryPreferences(Context context) { values = context.getSharedPreferences("delivery-choices", Context.MODE_PRIVATE); }
     boolean enabled() { return values.getBoolean("enabled", false); }
     void enabled(boolean enabled) { values.edit().putBoolean("enabled", enabled).putString("recovery", "").commit(); }
+    boolean applyAction(String action) {
+        if ("start".equals(action)) enabled(true);
+        else if ("stop".equals(action)) enabled(false);
+        return enabled();
+    }
     boolean autoCleanup() { return values.getBoolean("autoCleanup", false); }
     void autoCleanup(boolean enabled) { values.edit().putBoolean("autoCleanup", enabled).commit(); }
     String recovery() { return values.getString("recovery", ""); }

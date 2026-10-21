@@ -114,6 +114,9 @@ public final class DeliveryActivity extends Activity {
         button.setOnClickListener(v -> action.run());
     }
     private void command(String action) {
+        if (!"start".equals(action) && !new DeliveryPreferences(this).enabled()) {
+            Toast.makeText(this, "Start delivery before changing voice input, clearing audio or retrying.", Toast.LENGTH_LONG).show(); render(); return;
+        }
         if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 1); return;
         }
