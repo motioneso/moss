@@ -366,3 +366,73 @@ Recovery therefore required the controller to reinject and explicitly start it;
 the current add-on does not recover automatically. These short trials do not
 establish persistent authentication, hours-long scheduling, a VM deployment,
 complete mailbox coverage or continuous multi-message ingestion.
+
+### Disposable reload controller
+
+`recovery_probe.py` exercises automatic rearming across a reload of the same
+Outlook tab while an external controller remains connected. It registers the
+existing reader/watcher plus a bounded bootstrap in a Chrome isolated world.
+The bootstrap waits up to sixty one-second attempts for a supported message
+list, then tries to start once. It accepts only one fresh synthetic phrase;
+existing matching rows still prevent opening mail. Mail paths on both
+`outlook.office.com` and `outlook.cloud.microsoft` are supported by the bootstrap.
+
+Use an already running dedicated Chrome with a loopback debugging endpoint:
+
+```sh
+python3 recovery_probe.py --cdp http://127.0.0.1:PORT \
+  --phrase 'MOSS BODY TEST fresh-unique-suffix' --seconds 180
+```
+
+The command prints only statuses/counts, clears the capture and unregisters the
+bootstrap when it exits. It sends no email and does not launch a browser or read
+credentials. The debugging endpoint belongs to the dedicated test browser; its
+port must be reserved with `devports`. `--seconds` is bounded to 1–600.
+
+This is an external-controller experiment, not a background extension feature.
+A browser process restart requires the controller to reconnect and register
+again. A reload after capture should refuse to reopen the existing matching row;
+this conservative check does not provide durable deduplication or exactly-once
+collection. Signing out or navigating away does not trigger a sign-in attempt.
+
+Run the bounded synthetic regression checks with existing Python Playwright and
+local Chrome:
+
+```sh
+python3 verify_recovery.py
+```
+
+They cover initial arm, automatic reload rearm, separation from the main page
+world, refusal to open an already displayed match, refusal to start on another
+host, and registration cleanup. The host and reload checks were also observed
+failing when their corresponding guards were removed in temporary copies.
+All fixture requests are intercepted locally.
+
+Live recovery continuation (2026-10-21): three more invented messages were sent
+under a fresh allowance of up to five. Consecutive send attempts were spaced
+121 and 134 seconds apart. All three captured one body and opened one row:
+
+| Trial | Scans | Result |
+| --- | --- | --- |
+| Reload before arrival | 15 | Bootstrap automatically rearmed; capture succeeded |
+| Fresh phrase after prior capture/clear | 14 | Next message captured |
+| Full dedicated-browser restart, controller reconnect/register | 16 | Account sessions restored and capture succeeded |
+
+After the first capture, another reload refused to open the existing matching
+row (zero scans/opens, no capture retained). The first live reload also exposed
+an Outlook hostname change to `outlook.cloud.microsoft`; matching only the older
+hostname could no longer locate the tab. A synthetic failure established the
+need to enable the CDP Page domain before registering new-document scripts.
+
+The browser restart was orchestrated by the test harness, including reattachment
+and registration. This is evidence for a supervised recovery path, not an
+extension that autonomously survives browser shutdown. Neither restart required
+new credential entry during this short trial; future session expiry remains
+untested.
+
+At the user's request, the three new synthetic messages were moved to Deleted
+Items after their trials. A subject search found all eight automated test
+messages labelled Deleted Items, and a current-folder search found no remaining
+matching synthetic rows. Earlier manual tests with different phrases were not
+included. No permanent deletion was performed, and no unrelated messages were
+changed. The continuation used three of its five permitted sends.
