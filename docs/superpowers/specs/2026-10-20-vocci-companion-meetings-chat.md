@@ -111,7 +111,7 @@ already submitted is not silently resubmitted by pressing Retry or reconnecting.
 
 ## 3. Meeting-length recordings
 
-Add a version-2 resumable completed-recording transfer while retaining version 1.
+Add a version-3 resumable completed-recording transfer while retaining versions 1 and 2. Version 2 is already assigned to explicit short voice-request intent; version 3 carries the resumable transport and an immutable Meeting or voice destination.
 Proposed first bounds: two hours, 32 MiB original packet file, 256 KiB sidecar and
 256 MiB decoded WAV; binary upload chunks are at most 1 MiB. Enforce limits at both
 ends and expose oversized recordings without deleting them from the ring.

@@ -3,7 +3,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "Android status/queue screens show setup, permissions and identity; start/stop delivery, opt into Main voice, open Moss, retry transcription and clear completed audio. Existing-binding developer provisioning; maximum 120 seconds.",
+    "Android’s Park Press screen shows delivery, permissions, account/ring, hold opt-in, Main replies and local cleanup. Missing chunks resume; Meetings allow two hours and voice 120 seconds. Developer provisioning required.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
@@ -82,13 +82,13 @@ export const androidDeliveryFeature = {
       code: "source_size_limit",
       class: "validation",
       description:
-        "The stable advertised recording exceeds 1 MiB of packets or 64 KiB of sidecar. It fails visibly without downloading oversized files; other recordings continue."
+        "The stable advertised recording exceeds 32 MiB of packets or 256 KiB of sidecar. It fails visibly without downloading oversized files; other recordings continue."
     },
     {
       code: "duration_limit",
       class: "validation",
       description:
-        "The completed sidecar reports more than 120 seconds. The recording fails visibly with that sidecar retained, without downloading its audio."
+        "The completed sidecar exceeds two hours for a meeting or 120 seconds for opted-in hold input. The sidecar stays retained without downloading its audio."
     },
     {
       code: "server_identity_change",
@@ -125,7 +125,7 @@ export const androidDeliveryFeature = {
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Android retrieval pauses at 100 retained recordings, 100 MiB, 1024 identities or under 150 MiB free. Clear completed local audio from the status screen; queued and failed evidence stays retained."
+        "Android reserves source/decode budgets within 2 GiB and keeps 150 MiB free. Retrieval also pauses at 100 retained items or 1024 identities. Clear completed local audio; queued and failed evidence stays retained."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];

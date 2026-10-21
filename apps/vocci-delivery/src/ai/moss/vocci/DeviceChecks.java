@@ -11,7 +11,8 @@ import org.json.JSONObject;
 /** Explicit developer instrumentation; optional ring reads, no control or private output. */
 public final class DeviceChecks extends Instrumentation {
     private boolean ring;
-    @Override public void onCreate(Bundle args) { ring = "true".equals(args.getString("ring")); super.onCreate(args); start(); }
+    private int httpPort;
+    @Override public void onCreate(Bundle args) { ring = "true".equals(args.getString("ring")); httpPort = Integer.parseInt(args.getString("httpPort", "0")); super.onCreate(args); start(); }
     static void check(boolean value) { if (!value) throw new AssertionError("device assertion"); }
     private static void remove(File file) {
         File[] children = file.listFiles();
@@ -21,6 +22,7 @@ public final class DeviceChecks extends Instrumentation {
     @Override public void onStart() {
         Bundle result = new Bundle();
         try {
+            if (httpPort > 0) { HttpChecks.run(httpPort); result.putString("httpContract", "json_null_post"); }
             if (ring) {
                 try (RingConnection connection = new RingConnection(getTargetContext(), new SecretStore(getTargetContext()).load())) {
                     java.util.Map<String, Integer> inventory = connection.inventory();
@@ -75,6 +77,18 @@ public final class DeviceChecks extends Instrumentation {
                 wav = PrivateFiles.read(codecWav, 3_840_044);
             } finally { codecPackets.delete(); codecWav.delete(); }
             check(wav.length == 3244 && ByteBuffer.wrap(wav).order(ByteOrder.LITTLE_ENDIAN).getInt(24) == 16000);
+            // Generated 130-second Opus fixture exercises the installed platform codec beyond v1 limits.
+            try {
+                PrivateFiles.write(codecPackets, output -> {
+                    for (int n = 0; n < 6500; n++) output.write(new byte[]{(byte) n, 3, (byte) 0xf8, (byte) 0xff, (byte) 0xfe});
+                });
+                OpusWav.decode(codecPackets, codecWav, 7200000);
+                check(codecWav.length() == 4160044);
+                boolean limited = false;
+                try { OpusWav.decode(codecPackets, codecWav, 120000); }
+                catch (IllegalArgumentException expected) { limited = true; }
+                check(limited && codecWav.length() == 4160044); // Failed replacement preserves the published long WAV.
+            } finally { codecPackets.delete(); codecWav.delete(); }
             File atomicProbe = new File(getTargetContext().getCacheDir(), "atomic-source-check.bin");
             try {
                 PrivateFiles.write(atomicProbe, new byte[]{1,2,3});
@@ -111,7 +125,7 @@ public final class DeviceChecks extends Instrumentation {
             check(store.admitSidecar(id, "{\"record\":[1,\"end\"]},{\"duration\":[1,100]}".getBytes(StandardCharsets.UTF_8)));
             String oversized = "1700000003_long";
             store.discover(oversized);
-            check(!store.admitSidecar(oversized, "{\"record\":[1,\"end\"]},{\"duration\":[1,120001]}".getBytes(StandardCharsets.UTF_8)));
+            check(!store.admitSidecar(oversized, "{\"record\":[1,\"end\"]},{\"duration\":[1,7200001]}".getBytes(StandardCharsets.UTF_8)));
             check(store.entries.getJSONObject(oversized).getString("stage").equals("failed"));
             check(store.entries.getJSONObject(oversized).getString("error").equals("duration_limit"));
             check(!store.file(oversized, "packets.bin").exists());
@@ -132,11 +146,13 @@ public final class DeviceChecks extends Instrumentation {
             store.activity("stopped"); check(store.state.getString("activity").equals("stopped"));
             store.retrieved(id, packets, "{\"duration\":[1,100]}".getBytes(StandardCharsets.UTF_8));
             store.freeze(id);
-            byte[] frozen = PrivateFiles.read(store.file(id, "bundle.json"), 8192);
+            byte[] frozen = PrivateFiles.read(store.file(id, "upload.json"), 8192);
             DeliveryStore recovered = new DeliveryStore(isolated);
             recovered.freeze(id);
-            check(Arrays.equals(frozen, PrivateFiles.read(recovered.file(id, "bundle.json"), 8192)));
+            check(Arrays.equals(frozen, PrivateFiles.read(recovered.file(id, "upload.json"), 8192)));
+            check(PrivateFiles.json(recovered.file(id, "upload.json")).getInt("version") == 3);
             check(recovered.state.getString("sourceDeviceId").equals(store.state.getString("sourceDeviceId")));
+            UploadChecks.run(isolated, packets);
             String conflictId = "1700000002_conflict";
             recovered.retrieved(conflictId, packets, "{}".getBytes(StandardCharsets.UTF_8));
             JSONObject accepted = new JSONObject().put("id", "11111111-1111-4111-8111-111111111111")
@@ -174,7 +190,7 @@ public final class DeviceChecks extends Instrumentation {
             check(rejected);
             VoiceDeliveryChecks.run(isolated, packets);
             remove(isolated.getNoBackupFilesDir());
-            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,atomic_file_rollback,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected,voice_snapshot_recovery,voice_disable_unknown,voice_baseline,v1_unchanged,voice_frozen_restart,voice_uncertain_capture,voice_identity,cleanup_tombstones");
+            result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,platform_opus_130s,voice_120s_limit,upload_lost_ack_resume,upload_expiry,upload_identity,atomic_file_rollback,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected,voice_snapshot_recovery,voice_disable_unknown,voice_baseline,v1_unchanged,voice_frozen_restart,voice_uncertain_capture,voice_identity,cleanup_tombstones");
             result.putString("result", "PASS"); finish(-1, result);
         } catch (Throwable error) {
             result.putString("result", "FAIL"); result.putString("class", error.getClass().getSimpleName());

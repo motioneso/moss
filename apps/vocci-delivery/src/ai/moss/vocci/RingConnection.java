@@ -146,7 +146,7 @@ final class RingConnection implements AutoCloseable {
         stage = "file";
         RingProtocol.Transfer transfer = new RingProtocol.Transfer(name, size, output);
         write(RingProtocol.WRITE, RingProtocol.read(name));
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(180);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Math.min(7200, Math.max(180, size / 2048)));
         while (!transfer.ended() && System.nanoTime() < deadline) {
             Event event = pending.isEmpty() ? next() : pending.remove();
             if (event.kind.equals(RingProtocol.FILE)) transfer.append(event.bytes);

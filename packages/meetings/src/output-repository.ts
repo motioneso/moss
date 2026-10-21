@@ -22,6 +22,7 @@ import type {
 } from "@moss/shared";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
+import { RECORDING_OUTPUT_TRANSCRIPT_LIMITS } from "./transcript.js";
 import { validateMeetingOutput } from "./output-validation.js";
 
 export class MeetingOutputError extends Error {
@@ -107,10 +108,16 @@ export class MeetingOutputsRepository {
     if (!visible) throw new MeetingOutputError("meeting_not_found", 404);
     const meeting = await this.records.get(db, meetingId);
     if (!meeting) throw new MeetingOutputError("meeting_not_found", 404);
-    const transcript = await this.transcripts.snapshot(db, meeting.id, {
-      maxSegments: 500,
-      maxCharacters: 100000
-    });
+    const longSource =
+      (
+        await sql`SELECT 1 FROM app.meeting_recording_imports WHERE meeting_id=${meeting.id}::uuid AND source_manifest_json IS NOT NULL LIMIT 1`.execute(
+          db.db
+        )
+      ).rows.length > 0;
+    const limits = longSource
+      ? RECORDING_OUTPUT_TRANSCRIPT_LIMITS
+      : { maxSegments: 500, maxCharacters: 100000 };
+    const transcript = await this.transcripts.snapshot(db, meeting.id, limits, limits);
     return {
       meetingId: meeting.id,
       transcript,

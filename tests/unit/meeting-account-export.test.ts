@@ -310,8 +310,12 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0328_meeting_voice_recordings.sql", import.meta.url),
       "utf8"
     );
+    const uploadMigration = await readFile(
+      new URL("../../packages/meetings/sql/0329_meeting_recording_uploads.sql", import.meta.url),
+      "utf8"
+    );
     const summarySelectGrants = [
-      ...(minimalMigration + importSummaryMigration + voiceMigration).matchAll(
+      ...(minimalMigration + importSummaryMigration + voiceMigration + uploadMigration).matchAll(
         /GRANT SELECT\s*\([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g
       )
     ]

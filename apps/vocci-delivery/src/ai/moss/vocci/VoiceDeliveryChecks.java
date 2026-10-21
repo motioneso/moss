@@ -51,14 +51,14 @@ final class VoiceDeliveryChecks {
         JSONObject intent = voice.intent(fresh); check(intent != null && intent.isNull("capturedAt"));
         store.discover(fresh, intent); store.retrieved(fresh, packets, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8)); store.freeze(fresh);
         store.discover(uncertain, voice.intent(uncertain)); store.retrieved(uncertain, packets, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8)); store.freeze(uncertain);
-        byte[] bundle = PrivateFiles.read(store.file(fresh, "bundle.json"), 8192);
-        check(PrivateFiles.json(store.file(fresh, "bundle.json")).getInt("version") == 2);
-        check(PrivateFiles.json(store.file(fresh, "bundle.json")).isNull("capturedAt"));
+        byte[] bundle = PrivateFiles.read(store.file(fresh, "upload.json"), 8192);
+        check(PrivateFiles.json(store.file(fresh, "upload.json")).getInt("version") == 3);
+        check(PrivateFiles.json(store.file(fresh, "upload.json")).getJSONObject("destination").isNull("capturedAt"));
         store.retrieved(old, packets, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8)); store.freeze(old);
-        check(PrivateFiles.json(store.file(old, "bundle.json")).getInt("version") == 1);
+        check(PrivateFiles.json(store.file(old, "upload.json")).getJSONObject("destination").getString("intent").equals("meeting"));
         voice.desired(false); voice.synchronize(server); check(server.disabled);
         store = new DeliveryStore(context); store.freeze(fresh);
-        check(Arrays.equals(bundle, PrivateFiles.read(store.file(fresh, "bundle.json"), 8192)));
+        check(Arrays.equals(bundle, PrivateFiles.read(store.file(fresh, "upload.json"), 8192)));
         String requestId = "22222222-2222-4222-8222-222222222222";
         JSONObject accepted = new JSONObject().put("id", "33333333-3333-4333-8333-333333333333").put("intent", "voice-request")
             .put("voiceRequestId", requestId).put("state", "complete");
@@ -70,7 +70,7 @@ final class VoiceDeliveryChecks {
         catch (DeliveryStore.Conflict expected) { check(expected.getMessage().equals("server_identity_change")); }
         store.chatStatus(fresh, new JSONObject(chat.toString()).put("state", "replied"));
         store.entries.getJSONObject(uncertain).put("stage", "interrupted"); store.save(); store.clearCompleted();
-        check(!store.file(fresh, "bundle.json").exists() && store.file(uncertain, "bundle.json").exists());
+        check(!store.file(fresh, "upload.json").exists() && store.file(uncertain, "upload.json").exists());
         check(!store.file(fresh, "audio.wav").exists() && store.file(uncertain, "audio.wav").exists());
         store = new DeliveryStore(context); check(store.contains(fresh) && !store.needsRetrieval(fresh));
         check(store.entries.getJSONObject(fresh).getBoolean("cleared"));

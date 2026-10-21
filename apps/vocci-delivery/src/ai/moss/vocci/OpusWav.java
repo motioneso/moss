@@ -10,10 +10,14 @@ import java.nio.charset.StandardCharsets;
 /** Platform Opus decode with bounded packet/PCM buffers and atomic WAV publication. */
 final class OpusWav {
     static void decode(File packets, File destination) throws Exception {
-        PrivateFiles.write(destination, output -> decode(packets, output));
+        decode(packets, destination, 120000);
     }
-    private static void decode(File packets, FileOutputStream output) throws Exception {
-        PcmWavWriter wav = new PcmWavWriter(output, 120000);
+    static void decode(File packets, File destination, long maxDurationMs) throws Exception {
+        if (maxDurationMs < 1 || maxDurationMs > 7200000) throw new IllegalArgumentException("duration_limit");
+        PrivateFiles.write(destination, output -> decode(packets, output, maxDurationMs));
+    }
+    private static void decode(File packets, FileOutputStream output, long maxDurationMs) throws Exception {
+        PcmWavWriter wav = new PcmWavWriter(output, (int) maxDurationMs);
         MediaCodec codec = MediaCodec.createDecoderByType("audio/opus");
         try (InputStream input = new BufferedInputStream(new AtomicFile(packets).openRead())) {
             MediaFormat format = MediaFormat.createAudioFormat("audio/opus", 16000, 1);
@@ -28,7 +32,7 @@ final class OpusWav {
             boolean inputEnd = false, outputEnd = false;
             byte[] packet = new byte[255];
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-            long deadline = System.nanoTime() + 120_000_000_000L;
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(Math.max(120000, maxDurationMs));
             while (!outputEnd && System.nanoTime() < deadline) {
                 if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
                 if (!inputEnd) {

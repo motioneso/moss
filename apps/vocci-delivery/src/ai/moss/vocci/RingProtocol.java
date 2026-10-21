@@ -10,7 +10,7 @@ import java.util.Arrays;
 
 /** Only finished-file listing/reads; deliberately no destructive command builder. */
 final class RingProtocol {
-    static final int PACKET_LIMIT = 1024 * 1024, SIDECAR_LIMIT = 64 * 1024;
+    static final int PACKET_LIMIT = 32 * 1024 * 1024, SIDECAR_LIMIT = 256 * 1024;
     static final String SERVICE = "b75497db-806e-42b1-9e60-5871ca2e504b";
     static final String WRITE = "b75497dc-806e-42b1-9e60-5871ca2e504b";
     static final String UART = "b75497dd-806e-42b1-9e60-5871ca2e504b";

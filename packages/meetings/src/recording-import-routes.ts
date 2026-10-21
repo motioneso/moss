@@ -5,6 +5,7 @@ import { RECORDING_IMPORT_BODY_LIMIT, RecordingImportInputError } from "./record
 import { RecordingImportConflictError } from "./recording-import-repository.js";
 import type { RecordingImportService } from "./recording-import-service.js";
 import { registerRecordingVoiceRoutes } from "./recording-voice-routes.js";
+import { registerRecordingUploadRoutes } from "./recording-upload-routes.js";
 export function registerRecordingImportRoutes(
   server: FastifyInstance,
   deps: {
@@ -53,4 +54,5 @@ export function registerRecordingImportRoutes(
     }
   );
   registerRecordingVoiceRoutes(server, deps);
+  registerRecordingUploadRoutes(server, { ...deps, service: deps.service.uploads });
 }

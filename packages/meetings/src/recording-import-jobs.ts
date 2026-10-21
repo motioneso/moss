@@ -44,7 +44,14 @@ export async function registerRecordingImportWorker(
       if (
         !job ||
         !job.data ||
-        Object.keys(job.data).length !== 3 ||
+        Object.keys(job.data).some(
+          (key) => !["actorUserId", "resourceId", "kind", "windowStartMs"].includes(key)
+        ) ||
+        (job.data.windowStartMs !== undefined &&
+          (job.data.kind !== "transcribe" ||
+            !Number.isSafeInteger(job.data.windowStartMs) ||
+            job.data.windowStartMs < 0 ||
+            job.data.windowStartMs > 7_200_000)) ||
         !isUuid(job.data.actorUserId) ||
         !isUuid(job.data.resourceId) ||
         !["transcribe", "abandoned", "purge"].includes(job.data.kind)

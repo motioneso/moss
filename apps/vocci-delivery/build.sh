@@ -10,7 +10,7 @@ rm -rf build/classes build/dex
 mkdir -p build/classes build/dex
 javac --release 11 -cp "$android_jar" -d build/classes src/ai/moss/vocci/*.java
 "$build_tools/d8" --lib "$android_jar" --min-api 33 --output build/dex build/classes/ai/moss/vocci/*.class
-"$build_tools/aapt2" link -I "$android_jar" --manifest AndroidManifest.xml -o build/unsigned.apk
+"$build_tools/aapt2" link -I "$android_jar" --manifest AndroidManifest.xml -A assets -o build/unsigned.apk
 python3 - <<'PY'
 from pathlib import Path
 from zipfile import ZipFile

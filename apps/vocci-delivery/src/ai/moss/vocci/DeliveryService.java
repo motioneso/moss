@@ -67,7 +67,7 @@ public final class DeliveryService extends Service {
             wake = getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moss:vocci-delivery");
             while (!stopping && !Thread.currentThread().isInterrupted()) {
                 try {
-                    wake.acquire(240000);
+                    wake.acquire(4 * 60 * 60 * 1000L);
                     // Verify the credential's current owner before touching queued recordings.
                     if (!client.owner().equals(config.getString("ownerId"))) { report("owner_mismatch"); break; }
                     consumeCommands(client); voice.synchronize(client);
@@ -130,6 +130,7 @@ public final class DeliveryService extends Service {
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 if (!store.admitSidecar(id, sidecar)) continue;
+                store.reserveRetrieval(id, packetSize, sidecarSize, sidecar);
                 try { active.retrieve(name, packetSize, store.file(id, "packets.bin")); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 store.retrieved(id, sidecar);
@@ -154,7 +155,8 @@ public final class DeliveryService extends Service {
                 } else {
                     boolean voice = entry.has("voiceIntent");
                     JSONObject status = stage.equals("accepted") ? (voice ? client.pollVoice(entry.getJSONObject("status").getString("id")) : client.poll(entry.getJSONObject("status").getString("id"))) :
-                        (voice ? client.acceptVoice(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)) : client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)));
+                        (store.file(id, "upload.json").exists() ? ResumableUpload.deliver(client, store, id) :
+                          (voice ? client.acceptVoice(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)) : client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024))));
                     store.accepted(id, status);
                 }
             } catch (MossClient.Rejected error) {

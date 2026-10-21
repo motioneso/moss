@@ -19,11 +19,15 @@ import {
 } from "./recording-import-repository.js";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
+import { RecordingUploadRepository } from "./recording-upload-repository.js";
+import { RecordingUploadService } from "./recording-upload-service.js";
+import { RecordingWindowService } from "./recording-window-service.js";
 
 export interface RecordingImportPayload {
   actorUserId: string;
   resourceId: string;
   kind: "transcribe" | "abandoned" | "purge";
+  windowStartMs?: number;
 }
 export interface RecordingImportDependencies {
   dataContext: Pick<DataContextRunner, "withDataContext">;
@@ -59,7 +63,10 @@ export const recordingBundlePath = (id: string) => `meeting-recordings/${id}/bun
 export class RecordingImportService {
   private readonly imports = new RecordingImportRepository();
   private readonly records = new MeetingRecordsRepository();
-  constructor(private readonly deps: RecordingImportDependencies) {}
+  readonly uploads: RecordingUploadService;
+  constructor(private readonly deps: RecordingImportDependencies) {
+    this.uploads = new RecordingUploadService(deps);
+  }
   async accept(actor: AccessContext, value: unknown) {
     await this.deps.assertAvailable(actor);
     const bundle = validateRecordingBundle(value);
@@ -102,7 +109,8 @@ export class RecordingImportService {
       await this.deps.schedule(db, {
         actorUserId: actor.actorUserId,
         resourceId: id,
-        kind: "transcribe"
+        kind: "transcribe",
+        ...(row.source_manifest_json ? { windowStartMs: row.next_window_ms } : {})
       });
       return voiceRecordingImportStatus({
         ...row,
@@ -197,13 +205,32 @@ export class RecordingImportService {
       await this.deps.dataContext.withDataContext(actor, async (db) => {
         const row = await this.imports.get(db, payload.resourceId, true);
         if (payload.kind === "purge" ? !!row : row?.ready) return;
+        if (
+          row?.source_manifest_json &&
+          row.upload_expires_at &&
+          row.upload_expires_at.getTime() > Date.now()
+        ) {
+          await this.deps.schedule(
+            db,
+            payload,
+            Math.ceil((row.upload_expires_at.getTime() - Date.now()) / 1000)
+          );
+          return;
+        }
         await this.deps.vault.withVaultContext(actor, (ctx) =>
           deleteVaultDir(ctx, `meeting-recordings/${payload.resourceId}`)
         );
+        if (row?.source_manifest_json)
+          await new RecordingUploadRepository().clearExpired(db, row.id);
         if (row) await this.imports.finish(db, row.id, "failed", "import_interrupted");
       });
       return;
     }
+    const source = await this.deps.dataContext.withDataContext(actor, (db) =>
+      this.imports.get(db, payload.resourceId)
+    );
+    if (source?.source_manifest_json)
+      return new RecordingWindowService(this.deps).process(actor, payload);
     const attemptId = randomUUID();
     const row = await this.deps.dataContext.withDataContext(actor, async (db) => {
       const current = await this.imports.get(db, payload.resourceId, true);

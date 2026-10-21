@@ -30,7 +30,7 @@ function isMissingPathError(error: unknown): boolean {
   return error.code === "ENOENT" || error.code === "ENOTDIR";
 }
 
-async function assertNoSymlinkEscape(fullPath: string, vaultRoot: string): Promise<void> {
+export async function assertNoSymlinkEscape(fullPath: string, vaultRoot: string): Promise<void> {
   // Walk up ancestor chain to find the deepest existing path, then realpath that.
   // Pre-write targets may have several non-existent ancestor segments.
   let checkPath = fullPath;
@@ -98,7 +98,7 @@ export async function createVaultFileBytes(
   return createVaultContent(ctx, relativePath, content);
 }
 
-async function syncPath(path: string): Promise<void> {
+export async function syncPath(path: string): Promise<void> {
   const handle = await open(path, "r");
   try {
     await handle.sync();
@@ -159,7 +159,8 @@ export async function readVaultFileRange(
   ctx: VaultContext,
   relativePath: string,
   offset: number,
-  length: number
+  length: number,
+  expectedFileLength?: number
 ): Promise<Buffer> {
   assertVaultContext(ctx);
   if (
@@ -168,7 +169,9 @@ export async function readVaultFileRange(
     !Number.isSafeInteger(length) ||
     length < 1 ||
     length > VAULT_READ_RANGE_LIMIT ||
-    !Number.isSafeInteger(offset + length)
+    !Number.isSafeInteger(offset + length) ||
+    (expectedFileLength !== undefined &&
+      (!Number.isSafeInteger(expectedFileLength) || expectedFileLength < offset + length))
   ) {
     throw new RangeError("Invalid vault read range");
   }
@@ -177,7 +180,11 @@ export async function readVaultFileRange(
   const handle = await open(fullPath, "r");
   try {
     const info = await handle.stat();
-    if (!info.isFile() || offset + length > info.size) {
+    if (
+      !info.isFile() ||
+      offset + length > info.size ||
+      (expectedFileLength !== undefined && info.size !== expectedFileLength)
+    ) {
       throw new RangeError("Vault read range exceeds file");
     }
     const bytes = Buffer.alloc(length);

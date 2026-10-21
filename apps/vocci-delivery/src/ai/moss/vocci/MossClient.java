@@ -7,7 +7,7 @@ import java.util.UUID;
 import java.util.Arrays;
 import org.json.JSONObject;
 
-final class MossClient implements VoiceDelivery.Port {
+final class MossClient implements VoiceDelivery.Port, ResumableUpload.Port {
     static final class Rejected extends IOException {
         final int status;
         Rejected(int status) { super("http_rejected"); this.status = status; }
@@ -25,6 +25,12 @@ final class MossClient implements VoiceDelivery.Port {
         if (cookie.isEmpty() || cookie.length() > 8192 || cookie.contains("\n") || cookie.contains("\r")) throw new IllegalArgumentException("cookie");
     }
     private JSONObject request(String method, String path, byte[] body) throws Exception {
+        return request(method, path, body, "application/json");
+    }
+    private JSONObject request(String method, String path, byte[] body, String contentType) throws Exception {
+        // Android supplies a form Content-Type for an empty POST. Explicit JSON
+        // null preserves the receiver's no-body contract without that implicit type.
+        if (body == null && method.equals("POST")) body = "null".getBytes(StandardCharsets.UTF_8);
         HttpURLConnection connection = (HttpURLConnection) new URL(origin + path).openConnection();
         try {
             connection.setInstanceFollowRedirects(false);
@@ -33,7 +39,7 @@ final class MossClient implements VoiceDelivery.Port {
             connection.setRequestMethod(method);
             if (body != null) {
                 if (body.length > 8 * 1024 * 1024) throw new IllegalArgumentException("body_limit");
-                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("Content-Type", contentType);
                 connection.setDoOutput(true); connection.setFixedLengthStreamingMode(body.length);
                 try (OutputStream out = connection.getOutputStream()) { out.write(body); }
             }
@@ -48,7 +54,7 @@ final class MossClient implements VoiceDelivery.Port {
     }
     String owner() throws Exception { return uuid(request("GET", "/api/auth/get-session", null).getJSONObject("user").getString("id")); }
     JSONObject accept(byte[] frozen) throws Exception { return status(request("POST", "/api/meetings/recording-imports", frozen)); }
-    JSONObject poll(String id) throws Exception { return status(request("GET", "/api/meetings/recording-imports/" + uuid(id), null)); }
+    @Override public JSONObject poll(String id) throws Exception { return status(request("GET", "/api/meetings/recording-imports/" + uuid(id), null)); }
     @Override public JSONObject enable(JSONObject snapshot) throws Exception {
         return request("POST", "/api/meetings/voice-enablement", snapshot.toString().getBytes(StandardCharsets.UTF_8));
     }
@@ -56,8 +62,15 @@ final class MossClient implements VoiceDelivery.Port {
         return request("POST", "/api/meetings/voice-enablement/" + uuid(id) + "/disable", null);
     }
     JSONObject acceptVoice(byte[] frozen) throws Exception { return voiceStatus(request("POST", "/api/meetings/voice-recordings", frozen)); }
-    JSONObject pollVoice(String id) throws Exception { return voiceStatus(request("GET", "/api/meetings/voice-recordings/" + uuid(id), null)); }
+    @Override public JSONObject pollVoice(String id) throws Exception { return voiceStatus(request("GET", "/api/meetings/voice-recordings/" + uuid(id), null)); }
     JSONObject retryVoice(String id) throws Exception { return voiceStatus(request("POST", "/api/meetings/voice-recordings/" + uuid(id) + "/retry", null)); }
+    @Override public JSONObject reserveUpload(byte[] manifest) throws Exception { return request("POST", "/api/meetings/recording-uploads", manifest); }
+    @Override public JSONObject uploadProgress(String id) throws Exception { return request("GET", "/api/meetings/recording-uploads/" + uuid(id), null); }
+    @Override public JSONObject putChunk(String id, String kind, int index, byte[] bytes) throws Exception {
+        if (!Arrays.asList("packets", "sidecar", "wav").contains(kind) || index < 0 || index > 255 || bytes.length > 1024 * 1024) throw new IllegalArgumentException("chunk");
+        return request("PUT", "/api/meetings/recording-uploads/" + uuid(id) + "/" + kind + "/" + index, bytes, "application/octet-stream");
+    }
+    @Override public JSONObject finalizeUpload(String id) throws Exception { return request("POST", "/api/meetings/recording-uploads/" + uuid(id) + "/finalize", null); }
     JSONObject chat(String id) throws Exception {
         JSONObject value = request("GET", "/api/chat/voice-requests/" + uuid(id), null);
         uuid(value.getString("id")); uuid(value.getString("threadId")); uuid(value.getString("sourceDeviceId"));

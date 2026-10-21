@@ -31,6 +31,12 @@ bundle restart, stable UUID, bounded retries, owner-switch rejection, immutable
 voice snapshot recovery, uncertain capture, destination preservation and cleanup
 tombstones. The voice journal assertions require installed instrumentation.
 
+To include the real Android HTTP regression, claim a port with `devports claim
+vocci-http-check`, pass it as `-e httpPort <claimed-port>` to instrumentation, then
+release it with `devports release <claimed-port>`. Require `httpContract=json_null_post`.
+This verifies that finalization sends explicit JSON `null`: Android otherwise adds
+a form content type to an empty POST, which the receiver rejects with HTTP 415.
+
 Create the app-private `files/` directory with `run-as` on a fresh install.
 A developer provisions a one-use app-private `files/bootstrap.json` over stdin
 with `run-as ai.moss.vocci sh -c 'cat > files/bootstrap.json'`. Supply JSON fields:
@@ -71,13 +77,26 @@ HTTP is accepted only at loopback for isolated development using an owned ADB
 reverse on a claimed devport. Remote delivery requires HTTPS; redirects are
 rejected. Never reuse/remove another session's forward or server.
 
+## Native screen
+
+The existing status activity follows Moss’s Park Press roles: paper/forest colours,
+Archivo headings, sans body text, numbered sections with hairlines and 48 dp minimum
+controls. `NativeTheme.java` maps semantic roles from the web token source. Android’s
+system light/dark mode and font scale apply; insets keep controls outside system bars.
+The bundled Archivo Black TTF is converted from the repository’s Latin 900 WOFF2;
+its OFL license is included under `assets/fonts/` and packaged by `build.sh`.
+
+Snapshot polling updates keyed views in place. Unchanged snapshots retain controls,
+focus and scroll position; status changes update text and destinations. A theme
+recreation restores the scroll offset. This is the developer status screen, with
+existing provisioning requirements and destinations.
+
 ## Durable behavior and limits
 
 The service stores source identity and delivery entries in
 `no_backup/delivery/state.json`. Complete exact packet and sidecar files are
-published before decoding; an immutable `bundle.json` is published before upload.
-No private bytes are sent to Android logs. A lost acceptance response replays the
-same bundle. Accepted status retains import/meeting IDs and is polled to completion.
+published before decoding; an immutable version-3 `upload.json` manifest is published before upload. Existing frozen version-1/2 `bundle.json` files keep their original receiver and bytes.
+No private bytes are sent to Android logs. A lost reserve response replays the same manifest. HTTP progress is saved after responses; restart queries the server and sends only missing chunks. Accepted status retains import/meeting IDs and is polled to completion.
 Server conflicts and terminal failures stay visible, including HTTP status; source identity never changes
 to get around a failure. Authentication failure preserves pending work for session
 refresh. Receiver processing failures are not reset by replay.
@@ -95,11 +114,10 @@ a blocked service outcome. Stop records stopped without reposting a notification
 Listing requires two stable snapshots, matching audio/sidecar names, completed
 sidecar end/duration and exact transfer sizes/end frames. Partial reads restart
 at zero after reconnect. Interrupted codec work recovers from the retained sources;
-an already-frozen bundle is reused byte-for-byte. Platform Opus decoding validates
+an already-frozen manifest or legacy bundle is reused byte-for-byte. Platform Opus decoding validates
 packet continuity. Audio retrieval writes into an atomic file sink, and the codec reads
 one packet at a time into a file-backed WAV. PCM conversion uses an 8 KiB buffer,
-carrying partial samples and resampling groups across output buffers. The current
-short JSON upload still loads and base64-encodes its bounded files in memory.
+carrying partial samples and resampling groups across output buffers. New uploads stream hashes and read at most 1 MiB per HTTP chunk. Legacy frozen JSON bundles still load their bounded base64 payload in memory.
 If the decoder outputs 48 kHz, a three-sample box filter precedes
 16 kHz decimation; derived WAV is not claimed bit-identical to libopus's direct
 16 kHz decoder. Original evidence remains unchanged.
@@ -107,20 +125,48 @@ If the decoder outputs 48 kHz, a three-sample box filter precedes
 Eight automatic upload attempts use exponential backoff (30 seconds to 30 minutes).
 Connection failures continue reconnecting automatically with backoff capped at
 30 minutes, so returning to range after an outage resumes retrieval. The queue stops retrieving
-at 100 retained entries, 100 MiB, or less than 150 MiB free. Sources/bundles are
+at 100 retained entries, 2 GiB including reserved retrieval/decode budgets, or less than 150 MiB free. The status screen separates queued, failed and completed bytes and shows acknowledged upload percentage. Sources/bundles are
 retained after success until Clear completed local audio is selected. That action
 keeps identity tombstones to prevent redownload, and never clears queued, failed or
 interrupted evidence. At 1024 retained identities, enrollment/discovery stops.
 Automatic retention management is not implemented.
 
-Receiver limits remain 120 seconds, 1 MiB packets, 64 KiB sidecar and 8 MiB upload.
-Larger advertised files remain on the ring; over-duration decodes fail locally.
-A host regression writes generated two-hour PCM into a WAV under a 32 MiB Java
-heap. This tests only the WAV writer: production decode still enforces 120 seconds,
-and it does not prove MediaCodec, installed Android, ring transfer or long uploads.
+New version-3 Meeting uploads accept two hours, 32 MiB packets, 256 KiB sidecar,
+and 256 MiB canonical WAV. Explicit voice requests remain limited to 120 seconds.
+Legacy v1/v2 envelopes retain their original short limits. Per-recording local
+budgets include atomic WAV replacement space. BLE reads restart at zero; HTTP
+uploads resume independently for 24 hours. Expired uploads retain their identity
+and local sources; they cannot be reopened by changing IDs or destinations.
 
-No large/resumable upload transport, iOS, fresh ownership or live streaming. Ring reboot and background reliability
-beyond the actual PR proof remain unverified unless explicitly evidenced there.
+A host regression writes generated two-hour PCM under a 32 MiB Java heap. Installed
+instrumentation decodes a generated 130-second Opus silence fixture through the
+platform codec and confirms short voice limits still apply. Generated fixtures
+are not real ring capture or speech-recognition evidence. Two-hour binary HTTP
+and 240 checkpoint windows are integration-tested with generated PCM and stub ASR.
+No two-hour hardware recording or real two-hour ASR proof is claimed.
+
+No iOS, fresh ownership or live streaming support. Ring reboot and background
+reliability beyond the actual PR proof remain unverified.
+
+## Version-3 resumable receiver
+
+1. POST `/api/meetings/recording-uploads` with version 3, immutable source device and
+   recording IDs, destination, and each file's exact byte length and SHA256. The
+   server commits source identity and expiry before allocating Vault chunk files.
+2. Save the returned upload ID, fingerprint, expiry and progress. GET
+   `/api/meetings/recording-uploads/:id` after restart. PUT missing binary chunks to
+   `/:id/:kind/:index` using `application/octet-stream`; kinds are `packets`,
+   `sidecar`, `wav`, indices start at zero, and each chunk is at most 1 MiB.
+   Exact replay repairs a lost response; changed bytes or destination conflict.
+3. POST `/:id/finalize` with no body or JSON `null` after complete coverage. The server validates
+   complete hashes, framing, WAV and sidecar before marking the source ready.
+4. Poll existing import/voice status routes. Transcription commits one 30-second
+   window and next-job checkpoint together; final Meeting analysis runs once after
+   the last window. Voice enters Chat through its existing public admission API.
+5. Abandoned allocations expire after 24 hours. Cleanup deletes files and chunk
+   progress while retaining immutable source identity. Account export includes
+   individually verified source chunks; the enclosing JSON archive still accumulates
+   in memory. Account deletion cascades rows and removes the owner's Vault.
 
 ## Version-2 voice receiver (developer API)
 
@@ -128,10 +174,10 @@ The companion hold-to-talk switch requests a stable complete inventory twice, th
 saves an immutable request key/inventory before enabling voice delivery. A lost
 response or restart reuses that exact snapshot. Disabling while its result is
 unknown resolves and disables the same epoch. Existing queue entries and baseline
-recordings remain version-1 meeting evidence forever. New `amsg_` recordings get a
-frozen version-2 destination; disabling never rewrites an existing bundle.
+recordings keep their Meeting destination. New `amsg_` recordings get a frozen
+explicit voice destination; disabling never rewrites existing evidence.
 The short version-2 envelope retains the same 120-second and file-size bounds; it
-is separate from the planned resumable long-file transport.
+remains supported alongside version 3. Version 2 denotes short explicit voice intent; version 3 denotes the resumable transport.
 
 1. After reading the complete ring inventory, POST `/api/meetings/voice-enablement`
    with `{ version: 2, sourceDeviceId, requestKey, recordingIds }`. Keep the request

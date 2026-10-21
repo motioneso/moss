@@ -46,7 +46,23 @@ final class DeliveryStore {
         }));
         return order;
     }
-    boolean hasStorageCapacity() { return root.getUsableSpace() > 150 * 1024 * 1024L && size(root) < 100 * 1024 * 1024L; }
+    private long outstandingStorage() {
+        long total = 0;
+        for (String id : ids()) {
+            JSONObject entry = entries.optJSONObject(id);
+            if (!entry.optString("stage").equals("failed")) total += Math.max(0, entry.optLong("storageBudget") - size(file(id, "packets.bin").getParentFile()));
+        }
+        return total;
+    }
+    boolean hasStorageCapacity() { long outstanding = outstandingStorage(); return root.getUsableSpace() > 150 * 1024 * 1024L + outstanding && size(root) + outstanding < 2L * 1024 * 1024 * 1024; }
+    void reserveRetrieval(String id, int packetBytes, int sidecarBytes, byte[] sidecar) throws Exception {
+        JSONObject entry = entries.getJSONObject(id);
+        long duration = CompletedSidecar.duration(sidecar, entry.has("voiceIntent") ? 120000 : 7200000);
+        long wav = 44 + duration * 32;
+        long budget = packetBytes + sidecarBytes + wav * 2 + 4 * 1024 * 1024L;
+        entry.put("storageBudget", budget); save();
+        if (!hasStorageCapacity()) throw new IllegalStateException("storage_capacity");
+    }
     boolean canDiscover() {
         int retained = 0;
         for (String id : ids()) if (!entries.optJSONObject(id).optBoolean("cleared")) retained++;
@@ -67,7 +83,7 @@ final class DeliveryStore {
         entries.put(id, entry); save();
     }
     boolean admitSidecar(String id, byte[] sidecar) throws Exception {
-        try { return CompletedSidecar.isComplete(sidecar); }
+        try { return CompletedSidecar.isComplete(sidecar, entries.getJSONObject(id).has("voiceIntent") ? 120000 : 7200000); }
         catch (CompletedSidecar.TooLong invalid) { rejectSidecar(id, sidecar, "duration_limit"); return false; }
         catch (org.json.JSONException invalid) { rejectSidecar(id, sidecar, "sidecar_invalid"); return false; }
     }
@@ -105,20 +121,21 @@ final class DeliveryStore {
     }
     void freeze(String id) throws Exception {
         File bundle = file(id, "bundle.json");
-        if (!bundle.exists()) {
+        File upload = file(id, "upload.json");
+        if (!bundle.exists() && !upload.exists()) {
             File audio = file(id, "audio.wav");
-            OpusWav.decode(file(id, "packets.bin"), audio);
-            byte[] packets = PrivateFiles.read(file(id, "packets.bin"), RingProtocol.PACKET_LIMIT);
-            byte[] sidecar = PrivateFiles.read(file(id, "sidecar.bin"), RingProtocol.SIDECAR_LIMIT);
-            byte[] wav = PrivateFiles.read(audio, 3_840_044);
-            JSONObject input = new JSONObject().put("version", 1).put("sourceDeviceId", state.getString("sourceDeviceId")).put("recordingId", id)
-                .put("packets", manifest(id + ".opus", packets)).put("sidecar", manifest(id + ".json", sidecar)).put("wav", manifest(id + ".wav", wav));
-            JSONObject intent = entries.getJSONObject(id).optJSONObject("voiceIntent");
-            if (intent != null) input = new JSONObject().put("version", 2).put("intent", "voice-request")
-                .put("enablementId", intent.getString("enablementId")).put("capturedAt", intent.get("capturedAt")).put("recording", input);
-            PrivateFiles.json(bundle, input);
+            OpusWav.decode(file(id, "packets.bin"), audio, entries.getJSONObject(id).has("voiceIntent") ? 120000 : 7200000);
+            PrivateFiles.json(upload, ResumableUpload.manifest(this, id));
         }
-        entries.getJSONObject(id).put("stage", "ready"); save();
+        entries.getJSONObject(id).put("stage", "ready").put("storageBudget", 0); save();
+    }
+    void uploadProgress(String id, JSONObject value) throws Exception {
+        MossClient.uuid(value.getString("id"));
+        JSONObject entry = entries.getJSONObject(id), previous = entry.optJSONObject("uploadProgress");
+        if (value.getInt("chunkBytes") != ResumableUpload.CHUNK_BYTES || !value.getString("fingerprint").matches("[a-f0-9]{64}") ||
+            (previous != null && (!previous.getString("id").equals(value.getString("id")) || !previous.getString("fingerprint").equals(value.getString("fingerprint")) ||
+              !previous.getString("expiresAt").equals(value.getString("expiresAt"))))) throw new Conflict("server_identity_change");
+        entry.put("uploadProgress", value); save();
     }
     void beginAttempt(String id) throws Exception {
         JSONObject entry = entries.getJSONObject(id);
@@ -169,7 +186,7 @@ final class DeliveryStore {
         for (String id : ids()) {
             JSONObject entry = entries.getJSONObject(id);
             if (!completed(entry.getString("stage"))) continue;
-            for (String name : new String[]{"packets.bin", "sidecar.bin", "audio.wav", "bundle.json"}) {
+            for (String name : new String[]{"packets.bin", "sidecar.bin", "audio.wav", "bundle.json", "upload.json"}) {
                 File file = file(id, name);
                 if (file.exists() && !file.delete()) throw new java.io.IOException("storage_cleanup");
             }

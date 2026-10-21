@@ -94,3 +94,4 @@ export * from "./responsibility-agreement.js";
 export * from "./briefing-email-evidence.js";
 
 export * from "./meeting-recording-import-api.js";
+export * from "./meeting-recording-upload-api.js";

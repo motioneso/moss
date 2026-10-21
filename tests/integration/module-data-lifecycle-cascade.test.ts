@@ -137,6 +137,7 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.chat_user_memory_settings",
         "app.chat_voice_requests",
         "app.meeting_recording_voice_enablements",
+        "app.meeting_recording_chunks",
         "app.wellness_checkins",
         "app.medications",
         "app.medication_logs",

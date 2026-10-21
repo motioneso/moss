@@ -18,6 +18,13 @@ export interface RecordingImportRow {
   attempt_id: string | null;
   code: MeetingRecordingImportStatus["code"];
   retryable: boolean;
+  source_manifest_json: string | null;
+  upload_reserved: boolean;
+  upload_expires_at: Date | null;
+  next_window_ms: number;
+  transcript_version: number;
+  transcript_cursor: number;
+  voice_transcript: string;
 }
 export class RecordingImportConflictError extends Error {}
 export function recordingImportStatus(row: RecordingImportRow): MeetingRecordingImportStatus {
