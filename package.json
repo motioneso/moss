@@ -94,6 +94,7 @@
     "test:briefing-email-evidence": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/briefings-email-evidence.test.ts",
     "test:briefings": "tsx scripts/test-integration.ts tests/integration/briefings.test.ts tests/integration/briefings-synthesis.test.ts",
     "test:chat": "tsx scripts/test-integration.ts tests/integration/chat-live.test.ts",
+    "test:chat-first-reminder": "tsx scripts/test-integration.ts tests/integration/chat-first-reminder-fresh-account.test.ts tests/integration/chat-reminders-save.test.ts",
     "test:chat-classifier-shadow": "tsx scripts/test-integration.ts tests/integration/chat-classifier-shadow.test.ts",
     "test:chat-classifier-shadow-report": "tsx scripts/test-integration.ts tests/integration/chat-classifier-shadow-report.test.ts",
     "test:chat-classifier-gate": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/chat-classifier-shadow-review.test.ts tests/integration/chat-classifier-shadow-report.test.ts tests/integration/classifier-gate-setting-routes.test.ts tests/integration/foundation-schema-catalog.test.ts",

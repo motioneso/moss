@@ -126,6 +126,95 @@ function chatThread(id: string, title: string, isMain = false) {
   };
 }
 
+it("shows live reminders when the first turn creates Main, without reopening chat", async () => {
+  const previousEventSource = globalThis.EventSource;
+  const streams: { onmessage?: (event: { data: string }) => void }[] = [];
+  vi.stubGlobal(
+    "EventSource",
+    class {
+      constructor() {
+        streams.push(this);
+      }
+      onmessage?: (event: { data: string }) => void;
+      close() {}
+    }
+  );
+  let mainExists = false;
+  vi.mocked(listChatThreads).mockImplementation(async () => ({
+    threads: mainExists ? [chatThread("new-main", "Main", true)] : []
+  }));
+  vi.mocked(getChatPrivacyState).mockImplementation(async () => ({
+    incognito: false,
+    ...(mainExists ? { threadId: "new-main" } : {})
+  }));
+  vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+  vi.mocked(sendChatTurn).mockImplementationOnce(async () => {
+    mainExists = true;
+    return {
+      userMessageId: "first-request",
+      assistantMessageId: "first-confirmation",
+      reply: "I'll remind you in 2 minutes: stretch",
+      sourceFreshness: null
+    };
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function MainDrawer() {
+    const stream = useChatStream(DEFAULT_CHAT_SURFACE);
+    return createElement(ChatDrawer, {
+      ...stream,
+      open: true,
+      onClose: () => undefined,
+      isFounder: false,
+      ownerId: "owner",
+      surface: DEFAULT_CHAT_SURFACE
+    });
+  }
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(createElement(QueryClientProvider, { client }, createElement(MainDrawer)));
+    });
+    await vi.waitFor(async () => {
+      await act(async () =>
+        expect(renderer.root.findByType("textarea").props.disabled).toBe(false)
+      );
+    });
+    await act(async () => {
+      renderer.root.findByType("textarea").props.onChange({
+        target: { value: "remind me in 2 minutes to stretch" }
+      });
+    });
+    await act(async () => findByAriaLabel(renderer, "Send")!.props.onClick());
+    await vi.waitFor(async () => {
+      await act(async () => {
+        expect(JSON.stringify(renderer.toJSON())).toContain(
+          "I'll remind you in 2 minutes: stretch"
+        );
+      });
+    });
+    await act(async () => {
+      streams.at(-1)?.onmessage?.({
+        data: JSON.stringify({
+          kind: "reply",
+          text: "Reminder: stretch",
+          messageId: "first-delivery",
+          background: true,
+          backgroundThreadId: "new-main"
+        })
+      });
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Reminder: stretch");
+    expect(JSON.stringify(renderer.toJSON())).toContain("I'll remind you in 2 minutes: stretch");
+  } finally {
+    await act(async () => renderer?.unmount());
+    client.clear();
+    vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false });
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+    vi.mocked(listChatThreadMessages).mockReset();
+    vi.stubGlobal("EventSource", previousEventSource);
+  }
+});
+
 it("sends a recovered Main draft after startup history is ready", async () => {
   const previousEventSource = globalThis.EventSource;
   const previousStorage = globalThis.localStorage;
