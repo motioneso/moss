@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Outlook local preview</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <h1>Outlook local preview</h1>
+    <p>Temporary prototype. Open only a synthetic test email, then preview it here.</p>
+    <p>No uploads or saving. Closing this popup clears the preview.</p>
+    <button id="preview" type="button">Preview opened email</button>
+    <button id="clear" type="button">Clear</button>
+    <p id="status" role="status">Ready. Nothing has been read.</p>
+    <section id="result" hidden aria-label="Email preview">
+      <dl>
+        <dt>Subject</dt><dd id="subject"></dd>
+        <dt>From</dt><dd id="sender"></dd>
+        <dt>Date (as displayed)</dt><dd id="date"></dd>
+      </dl>
+      <h2>Body</h2><pre id="body"></pre>
+    </section>
+  </body>
+</html>
