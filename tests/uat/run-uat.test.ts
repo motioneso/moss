@@ -79,6 +79,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withClassifierFixture: false,
       withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
+      withApiKeyChatProvider: false,
       chatScript: undefined
     });
     const [command, args] = mocks.spawn.mock.calls[0] ?? [];
@@ -148,6 +149,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withClassifierFixture: false,
       withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
+      withApiKeyChatProvider: false,
       chatScript: "phase1-smoke"
     });
   });
@@ -202,6 +204,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withClassifierFixture: false,
       withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
+      withApiKeyChatProvider: false,
       chatScript: undefined
     });
   });
@@ -234,8 +237,27 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withClassifierFixture: false,
       withNewsFeedbackFixture: false,
       withClassifierMcpFixture: false,
+      withApiKeyChatProvider: false,
       chatScript: "phase1-smoke"
     });
+  });
+
+  it("#3410: threads the API-key chat provider flag as the last key", async () => {
+    mocks.readFile.mockResolvedValue(
+      `export const uatLevel = {
+        level: "admin+data",
+        without: [],
+        withApiKeyChatProvider: true
+      } as const;`
+    );
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.provisionForUat).toHaveBeenCalledWith(
+      "admin+data",
+      expect.objectContaining({ withApiKeyChatProvider: true, withClassifierMcpFixture: false })
+    );
   });
 
   it("threads the classifier fixture origin flag after the briefing-writer flag", async () => {

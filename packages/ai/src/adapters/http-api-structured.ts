@@ -1,6 +1,8 @@
 import type { ModuleServiceKey } from "@moss/shared";
 
 import type { ProviderKind } from "./transcript-reader.js";
+import { providerBaseUrl } from "../provider-base-url.js";
+import { unfence } from "../structured/run-helpers.js";
 
 // #915 D6: provider mechanics only. Routing policy and credentials stay outside feature code.
 export const STRUCTURED_TOOL_NAME = "emit_structured_output";
@@ -124,7 +126,7 @@ export function buildStructuredRequest(
 ): StructuredHttpRequest {
   switch (providerKind) {
     case "anthropic": {
-      const base = baseUrl ?? "https://api.anthropic.com";
+      const base = providerBaseUrl("anthropic", baseUrl);
       return {
         url: `${base}/v1/messages`,
         headers: {
@@ -156,7 +158,7 @@ export function buildStructuredRequest(
       };
     }
     case "openai-compatible": {
-      const base = baseUrl ?? "https://api.openai.com";
+      const base = providerBaseUrl("openai-compatible", baseUrl);
       if (input.nativeSearch) {
         // #2228: OpenAI's built-in web search tool only exists on the Responses API, so this
         // request (and only this one) switches endpoint. The Responses API carries the same
@@ -393,7 +395,7 @@ function extractOpenAiResponsesResult(record: OpenAiResponsesPayload): Structure
 
 function parseJsonOrThrow(text: string, usage: StructuredUsage): unknown {
   try {
-    return JSON.parse(text);
+    return JSON.parse(unfence(text));
   } catch {
     throw new StructuredOutputParseError("model output is not valid JSON", text, usage);
   }

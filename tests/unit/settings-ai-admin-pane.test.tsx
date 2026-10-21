@@ -47,6 +47,7 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   createAiProvider: (input: unknown) => createAiProvider(input as never),
   createAiModel: (input: unknown) => createAiModel(input as never),
   refreshAiProviderModels: vi.fn(async () => ({ models: [] })),
+  getAiProviderChatReadiness: vi.fn(async () => ({ status: "ready" })),
   revokeAiProvider: vi.fn(),
   updateAiProvider: vi.fn(),
   updateAiModel: vi.fn(),

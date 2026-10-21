@@ -1,6 +1,6 @@
 # 0003 — Interactive chat is a CLI-transport feature
 
-- **Status:** Accepted
+- **Status:** Superseded in part (interactive transport) by `docs/superpowers/specs/2026-10-10-api-key-chat-design.md`
 - **Date:** 2026-06-08
 - **Context:** Jarv1s Chat (epic) — Phase 1 (live runtime). See `docs/superpowers/specs/2026-06-08-jarvis-chat-design.md`.
 

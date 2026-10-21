@@ -61,6 +61,7 @@ export type {
   ToolCallLocation as AcpToolCallLocation,
   Usage as AcpUsage
 } from "@agentclientprotocol/sdk";
+export { MOSS_OPENCODE_API_KEY_ENV, MOSS_OPENCODE_PROVIDER_ID } from "./opencode-provider.js";
 export { createTunnelStream } from "./stream.js";
 export type { AcpExecPoll, AcpTunnel } from "./tunnel.js";
 /** Re-exported so tunnel backers can build protocol handlers without an SDK dependency. */

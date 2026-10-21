@@ -30,7 +30,8 @@ import {
   CliChatDeliveryUnknownError,
   CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   CliChatUnavailableError,
-  ApiKeyLiveChatUnavailableError,
+  ApiKeyUnreadableError,
+  UnsupportedApiKeyChatProviderError,
   UnsupportedLegacyCliProviderError
 } from "./errors.js";
 import {
@@ -163,7 +164,8 @@ export async function runChatTurn(
     } catch (err) {
       if (
         !(err instanceof CliChatUnavailableError) ||
-        err instanceof ApiKeyLiveChatUnavailableError ||
+        err instanceof ApiKeyUnreadableError ||
+        err instanceof UnsupportedApiKeyChatProviderError ||
         err instanceof UnsupportedLegacyCliProviderError
       ) {
         throw err;

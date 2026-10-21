@@ -28,6 +28,7 @@ import {
   sanitizeSessionKey,
   type CliChatEngine,
   type ProbeProviderResult,
+  type RpcAcpSpawnCredential,
   type RpcBeginLoginResult,
   type RpcCancelLoginResult,
   type RpcInstallProviderResult,
@@ -149,7 +150,8 @@ export class CliChatEngineHost {
     userId: string,
     profile: AcpProfile,
     useCandidate = false,
-    personaText?: string
+    personaText?: string,
+    credential: RpcAcpSpawnCredential | null = null
   ): Promise<{
     cwd: string;
     generation: number;
@@ -165,7 +167,8 @@ export class CliChatEngineHost {
       userId,
       profile,
       useCandidate,
-      personaText
+      personaText,
+      credential
     );
   }
 

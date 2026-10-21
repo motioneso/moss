@@ -8,6 +8,8 @@ import type { AiRepository } from "./repository.js";
 export interface DiscoverAndPersistModelsOutcome {
   readonly reason?: ModelDiscoveryReason;
   readonly message?: string;
+  /** Chat-capable ids the provider listed on this run. Set only when `reason` is absent. */
+  readonly discoveredModelIds?: readonly string[];
 }
 
 export interface DiscoverAndPersistModelsInput {
@@ -63,5 +65,10 @@ export async function discoverAndPersistModels(
   }
 
   await deps.repository.upsertDiscoveredModels(scopedDb, input.providerId, models);
-  return {};
+  // API-key rows are insert-only, so older rows outlive the list; callers check against this.
+  return {
+    discoveredModelIds: models
+      .filter((model) => model.capabilities.includes("chat"))
+      .map((model) => model.providerModelId)
+  };
 }

@@ -6,9 +6,20 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
-import { AiAutoRegisterService, AiRepository, createAiSecretCipher } from "@moss/ai";
+import type { AiAutoRegisterPort } from "@moss/ai";
+import {
+  AiAutoRegisterService,
+  AiRepository,
+  ModelDiscoveryService,
+  createAiSecretCipher,
+  discoverAndPersistModels
+} from "@moss/ai";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 
+import {
+  ensureApiKeyProvider,
+  type EnsureApiKeyProviderDeps
+} from "../../scripts/dev-instance/api-key-provider.js";
 import type { DevInstanceConfig } from "../../scripts/dev-instance/config.js";
 import type { CliRunnerStatus, ProvisionDeps } from "../../scripts/dev-instance/provision.js";
 import { runProvision } from "../../scripts/dev-instance/provision.js";
@@ -55,6 +66,9 @@ describe("dev-instance provision (#1258)", () => {
   function fakeConfig(overrides: Partial<DevInstanceConfig> = {}): DevInstanceConfig {
     return {
       providerKind: "anthropic",
+      providerAuth: "cli",
+      providerBaseUrl: null,
+      providerKeyFilePath: null,
       credentialFilePath: "/tmp/dev-instance-provision-test-credential.gpg",
       adminEmail: "owner@example.com",
       adminName: "Test Owner",
@@ -490,6 +504,121 @@ describe("dev-instance provision (#1258)", () => {
 
       expect(() => createAiSecretCipher(hardenedEnv)).toThrow();
       void providerRow;
+    });
+  });
+
+  describe("API-key provider (#3410)", () => {
+    const ADMIN_ID = "33333333-3333-4333-8333-333333333333";
+    const refuseAutoRegister = {
+      ensureDefaultChatModel: async () => {
+        throw new Error("auto-register must not run for an API-key config");
+      }
+    } as unknown as AiAutoRegisterPort;
+
+    it("registers through ensureApiKeyProvider and skips the CLI token", async () => {
+      await insertActiveAdmin(ADMIN_ID, "ada@example.com");
+      const seen: string[] = [];
+      let tokenCalls = 0;
+
+      const outcomes = await runProvision(
+        deps({
+          autoRegister: refuseAutoRegister,
+          config: fakeConfig({
+            providerKind: "openai-compatible",
+            providerAuth: "api_key",
+            providerBaseUrl: "http://proxy.test",
+            providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
+          }),
+          ensureApiKeyProvider: async (_scopedDb, adminUserId) => {
+            seen.push(adminUserId);
+            return { changed: true, providerId: "provider-1", chatModelId: "model-1" };
+          },
+          persistCliToken: async () => {
+            tokenCalls += 1;
+            return true;
+          }
+        })
+      );
+
+      expect(seen).toEqual([ADMIN_ID]);
+      expect(tokenCalls).toBe(0);
+      expect(outcomes.find((outcome) => outcome.id === "provider-rows")).toEqual({
+        id: "provider-rows",
+        changed: true,
+        detail: "registered API-key provider provider-1 as default"
+      });
+      expect(outcomes.find((outcome) => outcome.id === "cli-token")).toEqual({
+        id: "cli-token",
+        changed: false,
+        detail: "skipped: API-key provider"
+      });
+    });
+
+    it("refuses an API-key config when the registration step is not wired", async () => {
+      await insertActiveAdmin(ADMIN_ID, "ada@example.com");
+
+      await expect(
+        runProvision(
+          deps({
+            autoRegister: refuseAutoRegister,
+            config: fakeConfig({
+              providerAuth: "api_key",
+              providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
+            })
+          })
+        )
+      ).rejects.toThrow(/ensureApiKeyProvider is not wired/);
+    });
+
+    it("refuses a re-run whose list no longer has the model, though the old row remains", async () => {
+      await insertActiveAdmin(ADMIN_ID, "ada@example.com");
+      const repository = new AiRepository();
+      const modelDiscovery = new ModelDiscoveryService();
+      let listed: readonly string[] = ["org/model:tag@v2"];
+      modelDiscovery.discoverModels = async () => ({
+        models: listed.map((id) => ({
+          providerModelId: id,
+          displayName: id,
+          capabilities: ["chat" as const],
+          tier: "interactive" as const
+        })),
+        fromCache: false,
+        fromFallback: false,
+        cacheExpiresAt: null
+      });
+      const ensureDeps: EnsureApiKeyProviderDeps = {
+        repository,
+        cipher: createAiSecretCipher(),
+        discoverModels: (scopedDb, input) =>
+          discoverAndPersistModels(scopedDb, input, { repository, modelDiscovery }),
+        readKeyFile: async () => "ada-dev-instance-key-0002\n"
+      };
+      const config = fakeConfig({
+        providerKind: "openai-compatible",
+        providerAuth: "api_key",
+        providerBaseUrl: "http://proxy.test",
+        providerKeyFilePath: "/tmp/dev-instance-provision-test-key"
+      });
+      const context = { actorUserId: ADMIN_ID, requestId: "request:dev-api-key" };
+      const ensure = () =>
+        runner.withDataContext(context, (scopedDb) =>
+          ensureApiKeyProvider(scopedDb, ADMIN_ID, config, ensureDeps)
+        );
+
+      const first = await ensure();
+      listed = [];
+      await expect(ensure()).rejects.toThrow(/listed no chat model/);
+
+      const models = await runner.withDataContext(context, (scopedDb) =>
+        repository.listModels(scopedDb)
+      );
+      expect(
+        models.some(
+          (model) =>
+            model.provider_config_id === first.providerId &&
+            model.provider_model_id === "org/model:tag@v2"
+        )
+      ).toBe(true);
     });
   });
 });

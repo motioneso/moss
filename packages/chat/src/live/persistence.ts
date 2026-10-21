@@ -16,7 +16,15 @@ import { pendingReminderDeletion } from "../reminders/delete-agreement.js";
  * reuses ChatRepository's recency + completed-turn helpers and then enqueues the
  * episodic-embed job (unless the thread is incognito).
  */
-import type { AiConfiguredModelSafeRow, AiRepository, ProviderKind } from "@moss/ai";
+import type { AiRepository, AiSecretCipher, ProviderKind } from "@moss/ai";
+import {
+  chatAcpModel,
+  chatCredentialCipher,
+  chatLaunchRevision,
+  openChatCredential,
+  type ChatCredential
+} from "./api-key-launch.js";
+import { toLiveProvider } from "./live-provider.js";
 import { resolveClockFormat, resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
@@ -80,7 +88,6 @@ import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
 import { CHAT_PROCESS_BOOT_ID, deleteLiveTurn, insertLiveTurn } from "../live-turns.js";
 import { estimateTokens } from "./recall-seed.js";
-import { UnsupportedLegacyCliProviderError } from "./errors.js";
 import { getReplayK, getReplayTokenCap, type ReplayMessage } from "./replay-window.js";
 import {
   SUMMARY_RUN_INPUT_TOKENS,
@@ -92,9 +99,6 @@ import {
 } from "./summary-coverage.js";
 
 export { getReplayK, getReplayTokenCap } from "./replay-window.js";
-
-/** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
-const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];
 
 /** Title used when the live runtime has to open a user's first conversation. */
 const DEFAULT_CONVERSATION_TITLE = "Conversation";
@@ -113,6 +117,8 @@ export interface DataContextChatPersistenceDeps {
   readonly localePreferences?: PreferencesPort;
   /** Reads the user's saved ACP model choice for the live launch. */
   readonly chatPreferences?: PreferencesPort;
+  /** Builds the cipher that opens API-key provider credentials for chat launches. */
+  readonly resolveAiSecretCipher?: () => AiSecretCipher;
   /** #3128 — this process's boot id; tests pass one per simulated boot. */
   readonly bootId?: string;
   readonly canProposeBoundedAction?: (actorUserId: string) => Promise<boolean>;
@@ -157,6 +163,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
   private readonly localePreferences: PreferencesPort | undefined;
   private readonly chatPreferences: PreferencesPort | undefined;
+  private readonly resolveAiSecretCipher: (() => AiSecretCipher) | undefined;
   private readonly bootId: string;
   private readonly canProposeBoundedAction: DataContextChatPersistenceDeps["canProposeBoundedAction"];
   private readonly editCliAdapter: GenerateStructuredDeps["createCliStructuredAdapter"];
@@ -172,6 +179,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.connectorSyncAt = deps.connectorSyncAt;
     this.localePreferences = deps.localePreferences;
     this.chatPreferences = deps.chatPreferences;
+    this.resolveAiSecretCipher = deps.resolveAiSecretCipher;
     this.bootId = deps.bootId ?? CHAT_PROCESS_BOOT_ID;
     this.editCliAdapter = deps.editCliAdapter;
     this.canProposeBoundedAction = deps.canProposeBoundedAction;
@@ -217,8 +225,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     authMethod: AiAuthMethod;
     acpAgentId: string | null;
     acpModel?: string;
+    providerConfigRevision?: string;
   }> {
-    const { model, openCodeModel } = await this.run(
+    const { model, openCodeModel, revision } = await this.run(
       actorUserId,
       "resolve-provider",
       async (scopedDb) => {
@@ -228,7 +237,11 @@ export class DataContextChatPersistence implements ChatPersistencePort {
           scopedDb,
           CHAT_SETTINGS_PREFERENCE_KEY
         );
-        return { model, openCodeModel: normalizeChatSettings(rawChatSettings).openCodeModel };
+        return {
+          model,
+          openCodeModel: normalizeChatSettings(rawChatSettings).openCodeModel,
+          revision: await chatLaunchRevision(this.ai, scopedDb, model)
+        };
       }
     );
 
@@ -237,16 +250,29 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     }
 
     const provider = toLiveProvider(model);
+    const acpModel = chatAcpModel(model, openCodeModel);
     return {
       provider,
       model: model.provider_model_id,
       providerConfigId: model.provider_config_id,
       authMethod: model.provider_auth_method,
       acpAgentId: model.provider_acp_agent_id,
-      ...(model.provider_acp_agent_id === "opencode" && openCodeModel
-        ? { acpModel: openCodeModel }
-        : {})
+      ...(acpModel ? { acpModel } : {}),
+      ...(revision ? { providerConfigRevision: revision } : {})
     };
+  }
+
+  /** The API-key row's key and address, or `null` when they cannot be read. */
+  async resolveChatCredential(
+    actorUserId: string,
+    providerConfigId: string
+  ): Promise<ChatCredential | null> {
+    const cipher = chatCredentialCipher(this.resolveAiSecretCipher);
+    if (!cipher) return null;
+    const row = await this.run(actorUserId, "resolve-chat-credential", (scopedDb) =>
+      this.ai.selectProviderWithCredential(scopedDb, providerConfigId)
+    );
+    return openChatCredential(row, cipher);
   }
 
   async listPriorTurns(
@@ -944,24 +970,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       fn
     );
   }
-}
-
-/**
- * Map the router's broad AiProviderKind onto the narrow live ProviderKind the CLI
- * engines support. ollama/custom have no live CLI engine in Phase 1 → throw a
- * clear error rather than silently dispatching an unsupported provider.
- */
-function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
-  const kind = model.provider_kind;
-  if ((LIVE_PROVIDER_KINDS as readonly string[]).includes(kind)) {
-    return kind as ProviderKind;
-  }
-  if (model.provider_auth_method === "cli" && !model.provider_acp_agent_id) {
-    throw new UnsupportedLegacyCliProviderError();
-  }
-  throw new Error(
-    `Active chat model uses provider kind "${kind}", which has no live CLI engine in Phase 1.`
-  );
 }
 
 function deriveChatTitle(userText: string): string {

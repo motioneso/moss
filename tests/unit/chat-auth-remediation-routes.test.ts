@@ -5,16 +5,19 @@ import { registerChatRoutes } from "../../packages/chat/src/routes.js";
 import { registerChatLiveRoutes } from "../../packages/chat/src/live-routes.js";
 import { PageContextStore } from "../../packages/chat/src/live/page-context-store.js";
 import {
-  API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE,
-  ApiKeyLiveChatUnavailableError,
+  ApiKeyUnreadableError,
   CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   CHAT_PROVIDER_CHANGED_MESSAGE,
   ChatProviderChangedError,
   CliChatUnavailableError,
+  UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE,
   UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE,
+  UnsupportedApiKeyChatProviderError,
   UnsupportedLegacyCliProviderError
 } from "../../packages/chat/src/live/errors.js";
 import {
+  API_KEY_REJECTED_MESSAGE,
+  API_KEY_UNREADABLE_MESSAGE,
   CODEX_SIGN_IN_REQUIRED_MESSAGE,
   knownAuthFailureMessage
 } from "../../packages/chat/src/live/auth-errors.js";
@@ -24,7 +27,12 @@ const ACTOR_ID = "11111111-1111-4111-8111-111111111111";
 const CLAUDE_SIGN_IN_EXPIRED_MESSAGE =
   "The Claude sign-in has expired; an admin can log it in again under Settings, AI providers";
 
-const AUTH_MESSAGES = [CODEX_SIGN_IN_REQUIRED_MESSAGE, CLAUDE_SIGN_IN_EXPIRED_MESSAGE] as const;
+const AUTH_MESSAGES = [
+  CODEX_SIGN_IN_REQUIRED_MESSAGE,
+  CLAUDE_SIGN_IN_EXPIRED_MESSAGE,
+  API_KEY_REJECTED_MESSAGE,
+  API_KEY_UNREADABLE_MESSAGE
+] as const;
 type InjectRequest = { method: string; url: string; payload?: unknown };
 type InjectResponse = { statusCode: number; json: () => unknown };
 
@@ -82,7 +90,7 @@ describe("chat auth remediation route boundaries", () => {
   });
 
   it.each([
-    [new ApiKeyLiveChatUnavailableError(), API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE],
+    [new UnsupportedApiKeyChatProviderError(), UNSUPPORTED_API_KEY_CHAT_PROVIDER_MESSAGE],
     [new UnsupportedLegacyCliProviderError(), UNSUPPORTED_LEGACY_CLI_PROVIDER_MESSAGE]
   ])(
     "returns fixed remediation for known live-chat configuration failures",
@@ -97,6 +105,17 @@ describe("chat auth remediation route boundaries", () => {
       );
     }
   );
+
+  it("tells the user an API-key row's key could not be read", async () => {
+    const app = buildLiveApp(new ApiKeyUnreadableError());
+    apps.push(app);
+    await assertSerializedError(
+      app,
+      { method: "POST", url: "/api/chat/turn", payload: { text: "hello" } },
+      503,
+      API_KEY_UNREADABLE_MESSAGE
+    );
+  });
 
   it("asks the user to retry when the active provider changes before a turn is sent", async () => {
     const app = buildLiveApp(new ChatProviderChangedError());

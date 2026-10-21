@@ -336,7 +336,8 @@ describe("serveConnection (§3.4/§3.7)", () => {
       "user-1",
       "chat",
       false,
-      undefined
+      undefined,
+      null
     );
 
     channel.triggerClose();
@@ -381,6 +382,114 @@ describe("serveConnection (§3.4/§3.7)", () => {
 
     expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 8 });
   });
+
+  const credential = {
+    baseUrl: "http://proxy.test",
+    apiKey: "test-key-never-echo-0001",
+    model: "org/model:tag@v2"
+  };
+
+  it("passes a valid chat credential through to the host", async () => {
+    const host = fakeHost();
+    const spawn = vi.spyOn(host, "acpSpawn").mockResolvedValue({
+      cwd: "/tmp/neutral-base/chat:u:p/acp/p",
+      generation: 1,
+      home: null,
+      pid: null,
+      uid: 2001,
+      gid: 2001
+    });
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    channel.feed(
+      encodeFrame({
+        t: "req",
+        id: 41,
+        method: "acpSpawn",
+        sessionKey: "chat:u:p",
+        params: {
+          projectId: "p",
+          providerKind: "opencode",
+          userId: "u",
+          profile: "chat",
+          credential
+        }
+      })
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 41) as RpcOk;
+    expect(ok.t).toBe("ok");
+    expect(spawn).toHaveBeenCalledWith(
+      "chat:u:p",
+      "p",
+      "opencode",
+      "u",
+      "chat",
+      false,
+      undefined,
+      credential
+    );
+  });
+
+  // The last column is the exact value submitted in the bad field, so each case asserts against
+  // what was actually sent, plus the fragment every case shares.
+  it.each([
+    ["a credential on a workshop spawn", "anthropic", "workshop", credential, credential.apiKey],
+    ["a credential for Codex", "openai", "chat", credential, credential.apiKey],
+    ["an extra field", "anthropic", "chat", { ...credential, extra: "x" }, credential.apiKey],
+    [
+      "a key with a space",
+      "anthropic",
+      "chat",
+      { ...credential, apiKey: "test-key never-echo-0001" },
+      "test-key never-echo-0001"
+    ],
+    [
+      "a non-http address",
+      "anthropic",
+      "chat",
+      { ...credential, baseUrl: "file:///test-key-never-echo-0001" },
+      "file:///test-key-never-echo-0001"
+    ],
+    [
+      "a model with a space",
+      "anthropic",
+      "chat",
+      { ...credential, model: "a b test-key-never-echo-0001" },
+      "a b test-key-never-echo-0001"
+    ]
+  ])(
+    "refuses %s without echoing any value (stays open)",
+    async (_label, providerKind, profile, value, submitted) => {
+      const host = fakeHost();
+      const spawn = vi.spyOn(host, "acpSpawn");
+      const channel = new FakeChannel();
+      serveConnection(channel, deps(host));
+      authenticate(channel);
+
+      channel.feed(
+        encodeFrame({
+          t: "req",
+          id: 42,
+          method: "acpSpawn",
+          sessionKey: "chat:u:p",
+          params: { projectId: "p", providerKind, userId: "u", profile, credential: value }
+        })
+      );
+      await new Promise((r) => setTimeout(r, 5));
+      const frames = channel.decodeAll();
+      const err = frames.find((f) => (f as RpcErr).id === 42) as RpcErr;
+      expect(err.t).toBe("err");
+      expect(err.error.code).toBe("bad_request");
+      expect(JSON.stringify(frames)).not.toContain(submitted);
+      expect(JSON.stringify(frames)).not.toContain("never-echo-0001");
+      expect(JSON.stringify(frames)).not.toContain("proxy.test");
+      expect(spawn).not.toHaveBeenCalled();
+      expect(channel.closed).toBe(false);
+    }
+  );
 
   // Slice 1 task 3 — a spawn without a provider kind is refused, with no default.
   it("refuses acpSpawn without a provider kind (stays open)", async () => {

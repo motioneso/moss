@@ -50,6 +50,7 @@ import {
   type RpcWriteTerminalParams
 } from "@moss/chat/live";
 
+import { AcpCredentialBadRequestError, readAcpSpawnCredential } from "./acp-spawn-credential.js";
 import { BadSubmitAttemptError, NotLaunchedError, type CliChatEngineHost } from "./engine-host.js";
 import { InstallBadRequestError } from "./install-service.js";
 import { LoginBadRequestError } from "./login-service.js";
@@ -645,6 +646,11 @@ async function invoke(
       if (params.personaText !== undefined && typeof params.personaText !== "string") {
         throw new BadRequestError("acpSpawn.personaText must be a string");
       }
+      const credential = readAcpSpawnCredential(
+        params.credential,
+        params.providerKind,
+        params.profile
+      );
       const spawned = await host.acpSpawn(
         key,
         params.projectId,
@@ -652,7 +658,8 @@ async function invoke(
         params.userId,
         params.profile,
         params.useCandidate === true,
-        params.personaText
+        params.personaText,
+        credential
       );
       if (!recordAcpSpawn(key, spawned.generation)) {
         await host.acpKill(key, { generation: spawned.generation });
@@ -740,6 +747,7 @@ function safeErrorStatusCode(err: unknown): number | undefined {
 
 function errorCode(err: unknown): RpcErrorCode {
   if (err instanceof BadRequestError) return "bad_request";
+  if (err instanceof AcpCredentialBadRequestError) return "bad_request";
   // §A.2.3 catalog-blocked / in-flight install rejection ⇒ bad_request (does NOT close).
   if (err instanceof InstallBadRequestError) return "bad_request";
   // §L.2.4 catalog/adapter-blocked / stale-loginId / no-login-on-build ⇒ bad_request (does NOT close).

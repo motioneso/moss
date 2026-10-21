@@ -8,7 +8,13 @@ import type {
 } from "@moss/shared";
 import { decisionModelDialect } from "@moss/shared";
 
-import { inferWebSearchCapability } from "./model-discovery.js";
+import { inferWebSearchCapability, isNonChatModelId } from "./model-discovery.js";
+import { PROVIDER_MODEL_ID_PATTERN, providerBaseUrl } from "./provider-base-url.js";
+
+export const PROVIDER_CREDENTIAL_MISSING_MESSAGE = "Provider credential is missing.";
+export const PROVIDER_CREDENTIAL_VALID_MESSAGE = "Provider credential is valid.";
+export const PROVIDER_REJECTED_CREDENTIAL_MESSAGE = "Provider rejected the credential.";
+export const PROVIDER_TEST_FAILED_MESSAGE = "Provider test failed.";
 
 /** #3057: the Cloudflare Test probe and its two preset-only messages. */
 const CLOUDFLARE_TEST_MODEL = "clef-flash";
@@ -31,7 +37,7 @@ export async function testProviderCredential(
   }
 
   const apiKey = readApiKey(input.credential);
-  if (!apiKey) return fail(input.providerKind, "Provider credential is missing.");
+  if (!apiKey) return fail(input.providerKind, PROVIDER_CREDENTIAL_MISSING_MESSAGE);
 
   try {
     // #3057: a Cloudflare decision model has no models list; its Test sends one fixed probe.
@@ -47,7 +53,7 @@ export async function testProviderCredential(
       return {
         ok: true,
         providerKind: input.providerKind,
-        message: "Provider credential is valid."
+        message: PROVIDER_CREDENTIAL_VALID_MESSAGE
       };
     }
     if (input.providerKind === "system-one" && response.status === 404) {
@@ -57,11 +63,11 @@ export async function testProviderCredential(
     return fail(
       input.providerKind,
       response.status === 401 || response.status === 403
-        ? "Provider rejected the credential."
-        : "Provider test failed."
+        ? PROVIDER_REJECTED_CREDENTIAL_MESSAGE
+        : PROVIDER_TEST_FAILED_MESSAGE
     );
   } catch {
-    return fail(input.providerKind, "Provider test failed.");
+    return fail(input.providerKind, PROVIDER_TEST_FAILED_MESSAGE);
   }
 }
 
@@ -90,13 +96,13 @@ async function testCloudflareDecisionModel(
       redirect: "error"
     });
   } catch {
-    return fail(input.providerKind, "Provider test failed.");
+    return fail(input.providerKind, PROVIDER_TEST_FAILED_MESSAGE);
   }
 
   if (response.status === 401 || response.status === 403) {
-    return fail(input.providerKind, "Provider rejected the credential.");
+    return fail(input.providerKind, PROVIDER_REJECTED_CREDENTIAL_MESSAGE);
   }
-  if (!response.ok) return fail(input.providerKind, "Provider test failed.");
+  if (!response.ok) return fail(input.providerKind, PROVIDER_TEST_FAILED_MESSAGE);
 
   try {
     const payload = await response.json();
@@ -108,13 +114,13 @@ async function testCloudflareDecisionModel(
       return {
         ok: true,
         providerKind: input.providerKind,
-        message: "Provider credential is valid."
+        message: PROVIDER_CREDENTIAL_VALID_MESSAGE
       };
     }
   } catch {
     // A body that cannot be read is a failed test, handled below.
   }
-  return fail(input.providerKind, "Provider test failed.");
+  return fail(input.providerKind, PROVIDER_TEST_FAILED_MESSAGE);
 }
 
 export async function discoverProviderModels(
@@ -127,7 +133,12 @@ export async function discoverProviderModels(
   try {
     const response = await fetchModels(input, apiKey);
     if (!response.ok) return [];
-    return extractModelIds(await response.json()).map((id) => suggestModel(id, input.providerKind));
+    return extractModelIds(await response.json())
+      .filter((id) => !isNonChatModelId(id))
+      .filter(
+        (id) => input.providerKind !== "openai-compatible" || PROVIDER_MODEL_ID_PATTERN.test(id)
+      )
+      .map((id) => suggestModel(id, input.providerKind));
   } catch {
     return [];
   }
@@ -144,10 +155,13 @@ function readApiKey(credential: unknown): string | null {
 }
 
 function fetchModels(input: ProviderValidationInput, apiKey: string): Promise<Response> {
-  const f = input.fetch ?? globalThis.fetch;
+  const fetchOnce = input.fetch ?? globalThis.fetch;
+
+  // A redirect would replay the key header to whatever host it names.
+  const f = (url: string, init: RequestInit) => fetchOnce(url, { ...init, redirect: "error" });
   switch (input.providerKind) {
     case "anthropic":
-      return f("https://api.anthropic.com/v1/models", {
+      return f(`${providerBaseUrl("anthropic", input.baseUrl)}/v1/models`, {
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
       });
     case "google":
@@ -163,7 +177,7 @@ function fetchModels(input: ProviderValidationInput, apiKey: string): Promise<Re
     case "openai-compatible":
     case "ollama":
     case "custom": {
-      const base = (input.baseUrl ?? "https://api.openai.com").replace(/\/+$/, "");
+      const base = providerBaseUrl("openai-compatible", input.baseUrl);
       return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` } });
     }
   }

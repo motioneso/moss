@@ -26,6 +26,7 @@ export const PROVIDER_CATALOG: readonly {
   readonly preset?: DecisionModelPreset;
 }[] = [
   { label: "Anthropic", kind: "anthropic", authMethod: "cli" },
+  { label: "Anthropic (API key)", kind: "anthropic", authMethod: "api_key" },
   { label: "Codex", kind: "openai-compatible", authMethod: "cli", acpAgentId: "codex-acp" },
   { label: "OpenCode", kind: "openai-compatible", authMethod: "cli", acpAgentId: "opencode" },
   { label: "Google", kind: "google", authMethod: "cli" },
