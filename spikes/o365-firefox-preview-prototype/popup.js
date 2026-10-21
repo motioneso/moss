@@ -24,7 +24,7 @@ preview.addEventListener("click", async () => {
       if (request === generation) status.textContent = "Open Outlook Web in the active tab first.";
       return;
     }
-    const injections = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ["extract.js"] });
+    const injections = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ["read-message.js", "extract.js"] });
     if (request !== generation) return;
     const capture = injections.length === 1 && !injections[0].error && injections[0].result;
     if (!capture || !capture.ok) {
@@ -96,3 +96,54 @@ async function watchCommand(command) {
 document.getElementById("watch-start").addEventListener("click", () => watchCommand("start"));
 document.getElementById("watch-read").addEventListener("click", () => watchCommand("read"));
 document.getElementById("watch-stop").addEventListener("click", () => watchCommand("stop"));
+
+const autoButtons = ["auto-start", "auto-read", "auto-stop"].map((id) => document.getElementById(id));
+async function autoBodyCommand(command) {
+  const autoStatus = document.getElementById("auto-status");
+  const autoResult = document.getElementById("auto-result");
+  for (const button of autoButtons) button.disabled = true;
+  autoResult.hidden = true;
+  for (const field of fields) document.getElementById(`auto-${field}`).textContent = "";
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = new URL(tab.url);
+    if (url.protocol !== "https:" || !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)
+      || !/^\/mail(?:\/|$)/i.test(url.pathname)) {
+      autoStatus.textContent = "Open Outlook Web Inbox in the active tab first.";
+      return;
+    }
+    if (command === "start") {
+      const installed = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ["read-message.js", "auto-body.js"] });
+      if (installed.length !== 1 || installed[0].error) throw Error("injection");
+    }
+    const injections = await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (action, phrase) => {
+        const probe = globalThis.__mossAutoBodyProbe;
+        if (!probe) return null;
+        if (action === "start") {
+          globalThis.__mossInboxProbe?.stop();
+          globalThis.__mossCalendarProbe?.stop();
+          return probe.start(phrase);
+        }
+        return action === "stop" ? probe.stop() : probe.snapshot();
+      },
+      args: [command, document.getElementById("auto-phrase").value],
+    });
+    if (injections.length !== 1 || injections[0].error) throw Error("injection");
+    const state = injections[0].result;
+    if (!state) { autoStatus.textContent = "No body test in this tab. Start on Inbox first."; return; }
+    autoStatus.textContent = `${state.running ? "Running" : "Stopped"}: ${state.reason}. Scans: ${state.scans}; rows opened: ${state.opened}; body captured: ${state.capture ? "yes" : "no"}.`;
+    if (state.capture) {
+      for (const field of fields) document.getElementById(`auto-${field}`).textContent = state.capture[field] || "Not found";
+      autoResult.hidden = false;
+    }
+  } catch {
+    autoStatus.textContent = "Couldn't reach the body test. Reload Outlook to stop and clear it; then start again with a fresh phrase.";
+  } finally {
+    for (const button of autoButtons) button.disabled = false;
+  }
+}
+document.getElementById("auto-start").addEventListener("click", () => autoBodyCommand("start"));
+document.getElementById("auto-read").addEventListener("click", () => autoBodyCommand("read"));
+document.getElementById("auto-stop").addEventListener("click", () => autoBodyCommand("stop"));

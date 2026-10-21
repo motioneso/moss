@@ -35,5 +35,25 @@
     <p>Observations can reflect changed text, scrolling or view changes. A calendar
       item disappearing does not prove it was cancelled. Keep the same date/view.</p>
     <ol id="watch-results" aria-label="Observed inbox or calendar items"></ol>
+    <hr>
+    <h2>Automatic body test — one synthetic email</h2>
+    <p>Start on Inbox before sending. This opens one newly appearing matching row,
+      which may mark it as read. Leave this tab untouched. Starting stops the passive watchers.</p>
+    <label for="auto-phrase">Fresh unique test phrase (add a suffix)</label>
+    <input id="auto-phrase" value="MOSS BODY TEST" maxlength="80">
+    <p>Put the phrase in both subject and body. End the body with MOSS BODY END.
+      Send synthetic content only, in a new conversation. Wait up to five minutes for arrival.</p>
+    <p><button id="auto-start" type="button">Start automatic body test</button>
+      <button id="auto-read" type="button">Show body result</button>
+      <button id="auto-stop" type="button">Stop &amp; clear body</button></p>
+    <p id="auto-status" role="status">Not started. Captured body stays only in this tab’s memory until cleared or reloaded.</p>
+    <section id="auto-result" hidden aria-label="Automatic body preview">
+      <dl>
+        <dt>Subject</dt><dd id="auto-subject"></dd>
+        <dt>From</dt><dd id="auto-sender"></dd>
+        <dt>Date (as displayed)</dt><dd id="auto-date"></dd>
+      </dl>
+      <pre id="auto-body"></pre>
+    </section>
   </body>
 </html>

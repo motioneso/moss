@@ -110,6 +110,39 @@ Two absent scans reduce brief rerender noise but cannot establish deletion or
 cancellation. This experiment does not open, create, edit or delete events, click
 through dates, read invitations from mail, or sync a complete calendar.
 
+## Try the automatic body test (version 0.4.0)
+
+1. Reload the add-on in `about:debugging`, then reload Outlook and leave it on
+   **Inbox**. No permissions have been added.
+2. In the extension's **Automatic body test** section, enter a fresh phrase such
+   as `MOSS BODY TEST 3141`. Use a different suffix for each attempt. Click
+   **Start automatic body test**, then close the popup and leave the tab untouched.
+   Starting stops the passive watchers. Existing matching rows prevent starting.
+3. From another window/device, send a new synthetic conversation to yourself.
+   Put the exact phrase in its subject and body, add several invented paragraphs,
+   and put `MOSS BODY END` on the final line. Do not reply to real mail.
+4. Once Outlook displays the row, the test clicks it **once**. This may mark it
+   as read; it does not restore unread status. Reopen the popup and click
+   **Show body result**. Check locally whether the final marker appears.
+5. Report only the generic status/counts and whether the end marker appeared.
+   Click **Stop & clear body** afterward. Do not send the body or screenshots.
+
+This is one-shot automation, not a mailbox crawler. It waits up to five minutes
+for a newly displayed matching row among the first 50 rendered options, rejects
+multiple matches, and allows twenty seconds after the single click for rendering.
+Its own click may change the mail route; unrelated route changes before clicking
+stop the run. Trusted pointer/keyboard interaction in the page stops and clears it.
+No automatic retries, scrolling, sending, deletion, folder navigation or startup.
+
+The shared opened-message reader checks the nearby subject for the phrase before
+reading body text. Capture requires one visible message body, the phrase in that
+body, its final marker, no truncation, and two equal snapshots. Unsupported layouts
+or incomplete rendering time out without retaining a result. These markers test
+the synthetic render; they are not authoritative message IDs or proof of complete
+mailbox coverage. Body capture is bounded to 12,000 characters. One result stays
+in tab memory across popup closure until Stop, reload or tab close. Restart and
+session recovery remain unimplemented. Live automatic body testing is pending.
+
 ## Deliberately narrow behavior
 
 - Only `activeTab` and `scripting` permissions. No host permissions, background
@@ -148,6 +181,13 @@ Calendar checks cover test-phrase filtering (including an assertion observed to
 fail when the filter guard is removed), automatic appearance, changed labels,
 two-scan disappearance, deduplication, repeat script loading, stop/clear, route
 shutdown, and the popup's automatic calendar-mode selection with mocked APIs.
+Body-mode checks use a controlled clock with the production interval callback:
+one click after arrival, own-click mail route change, stable complete capture,
+stale subject rejection, missing end marker, multiple rows/bodies, compose exclusion,
+trusted interaction, Stop, timeout and navigation shutdown. Removing the subject
+identity guard exposes a stale-pane capture in the synthetic fixture, demonstrating
+that the guard matters. Popup retrieval and tab-memory retention are checked with
+mocked browser APIs; installed Firefox/Outlook behavior still needs the live trial.
 Manifest validation:
 
 ```sh

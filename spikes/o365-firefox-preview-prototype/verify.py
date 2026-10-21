@@ -9,7 +9,7 @@ import tempfile
 from playwright.sync_api import sync_playwright
 
 SOURCE = Path(__file__).resolve().parent
-EXTRACT = (SOURCE / "extract.js").read_text()
+EXTRACT = "(() => {" + (SOURCE / "read-message.js").read_text() + "return " + (SOURCE / "extract.js").read_text().split("\n", 1)[1] + "})()"
 WATCH = (SOURCE / "watch.js").read_text()
 CALENDAR = (SOURCE / "calendar-watch.js").read_text()
 MESSAGE = '''<article><h3>Synthetic subject</h3><h3>From: Example Sender</h3>
@@ -18,6 +18,156 @@ MESSAGE = '''<article><h3>Synthetic subject</h3><h3>From: Example Sender</h3>
 <span style="display:none">DISPLAY SECRET</span>
 <span aria-hidden="true">ARIA SECRET</span><button>CONTROL SECRET</button>
 </div></article>'''
+
+
+def verify_auto_body(browser, run):
+    reader = (SOURCE / "read-message.js").read_text()
+    auto = (SOURCE / "auto-body.js").read_text()
+    page = browser.new_page()
+    page.route("**/*", lambda route: route.fulfill(content_type="text/html", body="<main></main>"))
+    page.goto("https://outlook.office.com/mail/inbox")
+    # Controlled clock advances the production callback without repeated waits.
+    page.evaluate("""() => {
+      window.now = 0; Date.now = () => now;
+      window.setInterval = fn => { window.scanBody = fn; return 1; };
+      window.clearInterval = () => {};
+      window.clicks = 0;
+    }""")
+    page.evaluate(reader)
+    page.evaluate(auto)
+    phrase = "MOSS BODY TEST 3141"
+    message = MESSAGE.replace("Synthetic subject", phrase).replace(
+        "Synthetic body", phrase + "<p>" + "Invented paragraph. " * 100 + "</p><p>MOSS BODY END</p>")
+    fixture = '<div role="listbox" aria-label="Message list"><div role="option">Unrelated synthetic mail</div></div><section id="pane"></section>'
+
+    def reset():
+        page.evaluate("__mossAutoBodyProbe.stop()")
+        page.evaluate('history.replaceState({}, "", "/mail/inbox"); window.now = 0; window.clicks = 0;')
+        page.set_content(fixture)
+
+    def start():
+        return page.evaluate("phrase => __mossAutoBodyProbe.start(phrase)", phrase)
+
+    def arrival(count=1):
+        page.evaluate("""({phrase,count}) => {
+          for (let i=0;i<count;i++) {
+            const row = document.createElement('div'); row.setAttribute('role','option');
+            row.textContent = phrase;
+            row.addEventListener('click', () => { clicks++; history.pushState({}, '', '/mail/inbox/id/synthetic'); });
+            document.querySelector('[role=listbox]').append(row);
+          }
+        }""", dict(phrase=phrase, count=count))
+
+    def ticks(count=1):
+        for _ in range(count):
+            page.evaluate("window.scanBody()")
+        return page.evaluate("__mossAutoBodyProbe.snapshot()")
+
+    reset()
+    assert start()["running"]
+    ticks(3)
+    assert page.evaluate("clicks") == 0
+    arrival()
+    ticks()
+    assert page.evaluate("clicks") == 1
+    page.locator("#pane").evaluate("(node, html) => node.innerHTML = html", message)
+    assert ticks()["capture"] is None  # stable second snapshot required
+    captured = ticks()
+    assert not captured["running"] and captured["phase"] == "captured"
+    assert captured["capture"]["body"].endswith("MOSS BODY END")
+    assert len(captured["capture"]["body"]) > 1800
+    ticks(3)
+    assert page.evaluate("clicks") == 1
+
+    # Popup renders the captured fixture through mocked browser APIs.
+    popup = browser.new_page(viewport={"width": 900, "height": 1500})
+    popup.goto((SOURCE / "popup.html").as_uri())
+    popup.evaluate("state => window.syntheticBodyState = state", captured)
+    popup.evaluate("""() => {
+      window.probeUrl = 'https://outlook.office.com/mail/inbox'; window.autoCalls = 0;
+      window.__mossAutoBodyProbe = {
+        snapshot: () => syntheticBodyState,
+        stop: () => (syntheticBodyState = {...syntheticBodyState, running:false, capture:null}),
+        start: phrase => (syntheticBodyState = {...syntheticBodyState, running:true, capture:null, phrase}),
+      };
+      window.browser = {tabs:{query:async()=>[{id:1,url:probeUrl}]}, scripting:{executeScript:async options => {
+        autoCalls++;
+        if (options.files) {window.installed = options.files; return [{result:null}];}
+        return [{result:options.func(...options.args)}];
+      }}};
+    }""")
+    popup.locator("#auto-read").click()
+    popup.locator("#auto-result").wait_for(state="visible")
+    assert popup.locator("#auto-body").inner_text().endswith("MOSS BODY END")
+    popup.locator("#auto-result").screenshot(path=str(run / "screenshots/final_execution_10_body.png"))
+    popup.locator("#auto-stop").click()
+    popup.wait_for_function('!document.querySelector("#auto-stop").disabled')
+    assert popup.locator("#auto-result").is_hidden()
+    assert popup.locator("#auto-body").inner_text() == ""
+    popup.locator("#auto-phrase").fill(phrase)
+    popup.locator("#auto-start").click()
+    popup.wait_for_function('document.querySelector("#auto-status").textContent.startsWith("Running")')
+    assert popup.evaluate("installed") == ["read-message.js", "auto-body.js"]
+    assert popup.evaluate("syntheticBodyState.phrase") == phrase
+    calls = popup.evaluate("autoCalls")
+    for url in ["https://outlook.office.com.evil.invalid/mail/", "http://outlook.office.com/mail/", "https://outlook.office.com/calendar/"]:
+        popup.evaluate("url => probeUrl = url", url)
+        popup.locator("#auto-start").click()
+        popup.wait_for_function('document.querySelector("#auto-status").textContent.includes("active tab")')
+    assert popup.evaluate("autoCalls") == calls
+    popup.evaluate("""() => { probeUrl = 'https://outlook.office.com/mail/';
+      browser.scripting.executeScript = async () => [{error:{message:'synthetic'}}]; }""")
+    popup.locator("#auto-read").click()
+    popup.wait_for_function('document.querySelector("#auto-status").textContent.includes("reach")')
+    assert popup.locator("#auto-result").is_hidden()
+    popup.close()
+    assert page.evaluate("__mossAutoBodyProbe.snapshot().capture !== null")
+    assert page.evaluate("__mossAutoBodyProbe.stop().capture") is None
+
+    for variant in ["baseline", "duplicate", "stale", "no-end", "ambiguous", "compose", "stop", "interaction", "timeout", "route"]:
+        reset()
+        if variant == "baseline":
+            arrival()
+            assert not start()["running"]
+        else:
+            assert start()["running"]
+            if variant == "stop":
+                page.evaluate("__mossAutoBodyProbe.stop()")
+                arrival()
+            elif variant == "interaction":
+                page.locator('[role=option]').click()  # trusted Playwright pointer event
+                arrival()
+            elif variant == "timeout":
+                page.evaluate("now = 300001")
+                arrival()
+            elif variant == "route":
+                page.evaluate("history.pushState({}, '', '/mail/drafts')")
+                arrival()
+            else:
+                arrival(2 if variant == "duplicate" else 1)
+                ticks()
+                content = message
+                if variant == "stale": content = content.replace(phrase, "Other synthetic subject", 1)
+                if variant == "no-end": content = content.replace("MOSS BODY END", "incomplete")
+                if variant == "ambiguous": content += message
+                if variant == "compose": content = '<div contenteditable="true">' + message + '</div>'
+                page.locator("#pane").evaluate("(node, html) => node.innerHTML = html", content)
+        assert ticks(3)["capture"] is None, variant
+        assert page.evaluate("clicks") == (1 if variant in ["stale", "no-end", "ambiguous", "compose"] else 0), variant
+        page.evaluate("now = 400000")
+        assert not ticks()["running"], variant
+
+    # Removing subject identity verification must break the stale-pane assertion.
+    reset()
+    guard = 'if (expectedPhrase && !subject.toLowerCase().includes(expectedPhrase.toLowerCase())) return { ok: false, reason: "identity" };'
+    assert guard in reader
+    page.evaluate(reader.replace(guard, ""))
+    start()
+    arrival()
+    ticks()
+    page.locator("#pane").evaluate("(node, html) => node.innerHTML = html", message.replace(phrase, "Other subject", 1))
+    assert ticks(2)["capture"] is not None, "Removing identity guard must expose stale-pane capture"
+    page.close()
 
 
 def main():
@@ -29,7 +179,9 @@ def main():
     points = ["Single message and surrounding content isolation", "Missing/ambiguous/compose rejection",
               "Bounded body", "Popup text rendering, clear and host validation", "Injection error handling",
               "Automatic list observation, filtering, deduplication and stop", "Watcher popup controls and route shutdown",
-              "Calendar appearance/change/disappearance and filtering", "Calendar popup mode and control wiring"]
+              "Calendar appearance/change/disappearance and filtering", "Calendar popup mode and control wiring",
+              "One-shot body arrival, route change, stable complete capture and popup",
+              "Body isolation, ambiguity, interaction, stop and timeout guards"]
     (workspace / "plan.md").write_text("\n".join(f"- [ ] CP{i}: {p}" for i, p in enumerate(points, 1)))
     log = []
 
@@ -225,9 +377,12 @@ scripting:{executeScript:async()=>{window.calls++;return window.failInjection
         calendar.wait_for_function("!__mossCalendarProbe.snapshot().running")
         assert calendar.evaluate("__mossCalendarProbe.snapshot().rows") == []
         passed(8)
+        verify_auto_body(browser, run)
+        passed(10)
+        passed(11)
         browser.close()
     (workspace / "plan.md").write_text("\n".join(f"- [x] CP{i}: {p}; see log step {i}" for i, p in enumerate(points, 1)))
-    (run / "final_script_log.txt").write_text("\n".join(log) + "\nSynthetic checks passed; actual calendar watcher in Outlook unverified.\n")
+    (run / "final_script_log.txt").write_text("\n".join(log) + "\nSynthetic checks passed; automatic body mode in live Outlook unverified.\n")
     print("\n".join(log))
     print(f"Evidence: {workspace}")
 
