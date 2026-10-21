@@ -6,6 +6,7 @@ import {
 } from "../../packages/chat/src/live/chat-session-manager.js";
 import type { TranscriptRecord, CliChatEngine } from "../../packages/chat/src/live/types.js";
 import {
+  ApiKeyUnreadableError,
   UnsupportedApiKeyChatProviderError,
   UnsupportedLegacyCliProviderError
 } from "../../packages/chat/src/live/errors.js";
@@ -96,6 +97,34 @@ describe("admitted Main voice turns", () => {
       expect(persistence.recordTurn).toHaveBeenCalledOnce();
     }
   );
+  it("keeps an unreadable API-key provider queued until its credential recovers", async () => {
+    const { manager, persistence, engines } = setup();
+    persistence.resolveActiveProvider = async () => ({
+      provider: "anthropic",
+      model: "test",
+      authMethod: "api_key",
+      providerConfigId: "configured-provider",
+      providerConfigRevision: "revision"
+    });
+    persistence.resolveChatCredential = vi.fn(async () => null);
+    const claim = vi.fn(async () => true);
+    await expect(
+      manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, claim)
+    ).rejects.toBeInstanceOf(ApiKeyUnreadableError);
+    expect(claim).not.toHaveBeenCalled();
+    expect(engines).toHaveLength(0);
+    expect(persistence.recordTurn).not.toHaveBeenCalled();
+    persistence.resolveChatCredential = async () => ({
+      apiKey: "test-key",
+      baseUrl: null,
+      revision: "revision"
+    });
+    await expect(
+      manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, claim)
+    ).resolves.toBe("executed");
+    expect(claim).toHaveBeenCalledOnce();
+    expect(persistence.recordTurn).toHaveBeenCalledOnce();
+  });
   it.each([
     { authMethod: "api_key", error: UnsupportedApiKeyChatProviderError },
     { authMethod: "cli", error: UnsupportedLegacyCliProviderError }

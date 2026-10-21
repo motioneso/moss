@@ -6,6 +6,7 @@ import {
   discardChatSession,
   dropSessionsForProvider,
   ensureSessionForCurrentProvider,
+  resolveApiKeyLaunchCredential,
   switchChatProviderSession,
   type ActiveChatProvider,
   type ChatSessionDropTarget,
@@ -263,7 +264,9 @@ export class ChatSessionManager {
       )
         return "deferred";
       // Known configuration outages must leave the receipt queued, before any effects.
-      assertLiveChatProvider(await this.deps.persistence.resolveActiveProvider(actorUserId));
+      const provider = await this.deps.persistence.resolveActiveProvider(actorUserId);
+      assertLiveChatProvider(provider);
+      await resolveApiKeyLaunchCredential(actorUserId, provider, this.deps.persistence);
       this.deps.assertRuntimeReady?.();
       if (!unchanged() || this.launching.has(key)) return "deferred";
       if (!(await claim())) return "unclaimed";
