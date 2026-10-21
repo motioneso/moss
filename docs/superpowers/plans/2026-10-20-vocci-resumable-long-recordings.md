@@ -56,3 +56,22 @@ Status: resumable version-3 server/Android transport, physical Vault allocation,
 - Foundation validation identified six route/table/migration catalog expectations requiring updates. Those expectations are corrected; a full final-input foundation result is still required.
 
 - Saved real hold audio passed the ordinary Main flow after refreshing a revoked isolated proof-runner token: explicit Send, persisted user/assistant pair, visible Open reply and no second turn on replay. This is developer HTTP replay evidence, not a fresh ring gesture. A punctuation-sensitive proof assertion was corrected; product response text was unchanged.
+
+### Real long-capture timestamp regression
+
+A fresh physical normal recording reached Moss through installed native BLE retrieval,
+platform decode and v3 upload: 226,020 ms with a 35-second bookmark. Live gate
+`103839` then failed transcription. Replaying actual inference on its first
+30-second window reproduced adjacent segments ending at 29.98 seconds and starting
+at 29.96 seconds; the strict provider parser rejected that 20 ms overlap.
+
+The adapter now trims the preceding segment's end for adjacent overlaps of at most
+20 ms, preserving every text string and the short final segment's duration. Larger
+overlaps, negative timestamps and normalization that would erase a segment remain
+invalid. The regression was observed failing before the correction; 66 focused
+tests in three files and the retained actual provider response pass afterward.
+This is a timestamp compatibility fix, not a transcription accuracy claim or a
+successful final long live-proof receipt. The original ring files were preserved
+for native recovery without requesting a new recording. A subsequent retrieval
+attempt did not rediscover that capture and was cancelled; recovery explicitly
+restores the original packet/sidecar bytes at the completed-retrieval checkpoint.
