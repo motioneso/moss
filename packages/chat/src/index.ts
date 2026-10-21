@@ -112,6 +112,7 @@ export * from "./recall-port.js";
 export * from "./repository.js";
 export * from "./voice-requests.js";
 export * from "./voice-request-service.js";
+export * from "./voice-request-jobs.js";
 export { collectVoiceRequestExport } from "./voice-request-export.js";
 export * from "./routes.js";
 export * from "./skills/repository.js";

@@ -1,5 +1,6 @@
 import { createRecordingImportRuntime } from "./recording-import-runtime.js";
 export { createRecordingImportWorkerRuntime } from "./recording-import-runtime.js";
+export { createVoiceRequestWorkerRuntime } from "./voice-request-worker-runtime.js";
 import { createScheduledReportGenerator } from "@moss/chat";
 import { SessionTokenRegistry, ConfirmationRegistry } from "@moss/ai";
 import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
@@ -692,6 +693,7 @@ export interface BuiltInRouteDependencies {
   readonly adoptChatRpcConnection?: (connection: RpcConnection) => void;
   /** Publishes the chat runtime's ACP initialize check to the Settings probe. */
   readonly adoptAcpProviderInitialization?: ChatRoutesDependencies["adoptAcpProviderInitialization"];
+  readonly adoptVoiceRequestService?: ChatRoutesDependencies["adoptVoiceRequestService"];
   /**
    * #1081 H2 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * the same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the
@@ -2347,6 +2349,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         engineSelection: deps.chatEngineSelection,
         adoptChatRpcConnection: deps.adoptChatRpcConnection,
         adoptAcpProviderInitialization: deps.adoptAcpProviderInitialization,
+        adoptVoiceRequestService: deps.adoptVoiceRequestService,
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,

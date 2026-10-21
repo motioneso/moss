@@ -76,3 +76,25 @@ firmware changes, screenshot proof or intercepted responses.
 The full companion remains open: resumable two-hour transport, companion screens
 and setup, and an independent legacy live-audio investigation are later approved
 slices. This plan does not mark them implemented.
+
+## Runtime checkpoint
+
+The API now composes the durable admission service with its existing Chat manager.
+A separate consumer uses worker credentials to claim metadata-only jobs; owner work
+uses the API's app data context. API startup and shutdown own both the recording
+and voice consumers. Deferred work reschedules; known pre-dispatch outages retry.
+The public transaction-aware admission method joins the receiver's transaction and
+derives the owner from that transaction. Status/list/Send APIs expose an explicit
+projection; reserved messages are linked only after a real reply commits. Delegated
+model access to these review endpoints is rejected, including Send.
+
+This is still inactive for ring input. Next, the versioned receiver must preserve
+the enablement inventory baseline and immutable intent, then admit transcription
+completion through this public transaction-aware method. Never route existing
+version-1 files into it. Status APIs alone are not the approved review UI or Android
+screens. Real hold audio reaching a saved Main reply remains an unmet live-path gate.
+
+The independent static streaming result is recorded in
+[the investigation](../../research/2026-10-20-vocci-legacy-streaming.md): no active
+legacy activation path was identified within the searched bytecode boundary, and
+dynamic/native activation remains unresolved.

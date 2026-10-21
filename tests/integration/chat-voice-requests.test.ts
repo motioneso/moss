@@ -3,6 +3,8 @@ import { sql, type Kysely } from "kysely";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
+import { createVoiceRequestWorkerRuntime } from "@moss/module-registry";
+import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { exportUserData } from "../../packages/settings/src/data-export.js";
 import {
   ChatRepository,
@@ -10,6 +12,8 @@ import {
   VoiceRequestService,
   VoiceRequestConflictError,
   collectVoiceRequestExport,
+  createVoiceRequestScheduler,
+  CHAT_VOICE_REQUEST_QUEUE,
   type VoiceRequestDependencies,
   type VoiceRequestInput
 } from "@moss/chat";
@@ -21,15 +25,19 @@ const chat = new ChatRepository(),
   requests = new VoiceRequestRepository();
 const now = new Date("2026-10-20T20:00:00.000Z");
 let db: Kysely<MossDatabase>, root: Kysely<MossDatabase>, context: DataContextRunner;
+let boss: PgBoss;
 beforeAll(async () => {
   await resetFoundationDatabase();
   db = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
   root = createDatabase({ connectionString: connectionStrings.bootstrap });
   context = new DataContextRunner(db);
+  boss = createPgBossClient(connectionStrings.app);
+  await boss.start();
   if (process.env.VOCCI_VOICE_RLS_NEGATIVE_CONTROL === "1")
     await sql`ALTER TABLE app.chat_voice_requests DISABLE ROW LEVEL SECURITY`.execute(root);
 });
 afterAll(async () => {
+  await boss?.stop({ graceful: true });
   await Promise.allSettled([db?.destroy(), root?.destroy()]);
 });
 function input(overrides: Partial<VoiceRequestInput> = {}): VoiceRequestInput {
@@ -73,6 +81,72 @@ function setup(overrides: Partial<VoiceRequestDependencies> = {}) {
 }
 
 describe("durable Main voice admission", () => {
+  it("commits admission and metadata-only dispatch work with the receiver transaction", async () => {
+    const { service } = setup({ schedule: createVoiceRequestScheduler(boss) });
+    const value = input();
+    let rolledBackId = "";
+    await expect(
+      context.withDataContext(actor, async (ctx) => {
+        rolledBackId = (await service.admitInTransaction(ctx, value)).request.id;
+        throw new Error("transcript commit failed");
+      })
+    ).rejects.toThrow("transcript commit failed");
+    expect(await service.status(actor, rolledBackId)).toBeUndefined();
+    const rolledBackJobs = await sql<{
+      id: string;
+    }>`SELECT id FROM pgboss.job WHERE name=${CHAT_VOICE_REQUEST_QUEUE} AND data->>'resourceId'=${rolledBackId}`.execute(
+      root
+    );
+    expect(rolledBackJobs.rows).toHaveLength(0);
+    const saved = await context.withDataContext(actor, (ctx) =>
+      service.admitInTransaction(ctx, value)
+    );
+    const replay = await context.withDataContext(actor, (ctx) =>
+      service.admitInTransaction(ctx, value)
+    );
+    expect(replay.request.id).toBe(saved.request.id);
+    const jobs = await sql<{
+      data: unknown;
+    }>`SELECT data FROM pgboss.job WHERE name=${CHAT_VOICE_REQUEST_QUEUE} AND data->>'resourceId'=${saved.request.id}`.execute(
+      root
+    );
+    expect(jobs.rows).toEqual([
+      { data: { actorUserId: actor.actorUserId, resourceId: saved.request.id } }
+    ]);
+  });
+
+  it("delivers a real queued job through the API-owned service and worker credentials", async () => {
+    const { service, deps } = setup({ schedule: createVoiceRequestScheduler(boss) });
+    let signal: () => void = () => {};
+    const delivered = new Promise<void>((resolve) => {
+      signal = resolve;
+    });
+    const original = deps.submit;
+    let targetTurnId = "";
+    deps.submit = async (...args) => {
+      const result = await original(...args);
+      if (args[1].turnId === targetTurnId) signal();
+      return result;
+    };
+    const admitted = await service.admit(actor, input());
+    targetTurnId = admitted.request.turn_id;
+    const worker = createVoiceRequestWorkerRuntime(connectionStrings.worker, () => service);
+    try {
+      await worker.start();
+      await delivered;
+      expect((await service.status(actor, admitted.request.id))?.state).toBe("replied");
+    } finally {
+      await worker.close();
+    }
+  });
+
+  it("lists only the current owner's retained requests", async () => {
+    const { service } = setup();
+    const admitted = await service.admit(actor, input({ automatic: false }));
+    expect((await service.list(actor)).map((row) => row.id)).toContain(admitted.request.id);
+    expect((await service.list(other)).map((row) => row.id)).not.toContain(admitted.request.id);
+  });
+
   it("rolls admission back when durable work cannot be scheduled", async () => {
     const value = input();
     const failed = setup({

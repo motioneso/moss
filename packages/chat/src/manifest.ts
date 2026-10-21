@@ -4,6 +4,8 @@ import { collectVoiceRequestExport } from "./voice-request-export.js";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
+  chatVoiceRequestStatusSchema,
+  listChatVoiceRequestsResponseSchema,
   chatUnreadResponseSchema,
   readChatMessagesResponseSchema,
   getChatPrivacyStateResponseSchema,
@@ -182,6 +184,12 @@ export const chatModuleManifest = {
     }
   },
   features: [
+    {
+      id: "chat.voice_requests",
+      description:
+        "Voice status and Send APIs target Main with ordinary permissions. Old requests need Send; busy or other chats defer. Interrupted turns never auto-replay. Receiver activation and companion screens remain pending.",
+      featureFlagId: "chat.module"
+    },
     {
       id: "chat.unread_messages",
       description:
@@ -531,6 +539,27 @@ export const chatModuleManifest = {
     }
   ],
   routes: [
+    {
+      method: "GET",
+      path: "/api/chat/voice-requests",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      responseSchema: listChatVoiceRequestsResponseSchema,
+      permissionId: "chat.view"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/voice-requests/:id",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      responseSchema: chatVoiceRequestStatusSchema,
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/voice-requests/:id/send",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      responseSchema: chatVoiceRequestStatusSchema,
+      permissionId: "chat.message"
+    },
     {
       method: "GET",
       path: "/api/chat/unread",

@@ -1,4 +1,9 @@
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import {
+  readScopedActorUserId,
+  type AccessContext,
+  type DataContextDb,
+  type DataContextRunner
+} from "@moss/db";
 import { ChatRepository } from "./repository.js";
 import {
   VoiceRequestRepository,
@@ -36,13 +41,27 @@ export class VoiceRequestService {
 
   async admit(actor: AccessContext, input: VoiceRequestInput) {
     await this.deps.assertAvailable(actor);
-    return this.deps.dataContext.withDataContext(actor, async (db) => {
-      const main = await this.chat.ensureMainThread(db, actor.actorUserId);
-      const admission = await this.requests.admit(db, main.id, input, this.deps.now());
-      if (admission.created && admission.request.state === "queued")
-        await this.deps.schedule(db, actor, admission.request.id);
-      return admission;
-    });
+    return this.deps.dataContext.withDataContext(actor, (db) => this.reserve(db, actor, input));
+  }
+
+  /** Join the receiver's transcript transaction. Dispatch rechecks availability before effects. */
+  async admitInTransaction(db: DataContextDb, input: VoiceRequestInput) {
+    const actorUserId = await readScopedActorUserId(db);
+    if (!actorUserId) throw new Error("Voice admission requires an owner context");
+    return this.reserve(db, { actorUserId }, input);
+  }
+
+  private async reserve(db: DataContextDb, actor: AccessContext, input: VoiceRequestInput) {
+    const main = await this.chat.ensureMainThread(db, actor.actorUserId);
+    const admission = await this.requests.admit(db, main.id, input, this.deps.now());
+    if (admission.created && admission.request.state === "queued")
+      await this.deps.schedule(db, actor, admission.request.id);
+    return admission;
+  }
+
+  async list(actor: AccessContext) {
+    await this.deps.assertAvailable(actor);
+    return this.deps.dataContext.withDataContext(actor, (db) => this.requests.list(db));
   }
 
   async status(actor: AccessContext, id: string) {

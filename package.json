@@ -165,7 +165,7 @@
     "test:integration:3133": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/chat-reminder-controls.test.ts tests/integration/chat-reminder-notifications.test.ts tests/integration/settings-reminders.test.ts tests/integration/chat-reminders-delivery.test.ts tests/integration/chat-reminders-permissions.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/chat-reminders-save.test.ts tests/integration/chat-reminders-cancel-turn.test.ts tests/integration/chat-reminders-cancel.test.ts tests/integration/chat-reminders-local-clock.test.ts",
     "test:uat:3067": "MOSS_UAT_BROWSER=firefox tsx tests/uat/run-focus-judge-uat.ts",
     "test:recording-imports": "tsx scripts/test-integration.ts tests/integration/meeting-recording-imports.test.ts",
-    "test:voice-requests": "tsx scripts/test-integration.ts tests/integration/chat-voice-requests.test.ts tests/integration/chat-interrupted-turn.test.ts tests/integration/chat-classifier-gate-origin.test.ts tests/integration/meeting-account-export.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/account-self-deletion.test.ts",
+    "test:voice-requests": "tsx scripts/test-integration.ts tests/integration/chat-voice-requests.test.ts tests/integration/chat-interrupted-turn.test.ts tests/integration/chat-classifier-gate-origin.test.ts tests/integration/chat-origin-action-history.test.ts tests/integration/meeting-account-export.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/account-self-deletion.test.ts",
     "test:recording-live": "tsx scripts/verify-recording-import-live.ts"
   },
   "dependencies": {

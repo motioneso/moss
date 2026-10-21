@@ -24,6 +24,7 @@ export * from "./day-plan-api.js";
 export * from "./day-plan-changes-api.js";
 export * from "./chat-api.js";
 export * from "./chat-unread-api.js";
+export * from "./chat-voice-api.js";
 export * from "./chat-action-outcome.js";
 export * from "./chat-archive-api.js";
 export * from "./chat-settings-api.js";

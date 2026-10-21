@@ -87,6 +87,18 @@ export function voiceNeedsConfirmation(
 }
 
 export class VoiceRequestRepository {
+  async list(db: DataContextDb): Promise<VoiceRequest[]> {
+    assertDataContextDb(db);
+    return db.db
+      .selectFrom("app.chat_voice_requests")
+      .selectAll()
+      .orderBy(sql`CASE WHEN state IN ('ready-to-send', 'queued', 'dispatching') THEN 0 ELSE 1 END`)
+      .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
+      .limit(100)
+      .execute();
+  }
+
   async get(db: DataContextDb, id: string, lock = false): Promise<VoiceRequest | undefined> {
     assertDataContextDb(db);
     const query = db.db.selectFrom("app.chat_voice_requests").selectAll().where("id", "=", id);
