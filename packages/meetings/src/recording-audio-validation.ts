@@ -47,13 +47,14 @@ export function recordingWavDuration(
   maxDurationMs: number
 ): number {
   // Canonical 16 kHz mono PCM16 only; the uploader normalizes decoder output.
+  // latin1 compares tag bytes literally; Node's ascii decoder strips bit 7.
   if (
     header.length < 44 ||
     byteLength < 46 ||
     !Number.isSafeInteger(byteLength) ||
-    header.toString("ascii", 0, 4) !== "RIFF" ||
+    header.toString("latin1", 0, 4) !== "RIFF" ||
     header.readUInt32LE(4) !== byteLength - 8 ||
-    header.toString("ascii", 8, 16) !== "WAVEfmt " ||
+    header.toString("latin1", 8, 16) !== "WAVEfmt " ||
     header.readUInt32LE(16) !== 16 ||
     header.readUInt16LE(20) !== 1 ||
     header.readUInt16LE(22) !== 1 ||
@@ -61,7 +62,7 @@ export function recordingWavDuration(
     header.readUInt32LE(28) !== 32000 ||
     header.readUInt16LE(32) !== 2 ||
     header.readUInt16LE(34) !== 16 ||
-    header.toString("ascii", 36, 40) !== "data" ||
+    header.toString("latin1", 36, 40) !== "data" ||
     header.readUInt32LE(40) !== byteLength - 44 ||
     (byteLength - 44) % 2
   )

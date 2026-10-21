@@ -170,6 +170,15 @@ describe("incremental source validation", () => {
     );
   });
 
+  it.each([0, 8, 36])("rejects a high-bit WAV tag byte at %s", async (offset) => {
+    const { bytes } = fixture();
+    bytes.wav[offset] = bytes.wav[offset]! | 0x80;
+    const { files, read } = source(bytes);
+    await expect(validateRecordingSource(files, read)).rejects.toBeInstanceOf(
+      RecordingImportInputError
+    );
+  });
+
   it("rejects valid packet framing inconsistent with the WAV duration", async () => {
     const { bytes } = fixture();
     bytes.packets = Buffer.from([0, 1, 0]);
