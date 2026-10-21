@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **First reminder on a new account saves.** A reminder asked for in a new account's very first chat message is now saved and appears when it fires, without reloading chat. [PR #3544](https://github.com/motioneso/moss/pull/3544)
 - **Reminder alerts open their chat message.** Tapping a reminder's alert or its notification now opens that reminder in its chat instead of the Today page. [PR #3542](https://github.com/motioneso/moss/pull/3542)
 
 #### Added
