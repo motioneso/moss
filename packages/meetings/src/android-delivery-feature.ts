@@ -3,13 +3,13 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "A developer-installed Android foreground client retrieves completed Vocci recordings after an explicit Bluetooth-permission handoff. Delivery retries retain identity and source evidence. No consumer onboarding; maximum 120 seconds.",
+    "Android browser linking, restart recovery and optional seven-day cleanup. Only Start enables recovery; stopped voice/cleanup/retry actions ask for Start. Meetings: two hours; voice: 120 seconds. Initial ring setup needs a developer.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
       path: "/settings?section=modules&module=meetings",
       description:
-        "Meetings settings enable the receiver only. For Android permission handoff, session refresh or local storage, use apps/vocci-delivery/README.md in the source checkout and restart the developer client."
+        "Open the Android companion for account linking, permissions and local audio. Initial existing-ring provisioning is documented in apps/vocci-delivery/README.md. Meetings settings enable the receiver only."
     }
   ],
   errors: [
@@ -21,11 +21,18 @@ export const androidDeliveryFeature = {
         "Developer provisioning and writable app-private storage are required before delivery can start. Credentials use Android Keystore encryption."
     },
     {
+      code: "background_restart_required",
+      class: "prerequisite",
+      remediationRef: "meetings.android_developer_setup",
+      description:
+        "Start enables boot/app-update recovery; Stop disables it. After Force stop, launch and Start manually. Expand Permissions and background settings for battery controls; choose Unrestricted and remove Moss from Samsung Sleeping apps."
+    },
+    {
       code: "owner_mismatch",
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Delivery stops if the live Moss session belongs to another owner. Refresh the original owner's session; changing the queued source identity is not a recovery step."
+        "Delivery stops if the live Moss session belongs to another owner. Reconnect the original owner in the browser; changing the queued source identity is not a recovery step."
     },
     {
       code: "handoff_required",
@@ -39,7 +46,13 @@ export const androidDeliveryFeature = {
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Developer provisioning must refresh the same owner's Moss session and restart delivery. Pending evidence remains on Android."
+        "Connect Moss in browser from the Android companion using the original account, then Start delivery. Device approval expires after 90 inactive days or one year; pending evidence stays on Android."
+    },
+    {
+      code: "server_identity_change",
+      class: "validation",
+      description:
+        "A receiver or chat identity changed. Delivery stops for that recording and retains its frozen evidence."
     },
     {
       code: "retry_pending",
@@ -76,13 +89,13 @@ export const androidDeliveryFeature = {
       code: "source_size_limit",
       class: "validation",
       description:
-        "The stable advertised recording exceeds 1 MiB of packets or 64 KiB of sidecar. It fails visibly without downloading oversized files; other recordings continue."
+        "The stable advertised recording exceeds 32 MiB of packets or 256 KiB of sidecar. It fails visibly without downloading oversized files; other recordings continue."
     },
     {
       code: "duration_limit",
       class: "validation",
       description:
-        "The completed sidecar reports more than 120 seconds. The recording fails visibly with that sidecar retained, without downloading its audio."
+        "The completed sidecar exceeds two hours for a meeting or 120 seconds for opted-in hold input. The sidecar stays retained without downloading its audio."
     },
     {
       code: "server_identity_change",
@@ -119,7 +132,7 @@ export const androidDeliveryFeature = {
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Android retrieval pauses at 100 retained recordings or 100 MiB, or with less than 150 MiB free space. Developer retention management is required."
+        "Android reserves source/decode budgets within 2 GiB and keeps 150 MiB free. Retrieval also pauses at 100 retained items or 1024 identities. Clear completed local audio; queued and failed evidence stays retained."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];

@@ -245,7 +245,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
       // Recording capability is a separate permission: never grant it through a legacy bearer.
       const summary = await pairing.summarize({ approvalCode: request.body.code });
       let browserSessionId: string | undefined;
-      if (summary?.recordingPolicyVersion === 1) {
+      if (summary?.recordingPolicyVersion === 1 || summary?.platform === "android") {
         try {
           const browser = await authRuntime.sessionBindings.resolveBrowser({
             headers: request.headers,
@@ -259,7 +259,11 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
             code: "recording_approval_required"
           });
         }
-        if (request.body.decision === "approve" && request.body.recordingPolicyVersion !== 1)
+        if (
+          summary.recordingPolicyVersion === 1 &&
+          request.body.decision === "approve" &&
+          request.body.recordingPolicyVersion !== 1
+        )
           return reply.code(400).send({
             error: "Review the recording connection permission",
             code: "recording_policy_required"
@@ -304,6 +308,37 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
       return reply.code(404).send({ error: "That link request is no longer open" });
     }
   );
+
+  server.get("/api/companion/ring-session", { config: ipRateLimit(60) }, async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    try {
+      if (!authRuntime.ringDevices)
+        return reply.code(503).send({ error: "Android linking unavailable" });
+      const actor = await authRuntime.ringDevices.resolve({
+        headers: request.headers,
+        requestId: request.id
+      });
+      const status = await authRuntime.ringDevices.heartbeat(actor);
+      return { ownerId: actor.actorUserId, ...status };
+    } catch (error) {
+      if (error instanceof CompanionAuthError)
+        return reply.code(error.httpStatus).send({ code: error.code });
+      throw error;
+    }
+  });
+  server.post("/api/companion/ring-logout", { config: ipRateLimit(20) }, async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    try {
+      if (!authRuntime.ringDevices)
+        return reply.code(503).send({ error: "Android linking unavailable" });
+      await authRuntime.ringDevices.logoutCredential({ headers: request.headers });
+      return reply.code(204).send();
+    } catch (error) {
+      if (error instanceof CompanionAuthError)
+        return reply.code(error.httpStatus).send({ code: error.code });
+      throw error;
+    }
+  });
 
   server.post<{ Body: RedeemPairAttemptRequest }>(
     "/api/companion/pair/cancel",

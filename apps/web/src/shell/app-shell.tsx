@@ -25,6 +25,7 @@ import { ModuleSettingsButton } from "./module-settings-button";
 import { useUserLocale } from "../locale/locale-format";
 import { queryKeys } from "../api/query-keys";
 import { useActionQueryRefresh } from "../chat/use-action-query-refresh";
+import { VoiceRequestLink } from "../chat/voice-request-link";
 import { ChatDrawer } from "../chat/chat-drawer";
 import {
   AssistantSurfaceHostProvider,
@@ -536,6 +537,11 @@ export function AppShell(props: AppShellProps) {
         />
 
         <div className="workspace-area">
+          <VoiceRequestLink
+            ownerId={props.me.user.id}
+            enabled={activeSurface === DEFAULT_CHAT_SURFACE && !meetingSelection}
+            onOpenThread={openChatThread}
+          />
           <header className="topbar" hidden={expanded}>
             <button
               aria-label="Open navigation"

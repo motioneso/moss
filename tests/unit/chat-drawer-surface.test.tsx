@@ -58,6 +58,7 @@ import {
 } from "../../apps/web/src/api/client.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
+import { buildElement, flipSurface, mountWithClient } from "./chat-drawer-surface.harness.js";
 const moduleSurface = moduleChatSurface("job-search", "profile-1") as ChatSurface;
 const moduleSurfaceB = moduleChatSurface("job-search", "profile-2") as ChatSurface;
 async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
@@ -137,57 +138,6 @@ async function startNewSideChat(renderer: ReactTestRenderer): Promise<void> {
     findByAriaLabel(renderer, "New side chat")!.props.onClick();
   });
 }
-function buildElement(
-  client: QueryClient,
-  surface: ChatSurface,
-  clearRecords: () => void,
-  open = true,
-  initialText?: string
-): ReactElement {
-  return createElement(
-    QueryClientProvider,
-    { client },
-    createElement(
-      MemoryRouter,
-      null,
-      createElement(ChatDrawer, {
-        open,
-        onClose: () => undefined,
-        records: [],
-        clearRecords,
-        streamErrorCount: 0,
-        isFounder: false,
-        initialText,
-        surface
-      }) as ReactElement
-    )
-  );
-}
-async function mountWithClient(
-  client: QueryClient,
-  surface: ChatSurface,
-  clearRecords: () => void
-): Promise<ReactTestRenderer> {
-  let renderer!: ReactTestRenderer;
-  await act(async () => {
-    renderer = create(buildElement(client, surface, clearRecords));
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-  return renderer;
-}
-async function flipSurface(
-  renderer: ReactTestRenderer,
-  client: QueryClient,
-  surface: ChatSurface,
-  clearRecords: () => void
-): Promise<void> {
-  await act(async () => {
-    renderer.update(buildElement(client, surface, clearRecords));
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
 async function typeAndSend(renderer: ReactTestRenderer, text: string): Promise<void> {
   const textarea = renderer.root.findByType("textarea");
   await act(async () => {
@@ -204,7 +154,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
     vi.mocked(sendChatTurn).mockClear();
     vi.mocked(cancelChatTurn).mockClear();
     vi.mocked(clearChat).mockClear();
-    vi.mocked(getChatPrivacyState).mockClear();
+    vi.mocked(getChatPrivacyState).mockReset().mockResolvedValue({ incognito: false });
     vi.mocked(listChatThreadMessages).mockClear();
     vi.mocked(listChatThreads).mockClear();
     vi.mocked(resumeChat).mockClear();
@@ -392,10 +342,11 @@ describe("ChatDrawer surface routing (#1533)", () => {
   });
 
   it("seeds a delayed starter and keeps an unselected module draft separate from Main", async () => {
-    vi.mocked(getChatPrivacyState).mockResolvedValueOnce({
+    // Returning to Main refetches identity; that refetch must still identify Main.
+    vi.mocked(getChatPrivacyState).mockImplementation(async (surface) => ({
       incognito: false,
-      threadId: "main-thread"
-    });
+      ...(surface === DEFAULT_CHAT_SURFACE ? { threadId: "main-thread" } : {})
+    }));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clearRecords = vi.fn();
     let renderer!: ReactTestRenderer;
@@ -406,6 +357,10 @@ describe("ChatDrawer surface routing (#1533)", () => {
       );
       await Promise.resolve();
       await Promise.resolve();
+    });
+    // QueryObserver schedules notifications after the fetch promise resolves.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     let textarea = renderer.root.findByType("textarea");
@@ -422,6 +377,10 @@ describe("ChatDrawer surface routing (#1533)", () => {
     await act(async () => textarea.props.onChange({ target: { value: "Module draft" } }));
 
     await flipSurface(renderer, client, DEFAULT_CHAT_SURFACE, clearRecords);
+    await act(async () => {
+      await client.refetchQueries({ queryKey: queryKeys.chat.privacy(DEFAULT_CHAT_SURFACE) });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(renderer.root.findByType("textarea").props.value).toBe("Main draft");
   });
 

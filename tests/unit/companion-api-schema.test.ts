@@ -49,6 +49,26 @@ describe("companion protocol constants", () => {
 });
 
 describe("createPairAttemptRouteSchema", () => {
+  it("allows Android ring linking without granting Mac recording authority", async () => {
+    expect(
+      (
+        await parseBody(createPairAttemptRouteSchema.body, {
+          ...VALID_PAIR_BODY,
+          platform: "android"
+        })
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await parseBody(createPairAttemptRouteSchema.body, {
+          ...VALID_PAIR_BODY,
+          platform: "android",
+          recordingProofHash: "a".repeat(64),
+          recordingPolicyVersion: 1
+        })
+      ).status
+    ).toBe(400);
+  });
   it("carries independent recording proof only with an explicit supported policy", async () => {
     const capability = { recordingProofHash: "a".repeat(64), recordingPolicyVersion: 1 };
     expect(

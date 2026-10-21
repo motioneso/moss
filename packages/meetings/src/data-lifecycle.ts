@@ -1,5 +1,7 @@
 import { getVaultBaseDir, VaultContextRunner, readVaultFile } from "@moss/vault";
 import { recordingBundlePath } from "./recording-import-service.js";
+import { RecordingUploadRepository } from "./recording-upload-repository.js";
+import { readRecordingChunk } from "./recording-upload-storage.js";
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
@@ -9,6 +11,7 @@ type JsonValue = boolean | null | number | string | JsonValue[] | { [key: string
 type ExportRow = Record<string, JsonValue>;
 
 export interface MeetingsExportSection {
+  readonly voice_enablements: readonly ExportRow[];
   readonly recording_imports: readonly ExportRow[];
   readonly records: readonly ExportRow[];
   readonly note_writes: readonly ExportRow[];
@@ -43,7 +46,7 @@ export async function collectMeetingsExportSection(
     scopedDb,
     sql<
       Record<string, unknown>
-    >`SELECT id::text AS id, owner_user_id::text AS "ownerUserId", meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, created_at AS "createdAt"
+    >`SELECT id::text AS id, owner_user_id::text AS "ownerUserId", meeting_id::text AS "meetingId", source_device_id::text AS "sourceDeviceId", recording_id AS "recordingId", fingerprint, metadata_json AS "metadataJson", ready, state, attempts, code, voice_enablement_id::text AS "voiceEnablementId", voice_automatic AS "voiceAutomatic", voice_captured_at AS "voiceCapturedAt", voice_request_id::text AS "voiceRequestId", source_manifest_json AS "sourceManifestJson",upload_reserved AS "uploadReserved",upload_expires_at AS "uploadExpiresAt",next_window_ms AS "nextWindowMs",transcript_version AS "transcriptVersion",transcript_cursor AS "transcriptCursor",voice_transcript AS "voiceTranscript",created_at AS "createdAt"
       FROM app.meeting_recording_imports
       WHERE owner_user_id = ${ownerUserId}::uuid
       ORDER BY created_at, id`
@@ -52,13 +55,38 @@ export async function collectMeetingsExportSection(
   const recordingImports = imports.some((row) => row.ready === true)
     ? await vault.withVaultContext({ actorUserId: ownerUserId }, async (vaultCtx) => {
         for (const row of imports) {
-          if (row.ready === true && typeof row.id === "string")
-            row.bundleJson = await readVaultFile(vaultCtx, recordingBundlePath(row.id));
+          if (row.ready === true && typeof row.id === "string") {
+            if (typeof row.sourceManifestJson === "string") {
+              // Read and verify one <=1 MiB chunk at a time. The existing account
+              // archive still accumulates JSON in memory (as it does for notes).
+              const chunks: JsonValue[] = [];
+              for (const chunk of await new RecordingUploadRepository().chunks(scopedDb, row.id)) {
+                const bytes = await readRecordingChunk(vaultCtx, row.id, chunk);
+                chunks.push({
+                  kind: chunk.kind,
+                  index: chunk.chunk_index,
+                  byteLength: chunk.byte_length,
+                  sha256: chunk.sha256,
+                  base64: bytes.toString("base64")
+                });
+              }
+              row.chunks = chunks;
+            } else row.bundleJson = await readVaultFile(vaultCtx, recordingBundlePath(row.id));
+          }
         }
         return imports;
       })
     : imports;
   return {
+    voice_enablements: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT id::text AS id,owner_user_id::text AS "ownerUserId",source_device_id::text AS "sourceDeviceId",request_key::text AS "requestKey",inventory_json AS "inventoryJson",enabled_at AS "enabledAt",disabled_at AS "disabledAt"
+      FROM app.meeting_recording_voice_enablements
+      WHERE owner_user_id = ${ownerUserId}::uuid
+      ORDER BY enabled_at, id
+    `
+    ),
     recording_imports: recordingImports,
     records: await readRows(
       scopedDb,
@@ -174,7 +202,7 @@ export async function collectMeetingsExportSection(
     stop_summaries: await readRows(
       scopedDb,
       sql<Record<string, unknown>>`
-      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
+      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId", recording_import_id::text AS "recordingImportId",transcript_revision AS "transcriptRevision",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
       FROM app.meeting_stop_summaries WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,meeting_id
     `
     ),

@@ -2,9 +2,11 @@ import type { SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import {
+  assertLiveChatProvider,
   discardChatSession,
   dropSessionsForProvider,
   ensureSessionForCurrentProvider,
+  resolveApiKeyLaunchCredential,
   switchChatProviderSession,
   type ActiveChatProvider,
   type ChatSessionDropTarget,
@@ -86,6 +88,13 @@ export class ChatSessionManager {
   private readonly pendingForcedReplay = new Set<string>();
   /** #6.5 — one turn at a time per actor + surface. */
   private readonly turnsInFlight = new Set<string>();
+  private readonly voiceTurns = new Map<
+    string,
+    {
+      readonly threadId: string;
+      readonly transition: OriginThreadTransition | undefined;
+    }
+  >();
   /** #456 — per-turn stop controllers, keyed by actor + surface. */
   private readonly turnControllers = new Map<string, AbortController>();
   private readonly actionResultsBySession = new Map<string, ActionResultMetadata[]>();
@@ -217,6 +226,66 @@ export class ChatSessionManager {
       return await runChatTurn(this.turnHost, actorUserId, userName, text, opts, chatSurface);
     } finally {
       this.turnsInFlight.delete(sessionKey);
+    }
+  }
+
+  /**
+   * The durable receipt is claimed only while Main can use the ordinary drawer.
+   * Other/private selections defer without replacing their engine or context.
+   */
+  async submitMainVoiceTurn(
+    actorUserId: string,
+    userName: string,
+    text: string,
+    binding: { readonly threadId: string; readonly turnId: string },
+    claim: () => Promise<boolean>
+  ): Promise<"deferred" | "unclaimed" | "executed"> {
+    const key = surfaceSessionKey(actorUserId, DEFAULT_CHAT_SURFACE);
+    if (this.turnsInFlight.has(key)) return "deferred";
+    this.turnsInFlight.add(key);
+    try {
+      const transition = this.originTransitions.get(key);
+      const session = this.sessions.get(key);
+      if (transition?.pending || this.launching.has(key)) return "deferred";
+      const [main, shown] = await Promise.all([
+        this.deps.persistence.getMainThreadState?.(actorUserId),
+        this.getPrivacyState(actorUserId, DEFAULT_CHAT_SURFACE)
+      ]);
+      const unchanged = () =>
+        this.originTransitions.get(key) === transition && this.sessions.get(key) === session;
+      if (
+        !unchanged() ||
+        this.launching.has(key) ||
+        !main ||
+        main.incognito ||
+        main.id !== binding.threadId ||
+        shown.incognito ||
+        shown.threadId !== binding.threadId
+      )
+        return "deferred";
+      // Known configuration outages must leave the receipt queued, before any effects.
+      const provider = await this.deps.persistence.resolveActiveProvider(actorUserId);
+      assertLiveChatProvider(provider);
+      await resolveApiKeyLaunchCredential(actorUserId, provider, this.deps.persistence);
+      this.deps.assertRuntimeReady?.();
+      if (!unchanged() || this.launching.has(key)) return "deferred";
+      if (!(await claim())) return "unclaimed";
+      // A transition during the durable claim cannot enter another chat's pre-model path.
+      if (!unchanged() || this.originTransitions.get(key)?.pending)
+        throw new Error("Main changed during voice admission");
+      this.voiceTurns.set(key, { threadId: binding.threadId, transition });
+      await runChatTurn(
+        this.turnHost,
+        actorUserId,
+        userName,
+        text,
+        { admittedTurn: binding },
+        DEFAULT_CHAT_SURFACE
+      );
+      return "executed";
+    } finally {
+      this.voiceTurns.delete(key);
+      this.turnsInFlight.delete(key);
     }
   }
 
@@ -529,7 +598,19 @@ export class ChatSessionManager {
   }
 
   private emit(actorUserId: string, surface: ChatSurface, record: TranscriptRecord): void {
-    const set = this.subscribers.get(surfaceSessionKey(actorUserId, surface));
+    const key = surfaceSessionKey(actorUserId, surface);
+    const voice = this.voiceTurns.get(key);
+    if (voice) {
+      const session = this.sessions.get(key);
+      if (
+        this.originTransitions.get(key) !== voice.transition ||
+        this.originTransitions.get(key)?.pending ||
+        (session && (session.incognito || session.threadId !== voice.threadId))
+      )
+        return;
+      record = { ...record, voiceThreadId: voice.threadId };
+    }
+    const set = this.subscribers.get(key);
     if (!set) return;
     for (const fn of set) fn(record);
   }

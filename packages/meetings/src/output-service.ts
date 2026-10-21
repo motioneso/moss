@@ -54,7 +54,11 @@ export class MeetingOutputService {
     return this.complete(actor, meetingId, input, reservation, "manual");
   }
 
-  async generateOnStop(
+  async generateOnStop(actor: AccessContext, meetingId: string, requestKey: string) {
+    return this.generateAutomatic(actor, meetingId, requestKey);
+  }
+
+  async generateAutomatic(
     actor: AccessContext,
     meetingId: string,
     requestKey: string
@@ -77,7 +81,7 @@ export class MeetingOutputService {
       return { input, reservation: await this.reserve(db, meetingId, input) };
     });
     return admitted
-      ? this.complete(actor, meetingId, admitted.input, admitted.reservation, "automatic-stop")
+      ? this.complete(actor, meetingId, admitted.input, admitted.reservation, "automatic")
       : null;
   }
 
@@ -116,7 +120,7 @@ export class MeetingOutputService {
     meetingId: string,
     input: GenerateMeetingOutputInput,
     reservation: Awaited<ReturnType<MeetingOutputService["reserve"]>>,
-    trigger: "manual" | "automatic-stop"
+    trigger: "manual" | "automatic"
   ): Promise<MeetingOutputResult> {
     const template = getMeetingOutputTemplate(input.templateId, input.templateVersion)!;
     const encoded = JSON.stringify({ kind: "generate", ...input });
@@ -177,7 +181,7 @@ export class MeetingOutputService {
           stale
         });
         if (
-          trigger === "automatic-stop" &&
+          trigger === "automatic" &&
           !stale &&
           currentMeeting.title === "Untitled meeting" &&
           validated.overview.trim()

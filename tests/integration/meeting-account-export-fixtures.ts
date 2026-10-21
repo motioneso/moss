@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DataContextDb } from "@moss/db";
 import {
+  RecordingVoiceEnablementRepository,
   MeetingOutputsRepository,
   MeetingRecordsRepository,
   MeetingTranscriptRepository
@@ -13,6 +14,20 @@ import { MeetingExportsRepository } from "../../packages/meetings/src/export-rep
 /** Independent export contract: original columns only, never the history search projection. */
 export const meetingExportTables = [
   {
+    key: "voice_enablements",
+    table: "meeting_recording_voice_enablements",
+    columns: [
+      "id",
+      "owner_user_id",
+      "source_device_id",
+      "request_key",
+      "inventory_json",
+      "enabled_at",
+      "disabled_at"
+    ],
+    derived: []
+  },
+  {
     key: "recording_imports",
     table: "meeting_recording_imports",
     columns: [
@@ -23,6 +38,17 @@ export const meetingExportTables = [
       "recording_id",
       "fingerprint",
       "metadata_json",
+      "voice_enablement_id",
+      "voice_automatic",
+      "voice_captured_at",
+      "voice_request_id",
+      "source_manifest_json",
+      "upload_reserved",
+      "upload_expires_at",
+      "next_window_ms",
+      "transcript_version",
+      "transcript_cursor",
+      "voice_transcript",
       "ready",
       "state",
       "attempts",
@@ -176,7 +202,9 @@ export const meetingExportTables = [
       "due_at",
       "created_at",
       "early_enqueued",
-      "input_json"
+      "input_json",
+      "recording_import_id",
+      "transcript_revision"
     ],
     derived: []
   },
@@ -315,6 +343,12 @@ export async function seedMeetingAccountExport(
   marker: string,
   staleVersionCount = 1
 ) {
+  await new RecordingVoiceEnablementRepository().enable(db, {
+    version: 2,
+    sourceDeviceId: randomUUID(),
+    requestKey: randomUUID(),
+    recordingIds: []
+  });
   const records = new MeetingRecordsRepository();
   const transcripts = new MeetingTranscriptRepository();
   const outputs = new MeetingOutputsRepository();

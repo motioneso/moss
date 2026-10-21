@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Laptop, ShieldCheck } from "lucide-react";
+import { Laptop, ShieldCheck, Smartphone } from "lucide-react";
 
 import { Button, Card } from "@moss/ui";
 import { COMPANION_PRODUCT_NAME, type PairAttemptSummaryResponse } from "@moss/shared";
@@ -16,8 +16,14 @@ import { useAssistantName } from "../api/use-assistant-name.js";
  */
 function pickHeading(
   decided: "approved" | "denied" | null,
-  status: PairAttemptSummaryResponse["status"] | undefined
+  status: PairAttemptSummaryResponse["status"] | undefined,
+  android: boolean
 ): string {
+  if (android) {
+    if (decided === "approved") return "That phone is connected";
+    if (decided === "denied") return "Nothing was connected";
+    return "Do you recognise this Android phone?";
+  }
   if (decided === "approved") return "That Mac is connected";
   if (decided === "denied") return "Nothing was connected";
   if (status === "pending") return "Do you recognise this Mac?";
@@ -27,16 +33,16 @@ function pickHeading(
 function requestErrorMessage(error: unknown, deciding = false): string {
   if (error instanceof ApiError) {
     if (error.status === 400) {
-      return "This request link couldn't be used. Reopen it from the Mac and review the connection details.";
+      return "This request link couldn't be used. Reopen it from the companion and review the connection details.";
     }
     if (error.status === 404) {
-      return "That request is no longer open. Start a new one from the Mac and try again.";
+      return "That request is no longer open. Start a new one from the companion and try again.";
     }
     if (error.status === 409) {
-      return "That request was already answered. Start a new one from the Mac if you need to.";
+      return "That request was already answered. Start a new one from the companion if you need to.";
     }
     if (error.status === 401 || error.status === 403) {
-      return "Your account access couldn't be verified. Sign in again, then reopen the request from the Mac.";
+      return "Your account access couldn't be verified. Sign in again, then reopen the request from the companion.";
     }
   }
   return deciding
@@ -60,7 +66,7 @@ export const APPROVAL_CAPABILITIES: readonly string[] = [
 ];
 
 /**
- * The screen a Mac sends someone to when it wants to link (#2560).
+ * The screen a companion opens for explicit browser account approval.
  *
  * The Mac never sees this page and never learns who is signed in here. It holds a secret
  * the server has only a digest of, and the code in this link is what lets the browser name
@@ -99,6 +105,8 @@ function LinkRequest({ code }: { readonly code: string }) {
   });
 
   const deviceName = attemptQuery.data?.deviceName;
+  const android = attemptQuery.data?.platform === "android";
+  const device = android ? "phone" : "Mac";
   const checking = attemptQuery.isFetching;
   const answerUnavailable = attemptQuery.isError || attemptQuery.isFetching || decide.isError;
   const retryRequest = () => {
@@ -108,17 +116,20 @@ function LinkRequest({ code }: { readonly code: string }) {
 
   // The shell already labels the page, so the heading says what this moment asks of you
   // rather than repeating that label.
-  const heading = pickHeading(decided, attemptQuery.data?.status);
+  const heading = pickHeading(decided, attemptQuery.data?.status, android);
 
   return (
-    <section className="page-stack" aria-label={`Link ${COMPANION_PRODUCT_NAME}`}>
+    <section
+      className="page-stack"
+      aria-label={`Link ${android ? "Moss ring companion" : COMPANION_PRODUCT_NAME}`}
+    >
       <Card padding="lg" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
         <h1 className="jds-section-title">{heading}</h1>
 
         {code.length === 0 ? (
           <p role="alert">
-            This link is missing its request code. Start again from {COMPANION_PRODUCT_NAME} on the
-            Mac you want to connect.
+            This link is missing its request code. Start again from the companion you want to
+            connect.
           </p>
         ) : null}
 
@@ -137,30 +148,44 @@ function LinkRequest({ code }: { readonly code: string }) {
 
         {decided === "approved" ? (
           <p role="status">
-            <strong>{deviceName}</strong> is linked. Keep using this tab to start a meeting when
-            you’re ready. You can sign the Mac out any time from Settings, under Active sessions.
+            <strong>{deviceName}</strong> is linked.{" "}
+            {android
+              ? "Return to the Android companion to start delivery."
+              : "Keep using this tab to start a meeting when you’re ready."}{" "}
+            You can sign the {device} out any time from Settings, under Active sessions.
           </p>
         ) : null}
 
         {decided === "denied" ? (
-          <p role="status">Request declined. Nothing was linked and the Mac gets no access.</p>
+          <p role="status">Request declined. Nothing was linked and the {device} gets no access.</p>
         ) : null}
 
         {decided === null && attemptQuery.data?.status === "pending" ? (
           <>
             <p style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
-              <Laptop size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+              {android ? (
+                <Smartphone size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+              ) : (
+                <Laptop size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+              )}
               <span style={{ minWidth: 0 }}>
                 <strong>{deviceName}</strong> is asking to connect to your {assistantName} account.
-                Approve it only if you started this on that Mac.
+                Approve it only if you started this on that {device}.
               </span>
             </p>
             <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
               <ShieldCheck size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
               <div>
-                <span>A linked Mac will be able to:</span>
+                <span>A linked {device} will be able to:</span>
                 <ul style={{ margin: "var(--space-1) 0 0", paddingLeft: "var(--space-4)" }}>
-                  {APPROVAL_CAPABILITIES.map((capability) => (
+                  {(android
+                    ? [
+                        "upload completed ring recordings to Meetings for transcription and summaries",
+                        "send opted-in hold recordings to Main for transcription and text replies",
+                        "read recording delivery and voice reply status"
+                      ]
+                    : APPROVAL_CAPABILITIES
+                  ).map((capability) => (
                     <li key={capability}>{capability}</li>
                   ))}
                   {attemptQuery.data?.recordingPolicyVersion === 1 ? (
@@ -195,7 +220,9 @@ function LinkRequest({ code }: { readonly code: string }) {
             </div>
             {decide.isPending ? (
               <p role="status">
-                {decide.variables === "approve" ? "Approving this Mac…" : "Declining this request…"}
+                {decide.variables === "approve"
+                  ? `Approving this ${device}…`
+                  : "Declining this request…"}
               </p>
             ) : null}
           </>
@@ -204,7 +231,7 @@ function LinkRequest({ code }: { readonly code: string }) {
         {decided === null && attemptQuery.data && attemptQuery.data.status !== "pending" ? (
           <p role="status">
             The request for <strong>{deviceName}</strong> was already answered. Start a new one from
-            the Mac if you need to.
+            the companion if you need to.
           </p>
         ) : null}
 

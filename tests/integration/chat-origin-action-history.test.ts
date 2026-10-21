@@ -223,7 +223,9 @@ describe("origin-bound action history with the real database", () => {
       finish.resolve();
       await turn;
       expect(beforeClose.some((record) => record.kind === "action_result")).toBe(false);
-      expect(reopened.filter((record) => record.kind === "action_result")).toEqual([completed]);
+      expect(reopened.filter((record) => record.kind === "action_result")).toEqual([
+        { ...completed, actionThreadId: origin.id }
+      ]);
       expect(await store.getCurrentThreadState(ids.userA)).toEqual({
         id: origin.id,
         incognito: false

@@ -89,6 +89,48 @@ describe("timestamped ASR (generated fixtures, no provider compatibility proof)"
     expect(await readTimestampedTranscription(Response.json(value))).toEqual(value);
   });
 
+  it("normalizes one ASR frame of adjacent timestamp overlap without changing text", async () => {
+    const value = {
+      text: "Generated boundary fixture",
+      segments: [
+        { start: 29.64, end: 29.98, text: "Generated boundary" },
+        { start: 29.96, end: 29.98, text: " fixture" }
+      ]
+    };
+    expect(await readTimestampedTranscription(Response.json(value))).toEqual({
+      ...value,
+      segments: [{ ...value.segments[0], end: 29.96 }, value.segments[1]]
+    });
+  });
+
+  it.each([
+    { start: 29.959, end: 30, text: "More than one frame" },
+    { start: -0.001, end: 30, text: "Negative timestamp" }
+  ])("rejects wider overlap or normalization that loses duration %#", async (next) => {
+    await expect(
+      readTimestampedTranscription(
+        Response.json({
+          text: "Generated boundary fixture",
+          segments: [{ start: 25, end: 29.98, text: "Generated boundary" }, next]
+        })
+      )
+    ).rejects.toThrow("Invalid or unsupported timestamped transcription response");
+  });
+
+  it("rejects overlap that would remove the preceding segment's duration", async () => {
+    await expect(
+      readTimestampedTranscription(
+        Response.json({
+          text: "Generated boundary fixture",
+          segments: [
+            { start: 29.96, end: 29.98, text: "Generated boundary" },
+            { start: 29.96, end: 30, text: " fixture" }
+          ]
+        })
+      )
+    ).rejects.toThrow("Invalid or unsupported timestamped transcription response");
+  });
+
   it("bounds response bytes and cancels oversized response streams", async () => {
     const cancel = vi.fn();
     const stream = new ReadableStream<Uint8Array>({

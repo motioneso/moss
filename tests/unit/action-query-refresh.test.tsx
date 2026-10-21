@@ -1,5 +1,5 @@
 import type { ModuleDto, TranscriptRecord } from "@moss/shared";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
@@ -101,5 +101,51 @@ describe("action query refresh", () => {
       renderer.unmount();
     });
     client.clear();
+  });
+  it("refetches a cold in-flight read after an executed action", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryKey = ["settings", "themes"];
+    let release!: () => void;
+    const initialResponse = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const options = {
+      queryKey,
+      queryFn: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await initialResponse;
+          return "light";
+        }
+        return "dark";
+      }
+    };
+    const firstRead = client.fetchQuery(options).catch(() => undefined);
+    const observer = new QueryObserver(client, options);
+    const unsubscribe = observer.subscribe(() => undefined);
+    function Probe() {
+      useActionQueryRefresh([{ ...result, affectsModules: [] }], [], false);
+      return null;
+    }
+    let renderer!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        renderer = create(createElement(QueryClientProvider, { client }, createElement(Probe)));
+      });
+      await act(async () => {
+        release();
+        await firstRead;
+      });
+      expect(client.getQueryData(queryKey)).toBe("dark");
+      expect(calls).toBe(2);
+    } finally {
+      release();
+      await act(async () => {
+        renderer?.unmount();
+      });
+      unsubscribe();
+      client.clear();
+    }
   });
 });

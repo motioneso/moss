@@ -121,6 +121,7 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "filePath",
   "localDate",
   "chunkOffset",
+  "windowStartMs",
   "fileHash",
   "op",
   "source",

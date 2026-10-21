@@ -2,13 +2,16 @@ import { createHash } from "node:crypto";
 import { isUuid } from "@moss/db";
 import type { MeetingRecordingFile, MeetingRecordingImportInput } from "@moss/shared";
 
+import { RecordingImportInputError } from "./recording-validation-error.js";
+import {
+  RecordingPacketValidator,
+  recordingWavDuration,
+  recordingSidecarMetadata
+} from "./recording-audio-validation.js";
+export { RecordingImportInputError } from "./recording-validation-error.js";
+
 export const RECORDING_IMPORT_BODY_LIMIT = 8 * 1024 * 1024;
 const LIMITS = { packets: 1024 * 1024, sidecar: 64 * 1024, wav: 3_840_044 };
-export class RecordingImportInputError extends Error {
-  constructor(readonly statusCode: 400 | 413 = 400) {
-    super("Invalid completed recording bundle");
-  }
-}
 function invalid(): never {
   throw new RecordingImportInputError();
 }
@@ -45,106 +48,6 @@ function file(value: unknown, limit: number): { manifest: MeetingRecordingFile; 
 function hash(input: string | Uint8Array) {
   return createHash("sha256").update(input).digest("hex");
 }
-function packetCount(bytes: Buffer): number {
-  let count = 0,
-    offset = 0,
-    previous: number | null = null;
-  while (offset < bytes.length) {
-    if (offset + 2 > bytes.length) invalid();
-    const sequence = bytes[offset]!,
-      length = bytes[offset + 1]!;
-    if (
-      !length ||
-      offset + 2 + length > bytes.length ||
-      (previous !== null && sequence !== (previous + 1) % 256)
-    )
-      invalid();
-    previous = sequence;
-    offset += length + 2;
-    count++;
-  }
-  if (!count) invalid();
-  return count;
-}
-function wavDuration(bytes: Buffer): number {
-  // Version 1 deliberately accepts only canonical PCM WAV; uploader normalizes decoder output.
-  if (
-    bytes.length < 46 ||
-    bytes.toString("ascii", 0, 4) !== "RIFF" ||
-    bytes.readUInt32LE(4) !== bytes.length - 8 ||
-    bytes.toString("ascii", 8, 16) !== "WAVEfmt " ||
-    bytes.readUInt32LE(16) !== 16 ||
-    bytes.readUInt16LE(20) !== 1 ||
-    bytes.readUInt16LE(22) !== 1 ||
-    bytes.readUInt32LE(24) !== 16000 ||
-    bytes.readUInt32LE(28) !== 32000 ||
-    bytes.readUInt16LE(32) !== 2 ||
-    bytes.readUInt16LE(34) !== 16 ||
-    bytes.toString("ascii", 36, 40) !== "data" ||
-    bytes.readUInt32LE(40) !== bytes.length - 44 ||
-    (bytes.length - 44) % 2
-  )
-    invalid();
-  const duration = (bytes.length - 44) / 32;
-  if (duration > 120_000) throw new RecordingImportInputError(413);
-  if (!Number.isInteger(duration) || duration <= 0) invalid();
-  return duration;
-}
-function sidecarMetadata(bytes: Buffer, durationMs: number) {
-  let entries: unknown;
-  try {
-    entries = JSON.parse(`[${new TextDecoder("utf-8", { fatal: true }).decode(bytes)}]`);
-  } catch {
-    invalid();
-  }
-  if (!Array.isArray(entries) || !entries.length || entries.length > 512) invalid();
-  let startMs: number | null = null,
-    endMs: number | null = null,
-    recordedDurationMs: number | null = null;
-  const bookmarks: number[] = [];
-  function timestamp(value: unknown) {
-    if (typeof value !== "string" || !/^\d{10,13}$/.test(value)) invalid();
-    const result = Number(value) * (value.length === 10 ? 1000 : 1);
-    if (!Number.isSafeInteger(result)) invalid();
-    return result;
-  }
-  for (const item of entries) {
-    const entry = object(item);
-    for (const key of ["record", "btn", "duration"]) {
-      if (!(key in entry)) continue;
-      const pair = entry[key];
-      if (!Array.isArray(pair) || pair.length !== 2) invalid();
-      const at = timestamp(pair[0]);
-      if (key === "record") {
-        if (pair[1] === "start" && startMs === null) startMs = at;
-        else if (pair[1] === "end" && endMs === null) endMs = at;
-        else invalid();
-      } else if (key === "btn") {
-        if (pair[1] === "1") bookmarks.push(at);
-      } else {
-        if (
-          recordedDurationMs !== null ||
-          typeof pair[1] !== "string" ||
-          !/^\d{1,6}$/.test(pair[1])
-        )
-          invalid();
-        recordedDurationMs = Number(pair[1]);
-      }
-    }
-  }
-  if (
-    startMs === null ||
-    endMs === null ||
-    endMs < startMs ||
-    Math.abs(endMs - startMs - durationMs) > 1500 ||
-    recordedDurationMs === null ||
-    Math.abs(recordedDurationMs - durationMs) > 1000
-  )
-    invalid();
-  const bookmarksMs = bookmarks.map((at) => at - startMs);
-  if (bookmarksMs.some((at) => at < 0 || at > durationMs)) invalid();
-  return { startMs, endMs, recordedDurationMs, bookmarksMs };
-}
 export function validateRecordingBundle(value: unknown) {
   const input = object(value);
   keys(input, ["version", "sourceDeviceId", "recordingId", "packets", "sidecar", "wav"]);
@@ -165,11 +68,17 @@ export function validateRecordingBundle(value: unknown) {
     wav.manifest.name !== `${input.recordingId}.wav`
   )
     invalid();
-  const count = packetCount(packets.bytes),
-    durationMs = wavDuration(wav.bytes);
+  const validator = new RecordingPacketValidator();
+  validator.push(packets.bytes);
+  const count = validator.finish(),
+    durationMs = recordingWavDuration(wav.bytes, wav.bytes.length, 120_000);
   // Legacy firmware emits 20ms or 60ms packets. No claim of independent Opus decoding.
   if (durationMs < count * 20 || durationMs > count * 60) invalid();
-  const metadata = sidecarMetadata(sidecar.bytes, durationMs);
+  const metadata = recordingSidecarMetadata(sidecar.bytes, durationMs, {
+    maxBytes: LIMITS.sidecar,
+    maxEntries: 512,
+    durationDigits: 6
+  });
   const manifest: MeetingRecordingImportInput = {
     version: 1,
     sourceDeviceId: input.sourceDeviceId.toLowerCase(),

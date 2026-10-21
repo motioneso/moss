@@ -19,6 +19,10 @@ export type ChatRecordKind =
   | "action_request"
   | "action_result";
 export interface TranscriptRecord {
+  /** Captured destination for admitted voice turns; clients must filter by shown thread. */
+  readonly voiceThreadId?: string;
+  /** Captured action origin, including events arriving after its turn completes. */
+  readonly actionThreadId?: string;
   readonly kind: ChatRecordKind;
   readonly text: string;
   /** Stable identity for live replacement records (thought/tool updates). */

@@ -279,7 +279,7 @@ export function MeetingSummary({
         <>
           {data.automaticSummary?.status === "waiting" ? (
             <p role="status" className="jds-hint">
-              Finishing the transcript before writing the summary…
+              Preparing automatic summary…
             </p>
           ) : null}
           {data.automaticSummary?.status === "pending" ? (
@@ -302,7 +302,9 @@ export function MeetingSummary({
             <p className="jds-hint">
               {data.automaticSummary.code === "setting-off"
                 ? "Automatic summaries are off in Settings."
-                : "There wasn’t enough finalized transcript to write a summary."}
+                : data.automaticSummary.code === "transcript-changed"
+                  ? "The transcript changed after import. Use Rewrite summary to use the latest evidence."
+                  : "There wasn’t enough finalized transcript to write a summary."}
             </p>
           ) : null}
           {tool === "rewrite" ? (
@@ -426,8 +428,8 @@ export function MeetingSummary({
             </div>
           ) : !artifact && tool !== "rewrite" ? (
             <p className="jds-hint">
-              A summary appears after Stop when enabled in Settings. Use Rewrite summary to create
-              one yourself.
+              A summary appears after Stop or completed import when enabled in Settings. Use Rewrite
+              summary to create one yourself.
             </p>
           ) : null}
           {artifact ? (

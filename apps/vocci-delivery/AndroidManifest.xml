@@ -6,6 +6,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <queries><package android:name="com.gygeslabs.odinclient" /></queries>
   <application android:label="Moss recording delivery (dev)" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
     <activity android:name=".DeliveryActivity" android:exported="true">
@@ -15,6 +16,12 @@
       </intent-filter>
     </activity>
     <service android:name=".DeliveryService" android:exported="false" android:foregroundServiceType="connectedDevice" />
+    <receiver android:name=".DeliveryRecovery" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
   </application>
   <instrumentation android:name=".DeviceChecks" android:targetPackage="ai.moss.vocci" android:functionalTest="true" />
 </manifest>

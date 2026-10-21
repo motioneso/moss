@@ -11,6 +11,10 @@ import type {
 
 export const MEETING_TRANSCRIPT_MAX_SEGMENTS = 500;
 export const MEETING_TRANSCRIPT_MAX_CHARACTERS = 100_000;
+export const RECORDING_OUTPUT_TRANSCRIPT_LIMITS = {
+  maxSegments: 20_000,
+  maxCharacters: 1_200_000
+} as const;
 
 function integer(value: number, minimum = 0): boolean {
   return Number.isSafeInteger(value) && value >= minimum;
@@ -199,7 +203,11 @@ export function applyMeetingTranscriptEvent(
 /** Select whole segments ending at/before cutoff; never silently truncate quoted text. */
 export function selectMeetingTranscriptSnapshot(
   ledger: MeetingTranscriptLedger,
-  selection: MeetingTranscriptSelection
+  selection: MeetingTranscriptSelection,
+  limits: { maxSegments: number; maxCharacters: number } = {
+    maxSegments: MEETING_TRANSCRIPT_MAX_SEGMENTS,
+    maxCharacters: MEETING_TRANSCRIPT_MAX_CHARACTERS
+  }
 ): MeetingTranscriptSnapshot {
   if (
     selection.meetingId !== ledger.meetingId ||
@@ -208,9 +216,9 @@ export function selectMeetingTranscriptSnapshot(
     selection.transcriptRevision > ledger.transcriptRevision ||
     !integer(selection.cutoffMs) ||
     !integer(selection.maxSegments, 1) ||
-    selection.maxSegments > MEETING_TRANSCRIPT_MAX_SEGMENTS ||
+    selection.maxSegments > limits.maxSegments ||
     !integer(selection.maxCharacters, 1) ||
-    selection.maxCharacters > MEETING_TRANSCRIPT_MAX_CHARACTERS
+    selection.maxCharacters > limits.maxCharacters
   ) {
     throw new Error("Invalid transcript selection binding or bounds");
   }

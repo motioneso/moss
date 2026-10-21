@@ -27,6 +27,7 @@ import {
 } from "./api/client";
 import { assistantName, bindAssistantUser, loadPersonaSettings } from "./api/use-assistant-name.js";
 import { webRoutePath } from "./app-route-metadata";
+import { HomeRedirect } from "./home-redirect";
 import { queryKeys } from "./api/query-keys";
 import { AuthScreen } from "./auth/auth-screen";
 import { LoadingScreen } from "./loading-screen";
@@ -303,7 +304,7 @@ export function App() {
       >
         <Suspense fallback={<LoadingScreen />}>
           <Routes>
-            <Route index element={<Navigate to={webRoutePath("today")} replace />} />
+            <Route index element={<HomeRedirect />} />
             <Route
               path={webRoutePath("today")}
               element={

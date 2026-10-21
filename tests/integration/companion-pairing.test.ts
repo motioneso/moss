@@ -3,6 +3,7 @@ import pg from "pg";
 
 import {
   createCompanionPairingService,
+  createCompanionDevicesService,
   sha256Base64url,
   type CompanionPairingService
 } from "@moss/auth";
@@ -63,6 +64,121 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await Promise.allSettled([bootstrapClient?.end(), pool?.end()]);
+});
+
+describe("Android browser-approved linking", () => {
+  const issuedIds: string[] = [];
+  afterAll(async () => {
+    await pool.query("DELETE FROM app.companion_devices WHERE id=ANY($1::uuid[])", [issuedIds]);
+    await pool.query("DELETE FROM app.companion_pair_attempts WHERE platform='android'");
+    await pool.query("DELETE FROM app.better_auth_sessions WHERE id=$1", [sessionId]);
+  });
+  const sessionId = "00000000-0000-4000-8000-0000000025b0";
+  beforeAll(async () => {
+    await bootstrapClient.query(
+      "INSERT INTO app.better_auth_sessions(id,user_id,token,expires_at) VALUES($1,$2,'synthetic-android-browser','2100-01-01')",
+      [sessionId, userId]
+    );
+  });
+  async function issue() {
+    const attempt = await pairing.create(attemptInput({ platform: "android" }));
+    expect(
+      (
+        await pairing.decide({
+          approvalCode: attempt.approvalCode,
+          actorUserId: userId,
+          browserSessionId: sessionId,
+          decision: "approve"
+        })
+      ).ok
+    ).toBe(true);
+    const result = await pairing.redeem({ attemptId: attempt.attemptId, verifier: VERIFIER });
+    if (result.status !== "issued") throw new Error("Expected Android credential");
+    issuedIds.push(result.response.device.id);
+    return {
+      attempt,
+      response: result.response,
+      headers: { authorization: `Bearer ${result.response.credential}` },
+      requestId: "android-boundary"
+    };
+  }
+  it("requires a live browser session belonging to the approving owner", async () => {
+    const attempt = await pairing.create(attemptInput({ platform: "android" }));
+    expect(await pairing.summarize({ approvalCode: attempt.approvalCode })).toMatchObject({
+      platform: "android"
+    });
+    for (const input of [{}, { browserSessionId: sessionId, actorUserId: otherUserId }]) {
+      expect(
+        (
+          await pairing.decide({
+            approvalCode: attempt.approvalCode,
+            actorUserId: userId,
+            decision: "approve",
+            ...input
+          })
+        ).ok
+      ).toBe(false);
+    }
+  });
+  it("issues the Android credential/account shape once without Mac capture authority", async () => {
+    const { attempt, response } = await issue();
+    expect(response.credential).toMatch(/^vr1_[A-Za-z0-9_-]{43}$/);
+    expect(response.account.id).toBe(userId);
+    expect(response.recordingCapability).toBeUndefined();
+    expect(
+      (await pairing.redeem({ attemptId: attempt.attemptId, verifier: VERIFIER })).status
+    ).toBe("redeemed");
+    await pairing.cancel({ attemptId: attempt.attemptId, verifier: VERIFIER });
+  });
+  it("accepts Android through its resolver while the Mac resolver rejects that prefix", async () => {
+    const input = await issue();
+    const android = createCompanionDevicesService({ pool, now, platform: "android" });
+    expect((await android.resolve(input)).actorUserId).toBe(userId);
+    await expect(createCompanionDevicesService({ pool, now }).resolve(input)).rejects.toMatchObject(
+      { httpStatus: 401 }
+    );
+  });
+  it("checks the stored platform independently of the credential prefix", async () => {
+    const input = await issue();
+    await pool.query("UPDATE app.companion_devices SET platform='macos' WHERE id=$1", [
+      input.response.device.id
+    ]);
+    await expect(
+      createCompanionDevicesService({ pool, now, platform: "android" }).resolve(input)
+    ).rejects.toMatchObject({ httpStatus: 401 });
+  });
+  it("rejects mixed browser and Android credentials", async () => {
+    const input = await issue();
+    await expect(
+      createCompanionDevicesService({ pool, now, platform: "android" }).resolve({
+        ...input,
+        headers: { ...input.headers, cookie: "synthetic" }
+      })
+    ).rejects.toMatchObject({ httpStatus: 401 });
+  });
+  it("rejects a revoked Android credential and permits idempotent logout", async () => {
+    const input = await issue();
+    const android = createCompanionDevicesService({ pool, now, platform: "android" });
+    await android.logoutCredential(input);
+    await expect(android.resolve(input)).rejects.toMatchObject({ httpStatus: 401 });
+    await android.logoutCredential(input);
+  });
+  it("retains reported versions when a ring owner check updates reachability", async () => {
+    const input = await issue();
+    const android = createCompanionDevicesService({ pool, now, platform: "android" });
+    const actor = await android.resolve(input);
+    await android.heartbeat(actor, { appVersion: "1.2.3", osVersion: "16" });
+    await android.heartbeat(actor);
+    const result = await pool.query(
+      "SELECT app_version,os_version,last_contact_at FROM app.companion_devices WHERE id=$1",
+      [input.response.device.id]
+    );
+    expect(result.rows[0]).toMatchObject({
+      app_version: "1.2.3",
+      os_version: "16",
+      last_contact_at: now()
+    });
+  });
 });
 
 describe("creating a pairing attempt", () => {

@@ -14,7 +14,7 @@ export const MEETING_STOP_SUMMARY_QUEUES: readonly QueueDefinition[] = [
       retryDelay: 60,
       expireInSeconds: 180,
       deleteAfterSeconds: 3600,
-      retentionSeconds: 3600
+      retentionSeconds: 1_209_600
     }
   }
 ];
@@ -31,6 +31,23 @@ export function createMeetingStopSummaryScheduler(boss: PgBoss) {
         startAfter: at,
         singletonKey: `${payload.idempotencyKey}:${early ? "finalized" : "stop"}`
       });
+    });
+}
+/** Imported completion reuses automatic output receipts, with distinct import provenance. */
+export function createImportedMeetingSummaryScheduler(boss: Pick<PgBoss, "send">) {
+  const repository = new MeetingStopSummaryRepository();
+  return (
+    db: Parameters<MeetingStopSummaryRepository["scheduleImport"]>[0],
+    actor: Parameters<MeetingStopSummaryRepository["scheduleImport"]>[1],
+    input: Parameters<MeetingStopSummaryRepository["scheduleImport"]>[2]
+  ) =>
+    repository.scheduleImport(db, actor, input, async (transaction, payload, at) => {
+      const id = await sendJob(boss, MEETING_STOP_SUMMARY_QUEUE, payload, {
+        db: scopedJobDatabase(transaction),
+        startAfter: at,
+        singletonKey: payload.idempotencyKey
+      });
+      if (!id) throw new Error("Imported meeting analysis scheduling unavailable");
     });
 }
 export async function registerMeetingStopSummaryWorker(
@@ -51,7 +68,7 @@ export async function registerMeetingStopSummaryWorker(
         ![job.data.actorUserId, job.data.resourceId, job.data.idempotencyKey].every(isUuid)
       )
         throw new Error("Invalid automatic meeting summary metadata");
-      const result = await service.generateOnStop(
+      const result = await service.generateAutomatic(
         { actorUserId: job.data.actorUserId, requestId: job.id },
         job.data.resourceId,
         job.data.idempotencyKey

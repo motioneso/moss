@@ -155,7 +155,8 @@ export async function handleExportBuildJob(
         },
         chat: {
           threads: userExport.tables.chatThreads,
-          messages: userExport.tables.chatMessages
+          messages: userExport.tables.chatMessages,
+          voiceRequests: userExport.tables.chatVoiceRequests
         },
         briefings: {
           definitions: userExport.tables.briefingDefinitions,
