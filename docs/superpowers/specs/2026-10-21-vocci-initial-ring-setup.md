@@ -1,6 +1,6 @@
 # Vocci Android: initial setup for an already-owned ring
 
-Task: #3565. Follows merged #3554. **Status: proposed; awaiting design approval.**
+Task: #3565. Follows merged #3554. **Status: approved by Ben in chat on 2026-10-21 ("Approve!").**
 
 ## Outcome and scope
 
@@ -17,7 +17,7 @@ deletes recordings, registers a new binding or disables the official package.
 
 ## Authentication decision and feasibility gate
 
-Use the existing browser-approved Moss link. For Vocci, propose native email-code
+Use the existing browser-approved Moss link. For Vocci, use native email-code
 sign-in to the same existing account, then read-only binding retrieval. This is a
 different sign-in from Moss; explain why it is needed before sending a code.
 
