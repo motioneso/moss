@@ -4,17 +4,6 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
-## Vocci companion — physical Android check (#3553)
-
-Wireless pairing, installed platform/queue checks, and all seven native status
-controls pass. After Ben unlocked the phone and brought the ring nearby, Android
-still reported Bluetooth connection establishment failure (status 133), before
-authentication or audio transfer. Please take the charged ring off its charger,
-keep it beside the phone, and check whether the official Vocci app can connect.
-Report connected or not connected; no recording is needed yet. The companion is
-stopped and the official app's Bluetooth grants are restored. Code verification
-continues independently.
-
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the

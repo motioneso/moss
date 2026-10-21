@@ -108,9 +108,46 @@ Whisper transcription and ordinary ACP Main execution. Open reply displayed the
 persisted nonempty assistant response, and upload replay preserved exactly one
 user/assistant pair. This proves the receiving/chat path, not installed Android
 delivery. The updated companion is installed on the verified Samsung phone, and
-platform codec, atomic-file, voice journal and cleanup checks pass. Physical
-ring-to-Moss delivery and the installed UI check remain pending. The resumable
-two-hour transport remains a separate approved slice, unimplemented.
+platform codec, atomic-file, voice journal and cleanup checks pass. All seven
+installed status controls were subsequently verified on the unlocked phone.
+The resumable two-hour transport remains a separate approved slice, unimplemented.
+
+On October 21, native live gate `075518` at head `392c9c3ca` retrieved and uploaded
+two fresh physical samples after native Start delivery and hold opt-in: a normal
+14.1-second recording with a 10-second bookmark, and a 6.3-second hold recording
+classified as a voice request. Final native state retained two accepted, queued
+receipts with no last failure. The gate exited 1 when its wait expired roughly
+20 seconds after upload acceptance; its deadline had started before the user made
+the samples. This proves installed retrieval, decoding and server acceptance,
+but does not prove uninterrupted native processing, reply display or restart
+recovery. Both immutable bundles were preserved privately for further checks.
+
+Direct Whisper base transcription was clear for the normal sample, but the hold
+transcript did not match the requested reply phrase. Independent libopus decoding
+matched Android output sample counts and correlated above 0.997 for both samples.
+Do not describe this as absent inventory or a confirmed decoder fault; hold
+speech accuracy remains unresolved. The original companion's encrypted state
+was preserved, and the native proof restored official Bluetooth grants and the
+previous screen timeout during cleanup.
+
+Fresh-bundle replay gate `081423` at the same head exited 0 (fingerprint
+`4b83c10c2d78`, private browser run 2). The unchanged native packet, sidecar and WAV
+files were re-uploaded through the authenticated developer receiver after the
+native gate's server had been cleaned up. Real GPU Whisper base transcription,
+real analysis and the Meetings UI preserved the 10-second bookmark and one summary
+revision. The hold transcript reached explicit Send to Main, ordinary ACP
+execution, persisted user/assistant messages and a visible Open reply. Replay kept
+one message pair. The normal test sample produced no task suggestions; the earlier
+generated-speech task acceptance proof remains separate.
+
+This is a composite proof of native capture/acceptance and developer replay through
+processing/UI, not an uninterrupted native delivery/restart proof. The hold
+transcript still did not recognize the requested phrase, so reply plumbing passes
+but speech accuracy does not. Earlier replay gate `081023` passed the Meeting
+portion but failed hold transcription with the CPU proof recognizer; switching
+only the private provider to GPU with beam search and fixed temperature cleared
+that failure. No product transcription timeout, audio evidence or transcript was
+changed for the passing replay.
 
 The independent static streaming result is recorded in
 [the investigation](../../research/2026-10-20-vocci-legacy-streaming.md): no active
