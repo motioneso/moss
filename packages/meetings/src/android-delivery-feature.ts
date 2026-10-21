@@ -3,7 +3,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "Android ring delivery offers browser account linking, restart recovery, Main voice replies and optional seven-day cleanup. Only Start enables recovery; stopped voice/cleanup/retry controls ask you to Start first. Meetings support two hours; voice 120 seconds. Initial ring binding still needs developer setup.",
+    "Android browser linking, restart recovery and optional seven-day cleanup. Only Start enables recovery; stopped voice/cleanup/retry actions ask for Start. Meetings: two hours; voice: 120 seconds. Initial ring setup needs a developer.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
