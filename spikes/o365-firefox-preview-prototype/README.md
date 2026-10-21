@@ -169,5 +169,17 @@ ran and recorded a matching row in the live Outlook layout. Counts alone do not
 prove that the observation was a newly delivered message rather than a changed
 row. Full bodies, calendar events, restart recovery and VM operation remain untested.
 
-Calendar watcher live trial: **pending**. The earlier inbox result does not verify
-calendar extraction or event identity.
+Calendar watcher live trial (2026-10-21): the user reported that initial appearance
+worked when the event was created on another computer. Rename and deletion were
+not observed; those actions were performed in the watched tab. Live update and
+disappearance handling remain unresolved pending watcher status and a repeat with
+the watched tab left unchanged.
+
+A synthetic check of the current source confirmed that changing from a calendar
+view URL to an editor URL stops the watcher and clears observations by design.
+This is a possible explanation, not a verified cause of the live result. Before
+retesting, inspect **Show results** for Running versus Stopped/route changed.
+For the isolated collection trial, create, rename and delete on the other
+computer while leaving the watched tab's date/view unchanged. No route guard was
+relaxed on the basis of this report. The initial result does not establish stable
+event identity, reliable cancellation detection, restart recovery or VM operation.
