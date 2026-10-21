@@ -42,3 +42,55 @@ preview.addEventListener("click", async () => {
     preview.disabled = false;
   }
 });
+
+const watchStatus = document.getElementById("watch-status");
+const watchResults = document.getElementById("watch-results");
+const watchButtons = ["watch-start", "watch-read", "watch-stop"].map((id) => document.getElementById(id));
+
+async function watchCommand(command) {
+  for (const button of watchButtons) button.disabled = true;
+  watchResults.replaceChildren();
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = new URL(tab.url);
+    if (url.protocol !== "https:" || !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)) {
+      watchStatus.textContent = "Open Outlook Web Inbox in the active tab first.";
+      return;
+    }
+    if (command === "start") {
+      const installed = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ["watch.js"] });
+      if (installed.some((item) => item.error)) throw Error("injection");
+    }
+    const injections = await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (action, phrase) => {
+        const watcher = globalThis.__mossInboxProbe;
+        if (!watcher) return null;
+        if (action === "start") return watcher.start(phrase);
+        if (action === "stop") return watcher.stop();
+        return watcher.snapshot();
+      },
+      args: [command, document.getElementById("phrase").value],
+    });
+    if (injections.length !== 1 || injections[0].error) throw Error("injection");
+    const state = injections[0].result;
+    if (!state) {
+      watchStatus.textContent = "No watcher in this tab. Click Start watching on Inbox.";
+      return;
+    }
+    watchStatus.textContent = `${state.running ? "Running" : "Stopped"}: ${state.reason}. Scans: ${state.scans}; rendered rows: ${state.candidates}; phrase matches: ${state.matched}; newly observed/changed: ${state.observed}. Last scan: ${state.lastScan || "none"}.`;
+    for (const row of state.rows) {
+      const li = document.createElement("li");
+      li.textContent = `${row.kind} (${row.time})\n${row.summary}`;
+      watchResults.append(li);
+    }
+  } catch {
+    watchStatus.textContent = "Couldn't reach the watcher. Reloading Outlook stops and clears it; then start again.";
+  } finally {
+    for (const button of watchButtons) button.disabled = false;
+  }
+}
+
+document.getElementById("watch-start").addEventListener("click", () => watchCommand("start"));
+document.getElementById("watch-read").addEventListener("click", () => watchCommand("read"));
+document.getElementById("watch-stop").addEventListener("click", () => watchCommand("stop"));

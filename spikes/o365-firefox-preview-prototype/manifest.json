@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Outlook local preview — prototype",
-  "version": "0.1.0",
-  "description": "User-clicked, temporary local preview of one opened Outlook Web message.",
+  "version": "0.2.0",
+  "description": "Local Outlook preview and explicitly started, tab-local synthetic inbox watcher.",
   "permissions": ["activeTab", "scripting"],
-  "action": { "default_title": "Preview opened Outlook message", "default_popup": "popup.html" },
+  "action": { "default_title": "Outlook preview and inbox watcher", "default_popup": "popup.html" },
   "browser_specific_settings": {
     "gecko": {
       "id": "outlook-preview-prototype@moss.invalid",

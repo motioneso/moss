@@ -10,6 +10,7 @@ from playwright.sync_api import sync_playwright
 
 SOURCE = Path(__file__).resolve().parent
 EXTRACT = (SOURCE / "extract.js").read_text()
+WATCH = (SOURCE / "watch.js").read_text()
 MESSAGE = '''<article><h3>Synthetic subject</h3><h3>From: Example Sender</h3>
 <h3>Wed 10/21/2026 2:00 PM</h3><div role="document" aria-label="Message body">
 <p>Synthetic body</p><span hidden>HIDDEN SECRET</span>
@@ -25,7 +26,8 @@ def main():
     shutil.copyfile(__file__, run / "final_script.py")
     shutil.copyfile(__file__, workspace / "final_script.py")
     points = ["Single message and surrounding content isolation", "Missing/ambiguous/compose rejection",
-              "Bounded body", "Popup text rendering, clear and host validation", "Injection error handling"]
+              "Bounded body", "Popup text rendering, clear and host validation", "Injection error handling",
+              "Automatic list observation, filtering, deduplication and stop", "Watcher popup controls and route shutdown"]
     (workspace / "plan.md").write_text("\n".join(f"- [ ] CP{i}: {p}" for i, p in enumerate(points, 1)))
     log = []
 
@@ -82,9 +84,84 @@ scripting:{executeScript:async()=>{window.calls++;return window.failInjection
         page.locator("#preview").click()
         page.wait_for_function('document.querySelector("#status").textContent.includes("policy")')
         passed(5)
+
+        # Exercise popup controls with the same injected-function interface, but
+        # a fake watcher. Real injected script/permission behavior is still manual.
+        page.evaluate('''() => {
+          window.__mossInboxProbe = {
+            state: {running:false, reason:"Ready", scans:0, candidates:0, matched:0, observed:0, lastScan:"", rows:[]},
+            start(phrase) { this.state = {...this.state, running:true, phrase, scans:1, candidates:1, matched:1,
+              rows:[{kind:"Already visible at start",time:"now",summary:"MOSS TEST <img src=x>"}]}; return this.state; },
+            snapshot() {return this.state;},
+            stop() {this.state = {...this.state,running:false,reason:"Stopped and cleared",rows:[]};return this.state;}
+          };
+          window.browser.scripting.executeScript = async (options) => options.files
+            ? [{result:null}] : [{result:options.func(...options.args)}];
+        }''')
+        page.locator("#watch-start").click()
+        page.wait_for_function('document.querySelector("#watch-status").textContent.startsWith("Running")')
+        assert page.locator("#watch-results").inner_text().endswith("MOSS TEST <img src=x>")
+        assert page.locator("img").count() == 0
+        page.locator("#watch-read").click()
+        page.wait_for_function('!document.querySelector("#watch-read").disabled')
+        assert page.locator("#watch-results li").count() == 1
+        page.locator("body").screenshot(path=str(run / "screenshots/final_execution_7_watch_popup.png"))
+        page.locator("#watch-stop").click()
+        page.wait_for_function('document.querySelector("#watch-status").textContent.startsWith("Stopped")')
+        assert page.locator("#watch-results li").count() == 0
+
+        inbox = browser.new_page(viewport={"width": 1280, "height": 1800})
+        inbox.route("**/*", lambda route: route.fulfill(content_type="text/html", body='''<main>
+<div role="listbox" aria-label="Message list"><div role="option">MOSS TEST baseline</div>
+<div role="option">UNRELATED ROW</div><div role="option" hidden>MOSS TEST hidden</div></div>
+<div role="listbox" aria-label="Recipients"><div role="option">MOSS TEST recipient</div></div>
+<div role="document" aria-label="Message body">MOSS TEST body excluded</div></main>'''))
+        inbox.goto("https://outlook.office.com/mail/inbox")
+        # Prove the phrase-filter assertion actually fails when its guard is
+        # removed; the mutation runs on synthetic content in this isolated tab.
+        inbox.evaluate(WATCH.replace('if (!summary || !summary.toLowerCase().includes(phrase.toLowerCase())) continue;', 'if (!summary) continue;'))
+        unfiltered = inbox.evaluate('__mossInboxProbe.start("MOSS TEST")')
+        try:
+            assert [row["summary"] for row in unfiltered["rows"]] == ["MOSS TEST baseline"]
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError("Removing the filter did not break the isolation assertion")
+        inbox.evaluate('() => { __mossInboxProbe.stop(); delete globalThis.__mossInboxProbe; }')
+        inbox.evaluate(WATCH)
+        assert inbox.evaluate("__mossInboxProbe.snapshot().scans") == 0
+        state = inbox.evaluate('__mossInboxProbe.start("MOSS TEST")')
+        assert state["running"] and state["matched"] == 1 and state["observed"] == 0
+        assert [row["summary"] for row in state["rows"]] == ["MOSS TEST baseline"]
+        # Close the popup page: the independent tab's real interval must continue.
+        page.close()
+        inbox.evaluate('''() => {
+          const row = document.createElement("div"); row.setAttribute("role","option");
+          row.textContent = "MOSS TEST arrived automatically";
+          document.querySelector('[aria-label="Message list"]').prepend(row);
+        }''')
+        inbox.wait_for_function('__mossInboxProbe.snapshot().observed === 1')
+        scans = inbox.evaluate("__mossInboxProbe.snapshot().scans")
+        inbox.wait_for_function("n => __mossInboxProbe.snapshot().scans > n", arg=scans)
+        assert inbox.evaluate("__mossInboxProbe.snapshot().observed") == 1
+        # Loading the file again must not reset or duplicate the running watcher.
+        inbox.evaluate(WATCH)
+        assert len(inbox.evaluate("__mossInboxProbe.snapshot().rows")) == 2
+        state = inbox.evaluate("__mossInboxProbe.stop()")
+        assert not state["running"] and state["rows"] == [] and state["phrase"] == ""
+        scans = state["scans"]
+        inbox.wait_for_timeout(2200)
+        assert inbox.evaluate("__mossInboxProbe.snapshot().scans") == scans
+        passed(6)
+        inbox.evaluate('__mossInboxProbe.start("MOSS TEST")')
+        inbox.evaluate('history.pushState({}, "", "/mail/drafts")')
+        inbox.wait_for_function("!__mossInboxProbe.snapshot().running")
+        state = inbox.evaluate("__mossInboxProbe.snapshot()")
+        assert state["rows"] == [] and "route changed" in state["reason"]
+        passed(7)
         browser.close()
     (workspace / "plan.md").write_text("\n".join(f"- [x] CP{i}: {p}; see log step {i}" for i, p in enumerate(points, 1)))
-    (run / "final_script_log.txt").write_text("\n".join(log) + "\nSynthetic checks passed; actual add-on and Outlook unverified.\n")
+    (run / "final_script_log.txt").write_text("\n".join(log) + "\nSynthetic checks passed; actual inbox watcher in Outlook unverified.\n")
     print("\n".join(log))
     print(f"Evidence: {workspace}")
 

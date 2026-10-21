@@ -8,8 +8,8 @@
   </head>
   <body>
     <h1>Outlook local preview</h1>
-    <p>Temporary prototype. Open only a synthetic test email, then preview it here.</p>
-    <p>No uploads or saving. Closing this popup clears the preview.</p>
+    <p>Temporary prototype. Use synthetic test mail only. Choose an opened-email preview or the Inbox watcher below.</p>
+    <p>No uploads or disk saving. Opened-email preview clears when this popup closes.</p>
     <button id="preview" type="button">Preview opened email</button>
     <button id="clear" type="button">Clear</button>
     <p id="status" role="status">Ready. Nothing has been read.</p>
@@ -21,5 +21,18 @@
       </dl>
       <h2>Body</h2><pre id="body"></pre>
     </section>
+    <hr>
+    <h2>Inbox watcher experiment</h2>
+    <p>Leave Inbox open. Only rendered rows containing your test phrase are kept.
+      Watching continues when this popup closes; reload or navigation ends it.
+      No emails are opened. Calendar is not included yet.</p>
+    <label for="phrase">Synthetic email test phrase</label>
+    <input id="phrase" value="MOSS TEST" minlength="3" maxlength="80">
+    <p><button id="watch-start" type="button">Start watching</button>
+      <button id="watch-read" type="button">Show results</button>
+      <button id="watch-stop" type="button">Stop &amp; clear</button></p>
+    <p id="watch-status" role="status">Use Show results to check this tab’s watcher. Watch results live only in this tab’s memory.</p>
+    <p>“Newly observed” may mean changed text or scrolling, rather than a new email.</p>
+    <ol id="watch-results" aria-label="Observed inbox rows"></ol>
   </body>
 </html>
