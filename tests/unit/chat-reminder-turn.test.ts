@@ -31,6 +31,7 @@ function setup(options: {
   prepareEdit?: ReturnType<typeof vi.fn>;
   record?: ReturnType<typeof vi.fn>;
   abortDuringThreadRead?: () => void;
+  noConversation?: boolean;
 }) {
   const engine = new FakeEngine(0, [
     { records: [{ kind: "reply", text: "model answer" }], offset: 10, complete: true }
@@ -39,9 +40,13 @@ function setup(options: {
   const recordReminderTurn = options.record ?? vi.fn().mockResolvedValue(SAVED);
   const gate = { mode: vi.fn().mockResolvedValue("on"), evaluate: vi.fn() };
   gate.evaluate.mockResolvedValue({ kind: "declined" });
+  let opened = !options.noConversation;
+  const openNewConversation = vi.fn(async () => {
+    opened = true;
+  });
   const getMainThreadState = vi.fn(async () => {
     options.abortDuringThreadRead?.();
-    return { id: "main-thread", incognito: options.incognito ?? false };
+    return opened ? { id: "main-thread", incognito: options.incognito ?? false } : undefined;
   });
   const deps = makeMinimalDeps({
     engineFactory: () => engine as never,
@@ -51,14 +56,18 @@ function setup(options: {
       resolveActiveProvider: vi.fn().mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
       listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
       recordTurn: vi.fn().mockResolvedValue(undefined),
-      openNewConversation: vi.fn().mockResolvedValue(undefined),
+      openNewConversation,
       getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
       touchExistingThread: vi.fn().mockResolvedValue(true),
       getMainThreadState,
-      getCurrentThreadState: vi.fn(async (_actor, surface) => ({
-        id: surface && surface !== "drawer" ? "side-thread" : "main-thread",
-        incognito: options.incognito ?? false
-      })),
+      getCurrentThreadState: vi.fn(async (_actor, surface) =>
+        opened
+          ? {
+              id: surface && surface !== "drawer" ? "side-thread" : "main-thread",
+              incognito: options.incognito ?? false
+            }
+          : undefined
+      ),
       resolveScheduledReadRequest: options.read,
       hasPendingReminderDeletion: options.pending,
       recordReminderTurn,
@@ -70,10 +79,28 @@ function setup(options: {
   const manager = new ChatSessionManager(deps);
   const records: TranscriptRecord[] = [];
   manager.subscribe("u1", (record) => records.push(record));
-  return { manager, engine, gate, recordReminderTurn, records, getMainThreadState };
+  return {
+    manager,
+    engine,
+    gate,
+    recordReminderTurn,
+    records,
+    getMainThreadState,
+    openNewConversation
+  };
 }
 
 describe("chat reminder turn (#3309)", () => {
+  it("opens Main for an account that has never chatted and saves the reminder there", async () => {
+    const { manager, engine, recordReminderTurn, openNewConversation } = setup({
+      noConversation: true
+    });
+    const result = await manager.submitTurn("u1", "Ben", "remind me in 10 minutes to stretch");
+    expect(result.reply).toBe(SAVED.reply);
+    expect(openNewConversation).toHaveBeenCalledTimes(1);
+    expect(recordReminderTurn.mock.calls[0]?.[3]).toMatchObject({ threadId: "main-thread" });
+    expect(engine.launchCount).toBe(0);
+  });
   it.each([
     "move the couch to the left",
     "change of plans tonight",

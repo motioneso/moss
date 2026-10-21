@@ -496,7 +496,8 @@ describe("chat conversation identity binding", () => {
     expect(h.persistence.recordTurn).not.toHaveBeenCalled();
   });
 
-  it("keeps missing gate and shadow identities null even when launch creates a thread", async () => {
+  // #3543: a fresh account opens its conversation before the gate, so every step shares it.
+  it("binds gate, shadow and launch to the conversation a fresh account opens first", async () => {
     const tokens = new SessionTokenRegistry();
     const mint = vi.spyOn(tokens, "mint");
     const gate = buildClassifierGateRunner({ readMode: async () => "on", tokens });
@@ -510,11 +511,12 @@ describe("chat conversation identity binding", () => {
     h.setThread(null);
     expect(await h.manager.submitTurn("user-1", "Ben", "Hello")).toEqual({ reply: "Done." });
     expect(mint).toHaveBeenCalledWith(
-      expect.objectContaining({ threadId: null }),
+      expect.objectContaining({ threadId: "new-thread" }),
       expect.any(Object)
     );
-    expect(shadow.start).toHaveBeenCalledWith(expect.objectContaining({ threadId: null }));
+    expect(shadow.start).toHaveBeenCalledWith(expect.objectContaining({ threadId: "new-thread" }));
     expect(h.mintMcpToken).toHaveBeenCalledWith("user-1", "user-1:drawer", "new-thread");
+    expect(h.persistence.openNewConversation).toHaveBeenCalledTimes(1);
   });
 
   it("keeps shadow requests and tokens bound to A across a resume during its own mode await", async () => {

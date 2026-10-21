@@ -338,6 +338,9 @@ export function ChatDrawer(props: ChatDrawerProps) {
                   generation === generationRef.current
                 ) {
                   selection.confirm(state.threadId, { surface: initiatingSurface, generation });
+                  // The first turn can create Main after startup hydrated an empty account.
+                  props.clearRecords(state.threadId);
+                  setLiveThreadId(state.threadId);
                 }
               })
               .catch(() => undefined);

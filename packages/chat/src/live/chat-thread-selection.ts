@@ -24,6 +24,25 @@ export async function getSelectedThreadState(input: {
 }
 
 /**
+ * The selected conversation, opened first when the actor has none. A turn binds here before any
+ * pre-model answer, so a new account's first message lands in Main whoever answers it.
+ */
+export async function getOrOpenSelectedThreadState(input: {
+  readonly actorUserId: string;
+  readonly surface: ChatSurface;
+  readonly useMain: boolean;
+  readonly persistence: Pick<
+    ChatPersistencePort,
+    "getCurrentThreadState" | "getMainThreadState" | "openNewConversation"
+  >;
+}): Promise<ThreadState> {
+  const selected = await getSelectedThreadState(input);
+  if (selected || !input.persistence.getCurrentThreadState) return selected;
+  await input.persistence.openNewConversation(input.actorUserId, undefined, input.surface);
+  return getSelectedThreadState(input);
+}
+
+/**
  * The pinned conversation's state while it is still the actor's selection: the current
  * conversation, or Main for the drawer. Anything else means the selection moved.
  */
