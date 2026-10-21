@@ -219,7 +219,7 @@ export const chatModuleManifest = {
     {
       id: "chat.main_conversation",
       description:
-        "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
+        "Reopening Moss returns to your stable Main chat and saved history. Reopening the selected chat refreshes replies received while idle. The composer waits while Main is restored, " +
         "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
       featureFlagId: "chat.module"
     },

@@ -144,17 +144,9 @@ export interface RpcClientLogger {
 const NOOP_LOGGER: RpcClientLogger = { debug: () => {}, warn: () => {} };
 
 /**
- * The RPC surface the reconciliation routine (§5.3) is allowed to drive WHILE reconciliation is in
- * progress. Critically, these calls BYPASS the `reconciling` guard that `call()` applies to every
- * normal RPC — without this the reconciliation flow would self-deadlock: §5.3 step 1 must issue
- * `listLiveSessions()` to obtain `liveKeys` and step 4 must issue `kill()` for each api-unknown live
- * mux session, but both route through `call()`, which rejects with `CliChatUnavailableError`
- * ("cli-runner reconciling after restart") while `reconciling === true`. The hook therefore receives
- * THIS driver (not the public connection) and issues its own RPCs through it.
- *
- * Only the two verbs reconciliation actually needs are exposed (`listLiveSessions` + `kill`); the
- * guard-bypass is deliberately NOT available to general callers (the public `RpcConnection.kill` /
- * `listLiveSessions` stay blocked during reconcile, so a normal turn cannot sneak past the gate).
+ * Reconciliation (§5.3) needs listLiveSessions and kill while normal calls are blocked by the
+ * reconciling guard. This restricted driver bypasses that guard to avoid self-deadlock.
+ * General callers use RpcConnection, where both verbs remain blocked during reconciliation.
  */
 export interface RpcReconcileDriver {
   /** §4.6 reconciliation primitive — the authoritative live-key enumeration. Bypasses the gate. */

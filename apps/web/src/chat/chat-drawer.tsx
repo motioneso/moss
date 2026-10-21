@@ -558,13 +558,24 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setIsSending(false);
       setQueuedSendText(null);
       setSendError(null);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.chat.messages(id, props.surface)
+      });
       setReviewThreadId(id);
       setLiveThreadId(null);
       if (change) {
         resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
       }
     },
-    [props.meetingContext, props.surface, transition, callerDraft, isSending, resumeMutation]
+    [
+      props.meetingContext,
+      props.surface,
+      transition,
+      callerDraft,
+      isSending,
+      resumeMutation,
+      queryClient
+    ]
   );
   useEffect(() => {
     if (!props.open || !props.threadToOpen || transition.pending) return;

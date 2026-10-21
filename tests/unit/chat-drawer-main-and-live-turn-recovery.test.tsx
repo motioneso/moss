@@ -249,6 +249,62 @@ it("keeps the owner's Main and its draft when a newer shared Main is listed firs
   expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts["own-main"]).toBe("Unsent Main");
 });
 
+it("refreshes persisted replies when reopening the already selected Main chat", async () => {
+  vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false });
+  vi.mocked(listChatThreads).mockResolvedValue({ threads: [chatThread("a", "Main", true)] });
+  vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(drawer(client, undefined, "owner"));
+    });
+    await vi.waitFor(async () => {
+      await act(async () => {
+        expect(findByAriaLabel(renderer, "Open conversations")).not.toBeNull();
+      });
+    });
+    await act(async () => findByAriaLabel(renderer, "Open conversations")!.props.onClick());
+    await act(async () => findByAriaLabel(renderer, "Main chat")!.props.onClick());
+    await vi.waitFor(() => expect(resumeChat).toHaveBeenCalledWith("a", DEFAULT_CHAT_SURFACE));
+    await vi.waitFor(() =>
+      expect(listChatThreadMessages).toHaveBeenCalledWith("a", DEFAULT_CHAT_SURFACE)
+    );
+    vi.mocked(listChatThreadMessages).mockClear();
+    vi.mocked(listChatThreadMessages).mockResolvedValue({
+      messages: [
+        {
+          id: "voice-reply",
+          threadId: "a",
+          ownerUserId: "owner",
+          role: "assistant",
+          status: "stored",
+          body: "The ring reply arrived while Main was idle.",
+          modelRoute: null,
+          tools: [],
+          activity: [],
+          createdAt: "2026-10-20T00:00:00Z",
+          updatedAt: "2026-10-20T00:00:00Z"
+        }
+      ]
+    });
+    await act(async () => findByAriaLabel(renderer, "Open conversations")!.props.onClick());
+    await act(async () => findByAriaLabel(renderer, "Main chat")!.props.onClick());
+    await vi.waitFor(async () => {
+      await act(async () => {
+        expect(JSON.stringify(renderer.toJSON())).toContain(
+          "The ring reply arrived while Main was idle."
+        );
+      });
+    });
+  } finally {
+    await act(async () => renderer?.unmount());
+    client.clear();
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+    vi.mocked(listChatThreadMessages).mockReset();
+  }
+});
+
 it("shows the live turn in a new side chat before the turn ends", async () => {
   vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false, threadId: "side-1" });
   vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
