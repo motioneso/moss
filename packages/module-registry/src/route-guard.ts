@@ -58,6 +58,8 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("POST", "/api/companion/pair/redeem"),
   routeKey("POST", "/api/companion/pair/cancel"),
   routeKey("POST", "/api/companion/heartbeat"),
+  routeKey("GET", "/api/companion/ring-session"),
+  routeKey("POST", "/api/companion/ring-logout"),
   routeKey("PATCH", "/api/companion/device"),
   routeKey("POST", "/api/companion/logout"),
   // Legacy recording attempt/decide endpoints authenticate, then return 410; linking is the only approval.

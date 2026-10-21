@@ -11,6 +11,9 @@ export function registerVoiceRequestRoutes(
   server: FastifyInstance,
   deps: {
     readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
+    readonly resolveRingRecordingAccessContext?: (
+      request: FastifyRequest
+    ) => Promise<AccessContext>;
     readonly service: Pick<VoiceRequestService, "list" | "status" | "send">;
   }
 ) {
@@ -42,7 +45,11 @@ export function registerVoiceRequestRoutes(
         : {}),
       async handler(request, reply) {
         try {
-          const actor = await deps.resolveAccessContext(request);
+          const actor = await (
+            send
+              ? deps.resolveAccessContext
+              : (deps.resolveRingRecordingAccessContext ?? deps.resolveAccessContext)
+          )(request);
           if (request.headers[ACT_AS_GRANT_HEADER] !== undefined)
             throw new HttpError(403, "Open your voice requests in Moss.");
           if (send && request.body !== undefined && request.body !== null)

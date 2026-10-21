@@ -9,7 +9,7 @@ const id = "11111111-1111-4111-8111-111111111111";
 const threadId = "22222222-2222-4222-8222-222222222222";
 const actor = { actorUserId: "33333333-3333-4333-8333-333333333333" };
 
-function fixture() {
+function fixture(android = false) {
   const row: VoiceRequest = {
     id,
     thread_id: threadId,
@@ -44,12 +44,49 @@ function fixture() {
       if (request.headers.cookie !== "session=owner") throw new HttpError(401, "Session required");
       return actor;
     },
+    ...(android
+      ? {
+          resolveRingRecordingAccessContext: async (request: {
+            headers: { authorization?: string };
+          }) => {
+            if (request.headers.authorization !== "Bearer synthetic-ring")
+              throw new HttpError(401, "Ring required");
+            return actor;
+          }
+        }
+      : {}),
     service
   });
   return { server, service, row };
 }
 
 describe("voice request status and explicit Send", () => {
+  it("uses Android auth only for individual status, keeping list and Send on ordinary auth", async () => {
+    const { server, service } = fixture(true);
+    try {
+      const headers = { authorization: "Bearer synthetic-ring" };
+      expect(
+        (await server.inject({ url: `/api/chat/voice-requests/${id}`, headers })).statusCode
+      ).toBe(200);
+      expect((await server.inject({ url: "/api/chat/voice-requests", headers })).statusCode).toBe(
+        401
+      );
+      expect(
+        (
+          await server.inject({
+            method: "POST",
+            url: `/api/chat/voice-requests/${id}/send`,
+            headers
+          })
+        ).statusCode
+      ).toBe(401);
+      expect(service.list).not.toHaveBeenCalled();
+      expect(service.send).not.toHaveBeenCalled();
+    } finally {
+      await server.close();
+    }
+  });
+
   it("lists a bounded public projection without reserved/dispatch internals", async () => {
     const { server } = fixture();
     try {

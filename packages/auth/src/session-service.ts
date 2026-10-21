@@ -55,6 +55,7 @@ interface SessionRow {
   readonly display_name: string | null;
   readonly app_version: string | null;
   readonly os_version: string | null;
+  readonly companion_platform?: string | null;
 }
 
 /**
@@ -93,19 +94,19 @@ export function createMeSessionsService(deps: {
       // Token column is deliberately excluded from the projection — never selected.
       const result = await pool.query<SessionRow>(
         `SELECT id, created_at, updated_at, expires_at, ip_address, user_agent, 'cookie' AS source,
-                NULL::text AS display_name, NULL::text AS app_version, NULL::text AS os_version
+                NULL::text AS display_name, NULL::text AS app_version, NULL::text AS os_version, NULL::text AS companion_platform
            FROM app.better_auth_sessions
           WHERE user_id = $1 AND expires_at > now()
          UNION ALL
          SELECT id, created_at, NULL::timestamptz AS updated_at, expires_at,
                 NULL::text AS ip_address, NULL::text AS user_agent, 'bearer' AS source,
-                NULL::text AS display_name, NULL::text AS app_version, NULL::text AS os_version
+                NULL::text AS display_name, NULL::text AS app_version, NULL::text AS os_version, NULL::text AS companion_platform
            FROM app.auth_sessions
           WHERE user_id = $1 AND expires_at > now()
          UNION ALL
          SELECT id, created_at, last_contact_at AS updated_at, expires_at,
                 NULL::text AS ip_address, NULL::text AS user_agent, 'companion' AS source,
-                display_name, app_version, os_version
+                display_name, app_version, os_version, platform AS companion_platform
            FROM app.companion_devices
           WHERE user_id = $1 AND expires_at > now() AND absolute_expires_at > now()`,
         [actorUserId]
@@ -217,8 +218,10 @@ function toDto(row: SessionRow, currentSessionId: string | null): MeSessionDto {
     companion:
       row.source === "companion"
         ? {
-            product: COMPANION_PRODUCT_NAME,
-            displayName: row.display_name ?? "Mac",
+            product:
+              row.companion_platform === "android" ? "Moss ring companion" : COMPANION_PRODUCT_NAME,
+            displayName:
+              row.display_name ?? (row.companion_platform === "android" ? "Android phone" : "Mac"),
             appVersion: row.app_version,
             osVersion: row.os_version,
             lastContactAt: row.updated_at ? toIso(row.updated_at) : null
@@ -245,10 +248,11 @@ function describeDevice(row: SessionRow): {
   if (row.source === "companion") {
     // A linked Mac names itself, so the user recognises the row without a user agent.
     return {
-      deviceLabel: row.display_name ?? "Mac",
+      deviceLabel:
+        row.display_name ?? (row.companion_platform === "android" ? "Android phone" : "Mac"),
       browser: null,
-      os: "macOS",
-      deviceKind: "laptop"
+      os: row.companion_platform === "android" ? "Android" : "macOS",
+      deviceKind: row.companion_platform === "android" ? "phone" : "laptop"
     };
   }
   return parseUserAgent(row.user_agent);

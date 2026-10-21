@@ -23,15 +23,18 @@ public final class DeliveryActivity extends Activity {
     private final Map<String, View> views = new LinkedHashMap<>();
     private final Set<String> used = new HashSet<>();
     private int position;
-    private boolean updatingSwitch;
+    private boolean updatingSwitch, connectionDetails;
     private Integer restoreScrollY;
+    private final java.util.concurrent.ExecutorService linking = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final java.util.concurrent.atomic.AtomicBoolean linkBusy = new java.util.concurrent.atomic.AtomicBoolean();
+    private String linkStatus = "";
     private final Runnable refresh = new Runnable() {
-        @Override public void run() { render(); handler.postDelayed(this, 3000); }
+        @Override public void run() { render(); if (new MossLink(DeliveryActivity.this).pending()) link("check"); handler.postDelayed(this, 3000); }
     };
     @Override public void onCreate(Bundle state) {
         setTheme(NativeTheme.isDark(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(state);
-        if ("stop".equals(getIntent().getAction())) stopService(new Intent(this, DeliveryService.class));
+        if ("stop".equals(getIntent().getAction())) stopDelivery();
         theme = new NativeTheme(this); getWindow().setBackgroundDrawable(new ColorDrawable(theme.paper));
         getWindow().setDecorFitsSystemWindows(false);
         getWindow().getDecorView().getWindowInsetsController().setSystemBarsAppearance(theme.dark ? 0 :
@@ -45,11 +48,45 @@ public final class DeliveryActivity extends Activity {
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(theme.dp(24), theme.dp(24), theme.dp(24), theme.dp(32));
         scroll.addView(body); setContentView(scroll); scroll.requestApplyInsets();
-        if (state != null) restoreScrollY = state.getInt("scrollY");
+        if (state != null) { restoreScrollY = state.getInt("scrollY"); connectionDetails = state.getBoolean("connectionDetails"); }
     }
-    @Override public void onSaveInstanceState(Bundle state) { state.putInt("scrollY", scroll.getScrollY()); super.onSaveInstanceState(state); }
+    @Override public void onSaveInstanceState(Bundle state) { state.putInt("scrollY", scroll.getScrollY()); state.putBoolean("connectionDetails", connectionDetails); super.onSaveInstanceState(state); }
     @Override public void onResume() { super.onResume(); handler.post(refresh); }
     @Override public void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
+    @Override public void onDestroy() { linking.shutdownNow(); super.onDestroy(); }
+    private void link(String action) {
+        if (!linkBusy.compareAndSet(false, true)) return;
+        if (!action.equals("check")) stopDelivery();
+        linking.submit(() -> {
+            String status; String path = null;
+            try {
+                MossLink link = new MossLink(this);
+                if (action.equals("begin")) { path = link.begin(); status = "Approve this phone in your browser, then return here. Delivery stays stopped until you press Start."; }
+                else if (action.equals("cancel")) { link.cancel(); status = "Connection request cancelled."; }
+                else if (action.equals("disconnect")) { link.disconnect(); status = "Disconnected. Ring binding and queued recordings are kept."; }
+                else status = link.check() ? "Connected to Moss. Press Start delivery when ready." : "Waiting for browser approval…";
+            } catch (Exception error) {
+                if (error instanceof MossClient.Rejected) {
+                    int code = ((MossClient.Rejected) error).status;
+                    status = code == 409 ? "Approval was already redeemed. Cancel this request and connect again to recover safely." :
+                        code == 403 ? "Request declined or account unavailable. Cancel and connect again with your original Moss account." :
+                        code == 410 || code == 404 ? "Connection request expired. Cancel it and connect again." : "Moss is unavailable. Check your connection and try again.";
+                } else if ("configuration_identity_change".equals(error.getMessage()) || "owner_mismatch".equals(error.getMessage()))
+                    status = "This ring’s queue belongs to another account. Connect using the original Moss account; nothing was moved.";
+                else if ("link_expired".equals(error.getMessage())) status = "Connection request expired. Cancel it and connect again.";
+                else status = "Connection could not finish. Check your network, then try again; your ring and queue are kept.";
+            }
+            final String message = status, approval = path;
+            handler.post(() -> {
+                linkBusy.set(false);
+                if (isDestroyed()) return;
+                linkStatus = message;
+                if (approval != null) try { open(new SecretStore(this).load().getString("origin"), approval); }
+                catch (Exception unavailable) { linkStatus = "Could not open Moss. Try Connect in browser again."; }
+                render();
+            });
+        });
+    }
     private <T extends View> T place(String key, Class<T> type, Supplier<T> create, int gap) {
         View view = views.get(key);
         if (view == null) { view = create.get(); views.put(key, view); }
@@ -87,6 +124,14 @@ public final class DeliveryActivity extends Activity {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(origin + path))); }
         catch (ActivityNotFoundException unavailable) { Toast.makeText(this, "Install a browser to open Moss", Toast.LENGTH_SHORT).show(); }
     }
+    private void stopDelivery() {
+        new DeliveryPreferences(this).enabled(false);
+        stopService(new Intent(this, DeliveryService.class));
+    }
+    private void appSettings(String packageName) {
+        try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + packageName))); }
+        catch (ActivityNotFoundException unavailable) { Toast.makeText(this, "Open Apps in Android settings", Toast.LENGTH_SHORT).show(); }
+    }
     private void render() {
         position = 0; used.clear();
         NativeTheme.update(place("masthead", TextView.class, () -> theme.eyebrow(), 0), "MOSS / RING COMPANION");
@@ -95,16 +140,36 @@ public final class DeliveryActivity extends Activity {
         NativeTheme.update(intro, "Normal recordings become meetings. Hold-to-talk goes to Main chat, with text replies.");
         section("connection", "01", "Connection");
         button("start", "Start delivery", () -> command("start"));
-        button("stop", "Stop delivery", () -> stopService(new Intent(this, DeliveryService.class)));
-        button("permissions", "Bluetooth and notification permissions", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 1));
-        text("permission-status", "Bluetooth: " + (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed") +
-            " · Notifications: " + (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed"), 13, false);
+        button("stop", "Stop delivery", this::stopDelivery);
+        DeliveryPreferences choices = new DeliveryPreferences(this);
         JSONObject config = null;
         try {
             config = new SecretStore(this).load();
-            text("identity", "Moss: " + config.getString("origin") + "\nAccount: " + config.getString("ownerId") + "\nRing: " + config.getString("sn"), 13, false);
+            text("identity", "Moss: " + config.getString("origin") + "\nAccount: " + config.optString("accountName", config.getString("ownerId")) + "\nRing: " + config.getString("sn"), 13, false);
+            text("account-status", config.has("credential") ? "Account connected · device approval" : config.has("cookie") ? "Developer session · connect in browser for daily use" : "Account disconnected · connect in browser to resume", 15, false);
+            button("connect-account", new MossLink(this).pending() ? "Reopen browser approval" : "Connect Moss in browser", () -> link("begin"));
+            if (new MossLink(this).pending()) button("cancel-link", "Cancel connection request", () -> link("cancel"));
+            if (config.has("credential")) button("disconnect-account", "Disconnect Moss account", () -> link("disconnect"));
+            text("account-help", "Use the same Moss account that owns this queue. Your browser handles sign-in; ring setup and pending recordings are kept when reconnecting.", 13, false);
+            if (!linkStatus.isEmpty()) text("link-status", linkStatus, 15, false);
         } catch (Exception unavailable) {
             text("identity", "Setup needed: provision your existing ring binding and Moss session using the developer setup instructions, then Start delivery.", 13, false);
+        }
+        text("restart-status", choices.enabled() ? "Delivery enabled · resumes after phone restart when Android permits." : "Delivery stopped · automatic restart is off.", 13, false);
+        if (!choices.recovery().isEmpty()) text("recovery", choices.recovery(), 15, false);
+        button("connection-details", connectionDetails ? "Hide connection settings" : "Permissions and background settings", () -> { connectionDetails = !connectionDetails; render(); });
+        if (connectionDetails) {
+            button("permissions", "Bluetooth and notification permissions", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 1));
+            text("permission-status", "Bluetooth: " + (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed") +
+                " · Notifications: " + (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed"), 13, false);
+            text("background-help", "After Force stop, open this app and Start delivery. Keep Bluetooth on and allow background battery use for dependable delivery.", 13, false);
+            android.os.PowerManager power = getSystemService(android.os.PowerManager.class);
+            text("battery-status", power.isIgnoringBatteryOptimizations(getPackageName()) ? "Battery optimization: unrestricted" : "Battery optimization is active. In App settings → Battery, choose Unrestricted; also remove Moss from Samsung Sleeping apps.", 13, false);
+            button("app-settings", "Open companion app settings", () -> appSettings(getPackageName()));
+            if (getPackageManager().checkPermission(Manifest.permission.BLUETOOTH_CONNECT, DeliveryService.OFFICIAL) == PackageManager.PERMISSION_GRANTED) {
+                text("handoff-help", "Vocci still has Nearby devices access. Remove that permission before starting Moss; restore it when switching back to Vocci.", 13, false);
+                button("vocci-settings", "Open Vocci app settings", () -> appSettings(DeliveryService.OFFICIAL));
+            }
         }
         try {
             JSONObject state = PrivateFiles.json(new File(getNoBackupFilesDir(), "delivery/state.json")); // Never construct DeliveryStore: it writes.
@@ -123,6 +188,13 @@ public final class DeliveryActivity extends Activity {
             text("enrollment", voice == null ? "Voice input off" : voice.has("disableId") ? "Voice disable pending" : voice.has("snapshot") ? "Saving voice enrollment" : voice.has("enablement") ? "Voice enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Voice input off", 15, false);
             section("storage", "03", "Local audio");
             text("storage-usage", DeliveryStatus.storage(new File(getNoBackupFilesDir(), "delivery"), state.getJSONObject("entries")), 13, false);
+            Switch cleanup = place("cleanup-switch", Switch.class, () -> {
+                Switch view = new Switch(this); theme.toggle(view); view.setText("Clear delivered audio after 7 days");
+                view.setOnCheckedChangeListener((v, checked) -> { if (!updatingSwitch) new DeliveryPreferences(this).autoCleanup(checked); }); return view;
+            }, 12);
+            updatingSwitch = true;
+            try { cleanup.setChecked(choices.autoCleanup()); } finally { updatingSwitch = false; }
+            text("cleanup-help", "Optional cleanup runs while delivery is active. Pending, failed and interrupted recordings stay here. Moss copies and recordings on the ring are kept.", 13, false);
             button("clear", "Clear completed local audio", () -> command("clear-completed"));
             section("recent", "04", "Recent deliveries");
             JSONObject entries = state.getJSONObject("entries"); List<String> ids = new ArrayList<>(); entries.keys().forEachRemaining(ids::add);

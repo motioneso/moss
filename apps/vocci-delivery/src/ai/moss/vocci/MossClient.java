@@ -13,21 +13,34 @@ final class MossClient implements VoiceDelivery.Port, ResumableUpload.Port {
         Rejected(int status) { super("http_rejected"); this.status = status; }
         boolean terminal() { return status != 408 && status != 429 && status < 500; }
     }
-    private final String origin, cookie;
-    MossClient(JSONObject config) throws Exception {
-        URI uri = new URI(config.getString("origin"));
+    private final String origin, cookie, credential;
+    static String origin(String value) throws Exception {
+        URI uri = new URI(value);
         if (uri.getHost() == null || uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null ||
             (uri.getRawPath() != null && !uri.getRawPath().isEmpty()) ||
             !(uri.getScheme().equals("https") || (uri.getScheme().equals("http") &&
               (uri.getHost().equals("127.0.0.1") || uri.getHost().equals("localhost") || uri.getHost().equals("[::1]")))))
             throw new IllegalArgumentException("origin");
-        origin = uri.toString(); cookie = config.getString("cookie");
-        if (cookie.isEmpty() || cookie.length() > 8192 || cookie.contains("\n") || cookie.contains("\r")) throw new IllegalArgumentException("cookie");
+        return uri.toString();
+    }
+    MossClient(JSONObject config) throws Exception {
+        origin = origin(config.getString("origin"));
+        credential = config.optString("credential"); cookie = config.optString("cookie");
+        if (!credential.isEmpty()) {
+            if (!credential.matches("vr1_[A-Za-z0-9_-]{43}") || !cookie.isEmpty()) throw new IllegalArgumentException("credential");
+        } else if (cookie.isEmpty() || cookie.length() > 8192 || cookie.contains("\n") || cookie.contains("\r")) throw new IllegalArgumentException("cookie");
     }
     private JSONObject request(String method, String path, byte[] body) throws Exception {
         return request(method, path, body, "application/json");
     }
     private JSONObject request(String method, String path, byte[] body, String contentType) throws Exception {
+        return request(origin, cookie, credential, method, path, body, contentType);
+    }
+    static JSONObject linkRequest(String origin, String path, JSONObject body) throws Exception {
+        if (!Arrays.asList("/api/companion/pair", "/api/companion/pair/redeem", "/api/companion/pair/cancel").contains(path)) throw new IllegalArgumentException("link_path");
+        return request(origin(origin), "", "", "POST", path, body.toString().getBytes(StandardCharsets.UTF_8), "application/json");
+    }
+    private static JSONObject request(String origin, String cookie, String credential, String method, String path, byte[] body, String contentType) throws Exception {
         // Android supplies a form Content-Type for an empty POST. Explicit JSON
         // null preserves the receiver's no-body contract without that implicit type.
         if (body == null && method.equals("POST")) body = "null".getBytes(StandardCharsets.UTF_8);
@@ -35,7 +48,8 @@ final class MossClient implements VoiceDelivery.Port, ResumableUpload.Port {
         try {
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(15000); connection.setReadTimeout(60000);
-            connection.setRequestProperty("Cookie", cookie);
+            if (!cookie.isEmpty()) connection.setRequestProperty("Cookie", cookie);
+            if (!credential.isEmpty()) connection.setRequestProperty("Authorization", "Bearer " + credential);
             connection.setRequestMethod(method);
             if (body != null) {
                 if (body.length > 8 * 1024 * 1024) throw new IllegalArgumentException("body_limit");
@@ -44,6 +58,7 @@ final class MossClient implements VoiceDelivery.Port, ResumableUpload.Port {
                 try (OutputStream out = connection.getOutputStream()) { out.write(body); }
             }
             int status = connection.getResponseCode();
+            if (status == 204) return new JSONObject();
             if (status != 200 && status != 202) throw new Rejected(status);
             try (InputStream in = connection.getInputStream()) {
                 byte[] response = in.readNBytes(65537);
@@ -52,7 +67,11 @@ final class MossClient implements VoiceDelivery.Port, ResumableUpload.Port {
             }
         } finally { connection.disconnect(); }
     }
-    String owner() throws Exception { return uuid(request("GET", "/api/auth/get-session", null).getJSONObject("user").getString("id")); }
+    String owner() throws Exception {
+        JSONObject session = request("GET", credential.isEmpty() ? "/api/auth/get-session" : "/api/companion/ring-session", null);
+        return uuid(credential.isEmpty() ? session.getJSONObject("user").getString("id") : session.getString("ownerId"));
+    }
+    void logout() throws Exception { if (!credential.isEmpty()) request("POST", "/api/companion/ring-logout", null); }
     JSONObject accept(byte[] frozen) throws Exception { return status(request("POST", "/api/meetings/recording-imports", frozen)); }
     @Override public JSONObject poll(String id) throws Exception { return status(request("GET", "/api/meetings/recording-imports/" + uuid(id), null)); }
     @Override public JSONObject enable(JSONObject snapshot) throws Exception {

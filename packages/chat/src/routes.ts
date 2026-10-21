@@ -127,6 +127,7 @@ export interface ChatRoutesDependencies {
   readonly meetingChat?: MeetingChatData;
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
+  readonly resolveRingRecordingAccessContext?: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly repository?: ChatRepository;
   readonly skillsRepository?: ChatSkillsRepository;
@@ -617,6 +618,7 @@ export function registerChatRoutes(
     dependencies.adoptVoiceRequestService?.(voiceRequests);
     registerVoiceRequestRoutes(server, {
       service: voiceRequests,
+      resolveRingRecordingAccessContext: dependencies.resolveRingRecordingAccessContext,
       resolveAccessContext: dependencies.resolveAccessContext
     });
   }

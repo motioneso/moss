@@ -51,7 +51,10 @@ public final class DeliveryService extends Service {
         getSystemService(NotificationManager.class).notify(3550, notification(code.replace('_', ' ') + " · " + complete + " complete · " + failed + " failed · " + pending + " pending"));
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && "stop".equals(intent.getAction())) { stopSelf(); return START_NOT_STICKY; }
+        DeliveryPreferences choices = new DeliveryPreferences(this);
+        if (intent != null && "stop".equals(intent.getAction())) { choices.enabled(false); stopSelf(); return START_NOT_STICKY; }
+        if (intent != null && !"recover".equals(intent.getAction())) choices.enabled(true);
+        if (!choices.enabled()) { stopSelf(); return START_NOT_STICKY; }
         if (intent != null && Arrays.asList("voice-on", "voice-off", "clear-completed", "retry-transcription").contains(intent.getAction())) commands.add(new Intent(intent));
         synchronized (signal) { signal.notifyAll(); }
         if (!started) { started = true; worker.submit(this::run); }
@@ -71,6 +74,7 @@ public final class DeliveryService extends Service {
                     // Verify the credential's current owner before touching queued recordings.
                     if (!client.owner().equals(config.getString("ownerId"))) { report("owner_mismatch"); break; }
                     consumeCommands(client); voice.synchronize(client);
+                    if (new DeliveryPreferences(this).autoCleanup()) store.clearExpiredCompleted(System.currentTimeMillis());
                     if (getPackageManager().checkPermission(Manifest.permission.BLUETOOTH_CONNECT, OFFICIAL) == PackageManager.PERMISSION_GRANTED) {
                         report("handoff_required"); break;
                     }
@@ -106,6 +110,7 @@ public final class DeliveryService extends Service {
             if (wake != null && wake.isHeld()) wake.release();
             if (stopping && store != null) try { store.activity("stopped"); } catch (Exception ignored) { /* Preserve private failures. */ }
             started = false;
+            stopSelf();
         }
     }
     private void retrieve(JSONObject config, MossClient client) throws Exception {

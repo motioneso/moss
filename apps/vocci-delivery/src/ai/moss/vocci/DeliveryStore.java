@@ -166,6 +166,7 @@ final class DeliveryStore {
             stage = "voice-status";
         } else if (!stage.equals("complete") && !stage.equals("failed")) stage = "accepted";
         entry.remove("inFlight"); entry.remove("error");
+        if (completed(stage) && !entry.has("completedAt")) entry.put("completedAt", System.currentTimeMillis());
         entry.put("status", status).put("stage", stage).put("attempts", 0).put("nextAt", System.currentTimeMillis() + 30000); save();
     }
     void chatStatus(String id, JSONObject value) throws Exception {
@@ -177,18 +178,26 @@ final class DeliveryStore {
             if (!previous.isNull(key) && !previous.getString(key).equals(value.optString(key))) throw new Conflict("server_identity_change");
         }
         String status = value.getString("state");
+        if (completed(status) && !entry.has("completedAt")) entry.put("completedAt", System.currentTimeMillis());
         entry.put("chatStatus", value).put("stage", Arrays.asList("replied", "no-speech", "interrupted").contains(status) ? status : "voice-status")
             .put("attempts", 0).put("nextAt", System.currentTimeMillis() + 30000);
         entry.remove("inFlight"); entry.remove("error"); save();
     }
     static boolean completed(String stage) { return Arrays.asList("complete", "replied", "no-speech").contains(stage); }
-    void clearCompleted() throws Exception {
+    void clearCompleted() throws Exception { clearCompleted(Long.MAX_VALUE, false); }
+    void clearExpiredCompleted(long now) throws Exception { clearCompleted(now, true); }
+    private void clearCompleted(long now, boolean expiredOnly) throws Exception {
         for (String id : ids()) {
             JSONObject entry = entries.getJSONObject(id);
-            if (!completed(entry.getString("stage"))) continue;
+            if (!completed(entry.getString("stage")) || entry.optBoolean("cleared")) continue;
+            // Older journals get a full grace period on first retention-enabled visit.
+            if (!entry.has("completedAt")) entry.put("completedAt", now);
+            if (expiredOnly && now - entry.getLong("completedAt") < 7L * 24 * 60 * 60 * 1000) continue;
             for (String name : new String[]{"packets.bin", "sidecar.bin", "audio.wav", "bundle.json", "upload.json"}) {
-                File file = file(id, name);
-                if (file.exists() && !file.delete()) throw new java.io.IOException("storage_cleanup");
+                for (String suffix : new String[]{"", ".new", ".bak"}) {
+                    File file = file(id, name + suffix);
+                    if (file.exists() && !file.delete()) throw new java.io.IOException("storage_cleanup");
+                }
             }
             file(id, "bundle.json").getParentFile().delete();
             // Retain the identity tombstone so the ring cannot redownload cleared evidence.

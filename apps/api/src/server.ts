@@ -3,6 +3,7 @@ import {
   type MeetingCaptureMaintenanceRuntime
 } from "./meeting-capture-maintenance-runtime.js";
 import { recordingLoggerOptions } from "./recording-logger-options.js";
+import { createRingRecordingResolver } from "./ring-recording-auth.js";
 import { createHash, randomUUID } from "node:crypto";
 
 import helmet from "@fastify/helmet";
@@ -619,6 +620,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     );
     registerBuiltInApiRoutes(server, {
       adoptVoiceRequestService: companionDelivery.adoptVoiceRequestService,
+      resolveRingRecordingAccessContext: createRingRecordingResolver(authRuntime),
       admitVoiceRequest: companionDelivery.admitVoiceRequest,
       meetingCaptureAuthorization: {
         resolveBrowser: (input) => authRuntime.sessionBindings.resolveBrowser(input),
@@ -771,10 +773,6 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       e2eErrorDetail: options.e2eErrorDetail
     });
 
-    const guardManifests = [
-      ...getBuiltInModuleManifests(),
-      ...(options.__testExtraGuardedRoutes?.manifests ?? [])
-    ];
     if (options.__testExtraGuardedRoutes) {
       for (const r of options.__testExtraGuardedRoutes.routes) {
         server.route({ method: r.method, url: r.url, handler: async () => ({ ok: true }) });
@@ -782,9 +780,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     }
 
     registerRouteEnablementGuard(server, {
-      manifests: guardManifests,
+      manifests: guardManifestsForCoverage(),
       resolveActiveModules,
-      resolveAccessContext: authRuntime.resolveAccessContext
+      resolveAccessContext: createRingRecordingResolver(authRuntime)
     });
 
     registerStaticWeb(server);

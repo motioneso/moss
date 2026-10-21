@@ -14,8 +14,11 @@ server uses that configuration rather than selecting a fixed provider or model.
 
 Create an owner-only JSON credential file containing a normal authenticated Moss
 session cookie, for example `{"cookie":"<session cookie>"}`. Never put its contents
-in a command argument or in the repository. Companion-device credentials cannot
-authenticate the import route. Use HTTPS remotely; HTTP is allowed only on loopback.
+in a command argument or in the repository. This version-1 developer uploader uses
+a browser session; Mac companion credentials cannot authenticate recording imports.
+The Android app separately supports browser-approved ring credentials and version-3
+resumable uploads (up to two hours), described in its README. Use HTTPS remotely;
+HTTP is allowed only on loopback.
 
 From `~/Jarv1s`, with locally retrieved packets, sidecar and decoded WAV:
 

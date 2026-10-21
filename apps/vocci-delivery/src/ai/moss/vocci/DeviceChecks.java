@@ -12,7 +12,8 @@ import org.json.JSONObject;
 public final class DeviceChecks extends Instrumentation {
     private boolean ring;
     private int httpPort;
-    @Override public void onCreate(Bundle args) { ring = "true".equals(args.getString("ring")); httpPort = Integer.parseInt(args.getString("httpPort", "0")); super.onCreate(args); start(); }
+    private String linkAction;
+    @Override public void onCreate(Bundle args) { ring = "true".equals(args.getString("ring")); httpPort = Integer.parseInt(args.getString("httpPort", "0")); linkAction = args.getString("linkAction"); super.onCreate(args); start(); }
     static void check(boolean value) { if (!value) throw new AssertionError("device assertion"); }
     private static void remove(File file) {
         File[] children = file.listFiles();
@@ -22,6 +23,7 @@ public final class DeviceChecks extends Instrumentation {
     @Override public void onStart() {
         Bundle result = new Bundle();
         try {
+            if (linkAction != null) { LinkChecks.run(getTargetContext(), linkAction); result.putString("result", "PASS"); finish(-1, result); return; }
             if (httpPort > 0) { HttpChecks.run(httpPort); result.putString("httpContract", "json_null_post"); }
             if (ring) {
                 try (RingConnection connection = new RingConnection(getTargetContext(), new SecretStore(getTargetContext()).load())) {
@@ -189,11 +191,16 @@ public final class DeviceChecks extends Instrumentation {
             catch (IllegalArgumentException expected) { rejected = true; }
             check(rejected);
             VoiceDeliveryChecks.run(isolated, packets);
+            RetentionChecks.run(isolated);
+            RecoveryChecks.run(isolated);
+            result.putString("recovery", "stopped_stays_stopped,boot,update,permission,rejected_background_start");
+            result.putString("retention", "grace_period,pending_failed_interrupted_preserved,atomic_sidecars,tombstones,restart");
             remove(isolated.getNoBackupFilesDir());
             result.putString("checks", "keystore_roundtrip,encrypted_storage,tamper_rejected,completed_sidecar,discovered_restart,invalid_file_isolation,ended_invalid_duration,oversized_duration,interrupted_read_retry,healthy_retrieval_priority,blocked_stopped_status,terminal_identity_conflict,platform_opus_100ms,platform_opus_130s,voice_120s_limit,upload_lost_ack_resume,upload_expiry,upload_identity,atomic_file_rollback,frozen_restart,interrupted_attempt,stable_source_identity,retry_exhaustion,owner_switch_rejected,voice_snapshot_recovery,voice_disable_unknown,voice_baseline,v1_unchanged,voice_frozen_restart,voice_uncertain_capture,voice_identity,cleanup_tombstones");
             result.putString("result", "PASS"); finish(-1, result);
         } catch (Throwable error) {
             result.putString("result", "FAIL"); result.putString("class", error.getClass().getSimpleName());
+            if (error instanceof MossClient.Rejected) result.putInt("httpStatus", ((MossClient.Rejected) error).status);
             if (ring && error.getMessage() != null && error.getMessage().matches("ring_[a-z_]+")) result.putString("stage", error.getMessage());
             finish(1, result);
         }

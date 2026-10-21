@@ -620,6 +620,7 @@ export interface BuiltInRouteDependencies {
   // DEVELOPMENT_STANDARDS.md (registration gate + `chat.multiplexer` boot resolution).
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
+  readonly resolveRingRecordingAccessContext?: (request: FastifyRequest) => Promise<AccessContext>;
   readonly listConfiguredAuthProviders: () => readonly AuthProviderStatusDto[];
   readonly listModuleManifests: () => readonly MossModuleManifest[];
   /** Briefing tool names declared by external modules; lets briefings select them. */
@@ -2352,6 +2353,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         adoptChatRpcConnection: deps.adoptChatRpcConnection,
         adoptAcpProviderInitialization: deps.adoptAcpProviderInitialization,
         adoptVoiceRequestService: deps.adoptVoiceRequestService,
+        resolveRingRecordingAccessContext: deps.resolveRingRecordingAccessContext,
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,
@@ -3009,7 +3011,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const recordingImports = new RecordingImportService(importRuntime);
       registerRecordingImportRoutes(server, {
         service: recordingImports,
-        resolveAccessContext: deps.resolveAccessContext
+        resolveAccessContext: deps.resolveRingRecordingAccessContext ?? deps.resolveAccessContext
       });
       registerMeetingRecordRoutes(server, {
         beforeRemove: async (db, id, actor) => {

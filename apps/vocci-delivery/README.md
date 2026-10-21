@@ -1,4 +1,4 @@
-# Android completed-recording delivery (developer slice)
+# Android ring companion
 
 This repo-owned Android client retrieves finished legacy Vocci recordings and
 uploads them to Moss's existing Meetings receiver. It is a developer-installed
@@ -10,9 +10,9 @@ From `~/Jarv1s`, run `apps/vocci-delivery/test.sh` (exit 0 expected). Requires J
 21, Android SDK platform/build-tools 35.0.0; override `JAVA_HOME` and
 `ANDROID_SDK_ROOT` if needed. The build script uses SDK tools directly without a
 Gradle/network dependency. Generated development signing material and APKs stay
-in ignored `build/`. The APK is debuggable and development-only. Do not distribute
-it as a production client. Target API 35, minimum API 33; tested devices/results
-belong on the PR.
+in ignored `build/`. The default APK is debuggable and development-only; use the
+separate release mode below for distribution packaging. Target API 35, minimum
+API 33; tested devices/results belong on the PR.
 
 ## Provision and start
 
@@ -51,8 +51,9 @@ host can inspect a debug process; Keystore does not remove that trust boundary.
 There is no Vocci account sign-in/key recovery UI. Reuse an already-retained valid
 binding; do not ask its owner to sign in again unless it is actually unavailable.
 A new owner still needs legitimate Vocci account/backend key recovery. Refreshing
-Moss credentials requires the same origin/owner/ring and an explicit restart.
-Session cookies are general account credentials, not scoped ring capabilities.
+Moss credentials preserves the same origin/owner/ring and requires an explicit
+restart. Session cookies are general account credentials; browser linking below
+replaces the initial developer cookie with an Android device credential.
 
 Before starting, relinquish the official Vocci app's Nearby devices permissions
 through Android's app settings. Its reconnect services make force-stop alone
@@ -61,7 +62,8 @@ connect permission. Do not disable the package or remove pairing/ownership as a
 consumer flow. A developer physical-proof harness may save prior connect/scan
 grants, revoke them, stop the official process, and restore the exact grants and
 Bluetooth state in `finally` after stopping Moss. Test this handoff on the device;
-consumer-guided handoff needs separate design.
+the companion's Open Vocci app settings action supports this handoff without
+changing the binding.
 
 Start `ai.moss.vocci/.DeliveryActivity` from the launcher or ADB. Grant Bluetooth
 and notifications. The ongoing notification reports record-derived progress and
@@ -69,9 +71,13 @@ opens the status screen, with Start/Stop, permissions, account/ring identity,
 voice opt-in and recent queue entries. To stop explicitly, launch the activity with action `stop`; physical
 proof cleanup also force-stops this developer package before restoring Vocci.
 The service polls every 30 seconds and retains a partial wake lock only during
-bounded work. Sticky service restart handles OS reclamation; force-stop, permission
-revocation and battery restrictions can require manual restart. No boot delivery
-or indefinite background reliability is promised.
+bounded work. Sticky service restart handles OS reclamation. An explicit Start also enables
+recovery after boot/unlock and app update; Stop disables recovery. Android can
+refuse a background start, which leaves an Open app/Start delivery reminder.
+Force-stop still requires a manual launch. Permissions and background settings opens App settings
+for battery/permission recovery and Vocci settings for Nearby devices handoff.
+Choose Unrestricted battery use and remove Moss from Samsung Sleeping apps for
+daily use. Device-specific endurance remains a live validation requirement.
 
 HTTP is accepted only at loopback for isolated development using an owned ADB
 reverse on a claimed devport. Remote delivery requires HTTPS; redirects are
@@ -129,7 +135,11 @@ at 100 retained entries, 2 GiB including reserved retrieval/decode budgets, or l
 retained after success until Clear completed local audio is selected. That action
 keeps identity tombstones to prevent redownload, and never clears queued, failed or
 interrupted evidence. At 1024 retained identities, enrollment/discovery stops.
-Automatic retention management is not implemented.
+The optional Clear delivered audio after 7 days switch is off by default. While
+delivery is active it clears only completed local copies after seven days, including
+atomic sidecars, keeping source identity tombstones. Older completed entries get a
+full grace period when retention first runs. Queued, failed, ready-to-send and
+interrupted evidence is preserved. Moss copies and ring recordings are unchanged.
 
 New version-3 Meeting uploads accept two hours, 32 MiB packets, 256 KiB sidecar,
 and 256 MiB canonical WAV. Explicit voice requests remain limited to 120 seconds.
@@ -155,6 +165,61 @@ validation for this slice; physical two-hour endurance is not a completion gate.
 
 No iOS, fresh ownership or live streaming support. Ring reboot and background
 reliability beyond the actual PR proof remain unverified.
+
+## Link your Moss account
+
+After the existing ring is provisioned, open the companion and choose **Connect
+Moss in browser**. This stops delivery while you change its account connection.
+Sign into the original Moss account, review the Android permissions, and approve.
+Return to the companion; it shows **Account connected · device approval**. Press
+**Start delivery** when ready. Browser approval does not start ring delivery.
+The native app replaces the developer session cookie with a `vr1_` device
+credential. It uses recording receivers, individual voice-request status, and
+its own session/logout endpoints; ordinary account APIs and Mac focus endpoints
+retain their existing authentication. The pending verifier is retained in a
+separate Android Keystore-encrypted file until approval or cancellation.
+
+**Reopen browser approval** resumes a pending request. **Cancel connection
+request** retires it. Requests expire after ten minutes. If approval was already
+redeemed but its acknowledgement was lost, cancel and start a fresh request;
+never replace the local recording IDs. A different-account approval is rejected
+without moving the existing ring queue. The rejected device is cancelled too.
+
+In Moss, **Settings → Account & preferences → Active sessions** lists the phone
+as **Moss ring companion**. Sign it out there to revoke its connection. The
+companion stops at the next rejected owner or upload request and asks you to
+reconnect. Credentials expire after 90 inactive days, with a one-year ceiling;
+normal owner checks refresh the inactivity window. **Disconnect Moss account**
+revokes the device before removing its local credential. Ring binding, owner pin,
+queue, and pending audio stay on the phone. Reconnect with the original account
+and press Start to resume. Replacing an existing account link retires its previous
+device credential after the new connection is verified. Initial ring ownership setup still requires developer
+provisioning; linking does not recover a Vocci account or bind a new ring.
+
+## Release packaging
+
+Run `apps/vocci-delivery/build.sh release` with these environment variables:
+
+```text
+VOCCI_RELEASE_KEYSTORE=<existing private signing keystore>
+VOCCI_RELEASE_STORE_PASSWORD_FILE=<private file containing store password>
+VOCCI_RELEASE_KEY_PASSWORD_FILE=<private file containing key password>
+VOCCI_RELEASE_KEY_ALIAS=<existing signing alias>
+VOCCI_RELEASE_VERSION_CODE=<positive monotonically increasing integer>
+VOCCI_RELEASE_VERSION_NAME=<release version>
+```
+
+Keep passwords out of command arguments and git. Use the same password-file path
+when the key and store passwords match. Release mode requires supplied signing
+material; it does not generate a release identity. The result is
+`build/moss-vocci-release.apk`, with debugging, cleartext HTTP, instrumentation,
+and check classes removed. APK signature verification runs before success.
+Retain the original signing certificate for updates. Never uninstall a configured
+companion or substitute another key to work around an update-signature error:
+that loses its private binding/queue. A release APK cannot use the development
+loopback HTTP exception; use a working HTTPS Moss origin. Release packaging
+verification with a temporary test key is not a production distribution or an
+update-compatibility proof for a person's installed signing identity.
 
 ## Version-3 resumable receiver
 

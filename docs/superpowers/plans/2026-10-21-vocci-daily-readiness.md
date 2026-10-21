@@ -33,8 +33,9 @@ draft. No merge, production deployment, ownership or firmware change is authoriz
 
 Keep the existing ruled, numbered Connection / Voice messages / Local audio /
 Recent deliveries layout, Archivo headings and 48dp controls. Connection shows
-whether automatic restart is enabled, an explanation of force-stop, a battery
-settings action and an official Vocci settings action when handoff is required.
+account linking and whether automatic restart is enabled. A Permissions and
+background settings disclosure holds permission recovery, force-stop guidance,
+battery settings and the official Vocci settings handoff action.
 Local audio adds a switch labelled “Clear delivered audio after 7 days”, off until
 chosen, and states that Moss copies and ring recordings are retained. Linking
 opens the person's browser and returns to a visible pending/linked/relink status.
@@ -46,3 +47,31 @@ remain the baseline. New claims require new evidence; generated fixtures are not
 physical reboot/radio endurance or real long-form transcription evidence. Ring
 space reclamation, fresh ownership, firmware parity and streaming remain distinct
 from a polished existing-binding daily companion. Report incomplete work honestly.
+
+## Verification receipts
+
+- Canonical `test:companion` run `20261021-124701`, commit `3b4735409`,
+  dirty fingerprint `e218eb4317e0`: exit 0, 80 tests across five files. Includes
+  Android approval/session binding, distinct issuance, platform and mixed-cookie
+  checks, logout and version metadata preservation. This is component evidence.
+- Canonical `test:recording-live` run `20261021-125116`, same plan commit,
+  dirty fingerprint `5f7a2430f12e`: exit 0. Fresh Firefox owner signup/onboarding
+  and the installed isolated Android app exercised Connect/Cancel, browser Android
+  permissions/Approve, credential replacement, generated normal and explicit voice
+  uploads/replay, Active sessions revocation, relink and Disconnect. The replaced
+  link left one visible Android session. Cookie removal and original owner were
+  checked by the installed client. Connection-settings disclosure and retention
+  switch persisted across activity recreation. No network interception was used.
+- These auth/transport samples are generated 100 ms Opus silence with valid
+  sidecar metadata and a synthetic ring configuration. There was no ring I/O or
+  speech-recognition accuracy claim. Real ring/ASR/summary/Main evidence stays at
+  its original baseline receipts; it is not relabelled as new-auth proof.
+- Release packaging with a temporary test signing key passes signature validation,
+  non-debuggable/TLS-only manifest checks and absence of instrumentation/check
+  classes. The temporary key was removed. No production key was created and no
+  release APK was installed over the configured companion.
+- Phone timeout was restored. The original companion, actual ring binding and
+  retained evidence were untouched; only the separate proof package was exercised.
+
+Final static/security controls and CI are recorded on PR #3554. Until those
+receipts and review are complete this remains draft, with no merge/deployment.

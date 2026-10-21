@@ -3,13 +3,13 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "Android’s Park Press screen shows delivery, permissions, account/ring, hold opt-in, Main replies and local cleanup. Missing chunks resume; Meetings allow two hours and voice 120 seconds. Developer provisioning required.",
+    "Android ring delivery offers browser account linking, restart recovery, Main voice replies and optional seven-day cleanup. Meetings support two hours; voice 120 seconds. Initial ring binding still needs developer setup.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
       path: "/settings?section=modules&module=meetings",
       description:
-        "Meetings settings enable the receiver only. For Android permission handoff, session refresh or local storage, open the Android companion status screen; existing-binding provisioning is documented in apps/vocci-delivery/README.md."
+        "Open the Android companion for account linking, permissions and local audio. Initial existing-ring provisioning is documented in apps/vocci-delivery/README.md. Meetings settings enable the receiver only."
     }
   ],
   errors: [
@@ -21,11 +21,18 @@ export const androidDeliveryFeature = {
         "Developer provisioning and writable app-private storage are required before delivery can start. Credentials use Android Keystore encryption."
     },
     {
+      code: "background_restart_required",
+      class: "prerequisite",
+      remediationRef: "meetings.android_developer_setup",
+      description:
+        "Start enables boot/app-update recovery; Stop disables it. After Force stop, launch and Start manually. Expand Permissions and background settings for battery controls; choose Unrestricted and remove Moss from Samsung Sleeping apps."
+    },
+    {
       code: "owner_mismatch",
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Delivery stops if the live Moss session belongs to another owner. Refresh the original owner's session; changing the queued source identity is not a recovery step."
+        "Delivery stops if the live Moss session belongs to another owner. Reconnect the original owner in the browser; changing the queued source identity is not a recovery step."
     },
     {
       code: "handoff_required",
@@ -39,7 +46,7 @@ export const androidDeliveryFeature = {
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Developer provisioning must refresh the same owner's Moss session and restart delivery. Pending evidence remains on Android."
+        "Connect Moss in browser from the Android companion using the original account, then Start delivery. Device approval expires after 90 inactive days or one year; pending evidence stays on Android."
     },
     {
       code: "server_identity_change",
