@@ -114,4 +114,9 @@ markup has not been inspected. This trial does not establish full mailbox sync,
 compatibility with other tenants, employer approval, or absence of security alerts.
 No live mailbox content belongs in this folder.
 
-Automatic inbox watcher manual trial result: **pending**.
+Automatic inbox watcher manual trial result (2026-10-21): the user reported
+**Running: Watching rendered rows only**, with 34 scans, 15 rendered rows,
+one phrase match and one newly observed/changed row. This confirms the watcher
+ran and recorded a matching row in the live Outlook layout. Counts alone do not
+prove that the observation was a newly delivered message rather than a changed
+row. Full bodies, calendar events, restart recovery and VM operation remain untested.
