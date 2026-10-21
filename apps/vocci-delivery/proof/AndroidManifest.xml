@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ai.moss.vocci.setupproof">
   <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="35" />
   <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+  <queries><package android:name="com.gygeslabs.odinclient" /></queries>
   <application android:label="Moss setup proof" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/setup_network" android:theme="@android:style/Theme.Material.Light.NoActionBar">
     <activity android:name="ai.moss.vocci.MossSetupProofActivity" android:exported="true" />
     <activity android:name="ai.moss.vocci.VocciProofActivity" android:exported="true">
@@ -12,4 +14,5 @@
   </application>
   <instrumentation android:name="ai.moss.vocci.VocciAuthChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
   <instrumentation android:name="ai.moss.vocci.SetupLinkChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.vocci.SetupRingChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
 </manifest>

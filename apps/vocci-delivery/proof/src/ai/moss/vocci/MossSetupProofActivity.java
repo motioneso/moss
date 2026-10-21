@@ -13,7 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.json.JSONObject;
 
-/** Isolated first-install browser-link proof. No ring permissions or delivery service. */
+/** Isolated first-install browser-link proof. No delivery service. */
 public final class MossSetupProofActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private NativeTheme theme;
@@ -21,7 +21,7 @@ public final class MossSetupProofActivity extends Activity {
     private SetupLink.Status snapshot;
     private EditText address;
     private TextView status, account;
-    private Button connect, check, cancel;
+    private Button connect, check, cancel, ring;
     private boolean busy = true;
     @Override public void onCreate(Bundle state) {
         setTheme(NativeTheme.isDark(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
@@ -56,9 +56,12 @@ public final class MossSetupProofActivity extends Activity {
             return new Outcome(confirmed ? "Moss account confirmed. Cancel this test link when the check is finished." : "Waiting for browser approval. No ring setup has started.", null, false);
         }), false);
         cancel = button(body, "Cancel / revoke test link", () -> perform(() -> {
+            if (link.status().phase == SetupLink.Phase.COMMITTED)
+                return new Outcome("Complete test setup is already saved. Its adopted Moss link is kept; delivery has not started.", null, false);
             link.cancel(); evidence("cancelled");
             return new Outcome("Test link cancelled. Moss confirmed cleanup.", null, true);
         }), false);
+        ring = button(body, "Continue to Vocci ring lookup", () -> startActivity(new Intent(this, VocciProofActivity.class)), true);
         account = theme.text(15, false); add(body, account);
         status = theme.text(15, false); status.setId(1202); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); add(body, status);
         worker.execute(() -> {
@@ -114,6 +117,8 @@ public final class MossSetupProofActivity extends Activity {
         connect.setText(phase == SetupLink.Phase.APPROVAL ? "Reopen browser approval" : "Connect Moss in browser");
         check.setEnabled(ready && (phase == SetupLink.Phase.APPROVAL || phase == SetupLink.Phase.CONFIRMING));
         cancel.setEnabled(ready && phase != SetupLink.Phase.EMPTY && phase != SetupLink.Phase.COMMITTED && phase != SetupLink.Phase.RECOVERY);
+        ring.setVisibility(phase == SetupLink.Phase.LINKED ? View.VISIBLE : View.GONE);
+        ring.setEnabled(ready && phase == SetupLink.Phase.LINKED);
         account.setText(phase == SetupLink.Phase.LINKED ? "Account connected: " + snapshot.accountName : phase == SetupLink.Phase.CONFIRMING ? "Approval saved · account confirmation needed" :
             phase == SetupLink.Phase.CLEANUP ? "Interrupted setup · cleanup required" : phase == SetupLink.Phase.RECOVERY ? "Setup recovery required" : "Ring setup and delivery have not started.");
     }
@@ -135,6 +140,11 @@ public final class MossSetupProofActivity extends Activity {
         if ("setup_cleanup_required".equals(reason)) return "The interrupted link needs cleanup. Cancel this test link before starting again.";
         if ("setup_origin_pinned".equals(reason)) return "Cancel the current request before changing the Moss address.";
         return "Could not complete the request. Check your connection and retry. Any unconfirmed cleanup remains pending.";
+    }
+    @Override public void onResume() {
+        super.onResume();
+        if (link != null && !busy) perform(() -> new Outcome(link.status().phase == SetupLink.Phase.COMMITTED ?
+            "Complete test setup is saved. Delivery has not started." : "Setup state checked. Continue or cancel the staged link.", null, false));
     }
     @Override public void onDestroy() { worker.shutdown(); super.onDestroy(); }
 }

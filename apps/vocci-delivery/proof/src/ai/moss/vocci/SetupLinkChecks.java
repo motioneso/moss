@@ -85,7 +85,7 @@ public final class SetupLinkChecks extends Instrumentation {
             result.putString("result", "FAIL"); result.putString("check", error instanceof AssertionError ? error.getMessage() : error.getClass().getSimpleName()); finish(1, result);
         } finally { try { reset(); } catch (Exception ignored) { } }
     }
-    private SetupLink link(Fake fake) throws Exception { return new SetupLink(stage, config, delivery, fake); }
+    private SetupLink link(Fake fake) throws Exception { return new SetupLink(stage, config, delivery, fake, binding -> { throw new AssertionError("unexpected_ring_proof"); }); }
     private void reset() throws Exception { stage.delete(); config.delete(); if (delivery.exists() && !delivery.delete()) throw new IOException("cleanup"); }
     private static void check(boolean condition, String name) { if (!condition) throw new AssertionError(name); }
     interface Work { void run() throws Exception; }

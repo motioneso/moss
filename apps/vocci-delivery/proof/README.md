@@ -7,8 +7,9 @@ provisioning described in its parent README until the remaining wizard is built.
 `bash apps/vocci-delivery/proof/build.sh` builds a separate
 `ai.moss.vocci.setupproof` application, **Moss setup proof**. It compiles the same
 `VocciAccount`, `VocciHttp` and `VocciBindings` classes intended for the setup
-wizard. It has Internet access and no ring permissions, delivery service
-or private-file provisioning flow. The optional Moss-link proof screen is
+wizard. It has Internet and Bluetooth connect access, but no delivery service
+or private-file provisioning flow. Ring access is requested explicitly only for
+the selected-ring proof described below. It does not request scan access. The optional Moss-link proof screen is
 described below. Installing it does not replace
 `ai.moss.vocci`.
 
@@ -19,8 +20,8 @@ unsupported. It then uses a session token for the real read-only ring lookup and
 removes the setup-created session. It never creates an account or ring binding.
 No code is sent automatically at launch or after restart.
 
-The proof displays only the validated ring count. It discards the binding list
-after lookup and does not physically connect a ring. A passing lookup is a phase-one
+Without a staged Moss account, the sign-in proof displays only the validated ring
+count and discards the binding list after lookup. A passing lookup is a phase-one
 result, not completed product onboarding. Zero rings is a successful empty account
 lookup; it does not prove that an owned ring can complete setup.
 
@@ -101,3 +102,42 @@ This screen is development-only. The production launcher still opens the existin
 companion, and its fresh install still uses developer provisioning until the full
 guided ring setup is integrated. Never present this separate proof as a finished
 onboarding flow.
+
+## Selected-ring transaction proof
+
+After Moss account confirmation, **Continue to Vocci ring lookup** opens the native
+sign-in screen with a ring-selection section. Sign in explicitly, then select one
+of the rings returned by the real account lookup. The temporary Vocci session is
+removed before the list is offered for selection. Unselected bindings stay in
+memory only; selecting a ring copies only its four validated connection fields
+into encrypted setup staging and releases the inventory. Restart before selection
+requires a fresh sign-in; restart after selection retains the selected candidate.
+No sign-in code is sent automatically.
+
+**Allow Nearby devices** requests Bluetooth connect permission, without scan
+permission. **Open Vocci app settings** supports the existing permission handoff;
+it never disables the package. Pause delivery in the working companion before a
+controlled physical proof, and restore that setting afterward. The proof app does
+not change the original companion's configuration, queue or preferences.
+
+**Verify ring and save test setup** opens/closes a real `RingConnection`, verifies
+physical serial/device ID and the existing key, then confirms the staged Moss
+owner again before atomically saving the complete configuration. Failed proof or
+account confirmation publishes no configuration. A restart before commit requires
+fresh proof. Stale staging that matches the committed account and selected ring is
+removed without revoking its adopted credential; a different ring requires recovery.
+No delivery service, hold enrollment or Start preference is enabled. The app-private
+`setup-ring-proof.json` records only configuration commitment and time.
+
+Installed synthetic checks (dedicated stores, synthetic network and ring ports):
+
+```bash
+adb -s <phone> shell am instrument -w \
+  ai.moss.vocci.setupproof/ai.moss.vocci.SetupRingChecks
+```
+
+These contracts do not prove live physical setup. The selected-ring screen is
+built, but real native selection/physical verification remains unverified. The
+production launcher still requires developer provisioning. Do not remove the
+proof app with an unconfirmed live account cleanup pending; a committed live test
+configuration also needs its disposable Moss device/session cleaned up first.

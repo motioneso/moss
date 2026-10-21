@@ -9,8 +9,9 @@ ring setup wizard is unfinished.
 ## Transaction boundary
 
 `SetupLink` saves first-install Moss approval and account confirmation in a
-separate `SecretStore` record. It does not construct delivery state, connect a
-ring or start delivery. Approval, redemption, owner confirmation and cleanup
+separate `SecretStore` record. Its account-link entry points do not construct
+delivery state, connect a ring or start delivery. Selected-ring commit is covered
+separately in [phase 2b](2026-10-21-vocci-ring-transaction-proof.md). Approval, redemption, owner confirmation and cleanup
 have separate durable states. A lost redemption response requires cancellation;
 an unconfirmed logout retains cleanup material. Recreated controllers serialize
 transactions and reload staging rather than using a stale in-memory record.
@@ -57,13 +58,20 @@ writer case. This does not add a two-hour hardware test.
 
 ## Live UI check
 
-The first disposable-instance run exercised native Connect, fresh Moss owner
-signup/onboarding, explicit Android browser approval, native account confirmation
-and native Cancel. Safe native evidence reported cancellation confirmed, with
-staging and delivery configuration absent. The final browser assertion timed out;
-that run is not a complete live-path pass. A later attempt stopped before linking
-because the phone was locked. Final installed UI verification remains pending.
+Final canonical live gate `20261021-154755` exited 0 on commit
+`8687ca80b706670b4d342a5357c17adfd52d98e8`, clean inputs fingerprint
+`264e3e2948a4`. Installed proof APK SHA-256:
+`37196da654d47f89ecb2e2b10eb8a2e833f427cc48fdf9acba5dcb547fd65b29`.
 
+Executable native/browser assertions passed for Connect, fresh disposable owner
+signup/onboarding, explicit Android approval, native Check account confirmation,
+process restart retaining the staged account, and native Cancel. A fresh Settings
+tab in the same real signed-in browser context confirmed that Active sessions no
+longer listed the issued Android device. Native inspection confirmed both staging
+and delivery configuration absent. The original companion package was untouched.
+Owned browser, ADB reverse, isolated proof activity and gate container were cleaned
+up. Earlier runs reached cancellation but timed out reloading the browser's
+existing Settings tab; those runs are not claimed as complete passes.
 No recording or Vocci email code was needed for this Moss-link check. It used the
 canonical recording-live runner's throwaway database, API, worker and fresh owner;
 no shared account or database was used. Browser logs contain bounded structural

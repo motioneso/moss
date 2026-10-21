@@ -9,10 +9,11 @@ import java.util.concurrent.*;
 import java.io.File;
 import org.json.JSONObject;
 
-/** Isolated feasibility UI. No service, ring permissions, Moss credential or delivery config. */
+/** Isolated feasibility UI. No delivery service. A staged Moss link reveals the selected-ring proof panel. */
 public final class VocciProofActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private NativeTheme theme;
+    private RingSetupProofPanel ringPanel;
     private VocciAccount account;
     private EditText email, code;
     private TextView status, codeLabel;
@@ -20,6 +21,7 @@ public final class VocciProofActivity extends Activity {
     private boolean busy = true;
     private int found = -1;
     @Override public void onCreate(Bundle saved) {
+        setTheme(NativeTheme.isDark(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(saved);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         theme = new NativeTheme(this);
@@ -59,11 +61,12 @@ public final class VocciProofActivity extends Activity {
             if (found >= 0) evidence(true);
             return found >= 0 ? "Lookup passed: " + found + " owned ring(s). Temporary session removed." : "Temporary session cleaned up. You can start again.";
         }), false);
+        ringPanel = new RingSetupProofPanel(this, theme, body, this::perform);
         status = theme.text(15, false); status.setId(1103); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); add(body, status);
         worker.execute(() -> {
             String message;
             try {
-                account = new VocciAccount(this);
+                account = new VocciAccount(this); ringPanel.initialize();
                 message = account.canResumeLookup() ? "Email verification is saved. Finish ring lookup to continue without another code, or cancel to remove this session." : account.step() == VocciAccount.Step.CLEANUP ? "An interrupted attempt needs cleanup before a new code can be sent." : "Ready. Sending a code starts Vocci sign-in for this test.";
             } catch (Exception error) { message = "Encrypted setup state could not be opened. Existing companion data is unaffected."; }
             String ready = message; runOnUiThread(() -> { busy = false; status.setText(ready); render(); });
@@ -84,9 +87,11 @@ public final class VocciProofActivity extends Activity {
     }
     interface Work { String run() throws Exception; }
     private String finishLookup() throws Exception {
-        found = account.bindings().size();
+        java.util.List<JSONObject> bindings = account.bindings();
+        found = bindings.size();
         evidence(false);
         account.cleanup();
+        ringPanel.offer(bindings);
         evidence(true);
         return "Sign-in proof passed: " + found + " owned ring(s). Temporary Vocci session removed. No ring binding was changed.";
     }
@@ -97,7 +102,7 @@ public final class VocciProofActivity extends Activity {
     }
     private void perform(Work work) {
         if (busy || account == null) return;
-        busy = true; status.setText("Contacting Vocci…"); render();
+        busy = true; status.setText("Working…"); render();
         worker.execute(() -> {
             String message;
             try { message = work.run(); }
@@ -122,6 +127,7 @@ public final class VocciProofActivity extends Activity {
         finishLookup.setVisibility(account != null && account.canResumeLookup() ? View.VISIBLE : View.GONE);
         finishLookup.setEnabled(ready && account.canResumeLookup());
         cleanup.setEnabled(ready && step != VocciAccount.Step.EMAIL);
+        ringPanel.render(busy);
     }
     private static String explanation(String code) {
         switch (code) {
@@ -141,7 +147,13 @@ public final class VocciProofActivity extends Activity {
             default: return "Vocci setup could not be confirmed. Clean up this attempt before starting again.";
         }
     }
+    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
+        super.onRequestPermissionsResult(request, permissions, grants);
+        if (request == 21) status.setText(grants.length > 0 && grants[0] == android.content.pm.PackageManager.PERMISSION_GRANTED ?
+            "Nearby devices allowed. Complete the Vocci handoff, then verify the ring." : "Nearby devices access is needed for ring verification. You can allow it in this app's Android settings.");
+        render();
+    }
     @Override public void onDestroy() {
-        code.setText(""); worker.shutdown(); super.onDestroy();
+        code.setText(""); ringPanel.release(); worker.shutdown(); super.onDestroy();
     }
 }

@@ -33,6 +33,13 @@ final class VocciBindings {
         }
         return result;
     }
+    static JSONObject selected(JSONObject binding) throws Exception {
+        JSONObject selected = new JSONObject();
+        for (String name : new String[]{"address", "sn", "deviceId", "bindKey"}) selected.put(name, field(binding, name));
+        String address = selected.getString("address");
+        if (!address.equals(RingAuth.canonicalMac(address))) throw new VocciHttp.Failure("binding_response_invalid");
+        return selected;
+    }
     private static String field(JSONObject row, String name) throws Exception {
         Object value = row.opt(name);
         if (!(value instanceof String)) throw new VocciHttp.Failure("binding_response_invalid");
