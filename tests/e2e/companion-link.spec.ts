@@ -159,7 +159,7 @@ test("a closed request is distinct from a transport problem", async ({ page }) =
     })
   );
   await page.goto("/link/trail-marker#code=closed-request");
-  await expect(page.getByRole("alert")).toContainText("Start a new one from the Mac");
+  await expect(page.getByRole("alert")).toContainText("Start a new one from the companion");
   await expect(page.getByRole("button", { name: "Check request again" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
 });
