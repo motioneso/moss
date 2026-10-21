@@ -1,0 +1,8 @@
+Command: pnpm test:unit tests/unit/chat-drawer-main-and-live-turn-recovery.test.tsx
+Before adding the first-turn stream binding:
+   × shows live reminders when the first turn creates Main, without reopening chat 137ms
+ FAIL  tests/unit/chat-drawer-main-and-live-turn-recovery.test.tsx > shows live reminders when the first turn creates Main, without reopening chat
+AssertionError: expected '{"type":"aside","props":{"ref":{"curr…' to contain 'Reminder: stretch'
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Duration  2.69s (transform 1.42s, setup 34ms, import 2.11s, tests 380ms, environment 0ms)

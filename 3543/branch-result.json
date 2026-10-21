@@ -1,0 +1,22 @@
+{
+  "variant": "branch",
+  "mainBefore": 404,
+  "reply": "Okay. I'll remind you in 2 minutes: stretch",
+  "mainId": "8a1cdc2c-945e-40a3-832e-2449cf53c07c",
+  "taskId": "756d7486-1409-45ca-9517-06e7e2c833d4",
+  "dueAt": "2026-10-21T20:06:52.376Z",
+  "runs": [
+    {
+      "at": "2026-10-21T20:06:53.015Z",
+      "outcome": "delivered",
+      "summary": "Reminder delivered",
+      "message": {
+        "id": "e28df724-0fbc-4547-9c6d-c3d494f54699",
+        "threadId": "8a1cdc2c-945e-40a3-832e-2449cf53c07c",
+        "body": "Reminder: stretch"
+      }
+    }
+  ],
+  "deliveredExactlyOnce": true,
+  "sameDocumentWithoutReload": true
+}

@@ -1,0 +1,13 @@
+
+> moss@0.2.0 test:unit ~/Jarv1s
+> tsx scripts/test-unit.ts tests/unit/lifestyle-settings-design.test.tsx tests/unit/mcp-gateway-validation.test.ts
+
+
+ RUN  v4.1.8 ~/Jarv1s
+
+
+ Test Files  2 passed (2)
+      Tests  64 passed (64)
+   Start at  12:57:43
+   Duration  30.56s (transform 29.05s, setup 101ms, import 37.26s, tests 3.04s, environment 2.08s)
+

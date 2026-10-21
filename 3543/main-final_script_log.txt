@@ -1,0 +1,6 @@
+step 1 action: main: create fresh owner through real signup; no model configured
+step 2 action: Signup completed; zero conversations; Main HTTP404. Keep this signed-in page loaded.
+step 3 action: Precondition: real host Codex auth installed with sanctioned helper; genuine provider-install/login and ai-pin endpoints select economy model. No reload. Main still HTTP404.
+step 4 action: Real composer contains first reminder; zero conversations and Main HTTP404 immediately before Enter.
+step 5 action: Real UI POST returned HTTP200: I couldn't save that reminder, so nothing is set. Try again in a moment.
+step 6 action: Expected regression reproduced: UI reports reminder was not saved; no schedule; no Main. FAIL on origin/main.

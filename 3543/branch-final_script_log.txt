@@ -1,0 +1,7 @@
+step 1 action: branch: create fresh owner through real signup; no model configured
+step 2 action: Signup completed; zero conversations; Main HTTP404. Keep this signed-in page loaded.
+step 3 action: Precondition: real host Codex auth installed with sanctioned helper; genuine provider-install/login and ai-pin endpoints select economy model. No reload. Main still HTTP404.
+step 4 action: Real composer contains first reminder; zero conversations and Main HTTP404 immediately before Enter.
+step 5 action: Real UI POST returned HTTP200: Okay. I'll remind you in 2 minutes: stretch
+step 6 action: First UI turn created Main and active schedule; waiting for actual worker delivery; dueAt=2026-10-21T20:06:52.376Z
+step 7 action: Actual worker delivered once; Reminder: stretch appeared live in newly created Main with the same document timeOrigin and no reload. PASS on branch.
