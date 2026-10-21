@@ -145,6 +145,30 @@ session recovery remain unimplemented. Live automatic body testing is pending.
 
 ## Deliberately narrow behavior
 
+### Diagnose a missing subject (version 0.4.2)
+
+After a failed synthetic body trial, reload the extension and Outlook, then
+manually reopen that synthetic message. Enter its exact subject test phrase in
+the automatic body's phrase box and click **Check subject layout**. No new email
+or automatic run is needed. Copy only the resulting **Layout check** report.
+
+This explicit diagnostic compares the phrase against readable headings outside
+the selected body, examining up to twelve ancestor containers (stopping after
+the first main region or before the page body). Per container it reports numeric
+body/list/navigation/heading counts, main-region status, and the number of
+headings containing the phrase. It considers at most 100 headings per container
+and 500 characters per heading. It returns fixed labels/counts only, excluding
+heading text, addresses, IDs, attributes, and body text. The popup clears its
+displayed body result before showing the report; nothing is saved or uploaded.
+This does not change the extractor's boundary or relax subject verification.
+
+The version 0.4.1 live repeat still reported **Subject heading missing or does not
+match test phrase** after opening one row. The nested-wrapper fix passed its
+synthetic fixture but did not resolve the real layout. The structural report is
+the next diagnostic step; automatic body capture remains unverified.
+
+### Boundaries
+
 - Only `activeTab` and `scripting` permissions. No host permissions, background
   scripts, automatic content scripts, cookies, token access, or storage APIs.
 - The popup accepts only HTTPS `outlook.office.com`, `outlook.office365.com`, and
@@ -195,6 +219,10 @@ previous reader, then verify separate subject/sender fields and automatic captur
 Missing subjects stay unknown; main-region titles and body headings cannot provide
 subject identity. Pending/timeout statuses name the failed capture check without
 including message text.
+Layout-report checks cover outer/main headings, excluded hidden/list/body
+headings, ancestor bounds, ambiguous bodies, exact report serialization, and
+popup wiring without starting a test. Appending raw body text in an isolated
+mutated diagnostic makes the exact-report assertion fail.
 Manifest validation:
 
 ```sh

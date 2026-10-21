@@ -97,12 +97,13 @@ document.getElementById("watch-start").addEventListener("click", () => watchComm
 document.getElementById("watch-read").addEventListener("click", () => watchCommand("read"));
 document.getElementById("watch-stop").addEventListener("click", () => watchCommand("stop"));
 
-const autoButtons = ["auto-start", "auto-read", "auto-stop"].map((id) => document.getElementById(id));
+const autoButtons = ["auto-start", "auto-read", "auto-stop", "auto-layout"].map((id) => document.getElementById(id));
 async function autoBodyCommand(command) {
   const autoStatus = document.getElementById("auto-status");
   const autoResult = document.getElementById("auto-result");
   for (const button of autoButtons) button.disabled = true;
   autoResult.hidden = true;
+  document.getElementById("layout-result").textContent = "";
   for (const field of fields) document.getElementById(`auto-${field}`).textContent = "";
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -112,13 +113,15 @@ async function autoBodyCommand(command) {
       autoStatus.textContent = "Open Outlook Web Inbox in the active tab first.";
       return;
     }
-    if (command === "start") {
-      const installed = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ["read-message.js", "auto-body.js"] });
+    if (command === "start" || command === "layout") {
+      const files = command === "layout" ? ["layout.js"] : ["read-message.js", "auto-body.js"];
+      const installed = await browser.scripting.executeScript({ target: { tabId: tab.id }, files });
       if (installed.length !== 1 || installed[0].error) throw Error("injection");
     }
     const injections = await browser.scripting.executeScript({
       target: { tabId: tab.id },
       func: (action, phrase) => {
+        if (action === "layout") return globalThis.__mossDescribeMessageLayout(phrase);
         const probe = globalThis.__mossAutoBodyProbe;
         if (!probe) return null;
         if (action === "start") {
@@ -132,6 +135,11 @@ async function autoBodyCommand(command) {
     });
     if (injections.length !== 1 || injections[0].error) throw Error("injection");
     const state = injections[0].result;
+    if (command === "layout") {
+      document.getElementById("layout-result").textContent = state?.report || "No layout report returned.";
+      autoStatus.textContent = "Layout check finished. Body test was not started.";
+      return;
+    }
     if (!state) { autoStatus.textContent = "No body test in this tab. Start on Inbox first."; return; }
     autoStatus.textContent = `${state.running ? "Running" : "Stopped"}: ${state.reason}. Scans: ${state.scans}; rows opened: ${state.opened}; body captured: ${state.capture ? "yes" : "no"}.`;
     if (state.capture) {
@@ -147,3 +155,4 @@ async function autoBodyCommand(command) {
 document.getElementById("auto-start").addEventListener("click", () => autoBodyCommand("start"));
 document.getElementById("auto-read").addEventListener("click", () => autoBodyCommand("read"));
 document.getElementById("auto-stop").addEventListener("click", () => autoBodyCommand("stop"));
+document.getElementById("auto-layout").addEventListener("click", () => autoBodyCommand("layout"));

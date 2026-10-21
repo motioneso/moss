@@ -41,6 +41,38 @@ def verify_nested_headers(page):
     assert page.evaluate(EXTRACT)["subject"] == ""
 
 
+def verify_layout(page):
+    source = (SOURCE / "layout.js").read_text()
+    phrase = "MOSS BODY TEST layout"
+    fixture = ('<main><h2>' + phrase + '</h2><div role="listbox"><h2>PRIVATE ROW</h2></div>'
+               + '<div hidden><h2>' + phrase + '</h2></div>'
+               + '<article><h3>PRIVATE SENDER &lt;person@example.invalid&gt;</h3>'
+               + '<div role="document" aria-label="Message body">PRIVATE BODY<h2>' + phrase + '</h2></div></article></main>')
+    page.set_content(fixture)
+    page.evaluate(source)
+    report = page.evaluate("phrase => __mossDescribeMessageLayout(phrase).report", phrase)
+    expected = ('Layout check v0.4.2; readable bodies: 1.\n'
+                'Depth 0: main=no; bodies=1; lists=0; navigation=0; headings=1; phrase headings=0; heading cap=no.\n'
+                'Depth 1: main=yes; bodies=1; lists=1; navigation=0; headings=2; phrase headings=1; heading cap=no.')
+    assert report == expected, report
+    # Observe the no-content assertion fail if raw body text is appended.
+    leak = source.replace('return { report: lines.join("\\n") };', 'return { report: lines.join("\\n") + body.innerText };')
+    assert leak != source
+    page.evaluate(leak)
+    try:
+        assert page.evaluate("phrase => __mossDescribeMessageLayout(phrase).report", phrase) == expected
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("Raw body leak did not break the report assertion")
+    page.evaluate(source)
+    assert 'Enter the exact' in page.evaluate('__mossDescribeMessageLayout("MOSS BODY TEST").report')
+    page.set_content('<div>' * 20 + MESSAGE + '</div>' * 20)
+    assert len(page.evaluate("phrase => __mossDescribeMessageLayout(phrase).report", phrase).splitlines()) == 13
+    page.set_content(MESSAGE + MESSAGE)
+    assert page.evaluate("phrase => __mossDescribeMessageLayout(phrase).report", phrase) == 'Layout check v0.4.2; readable bodies: 2.'
+
+
 def verify_auto_body(browser, run):
     reader = (SOURCE / "read-message.js").read_text()
     auto = (SOURCE / "auto-body.js").read_text()
@@ -131,6 +163,15 @@ def verify_auto_body(browser, run):
     popup.wait_for_function('document.querySelector("#auto-status").textContent.startsWith("Running")')
     assert popup.evaluate("installed") == ["read-message.js", "auto-body.js"]
     assert popup.evaluate("syntheticBodyState.phrase") == phrase
+    popup.evaluate("""() => {window.__mossDescribeMessageLayout = phrase => {
+      window.layoutPhrase = phrase; return {report:'Layout counts only'};
+    };}""")
+    popup.locator("#auto-layout").click()
+    popup.wait_for_function('document.querySelector("#layout-result").textContent === "Layout counts only"')
+    assert popup.evaluate("installed") == ["layout.js"]
+    assert popup.evaluate("layoutPhrase") == phrase
+    assert popup.evaluate("syntheticBodyState.running")
+    assert popup.locator("#auto-result").is_hidden()
     calls = popup.evaluate("autoCalls")
     for url in ["https://outlook.office.com.evil.invalid/mail/", "http://outlook.office.com/mail/", "https://outlook.office.com/calendar/"]:
         popup.evaluate("url => probeUrl = url", url)
@@ -211,7 +252,8 @@ def main():
               "Calendar appearance/change/disappearance and filtering", "Calendar popup mode and control wiring",
               "One-shot body arrival, route change, stable complete capture and popup",
               "Body isolation, ambiguity, interaction, stop and timeout guards",
-              "Nested sender and outer subject identification"]
+              "Nested sender and outer subject identification",
+              "Layout diagnosis counts, exclusions, bounds and popup wiring"]
     (workspace / "plan.md").write_text("\n".join(f"- [ ] CP{i}: {p}" for i, p in enumerate(points, 1)))
     log = []
 
@@ -239,6 +281,8 @@ def main():
         passed(3)
         verify_nested_headers(page)
         passed(12)
+        verify_layout(page)
+        passed(13)
 
         # Mock only the browser API: this is popup logic verification, not proof
         # of Firefox extension installation or activeTab permission behavior.

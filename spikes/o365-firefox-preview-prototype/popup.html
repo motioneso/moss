@@ -47,6 +47,10 @@
       <button id="auto-read" type="button">Show body result</button>
       <button id="auto-stop" type="button">Stop &amp; clear body</button></p>
     <p id="auto-status" role="status">Not started. Captured body stays only in this tab’s memory until cleared or reloaded.</p>
+    <p><button id="auto-layout" type="button">Check subject layout</button></p>
+    <p>For a failed synthetic test: enter its exact phrase above, keep that email
+      open, and check its layout. Reports counts and matches only; does not start a test.</p>
+    <pre id="layout-result" aria-label="Subject layout counts"></pre>
     <section id="auto-result" hidden aria-label="Automatic body preview">
       <dl>
         <dt>Subject</dt><dd id="auto-subject"></dd>
