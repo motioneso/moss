@@ -1,7 +1,7 @@
 # Disposable Firefox Outlook preview
 
 Questions: can a user-invoked Firefox add-on preview an opened Outlook Web message,
-and watch rendered Inbox rows after an explicit Start, without a new Microsoft app
+and watch rendered Inbox rows or Calendar events after an explicit Start, without a new Microsoft app
 registration? This is a standalone experiment,
 not a Moss connector. A user-reported Firefox/Outlook trial succeeded on
 2026-10-21, with the sender field missing; see the result below.
@@ -48,8 +48,8 @@ Outlook tab, without a separate Microsoft sign-in or app registration.
    and clears it. After a reload you must click Start again.
 
 If no supported message list is found, report that status and the numeric counts
-only. Do not send mailbox text, DOM dumps, or screenshots. Actual Outlook inbox
-selectors are unverified. The watcher requires a single visible `role=listbox`
+only. Do not send mailbox text, DOM dumps, or screenshots. Outlook inbox selectors
+worked in the first reported live trial; other layouts remain unverified. The watcher requires a single visible `role=listbox`
 whose `aria-label` includes Message, Conversation or Inbox (English).
 
 The watcher checks every two seconds while the browser schedules its timer; a
@@ -60,11 +60,55 @@ row includes whatever text Outlook renders there, potentially sender, subject,
 time and a body snippet. Those fields are not parsed or guaranteed complete.
 Do not put the test phrase in real/confidential conversations.
 
-This does not scroll, click, open messages, fetch full bodies, navigate folders,
+The inbox watcher does not scroll, click, open messages, fetch full bodies, navigate folders,
 inspect calendar, or automatically resume after reload/browser restart. It cannot
 guarantee new-email identity: changed timestamps/read states, scrolling, Focused /
 Other tabs, conversations and virtualization can produce misses or repeats.
 Results show observations, not a reliable mailbox change feed. No VM was created.
+
+## Try the calendar watcher (version 0.3.0)
+
+1. Stop the existing watcher, reload this add-on in `about:debugging`, then reload
+   Outlook. Open **Calendar** and leave it on the week containing your test event.
+2. Open the extension and click **Start watching**, keeping the phrase `MOSS TEST`.
+   It automatically chooses the calendar watcher when the active Outlook URL
+   contains `/calendar`. Close the popup and leave this view open.
+3. In another tab/window, create a personal calendar event with **no attendees**,
+   titled `MOSS TEST calendar`, within the displayed week. Wait for it to appear
+   in the watched calendar, then reopen the extension and click **Show results**.
+   Look for a phrase match and **Appeared / changed summary in displayed calendar**.
+4. In the other window, rename it to `MOSS TEST calendar updated`, keeping the test
+   phrase. Wait for Outlook to display the update and use **Show results** again.
+   The updated label should appear; the former label should become **No longer
+   displayed — not proof of cancellation** after two absent scans.
+5. Delete that personal test event in the other window. Once it disappears from
+   the watched view and two more scans pass, Show results should record the updated
+   label as no longer displayed. Report only counts/status and whether those three
+   observations occurred. Do not share actual event labels or calendar screenshots.
+6. Click **Stop & clear**. Navigation/reload discards the watcher; it does not
+   automatically restart. If Outlook itself does not update the watched view,
+   report that separately; the watcher cannot discover changes absent from its DOM.
+
+This probe reads matching, event-like button labels within a single visible
+`main`/`role=main` region on a calendar URL. It excludes navigation, dialogs and
+editors and requires a displayed time or English All day in the button label.
+It uses `aria-label` where supplied (otherwise rendered button text), so summaries
+may include event title, time and other accessible event details. Actual Outlook
+calendar selectors remain unverified. A zero candidate count may mean an empty
+calendar or an unsupported layout; it is not proof of calendar access.
+
+Every scheduled two-second scan considers at most 500 visible buttons, 200 time-like
+labels, and 50 matching unique summaries. Summaries are capped at 2,000 characters;
+the last 20 observations are retained in tab memory, together with the current
+matching set and one-scan disappearance grace state. No event IDs or authoritative
+change feed are available. Identical labels may merge; title/time changes produce
+appearance plus disappearance, not a proven update to one identified event.
+
+Keep the same date, view, selected calendars and scroll position. Filtering,
+scrolling, loading, virtualization and view changes can make events disappear.
+Two absent scans reduce brief rerender noise but cannot establish deletion or
+cancellation. This experiment does not open, create, edit or delete events, click
+through dates, read invitations from mail, or sync a complete calendar.
 
 ## Deliberately narrow behavior
 
@@ -100,6 +144,10 @@ rendering, clearing, host validation, and injection errors. Watcher checks also
 cover timer-driven row detection with the popup closed, test-phrase filtering,
 deduplication, repeat script loading, Stop/clear, route change shutdown, and popup
 controls. The watcher runs on synthetic Outlook-shaped HTML, not a live mailbox.
+Calendar checks cover test-phrase filtering (including an assertion observed to
+fail when the filter guard is removed), automatic appearance, changed labels,
+two-scan disappearance, deduplication, repeat script loading, stop/clear, route
+shutdown, and the popup's automatic calendar-mode selection with mocked APIs.
 Manifest validation:
 
 ```sh
@@ -120,3 +168,6 @@ one phrase match and one newly observed/changed row. This confirms the watcher
 ran and recorded a matching row in the live Outlook layout. Counts alone do not
 prove that the observation was a newly delivered message rather than a changed
 row. Full bodies, calendar events, restart recovery and VM operation remain untested.
+
+Calendar watcher live trial: **pending**. The earlier inbox result does not verify
+calendar extraction or event identity.

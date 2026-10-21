@@ -54,31 +54,33 @@ async function watchCommand(command) {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     const url = new URL(tab.url);
     if (url.protocol !== "https:" || !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)) {
-      watchStatus.textContent = "Open Outlook Web Inbox in the active tab first.";
+      watchStatus.textContent = "Open Outlook Web Inbox or Calendar in the active tab first.";
       return;
     }
+    const calendar = /(^|\/)calendar(\/|$)/i.test(url.pathname);
+    const mode = calendar ? "calendar" : "inbox";
     if (command === "start") {
-      const installed = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ["watch.js"] });
+      const installed = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [calendar ? "calendar-watch.js" : "watch.js"] });
       if (installed.some((item) => item.error)) throw Error("injection");
     }
     const injections = await browser.scripting.executeScript({
       target: { tabId: tab.id },
-      func: (action, phrase) => {
-        const watcher = globalThis.__mossInboxProbe;
+      func: (action, phrase, calendarMode) => {
+        const watcher = calendarMode ? globalThis.__mossCalendarProbe : globalThis.__mossInboxProbe;
         if (!watcher) return null;
         if (action === "start") return watcher.start(phrase);
         if (action === "stop") return watcher.stop();
         return watcher.snapshot();
       },
-      args: [command, document.getElementById("phrase").value],
+      args: [command, document.getElementById("phrase").value, calendar],
     });
     if (injections.length !== 1 || injections[0].error) throw Error("injection");
     const state = injections[0].result;
     if (!state) {
-      watchStatus.textContent = "No watcher in this tab. Click Start watching on Inbox.";
+      watchStatus.textContent = "No watcher in this tab. Click Start watching on Inbox or Calendar.";
       return;
     }
-    watchStatus.textContent = `${state.running ? "Running" : "Stopped"}: ${state.reason}. Scans: ${state.scans}; rendered rows: ${state.candidates}; phrase matches: ${state.matched}; newly observed/changed: ${state.observed}. Last scan: ${state.lastScan || "none"}.`;
+    watchStatus.textContent = `${state.running ? "Running" : "Stopped"} (${mode}): ${state.reason}. Scans: ${state.scans}; rendered items: ${state.candidates}; phrase matches: ${state.matched}; newly observed/changed: ${state.observed}.${calendar ? ` No longer displayed: ${state.disappeared}.` : ""} Last scan: ${state.lastScan || "none"}.`;
     for (const row of state.rows) {
       const li = document.createElement("li");
       li.textContent = `${row.kind} (${row.time})\n${row.summary}`;
