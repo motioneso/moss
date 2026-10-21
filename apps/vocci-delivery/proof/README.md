@@ -7,8 +7,9 @@ provisioning described in its parent README until the remaining wizard is built.
 `bash apps/vocci-delivery/proof/build.sh` builds a separate
 `ai.moss.vocci.setupproof` application, **Moss setup proof**. It compiles the same
 `VocciAccount`, `VocciHttp` and `VocciBindings` classes intended for the setup
-wizard. It has Internet access and no ring permissions, delivery service, Moss
-account link or private-file provisioning flow. Installing it does not replace
+wizard. It has Internet access and no ring permissions, delivery service
+or private-file provisioning flow. The optional Moss-link proof screen is
+described below. Installing it does not replace
 `ai.moss.vocci`.
 
 Open the proof and use the email of your existing Vocci account. **Send code**
@@ -53,3 +54,50 @@ the normal phone timeout again; it does not change system settings. Failures sav
 only a local error code and time in `no_backup/auth-proof-error.json`. Development
 instrumentation can inspect bounded attempt flags and native client status with
 `-e diagnose true`; it performs a read-only client fetch and sends no email.
+
+## First-install Moss linking proof
+
+The same isolated APK also contains `MossSetupProofActivity`, backed by
+`SetupLink`. Launch it explicitly in a development session:
+
+```bash
+adb -s <phone> shell am start -n \
+  ai.moss.vocci.setupproof/ai.moss.vocci.MossSetupProofActivity
+```
+
+Enter the Moss HTTPS origin, choose **Connect Moss in browser**, approve the phone
+in Moss, return and choose **Check approval**. Account confirmation remains in a
+separate encrypted staging record; no delivery configuration, ring connection,
+voice enrollment or delivery service is created. For local development, only this
+separate proof APK permits HTTP to loopback (`localhost`, `127.0.0.1`, `::1`),
+for an ADB reverse connection to a dev instance. Other HTTP hosts remain blocked;
+the production manifest and release HTTPS policy are unchanged.
+**Cancel / revoke test link**
+revokes the test credential and cancels its request. A network failure retains
+cleanup material; retry cancellation before removing the app. A lost redemption
+response requires cancellation with the original private attempt proof rather than
+another redemption. The server retains that cancellation path while an issued
+device references it, even after approval expiry.
+
+The screen keeps input/views stable while requests run and announces status. It
+uses the existing native theme and never places account credentials in an intent.
+Browser approval receives the same origin/fragment URL as the existing companion
+flow. `setup-link-proof.json` records only the result (`linked` or `cancelled`) and
+time. Do not read `setup.enc` through ADB.
+
+Installed synthetic staging checks use dedicated synthetic stores:
+
+```bash
+adb -s <phone> shell am instrument -w \
+  ai.moss.vocci.setupproof/ai.moss.vocci.SetupLinkChecks
+```
+
+For the private live UI harness, `-e inspect true` returns only phase/staging/config
+flags and, while approval is pending, the URL already handed to the browser. Keep
+that URL out of logs. This inspection never exports the private verifier or issued
+credential, and does not run or reset the synthetic stores.
+
+This screen is development-only. The production launcher still opens the existing
+companion, and its fresh install still uses developer provisioning until the full
+guided ring setup is integrated. Never present this separate proof as a finished
+onboarding flow.

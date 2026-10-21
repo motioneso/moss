@@ -12,7 +12,8 @@ rm -rf build/auth-proof/classes build/auth-proof/dex
 mkdir -p build/auth-proof/classes build/auth-proof/dex
 javac --release 11 -cp "$android_jar:build/classes" -d build/auth-proof/classes proof/src/ai/moss/vocci/*.java
 "$build_tools/d8" --lib "$android_jar" --min-api 33 --output build/auth-proof/dex build/classes/ai/moss/vocci/*.class build/auth-proof/classes/ai/moss/vocci/*.class
-"$build_tools/aapt2" link -I "$android_jar" --manifest proof/AndroidManifest.xml -A assets -o build/auth-proof/unsigned.apk
+"$build_tools/aapt2" compile --dir proof/res -o build/auth-proof/resources.zip
+"$build_tools/aapt2" link -I "$android_jar" --manifest proof/AndroidManifest.xml -R build/auth-proof/resources.zip -A assets -o build/auth-proof/unsigned.apk
 python3 - <<'PY'
 from pathlib import Path
 from zipfile import ZipFile

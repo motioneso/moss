@@ -19,22 +19,29 @@ final class MossLink {
     String begin() throws Exception {
         if (pending()) return attempt().getString("approvalPath");
         JSONObject saved = config.load();
+        JSONObject attempt = prepare(saved.getString("origin"));
+        acceptAttempt(attempt, MossClient.linkRequest(attempt.getString("origin"), "/api/companion/pair", requestBody(attempt)));
+        pending.save(attempt);
+        return attempt.getString("approvalPath");
+    }
+    static JSONObject prepare(String origin) throws Exception {
         byte[] entropy = new byte[32]; new SecureRandom().nextBytes(entropy);
         String verifier = Base64.encodeToString(entropy, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
-        String hash = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.UTF_8)), Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
-        JSONObject response = MossClient.linkRequest(saved.getString("origin"), "/api/companion/pair", new JSONObject()
-            .put("deviceName", "Moss ring · Android").put("platform", "android").put("appVersion", "1.0.0")
-            .put("osVersion", Build.VERSION.RELEASE.substring(0, Math.min(32, Build.VERSION.RELEASE.length())))
-            .put("verifierHash", hash));
-        MossClient.uuid(response.getString("attemptId"));
+        return new JSONObject().put("origin", MossClient.origin(origin)).put("verifier", verifier);
+    }
+    static JSONObject requestBody(JSONObject attempt) throws Exception {
+        String hash = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(attempt.getString("verifier").getBytes(StandardCharsets.UTF_8)), Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+        return new JSONObject().put("deviceName", "Moss ring · Android").put("platform", "android").put("appVersion", "1.0.0")
+            .put("osVersion", Build.VERSION.RELEASE.substring(0, Math.min(32, Build.VERSION.RELEASE.length()))).put("verifierHash", hash);
+    }
+    static void acceptAttempt(JSONObject attempt, JSONObject response) throws Exception {
+        String attemptId = MossClient.uuid(response.getString("attemptId"));
         String path = response.getString("approvalPath");
         if (!path.matches("/link/trail-marker#code=[A-Za-z0-9_-]{32}")) throw new IllegalArgumentException("approval_path");
         Instant.parse(response.getString("expiresAt"));
-        pending.save(new JSONObject().put("origin", saved.getString("origin")).put("verifier", verifier)
-            .put("attemptId", response.getString("attemptId")).put("approvalPath", path).put("expiresAt", response.getString("expiresAt")));
-        return path;
+        attempt.put("attemptId", attemptId).put("approvalPath", path).put("expiresAt", response.getString("expiresAt"));
     }
-    private JSONObject proof(JSONObject attempt) throws Exception {
+    static JSONObject proof(JSONObject attempt) throws Exception {
         return new JSONObject().put("attemptId", attempt.getString("attemptId")).put("verifier", attempt.getString("verifier"));
     }
     boolean check() throws Exception {
