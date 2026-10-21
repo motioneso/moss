@@ -38,6 +38,7 @@ import { useAssistantName } from "../api/use-assistant-name.js";
 import { DEFAULT_CHAT_SURFACE, type ChatAttachmentDto, type ChatSurface } from "@moss/shared";
 import { ChatModelPill } from "./chat-model-pill";
 import { ChatWaitingIndicator } from "./chat-waiting-indicator";
+import { ChatPrivateStatus } from "./chat-private-status";
 import { ChatConversationError, ChatEmptyState } from "./chat-empty-state";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
@@ -850,31 +851,14 @@ export function ChatDrawer(props: ChatDrawerProps) {
           ref={bodyRef}
           onScroll={handleBodyScroll}
         >
-          {activatingPrivate ? (
-            <div className="chatd-private is-activating">
-              <span>Starting private chat…</span>
-            </div>
-          ) : null}
-          {privateActivationError ? (
-            <div className="chatd-private is-error">
-              <span>{privateActivationError}</span>
-              <button type="button" onClick={() => setPrivateActivationError(null)}>
-                Dismiss
-              </button>
-            </div>
-          ) : null}
-          {privateMode && !reviewing ? (
-            <div className={`chatd-private${privateEnded ? " is-ended" : ""}`}>
-              <span>
-                {privateEnded
-                  ? "Private chat ended. Start a new chat to continue."
-                  : "Private chat: not saved to history. Approved actions still keep records."}
-              </span>
-              <button type="button" onClick={closePrivateChat}>
-                End
-              </button>
-            </div>
-          ) : null}
+          <ChatPrivateStatus
+            activating={activatingPrivate}
+            error={privateActivationError}
+            active={privateMode && !reviewing}
+            ended={privateEnded}
+            onDismissError={() => setPrivateActivationError(null)}
+            onEnd={closePrivateChat}
+          />
           {moduleIdentityPending && privacyStateQuery.isError ? (
             <ChatConversationError
               moduleConversation
