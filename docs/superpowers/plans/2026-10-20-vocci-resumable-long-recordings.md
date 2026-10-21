@@ -1,6 +1,6 @@
 # Vocci resumable long recordings implementation plan
 
-Status: resumable version-3 server/Android transport, physical Vault allocation, 2 GiB local retention budgets and checkpointed transcription implemented. Installed native recovery through Meeting analysis and Main reply/restart passes with retained short ring samples. Full foundation/CI, transcription quality and real long-recording hardware proof remain completion gates. Implements section 3 of the approved [companion spec](../specs/2026-10-20-vocci-companion-meetings-chat.md). Tracking: task #3553, draft PR #3554. Each step must be implemented and verified before claiming support for long recordings.
+Status: resumable version-3 server/Android transport, physical Vault allocation, 2 GiB local retention budgets and checkpointed transcription implemented. Installed native recovery passes with retained physical 226-second Meeting and correctly recognized hold samples, including visible Meeting analysis and Main replies. Final checks remain in progress. Ben accepted simulated two-hour validation on 2026-10-21 instead of a physical endurance recording. Implements section 3 of the approved [companion spec](../specs/2026-10-20-vocci-companion-meetings-chat.md). Tracking: task #3553, draft PR #3554. Generated upper-bound evidence remains distinct from real shorter hardware recordings.
 
 ## Boundaries
 
@@ -75,3 +75,27 @@ successful final long live-proof receipt. The original ring files were preserved
 for native recovery without requesting a new recording. A subsequent retrieval
 attempt did not rediscover that capture and was cancelled; recovery explicitly
 restores the original packet/sidecar bytes at the completed-retrieval checkpoint.
+
+### Final physical-source recovery and duration acceptance
+
+At clean product head `743f25fc1`, long recovery gate `113145` passed: the original
+226,020 ms source completed installed native decoding/upload, real transcription
+windows and real model analysis, with transcript, summary and the 35-second bookmark
+visible in Meetings. Hold recovery gate `113449` also passed: actual recognition of
+the fresh post-enrollment source, explicit Send, one persisted user/assistant pair
+and a visible Main reply. Both runs restore retained physical files at the completed
+retrieval checkpoint; they do not claim another BLE capture.
+
+The hold proof exposed a separate display defect: standalone numeric replies became
+empty Markdown lists. Six shell/shared-renderer regressions failed before the narrow
+escaping correction; fifteen focused tests and full type/lint checks pass afterward.
+
+Ben revised acceptance to simulated two-hour upper-bound validation, because such
+long recordings are a rare need. The real shorter captures remain hardware evidence.
+The generated two-hour binary transport/checkpoint test and bounded-memory PCM writer
+cover the limit separately from real speech recognition. Physical two-hour endurance
+and supported consumer onboarding remain outside this slice's completion claim.
+An additional installed-codec proof decoded 360,000 generated 20 ms Opus frames into
+an exact 7,200,000 ms canonical WAV (230,400,044 bytes) in 93.6 seconds. The private
+instrumentation used unchanged repository decoder bytes; generated files were
+removed afterward. This does not claim real two-hour speech-recognition accuracy.

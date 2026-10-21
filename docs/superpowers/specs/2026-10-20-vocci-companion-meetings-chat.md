@@ -211,10 +211,15 @@ imported-meeting analysis on the existing short transport; (2) resumable long-fi
 transport and windowed transcription; (3) companion screens and supported setup.
 The live investigation is independent. Each slice must state its remaining limits.
 
-Before calling the companion complete, prove installed ring → Android → Moss with
-real recordings: a meeting longer than two minutes and ultimately the two-hour
-boundary, preserved bookmarks, summary/actions available in Meetings, and a fresh
-hold request that appears as one user message with a real text reply. Exercise
+Before calling this developer-provisioned companion slice complete, prove installed
+ring → Android → Moss with real recordings: a meeting longer than two minutes,
+preserved bookmarks, summary/actions available in Meetings, and a fresh hold request
+that appears as one user message with a real text reply. Ben revised upper-duration
+acceptance on 2026-10-21: use a simulated two-hour recording instead of requiring a
+physical two-hour capture, since that duration is not a frequent need. Keep simulated
+transport/codec/window checks distinct from the real shorter recording evidence;
+physical two-hour endurance remains unverified and does not block this slice.
+Supported consumer setup remains the separately reviewed seam described above. Exercise
 restart, lost acceptance/turn responses, duplicate inventory, offline return,
 stale request review, account mismatch, disabled modules and storage exhaustion.
 Verify first-enable backlog does not execute, and replay does not create duplicate

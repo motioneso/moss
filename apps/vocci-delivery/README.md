@@ -145,6 +145,14 @@ are not real ring capture or speech-recognition evidence. Two-hour binary HTTP
 and 240 checkpoint windows are integration-tested with generated PCM and stub ASR.
 No two-hour hardware recording or real two-hour ASR proof is claimed.
 
+The October 21 developer proof additionally decoded 360,000 generated 20 ms Opus
+silence frames through the installed Android codec, producing an exact two-hour
+16 kHz mono PCM WAV (230,400,044 bytes) in about 94 seconds. This isolated proof
+used the repository's decoder unchanged and removed its generated local files
+afterward. It is codec/size evidence, separate from the generated server-window
+test and the real 226-second ring recording. Ben accepted simulated upper-bound
+validation for this slice; physical two-hour endurance is not a completion gate.
+
 No iOS, fresh ownership or live streaming support. Ring reboot and background
 reliability beyond the actual PR proof remain unverified.
 
