@@ -29,6 +29,16 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-21
+
+#### Fixed
+
+- **Reminder alerts open their chat message.** Tapping a reminder's alert or its notification now opens that reminder in its chat instead of the Today page. [PR #3542](https://github.com/motioneso/moss/pull/3542)
+
+#### Added
+
+- **Chat can now use an API-key provider.** Admins can pick an Anthropic or OpenAI-compatible (Chat Completions) provider that uses an API key, including one at its own web address, and chat works with it the same way, tools and confirmation cards included. [PR #3540](https://github.com/motioneso/moss/pull/3540)
+
 ### 2026-10-20
 
 #### Added
