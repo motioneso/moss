@@ -177,8 +177,10 @@ the watched tab left unchanged.
 
 A synthetic check of the current source confirmed that changing from a calendar
 view URL to an editor URL stops the watcher and clears observations by design.
-This is a possible explanation, not a verified cause of the live result. Before
-retesting, inspect **Show results** for Running versus Stopped/route changed.
+The user subsequently reported **Stopped (calendar): Calendar route changed;
+stopped and cleared**, after 46 scans. This confirms a live route interruption;
+the zero observation counters reflect clearing and do not establish extraction
+failure. Rename/disappearance detection still needs an uninterrupted trial.
 For the isolated collection trial, create, rename and delete on the other
 computer while leaving the watched tab's date/view unchanged. No route guard was
 relaxed on the basis of this report. The initial result does not establish stable
