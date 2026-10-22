@@ -84,14 +84,18 @@ confirmed committed ring setup; the combined harness failed on ADB before its
 success observation. Browser cleanup signed out the disposable device, isolated
 configuration was removed and EMPTY confirmed. This is partial acceptance. -->
 
-## Vocci #3565 — complete setup and delivery test
+## Vocci #3565 — physical completion deferred
 
-The new ready-screen Start/Stop and hold controls are implemented. Installed
-empty/error and synthetic ready checks passed in both themes at normal/150%
-text. The complete test with the actual service has passed fresh Moss browser
-approval and account restart and is now at native Vocci sign-in. Ben needs to
-enter his existing email and email code directly in Moss setup proof, then leave
-it open and reply done. The previous disposable session was cleaned up; this
-run needs fresh native sign-in. No recording is needed yet. After real ring
-verification and enrollment, a separate step will request fresh Meeting/hold
-samples. Full foundation and CI continue independently; no merge is authorized.
+Native Vocci email-code verification and explicit ring selection passed using
+Ben-authorized Chrome/Gmail assistance; no further code entry is requested.
+The selected state survived restart. Ben currently cannot record audio, and the
+separate physical diagnostic returned `ring_connect`. No configuration was
+published by this run. Browser cleanup revoked its disposable Moss device;
+isolated staging was removed and EMPTY confirmed. Phone timeout was restored.
+
+Resume when the ring is available: complete real Verify → Ready Start/hold →
+fresh normal Meeting and opted-in Main/text reply. A private harness completion
+quoting bug was fixed and tested independently; it is not product success.
+CI passed on the implemented source. Full local foundation rerun
+`20261021-214931` remains active after a News timing failure; that suite passed
+13/13 in isolation. Keep #3565 open and PR #3566 draft; no merge is authorized.

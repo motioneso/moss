@@ -126,9 +126,52 @@ and delivery options button opened the saved Ready screen. Start was available,
 delivery remained stopped, and original config/queue hashes matched. No new
 Vocci sign-in or service Start was needed for that upgrade check.
 
+## Latest bounded live checks
+
+Run `20261021-211131`, on clean source `8f24358bd` (inputs `c9d68993572a`),
+expired while the owner was away with the phone. Its browser cleanup confirmed
+Sign out device and row removal. The later native screen showed that the owner's
+selected ring had survived restart. This did not complete physical verification.
+
+Run `20261021-214856` tested documentation HEAD `b9d546303` with the same
+implemented source and one changed coordination document (inputs
+`4e5c3b78edda`). Actual native Moss Connect, fresh browser owner signup and
+approval, configured AI settings, account confirmation and process restart passed.
+With the owner's express authorization, an assistant used the existing Chrome
+Gmail session to read the newly requested Vocci email code and enter it directly
+in the actual native UI. Only one code request was sent; an interrupted UI read
+resumed the same request. Code values and account details are omitted here.
+Native verification, the real owned-ring inventory, explicit selection and
+selected-state restart passed. Android's intervening Save/No thanks prompt was
+dismissed with No thanks before continuing.
+
+The complete run still exited 1 at its physical/owner commit checkpoint. Installed
+inspection reported LINKED, configuration absent and staging present. A separate
+installed `SetupPhysicalCheck` then returned `result=FAIL`, reason `ring_connect`,
+instrumentation code `1`. The owner also reported that fresh audio was unavailable.
+Neither actual Start/hold nor new Meeting/Main delivery was reached in this run.
+Browser failure cleanup confirmed disposable-device row removal. Only that revoked
+isolated staging was removed; EMPTY was confirmed. Original config/queue hashes
+matched across cleanup, and the original screen timeout was restored.
+
+A separate harness defect was reproduced: passing an unquoted nested `sh -c`
+command through ADB caused a true constant test to return 1; correctly quoting the
+same command returned 0. Both private completion checks were corrected. That fix
+was not rerun through complete setup and does not turn the failed run green.
+The private observer now detects actual selected-ring UI rather than relying on
+a chat marker; concurrent native UI inspection must be serialized.
+
+CI passed, including its overall gate, Android, static, unit, integration,
+Meeting, browser, compose and auth-control jobs, on the implemented source.
+Local foundation `20261021-210957` failed one News focus-refresh unit test:
+17,871 passed, three skipped. Its isolated rerun passed all 13 tests.
+Full foundation rerun `20261021-214931` is active; no green local result is claimed.
+
 ## Remaining
 
-Obtain a green combined production-wizard run and prove fresh physical Meeting
-and opted-in Main/text delivery from the final controls. Complete authenticated-state theme/font,
-recovery/upgrade and current-input foundation/CI acceptance. Keep #3565 open and
-PR #3566 draft. No merge, production deployment or completed-onboarding claim.
+Obtain a green combined production-wizard run with the reachable ring and prove
+fresh physical Meeting and opted-in Main/text delivery from the final controls.
+Complete authenticated-state theme/font, recovery/upgrade and final-input
+foundation/CI acceptance. No code-entry request is pending; authorized existing
+Gmail access can finish the next sign-in. Keep #3565 open and PR #3566 draft.
+No merge, production deployment or completed-onboarding claim.
