@@ -40,3 +40,4 @@ export * from "./source-context/service.js";
 export * from "./source-context/runtime.js";
 
 export * from "./outlook-calendar-jobs.js";
+export * from "./outlook-calendar-availability.js";

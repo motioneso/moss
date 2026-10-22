@@ -181,7 +181,8 @@
     "fastify": "^5.6.2",
     "kysely": "^0.29.2",
     "pg": "^8.21.0",
-    "pg-boss": "^12.18.2"
+    "pg-boss": "^12.18.2",
+    "playwright-core": "1.60.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

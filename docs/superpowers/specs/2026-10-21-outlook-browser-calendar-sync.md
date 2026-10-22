@@ -81,6 +81,10 @@ flag, source display timezone, and observation time. Preserve a source view link
 only if obtained through the rendered UI. Location is optional. Attendees,
 meeting bodies, attachments and mail are not needed for the first import.
 
+- The selected Calendar must belong to the rendered My calendars group and expose
+  the supported primary-only menu without secondary-calendar edit/remove actions.
+  Shared and same-name secondary calendars are refused; unfamiliar menus pause
+  collection as an unsupported source.
 - Calendar timezone must be read/confirmed explicitly; do not assume the browser
   or host timezone matches Outlook. Reject ambiguous DST times or date ranges.
 - Preserve all-day dates using the calendar module's established conventions;
@@ -127,6 +131,10 @@ calendar screen is proposed. The required status/remediation copy is:
 | Disconnected      | Outlook calendar updates paused                            | Reconnect                          |
 
 Existing events remain readable if disconnected; they carry stale source health.
+Availability-based calendar creation also refuses stale, incomplete, disconnected,
+unconfirmed or uncovered Outlook sources before any provider operation. A complete
+refresh persists the source timezone for interpreting covered dates.
+
 Disable Google-specific write/reply/RSVP/reschedule actions for this source in
 both API/tools and UI. This connection grants no Outlook write capability.
 Update the owning module manifests/app map for requirements, read-only behavior,
@@ -156,7 +164,9 @@ UI, and freshness must survive worker/browser interruption.
 Run the scoped synthetic checks, then the required product checks and isolated
 DB gate using the repository's verification skill. Observe security assertions
 failing when their protections are removed. Record live UI evidence without
-publishing work data. No deployment or merge is included in this approval.
+publishing work data. The initial implementation approval excluded deployment and merge. Ben subsequently
+authorized merging once ready (`let’s merge when ready`); deployment remains outside
+this work.
 
 ## Approval
 
@@ -200,7 +210,7 @@ rendered collection and synthetic occurrence identity separately.
   title/time/all-day edits, two simultaneous appointments, recurring occurrence
   and exception edits, and an actual Chrome shutdown/relaunch. Account mismatch
   and trusted human-input interruption were exercised.
-- Calendar scope: 107 unit tests pass. The scoped disposable-database suite passes
+- Calendar scope: 131 unit tests pass. The scoped disposable-database suite passes
   34 tests, including owner/worker RLS, grants, source binding, missing-event
   reconciliation, failure checkpoints and bounded retries.
 - Real isolated Moss UI: sign in → Settings connection → queued import → repeated
@@ -210,17 +220,25 @@ rendered collection and synthetic occurrence identity separately.
 - Negative controls: four independent interactive/staged delete/move tests fail
   when their source guards are removed. Owner-binding, source-fingerprint and
   feature-grant checks also fail with protections removed. The trusted-input test
-  fails with its interruption flag disabled. All protections were restored.
+  fails with its interruption flag disabled. Same-name secondary/shared-calendar
+  fixtures fail with source-selection checks bypassed. Availability guard bypass
+  fails both interactive/staged refusal fixtures before provider operations. All
+  protections were restored.
 - Synthetic Outlook appointments, the recurring series and exception were removed
   through the UI. A subsequent complete five-week scan found zero synthetic
   occurrences. The dedicated source browser was stopped and test ports released.
 - Consecutive collector refreshes complete from the final week left by the prior
   refresh. The regression fails with the original navigation bound restored.
-- Full typecheck, lint and formatting pass. The repository file-size check is blocked by
-  unchanged `apps/web/src/chat/chat-drawer.tsx` at 1,001 lines, also present at
-  the branch's starting revision. No waiver or unrelated structural change was
-  added for it. This is not a passing full foundation/CI receipt.
+- Merge review: both independent review axes completed. Source selection and
+  availability-uncertainty findings were corrected and re-reviewed; production
+  bundles externalize the browser library and resolve it as a runtime dependency.
+- Full typecheck, lint and formatting passed at the implementation handoff. The
+  initial repository file-size check failed on unchanged `apps/web/src/chat/chat-drawer.tsx` at 1,001 lines, also present at
+  the branch's starting revision. Updating from main brings its existing fix (987
+  lines); no local waiver or unrelated restructuring was added. Final post-review
+  gate and CI receipts are recorded on the pull request.
 
 The implementation remains disabled without operator configuration. No work
-calendar has been imported into a shared instance, and no deployment or merge
-has been performed.
+calendar has been imported into a shared instance, and no deployment has been
+performed. Ben authorized merging after readiness checks; final merge status is
+recorded on the pull request.

@@ -115,17 +115,69 @@ async function requirePrimaryCalendar(page: Page): Promise<void> {
   if (await open.isVisible()) await click(open);
   const calendars = page.locator('button[role="option"][aria-selected="true"]:visible');
   await calendars.first().waitFor();
-  if (
-    (await calendars.count()) !== 1 ||
-    !(await calendars
-      .first()
-      .evaluate((e) =>
-        [...e.querySelectorAll("*")].some(
-          (n) => n.children.length === 0 && n.textContent?.trim() === "Calendar"
-        )
-      ))
-  ) {
-    throw new OutlookCalendarSourceError("source-changed");
+  if ((await calendars.count()) !== 1) throw new OutlookCalendarSourceError("source-changed");
+  const selected = calendars.first();
+  const ownsSelection = await selected.evaluate((e) => {
+    const group = e.closest("li")?.querySelector("button");
+    return (
+      [...e.querySelectorAll("*")].some(
+        (n) => n.children.length === 0 && n.textContent?.trim() === "Calendar"
+      ) &&
+      !!group &&
+      [...group.querySelectorAll("*")].some(
+        (n) => n.children.length === 0 && n.textContent?.trim() === "My calendars"
+      )
+    );
+  });
+  if (!ownsSelection) throw new OutlookCalendarSourceError("source-changed");
+  // The primary calendar has no edit/remove action. A same-name secondary calendar
+  // must not silently become the "primary" source; unsupported menus fail closed.
+  await selected.evaluate((e) => {
+    const more = e.parentElement?.querySelector<HTMLButtonElement>(
+      'button[aria-label="More options"]'
+    );
+    if (!more) throw new Error("unsupported-calendar-menu");
+    more.click();
+  });
+  const menu = page.getByRole("menu");
+  await menu.waitFor({ state: "visible" });
+  try {
+    // Decorative Charm and disabled view/move commands vary by calendar view.
+    const expected = new Set([
+      "Show this only",
+      "Sharing and permissions",
+      "Color",
+      "Charm",
+      "Move up",
+      "Move down",
+      "Move to"
+    ]);
+    const actions = (await menu.locator('[role="menuitem"]').allInnerTexts()).map((text) =>
+      text.split("\n")[0]!.trim()
+    );
+    if (
+      actions.length < 3 ||
+      new Set(actions).size !== actions.length ||
+      !["Sharing and permissions", "Color", "Move to"].every((name) => actions.includes(name)) ||
+      actions.some((name) => !expected.has(name))
+    ) {
+      throw new OutlookCalendarSourceError("source-changed");
+    }
+  } finally {
+    // Synthetic Escape closes the read-only context menu without tripping the
+    // trusted-human-input guard. No menu action is invoked.
+    await menu.evaluate((e) =>
+      e.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          keyCode: 27,
+          which: 27,
+          bubbles: true
+        })
+      )
+    );
+    await menu.waitFor({ state: "hidden" });
   }
 }
 

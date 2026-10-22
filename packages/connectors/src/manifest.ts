@@ -338,7 +338,7 @@ export const connectorsModuleManifest = {
     {
       id: "connectors.outlook_browser_coverage",
       description:
-        "Calendar shows the last complete refresh and covered dates. Incomplete scans retain the checkpoint. Meetings absent from two complete scans need verification; their times remain reserved until checked."
+        "Calendar shows the last complete refresh and covered dates. Missing meetings remain reserved. Calendar creation requires a current complete source with no unconfirmed meetings and coverage of the requested window."
     },
     {
       id: "connectors.outlook_browser_read_only",
@@ -350,6 +350,13 @@ export const connectorsModuleManifest = {
       description:
         "Read-only Outlook primary calendar, yesterday through the next 30 days, refreshed every five minutes. Requires an operator-bound dedicated browser and human sign-in. Connect, retry or disconnect in Connections settings.",
       errors: [
+        {
+          code: "connectors.outlook.availability_unverified",
+          class: "prerequisite",
+          remediationRef: "connectors.outlook.inspect_browser",
+          description:
+            "Calendar creation requires a current complete Outlook refresh with no unconfirmed meetings and coverage of the requested window. Sync or reconnect, then retry within covered dates."
+        },
         {
           code: "connectors.outlook.sign_in_needed",
           class: "prerequisite",

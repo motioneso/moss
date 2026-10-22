@@ -26,6 +26,7 @@ import {
   type RescheduleEventResult
 } from "@moss/calendar";
 import {
+  outlookCalendarAvailabilityIssue,
   GoogleApiError,
   GoogleConnectError,
   type GoogleConnectionService,
@@ -99,6 +100,13 @@ async function createApplyAdditionEvent(
 
   const staged = await readApplyReads(deps, dataContext, access);
   if ("denied" in staged) return denied(staged.denied);
+  const availabilityIssue = await dataContext.withDataContext(access, (db) =>
+    outlookCalendarAvailabilityIssue(db, start, end, {
+      repository: deps.connectorsRepository,
+      preferences: deps.preferencesRepository
+    })
+  );
+  if (availabilityIssue) return denied(availabilityIssue);
   const token = await ensureApplyToken(deps, dataContext, access, staged.reads);
   if ("denied" in token) return denied(token.denied);
 
@@ -282,6 +290,23 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
           message: "Calendar access is disabled for this account in Settings."
         };
       }
+
+      const availabilityIssue = await outlookCalendarAvailabilityIssue(
+        scopedDb,
+        resolved.start,
+        resolved.end,
+        { repository: deps.connectorsRepository, preferences: deps.preferencesRepository }
+      );
+      if (availabilityIssue)
+        return {
+          created: false,
+          resolvedStart: resolved.start.toISOString(),
+          resolvedEnd: resolved.end.toISOString(),
+          shifted: false,
+          conflict: "none",
+          calendarMirror: "skipped-error",
+          message: availabilityIssue
+        };
 
       // 2. Fresh access token (refreshes on <60s-to-expiry, after approval).
       let accessToken: string;

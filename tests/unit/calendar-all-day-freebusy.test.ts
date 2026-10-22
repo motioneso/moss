@@ -45,6 +45,7 @@ function buildService(
   const asked: { timeMin: string; timeMax: string }[] = [];
   const service = buildCalendarWriteService({
     connectorsRepository: {
+      listAccounts: async () => [],
       getCalendarWriteScopeState: async () => ({
         accountId: "00000000-0000-0000-0000-00000000ca10",
         hasScope: true

@@ -43,6 +43,7 @@ export interface OutlookCalendarHealth {
   readonly lastCompleteAt?: string;
   readonly windowStart?: string;
   readonly windowEnd?: string;
+  readonly timeZone?: string;
   readonly unconfirmed?: number;
   readonly failures?: number;
   readonly attemptedAt?: string;
@@ -144,7 +145,8 @@ export async function runOutlookCalendarSync(
           ? {
               lastCompleteAt: scan.observedAt,
               windowStart: scan.windowStart,
-              windowEnd: scan.windowEnd
+              windowEnd: scan.windowEnd,
+              timeZone: scan.timeZone
             }
           : {})
       };
