@@ -255,6 +255,41 @@ stopped after the parser changed and invalidated the recorded source inputs.
 Those receipts do not validate this new fix. Root and test TypeScript checks
 also passed for the fix.
 
+## Subsequent live recovery checks
+
+Run `20261022-112006` stopped at its empty-install prerequisite because revoked
+state from the prior disposable run remained on the phone. The earlier browser
+revocation was confirmed before removing that isolated state. Actual EMPTY and
+unchanged original configuration/queue hashes were then checked.
+
+Run `20261022-112204` passed Moss linking but exceeded native sign-in observation.
+Separately, native sign-in cleanup, a fresh email-code request, owned-ring
+selection and Cancel setup passed; actual EMPTY was confirmed. These separate
+observations do not make the canonical run green.
+
+Run `20261022-113711` recovered account inventory through the actual Finish ring
+lookup control, explicitly selected the owned ring and observed its saved
+selection after restart. Physical Verify did not commit configuration; the UI
+showed the generic network/Bluetooth retry message. The exact failed boundary
+was not established. No delivery journal was created and no fresh sample was
+requested. Browser cleanup confirmed disposable-device removal, isolated state
+was removed only afterward, and actual EMPTY plus unchanged original hashes
+were confirmed. The owned browser, reverse and proof servers were stopped.
+
+The private observer now retains verified sign-in for one explicit Finish ring
+lookup retry, and can run the existing content-free physical diagnostic after
+a failed Verify. A diagnostic does not substitute for production Verify/commit.
+Instrumentation closes the app's foreground activity; after any such check,
+reopen the native UI before observing controls. No instrumentation should run
+concurrently with an owner of native UI automation.
+
+On source `6982161f3`, isolated foundation `20261022-112201` passed static,
+type/app-map, 17,888 unit tests (three skipped) and 35 UAT-seed tests. Integration
+remained running. CI initially failed before unit tests during Playwright
+dependency installation: Ubuntu download timeout followed by a retained apt
+lock. The single failed-job retry completed successfully; workflow
+`39830709914` is green on `6982161f3`. This does not resolve live acceptance.
+
 ## Remaining
 
 Obtain a green combined production-wizard run with the reachable ring and prove
