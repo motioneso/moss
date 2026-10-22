@@ -290,6 +290,11 @@ dependency installation: Ubuntu download timeout followed by a retained apt
 lock. The single failed-job retry completed successfully; workflow
 `39830709914` is green on `6982161f3`. This does not resolve live acceptance.
 
+The same isolated foundation run subsequently completed with exit 0: all
+392 integration files passed, with 4,076 tests passed and two skipped. Its
+receipt records clean source `6982161f3`. The later documentation-only commit
+`a96c3b5cc` does not change that tested source. Live acceptance remains open.
+
 ## Remaining
 
 Obtain a green combined production-wizard run with the reachable ring and prove

@@ -4,14 +4,11 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
-## Vocci physical verification (#3565)
+## Vocci live-check unlock (#3565)
 
-The repaired audio parser passes real meeting replay. The latest installed setup
-retained ring selection but physical verification did not complete. Confirm
-whether the ring is currently near the Samsung and charged before the next
-hardware check. Android also reports a secure lock; unlock the Samsung and
-leave the proof app open. The timeout was extended to 30 minutes before the
-request. No new recording is needed; integration/CI checks continue.
+The proof server is ready, but Android reports a secure lock after power-button
+sleep. Unlock the Samsung and leave its screen on. The screen timeout remains
+30 minutes; no recording or email code is needed yet.
 
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
