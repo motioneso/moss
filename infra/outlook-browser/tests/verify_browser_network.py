@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from chromium_seccomp import chromium_policy
+from egress import connect_host
 from infrastructure import InfrastructurePolicy
 from lifecycle import Inventory
 from podman import Podman
@@ -22,6 +23,9 @@ from service_lock import ServiceLock
 from verify_browser import PUBLIC, ROOT, evaluate, navigate
 from verify_network import command
 from verify_policies import EXPECTED, engine_store, require_sources
+
+
+REDIRECT = 'https://microsoft.com/robots.txt'
 
 
 def require_blocked(result, document_uri):
@@ -43,15 +47,15 @@ def expect_failure(assertion, *args):
     raise AssertionError('Protection removal did not fail the browser assertion')
 
 
-async def visit(name):
+async def visit(name, url=PUBLIC):
     # A fresh query avoids accepting cached content from the preceding visit.
-    result = await navigate(name, PUBLIC + '?moss-network-proof=' + uuid.uuid4().hex)
+    result = await navigate(name, url + '?moss-network-proof=' + uuid.uuid4().hex)
     uri = await evaluate(name, 'document.documentURI')
     return result, uri
 
 
-async def require_public(name):
-    result, uri = await visit(name)
+async def require_public(name, url=PUBLIC):
+    result, uri = await visit(name, url)
     assert 'errorText' not in result, 'Ordinary browser HTTPS failed'
     assert uri.startswith(PUBLIC), 'Public HTTPS document missing'
     return result, uri
@@ -96,6 +100,7 @@ async def verify(image):
             runtime_id, name = await allocate(managed)
             assert await policy.refresh(), 'Pre-navigation host discovery failed'
             await require_public(name)
+            await require_public(name, REDIRECT)
             print('PASS: candidate sources/sandbox, network-none and public Chromium TLS', flush=True)
 
             # Use the actual expiry timer and monotonic age, without changing
@@ -122,6 +127,25 @@ async def verify(image):
             print('PASS: real public ingress refresh closes browser transport and denies its hostname',
                   flush=True)
 
+            # Observe the real parser without changing its result or upstream
+            # responses. Both CONNECTs must occur, establishing that the public
+            # redirect source succeeded before its target was denied.
+            destinations = []
+
+            def observe_connect(header):
+                host = connect_host(header)
+                destinations.append(host)
+                return host
+
+            with patch('egress.connect_host', side_effect=observe_connect):
+                require_blocked(*(await visit(name, REDIRECT)))
+            assert 'microsoft.com' in destinations, 'Redirect source CONNECT missing'
+            assert 'www.microsoft.com' in destinations, 'Redirect target CONNECT missing'
+            assert destinations.index('microsoft.com') < destinations.index('www.microsoft.com'), \
+                'Redirect target was not requested after its source'
+            print('PASS: real public HTTPS redirect reaches source and denies infrastructure target',
+                  flush=True)
+
             # Retain discovered addresses but remove the direct hostname match.
             # This request must pass through destination DNS/address checks.
             policy.hosts = ('localhost',)
@@ -138,6 +162,8 @@ async def verify(image):
             runtimes.append(control)
             _, control_name = await allocate(control)
             result, uri = await require_public(control_name)
+            expect_failure(require_blocked, result, uri)
+            result, uri = await require_public(control_name, REDIRECT)
             expect_failure(require_blocked, result, uri)
             print('PASS: omitting host policy restores verified public TLS and fails the same browser denial',
                   flush=True)

@@ -293,15 +293,21 @@ public Microsoft endpoint as an infrastructure-ingress stand-in. Refresh must cl
 live transports and deny the hostname. Removing the direct hostname match while retaining the
 discovered addresses must still deny Chromium after destination resolution.
 
+The real public HTTPS redirect from `microsoft.com/robots.txt` to the same `www.microsoft.com`
+endpoint must succeed before classification. Afterwards the verifier observes the unmodified
+CONNECT parser: the source CONNECT must precede the target CONNECT, and Chromium must report
+target denial. No upstream response is intercepted or substituted.
+
 Two controls must fail the same positive assertions. Omitting only Runtime's infrastructure-policy
-binding restores public HTTPS and fails browser denial. Suppressing only proactive tunnel closure
+binding restores direct and redirected public HTTPS and fails browser denial for both routes.
+Suppressing only proactive tunnel closure
 leaves new-CONNECT hostname/address/generation checks active, but Chromium reuses its old tunnel
 and renders another public response; both transport-closure and browser-denial assertions fail.
 Restoring closure and invalidating policy must close those captured transports.
 
-The six proof groups passed on native x86_64. This is a deliberately reclassified public endpoint,
+The seven proof groups passed on native x86_64. This is a deliberately reclassified public endpoint,
 not deployed Moss ingress acceptance. There is no TLS interception, certificate bypass, account,
-host TCP listener or production service. Redirect/rebinding, public IPv6 browser reachability,
+host TCP listener or production service. Broader redirects/rebinding, public IPv6 browser reachability,
 ARM64/supported hosts, installer population and authenticated product acceptance remain blockers.
 The verifier removes its three containers and profile volumes; the supplied candidate/base image
 and build cache remain until explicitly removed.
