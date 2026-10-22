@@ -56,7 +56,7 @@ the tunnel. Public HTTPS servers are not restricted to Microsoft, allowing feder
   boundaries, and repetition against the maintained release image on supported hosts.
 - Populate/refresh the denied infrastructure networks, including the server's public addresses
   and the app's public ingress; the special-use deny list alone does not identify those.
-- Browser security-update delivery and release review, managed-policy enforcement verification,
+- Browser security-update delivery and release review, remaining managed-policy behavior coverage,
   ARM64 sandbox diagnostics, redirect/rebinding tests, public IPv6 and alternate-route browser proof.
 - Authenticated viewer/collector leases, real session revocation, user setup, account confirmation,
   calendar import/removal and app-map/UI/deployment integration from the approved build spec.
@@ -164,8 +164,10 @@ only the proxy's numeric loopback address; the host egress resolves HTTPS destin
 The debugging listener is container-local and has no published host port.
 
 The policy file configures password-manager, autofill, download, printing and browser-sync
-restrictions. Their effective enforcement has **not** been verified. Profile files still contain
-live login material after sign-in; do not treat these policies as encryption or backup protection.
+restrictions. The native policy proof below checks Chromium's mandatory-policy report, five
+enforced preferences and a synthetic Blob download. It does not exercise every policy's browser
+UI behavior. Profile files still contain live login material after sign-in; do not treat these
+policies as encryption or backup protection.
 
 The checked-in pin is a **candidate**, not a maintained release channel or a completed security
 review. Before release, review browser/base vulnerabilities, update the pins, rebuild both supported
@@ -202,3 +204,37 @@ consistently for builds and every test subprocess when selecting a separate disp
 rules while preserving unrelated syscall names and conditions. The installed host default
 requires this adjustment for Chromium's nested namespace sandbox. It adds no outer capability.
 The test uses the generated file; installer policy delivery and host support checks remain pending.
+
+## Effective candidate policies
+
+After building the candidate, run this account-free native proof:
+
+```sh
+PYTHONPATH=infra/outlook-browser python3 -B infra/outlook-browser/tests/verify_policies.py --image sha256:<reported-image-id>
+```
+
+Use `--engine-root <disposable-store> --engine-runroot <disposable-runroot>` together to select
+a separate store. A test-only PATH adapter forwards every engine subprocess, including runtime
+operations, to those explicit locations. It does not change the installed service or image.
+
+The test creates actual Runtime/Podman/Egress browsers, checks runner/relay bytes and policy
+values against the checkout, and checks Chromium's own namespace/seccomp diagnostics. Chromium's
+policy page must report all nine configured policies with the expected values, Platform source,
+Machine scope, Mandatory level and OK status. Its settings API must report address/card autofill,
+background mode, password saving and browser sign-in as enforced false; attempts to set those
+five preferences true must fail and leave them false. Repeat after a graceful browser restart.
+
+The download fixture clicks a page-created Blob link with a user gesture and checks for its exact
+synthetic bytes in the profile's download directory for five seconds. Test-side CDP explicitly
+allows headless saving in both positive and control browsers, so that default cannot explain the
+policy denial. No file may appear with the configured policy. Clearing only the policy file's
+contents in a derivative image must make all policy/preference assertions fail and actually save
+the fixture. Removing only DownloadRestrictions must also save it and fail the same no-download
+assertion while the other eight policies and five preference locks still pass.
+
+This establishes the reported policy state, preference enforcement and this bounded Blob-download
+case on native x86_64. It does not prove every download route, printing behavior, notification
+prompts, sync/sign-in UI, password-form behavior, ARM64 or real Microsoft sign-in. The controls
+change only the policy JSON; no CDP helper or test bypass is shipped. No accounts or production
+services are used. Containers, profile volumes and control tags are removed; the supplied image
+and build cache remain until explicitly removed.

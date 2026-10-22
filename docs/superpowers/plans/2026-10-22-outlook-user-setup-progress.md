@@ -1,7 +1,9 @@
 # Outlook user setup implementation record
 
-Tracking: #3570; draft PR #3571. Worktree: `~/Jarv1s` task checkout, branch
-`moss/outlook-user-setup-design`. The approved flow and build spec remain authoritative.
+Tracking: #3570; draft PR #3571. Current checkout:
+`~/Jarv1s/.claude/worktrees/outlook-production-next`, local branch `moss/outlook-production-next`;
+push to the existing PR head `moss/outlook-user-setup-design`. The approved flow and build spec
+remain authoritative.
 
 ## Implemented internal foundation
 
@@ -86,7 +88,7 @@ protections individually; the actual browser assertions fail in both cases. Unit
 checks seccomp-rule preservation and rejects a permissive source policy with a guard-removal control.
 
 This is candidate-image evidence, not maintained release delivery, ARM64, real sign-in/MFA,
-effective managed-policy enforcement, full redirects/rebinding/public IPv6, host/app public
+complete managed-policy behavior coverage, full redirects/rebinding/public IPv6, host/app public
 ingress denial, service hard-crash recovery, Moss auth/viewer or live product proof. Those remain
 hard blockers. The legacy connection and production deployment remain untouched.
 
@@ -116,6 +118,32 @@ pinned candidate inputs. Both positive crash groups and the actual orphan-creati
 The store was selected by explicit engine root/runroot options on a separate disk. No accounts,
 production services or live connector were used. Test containers/volumes/units are removed by the
 verifier; the task's disposable image store is removed after verification.
+
+## Effective candidate policy checkpoint
+
+`verify_policies.py` exercises the actual Runtime/Podman/Egress candidate on native x86_64.
+All nine configured policies report the expected values, Platform source, Machine scope,
+Mandatory level and OK status in Chromium's policy page. The settings API reports five enforced
+false preferences: address/card autofill, background mode, password saving and browser sign-in.
+Attempts to change them to true are rejected and leave them false. These checks and the bounded
+synthetic Blob-download denial pass again after graceful browser restart.
+
+Two derivative images change only policy JSON. Clearing it makes all nine policy assertions and
+all five preference assertions fail, and actually saves the synthetic download. Removing only
+DownloadRestrictions saves the same bytes and fails the exact positive no-download assertion;
+the other eight policies and five preference locks still pass. Headless saving is explicitly
+allowed through test-side CDP in both paths, with the same user gesture and five-second observation.
+Runner/relay bytes and policy values are checked, along with Chromium's namespace/seccomp diagnostics.
+
+Native candidate receipt: `sha256:bc5c9a3022e7337700aac2ef5cfe98e7f2c33862565f7bc0fe59f05100ae2a8a`;
+`verify_policies.py` exited 0, four proof groups. This checks reported policy state, actual
+preference locks and the tested download route; it does not establish every download route,
+printing behavior, notification prompts, sync/sign-in UI or password-form behavior. Those limits,
+ARM64 and the existing network/product/deployment blockers remain. No accounts or production
+services are used. The native command and disposable-store options are in the runtime README.
+Proof containers, profile volumes, control/candidate images and the disposable engine store were
+removed after verification. Runtime unit verification passed 38 tests plus twelve guard-removal
+controls. No database-touching test ran in this policy-only continuation.
 
 ## Remaining build work
 
