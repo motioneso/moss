@@ -83,3 +83,15 @@ inventory/selection/restart passed. The installed UI and state subsequently
 confirmed committed ring setup; the combined harness failed on ADB before its
 success observation. Browser cleanup signed out the disposable device, isolated
 configuration was removed and EMPTY confirmed. This is partial acceptance. -->
+
+## Vocci #3565 — complete setup and delivery test
+
+The new ready-screen Start/Stop and hold controls are implemented. Installed
+empty/error and synthetic ready checks passed in both themes at normal/150%
+text. The complete test with the actual service has passed fresh Moss browser
+approval and account restart and is now at native Vocci sign-in. Ben needs to
+enter his existing email and email code directly in Moss setup proof, then leave
+it open and reply done. The previous disposable session was cleaned up; this
+run needs fresh native sign-in. No recording is needed yet. After real ring
+verification and enrollment, a separate step will request fresh Meeting/hold
+samples. Full foundation and CI continue independently; no merge is authorized.
