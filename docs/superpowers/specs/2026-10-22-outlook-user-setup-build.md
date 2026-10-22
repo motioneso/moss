@@ -1,8 +1,9 @@
 # Outlook user setup: implementation spec
 
 **Status: implementation in progress within the approved user flow.** Durable lifecycle storage and
-its recovery dispatcher and internal host inventory/egress/Podman primitives are implemented;
-the managed service, authenticated API/viewer, and Settings integration remain pending. See the
+its recovery dispatcher, host inventory/egress/Podman primitives and a private lifecycle service
+are implemented; production browser/runtime installation, authenticated API/viewer, and Settings
+integration remain pending. See the
 [implementation record](../plans/2026-10-22-outlook-user-setup-progress.md).
 Ben approved the
 [setup flow and disconnect semantics](2026-10-22-outlook-user-setup-design.md) on 2026-10-22.

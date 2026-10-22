@@ -57,6 +57,21 @@ class RuntimeComposition(unittest.IsolatedAsyncioTestCase):
         await self.runtime.remove(self.key, 2)
         self.assertEqual(self.inventory.get(self.key), (2, 'removed'))
 
+    async def test_failed_allocation_revokes_its_egress_before_retry(self):
+        proxies = []
+        def fail(key):
+            proxies.append(self.runtime.proxies[key])
+            raise OSError('fixture engine unavailable')
+        self.engine.create.side_effect = fail
+        with self.assertRaises(OSError):
+            await self.runtime.allocate(self.key, 1)
+        self.assertTrue(proxies[0].revoked)
+        self.assertNotIn(self.key, self.runtime.proxies)
+        self.assertEqual(self.inventory.get(self.key), (1, 'allocating'))
+        self.engine.create.side_effect = None
+        await self.runtime.allocate(self.key, 1)
+        self.assertEqual(self.inventory.get(self.key), (1, 'ready'))
+
     async def test_shutdown_preserves_profile_and_restart_reopens_socket(self):
         await self.runtime.allocate(self.key, 1)
         await self.runtime.close()

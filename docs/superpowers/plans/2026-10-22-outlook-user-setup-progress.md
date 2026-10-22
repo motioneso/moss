@@ -30,24 +30,48 @@ The recovery tests inject runtime removal; they do not prove deletion of a real 
 `infra/outlook-browser/` now implements a durable host inventory, per-runtime Unix CONNECT egress,
 fixed rootless Podman container/profile operations and their internal composition. Removal records
 a permanent tombstone before revoking tunnels and deleting resources. Request cancellation drains
-the external engine operation before releasing the inventory lock. No host service/socket API,
-viewer, collector, maintained browser image or installation/deployment wiring ships in this slice.
+the external engine operation before releasing the inventory lock. No viewer, collector,
+maintained browser image or installation/deployment wiring ships in this slice.
 
-Verification: `pnpm test:outlook-runtime` runs 21 tests and four guard-removal controls in CI.
+Verification: `pnpm test:outlook-runtime` runs 36 tests and eleven guard-removal controls in CI.
 Actual rootless Python fixtures also exercised public Microsoft TLS, 14 network checks, a real
 network-none negative control, separate profile volumes, idempotent allocation, container/profile
 deletion, inventory restart and unaffected second runtime. These are transport/engine proofs,
 not Chromium, real user authentication or Microsoft sign-in proofs. See the runtime README for
 commands and limitations. The tests use no account or production services.
 
-Hard broker-process crash/orphaned-command recovery, discovering/refreshing public host/app ingress
-deny addresses, and the actual browser's network/sandbox tests remain hard merge blockers.
+## Private lifecycle service
+
+The host entrypoint now composes the runtime behind a bounded Unix JSON-line protocol exposing
+only allocate/remove. Peer UID and private directory/socket permissions are checked. Requests
+contain only runtime ID, generation and operation; responses return a boolean and never echo
+requests or exception diagnostics. Moss user/session authorization remains unimplemented.
+
+A permanent-file singleton lock covers broker lifetime and external engine-command supervisors.
+The supervisor prevents Podman inheriting its lock descriptor: a real-engine test showed
+that passing it directly lets a detached monitor hold it indefinitely. The corrected path passed
+lock reacquisition with another real fixture container still running. On timeout, a supervisor
+requests broker shutdown through a parent pidfd and drains the command instead of acknowledging
+uncertain completion. A user-service template terminates the old cgroup before restart. Startup
+tries pending removals before restoring sockets and accepts requests after that recovery pass.
+Failed cleanup/restoration keeps the affected runtime pending with egress closed and does not
+block other owners' restoration. Failed cleanup remains unacknowledged for worker retry.
+
+Actual user-systemd tests ran the real service/protocol with a disclosed slow external-engine
+stand-in: main-process SIGKILL, old-command termination, restart/recovery, removal and tombstone.
+Changing KillMode to process demonstrated an orphan completing a late creation. Unit tests also
+kill an actual broker subprocess and verify its surviving command supervisor blocks replacement
+until completion. These tests do not prove hard-crash recovery of actual Podman or Chromium.
+
+Actual Podman hard-crash/removal, discovering/refreshing public host/app ingress deny addresses,
+and the actual browser's network/sandbox tests remain hard merge blockers. The unit is not
+installed/enabled, no app/worker mounts are added yet, and the legacy runtime is unchanged.
 
 ## Remaining build work
 
-1. Production host broker and maintained browser image, integrating the primitives above. Persisted
+1. Complete production host broker browser operations and maintained browser image. Persisted
    tombstones reject delayed allocations after cleanup, but hard service-crash/orphaned-command
-   recovery still needs proof. Never reuse a removed runtime reference. Complete public host/app
+   recovery with the actual engine still needs proof. Never reuse a removed runtime reference. Complete public host/app
    ingress denial and actual Chromium sandbox/network checks before claiming browser isolation.
 2. Private Unix transport, installer and every affected deployment configuration; optional runtime
    absence must preserve the legacy integration. Wire lifecycle sweeping when that service exists.

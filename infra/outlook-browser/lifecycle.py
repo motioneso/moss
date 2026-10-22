@@ -75,6 +75,12 @@ class Inventory:
             return database.execute('SELECT generation, state FROM runtimes WHERE id = ?',
                                     (runtime_id,)).fetchone()
 
+    def pending(self):
+        """Snapshot for startup recovery; tombstones never need recreation."""
+        with self.connect() as database:
+            return database.execute('''SELECT id, generation, state FROM runtimes
+                WHERE state != 'removed' ORDER BY state = 'removing' DESC, id''').fetchall()
+
     def allocate(self, runtime_id, generation, create):
         """create must be bounded and idempotent for the named container/volume."""
         with self.allocating(runtime_id, generation):

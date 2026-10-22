@@ -7,6 +7,7 @@ from pathlib import Path
 from lifecycle import Inventory, Unavailable
 from podman import Podman
 from runtime import Runtime
+from service_lock import ServiceLock
 from verify_network import command
 
 
@@ -22,6 +23,7 @@ async def verify():
         transport = root / 'transport'
         transport.mkdir(mode=0o700)
         inventory = Inventory(root / 'state')
+        service_lock = ServiceLock(inventory.directory)
         runtime_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
         engine = None
         runtime = None
@@ -34,7 +36,7 @@ async def verify():
             image = 'sha256:' + image.removeprefix('sha256:')
             engine = await asyncio.to_thread(Podman, image=image,
                                              seccomp='/usr/share/containers/seccomp.json',
-                                             transport_root=transport)
+                                             transport_root=transport, service_lock=service_lock)
             runtime = Runtime(inventory=inventory, engine=engine, transport_root=transport,
                               denied_networks=())
             for runtime_id in runtime_ids:
@@ -62,6 +64,11 @@ async def verify():
             assert not engine.owned('container', name, first)
             assert not engine.owned('volume', volume, first)
             await runtime.close()
+            # Podman must not leave the broker descriptor in a long-lived
+            # detached monitor after its CLI has finished.
+            service_lock.close()
+            service_lock = ServiceLock(inventory.directory)
+            engine.service_lock = service_lock
             restarted = Runtime(inventory=Inventory(root / 'state'), engine=engine,
                                 transport_root=transport, denied_networks=())
             try:
@@ -75,11 +82,14 @@ async def verify():
             print('PASS: real per-runtime profiles, idempotent allocation, container/profile '
                   'removal and restart tombstone; second runtime unaffected')
         finally:
+            if engine:
+                engine.service_lock = None
             for runtime_id in runtime_ids:
                 if runtime:
                     await runtime.remove(runtime_id, 2)
             if image:
                 await command('image', 'rm', tag)
+            service_lock.close()
 
 
 if __name__ == '__main__':

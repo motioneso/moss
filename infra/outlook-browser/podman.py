@@ -7,6 +7,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 from lifecycle import Unavailable, validate_reference
@@ -16,20 +17,30 @@ LABEL = 'io.moss.outlook.runtime'
 
 
 class Podman:
-    def __init__(self, *, image, seccomp, transport_root):
+    def __init__(self, *, image, seccomp, transport_root, service_lock=None):
         if not re.fullmatch(r'sha256:[a-f0-9]{64}', image):
             raise ValueError('Browser image must be an installed immutable image ID')
         self.image = image
+        self.service_lock = service_lock
         self.seccomp = Path(seccomp).resolve(strict=True)
         self.transport_root = Path(transport_root).resolve(strict=True)
         if self.run('info', '--format', '{{.Host.Security.Rootless}}') != 'true':
             raise Unavailable('Rootless Podman required')
 
-    @staticmethod
-    def run(*arguments, absent=False):
-        result = subprocess.run(['podman', *arguments], stdin=subprocess.DEVNULL,
+    def run(self, *arguments, absent=False):
+        descriptors = (() if self.service_lock is None else
+                       (self.service_lock.descriptor,))
+        command = ['podman', *arguments]
+        timeout = 30
+        if self.service_lock is not None:
+            command = [sys.executable, '-B', str(Path(__file__).with_name('engine_command.py')),
+                       str(os.getpid()), str(self.service_lock.descriptor), *arguments]
+            # The supervisor owns timeout handling. Killing it here could free
+            # the lock while the engine it supervises is still running.
+            timeout = None
+        result = subprocess.run(command, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                timeout=30, check=False)
+                                timeout=timeout, check=False, pass_fds=descriptors)
         if absent and result.returncode == 1:
             return None
         if result.returncode or len(result.stdout) > 8192:

@@ -67,7 +67,13 @@ class Runtime:
                     await proxy.listen(str(path))
                     os.chmod(path, 0o600)
                     self.proxies[runtime_id] = proxy
-                await complete_engine(self.engine.create, runtime_id)
+                try:
+                    await complete_engine(self.engine.create, runtime_id)
+                except BaseException:
+                    failed_proxy = self.proxies.pop(runtime_id, None)
+                    if failed_proxy:
+                        await failed_proxy.revoke()
+                    raise
 
     async def remove(self, runtime_id, generation):
         async with self.lock(runtime_id, generation):
