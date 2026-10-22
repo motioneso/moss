@@ -4,6 +4,14 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
+## Vocci final live-check availability (#3565)
+
+The installed proof is EMPTY and the longer test window is ready. Android reports
+a secure lock after the previous run ended. Unlock the Samsung, leave the setup
+proof visible, and keep the ring nearby for the next actual delivery check. No
+new recording is needed until hold enrollment is confirmed. Screen timeout was
+extended before asking; restore the original value after the live check.
+
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the
