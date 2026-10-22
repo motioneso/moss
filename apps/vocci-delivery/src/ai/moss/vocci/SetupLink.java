@@ -117,7 +117,12 @@ final class SetupLink {
         synchronized (TRANSACTION) { refresh(); return savedStatus(); }
     }
     private Status savedStatus() throws Exception {
-        if (reconcile()) return new Status(Phase.COMMITTED, new JSONObject());
+        if (reconcile()) {
+            JSONObject active = committed.load();
+            return new Status(Phase.COMMITTED, new JSONObject().put("origin", active.getString("origin"))
+                .put("accountName", active.optString("accountName", active.getString("ownerId")))
+                .put("binding", new JSONObject().put("sn", active.getString("sn"))));
+        }
         if (!staged.exists()) return new Status(deliveryState.exists() ? Phase.RECOVERY : Phase.EMPTY, record);
         Phase phase;
         if (record.optBoolean("cleanupRequested")) phase = Phase.CLEANUP;

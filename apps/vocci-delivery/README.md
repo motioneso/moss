@@ -2,7 +2,7 @@
 
 This repo-owned Android client retrieves finished legacy Vocci recordings and
 uploads them to Moss's existing Meetings receiver. It is a developer-installed
-foreground service, not consumer ring setup. No ownership, pairing, recording
+foreground service with guided setup for already-owned rings. No ownership, pairing, recording
 control, ring deletion or destructive sync acknowledgement commands exist. Normal
 recordings become Meetings evidence; newly opted-in hold recordings go to Main chat.
 
@@ -14,7 +14,37 @@ in ignored `build/`. The default APK is debuggable and development-only; use the
 separate release mode below for distribution packaging. Target API 35, minimum
 API 33; tested devices/results belong on the PR.
 
-## Provision and start
+## Set up an already-owned ring
+
+Fresh installs open **Set up your ring**. Existing configured installs open the
+usual companion and keep their current ring, account, pending audio and hold choice.
+The new wizard is implemented; its complete setup-to-recording live acceptance is
+still pending in #3565. Use a development build for this pre-release flow.
+
+1. Enter your Moss server address and choose **Connect Moss in browser**. Sign into
+   Moss, review the Android permissions and approve. Return and **Check approval**.
+2. Enter the email for the existing Vocci account that owns the ring. Choose
+   **Send code** and enter the email code directly in the app. If requested, enter
+   your authenticator code. Resend is explicit and shows a cooldown. Unsupported
+   sign-in methods stop with an explanation; this does not create an account.
+3. Choose a ring from **Rings on your Vocci account**, then **Select ring**. Allow
+   Nearby devices, turn Bluetooth on and keep the ring close. If Vocci is installed,
+   open its app settings → Permissions and remove Nearby devices access. Return
+   and choose **Verify ring**. Cloud lookup alone does not complete verification.
+4. After setup is saved, choose **Continue to companion**. Review Bluetooth,
+   notifications and background battery settings, then explicitly **Start delivery**.
+   Enable hold-to-talk on that screen only when you want Main chat text replies.
+   Setup itself starts neither delivery nor hold input.
+
+Cancel setup confirms remote cleanup when online. If offline, reconnect and retry;
+unconfirmed cleanup remains pending. Reopening resumes staged Moss/ring selection.
+An interrupted unverified email attempt needs sign-in cleanup before another code;
+a verified saved attempt offers **Finish ring lookup**. No background email sends.
+Keep the original Moss origin/owner/ring for recovery. Corrupt configuration or
+orphaned queued audio blocks adoption of another setup. A new factory-fresh ring,
+ownership transfer, firmware and ring-audio deletion are outside this flow.
+
+## Developer bootstrap and checks
 
 Use the authorized Android device explicitly with `adb -s <serial>` for every
 command; do not operate on another attached device. Install
@@ -48,9 +78,9 @@ checks the live session owner, consumes/removes the bootstrap, then retains conf
 with Android Keystore AES-GCM in `no_backup/config.enc`. An authorized debugging
 host can inspect a debug process; Keystore does not remove that trust boundary.
 
-There is no Vocci account sign-in/key recovery UI. Reuse an already-retained valid
-binding; do not ask its owner to sign in again unless it is actually unavailable.
-A new owner still needs legitimate Vocci account/backend key recovery. Refreshing
+The guided flow above retrieves an existing owner binding. Developer bootstrap
+remains available for diagnostics. Reuse an already-retained valid binding; do not
+ask its owner to sign in again unless it is actually unavailable. Refreshing
 Moss credentials preserves the same origin/owner/ring and requires an explicit
 restart. Session cookies are general account credentials; browser linking below
 replaces the initial developer cookie with an Android device credential.
@@ -96,8 +126,8 @@ its OFL license is included under `assets/fonts/` and packaged by `build.sh`.
 
 Snapshot polling updates keyed views in place. Unchanged snapshots retain controls,
 focus and scroll position; status changes update text and destinations. A theme
-recreation restores the scroll offset. This is the developer status screen, with
-existing provisioning requirements and destinations.
+recreation restores the scroll offset. The existing status screen keeps its saved configuration and destinations;
+fresh installs use the guided setup above.
 
 ## Durable behavior and limits
 
@@ -170,7 +200,7 @@ reliability beyond the actual PR proof remain unverified.
 
 ## Link your Moss account
 
-After the existing ring is provisioned, open the companion and choose **Connect
+After setup is saved, open the companion and choose **Connect
 Moss in browser**. This stops delivery while you change its account connection.
 Sign into the original Moss account, review the Android permissions, and approve.
 Return to the companion; it shows **Account connected · device approval**. Press
@@ -195,8 +225,8 @@ normal owner checks refresh the inactivity window. **Disconnect Moss account**
 revokes the device before removing its local credential. Ring binding, owner pin,
 queue, and pending audio stay on the phone. Reconnect with the original account
 and press Start to resume. Replacing an existing account link retires its previous
-device credential after the new connection is verified. Initial ring ownership setup still requires developer
-provisioning; linking does not recover a Vocci account or bind a new ring.
+device credential after the new connection is verified. Already-owned rings use the guided setup above. Factory-fresh ownership must first
+be established in Vocci; Moss reconnection does not repeat key lookup or bind a ring.
 
 ## Release packaging
 

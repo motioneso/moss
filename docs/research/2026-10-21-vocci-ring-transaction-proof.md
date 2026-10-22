@@ -35,7 +35,7 @@ screen has not yet passed installed live UI, theme or font-scale acceptance.
 
 ## Observed checks
 
-The final installed proof APK SHA-256 is
+The earlier selected-ring diagnostic proof APK SHA-256 is
 `1c2a03c67335112a322217cab1f0f1835c648cfc66e902e0f3ddfbb0f81d636a`.
 Installed synthetic instrumentation passed:
 
