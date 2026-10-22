@@ -341,6 +341,19 @@ CI receipts validate their recorded source; a new live run remains necessary.
 Scoped ESLint, root TypeScript, Prettier and diff whitespace checks pass for the
 timeout-only gate change. These checks do not replace its pending live rerun.
 
+CI on documentation head `9a9eb7b3a` initially failed before tests in the unit,
+Meeting draft UI and Meetings runtime lanes during browser installation. One
+failed-job rerun was requested for each affected workflow. The unit lane again
+exhausted its five-minute install attempt while Ubuntu packages were still
+downloading; its immediate second attempt failed because the first installer's
+apt child retained the package lock. No third rerun was requested. Its workflow
+now spends the existing two-attempt ten-minute total budget on one bounded
+attempt, retaining the named timeout annotation and 45-minute job backstop.
+All 16 existing CI phase/deadline tests, workflow formatting and diff checks pass.
+Fresh CI is still required for that workflow change. Foundation
+`20261022-152714` was stopped after the workflow changed; it has no passing
+final-input verdict.
+
 ## Remaining
 
 Obtain a green combined production-wizard run with the reachable ring and prove

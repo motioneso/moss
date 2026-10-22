@@ -159,14 +159,13 @@ jobs:
       - name: Install Chromium for unit tests
         run: |
           status=0
-          for attempt in 1 2; do
-            status=0
-            timeout --verbose --signal=TERM 5m pnpm exec playwright install --with-deps chromium \
-              || status=$?
-            if [ "$status" -eq 0 ]; then break; fi
-          done
+          # Use the existing total ten-minute budget in one attempt. Killing pnpm
+          # after five minutes can leave sudo's apt child holding the package lock,
+          # so immediately retrying starts a competing installer instead of recovering.
+          timeout --verbose --signal=TERM 10m pnpm exec playwright install --with-deps chromium \
+            || status=$?
           if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit-chromium-install budget=5m issue=#1534"
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit-chromium-install budget=10m issue=#1534"
           fi
           exit "$status"
 

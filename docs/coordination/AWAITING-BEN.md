@@ -4,13 +4,11 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
-## Vocci final live-check availability (#3565)
+## Vocci fresh hold sample (#3565)
 
-The installed proof is EMPTY and the longer test window is ready. Android reports
-a secure lock after the previous run ended. Unlock the Samsung, leave the setup
-proof visible, and keep the ring nearby for the next actual delivery check. No
-new recording is needed until hold enrollment is confirmed. Screen timeout was
-extended before asking; restore the original value after the live check.
+Actual setup, Start and hold enrollment passed. Make a fresh hold sample saying
+"What is two plus two?", release, then reply done. No normal recording is needed.
+The current run observes receipt directly from the delivery journal.
 
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
