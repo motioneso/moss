@@ -295,6 +295,52 @@ The same isolated foundation run subsequently completed with exit 0: all
 receipt records clean source `6982161f3`. The later documentation-only commit
 `a96c3b5cc` does not change that tested source. Live acceptance remains open.
 
+## Latest installed setup and delivery run
+
+Run `20261022-125024` retained native sign-in and selection across restart, but
+the first production Verify did not commit. The existing physical diagnostic
+passed without configuration. One actual Verify retry then committed and showed
+the saved Ready state. The first failure's boundary remains unknown; the
+canonical run still exited 1. Browser revocation, isolated EMPTY cleanup and
+unchanged original configuration/queue hashes were confirmed.
+
+Run `20261022-125849` passed actual Moss browser linking and restart retention,
+native Vocci sign-in, explicit selection/restart, physical verification on its
+first attempt, fresh Moss owner verification and atomic configuration save.
+Actual Ready-screen Start retrieved recordings; explicit hold opt-in completed
+stable-inventory enrollment. Three normal entries reached `complete` in the
+production journal. No fresh post-enrollment hold entry arrived before the
+15-minute outer timeout. The canonical run exited 1; visible Meeting outputs,
+hold review/Send and Main text reply were not reached. Journal completion alone
+does not establish those UI checks.
+
+The timeout terminated the browser before its normal revocation cleanup ran.
+The disposable server and its dedicated database container were destroyed by
+the gate; browser revocation was **not observed**. A separate actual native Stop
+disabled recovery. After confirming the disposable endpoint and database
+container were gone, isolated setup/configuration/delivery files were removed.
+Installed inspection confirmed EMPTY; original companion configuration/queue
+hashes still matched the upgrade baseline. The owned reverse was removed and
+the original phone screen timeout restored. These are recovered cleanup steps,
+not a combined passing run.
+
+One other normal entry failed before upload. Replaying its private captured
+packet file through the actual production `RingProtocol.PacketReader` fails
+after 48,846 complete packets with `packet header/length`. The phone's packet
+file and captured copy are both 5,242,880 bytes; the last packet declares 101
+bytes with only 71 remaining. This establishes an incomplete local packet file,
+not its cause on the ring or during retrieval. No partial audio was uploaded and
+no ring recording was deleted. Audio, timestamps, identifiers and transcripts
+remain private.
+
+The live gate's bounded browser window is increased to 30 minutes so native
+sign-in, existing backlog processing, fresh samples and cleanup can fit in one
+run. The private observer also handles termination through its failure/cleanup
+path. Neither change supplies missing delivery evidence. Earlier foundation and
+CI receipts validate their recorded source; a new live run remains necessary.
+Scoped ESLint, root TypeScript, Prettier and diff whitespace checks pass for the
+timeout-only gate change. These checks do not replace its pending live rerun.
+
 ## Remaining
 
 Obtain a green combined production-wizard run with the reachable ring and prove

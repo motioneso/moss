@@ -4,12 +4,6 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
-## Vocci live-check unlock (#3565)
-
-The proof server is ready, but Android reports a secure lock after power-button
-sleep. Unlock the Samsung and leave its screen on. The screen timeout remains
-30 minutes; no recording or email code is needed yet.
-
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the
