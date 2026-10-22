@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 
 import {
@@ -99,6 +99,7 @@ describe("apply writer transaction probe", () => {
     let calls = 0;
     const real = new ConnectorsRepository();
     return {
+      listAccounts: (scopedDb: DataContextDb) => real.listAccounts(scopedDb),
       getCalendarWriteScopeState: (scopedDb: DataContextDb) =>
         real.getCalendarWriteScopeState(scopedDb),
       getActiveGoogleAccountSecret: (async () => rows[Math.min(calls++, rows.length - 1)]) as never
@@ -398,13 +399,12 @@ describe("apply writer transaction probe", () => {
       { id: "00000000-0000-4000-8000-000000000099", encryptedSecret: row!.encryptedSecret }
     ]);
     const queried: unknown[] = [];
-    const spyingCache = {
-      getByExternalId: (async (...args: unknown[]) => {
-        queried.push(args);
-        return undefined;
-      }) as never
-    };
-    const port = buildGuardPort(insertRepo, lookupRepo, spyingCache as never);
+    const spyingCache = new CalendarRepository();
+    vi.spyOn(spyingCache, "getByExternalId").mockImplementation(async (...args) => {
+      queried.push(args);
+      return undefined;
+    });
+    const port = buildGuardPort(insertRepo, lookupRepo, spyingCache);
 
     await expect(
       port.createAddition({
@@ -428,12 +428,11 @@ describe("apply writer transaction probe", () => {
     expect(row).toBeDefined();
     const insertRepo = scriptedActiveAccount([row]);
     const lookupRepo = scriptedActiveAccount([row]);
-    const failingCache = {
-      getByExternalId: (async () => {
-        throw new Error("cache down");
-      }) as never
-    };
-    const port = buildGuardPort(insertRepo, lookupRepo, failingCache as never);
+    const failingCache = new CalendarRepository();
+    vi.spyOn(failingCache, "getByExternalId").mockImplementation(async () => {
+      throw new Error("cache down");
+    });
+    const port = buildGuardPort(insertRepo, lookupRepo, failingCache);
 
     await expect(
       port.createAddition({

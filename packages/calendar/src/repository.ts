@@ -4,6 +4,8 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type CalendarEvent, type DataContextDb } from "@moss/db";
 
+import { localDayRange } from "@moss/module-sdk";
+
 import { isCalendarFollowThroughEvent } from "./follow-through.js";
 
 export interface CreateCachedCalendarEventInput {
@@ -30,6 +32,54 @@ export interface ListVisibleCalendarEventsOptions {
 }
 
 export class CalendarRepository {
+  async listMirrorWindow(
+    scopedDb: DataContextDb,
+    accountId: string,
+    start: string,
+    end: string,
+    timeZone: string
+  ): Promise<CalendarEvent[]> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.calendar_events")
+      .selectAll()
+      .where("connector_account_id", "=", accountId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where(sql`external_metadata->>'source'`, "=", "outlook-browser-calendar")
+      .where((eb) =>
+        eb.or([
+          eb.and([
+            eb(sql`external_metadata->>'allDay'`, "=", "true"),
+            eb("ends_at", ">", new Date(`${start}T00:00:00Z`)),
+            eb("starts_at", "<", new Date(`${end}T00:00:00Z`))
+          ]),
+          eb.and([
+            eb(sql`external_metadata->>'allDay'`, "=", "false"),
+            eb("ends_at", ">", localDayRange(start, timeZone).start),
+            eb("starts_at", "<", localDayRange(end, timeZone).start)
+          ])
+        ])
+      )
+      .execute();
+  }
+
+  async updateMirrorMetadata(
+    scopedDb: DataContextDb,
+    accountId: string,
+    eventId: string,
+    patch: Record<string, unknown>
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.calendar_events")
+      .set({ external_metadata: sql`external_metadata || ${JSON.stringify(patch)}::jsonb` })
+      .where("id", "=", eventId)
+      .where("connector_account_id", "=", accountId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where(sql`external_metadata->>'source'`, "=", "outlook-browser-calendar")
+      .execute();
+  }
+
   async listVisible(
     scopedDb: DataContextDb,
     opts?: ListVisibleCalendarEventsOptions

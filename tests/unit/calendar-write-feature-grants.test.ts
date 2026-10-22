@@ -12,6 +12,7 @@ describe("calendar write feature grants", () => {
     let cacheCalls = 0;
     const service = buildCalendarWriteService({
       connectorsRepository: {
+        listAccounts: async () => [],
         getCalendarWriteScopeState: async () => ({
           accountId: "00000000-0000-0000-0000-00000000ca10",
           hasScope: true
@@ -35,6 +36,7 @@ describe("calendar write feature grants", () => {
         }
       },
       calendarRepository: {
+        listVisible: async () => [],
         upsertCachedEvent: async () => {
           cacheCalls += 1;
           return {} as never;
@@ -68,6 +70,7 @@ describe("calendar write feature grants", () => {
     let deletedEventId: string | null = null;
     const service = buildCalendarWriteService({
       connectorsRepository: {
+        listAccounts: async () => [],
         getCalendarWriteScopeState: async () => ({
           accountId: "00000000-0000-0000-0000-00000000ca10",
           hasScope: true
@@ -88,6 +91,7 @@ describe("calendar write feature grants", () => {
         }
       },
       calendarRepository: {
+        listVisible: async () => [],
         upsertCachedEvent: async () => {
           const error = new Error("new row violates row-level security policy");
           (error as { code?: string }).code = "42501";
@@ -122,6 +126,7 @@ describe("calendar write feature grants", () => {
   it("preserves cached calendarEventId on idempotent 409 retries", async () => {
     const service = buildCalendarWriteService({
       connectorsRepository: {
+        listAccounts: async () => [],
         getCalendarWriteScopeState: async () => ({
           accountId: "00000000-0000-0000-0000-00000000ca10",
           hasScope: true
@@ -137,6 +142,7 @@ describe("calendar write feature grants", () => {
         }
       },
       calendarRepository: {
+        listVisible: async () => [],
         getByExternalId: async () => ({ id: "cached-calendar-event-1" })
       }
     } as never);

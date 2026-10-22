@@ -48,7 +48,10 @@ const EXTERNAL = [
   "onnxruntime-node",
   "sharp",
   "pg-native",
-  "node-pty"
+  "node-pty",
+  // Playwright reads its own packaged assets and optional transports at runtime.
+  // Root dependencies keep this resolvable from the resident dist/ bundles.
+  "playwright-core"
 ];
 
 /**
