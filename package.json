@@ -72,6 +72,7 @@
     "start:worker": "pnpm --filter @moss/worker start",
     "test:unit": "tsx scripts/test-unit.ts",
     "test:outlook-runtime": "PYTHONPATH=infra/outlook-browser python3 -B -m unittest discover -s infra/outlook-browser/tests -v && python3 -B infra/outlook-browser/tests/verify_negative_controls.py",
+    "test:outlook-client": "pnpm test:unit tests/unit/outlook-lifecycle-client.test.ts && python3 -B scripts/check-outlook-lifecycle-client-controls.py",
     "test:uat-seed": "vitest run tests/uat/seed",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:chat-unread": "tsx scripts/test-integration.ts tests/integration/chat-unread.test.ts",

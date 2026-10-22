@@ -8,6 +8,7 @@ The existing operator-bound collector is unchanged.
 private Unix lifecycle broker (broker.py / service.py)
   trusted app/worker UID checked with SO_PEERCRED
   allocate/remove only; runtime ID + generation, bounded JSON line
+  ← connectors OutlookLifecycleClient (not yet app-wired)
 Runtime.allocate/remove
   Inventory: durable SQLite state and permanent removal tombstones
   Egress: one private Unix CONNECT socket per runtime
@@ -146,6 +147,35 @@ The test requires a working user-systemd bus; terminals without session variable
 `DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus` before running it.
 
 ## Internal service configuration
+
+The exported connectors `OutlookLifecycleClient` implements the cleanup runtime port and fixed
+allocate/remove requests over this Unix protocol. Its socket path, mapped broker UID/group and
+optional socket timeout are trusted installation configuration. Before connecting it checks the
+parent's real path and 0750 ownership/group, and the actual socket's 0660 ownership/group. The
+installer must protect the mounted directory and its ancestors against replacement. These checks
+do not authenticate Moss users or make an untrusted/mutable mount safe.
+
+Requests snapshot the server-resolved UUID/generation before filesystem waits and reconstruct
+only the fixed envelope. The client accepts only the exact positive reply followed by EOF, with
+a 32-byte response bound and an absolute socket deadline (45 seconds by default, configurable up
+to 120 seconds). Socket/filesystem errors become a fixed error with no raw cause or reply. A timeout
+means uncertain completion: retry the same reference through durable lifecycle work; never infer
+that browser/profile removal succeeded. No API/worker configuration, scheduler or mount enables
+this adapter yet.
+
+On Linux, run:
+
+```sh
+pnpm test:outlook-client
+```
+
+This runs 22 tests and thirteen source guard-removal controls on temporary copies. Real Unix
+sockets exercise fragmented/negative/truncated/extra replies, pre-EOF byte bounds, a busy peer's
+absolute deadline, filesystem identity/modes/symlinks, immutable references and fixed errors.
+Two tests call the actual Python broker: it accepts the matching Linux peer UID and rejects a
+mismatched UID. A disclosed metadata-only runtime stand-in records allocate/remove arguments;
+this is cross-language protocol evidence, not a Podman/profile-deletion receipt. No database,
+account, host TCP listener or production service is used. CI runs the same lane.
 
 `service.py --config <trusted-json-file>` reads exactly `state`, `transport`, `socket`, `image`,
 `seccomp`, `allowed_uid`, `socket_gid`, `denied_networks` and `infrastructure_hosts`. Paths are absolute installation

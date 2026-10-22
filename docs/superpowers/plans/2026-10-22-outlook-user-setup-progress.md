@@ -224,6 +224,30 @@ guard-removal controls. No database-touching test ran in this browser-only slice
 Scoped Markdown formatting, verifier syntax and diff checks pass. The full static receipt above
 belongs to `6765604ed`; this test/Markdown-only slice does not claim a new full-static receipt.
 
+## Lifecycle transport checkpoint
+
+The exported connectors `OutlookLifecycleClient` now supplies a concrete implementation of the
+cleanup runtime port plus fixed allocation over the existing Unix broker protocol. Installation
+supplies the socket path, mapped broker UID/group and bounded socket deadline. It checks the
+parent's real path/0750 permissions and socket type/0660 permissions against that identity.
+The mount and its ancestors must be protected by the installer; this is not Moss user authentication.
+
+The client snapshots UUID/generation before filesystem waits, sends only the fixed envelope,
+limits replies to 32 bytes and requires the exact positive acknowledgment followed by EOF.
+An absolute socket deadline defaults to 45 seconds (at most 120 seconds). Errors retain no raw
+socket error/cause, path or broker response. Timeout is uncertain completion, requiring durable
+retry of the same reference rather than removal acknowledgment.
+
+`pnpm test:outlook-client` exercises 22 Linux Unix-socket tests plus thirteen assertion-failing
+source guard-removal controls and is registered in CI. It includes actual Python broker acceptance
+and peer-UID denial with a disclosed metadata-only runtime stand-in. This proves protocol
+compatibility, not actual engine/profile deletion, deployed mounts or application authorization.
+No database, account or production service is used. No app/worker runtime configuration is enabled;
+installer/deployment and lifecycle scheduling remain unfinished.
+Full `pnpm verify:static` exited 0, including root/test/web/external-module typechecks and
+app-map generation. Python syntax and scoped formatting/diff checks pass. The final receipt edit
+also passes scoped formatting/diff checks. This is not a database/full-foundation or live UI receipt.
+
 ## Remaining build work
 
 1. Complete production host broker browser operations and maintained browser image. Persisted

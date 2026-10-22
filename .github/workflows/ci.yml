@@ -183,6 +183,9 @@ jobs:
       - name: Verify Outlook runtime primitives
         run: pnpm test:outlook-runtime
 
+      - name: Verify Outlook lifecycle client controls
+        run: pnpm test:outlook-client
+
       - name: Run unit tests
         run: |
           status=0
