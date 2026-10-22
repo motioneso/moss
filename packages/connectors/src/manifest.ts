@@ -66,13 +66,16 @@ export const connectorsModuleManifest = {
       "sql/0215_connector_sync_previous_run.sql",
       "sql/0244_email_refresh.sql",
       "sql/0248_connector_email_history_id.sql",
-      "sql/0331_outlook_browser_calendar.sql"
+      "sql/0331_outlook_browser_calendar.sql",
+      "sql/0332_outlook_browser_lifecycle.sql"
     ],
     migrationDirectories: ["packages/connectors/sql"],
     ownedTables: [
       "app.connector_definitions",
       "app.connector_accounts",
       "app.connector_oauth_pending",
+      "app.connector_outlook_setups",
+      "app.connector_outlook_cleanup",
       "app.connector_email_refreshes",
       "app.connector_email_refresh_keys",
       "app.connector_email_refresh_accounts"

@@ -1,6 +1,9 @@
 # Outlook user setup: implementation spec
 
-**Status: technical build plan within the approved user flow; product implementation pending.** Ben approved the
+**Status: implementation in progress within the approved user flow.** Durable lifecycle storage and
+its recovery dispatcher are implemented; managed runtime, authenticated API/viewer, and Settings
+integration remain pending. See the [implementation record](../plans/2026-10-22-outlook-user-setup-progress.md).
+Ben approved the
 [setup flow and disconnect semantics](2026-10-22-outlook-user-setup-design.md) on 2026-10-22.
 The runtime/deployment details below carry that flow into implementation; they do not introduce
 another approval checkpoint. Deployment and production migration are separate actions.

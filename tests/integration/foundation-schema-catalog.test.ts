@@ -643,7 +643,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0328", name: "0328_meeting_voice_recordings.sql" },
         { version: "0329", name: "0329_meeting_recording_uploads.sql" },
         { version: "0330", name: "0330_android_companion_linking.sql" },
-        { version: "0331", name: "0331_outlook_browser_calendar.sql" }
+        { version: "0331", name: "0331_outlook_browser_calendar.sql" },
+        { version: "0332", name: "0332_outlook_browser_lifecycle.sql" }
       ]);
     } finally {
       await client.end();
