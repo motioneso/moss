@@ -78,9 +78,9 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
 
-## Vocci #3565 — phone wake for setup check
+## Vocci #3565 — native owner sign-in
 
-Live ring setup is waiting for Ben to unlock the Samsung and open **Moss setup proof**.
-Wireless ADB transport stopped answering shell requests after the secure screen
-locked; its stale transport was disconnected for rediscovery. No new code is needed yet.
-Recommendation: unlock/open the isolated proof, then continue the controlled native check.
+The isolated setup app has a real staged, browser-approved disposable Moss account.
+Ben must enter the existing Vocci email, send a code, and verify that code directly
+in **Moss setup proof**. No code should be shared in chat or exported. Keep the ring
+nearby. Then continue native selection and actual identity/key verification.
