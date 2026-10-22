@@ -78,12 +78,3 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
 
-## Vocci #3565 — live setup retry after phone lock
-
-The first live selection reached confirmed vendor cleanup and persisted the selected
-ring; the phone locked in Android Settings before Verify was pressed. A direct
-check of that actual selected ring passed identity/key proof. The disposable test
-server was torn down after the harness failure, so a complete retry needs Ben to
-unlock the Samsung and complete native Vocci email-code sign-in again when the
-screen appears. No code belongs in chat. Keep the proof app open afterward.
-The harness now waits through a lock and preserves its server briefly on failure.

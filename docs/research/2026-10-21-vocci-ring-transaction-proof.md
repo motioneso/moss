@@ -3,8 +3,9 @@
 Part of #3565 / draft PR #3566. Implements the
 [selected-ring transaction plan](../superpowers/plans/2026-10-21-vocci-ring-setup-transaction.md)
 after the completed [staged-link live proof](2026-10-21-vocci-staged-link-proof.md).
-The production launcher remains unchanged. The full native Verify-and-save flow is
-**unverified**; this is not finished product onboarding.
+The production launcher remains unchanged. Real native Verify-and-save has now
+committed a complete configuration, but its full automation run failed afterward.
+A later retry also required manual UI recovery; this is not finished product onboarding.
 
 ## Implemented boundary
 
@@ -90,6 +91,44 @@ serial/device identity and the existing-key challenge passed. It neither confirm
 a fresh Moss owner nor commits configuration, and cannot replace the remaining
 real native Verify-and-save acceptance. It returns only bounded diagnostic codes.
 
+Canonical run `20261021-200727`, on clean `9a52fb678` (inputs `29bd07f6dba6`),
+passed the same real account-link/sign-in/selection/restart path. Its native Verify
+action committed configuration at `2026-10-22T03:14:19.740897Z`. Installed state
+inspection confirmed `COMMITTED`, configuration present, staging absent and no
+delivery state. This establishes the actual physical identity/key check, fresh
+Moss-owner confirmation and atomic publication through the native action. It is
+stronger evidence than the earlier diagnostic, which did not commit anything.
+
+The run still exited 1: ADB UI inspection failed after the commit, and the browser
+cleanup harness omitted the required sign-out confirmation dialog. Revocation was
+not confirmed in that run. After the runner destroyed its disposable server, only
+the isolated proof configuration was removed; state inspection returned `EMPTY`.
+
+The corrected browser cleanup was then exercised independently in canonical run
+`20261021-201959`, exit 0, with the same clean commit and input fingerprint. It
+performed real native Moss Connect, fresh disposable owner signup/approval,
+native account confirmation/restart, browser Active sessions Sign out and the
+Sign out device confirmation, then observed the row disappear. Isolated staging
+was removed afterward. Original companion configuration and queue hashes matched
+before and after. No Vocci sign-in or ring connection was needed for this bounded
+browser-cleanup proof.
+
+The full harness now waits for the native action's fresh bounded result record
+after clicking Verify, then checks committed state; it does not depend on an
+Android UI dump during that transition. Browser cleanup includes confirmation.
+No response is intercepted or result record synthesized. Combined canonical run `20261021-202253` on the same clean commit and inputs
+exited 1 after real native sign-in and temporary-session cleanup. Its selected-state
+UI lookup failed while Android permission settings covered the proof app. Manual
+recovery returned to the actual selected-ring screen without another sign-in;
+selection remained saved across process restart. Clicking the real native Verify
+control committed at `2026-10-22T03:30:28.403759Z`. Installed inspection confirmed
+`COMMITTED`, configuration present and staging absent. The harness then confirmed
+browser Sign out device and row removal during failure cleanup. Its disposable
+server was destroyed, and only the isolated proof configuration was removed;
+installed inspection returned `EMPTY`. This is recovered live evidence, **not a
+successful combined canonical run**. No command modified the original companion;
+this failed run did not reach its final original-file hash comparison.
+
 ## Remaining acceptance
 
 The subsequent canonical retry `20261021-195535` tested clean `1ce17b391`
@@ -98,13 +137,11 @@ lock, before a Moss link or Vocci sign-in. Installed state inspection afterward
 confirmed `EMPTY`, no staging and no configuration. The runner removed its
 disposable server; no setup acceptance is claimed for this retry.
 
-No new recording is needed for this slice. Next run the real native account
-selection, permission/handoff and physical identity/key proof against a disposable Moss account, then verify cancellation and
-interrupted-commit recovery. Preserve the original companion's configuration and
-queue; restore any temporarily paused delivery preference after the controlled
-physical check.
-
-Only then proceed to the integrated product wizard, explicit Start, fresh Meeting
-and opted-in hold-to-Main proofs, upgrade/recovery checks, guide and app-map updates.
+The feasibility and real native selected-ring commit boundaries have been observed.
+The independent browser-cleanup gate passed, while the combined harness remains
+red and needs stable native screen targeting. Do not repeat owner sign-in merely
+to retry that harness. Next integrate the shared product wizard, then exercise its
+actual launcher, explicit Start, fresh Meeting and opted-in hold-to-Main paths,
+upgrade/recovery, themes/font scale, guide and app map.
 Full foundation and CI remain required on final inputs. Keep #3565 open and PR #3566
 draft; no production deployment or merge is claimed.
