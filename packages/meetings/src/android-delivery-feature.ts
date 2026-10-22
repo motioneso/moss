@@ -3,13 +3,13 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "Android browser linking, restart recovery and optional seven-day cleanup. Only Start enables recovery; stopped voice/cleanup/retry actions ask for Start. Meetings: two hours; voice: 120 seconds. Fresh installs offer browser-approved Moss linking, native Vocci email-code sign-in, owned-ring selection and physical verification. Continue to the companion and explicitly Start; hold opt-in remains on that screen. Factory-fresh ownership and unsupported sign-in methods need Vocci.",
+    "Android ring setup: browser-approved Moss link, native Vocci email code, ring selection and physical Verify. Explicit Start enables delivery/restart; hold opt-in sends to Main. Optional 7-day cleanup. Meetings: 2h; voice: 120s.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
       path: "/settings?section=modules&module=meetings",
       description:
-        "Open the Android companion for account linking, permissions and local audio. Fresh installs open Set up your ring; existing configured installs keep their saved setup. Guidance and pre-release acceptance limits are documented in apps/vocci-delivery/README.md. Meetings settings enable the receiver only."
+        "Open the Android companion: fresh installs show Set up your ring; configured installs keep their setup. See apps/vocci-delivery/README.md for the guide and acceptance limits. Meetings settings enable the receiver only."
     }
   ],
   errors: [
@@ -18,21 +18,21 @@ export const androidDeliveryFeature = {
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Complete guided setup for an already-owned ring and provide writable app-private storage before delivery. Approve Moss in your browser, enter the Vocci email code only in the app, select an owned ring and Verify ring. Configuration is published only after physical identity/key and fresh Moss-owner checks. Credentials use Android Keystore encryption."
+        "Complete setup for an already-owned ring: browser-approved Moss link, native Vocci sign-in, explicit ring selection and physical identity/key verification. Writable app-private storage and Android Keystore are required."
     },
     {
       code: "setup_cleanup_required",
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Interrupted setup retains encrypted cleanup material. Reconnect and Cancel setup; do not claim remote sign-out while offline. A saved verified Vocci session offers Finish ring lookup. Opening setup sends no email automatically."
+        "Reconnect and Cancel setup to finish pending cleanup. Offline sign-out is unconfirmed. A saved verified Vocci session offers Finish ring lookup. Opening setup sends no email automatically."
     },
     {
       code: "setup_ownership_unsupported",
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Only already-owned rings with supported native email-code sign-in and required authenticator codes are supported. No rings, unsupported factors or malformed/ambiguous binding details require legitimate account recovery or ownership setup in Vocci. No reset or ownership write is attempted."
+        "Use an already-owned ring and native email-code sign-in, with an authenticator code if required. Missing rings, unsupported methods or invalid binding details need legitimate recovery in Vocci. No ownership reset is attempted."
     },
     {
       code: "background_restart_required",

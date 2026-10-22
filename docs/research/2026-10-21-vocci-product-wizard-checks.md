@@ -62,6 +62,13 @@ full foundation run `20261021-191313` also finished exit 0 (4,075 integration
 checks, 17,872 unit checks), but tested earlier clean `11278ea4a`, inputs
 `7ff1e3b6c2d9`; it does not validate this wizard or the later account fix.
 
+The first current-input foundation (`20261021-204603`) and live proof
+(`20261021-204719`) both stopped before migration because the new Meetings
+app-map description exceeded its 240-character contract. The descriptions were
+shortened without dropping the setup prerequisites or recovery guidance; direct
+module-registry validation now checks that runtime contract as well as TypeScript.
+These failed launches are not live wizard acceptance.
+
 ## Remaining
 
 Exercise the actual new wizard through browser approval, owner-entered native
