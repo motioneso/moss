@@ -1,5 +1,6 @@
 import { createRecordingImportRuntime } from "./recording-import-runtime.js";
 export { createRecordingImportWorkerRuntime } from "./recording-import-runtime.js";
+export { createVoiceRequestWorkerRuntime } from "./voice-request-worker-runtime.js";
 import { createScheduledReportGenerator } from "@moss/chat";
 import { SessionTokenRegistry, ConfirmationRegistry } from "@moss/ai";
 import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
@@ -31,6 +32,7 @@ import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
   RecordingImportService,
+  type RecordingImportDependencies,
   RECORDING_IMPORT_QUEUES,
   registerRecordingImportRoutes,
   meetingsModuleManifest,
@@ -620,6 +622,7 @@ export interface BuiltInRouteDependencies {
   // DEVELOPMENT_STANDARDS.md (registration gate + `chat.multiplexer` boot resolution).
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
+  readonly resolveRingRecordingAccessContext?: (request: FastifyRequest) => Promise<AccessContext>;
   readonly listConfiguredAuthProviders: () => readonly AuthProviderStatusDto[];
   readonly listModuleManifests: () => readonly MossModuleManifest[];
   /** Briefing tool names declared by external modules; lets briefings select them. */
@@ -694,6 +697,8 @@ export interface BuiltInRouteDependencies {
   readonly adoptChatRpcConnection?: (connection: RpcConnection) => void;
   /** Publishes the chat runtime's ACP initialize check to the Settings probe. */
   readonly adoptAcpProviderInitialization?: ChatRoutesDependencies["adoptAcpProviderInitialization"];
+  readonly adoptVoiceRequestService?: ChatRoutesDependencies["adoptVoiceRequestService"];
+  readonly admitVoiceRequest?: RecordingImportDependencies["admitVoiceRequest"];
   /**
    * #1081 H2 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * the same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the
@@ -2359,6 +2364,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         engineSelection: deps.chatEngineSelection,
         adoptChatRpcConnection: deps.adoptChatRpcConnection,
         adoptAcpProviderInitialization: deps.adoptAcpProviderInitialization,
+        adoptVoiceRequestService: deps.adoptVoiceRequestService,
+        resolveRingRecordingAccessContext: deps.resolveRingRecordingAccessContext,
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,
@@ -3016,7 +3023,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const recordingImports = new RecordingImportService(importRuntime);
       registerRecordingImportRoutes(server, {
         service: recordingImports,
-        resolveAccessContext: deps.resolveAccessContext
+        resolveAccessContext: deps.resolveRingRecordingAccessContext ?? deps.resolveAccessContext
       });
       registerMeetingRecordRoutes(server, {
         beforeRemove: async (db, id, actor) => {
@@ -3276,7 +3283,6 @@ export const LIFECYCLE_MIGRATION_PENDING: readonly string[] = [
   "ai",
   "briefings",
   "calendar",
-  "chat",
   "connectors",
   "email",
   "jarvis.commitments",

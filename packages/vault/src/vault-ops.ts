@@ -3,11 +3,13 @@ import {
   chmod,
   link,
   mkdir,
+  open,
   readFile,
   readdir,
   realpath,
   rm,
   stat,
+  statfs,
   writeFile
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -28,7 +30,7 @@ function isMissingPathError(error: unknown): boolean {
   return error.code === "ENOENT" || error.code === "ENOTDIR";
 }
 
-async function assertNoSymlinkEscape(fullPath: string, vaultRoot: string): Promise<void> {
+export async function assertNoSymlinkEscape(fullPath: string, vaultRoot: string): Promise<void> {
   // Walk up ancestor chain to find the deepest existing path, then realpath that.
   // Pre-write targets may have several non-existent ancestor segments.
   let checkPath = fullPath;
@@ -84,27 +86,134 @@ export async function createVaultFile(
   relativePath: string,
   content: string
 ): Promise<"created" | "exists"> {
+  return createVaultContent(ctx, relativePath, content);
+}
+
+/** Binary counterpart of createVaultFile; existing bytes are never replaced. */
+export async function createVaultFileBytes(
+  ctx: VaultContext,
+  relativePath: string,
+  content: Buffer
+): Promise<"created" | "exists"> {
+  return createVaultContent(ctx, relativePath, content);
+}
+
+export async function syncPath(path: string): Promise<void> {
+  const handle = await open(path, "r");
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function createVaultContent(
+  ctx: VaultContext,
+  relativePath: string,
+  content: string | Buffer
+): Promise<"created" | "exists"> {
   assertVaultContext(ctx);
   const fullPath = resolveVaultPath(ctx.vaultRoot, relativePath);
+  if (fullPath === resolve(ctx.vaultRoot)) throw new VaultPathError(relativePath);
   await assertNoSymlinkEscape(fullPath, ctx.vaultRoot);
   await mkdir(dirname(fullPath), { recursive: true, mode: VAULT_DIR_MODE });
   const temporaryPath = `${fullPath}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporaryPath, content, {
-      encoding: "utf8",
       mode: VAULT_FILE_MODE,
       flag: "wx"
     });
+    await syncPath(temporaryPath);
+    let result: "created" | "exists";
     try {
       await link(temporaryPath, fullPath);
-      return "created";
+      result = "created";
     } catch (error) {
-      if (error instanceof Error && "code" in error && error.code === "EEXIST") return "exists";
-      throw error;
+      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+      result = "exists";
     }
+    // Also sync on replay: a previous process may have linked the file and lost its
+    // acknowledgement before syncing the directory. Never acknowledge that gap.
+    // Persist newly created nested directories as well as the file's entry. Include
+    // the vault's parent because withVaultContext may have just created this root.
+    let directory = dirname(fullPath);
+    while (directory !== resolve(ctx.vaultRoot)) {
+      await syncPath(directory);
+      directory = dirname(directory);
+    }
+    await syncPath(directory);
+    await syncPath(dirname(directory));
+    return result;
   } finally {
     await rm(temporaryPath, { force: true });
   }
+}
+
+export const VAULT_READ_RANGE_LIMIT = 1024 * 1024;
+
+/**
+ * Read exactly one bounded range. Short files fail rather than silently returning a
+ * partial chunk. Callers verifying an immutable source must also verify its hash.
+ */
+export async function readVaultFileRange(
+  ctx: VaultContext,
+  relativePath: string,
+  offset: number,
+  length: number,
+  expectedFileLength?: number
+): Promise<Buffer> {
+  assertVaultContext(ctx);
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(length) ||
+    length < 1 ||
+    length > VAULT_READ_RANGE_LIMIT ||
+    !Number.isSafeInteger(offset + length) ||
+    (expectedFileLength !== undefined &&
+      (!Number.isSafeInteger(expectedFileLength) || expectedFileLength < offset + length))
+  ) {
+    throw new RangeError("Invalid vault read range");
+  }
+  const fullPath = resolveVaultPath(ctx.vaultRoot, relativePath);
+  await assertNoSymlinkEscape(fullPath, ctx.vaultRoot);
+  const handle = await open(fullPath, "r");
+  try {
+    const info = await handle.stat();
+    if (
+      !info.isFile() ||
+      offset + length > info.size ||
+      (expectedFileLength !== undefined && info.size !== expectedFileLength)
+    ) {
+      throw new RangeError("Vault read range exceeds file");
+    }
+    const bytes = Buffer.alloc(length);
+    let position = 0;
+    while (position < length) {
+      const { bytesRead } = await handle.read(
+        bytes,
+        position,
+        length - position,
+        offset + position
+      );
+      if (!bytesRead) throw new RangeError("Vault read range exceeds file");
+      position += bytesRead;
+    }
+    return bytes;
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Filesystem space available to this process, not a reservation. Upload admission
+ * must subtract outstanding reservations under its own shared capacity lock.
+ */
+export async function getVaultAvailableBytes(ctx: VaultContext): Promise<bigint> {
+  assertVaultContext(ctx);
+  await assertNoSymlinkEscape(ctx.vaultRoot, ctx.vaultRoot);
+  const info = await statfs(ctx.vaultRoot, { bigint: true });
+  return info.bavail * info.bsize;
 }
 
 // #1133 — byte variants for chat attachments (images/PDFs). Same containment discipline as

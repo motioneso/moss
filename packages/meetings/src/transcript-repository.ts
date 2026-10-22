@@ -162,7 +162,8 @@ export class MeetingTranscriptRepository {
   async snapshotWithSources(
     scopedDb: DataContextDb,
     meetingId: string,
-    selection: ReadMeetingTranscriptInput
+    selection: ReadMeetingTranscriptInput,
+    limits?: { maxSegments: number; maxCharacters: number }
   ): Promise<MeetingTranscriptSnapshotResponse | null> {
     assertUuid(meetingId, "Meeting id");
     meetingId = meetingId.toLowerCase();
@@ -176,13 +177,17 @@ export class MeetingTranscriptRepository {
     )
       throw new MeetingTranscriptInputError();
     try {
-      const snapshot = selectMeetingTranscriptSnapshot(state.ledger, {
-        ...selection,
-        meetingId,
-        ownerUserId: state.meeting.owner_user_id,
-        transcriptRevision: selection.transcriptRevision ?? state.ledger.transcriptRevision,
-        cutoffMs: Math.min(selection.cutoffMs ?? bound, bound)
-      });
+      const snapshot = selectMeetingTranscriptSnapshot(
+        state.ledger,
+        {
+          ...selection,
+          meetingId,
+          ownerUserId: state.meeting.owner_user_id,
+          transcriptRevision: selection.transcriptRevision ?? state.ledger.transcriptRevision,
+          cutoffMs: Math.min(selection.cutoffMs ?? bound, bound)
+        },
+        limits
+      );
       return { snapshot, sources: state.ledger.sources };
     } catch {
       throw new MeetingTranscriptInputError();
@@ -198,9 +203,12 @@ export class MeetingTranscriptRepository {
   async snapshot(
     scopedDb: DataContextDb,
     meetingId: string,
-    selection: ReadMeetingTranscriptInput
+    selection: ReadMeetingTranscriptInput,
+    limits?: { maxSegments: number; maxCharacters: number }
   ) {
-    return (await this.snapshotWithSources(scopedDb, meetingId, selection))?.snapshot ?? null;
+    return (
+      (await this.snapshotWithSources(scopedDb, meetingId, selection, limits))?.snapshot ?? null
+    );
   }
 
   async evidence(scopedDb: DataContextDb, evidence: MeetingTranscriptEvidence) {

@@ -67,7 +67,7 @@ describe("automatic summary queue", () => {
       return "worker";
     });
     const generate = vi
-      .spyOn(MeetingOutputService.prototype, "generateOnStop")
+      .spyOn(MeetingOutputService.prototype, "generateAutomatic")
       .mockResolvedValue(null);
     await registerMeetingStopSummaryWorker(
       { work } as unknown as PgBoss,

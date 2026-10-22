@@ -113,7 +113,7 @@ describe("Trail Marker request status", () => {
   it("explains a closed request without suggesting an ineffective retry", () => {
     const html = renderReadError(404);
     expect(html).toContain("That request is no longer open");
-    expect(html).toContain("Start a new one from the Mac");
+    expect(html).toContain("Start a new one from the companion");
     expect(html).not.toContain("Check request again");
   });
 
@@ -139,6 +139,22 @@ describe("Trail Marker request status", () => {
 });
 
 describe("Trail Marker approval page copy", () => {
+  it("shows Android ring permissions without Mac focus or live-capture authority", () => {
+    const client = new QueryClient();
+    client.setQueryData(queryKeys.companionPairAttempt("abc"), {
+      deviceName: "Ring phone",
+      platform: "android",
+      status: "pending"
+    });
+    const html = renderRequest("/link/trail-marker#code=abc", client);
+    expect(html).toContain("recognise this Android phone");
+    expect(html).toContain("upload completed ring recordings");
+    expect(html).toContain("opted-in hold recordings to Main");
+    expect(html).not.toContain("focus block");
+    expect(html).not.toContain("Record meetings when you choose Start");
+    expect(html).toContain("never gets your password or your browser session");
+    client.clear();
+  });
   it("lists the four things a linked Mac may do", () => {
     const html = renderApproval();
     expect(APPROVAL_CAPABILITIES).toHaveLength(4);

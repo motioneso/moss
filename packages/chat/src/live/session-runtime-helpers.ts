@@ -264,6 +264,7 @@ export function injectActionResultRecord(
   if (mappedRecord) {
     const approvalRecord = {
       ...mappedRecord,
+      ...(record.actionThreadId ? { actionThreadId: record.actionThreadId } : {}),
       ...(record.actionRequestId ? { actionRequestId: record.actionRequestId } : {}),
       ...(record.summary ? { summary: record.summary } : {}),
       outcome: record.outcome,

@@ -46,21 +46,44 @@ final class DeliveryStore {
         }));
         return order;
     }
-    boolean hasStorageCapacity() { return root.getUsableSpace() > 150 * 1024 * 1024L && size(root) < 100 * 1024 * 1024L; }
-    boolean canDiscover() { return entries.length() < 100 && hasStorageCapacity(); }
+    private long outstandingStorage() {
+        long total = 0;
+        for (String id : ids()) {
+            JSONObject entry = entries.optJSONObject(id);
+            if (!entry.optString("stage").equals("failed")) total += Math.max(0, entry.optLong("storageBudget") - size(file(id, "packets.bin").getParentFile()));
+        }
+        return total;
+    }
+    boolean hasStorageCapacity() { long outstanding = outstandingStorage(); return root.getUsableSpace() > 150 * 1024 * 1024L + outstanding && size(root) + outstanding < 2L * 1024 * 1024 * 1024; }
+    void reserveRetrieval(String id, int packetBytes, int sidecarBytes, byte[] sidecar) throws Exception {
+        JSONObject entry = entries.getJSONObject(id);
+        long duration = CompletedSidecar.duration(sidecar, entry.has("voiceIntent") ? 120000 : 7200000);
+        long wav = 44 + duration * 32;
+        long budget = packetBytes + sidecarBytes + wav * 2 + 4 * 1024 * 1024L;
+        entry.put("storageBudget", budget); save();
+        if (!hasStorageCapacity()) throw new IllegalStateException("storage_capacity");
+    }
+    boolean canDiscover() {
+        int retained = 0;
+        for (String id : ids()) if (!entries.optJSONObject(id).optBoolean("cleared")) retained++;
+        return retained < 100 && entries.length() < 1024 && hasStorageCapacity();
+    }
     boolean needsRetrieval(String id) throws Exception { return !contains(id) || entries.getJSONObject(id).getString("stage").equals("discovered"); }
     boolean retrievalDue(String id) throws Exception {
         if (!contains(id)) return true;
         JSONObject entry = entries.getJSONObject(id);
         return needsRetrieval(id) && RetryPolicy.due(entry.optInt("attempts"), entry.optLong("nextAt"), System.currentTimeMillis());
     }
-    void discover(String id) throws Exception {
+    void discover(String id) throws Exception { discover(id, null); }
+    void discover(String id, JSONObject voiceIntent) throws Exception {
         if (contains(id)) return;
         if (!canDiscover()) throw new IllegalStateException("storage_capacity");
-        entries.put(id, new JSONObject().put("stage", "discovered").put("attempts", 0).put("nextAt", 0)); save();
+        JSONObject entry = new JSONObject().put("stage", "discovered").put("attempts", 0).put("nextAt", 0);
+        if (voiceIntent != null) entry.put("voiceIntent", voiceIntent);
+        entries.put(id, entry); save();
     }
     boolean admitSidecar(String id, byte[] sidecar) throws Exception {
-        try { return CompletedSidecar.isComplete(sidecar); }
+        try { return CompletedSidecar.isComplete(sidecar, entries.getJSONObject(id).has("voiceIntent") ? 120000 : 7200000); }
         catch (CompletedSidecar.TooLong invalid) { rejectSidecar(id, sidecar, "duration_limit"); return false; }
         catch (org.json.JSONException invalid) { rejectSidecar(id, sidecar, "sidecar_invalid"); return false; }
     }
@@ -83,8 +106,14 @@ final class DeliveryStore {
         discover(id);
         if (!hasStorageCapacity()) throw new IllegalStateException("storage_capacity");
         PrivateFiles.write(file(id, "packets.bin"), packets);
+        retrieved(id, sidecar);
+    }
+    void retrieved(String id, byte[] sidecar) throws Exception {
+        if (!needsRetrieval(id)) return;
+        File packets = file(id, "packets.bin");
+        if (packets.length() < 1 || packets.length() > RingProtocol.PACKET_LIMIT) throw new IllegalArgumentException("packet_size");
         PrivateFiles.write(file(id, "sidecar.bin"), sidecar);
-        entries.put(id, new JSONObject().put("stage", "retrieved").put("attempts", 0).put("nextAt", 0)); save();
+        entries.getJSONObject(id).put("stage", "retrieved").put("attempts", 0).put("nextAt", 0); save();
     }
     static JSONObject manifest(String name, byte[] bytes) throws Exception {
         return new JSONObject().put("name", name).put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
@@ -92,15 +121,21 @@ final class DeliveryStore {
     }
     void freeze(String id) throws Exception {
         File bundle = file(id, "bundle.json");
-        if (!bundle.exists()) {
-            byte[] packets = PrivateFiles.read(file(id, "packets.bin"), RingProtocol.PACKET_LIMIT);
-            byte[] sidecar = PrivateFiles.read(file(id, "sidecar.bin"), RingProtocol.SIDECAR_LIMIT);
-            byte[] wav = OpusWav.decode(packets);
-            JSONObject input = new JSONObject().put("version", 1).put("sourceDeviceId", state.getString("sourceDeviceId")).put("recordingId", id)
-                .put("packets", manifest(id + ".opus", packets)).put("sidecar", manifest(id + ".json", sidecar)).put("wav", manifest(id + ".wav", wav));
-            PrivateFiles.json(bundle, input);
+        File upload = file(id, "upload.json");
+        if (!bundle.exists() && !upload.exists()) {
+            File audio = file(id, "audio.wav");
+            OpusWav.decode(file(id, "packets.bin"), audio, entries.getJSONObject(id).has("voiceIntent") ? 120000 : 7200000);
+            PrivateFiles.json(upload, ResumableUpload.manifest(this, id));
         }
-        entries.getJSONObject(id).put("stage", "ready"); save();
+        entries.getJSONObject(id).put("stage", "ready").put("storageBudget", 0); save();
+    }
+    void uploadProgress(String id, JSONObject value) throws Exception {
+        MossClient.uuid(value.getString("id"));
+        JSONObject entry = entries.getJSONObject(id), previous = entry.optJSONObject("uploadProgress");
+        if (value.getInt("chunkBytes") != ResumableUpload.CHUNK_BYTES || !value.getString("fingerprint").matches("[a-f0-9]{64}") ||
+            (previous != null && (!previous.getString("id").equals(value.getString("id")) || !previous.getString("fingerprint").equals(value.getString("fingerprint")) ||
+              !previous.getString("expiresAt").equals(value.getString("expiresAt"))))) throw new Conflict("server_identity_change");
+        entry.put("uploadProgress", value); save();
     }
     void beginAttempt(String id) throws Exception {
         JSONObject entry = entries.getJSONObject(id);
@@ -115,13 +150,60 @@ final class DeliveryStore {
     }
     void accepted(String id, JSONObject status) throws Exception {
         JSONObject entry = entries.getJSONObject(id);
-        if (entry.has("status") && (!entry.getJSONObject("status").getString("id").equals(status.getString("id")) ||
-            !entry.getJSONObject("status").getString("meetingId").equals(status.getString("meetingId")))) throw new Conflict("server_identity_change");
-        if (!status.getString("mode").equals(id.startsWith("amsg_") ? "voice-request" : "normal")) throw new Conflict("server_mode_change");
+        boolean voice = entry.has("voiceIntent");
+        if (entry.has("status")) {
+            JSONObject previous = entry.getJSONObject("status");
+            if (!previous.getString("id").equals(status.getString("id")) ||
+                (!voice && !previous.getString("meetingId").equals(status.getString("meetingId"))) ||
+                (voice && !previous.isNull("voiceRequestId") && !previous.getString("voiceRequestId").equals(status.optString("voiceRequestId"))))
+                throw new Conflict("server_identity_change");
+        }
+        if (voice ? !status.getString("intent").equals("voice-request") :
+            !status.getString("mode").equals(id.startsWith("amsg_") ? "voice-request" : "normal")) throw new Conflict("server_mode_change");
         String stage = status.getString("state");
-        entry.remove("inFlight");
-        entry.put("status", status).put("stage", stage.equals("complete") || stage.equals("failed") ? stage : "accepted")
-            .put("attempts", 0).put("nextAt", System.currentTimeMillis() + 30000); save();
+        if (voice && stage.equals("complete")) {
+            if (status.isNull("voiceRequestId")) throw new Conflict("server_identity_change");
+            stage = "voice-status";
+        } else if (!stage.equals("complete") && !stage.equals("failed")) stage = "accepted";
+        entry.remove("inFlight"); entry.remove("error");
+        if (completed(stage) && !entry.has("completedAt")) entry.put("completedAt", System.currentTimeMillis());
+        entry.put("status", status).put("stage", stage).put("attempts", 0).put("nextAt", System.currentTimeMillis() + 30000); save();
+    }
+    void chatStatus(String id, JSONObject value) throws Exception {
+        JSONObject entry = entries.getJSONObject(id), previous = entry.optJSONObject("chatStatus");
+        if (!entry.getJSONObject("status").getString("voiceRequestId").equals(value.getString("id")) ||
+            !state.getString("sourceDeviceId").equals(value.getString("sourceDeviceId")) || !id.equals(value.getString("recordingId")) ||
+            (previous != null && !previous.getString("threadId").equals(value.getString("threadId")))) throw new Conflict("server_identity_change");
+        if (previous != null) for (String key : new String[]{"userMessageId", "assistantMessageId"}) {
+            if (!previous.isNull(key) && !previous.getString(key).equals(value.optString(key))) throw new Conflict("server_identity_change");
+        }
+        String status = value.getString("state");
+        if (completed(status) && !entry.has("completedAt")) entry.put("completedAt", System.currentTimeMillis());
+        entry.put("chatStatus", value).put("stage", Arrays.asList("replied", "no-speech", "interrupted").contains(status) ? status : "voice-status")
+            .put("attempts", 0).put("nextAt", System.currentTimeMillis() + 30000);
+        entry.remove("inFlight"); entry.remove("error"); save();
+    }
+    static boolean completed(String stage) { return Arrays.asList("complete", "replied", "no-speech").contains(stage); }
+    void clearCompleted() throws Exception { clearCompleted(Long.MAX_VALUE, false); }
+    void clearExpiredCompleted(long now) throws Exception { clearCompleted(now, true); }
+    private void clearCompleted(long now, boolean expiredOnly) throws Exception {
+        for (String id : ids()) {
+            JSONObject entry = entries.getJSONObject(id);
+            if (!completed(entry.getString("stage")) || entry.optBoolean("cleared")) continue;
+            // Older journals get a full grace period on first retention-enabled visit.
+            if (!entry.has("completedAt")) entry.put("completedAt", now);
+            if (expiredOnly && now - entry.getLong("completedAt") < 7L * 24 * 60 * 60 * 1000) continue;
+            for (String name : new String[]{"packets.bin", "sidecar.bin", "audio.wav", "bundle.json", "upload.json"}) {
+                for (String suffix : new String[]{"", ".new", ".bak"}) {
+                    File file = file(id, name + suffix);
+                    if (file.exists() && !file.delete()) throw new java.io.IOException("storage_cleanup");
+                }
+            }
+            file(id, "bundle.json").getParentFile().delete();
+            // Retain the identity tombstone so the ring cannot redownload cleared evidence.
+            entry.put("cleared", true);
+        }
+        save();
     }
     void httpFailure(String id, int status, boolean terminal) throws Exception {
         entries.getJSONObject(id).put("httpStatus", status);

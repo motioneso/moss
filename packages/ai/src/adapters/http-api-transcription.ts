@@ -27,6 +27,8 @@ export interface TranscribeAudioResult {
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_SEGMENTS = 10000;
 const MAX_TEXT_LENGTH = 1024 * 1024;
+// Real ASR segment boundaries can overlap by one 20 ms acoustic frame.
+const MAX_ADJACENT_OVERLAP_MS = 20;
 
 function invalidResponse(): Error {
   return new TranscriptionTransportError("provider-response-invalid", "validation");
@@ -109,7 +111,8 @@ export async function readTimestampedTranscription(
     if (
       typeof start !== "number" ||
       !Number.isFinite(start) ||
-      start < previousEnd ||
+      start < 0 ||
+      Math.round(previousEnd * 1000) - Math.round(start * 1000) > MAX_ADJACENT_OVERLAP_MS ||
       typeof end !== "number" ||
       !Number.isFinite(end) ||
       end <= start ||
@@ -118,6 +121,12 @@ export async function readTimestampedTranscription(
       typeof text !== "string"
     )
       throw invalidResponse();
+    const previous = segments.at(-1);
+    if (previous && start < previousEnd) {
+      // Keep a short final segment intact; moving its start can erase its duration.
+      if (Math.round(start * 1000) <= Math.round(previous.start * 1000)) throw invalidResponse();
+      segments[segments.length - 1] = { ...previous, end: start };
+    }
     textLength += text.length;
     if (textLength > MAX_TEXT_LENGTH) throw invalidResponse();
     segments.push({ start, end, text });

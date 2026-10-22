@@ -25,6 +25,7 @@ export * from "./day-plan-api.js";
 export * from "./day-plan-changes-api.js";
 export * from "./chat-api.js";
 export * from "./chat-unread-api.js";
+export * from "./chat-voice-api.js";
 export * from "./chat-action-outcome.js";
 export * from "./chat-archive-api.js";
 export * from "./chat-settings-api.js";
@@ -95,3 +96,4 @@ export * from "./briefing-email-evidence.js";
 
 export * from "./meeting-recording-import-api.js";
 export * from "./outlook-calendar-api.js";
+export * from "./meeting-recording-upload-api.js";

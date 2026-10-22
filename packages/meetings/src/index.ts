@@ -38,3 +38,8 @@ export * from "./recording-import-repository.js";
 export * from "./recording-import-service.js";
 export * from "./recording-import-jobs.js";
 export * from "./recording-import-routes.js";
+
+export * from "./recording-voice-enablement.js";
+export * from "./recording-voice-bundle.js";
+
+export * from "./recording-voice-routes.js";

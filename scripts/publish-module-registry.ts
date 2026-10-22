@@ -31,16 +31,19 @@ import { buildExternalModule } from "./build-external-module.js";
 
 export const REGISTRY_RETAINED_VERSIONS = 5;
 
+// Archived modules keep their source and installed copies, but are not offered for download.
+// Keep this publication policy outside signed manifests so other artifact identities do not change.
+const UNLISTED_MODULE_IDS = new Set(["job-search"]);
+
 /**
- * Generic module discovery (N47, #1307): every child directory of `external-modules/`
- * under `repoRoot`, no per-module allowlist. Exported so a test can drive the exact
- * discovery the CLI runs — a copy re-implemented inline in a test would pass even if an
- * allowlist filter were added here later.
+ * Discover every child directory of `external-modules/` except explicitly unlisted modules.
+ * New modules need no allowlist entry. The CLI uses this selection for both publication and
+ * version-conflict checks; previous-index history is merged only for selected modules.
  */
 export function discoverModuleDirs(repoRoot: string): string[] {
   const externalModulesDir = join(repoRoot, "external-modules");
   return readdirSync(externalModulesDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
+    .filter((e) => e.isDirectory() && !UNLISTED_MODULE_IDS.has(e.name))
     .map((e) => join(externalModulesDir, e.name));
 }
 

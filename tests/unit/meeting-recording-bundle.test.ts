@@ -90,6 +90,17 @@ describe("completed legacy recording validation", () => {
       })
     ).toThrow(RecordingImportInputError);
   });
+  it.each([0, 8, 36])(
+    "rejects a non-ASCII WAV tag byte at %s with a matching file hash",
+    (offset) => {
+      const input = recordingBundle();
+      const wav = Buffer.from(input.wav.base64, "base64");
+      wav[offset] = wav[offset]! | 0x80;
+      expect(() =>
+        validateRecordingBundle({ ...input, wav: recordingFile(input.wav.name, wav) })
+      ).toThrow(RecordingImportInputError);
+    }
+  );
   it("keeps accepted import work queued through a multi-day outage", () => {
     const retention = RECORDING_IMPORT_QUEUES[0]!.options!.retentionSeconds!;
     expect(retention).toBeGreaterThanOrEqual(7 * 24 * 60 * 60);

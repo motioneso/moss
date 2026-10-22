@@ -16,11 +16,17 @@ final class PrivateFiles {
     static JSONObject json(File file) throws Exception {
         return new JSONObject(new String(read(file, 8 * 1024 * 1024), StandardCharsets.UTF_8));
     }
+    interface Writer { void write(FileOutputStream output) throws Exception; }
     static void write(File file, byte[] bytes) throws IOException {
+        try { write(file, output -> output.write(bytes)); }
+        catch (IOException error) { throw error; }
+        catch (Exception error) { throw new IOException("storage_write", error); }
+    }
+    static void write(File file, Writer writer) throws Exception {
         if (!file.getParentFile().isDirectory() && !file.getParentFile().mkdirs()) throw new IOException("storage_unavailable");
         AtomicFile atomic = new AtomicFile(file);
         FileOutputStream out = atomic.startWrite();
-        try { out.write(bytes); atomic.finishWrite(out); }
+        try { writer.write(out); atomic.finishWrite(out); }
         catch (Exception e) { atomic.failWrite(out); throw e; }
     }
     static void json(File file, JSONObject value) throws IOException {

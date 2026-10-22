@@ -1,4 +1,5 @@
 import { CHAT_SCHEDULED_READ_QUEUE_DEFINITION } from "./scheduled-reads/queue.js";
+import { CHAT_VOICE_REQUEST_QUEUE_DEFINITION } from "./voice-request-jobs.js";
 import {
   registerScheduledReadWorker,
   type ScheduledReadRunnerDeps
@@ -86,6 +87,7 @@ export const CHAT_ARCHIVE_DAY_QUEUE = "chat.archive-day";
 export const CHAT_SUMMARIZE_CONVERSATION_QUEUE = "chat.summarize-conversation";
 
 export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
+  CHAT_VOICE_REQUEST_QUEUE_DEFINITION,
   { name: CHAT_EMBED_TURN_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },

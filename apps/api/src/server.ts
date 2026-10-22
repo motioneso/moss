@@ -3,6 +3,7 @@ import {
   type MeetingCaptureMaintenanceRuntime
 } from "./meeting-capture-maintenance-runtime.js";
 import { recordingLoggerOptions } from "./recording-logger-options.js";
+import { createRingRecordingResolver } from "./ring-recording-auth.js";
 import { createHash, randomUUID } from "node:crypto";
 
 import helmet from "@fastify/helmet";
@@ -30,6 +31,11 @@ import {
 } from "@moss/auth";
 import { createCliStructuredAdapterFactory } from "@moss/chat";
 import {
+  createCompanionDeliveryRuntime,
+  type CompanionDeliveryRuntime,
+  type CompanionDeliveryOverrides
+} from "./companion-delivery-runtime.js";
+import {
   ConnectorsRepository,
   GoogleConnectionService,
   GoogleOAuthClient,
@@ -48,7 +54,6 @@ import {
 import { createPgBossClient, sendModuleControl } from "@moss/jobs";
 import {
   aggregateFocusSignals,
-  createRecordingImportWorkerRuntime,
   createActiveModulesResolver,
   focusSignalProvidersFor,
   getAllQueueDefinitions,
@@ -105,13 +110,12 @@ import { registerPlatformRoutes } from "./platform-module-routes.js";
 import { handleBetterAuthRequest } from "./better-auth-adapter.js";
 import { registerModulePreferenceRoutes } from "./module-preferences.js";
 
-export interface CreateApiServerOptions {
+export interface CreateApiServerOptions extends CompanionDeliveryOverrides {
   readonly appDb?: Kysely<MossDatabase>;
   readonly workerDb?: Kysely<MossDatabase>;
   readonly boss?: PgBoss;
   /** Override the maintenance lifecycle; the API still awaits start and drains close. */
   readonly captureMaintenance?: MeetingCaptureMaintenanceRuntime;
-  readonly recordingImportWorker?: ReturnType<typeof createRecordingImportWorkerRuntime>;
   readonly authRuntime?: MossAuthRuntime;
   /** #3065: tests inject a registry with a fake clock. */
   readonly actAsGrants?: ActAsGrantRegistry;
@@ -254,7 +258,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   const ownsWorkerDb = options.workerDb === undefined;
   const workerDataContext = new DataContextRunner(workerDb);
   let externalWorkerRuntime: ExternalModuleWorkerRuntime | undefined;
-  let recordingImportWorker = options.recordingImportWorker;
+  let companionDelivery: CompanionDeliveryRuntime | undefined;
   const ownsBoss = options.boss === undefined;
   const dataContext = new DataContextRunner(appDb);
   const aiRepository = new AiRepository();
@@ -287,7 +291,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       auth: authRuntime
     });
   server.addHook("preClose", async () => captureMaintenance.close());
-  server.addHook("preClose", async () => recordingImportWorker?.close());
+  server.addHook("preClose", async () => companionDelivery?.close());
   const AUTH_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_AUTH_MAX"), 10);
 
   // Security headers via @fastify/helmet.
@@ -605,12 +609,19 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // #917: externalModuleHolder is computed above (before registerPlatformRoutes),
     // because the /api/modules provider closes over it. registerBuiltInApiRoutes reuses
     // the same holder for the settings module's external-module deps below.
-    recordingImportWorker ??= createRecordingImportWorkerRuntime(getMossDatabaseUrls().worker, {
-      dataContext,
-      boss,
-      resolveActiveModules: resolveActiveModulesWithIntegrations
-    });
+    companionDelivery = createCompanionDeliveryRuntime(
+      {
+        workerConnectionString: getMossDatabaseUrls().worker,
+        dataContext,
+        boss,
+        resolveActiveModules: resolveActiveModulesWithIntegrations
+      },
+      options
+    );
     registerBuiltInApiRoutes(server, {
+      adoptVoiceRequestService: companionDelivery.adoptVoiceRequestService,
+      resolveRingRecordingAccessContext: createRingRecordingResolver(authRuntime),
+      admitVoiceRequest: companionDelivery.admitVoiceRequest,
       meetingCaptureAuthorization: {
         resolveBrowser: (input) => authRuntime.sessionBindings.resolveBrowser(input),
         resolveCompanion: (input) => authRuntime.companionDevices.resolve(input),
@@ -762,10 +773,6 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       e2eErrorDetail: options.e2eErrorDetail
     });
 
-    const guardManifests = [
-      ...getBuiltInModuleManifests(),
-      ...(options.__testExtraGuardedRoutes?.manifests ?? [])
-    ];
     if (options.__testExtraGuardedRoutes) {
       for (const r of options.__testExtraGuardedRoutes.routes) {
         server.route({ method: r.method, url: r.url, handler: async () => ({ ok: true }) });
@@ -773,9 +780,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     }
 
     registerRouteEnablementGuard(server, {
-      manifests: guardManifests,
+      manifests: guardManifestsForCoverage(),
       resolveActiveModules,
-      resolveAccessContext: authRuntime.resolveAccessContext
+      resolveAccessContext: createRingRecordingResolver(authRuntime)
     });
 
     registerStaticWeb(server);
@@ -837,7 +844,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // their caller-owned lifecycle; maintenance borrows send and owns its consumer.
     if (ownsBoss) await boss.start();
     await captureMaintenance.start();
-    await recordingImportWorker?.start();
+    await companionDelivery?.start();
   });
 
   server.addHook("onClose", async () => {

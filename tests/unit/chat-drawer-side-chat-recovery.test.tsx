@@ -614,13 +614,15 @@ it("binds an edited restored module fallback after remount without replacing can
   );
   await act(async () => {
     privacy.resolve({ incognito: false, threadId: "a" });
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  expect(renderer.root.findByType("textarea").props.value).toBe("Restored fallback, edited");
-  expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts).toMatchObject({
-    a: "Canonical A",
-    [boundDraftKey(moduleSurface, "a")]: "Restored fallback, edited"
+  // Query notifications and the draft-binding effect settle asynchronously.
+  await vi.waitFor(() => {
+    expect(renderer.root.findByType("textarea").props.value).toBe("Restored fallback, edited");
+    expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts).toMatchObject({
+      a: "Canonical A",
+      [boundDraftKey(moduleSurface, "a")]: "Restored fallback, edited"
+    });
   });
 });
 

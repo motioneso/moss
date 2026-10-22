@@ -9,7 +9,9 @@ import { getMeetingOutputTemplate } from "./output-validation.js";
 export interface MeetingStopSummaryRow {
   meeting_id: string;
   owner_user_id: string;
-  grant_id: string;
+  grant_id: string | null;
+  recording_import_id: string | null;
+  transcript_revision: number | null;
   request_key: string;
   template_id: string;
   status: "waiting" | "submitted" | "skipped";
@@ -30,7 +32,7 @@ export type MeetingStopSummaryEnqueue = (
   at: Date,
   early: boolean
 ) => Promise<void>;
-/** Durable intent shares the capture transaction; optional enqueue uses a savepoint so Stop survives queue failure. */
+/** Capture Stop or import completion records intent; queue failure cannot discard evidence. */
 export class MeetingStopSummaryRepository {
   constructor(
     private readonly preferences = new MeetingPreferencesRepository(),
@@ -135,6 +137,42 @@ export class MeetingStopSummaryRepository {
         );
     }
   }
+  /** Called in the transcript-completion transaction; no live capture capability is created. */
+  async scheduleImport(
+    db: DataContextDb,
+    actor: AccessContext,
+    input: { meetingId: string; importId: string },
+    enqueue: MeetingStopSummaryEnqueue
+  ): Promise<void> {
+    assertDataContextDb(db);
+    if (await this.row(db, input.meetingId)) return;
+    const preferences = await this.preferences.get(db);
+    const inputs = await this.outputs.inputs(db, input.meetingId);
+    const row = (
+      await sql<MeetingStopSummaryRow>`INSERT INTO app.meeting_stop_summaries
+        (meeting_id,recording_import_id,transcript_revision,request_key,template_id,status,code,due_at)
+        SELECT meeting_id,id,${inputs.transcript?.transcriptRevision ?? 0},${randomUUID()}::uuid,${preferences.summaryTemplateId},
+          ${preferences.summarizeOnStop ? "waiting" : "skipped"},
+          ${preferences.summarizeOnStop ? null : "setting-off"},clock_timestamp()
+        FROM app.meeting_recording_imports
+        WHERE id=${input.importId}::uuid AND meeting_id=${input.meetingId}::uuid AND state='complete'
+        RETURNING *`.execute(db.db)
+    ).rows[0];
+    if (!row) throw new Error("Completed recording import required for summary");
+    if (row.status === "waiting")
+      await this.enqueueSafely(
+        db,
+        row,
+        {
+          actorUserId: actor.actorUserId,
+          resourceId: row.meeting_id,
+          idempotencyKey: row.request_key
+        },
+        row.due_at,
+        false,
+        enqueue
+      );
+  }
   private async skip(db: DataContextDb, meetingId: string, code: string): Promise<null> {
     await sql`UPDATE app.meeting_stop_summaries SET status='skipped',code=${code} WHERE meeting_id=${meetingId}::uuid`.execute(
       db.db
@@ -150,42 +188,57 @@ export class MeetingStopSummaryRepository {
     const row = await this.row(db, meetingId);
     if (!row || row.request_key !== requestKey || row.status === "skipped") return null;
     if (row.input_json) return JSON.parse(row.input_json) as GenerateMeetingOutputInput;
-    if (row.due_at.getTime() + 300000 <= Date.now())
+    if (row.due_at.getTime() + (row.recording_import_id ? 1_209_600_000 : 300000) <= Date.now())
       return this.skip(db, meetingId, "meeting_output_interrupted");
-    const capture = (
-      await sql<{
-        status: string;
-        state_json: string | null;
-      }>`SELECT status,state_json FROM app.meeting_capture_grants WHERE id=${row.grant_id}::uuid AND meeting_id=${meetingId}::uuid`.execute(
-        db.db
+    if (row.recording_import_id) {
+      const imported = (
+        await sql<{ state: string }>`SELECT state FROM app.meeting_recording_imports
+          WHERE id=${row.recording_import_id}::uuid AND meeting_id=${meetingId}::uuid`.execute(
+          db.db
+        )
+      ).rows[0];
+      if (imported?.state !== "complete") return this.skip(db, meetingId, "import-interrupted");
+    } else {
+      const capture = (
+        await sql<{
+          status: string;
+          state_json: string | null;
+        }>`SELECT status,state_json FROM app.meeting_capture_grants WHERE id=${row.grant_id}::uuid AND meeting_id=${meetingId}::uuid`.execute(
+          db.db
+        )
+      ).rows[0];
+      const state = capture?.state_json
+        ? (JSON.parse(capture.state_json) as {
+            desired?: string;
+            stopCutoffMs?: number | null;
+            finalized?: boolean;
+            finalizationDeadline?: string | null;
+          })
+        : null;
+      if (
+        !state ||
+        capture?.status === "revoked" ||
+        state.desired !== "stopped" ||
+        state.stopCutoffMs == null
       )
-    ).rows[0];
-    const state = capture?.state_json
-      ? (JSON.parse(capture.state_json) as {
-          desired?: string;
-          stopCutoffMs?: number | null;
-          finalized?: boolean;
-          finalizationDeadline?: string | null;
-        })
-      : null;
-    if (
-      !state ||
-      capture?.status === "revoked" ||
-      state.desired !== "stopped" ||
-      state.stopCutoffMs == null
-    )
-      return this.skip(db, meetingId, "capture-interrupted");
-    if (
-      !state.finalized &&
-      (!state.finalizationDeadline || Date.parse(state.finalizationDeadline) >= Date.now())
-    )
-      throw new Error("Meeting finalization is still pending");
+        return this.skip(db, meetingId, "capture-interrupted");
+      if (
+        !state.finalized &&
+        (!state.finalizationDeadline || Date.parse(state.finalizationDeadline) >= Date.now())
+      )
+        throw new Error("Meeting finalization is still pending");
+    }
     if (!(await this.preferences.get(db)).summarizeOnStop)
       return this.skip(db, meetingId, "setting-off");
     if (await this.outputs.head(db, meetingId)) return this.skip(db, meetingId, "existing-output");
     if (await this.outputs.pendingGeneration(db, meetingId))
       return this.skip(db, meetingId, "existing-request");
     const inputs = await this.outputs.inputs(db, meetingId);
+    if (
+      row.recording_import_id &&
+      row.transcript_revision !== (inputs.transcript?.transcriptRevision ?? 0)
+    )
+      return this.skip(db, meetingId, "transcript-changed");
     if (
       !inputs.transcript ||
       inputs.transcript.containsProvisional ||
@@ -228,7 +281,9 @@ export class MeetingStopSummaryRepository {
       )
     ).rows[0];
     if (!request) {
-      const expiresAt = new Date(row.due_at.getTime() + 300000);
+      const expiresAt = new Date(
+        row.due_at.getTime() + (row.recording_import_id ? 1_209_600_000 : 300000)
+      );
       return {
         status: expiresAt.getTime() <= Date.now() ? "failed" : "waiting",
         requestKey: row.request_key,

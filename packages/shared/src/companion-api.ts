@@ -1,13 +1,14 @@
 import { errorResponseSchema } from "./schema-fragments.js";
 
 /**
- * Contracts for the Trail Marker Mac companion (#2560). The companion credential
- * minted here is NOT a browser or CLI session: it is accepted only by
- * `/api/companion/*` and authorizes account identity plus this device's own
- * connection. Never widen these contracts to carry task, chat, file or admin data.
+ * Browser-approved companion linking. Mac tm1 credentials retain their existing
+ * device/focus boundary. Android vr1 credentials use the separate recording and
+ * voice-status resolver plus dedicated ring session/logout routes.
  */
 export const COMPANION_PROTOCOL_VERSION = 1 as const;
 export const COMPANION_CREDENTIAL_PREFIX = "tm1_" as const;
+/** Ring credentials authenticate only the dedicated recording receiver resolver. */
+export const RING_COMPANION_CREDENTIAL_PREFIX = "vr1_" as const;
 
 /** Product name Moss shows for a linked Mac. */
 export const COMPANION_PRODUCT_NAME = "Trail Marker for Mac" as const;
@@ -28,10 +29,10 @@ export interface CompanionProtocolResponse {
 
 export interface CreatePairAttemptRequest {
   readonly deviceName: string;
-  readonly platform: "macos";
+  readonly platform: "macos" | "android";
   readonly appVersion: string;
   readonly osVersion: string;
-  /** base64url sha256 of the app's verifier; the raw verifier never leaves the Mac until redeem. */
+  /** base64url sha256 of the app's verifier; the raw verifier is sent by the companion at redeem. */
   readonly verifierHash: string;
   /** Independent recording proof requested as part of this connection, never inferred. */
   readonly recordingProofHash?: string;
@@ -49,6 +50,7 @@ export interface PairAttemptSummaryResponse {
   readonly deviceName: string;
   readonly status: "pending" | "approved" | "denied";
   readonly recordingPolicyVersion?: 1;
+  readonly platform?: "android";
 }
 
 export interface DecidePairAttemptRequest {
@@ -70,7 +72,7 @@ export interface RedeemPairAttemptResponse {
   /** Returned exactly once, in this response body, over TLS. The server keeps only its hash. */
   readonly credential: string;
   readonly device: { readonly id: string; readonly displayName: string };
-  readonly account: { readonly name: string; readonly email: string };
+  readonly account: { readonly name: string; readonly email: string; readonly id?: string };
   readonly expiresAt: string;
   readonly recordingCapability?: { readonly policyVersion: 1; readonly revision: number };
 }
@@ -159,7 +161,11 @@ const ACCOUNT_SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["name", "email"],
-  properties: { name: { type: "string" }, email: { type: "string" } }
+  properties: {
+    name: { type: "string" },
+    email: { type: "string" },
+    id: { type: "string", format: "uuid" }
+  }
 } as const;
 
 /**
@@ -200,9 +206,15 @@ export const createPairAttemptRouteSchema = {
       recordingProofHash: ["recordingPolicyVersion"],
       recordingPolicyVersion: ["recordingProofHash"]
     },
+    allOf: [
+      {
+        if: { properties: { platform: { const: "android" } }, required: ["platform"] },
+        then: { not: { required: ["recordingProofHash"] } }
+      }
+    ],
     properties: {
       deviceName: DEVICE_NAME_SCHEMA,
-      platform: { type: "string", enum: ["macos"] },
+      platform: { type: "string", enum: ["macos", "android"] },
       appVersion: VERSION_STRING_SCHEMA,
       osVersion: VERSION_STRING_SCHEMA,
       verifierHash: BASE64URL_SHA256_SCHEMA,
@@ -244,6 +256,7 @@ export const getPairAttemptRouteSchema = {
       properties: {
         deviceName: { type: "string" },
         status: { type: "string", enum: ["pending", "approved", "denied"] },
+        platform: { type: "string", const: "android" },
         recordingPolicyVersion: { type: "integer", const: 1 }
       }
     },

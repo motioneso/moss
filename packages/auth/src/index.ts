@@ -153,6 +153,8 @@ export interface MossAuthRuntime {
   readonly companionPairing: CompanionPairingService;
   /** Companion credential resolution and own-device operations (#2560). */
   readonly companionDevices: CompanionDevicesService;
+  /** Separate Android credential family; never supplied to ordinary/Mac resolvers. */
+  readonly ringDevices?: CompanionDevicesService;
   /** Fresh cookie-session/device binding checks for separately approved capabilities. */
   readonly sessionBindings: SessionBindingsService;
   readonly recordingCapabilities: RecordingCapabilitiesService;
@@ -266,6 +268,7 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     // companion tables to jarvis_auth_runtime alone.
     companionPairing: createCompanionPairingService({ pool }),
     companionDevices: createCompanionDevicesService({ pool }),
+    ringDevices: createCompanionDevicesService({ pool, platform: "android" }),
     sessionBindings: createSessionBindingsService({ pool, auth }),
     recordingCapabilities: createRecordingCapabilitiesService({
       pool,

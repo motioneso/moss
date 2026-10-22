@@ -21,6 +21,8 @@ import type {
 import type { StoredMeetingChatContext } from "@moss/shared";
 import { normalizeChatSurface } from "./live/chat-surface.js";
 import { toIsoString } from "./memory-serializers.js";
+import { reservedVoiceMessages } from "./voice-requests.js";
+import { findStoredChatTurn } from "./stored-turn.js";
 import {
   actionRecordId,
   actionRecords,
@@ -322,7 +324,9 @@ export class ChatRepository {
       // The pair keeps the question's place in history unless the summary already covers it.
       const startedAt = new Date(turn.started_at);
       const now = frontierAt && startedAt <= frontierAt ? new Date() : startedAt;
+      const voice = await reservedVoiceMessages(scopedDb, threadId, turn.turn_id);
       await this.insertMessage(scopedDb, {
+        id: voice?.user_message_id,
         thread,
         role: "user",
         status: "stored",
@@ -361,26 +365,6 @@ export class ChatRepository {
     return frontier ? new Date(frontier.created_at) : undefined;
   }
 
-  // The stored user and assistant rows of a turn id that already landed. A real reply outranks
-  // the interrupted note of the same turn.
-  private async findStoredTurn(
-    scopedDb: DataContextDb,
-    threadId: string,
-    turnId: string
-  ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
-    const rows = await scopedDb.db
-      .selectFrom("app.chat_messages")
-      .selectAll()
-      .where("thread_id", "=", threadId)
-      .where(sql<boolean>`tool_metadata @> ${JSON.stringify({ turnId })}::jsonb`)
-      .execute();
-    const userMessage = rows.find((row) => row.role === "user");
-    const assistants = rows.filter((row) => row.role === "assistant");
-    const assistantMessage =
-      assistants.find((row) => row.tool_metadata.interruptedTurn !== true) ?? assistants[0];
-    return userMessage && assistantMessage ? { userMessage, assistantMessage } : undefined;
-  }
-
   async listMessages(scopedDb: DataContextDb, threadId: string): Promise<ChatMessage[]> {
     assertDataContextDb(scopedDb);
 
@@ -412,6 +396,7 @@ export class ChatRepository {
   private async insertMessage(
     scopedDb: DataContextDb,
     input: {
+      readonly id?: string;
       readonly thread: ChatThread;
       readonly role: ChatMessage["role"];
       readonly status: ChatMessageStatus;
@@ -424,7 +409,7 @@ export class ChatRepository {
     return scopedDb.db
       .insertInto("app.chat_messages")
       .values({
-        id: randomUUID(),
+        id: input.id ?? randomUUID(),
         thread_id: input.thread.id,
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         role: input.role,
@@ -508,6 +493,29 @@ export class ChatRepository {
       .where("surface", "=", "drawer")
       .where("is_main", "=", true)
       .executeTakeFirst();
+  }
+
+  /** Voice admission may create Main without selecting it over an existing private chat. */
+  async ensureMainThread(scopedDb: DataContextDb, actorUserId: string): Promise<ChatThread> {
+    assertDataContextDb(scopedDb);
+    await this.lockThreadSelection(scopedDb, normalizeChatSurface());
+    const existing = await this.getMainThread(scopedDb, actorUserId);
+    if (existing) return existing;
+    return scopedDb.db
+      .insertInto("app.chat_threads")
+      .values({
+        id: randomUUID(),
+        owner_user_id: actorUserId,
+        title: "Main",
+        incognito: false,
+        surface: "drawer",
+        is_main: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+        last_active_at: new Date(0)
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
   }
 
   /**
@@ -639,12 +647,18 @@ export class ChatRepository {
     // stored as interrupted keeps its question, and the real reply follows the note.
     let landedQuestion: ChatMessage | undefined;
     if (opts?.turnId) {
-      const landed = await this.findStoredTurn(scopedDb, threadId, opts.turnId);
+      const landed = await findStoredChatTurn(scopedDb, threadId, opts.turnId);
       await deleteLiveTurn(scopedDb, opts.turnId);
       if (landed && landed.assistantMessage.tool_metadata.interruptedTurn !== true) return landed;
       landedQuestion = landed?.userMessage;
     }
     const turnIdentity = opts?.turnId ? { turnId: opts.turnId } : {};
+    const voice = await reservedVoiceMessages(scopedDb, threadId, opts?.turnId);
+    if (
+      voice &&
+      (voice.transcript !== userText || !["dispatching", "interrupted"].includes(voice.state))
+    )
+      throw new Error("Voice turn does not match its admitted request");
     let activity = [...(opts?.activityRecords ?? opts?.actionResults ?? [])];
     let actionResults: readonly unknown[] = [...(opts?.actionResults ?? [])];
     const actionIds = new Set(activity.map(actionRecordId).filter((id): id is string => !!id));
@@ -714,6 +728,7 @@ export class ChatRepository {
     const userMessage =
       landedQuestion ??
       (await this.insertMessage(scopedDb, {
+        id: voice?.user_message_id,
         thread,
         role: "user",
         status: "stored",
@@ -729,6 +744,7 @@ export class ChatRepository {
         now
       }));
     const assistantMessage = await this.insertMessage(scopedDb, {
+      id: voice?.assistant_message_id,
       thread,
       role: "assistant",
       status: "stored",
@@ -750,6 +766,13 @@ export class ChatRepository {
       now
     });
 
+    if (voice) {
+      await scopedDb.db
+        .updateTable("app.chat_voice_requests")
+        .set({ state: "replied", updated_at: now })
+        .where("id", "=", voice.id)
+        .execute();
+    }
     return { userMessage, assistantMessage };
   }
 
