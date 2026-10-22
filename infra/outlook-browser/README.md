@@ -13,7 +13,7 @@ Runtime.allocate/remove
   Egress: one private Unix CONNECT socket per runtime
   Podman: fixed rootless container/profile operations
 
-planned browser network namespace (network=none)
+candidate Chromium network namespace (network=none)
   loopback relay (proxy.py) → runtime's Unix socket → public TCP 443
 ```
 
@@ -38,7 +38,8 @@ The engine takes an installed immutable image ID, a reviewed seccomp file and a 
 root from trusted installation configuration. Clients cannot supply any of those values. Containers
 use a read-only root, no network, no added capabilities, no-new-privileges, bounded resources and
 disabled container logging. Resource labels are checked before reusing/removing a container or
-volume. Chromium sandbox readiness and the maintained browser image are still pending.
+volume. Native candidate-browser checks are described below. Image maintenance and full browser
+network acceptance on both supported architectures remain release blockers.
 
 Egress accepts bounded HTTP/1.1 CONNECT authorities on port 443, rejects special-use IPv4/IPv6
 and configured infrastructure networks, rejects mixed private/public DNS answers, and connects to
@@ -53,8 +54,8 @@ the tunnel. Public HTTPS servers are not restricted to Microsoft, allowing feder
 - Hard-crash/removal proof with actual Podman operations and the production Chromium image.
 - Populate/refresh the denied infrastructure networks, including the server's public addresses
   and the app's public ingress; the special-use deny list alone does not identify those.
-- Maintained pinned Chromium image, actual browser proxy configuration, sandbox diagnostics on
-  both architectures, redirect/IPv6/rebinding browser tests, and no alternate network route.
+- Browser security-update delivery and release review, managed-policy enforcement verification,
+  ARM64 sandbox diagnostics, redirect/rebinding tests, public IPv6 and alternate-route browser proof.
 - Authenticated viewer/collector leases, real session revocation, user setup, account confirmation,
   calendar import/removal and app-map/UI/deployment integration from the approved build spec.
 - Real Microsoft sign-in/MFA, two-user live UI proof and empty-install/update/uninstall evidence.
@@ -67,7 +68,7 @@ From `~/Jarv1s`, Python 3.12+:
 pnpm test:outlook-runtime
 ```
 
-This runs 36 tests plus eleven guard-removal checks against temporary copies of the actual source.
+This runs 38 tests plus twelve guard-removal checks against temporary copies of the actual source.
 CI runs the same command. No database, browser, credentials or network access is needed.
 
 Optional real rootless Podman proofs use a **Python fixture**, not a browser or real account:
@@ -127,3 +128,52 @@ checks and the remaining fixed browser operations must be implemented at their a
 The observed Python fixture manifest digest was
 `sha256:884d3f3d9b4ef25b050f984ca8781efd6b0f49312721d2c321536b7cecf1c224`.
 It is pinned in the engine fixture build. It is not a production browser image.
+
+## Candidate browser image
+
+`image/Containerfile` pins the base manifest, Chromium package and websocket-client package.
+Only the fixed runner, relay and browser policy are copied; no profile or operator binding is
+included. The image starts at `about:blank`. The runner accepts no arguments, waits for the
+loopback relay before launching Chromium, supervises both children and discards their output.
+Chromium uses the proxy with implicit loopback bypass disabled. Its local DNS rule excludes
+only the proxy's numeric loopback address; the host egress resolves HTTPS destinations.
+The debugging listener is container-local and has no published host port.
+
+The policy file configures password-manager, autofill, download, printing and browser-sync
+restrictions. Their effective enforcement has **not** been verified. Profile files still contain
+live login material after sign-in; do not treat these policies as encryption or backup protection.
+
+The checked-in pin is a **candidate**, not a maintained release channel or a completed security
+review. Before release, review browser/base vulnerabilities, update the pins, rebuild both supported
+architectures, rerun acceptance and publish immutable image identities. An unavailable exact
+package must fail the build; never silently substitute an unreviewed version or disable sandboxing.
+
+Account-free native proof, from `~/Jarv1s`:
+
+```sh
+podman build --tag localhost/moss-outlook-browser:candidate --file infra/outlook-browser/image/Containerfile infra/outlook-browser
+podman image inspect --format '{{.Id}}' localhost/moss-outlook-browser:candidate
+PYTHONPATH=infra/outlook-browser python3 -B infra/outlook-browser/tests/verify_browser.py --image sha256:<reported-image-id>
+```
+
+Supply exactly one `sha256:` prefix. The verifier checks image runner/relay/policy bytes against
+the checkout. It creates two real runtimes through the managed engine and egress, checks Chromium's
+own namespace/seccomp diagnostics, public Microsoft HTTPS with ordinary certificate checks, fresh
+separate localStorage, restart persistence, profile-volume removal and the unaffected second
+browser. It exercises selected private IPv4/IPv6 and local debugging-page navigation. Test-only
+derivative images remove the sandbox and loopback-bypass protections individually; each must cause
+the corresponding assertion to fail. No arbitrary-CDP helper or bypass flag is installed in the
+candidate image or exposed by the lifecycle broker. The probe runs only through test-side exec.
+
+This proof passed on native x86_64. It does not establish ARM64 support, Microsoft sign-in/MFA,
+full redirects/rebinding/public IPv6 behavior, public host/app ingress denial, service crash
+recovery or authenticated Moss viewing. No real account or production instance is used.
+The verifier removes its containers, volumes and control-image tags; the candidate/base remain
+until explicitly removed. Ensure sufficient build storage. On this host, an environment-only
+storage override was ignored; verify `podman info` and use explicit engine root/runroot options
+consistently for builds and every test subprocess when selecting a separate disposable store.
+
+`chromium_seccomp.py` derives a policy from the trusted host default, changing only `chroot`
+rules while preserving unrelated syscall names and conditions. The installed host default
+requires this adjustment for Chromium's nested namespace sandbox. It adds no outer capability.
+The test uses the generated file; installer policy delivery and host support checks remain pending.

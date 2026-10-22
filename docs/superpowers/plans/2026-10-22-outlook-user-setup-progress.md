@@ -30,10 +30,11 @@ The recovery tests inject runtime removal; they do not prove deletion of a real 
 `infra/outlook-browser/` now implements a durable host inventory, per-runtime Unix CONNECT egress,
 fixed rootless Podman container/profile operations and their internal composition. Removal records
 a permanent tombstone before revoking tunnels and deleting resources. Request cancellation drains
-the external engine operation before releasing the inventory lock. No viewer, collector,
-maintained browser image or installation/deployment wiring ships in this slice.
+the external engine operation before releasing the inventory lock. No viewer, collector or
+installation/deployment wiring ships in this slice. A pinned candidate browser image now exists;
+its maintenance and release acceptance remain unfinished.
 
-Verification: `pnpm test:outlook-runtime` runs 36 tests and eleven guard-removal controls in CI.
+Verification: `pnpm test:outlook-runtime` runs 38 tests and twelve guard-removal controls in CI.
 Actual rootless Python fixtures also exercised public Microsoft TLS, 14 network checks, a real
 network-none negative control, separate profile volumes, idempotent allocation, container/profile
 deletion, inventory restart and unaffected second runtime. These are transport/engine proofs,
@@ -64,8 +65,34 @@ kill an actual broker subprocess and verify its surviving command supervisor blo
 until completion. These tests do not prove hard-crash recovery of actual Podman or Chromium.
 
 Actual Podman hard-crash/removal, discovering/refreshing public host/app ingress deny addresses,
-and the actual browser's network/sandbox tests remain hard merge blockers. The unit is not
+and the remaining browser network/architecture acceptance remain hard merge blockers. The unit is not
 installed/enabled, no app/worker mounts are added yet, and the legacy runtime is unchanged.
+
+## Candidate Chromium image
+
+The image pins its base manifest and direct Chromium/websocket-client packages. Only a fixed
+runner, loopback relay and browser policy are copied, with a fresh profile directory. The runner
+waits for the relay before starting Chromium at about:blank and supervises both child processes.
+The proxy configuration disables Chromium's implicit loopback bypass; DNS rules exclude only the
+numeric proxy address. A narrowly derived seccomp policy preserves unrelated host-default rules.
+Neither an arbitrary-CDP helper nor a test-only bypass flag is shipped in the image.
+
+Native x86_64 account-free proof exercised the real Runtime/Podman/Egress path: two Chromium
+namespace/seccomp diagnostics, public Microsoft HTTPS, separate fresh browser storage, selected
+private IPv4/IPv6 and local-CDP navigation denials, graceful profile persistence, actual volume
+removal and the unaffected second browser. Two derivative test images remove sandbox and loopback
+protections individually; the actual browser assertions fail in both cases. Unit coverage also
+checks seccomp-rule preservation and rejects a permissive source policy with a guard-removal control.
+
+This is candidate-image evidence, not maintained release delivery, ARM64, real sign-in/MFA,
+effective managed-policy enforcement, full redirects/rebinding/public IPv6, host/app public
+ingress denial, service hard-crash recovery, Moss auth/viewer or live product proof. Those remain
+hard blockers. The legacy connection and production deployment remain untouched.
+
+Native browser receipt: immutable candidate
+`sha256:65311904714ff46cc028ec495e666de1bb954043d996ddc81628049343f0e52b`,
+Chromium package `149.0.7827.53-r0`; `verify_browser.py` exited 0 with six proof groups,
+including both actual guard-removal assertion failures. No certificate bypass was used.
 
 ## Remaining build work
 

@@ -8,6 +8,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTROLS = (
+    ('seccomp deny default', 'chromium_seccomp.py',
+     "if default.get('defaultAction') != 'SCMP_ACT_ERRNO':", 'if False:',
+     'test_chromium_seccomp.ChromiumSeccomp.test_permissive_source_is_rejected'),
     ('address policy', 'egress.py',
      'if not allowed or any(address in network for network in denied_networks):',
      'if False:', 'test_egress.AddressPolicy.test_special_addresses'),
@@ -43,7 +46,8 @@ def verify():
     for name, filename, before, after, test in CONTROLS:
         with tempfile.TemporaryDirectory(prefix='moss-runtime-negative-') as directory:
             for module in ('egress.py', 'lifecycle.py', 'runtime.py', 'broker.py',
-                           'podman.py', 'service_lock.py', 'engine_command.py', 'service.py'):
+                           'podman.py', 'service_lock.py', 'engine_command.py', 'service.py',
+                           'chromium_seccomp.py'):
                 source = (ROOT / module).read_text()
                 if module == filename:
                     if source.count(before) != 1:
