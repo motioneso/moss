@@ -84,18 +84,7 @@ confirmed committed ring setup; the combined harness failed on ADB before its
 success observation. Browser cleanup signed out the disposable device, isolated
 configuration was removed and EMPTY confirmed. This is partial acceptance. -->
 
-## Vocci #3565 — physical completion deferred
-
-Native Vocci email-code verification and explicit ring selection passed using
-Ben-authorized Chrome/Gmail assistance; no further code entry is requested.
-The selected state survived restart. Ben currently cannot record audio, and the
-separate physical diagnostic returned `ring_connect`. No configuration was
-published by this run. Browser cleanup revoked its disposable Moss device;
-isolated staging was removed and EMPTY confirmed. Phone timeout was restored.
-
-Resume when the ring is available: complete real Verify → Ready Start/hold →
-fresh normal Meeting and opted-in Main/text reply. A private harness completion
-quoting bug was fixed and tested independently; it is not product success.
-CI passed on the implemented source. Full local foundation rerun
-`20261021-214931` remains active after a News timing failure; that suite passed
-13/13 in isolation. Keep #3565 open and PR #3566 draft; no merge is authorized.
+<!-- Resolved 2026-10-22: Ben is available for phone/ring steps again.
+The latest proof passed physical Verify and Start/hold enrollment, then expired
+waiting for fresh samples. Ben is recording during his meeting; no additional
+user step is requested during it. Delivery of those samples is unverified. -->

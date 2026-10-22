@@ -165,13 +165,71 @@ CI passed, including its overall gate, Android, static, unit, integration,
 Meeting, browser, compose and auth-control jobs, on the implemented source.
 Local foundation `20261021-210957` failed one News focus-refresh unit test:
 17,871 passed, three skipped. Its isolated rerun passed all 13 tests.
-Full foundation rerun `20261021-214931` is active; no green local result is claimed.
+Full foundation rerun `20261021-214931` completed exit 0: 392 integration files,
+4,075 tests passed and two skipped. It tested documentation HEAD `b9d546303`,
+the same implemented source `8f24358bd`, and the changed coordination document
+(inputs `4e5c3b78edda`). Documentation commit `3f5003a16` also passed CI.
+This local receipt applies to those recorded inputs; it is not a final-HEAD rerun.
+
+## October 22 resumed acceptance
+
+The first resumed run (`20261022-101252`) exited 1 at native sign-in observation.
+Gmail-assisted native sign-in and explicit selection passed separately. Suspending
+the observer while it had an ADB child caused its subprocess deadline to expire.
+Browser cleanup revoked the disposable device; isolated staging was removed and
+EMPTY confirmed. The private harness now uses a cooperative completion marker
+for native UI ownership, followed by an assertion of the actual selected summary.
+The marker does not substitute for observing the production UI.
+
+The subsequent run (`20261022-101640`) passed actual native sign-in, inventory,
+selection and selected-state restart. Physical identity/key and fresh Moss owner
+checks passed, configuration was committed atomically, the actual Ready-screen
+Start launched the production service and completed a ring inventory, and the
+separate hold opt-in enrolled against a stable inventory. Fresh Meeting/Main
+sample collection expired after 240 seconds without fresh samples. The run
+exited 1. Browser cleanup confirmed disposable-device removal; only its revoked
+isolated configuration/delivery state was removed. Original configuration and
+queue hashes matched the retained upgrade baseline. No combined green result
+is claimed. The owner subsequently began a hold sample and planned a meeting
+recording, after the isolated test session had ended; neither is delivery proof.
+
+The real authenticated Ready screen also passed a light/dark × 100%/150% text
+matrix. All four runs retained the configured identity and checked hold choice,
+kept Stop available and preserved the encrypted configuration hash; original
+font/theme settings were restored. These are actual native accessibility/control
+state checks. Secure-window screenshots were blank, so they do not establish
+visual acceptance; the earlier executable layout checks remain the evidence for
+unellipsized text and target size.
+
+## Long-recording clock-drift regression
+
+The real service downloaded a 42-minute recording and all upload chunks, but
+finalization returned HTTP 400. Its declared and decoded audio duration both
+measured 2,513,160 ms; the ring's start/end timestamps spanned 2,509,000 ms.
+The 4,160 ms difference exceeded the former fixed 1,500 ms consistency bound.
+Packet framing, hashes and canonical WAV validation independently passed.
+
+Elapsed timestamp validation now permits 0.2% drift plus one second of timestamp
+quantization, with the existing 1,500 ms floor for short recordings. Declared
+duration must still match decoded audio within 1,000 ms. Chronology, bookmark,
+framing, hash and duration/size limits remain enforced. This is a measured
+compatibility fix, not a claim that two-hour hardware endurance passed.
+
+The retained private real-source reproduction failed before the fix and passed
+after it. Generated source regressions cover the observed 42-minute pattern,
+short-recording and excessive long-recording drift rejection, and mismatched
+declared duration. The focused source/bundle suites passed all 59 tests.
+Isolated HTTP receiver gate `20261022-103030` exited 0: all 13 integration tests
+passed, including finalization with the measured drift pattern. These generated
+fixtures are transport validation evidence, not physical recording or ASR proof.
+Full foundation and CI must rerun for these source changes.
 
 ## Remaining
 
 Obtain a green combined production-wizard run with the reachable ring and prove
 fresh physical Meeting and opted-in Main/text delivery from the final controls.
-Complete authenticated-state theme/font, recovery/upgrade and final-input
-foundation/CI acceptance. No code-entry request is pending; authorized existing
-Gmail access can finish the next sign-in. Keep #3565 open and PR #3566 draft.
+Complete remaining recovery/upgrade and final-input foundation/CI acceptance.
+Authenticated-state native theme/font controls passed as documented above;
+secure-window images do not establish visual acceptance. No code-entry request
+is pending; authorized existing Gmail access can finish the next sign-in. Keep #3565 open and PR #3566 draft.
 No merge, production deployment or completed-onboarding claim.

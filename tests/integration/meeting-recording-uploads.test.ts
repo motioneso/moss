@@ -125,6 +125,24 @@ async function serverFor(service: RecordingImportService) {
   return server;
 }
 describe("resumable recording transport and checkpointed transcription", () => {
+  it("finalizes a long recording with measured ring-clock drift through the HTTP receiver", async () => {
+    const { service } = setup();
+    const uploaded = await upload(service, recordingUpload(2_513_160, false, -4_160));
+    const server = await serverFor(service);
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: `/api/meetings/recording-uploads/${uploaded.id}/finalize`,
+        headers: { authorization: `Bearer ${ids.userA}`, "content-type": "application/json" },
+        payload: "null"
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ ready: true });
+    } finally {
+      await server.close();
+    }
+  });
+
   it("admits one short resumable hold transcript through the real Chat boundary after its final window", async () => {
     const chat = new VoiceRequestService({
       dataContext: context,
