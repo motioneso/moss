@@ -20,24 +20,36 @@ preview.addEventListener("click", async () => {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     const url = new URL(tab.url);
-    if (url.protocol !== "https:" || !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)) {
+    if (
+      url.protocol !== "https:" ||
+      !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)
+    ) {
       if (request === generation) status.textContent = "Open Outlook Web in the active tab first.";
       return;
     }
-    const injections = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ["read-message.js", "extract.js"] });
+    const injections = await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["read-message.js", "extract.js"]
+    });
     if (request !== generation) return;
     const capture = injections.length === 1 && !injections[0].error && injections[0].result;
     if (!capture || !capture.ok) {
-      status.textContent = capture?.reason === "ambiguous"
-        ? "Several message bodies are open. Open just the synthetic message on its own."
-        : "Couldn't identify one readable message. Open a synthetic email; close drafts and try again.";
+      status.textContent =
+        capture?.reason === "ambiguous"
+          ? "Several message bodies are open. Open just the synthetic message on its own."
+          : "Couldn't identify one readable message. Open a synthetic email; close drafts and try again.";
       return;
     }
-    for (const field of fields) document.getElementById(field).textContent = capture[field] || "Not found";
+    for (const field of fields)
+      document.getElementById(field).textContent = capture[field] || "Not found";
     result.hidden = false;
-    status.textContent = capture.truncated ? "Local preview only. Body limited to 12,000 characters." : "Local preview only. Nothing saved or uploaded.";
+    status.textContent = capture.truncated
+      ? "Local preview only. Body limited to 12,000 characters."
+      : "Local preview only. Nothing saved or uploaded.";
   } catch {
-    if (request === generation) status.textContent = "Firefox couldn't read this tab. Reload Outlook and try again; your browser policy may block extensions.";
+    if (request === generation)
+      status.textContent =
+        "Firefox couldn't read this tab. Reload Outlook and try again; your browser policy may block extensions.";
   } finally {
     preview.disabled = false;
   }
@@ -45,7 +57,9 @@ preview.addEventListener("click", async () => {
 
 const watchStatus = document.getElementById("watch-status");
 const watchResults = document.getElementById("watch-results");
-const watchButtons = ["watch-start", "watch-read", "watch-stop"].map((id) => document.getElementById(id));
+const watchButtons = ["watch-start", "watch-read", "watch-stop"].map((id) =>
+  document.getElementById(id)
+);
 
 async function watchCommand(command) {
   for (const button of watchButtons) button.disabled = true;
@@ -53,14 +67,20 @@ async function watchCommand(command) {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     const url = new URL(tab.url);
-    if (url.protocol !== "https:" || !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)) {
+    if (
+      url.protocol !== "https:" ||
+      !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)
+    ) {
       watchStatus.textContent = "Open Outlook Web Inbox or Calendar in the active tab first.";
       return;
     }
     const calendar = /(^|\/)calendar(\/|$)/i.test(url.pathname);
     const mode = calendar ? "calendar" : "inbox";
     if (command === "start") {
-      const installed = await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [calendar ? "calendar-watch.js" : "watch.js"] });
+      const installed = await browser.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: [calendar ? "calendar-watch.js" : "watch.js"]
+      });
       if (installed.some((item) => item.error)) throw Error("injection");
     }
     const injections = await browser.scripting.executeScript({
@@ -72,12 +92,13 @@ async function watchCommand(command) {
         if (action === "stop") return watcher.stop();
         return watcher.snapshot();
       },
-      args: [command, document.getElementById("phrase").value, calendar],
+      args: [command, document.getElementById("phrase").value, calendar]
     });
     if (injections.length !== 1 || injections[0].error) throw Error("injection");
     const state = injections[0].result;
     if (!state) {
-      watchStatus.textContent = "No watcher in this tab. Click Start watching on Inbox or Calendar.";
+      watchStatus.textContent =
+        "No watcher in this tab. Click Start watching on Inbox or Calendar.";
       return;
     }
     watchStatus.textContent = `${state.running ? "Running" : "Stopped"} (${mode}): ${state.reason}. Scans: ${state.scans}; rendered items: ${state.candidates}; phrase matches: ${state.matched}; newly observed/changed: ${state.observed}.${calendar ? ` No longer displayed: ${state.disappeared}.` : ""} Last scan: ${state.lastScan || "none"}.`;
@@ -87,7 +108,8 @@ async function watchCommand(command) {
       watchResults.append(li);
     }
   } catch {
-    watchStatus.textContent = "Couldn't reach the watcher. Reloading Outlook stops and clears it; then start again.";
+    watchStatus.textContent =
+      "Couldn't reach the watcher. Reloading Outlook stops and clears it; then start again.";
   } finally {
     for (const button of watchButtons) button.disabled = false;
   }
@@ -97,7 +119,9 @@ document.getElementById("watch-start").addEventListener("click", () => watchComm
 document.getElementById("watch-read").addEventListener("click", () => watchCommand("read"));
 document.getElementById("watch-stop").addEventListener("click", () => watchCommand("stop"));
 
-const autoButtons = ["auto-start", "auto-read", "auto-stop", "auto-layout"].map((id) => document.getElementById(id));
+const autoButtons = ["auto-start", "auto-read", "auto-stop", "auto-layout"].map((id) =>
+  document.getElementById(id)
+);
 async function autoBodyCommand(command) {
   const autoStatus = document.getElementById("auto-status");
   const autoResult = document.getElementById("auto-result");
@@ -108,8 +132,11 @@ async function autoBodyCommand(command) {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     const url = new URL(tab.url);
-    if (url.protocol !== "https:" || !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname)
-      || !/^\/mail(?:\/|$)/i.test(url.pathname)) {
+    if (
+      url.protocol !== "https:" ||
+      !["outlook.office.com", "outlook.office365.com", "outlook.live.com"].includes(url.hostname) ||
+      !/^\/mail(?:\/|$)/i.test(url.pathname)
+    ) {
       autoStatus.textContent = "Open Outlook Web Inbox in the active tab first.";
       return;
     }
@@ -131,23 +158,29 @@ async function autoBodyCommand(command) {
         }
         return action === "stop" ? probe.stop() : probe.snapshot();
       },
-      args: [command, document.getElementById("auto-phrase").value],
+      args: [command, document.getElementById("auto-phrase").value]
     });
     if (injections.length !== 1 || injections[0].error) throw Error("injection");
     const state = injections[0].result;
     if (command === "layout") {
-      document.getElementById("layout-result").textContent = state?.report || "No layout report returned.";
+      document.getElementById("layout-result").textContent =
+        state?.report || "No layout report returned.";
       autoStatus.textContent = "Layout check finished. Body test was not started.";
       return;
     }
-    if (!state) { autoStatus.textContent = "No body test in this tab. Start on Inbox first."; return; }
+    if (!state) {
+      autoStatus.textContent = "No body test in this tab. Start on Inbox first.";
+      return;
+    }
     autoStatus.textContent = `${state.running ? "Running" : "Stopped"}: ${state.reason}. Scans: ${state.scans}; rows opened: ${state.opened}; body captured: ${state.capture ? "yes" : "no"}.`;
     if (state.capture) {
-      for (const field of fields) document.getElementById(`auto-${field}`).textContent = state.capture[field] || "Not found";
+      for (const field of fields)
+        document.getElementById(`auto-${field}`).textContent = state.capture[field] || "Not found";
       autoResult.hidden = false;
     }
   } catch {
-    autoStatus.textContent = "Couldn't reach the body test. Reload Outlook to stop and clear it; then start again with a fresh phrase.";
+    autoStatus.textContent =
+      "Couldn't reach the body test. Reload Outlook to stop and clear it; then start again with a fresh phrase.";
   } finally {
     for (const button of autoButtons) button.disabled = false;
   }

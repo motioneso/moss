@@ -1,11 +1,57 @@
-body { font: 14px system-ui, sans-serif; width: 420px; margin: 16px; color: #181818; background: #fff; }
-h1 { font-size: 19px; }
-h2 { font-size: 15px; }
-button { font: inherit; padding: 7px 12px; margin-right: 6px; }
-dt { font-weight: bold; margin-top: 10px; }
-dd { margin: 3px 0; overflow-wrap: anywhere; }
-pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; max-height: 300px; overflow-y: auto; }
-#status { padding: 8px; background: #eee; }
-input { display: block; box-sizing: border-box; width: 100%; font: inherit; padding: 6px; margin-top: 4px; }
-#watch-results { padding-left: 20px; max-height: 240px; overflow-y: auto; }
-#watch-results li { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; }
+body {
+  font:
+    14px system-ui,
+    sans-serif;
+  width: 420px;
+  margin: 16px;
+  color: #181818;
+  background: #fff;
+}
+h1 {
+  font-size: 19px;
+}
+h2 {
+  font-size: 15px;
+}
+button {
+  font: inherit;
+  padding: 7px 12px;
+  margin-right: 6px;
+}
+dt {
+  font-weight: bold;
+  margin-top: 10px;
+}
+dd {
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  max-height: 300px;
+  overflow-y: auto;
+}
+#status {
+  padding: 8px;
+  background: #eee;
+}
+input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  font: inherit;
+  padding: 6px;
+  margin-top: 4px;
+}
+#watch-results {
+  padding-left: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+#watch-results li {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}

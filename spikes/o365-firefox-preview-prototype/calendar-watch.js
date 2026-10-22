@@ -16,9 +16,22 @@
   const present = new Set();
   const misses = new Map();
   const currentRoute = () => location.pathname + location.search + location.hash;
-  const visible = (node) => !node.closest('[hidden], [aria-hidden="true"], [inert]')
-    && getComputedStyle(node).visibility === "visible" && node.getClientRects().length > 0;
-  const snapshot = () => ({ running, reason, phrase, scans, candidates, matched, observed, disappeared, lastScan, rows: rows.map((row) => ({ ...row })) });
+  const visible = (node) =>
+    !node.closest('[hidden], [aria-hidden="true"], [inert]') &&
+    getComputedStyle(node).visibility === "visible" &&
+    node.getClientRects().length > 0;
+  const snapshot = () => ({
+    running,
+    reason,
+    phrase,
+    scans,
+    candidates,
+    matched,
+    observed,
+    disappeared,
+    lastScan,
+    rows: rows.map((row) => ({ ...row }))
+  });
   const stop = (message = "Stopped and cleared") => {
     clearInterval(timer);
     timer = undefined;
@@ -36,7 +49,10 @@
     rows = rows.slice(0, 20);
   };
   const scan = (baseline = false) => {
-    if (currentRoute() !== route) { stop("Calendar route changed; stopped and cleared. Start again on the desired view."); return; }
+    if (currentRoute() !== route) {
+      stop("Calendar route changed; stopped and cleared. Start again on the desired view.");
+      return;
+    }
     scans++;
     lastScan = new Date().toLocaleTimeString();
     const roots = [...document.querySelectorAll('main, [role="main"]')].filter(visible);
@@ -48,19 +64,40 @@
     }
     // Experimental English event labels: time range or All day. No page-text
     // fallback, dialogs, navigation, event opening, or internal Outlook APIs.
-    const buttons = [...roots[0].querySelectorAll('button, [role="button"]')].filter((node) =>
-      visible(node) && !node.closest('nav, [role="navigation"], [role="dialog"], [role="textbox"], [contenteditable="true"]')).slice(0, 500);
-    const labels = buttons.map((node) => (node.getAttribute("aria-label") || node.innerText || "").trim().replace(/\s+/g, " ").slice(0, 2000))
-      .filter((label) => /\b(?:\d{1,2}:\d{2}|\d{1,2}\s*[ap]m|all[ -]day)\b/i.test(label)).slice(0, 200);
+    const buttons = [...roots[0].querySelectorAll('button, [role="button"]')]
+      .filter(
+        (node) =>
+          visible(node) &&
+          !node.closest(
+            'nav, [role="navigation"], [role="dialog"], [role="textbox"], [contenteditable="true"]'
+          )
+      )
+      .slice(0, 500);
+    const labels = buttons
+      .map((node) =>
+        (node.getAttribute("aria-label") || node.innerText || "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .slice(0, 2000)
+      )
+      .filter((label) => /\b(?:\d{1,2}:\d{2}|\d{1,2}\s*[ap]m|all[ -]day)\b/i.test(label))
+      .slice(0, 200);
     candidates = labels.length;
-    const current = new Set(labels.filter((label) => label.toLowerCase().includes(phrase.toLowerCase())).slice(0, 50));
+    const current = new Set(
+      labels.filter((label) => label.toLowerCase().includes(phrase.toLowerCase())).slice(0, 50)
+    );
     matched = current.size;
     for (const label of current) {
       misses.delete(label);
       if (present.has(label)) continue;
       present.add(label);
       if (!baseline) observed++;
-      record(baseline ? "Already displayed at start" : "Appeared / changed summary in displayed calendar", label);
+      record(
+        baseline
+          ? "Already displayed at start"
+          : "Appeared / changed summary in displayed calendar",
+        label
+      );
     }
     for (const label of present) {
       if (current.has(label)) continue;

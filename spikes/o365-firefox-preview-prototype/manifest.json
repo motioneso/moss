@@ -4,7 +4,10 @@
   "version": "0.4.3",
   "description": "Local Outlook preview and explicitly started, tab-local synthetic inbox/calendar watchers.",
   "permissions": ["activeTab", "scripting"],
-  "action": { "default_title": "Outlook preview and local watchers", "default_popup": "popup.html" },
+  "action": {
+    "default_title": "Outlook preview and local watchers",
+    "default_popup": "popup.html"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "outlook-preview-prototype@moss.invalid",

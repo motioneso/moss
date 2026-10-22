@@ -14,9 +14,21 @@
   let observed = 0;
   let lastScan = "";
   const currentRoute = () => location.pathname + location.search + location.hash;
-  const visible = (node) => !node.closest('[hidden], [aria-hidden="true"], [inert]')
-    && getComputedStyle(node).visibility === "visible" && node.getClientRects().length > 0;
-  const snapshot = () => ({ running, reason, phrase, scans, candidates, matched, observed, lastScan, rows: rows.map((row) => ({ ...row })) });
+  const visible = (node) =>
+    !node.closest('[hidden], [aria-hidden="true"], [inert]') &&
+    getComputedStyle(node).visibility === "visible" &&
+    node.getClientRects().length > 0;
+  const snapshot = () => ({
+    running,
+    reason,
+    phrase,
+    scans,
+    candidates,
+    matched,
+    observed,
+    lastScan,
+    rows: rows.map((row) => ({ ...row }))
+  });
   const stop = (message = "Stopped and cleared") => {
     clearInterval(timer);
     timer = undefined;
@@ -29,22 +41,36 @@
     return snapshot();
   };
   const scan = (baseline = false) => {
-    if (currentRoute() !== route) { stop("Page route changed; stopped and cleared. Return to Inbox and start again."); return; }
+    if (currentRoute() !== route) {
+      stop("Page route changed; stopped and cleared. Return to Inbox and start again.");
+      return;
+    }
     scans++;
     lastScan = new Date().toLocaleTimeString();
     // Do not guess from page text or read dropdown/recipient lists. The user
     // chooses Inbox; only a single named, visible message list is supported.
-    const lists = [...document.querySelectorAll('[role="listbox"]')].filter((node) =>
-      visible(node) && /message|conversation|inbox/i.test(node.getAttribute("aria-label") || "")
-      && !node.closest('nav, [role="navigation"], [role="dialog"], [contenteditable="true"]'));
+    const lists = [...document.querySelectorAll('[role="listbox"]')].filter(
+      (node) =>
+        visible(node) &&
+        /message|conversation|inbox/i.test(node.getAttribute("aria-label") || "") &&
+        !node.closest('nav, [role="navigation"], [role="dialog"], [contenteditable="true"]')
+    );
     if (lists.length !== 1) {
       candidates = matched = 0;
-      reason = lists.length > 1 ? "Several message lists found; waiting for one Inbox list." : "No supported message list found; waiting. Keep Inbox open.";
+      reason =
+        lists.length > 1
+          ? "Several message lists found; waiting for one Inbox list."
+          : "No supported message list found; waiting. Keep Inbox open.";
       return;
     }
-    const options = [...lists[0].querySelectorAll('[role="option"]')].filter((node) =>
-      node.closest('[role="listbox"]') === lists[0] && visible(node)
-      && !node.closest('[role="textbox"], [contenteditable="true"]')).slice(0, 50);
+    const options = [...lists[0].querySelectorAll('[role="option"]')]
+      .filter(
+        (node) =>
+          node.closest('[role="listbox"]') === lists[0] &&
+          visible(node) &&
+          !node.closest('[role="textbox"], [contenteditable="true"]')
+      )
+      .slice(0, 50);
     candidates = options.length;
     matched = 0;
     for (const option of options) {
@@ -56,7 +82,11 @@
       seen.add(summary);
       if (seen.size > 500) seen.delete(seen.values().next().value);
       if (!baseline) observed++;
-      rows.unshift({ kind: baseline ? "Already visible at start" : "Newly observed or changed row", time: lastScan, summary });
+      rows.unshift({
+        kind: baseline ? "Already visible at start" : "Newly observed or changed row",
+        time: lastScan,
+        summary
+      });
       rows = rows.slice(0, 20);
     }
     reason = "Watching rendered rows only";

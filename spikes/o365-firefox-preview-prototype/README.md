@@ -278,10 +278,10 @@ leaving the watched view unchanged and making changes on the other computer.
 The watcher remained Running (calendar) throughout.
 
 | User action | Scans | Rendered items | Phrase matches | Newly observed/changed | No longer displayed |
-| --- | --- | --- | --- | --- | --- |
-| Create | 19 | 15 | 1 | 1 | 0 |
-| Edit | 46 | 15 | 1 | 2 | 0 |
-| Delete | 62 | 14 | 0 | 2 | 1 |
+| ----------- | ----- | -------------- | -------------- | ---------------------- | ------------------- |
+| Create      | 19    | 15             | 1              | 1                      | 0                   |
+| Edit        | 46    | 15             | 1              | 2                      | 0                   |
+| Delete      | 62    | 14             | 0              | 2                      | 1                   |
 
 This supports live detection of appearance, a changed summary, and disappearance
 in the displayed Outlook calendar during this bounded trial. It does not establish
@@ -312,7 +312,6 @@ to twelve wrappers and searches specifically for a unique phrase-matching headin
 in automatic mode. A synthetic fixture reproducing both conditions failed before
 the change. The subsequent live repeat succeeded, as recorded below.
 
-
 Successful automatic body repeat (2026-10-21, version 0.4.3): the user reported
 **Stopped: Captured one synthetic body locally; automation finished**, with
 38 scans, one row opened, and **body captured: yes**. This verifies one explicitly
@@ -336,12 +335,12 @@ account. Existing version 0.4.3 scripts were injected through Chrome DevTools in
 an isolated JavaScript world. No Chrome extension was installed; these results
 exercise the reader and watcher, not Chrome add-on installation or permissions.
 
-| Trial | Result | Scans | Rows opened |
-| --- | --- | --- | --- |
-| Outlook foreground | Synthetic body captured | 13 | 1 |
-| Gmail brought to foreground (visibility unverified) | Synthetic body captured | 15 | 1 |
-| Outlook reload, then explicit reinjection/start | Synthetic body captured | 13 | 1 |
-| Minimized browser, controller disconnected | Synthetic body captured | 13 | 1 |
+| Trial                                               | Result                  | Scans | Rows opened |
+| --------------------------------------------------- | ----------------------- | ----- | ----------- |
+| Outlook foreground                                  | Synthetic body captured | 13    | 1           |
+| Gmail brought to foreground (visibility unverified) | Synthetic body captured | 15    | 1           |
+| Outlook reload, then explicit reinjection/start     | Synthetic body captured | 13    | 1           |
+| Minimized browser, controller disconnected          | Synthetic body captured | 13    | 1           |
 
 Each success required the existing subject/body phrase, final marker and stable
 snapshot checks. Only status/count summaries were returned to the controller;
@@ -412,11 +411,11 @@ Live recovery continuation (2026-10-21): three more invented messages were sent
 under a fresh allowance of up to five. Consecutive send attempts were spaced
 121 and 134 seconds apart. All three captured one body and opened one row:
 
-| Trial | Scans | Result |
-| --- | --- | --- |
-| Reload before arrival | 15 | Bootstrap automatically rearmed; capture succeeded |
-| Fresh phrase after prior capture/clear | 14 | Next message captured |
-| Full dedicated-browser restart, controller reconnect/register | 16 | Account sessions restored and capture succeeded |
+| Trial                                                         | Scans | Result                                             |
+| ------------------------------------------------------------- | ----- | -------------------------------------------------- |
+| Reload before arrival                                         | 15    | Bootstrap automatically rearmed; capture succeeded |
+| Fresh phrase after prior capture/clear                        | 14    | Next message captured                              |
+| Full dedicated-browser restart, controller reconnect/register | 16    | Account sessions restored and capture succeeded    |
 
 After the first capture, another reload refused to open the existing matching
 row (zero scans/opens, no capture retained). The first live reload also exposed

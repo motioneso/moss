@@ -15,14 +15,14 @@ Keep two candidate experiences separate:
 
 Browser scraping is technically plausible, but it is not evidence of authorization, freedom from monitoring, or reliable full-mailbox synchronization. Do not treat it as the automatic fallback after an explicit organizational access denial.
 
-| Route | Needs a user-created work-tenant app registration? | Useful scope | Remaining constraints |
-| --- | --- | --- | --- |
-| Operator-owned multitenant Graph app | No | Reliable API-based sync | Operator needs registration/verification; employer controls consent and access |
-| Outlook Office.js add-in | No, for current-item APIs | User-selected opened message | Add-in installation, supported client/API, permitted transfer destination |
-| Browser extension or UI automation | No, for rendered-page extraction | Selected-message capture; fragile crawling | Installation/automation policy, running browser/session, DOM changes |
-| Power Automate Outlook connector | No custom registration | Cloud new-message workflow | Connector access, data policies, delivery connector, licensing |
-| Manual `.eml` export | No | One-message ingestion experiment | Manual action; permitted export and transfer; no sync |
-| Classic Outlook Windows COM helper | No custom registration for local object-model access | Client-specific desktop automation | Classic Windows only, install/trust settings, security prompts, desktop availability |
+| Route                                | Needs a user-created work-tenant app registration?   | Useful scope                               | Remaining constraints                                                                |
+| ------------------------------------ | ---------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Operator-owned multitenant Graph app | No                                                   | Reliable API-based sync                    | Operator needs registration/verification; employer controls consent and access       |
+| Outlook Office.js add-in             | No, for current-item APIs                            | User-selected opened message               | Add-in installation, supported client/API, permitted transfer destination            |
+| Browser extension or UI automation   | No, for rendered-page extraction                     | Selected-message capture; fragile crawling | Installation/automation policy, running browser/session, DOM changes                 |
+| Power Automate Outlook connector     | No custom registration                               | Cloud new-message workflow                 | Connector access, data policies, delivery connector, licensing                       |
+| Manual `.eml` export                 | No                                                   | One-message ingestion experiment           | Manual action; permitted export and transfer; no sync                                |
+| Classic Outlook Windows COM helper   | No custom registration for local object-model access | Client-specific desktop automation         | Classic Windows only, install/trust settings, security prompts, desktop availability |
 
 These are technical routes, not a prediction that a specific employer permits them. Sources and distinctions follow.
 

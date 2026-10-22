@@ -1,61 +1,89 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
+    <meta charset="utf-8" />
     <title>Outlook local preview</title>
-    <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="popup.css" />
     <script src="popup.js" defer></script>
   </head>
   <body>
     <h1>Outlook local preview</h1>
-    <p>Temporary prototype. Use synthetic test mail/events only. Choose an opened-email preview or a watcher below.</p>
+    <p>
+      Temporary prototype. Use synthetic test mail/events only. Choose an opened-email preview or a
+      watcher below.
+    </p>
     <p>No uploads or disk saving. Opened-email preview clears when this popup closes.</p>
     <button id="preview" type="button">Preview opened email</button>
     <button id="clear" type="button">Clear</button>
     <p id="status" role="status">Ready. Nothing has been read.</p>
     <section id="result" hidden aria-label="Email preview">
       <dl>
-        <dt>Subject</dt><dd id="subject"></dd>
-        <dt>From</dt><dd id="sender"></dd>
-        <dt>Date (as displayed)</dt><dd id="date"></dd>
+        <dt>Subject</dt>
+        <dd id="subject"></dd>
+        <dt>From</dt>
+        <dd id="sender"></dd>
+        <dt>Date (as displayed)</dt>
+        <dd id="date"></dd>
       </dl>
-      <h2>Body</h2><pre id="body"></pre>
+      <h2>Body</h2>
+      <pre id="body"></pre>
     </section>
-    <hr>
+    <hr />
     <h2>Inbox / Calendar watcher experiment</h2>
-    <p>Leave Inbox or Calendar open. The watcher uses the active page and keeps only
-      displayed items containing your test phrase. It continues when this popup
-      closes; reload or navigation ends it. No emails/events are opened.</p>
+    <p>
+      Leave Inbox or Calendar open. The watcher uses the active page and keeps only displayed items
+      containing your test phrase. It continues when this popup closes; reload or navigation ends
+      it. No emails/events are opened.
+    </p>
     <label for="phrase">Synthetic email/event test phrase</label>
-    <input id="phrase" value="MOSS TEST" minlength="3" maxlength="80">
-    <p><button id="watch-start" type="button">Start watching</button>
+    <input id="phrase" value="MOSS TEST" minlength="3" maxlength="80" />
+    <p>
+      <button id="watch-start" type="button">Start watching</button>
       <button id="watch-read" type="button">Show results</button>
-      <button id="watch-stop" type="button">Stop &amp; clear</button></p>
-    <p id="watch-status" role="status">Use Show results to check this tab’s watcher. Watch results live only in this tab’s memory.</p>
-    <p>Observations can reflect changed text, scrolling or view changes. A calendar
-      item disappearing does not prove it was cancelled. Keep the same date/view.</p>
+      <button id="watch-stop" type="button">Stop &amp; clear</button>
+    </p>
+    <p id="watch-status" role="status">
+      Use Show results to check this tab’s watcher. Watch results live only in this tab’s memory.
+    </p>
+    <p>
+      Observations can reflect changed text, scrolling or view changes. A calendar item disappearing
+      does not prove it was cancelled. Keep the same date/view.
+    </p>
     <ol id="watch-results" aria-label="Observed inbox or calendar items"></ol>
-    <hr>
+    <hr />
     <h2>Automatic body test — one synthetic email</h2>
-    <p>Start on Inbox before sending. This opens one newly appearing matching row,
-      which may mark it as read. Leave this tab untouched. Starting stops the passive watchers.</p>
+    <p>
+      Start on Inbox before sending. This opens one newly appearing matching row, which may mark it
+      as read. Leave this tab untouched. Starting stops the passive watchers.
+    </p>
     <label for="auto-phrase">Fresh unique test phrase (add a suffix)</label>
-    <input id="auto-phrase" value="MOSS BODY TEST" maxlength="80">
-    <p>Put the phrase in both subject and body. End the body with MOSS BODY END.
-      Send synthetic content only, in a new conversation. Wait up to five minutes for arrival.</p>
-    <p><button id="auto-start" type="button">Start automatic body test</button>
+    <input id="auto-phrase" value="MOSS BODY TEST" maxlength="80" />
+    <p>
+      Put the phrase in both subject and body. End the body with MOSS BODY END. Send synthetic
+      content only, in a new conversation. Wait up to five minutes for arrival.
+    </p>
+    <p>
+      <button id="auto-start" type="button">Start automatic body test</button>
       <button id="auto-read" type="button">Show body result</button>
-      <button id="auto-stop" type="button">Stop &amp; clear body</button></p>
-    <p id="auto-status" role="status">Not started. Captured body stays only in this tab’s memory until cleared or reloaded.</p>
+      <button id="auto-stop" type="button">Stop &amp; clear body</button>
+    </p>
+    <p id="auto-status" role="status">
+      Not started. Captured body stays only in this tab’s memory until cleared or reloaded.
+    </p>
     <p><button id="auto-layout" type="button">Check subject layout</button></p>
-    <p>For a failed synthetic test: enter its exact phrase above, keep that email
-      open, and check its layout. Reports counts and matches only; does not start a test.</p>
+    <p>
+      For a failed synthetic test: enter its exact phrase above, keep that email open, and check its
+      layout. Reports counts and matches only; does not start a test.
+    </p>
     <pre id="layout-result" aria-label="Subject layout counts"></pre>
     <section id="auto-result" hidden aria-label="Automatic body preview">
       <dl>
-        <dt>Subject</dt><dd id="auto-subject"></dd>
-        <dt>From</dt><dd id="auto-sender"></dd>
-        <dt>Date (as displayed)</dt><dd id="auto-date"></dd>
+        <dt>Subject</dt>
+        <dd id="auto-subject"></dd>
+        <dt>From</dt>
+        <dd id="auto-sender"></dd>
+        <dt>Date (as displayed)</dt>
+        <dd id="auto-date"></dd>
       </dl>
       <pre id="auto-body"></pre>
     </section>
