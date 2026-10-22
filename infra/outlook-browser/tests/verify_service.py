@@ -54,9 +54,9 @@ def command(*args):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
 
 
-def request(path, runtime_id, operation, *, wait=True):
+def request(path, runtime_id, operation, *, wait=True, timeout=5):
     connection = socket.socket(socket.AF_UNIX)
-    connection.settimeout(5)
+    connection.settimeout(timeout)
     connection.connect(str(path))
     connection.sendall(json.dumps({'operation': operation, 'runtimeId': runtime_id,
                                   'generation': 1 if operation == 'allocate' else 2}).encode() + b'\n')

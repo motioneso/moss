@@ -31,8 +31,9 @@ removals before restoring allocated runtime sockets, and listens after that reco
 An individual failure keeps that runtime pending with egress closed; it does not acknowledge
 removal or prevent other owners' runtime restoration. Worker retries or later allocation can
 retry failed operations. The application's cleanup scheduler remains unwired.
-Actual hard-crash tests with Podman and Chromium remain required; the cgroup proof uses an
-external-engine stand-in, as described below.
+The account-free candidate-image proof below now covers actual Podman/Chromium crash boundaries
+after creation and container removal, before acknowledgment. Crashes inside arbitrary engine or
+storage operations remain unverified; the earlier cgroup proof uses an external-engine stand-in.
 
 The engine takes an installed immutable image ID, a reviewed seccomp file and a private transport
 root from trusted installation configuration. Clients cannot supply any of those values. Containers
@@ -51,7 +52,8 @@ the tunnel. Public HTTPS servers are not restricted to Microsoft, allowing feder
 **Remaining release blockers:**
 
 - Installer, deployment mounts/UID mapping and host-service hardening on supported installations.
-- Hard-crash/removal proof with actual Podman operations and the production Chromium image.
+- Crash coverage inside actual engine/storage operations beyond the tested acknowledgment
+  boundaries, and repetition against the maintained release image on supported hosts.
 - Populate/refresh the denied infrastructure networks, including the server's public addresses
   and the app's public ingress; the special-use deny list alone does not identify those.
 - Browser security-update delivery and release review, managed-policy enforcement verification,
@@ -103,6 +105,28 @@ broker must terminate that operation, restart, recover its allocating record and
 only after fixture resources disappear. The negative control changes only KillMode to process
 and observes the orphan make a late creation after broker death. Units and fixture files are
 removed afterwards. This does not establish actual Podman/container cgroup behavior.
+
+To test actual rootless Podman and the candidate Chromium image, build the candidate below, then:
+
+```sh
+PYTHONPATH=infra/outlook-browser python3 -B infra/outlook-browser/tests/verify_podman_service.py --image sha256:<reported-image-id>
+PYTHONPATH=infra/outlook-browser python3 -B infra/outlook-browser/tests/verify_podman_service.py --image sha256:<reported-image-id> --negative-control
+```
+
+These start disposable user units with the real service properties, entrypoint, engine and image.
+A disclosed test-only PATH wrapper delegates to the actual Podman binary, pausing after successful
+`run` or `rm`, before returning completion to the broker. SIGKILL must recover the allocating record
+and profile marker, or finish deleting the remaining volume from the removing record before the
+broker listens again. Both cases check the other runtime's marker. Image source bytes and actual
+Chromium sandbox diagnostics are checked. The negative control changes only KillMode to process,
+pauses before a real `run`, observes the positive cgroup assertion fail, then allows that orphan to
+create candidate Chromium after broker death. This establishes deterministic operation-boundary
+recovery, not every possible crash within Podman's storage operations. No real account is used.
+Containers, volumes, units and barrier files are removed; the supplied image remains installed.
+Use `--engine-root` and `--engine-runroot` together to select a separate test store consistently.
+The test requires a working user-systemd bus; terminals without session variables can set
+`XDG_RUNTIME_DIR=/run/user/$(id -u)` and
+`DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus` before running it.
 
 ## Internal service configuration
 
@@ -166,8 +190,9 @@ the corresponding assertion to fail. No arbitrary-CDP helper or bypass flag is i
 candidate image or exposed by the lifecycle broker. The probe runs only through test-side exec.
 
 This proof passed on native x86_64. It does not establish ARM64 support, Microsoft sign-in/MFA,
-full redirects/rebinding/public IPv6 behavior, public host/app ingress denial, service crash
-recovery or authenticated Moss viewing. No real account or production instance is used.
+full redirects/rebinding/public IPv6 behavior, public host/app ingress denial, arbitrary engine
+crash recovery or authenticated Moss viewing. The separate service proof above exercises selected
+crash boundaries. No real account or production instance is used.
 The verifier removes its containers, volumes and control-image tags; the candidate/base remain
 until explicitly removed. Ensure sufficient build storage. On this host, an environment-only
 storage override was ignored; verify `podman info` and use explicit engine root/runroot options

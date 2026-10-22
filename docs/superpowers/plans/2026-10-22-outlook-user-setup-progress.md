@@ -64,8 +64,9 @@ Changing KillMode to process demonstrated an orphan completing a late creation. 
 kill an actual broker subprocess and verify its surviving command supervisor blocks replacement
 until completion. These tests do not prove hard-crash recovery of actual Podman or Chromium.
 
-Actual Podman hard-crash/removal, discovering/refreshing public host/app ingress deny addresses,
-and the remaining browser network/architecture acceptance remain hard merge blockers. The unit is not
+Crashes inside Podman/storage operations beyond the tested boundaries below,
+discovering/refreshing public host/app ingress deny addresses, and the remaining browser
+network/architecture acceptance remain hard merge blockers. The unit is not
 installed/enabled, no app/worker mounts are added yet, and the legacy runtime is unchanged.
 
 ## Candidate Chromium image
@@ -94,11 +95,34 @@ Native browser receipt: immutable candidate
 Chromium package `149.0.7827.53-r0`; `verify_browser.py` exited 0 with six proof groups,
 including both actual guard-removal assertion failures. No certificate bypass was used.
 
+## Actual service/engine crash boundaries
+
+`verify_podman_service.py` now runs the real lifecycle service in disposable user units with actual
+rootless Podman and the candidate Chromium image. A disclosed test-only PATH barrier delegates to
+the real engine, pauses after successful `run` or `rm`, and withholds completion while the test
+kills the main broker. The allocating record recovers with its profile marker; the removing record
+finishes deleting its remaining volume before the service listens again. Both cases verify the
+second runtime's marker. Removed references remain rejected. Candidate source bytes and Chromium's
+own namespace/seccomp diagnostics are checked through test-side exec.
+
+The KillMode=process control observes the same positive cgroup assertion fail, then releases the
+orphan to execute a real `run` and create candidate Chromium after broker death. This is actual
+engine/container evidence at deterministic command boundaries, not exhaustive proof of interrupted
+engine/storage transactions. The wrapper is not installed in the service or image.
+
+Native x86_64 receipt: image
+`sha256:c958299592f86f55196d8bdd07ce72f8f9669b656410de8fbf8990abc021e507`, built from the same
+pinned candidate inputs. Both positive crash groups and the actual orphan-creation control passed.
+The store was selected by explicit engine root/runroot options on a separate disk. No accounts,
+production services or live connector were used. Test containers/volumes/units are removed by the
+verifier; the task's disposable image store is removed after verification.
+
 ## Remaining build work
 
 1. Complete production host broker browser operations and maintained browser image. Persisted
-   tombstones reject delayed allocations after cleanup, but hard service-crash/orphaned-command
-   recovery with the actual engine still needs proof. Never reuse a removed runtime reference. Complete public host/app
+   tombstones reject delayed allocations after cleanup. Actual service-crash/orphaned-command
+   tests now cover the boundaries above; interrupted engine/storage transactions and supported-host
+   coverage remain unverified. Never reuse a removed runtime reference. Complete public host/app
    ingress denial and actual Chromium sandbox/network checks before claiming browser isolation.
 2. Private Unix transport, installer and every affected deployment configuration; optional runtime
    absence must preserve the legacy integration. Wire lifecycle sweeping when that service exists.
