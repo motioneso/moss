@@ -9,15 +9,6 @@ Remove an entry once he rules and the ruling is recorded where the work lives. *
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the
 full record survives in git history (`git log -p -- docs/coordination/AWAITING-BEN.md`).
 
-## Outlook user setup design — task #3570 (2026-10-22)
-
-Owner: Outlook setup agent. Waiting for agreement on the
-[setup screens and account-separation proposal](../superpowers/specs/2026-10-22-outlook-user-setup-design.md).
-Recommendation: each Moss user signs into a separate managed Outlook session, confirms the detected
-account, and gets read-only primary-calendar sync. Disconnect removes imported events and the
-saved local browser session. Alternative: revise the flow or disconnect semantics before the
-runtime spike and final build spec. No product implementation or production migration is approved.
-
 **Protocol (mandatory since 2026-08-05):** no agent idles waiting on Ben without doing BOTH of:
 
 1. Add an entry here — what is blocked, the options, your recommendation.

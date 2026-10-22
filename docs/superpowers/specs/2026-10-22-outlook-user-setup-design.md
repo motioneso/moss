@@ -1,8 +1,9 @@
 # Outlook calendar: per-user setup and browser separation
 
-**Status: design proposal for review, not an approved implementation spec.**
-Agree the screens first, then finalize the implementation spec and build task. Runtime choices
-below are requirements to validate, not claims about protections that exist today.
+**Status: user flow and disconnect semantics approved by Ben on 2026-10-22.**
+Proceed with the isolated synthetic runtime proof, then finalize the implementation spec and
+build task. Runtime choices below are requirements to validate, not claims about protections
+that exist today. This approval does not authorize deployment or production migration.
 
 Tracking: [task #3570](https://github.com/motioneso/moss/issues/3570).
 
@@ -177,7 +178,8 @@ Graph permissions, arbitrary user-provided browser endpoints and automated MFA c
 
 ## Approval and next artifact
 
-Review the user flow and disconnect semantics against the mockups. Once agreed, finalize a
-tracked implementation spec after the runtime proof resolves deployment and transport choices.
+Ben approved the user flow and disconnect semantics against the mockups on 2026-10-22. Finalize
+a tracked implementation spec after the runtime proof resolves deployment and transport choices.
 The runtime spike and feature build need task tracking and the repository's normal gates.
-This design review is not approval to build, deploy, or migrate the feature.
+This approval covers the design and isolated proof; deployment and production migration remain
+outside this design's scope.
