@@ -58,10 +58,12 @@ Protection-removal controls were built and exercised on the installed app:
   `commit_requires_fresh_ring_and_owner`.
 - Removing the selected-ring comparison during adopted-configuration recovery
   failed at `guard_missing_setup_recovery_required`.
+- Replacing the selected-field projection with a full candidate copy failed at
+  `selection_is_copied_and_projected`.
 
-All controls were restored, then all three installed suites passed again. The
-selected-field projection contract passed; its separate protection-removal control
-remains pending. Do not treat that pending control as completed isolation evidence.
+All four controls were restored, then all three installed suites passed again
+(94 contracts). The selected-field projection control was completed after the
+initial transaction commit; it uses synthetic candidates with extra fields.
 
 Host crypto vectors, transfer/restart checks and WAV checks passed, including a
 generated two-hour WAV under the existing constrained heap. Sequential host and
@@ -70,12 +72,11 @@ hardware recording result.
 
 ## Remaining acceptance
 
-The phone/ring are with their owner; no new sign-in code or recording was requested.
-Next run the real native account selection, permission/handoff and physical
-identity/key proof against a disposable Moss account, then verify cancellation and
+No new recording is needed for this slice. Next run the real native account
+selection, permission/handoff and physical identity/key proof against a disposable Moss account, then verify cancellation and
 interrupted-commit recovery. Preserve the original companion's configuration and
 queue; restore any temporarily paused delivery preference after the controlled
-physical check. Complete the selected-field protection-removal control too.
+physical check.
 
 Only then proceed to the integrated product wizard, explicit Start, fresh Meeting
 and opted-in hold-to-Main proofs, upgrade/recovery checks, guide and app-map updates.
