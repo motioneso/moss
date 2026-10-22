@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Read-only Outlook calendar connection.** Connect a dedicated Outlook browser to see upcoming meetings in Moss, with automatic refreshes and clear warnings when updates need attention. [PR #3568](https://github.com/motioneso/moss/pull/3568)
 - **Process ring recordings in Moss.** Ring recordings can generate meeting summaries and follow-ups, while opted-in voice requests can receive text replies in the main chat. [PR #3554](https://github.com/motioneso/moss/pull/3554)
 - **Chat can now use an API-key provider.** Admins can pick an Anthropic or OpenAI-compatible (Chat Completions) provider that uses an API key, including one at its own web address, and chat works with it the same way, tools and confirmation cards included. [PR #3540](https://github.com/motioneso/moss/pull/3540)
 
