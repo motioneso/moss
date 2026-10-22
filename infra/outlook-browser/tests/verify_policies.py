@@ -107,13 +107,20 @@ def require_preference(prefs, key):
             pref.get('controlledBy') == 'USER_POLICY'), 'Preference not enforced: ' + key
 
 
+async def enable_preference(name, key):
+    return await evaluate(name, '''new Promise(resolve=>
+      chrome.settingsPrivate.setPref(''' + json.dumps(key) + ''',true,'',resolve))''')
+
+
+def require_rejected_change(changed):
+    assert changed is False, 'Managed preference was writable'
+
+
 async def require_locked_preferences(name):
     prefs = await preferences(name)
     for key in PREFERENCES:
         require_preference(prefs, key)
-        changed = await evaluate(name, '''new Promise(resolve=>
-          chrome.settingsPrivate.setPref(''' + json.dumps(key) + ''',true,'',resolve))''')
-        assert changed is False, 'Managed preference was writable: ' + key
+        require_rejected_change(await enable_preference(name, key))
     prefs = await preferences(name)
     for key in PREFERENCES:
         require_preference(prefs, key)
@@ -239,10 +246,16 @@ async def verify(image):
                 expect_failure(require_policy, rows, key)
             for key in PREFERENCES:
                 expect_failure(require_preference, prefs, key)
+                changed = await enable_preference(name, key)
+                assert changed is True, 'Unmanaged preference write did not succeed: ' + key
+                expect_failure(require_rejected_change, changed)
+            prefs = await preferences(name)
+            for key in PREFERENCES:
+                assert next(pref for pref in prefs if pref['key'] == key)['value'] is True
             content = await download_file(name)
             assert content == CONTENT, 'Unmanaged control did not actually save the fixture'
             expect_failure(require_no_download, content)
-            print('PASS: clearing policies fails all policy/preference assertions and saves fixture',
+            print('PASS: clearing policies permits five preference writes and saves fixture; assertions fail',
                   flush=True)
             await runtime.remove(runtime_id, 2)
 

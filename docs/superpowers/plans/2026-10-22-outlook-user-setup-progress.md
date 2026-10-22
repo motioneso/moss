@@ -129,13 +129,15 @@ Attempts to change them to true are rejected and leave them false. These checks 
 synthetic Blob-download denial pass again after graceful browser restart.
 
 Two derivative images change only policy JSON. Clearing it makes all nine policy assertions and
-all five preference assertions fail, and actually saves the synthetic download. Removing only
-DownloadRestrictions saves the same bytes and fails the exact positive no-download assertion;
+all five preference assertions fail. All five previously rejected preference writes then succeed,
+leave the values true and fail the same write-rejection assertion. It also actually saves the
+synthetic download. Removing only DownloadRestrictions saves the same bytes and fails the exact
+positive no-download assertion;
 the other eight policies and five preference locks still pass. Headless saving is explicitly
 allowed through test-side CDP in both paths, with the same user gesture and five-second observation.
 Runner/relay bytes and policy values are checked, along with Chromium's namespace/seccomp diagnostics.
 
-Native candidate receipt: `sha256:bc5c9a3022e7337700aac2ef5cfe98e7f2c33862565f7bc0fe59f05100ae2a8a`;
+Native candidate receipt: `sha256:fa8063fc021b61c3e52bc7ea7d441f68848a793e74226942ee6bd849bb3566b2`;
 `verify_policies.py` exited 0, four proof groups. This checks reported policy state, actual
 preference locks and the tested download route; it does not establish every download route,
 printing behavior, notification prompts, sync/sign-in UI or password-form behavior. Those limits,
@@ -144,6 +146,8 @@ services are used. The native command and disposable-store options are in the ru
 Proof containers, profile volumes, control/candidate images and the disposable engine store were
 removed after verification. Runtime unit verification passed 38 tests plus twelve guard-removal
 controls. No database-touching test ran in this policy-only continuation.
+Full `pnpm verify:static` exited 0 at `4673358ff`; the subsequent Python-verifier/Markdown
+follow-up passed the strengthened native proof, touched-document formatting and diff checks.
 
 ## Remaining build work
 

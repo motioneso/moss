@@ -229,8 +229,10 @@ synthetic bytes in the profile's download directory for five seconds. Test-side 
 allows headless saving in both positive and control browsers, so that default cannot explain the
 policy denial. No file may appear with the configured policy. Clearing only the policy file's
 contents in a derivative image must make all policy/preference assertions fail and actually save
-the fixture. Removing only DownloadRestrictions must also save it and fail the same no-download
-assertion while the other eight policies and five preference locks still pass.
+the fixture. All five previously rejected preference writes must then succeed, change the values
+to true and fail the same write-rejection assertion. Removing only DownloadRestrictions must also
+save it and fail the same no-download assertion while the other eight policies and five
+preference locks still pass.
 
 This establishes the reported policy state, preference enforcement and this bounded Blob-download
 case on native x86_64. It does not prove every download route, printing behavior, notification
