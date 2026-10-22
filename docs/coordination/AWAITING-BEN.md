@@ -75,4 +75,16 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-None.
+### Outlook calendar into Moss — o365-calendar (2026-10-21)
+
+Ben selected calendar import into Moss before further email monitoring. Task
+[#3567](https://github.com/motioneso/moss/issues/3567) tracks the concrete proposed
+[design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md): read-only
+primary work calendar, previous day plus 30 upcoming days, five-minute refresh,
+owner-bound browser and honest incomplete/stale/sign-in status. Implementation
+waits for approval of that design under the CLAUDE.md spec gate. No product code,
+shared-instance changes or real event imports have been made. Source IDs matched
+across one reload for 14 displayed events; edit/recurrence identity remains a
+mandatory source-quality gate before ingestion.
+
+Decision: approve this concrete calendar-first design, or specify adjustments.
