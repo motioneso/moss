@@ -101,10 +101,10 @@ public final class SetupRingChecks extends Instrumentation {
         restarted.verifyAndCommit();
         check(fake.proofs == 1 && fake.owners == 2 && !stage.exists(), "commit_requires_fresh_ring_and_owner");
         JSONObject committed = config.load();
-        check(committed.length() == 7 && committed.getString("bindKey").equals("synthetic-key") && committed.getString("ownerId").equals(OWNER), "complete_configuration_only");
+        check(committed.length() == 8 && committed.getString("bindKey").equals("synthetic-key") && committed.getString("ownerId").equals(OWNER), "complete_configuration_only");
         check(!delivery.exists() && !committed.has("enabled") && !committed.has("holdEnabled"), "commit_does_not_start_delivery_or_hold");
         SetupLink.Status status = restarted.status();
-        check(status.phase == SetupLink.Phase.COMMITTED && status.origin.equals(ORIGIN) && status.accountName.equals(OWNER) &&
+        check(status.phase == SetupLink.Phase.COMMITTED && status.origin.equals(ORIGIN) && status.accountName.equals("Synthetic ring owner") &&
             status.ringSelected && status.ringSuffix.equals("123456"), "committed_summary_survives_restart");
         rejects("setup_already_configured", () -> restarted.selectBinding(ring()));
         restarted.cancel(); check(config.exists() && fake.logouts == 0, "cancel_preserves_committed_config"); passed++;

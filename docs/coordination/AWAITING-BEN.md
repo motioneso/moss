@@ -78,11 +78,8 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
 
-## Vocci #3565 — production wizard sign-in check
-
-The new production setup activity has passed native Moss Connect, real browser
-approval, account confirmation and restart in its isolated installed test. It is
-now at section 02, Vocci account. Ben needs to enter his existing Vocci email and
-email code directly in the app, then leave it open. No recording or code in chat.
-This checks the new product wizard; the earlier separate feasibility UI already
-passed. Server checks continue independently.
+<!-- Resolved 2026-10-21: Ben completed production-wizard Vocci sign-in. Real
+inventory/selection/restart passed. The installed UI and state subsequently
+confirmed committed ring setup; the combined harness failed on ADB before its
+success observation. Browser cleanup signed out the disposable device, isolated
+configuration was removed and EMPTY confirmed. This is partial acceptance. -->

@@ -3,7 +3,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "Android ring setup: browser-approved Moss link, native Vocci email code, ring selection and physical Verify. Explicit Start enables delivery/restart; hold opt-in sends to Main. Optional 7-day cleanup. Meetings: 2h; voice: 120s.",
+    "Android ring setup: browser-approved Moss link, native Vocci code, ring selection and physical Verify. Ready step: explicit Start/restart and hold opt-in to Main. Reopen from Ring setup and delivery options. Meetings: 2h; voice: 120s.",
   remediations: [
     {
       id: "meetings.android_developer_setup",

@@ -11,6 +11,7 @@ import android.provider.Settings;
 import android.text.InputType;
 import android.view.*;
 import android.widget.*;
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.*;
 import org.json.JSONObject;
@@ -27,6 +28,10 @@ public final class SetupActivity extends Activity {
     private LinearLayout body, vocciSection, ringSection, readySection;
     private EditText address, email, code;
     private TextView mossSummary, status, codeLabel, ringSummary, permissionSummary;
+    private TextView readyPermissions, deliverySummary, voiceSummary;
+    private Button startDelivery, stopDelivery, readySettings, readyPermissionsButton, readyHandoff;
+    private Switch hold;
+    private boolean updatingHold;
     private Button connect, check, cancel, send, verifyCode, resend, changeEmail, resumeLookup, select, verifyRing, nearby, appSettings, handoff;
     private RadioGroup rings;
     private List<JSONObject> inventory = Collections.emptyList();
@@ -115,7 +120,22 @@ public final class SetupActivity extends Activity {
         }), true);
 
         readySection = section("04", "Ready to connect");
-        text(readySection, "Setup is saved. On the companion screen, review permissions and choose Start delivery. Hold-to-talk stays off until you enable it there. Completed normal recordings become Meetings in Moss.", 15, false);
+        text(readySection, "Setup is saved. Completed normal recordings become Meetings in Moss. Choose Start delivery to connect and allow recovery after phone restart. Hold-to-talk is a separate choice below.", 15, false);
+        readyPermissions = text(readySection, "", 15, false);
+        readyPermissionsButton = button(readySection, "Bluetooth and notification permissions", () -> requestPermissions(
+            new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 31), false);
+        readySettings = button(readySection, "Permissions and background settings", () -> settings(getPackageName()), false);
+        readyHandoff = button(readySection, "Open Vocci app settings", () -> settings(DeliveryService.OFFICIAL), false);
+        text(readySection, "In Android App settings → Battery, choose Unrestricted; also remove Moss from Samsung Sleeping apps. After Force stop, reopen this app and Start delivery.", 15, false);
+        startDelivery = button(readySection, "Start delivery", () -> status.setText(DeliveryActions.command(this, "start")), true);
+        stopDelivery = button(readySection, "Stop delivery", () -> { DeliveryActions.stop(this); render(); }, false);
+        deliverySummary = text(readySection, "", 15, false);
+        hold = new Switch(this); hold.setId(3105); theme.toggle(hold); hold.setText("Hold-to-talk in Main chat"); add(readySection, hold);
+        hold.setOnCheckedChangeListener((view, checked) -> {
+            if (!updatingHold) { status.setText(DeliveryActions.command(this, checked ? "voice-on" : "voice-off")); render(); }
+        });
+        text(readySection, "Start delivery before enabling hold-to-talk. Moss checks the ring inventory twice before enrollment. Existing recordings keep their destination. Review each new hold transcript in Main and press Send for a text reply.", 15, false);
+        voiceSummary = text(readySection, "", 15, false);
         button(readySection, "Continue to companion", () -> {
             startActivity(new Intent(this, DeliveryActivity.class)); finish();
         }, true);
@@ -215,6 +235,7 @@ public final class SetupActivity extends Activity {
         vocciSection.setVisibility(linked && !selected ? View.VISIBLE : View.GONE);
         ringSection.setVisibility(linked ? View.VISIBLE : View.GONE);
         readySection.setVisibility(committed ? View.VISIBLE : View.GONE);
+        renderReady(enabled && committed);
         VocciAccount.Step step = account == null ? VocciAccount.Step.CLEANUP : account.step();
         boolean authEnabled = enabled && linked && !selected;
         email.setEnabled(authEnabled && step == VocciAccount.Step.EMAIL);
@@ -239,6 +260,32 @@ public final class SetupActivity extends Activity {
         nearby.setEnabled(enabled); appSettings.setEnabled(enabled); handoff.setEnabled(enabled);
         cancel.setVisibility(committed ? View.GONE : View.VISIBLE);
         cancel.setEnabled(enabled && phase != SetupLink.Phase.RECOVERY && (phase != SetupLink.Phase.EMPTY || step != VocciAccount.Step.EMAIL));
+    }
+    private void renderReady(boolean enabled) {
+        DeliveryPreferences choices = new DeliveryPreferences(this);
+        JSONObject state = new JSONObject();
+        boolean readable = true;
+        try {
+            File journal = new File(getNoBackupFilesDir(), "delivery/state.json");
+            if (journal.exists()) state = PrivateFiles.json(journal);
+        } catch (Exception unavailable) { readable = false; }
+        android.os.PowerManager power = getSystemService(android.os.PowerManager.class);
+        NativeTheme.update(readyPermissions, "Nearby devices: " + (bluetoothAllowed() ? "allowed" : "needed") + " · Bluetooth: " + (bluetoothOn() ? "on" : "off or unavailable") +
+            "\nNotifications: " + (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed") +
+            "\nBattery: " + (power != null && power.isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "optimization active") +
+            (officialAllowed() ? "\nRemove Vocci's Nearby devices permission before starting delivery." : "\nVocci Nearby devices: handoff ready"));
+        NativeTheme.update(deliverySummary, (choices.enabled() ? "Delivery enabled · " + state.optString("activity", "starting").replace('_', ' ') : "Delivery stopped · automatic restart is off.") +
+            (choices.recovery().isEmpty() ? "" : "\n" + choices.recovery()));
+        JSONObject voice = state.optJSONObject("voice");
+        updatingHold = true;
+        try { hold.setChecked(voice != null && voice.optBoolean("desired")); } finally { updatingHold = false; }
+        hold.setEnabled(enabled && readable && choices.enabled());
+        NativeTheme.update(voiceSummary, !readable ? "Saved delivery status could not be read. Open the companion for recovery; your recordings are kept." :
+            voice == null ? "Voice input off" : voice.has("disableId") ? "Voice disable pending" : voice.has("snapshot") ? "Saving voice enrollment" :
+            voice.has("enablement") ? "Voice enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Voice input off");
+        startDelivery.setEnabled(enabled && readable); stopDelivery.setEnabled(enabled && choices.enabled());
+        readySettings.setEnabled(enabled); readyPermissionsButton.setEnabled(enabled);
+        readyHandoff.setVisibility(officialAllowed() ? View.VISIBLE : View.GONE); readyHandoff.setEnabled(enabled);
     }
     private boolean bluetoothAllowed() { return checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED; }
     private boolean bluetoothOn() {

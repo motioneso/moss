@@ -106,6 +106,7 @@ final class SetupLink {
             }
             requireUnconfigured();
             JSONObject complete = accountConfiguration();
+            complete.put("accountName", record.optString("accountName", record.getString("ownerId")));
             for (String field : new String[]{"address", "sn", "deviceId", "bindKey"}) complete.put(field, binding.get(field));
             committed.save(complete);
             // A crash here leaves a complete config plus matching staging, which

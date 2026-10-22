@@ -59,3 +59,26 @@ Kill gate: if the production UI cannot reuse the existing transaction without
 weakening owner/ring guards or touching pending recordings, stop this slice and
 record the conflict before broadening the service boundary. Agent owns this
 check; Ben decides any scope expansion. No merge/deploy is authorized here.
+
+## Ready-screen integration slice
+
+The approved spec also places explicit Start and hold controls on the final step.
+Reuse `DeliveryActions` from both native screens; keep recovery preference writes
+in the service's existing Start action and voice changes in its worker-owned
+`VoiceDelivery` journal. The ready screen reads snapshots without constructing a
+`DeliveryStore`, disables hold changes while stopped, and preserves existing
+choices on reopening. Stop keeps queued evidence. Display actual Bluetooth,
+notification, battery and official-app handoff state, and offer Android settings.
+Keep Continue to companion for recent deliveries; expose the saved ready screen
+from Ring setup and delivery options on the configured companion.
+
+Retain the confirmed display name in new committed setup, with the existing
+owner-ID fallback for older installations. No new authentication or owner change.
+Installed synthetic ready-screen checks must distinguish fixture layout and
+state-preservation evidence from physical service acceptance. Exercise light/dark
+at normal/150% font; then recheck real Start and fresh Meeting/Main delivery.
+The earlier isolated setup proof had no service. Include the actual production
+service and permissions in the final isolated proof manifest so a complete live
+run can exercise real Start/hold commands without changing the original account.
+Its launcher now uses the production delivery/setup route. Fixture layout checks
+still never press Start and never substitute for physical delivery.

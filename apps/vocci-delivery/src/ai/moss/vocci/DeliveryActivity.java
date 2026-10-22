@@ -117,22 +117,14 @@ public final class DeliveryActivity extends Activity {
         button.setOnClickListener(v -> action.run());
     }
     private void command(String action) {
-        if (!"start".equals(action) && !new DeliveryPreferences(this).enabled()) {
-            Toast.makeText(this, "Start delivery before changing voice input, clearing audio or retrying.", Toast.LENGTH_LONG).show(); render(); return;
-        }
-        if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 1); return;
-        }
-        startForegroundService(new Intent(this, DeliveryService.class).setAction(action));
-        Toast.makeText(this, "Change queued", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, DeliveryActions.command(this, action), Toast.LENGTH_LONG).show(); render();
     }
     private void open(String origin, String path) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(origin + path))); }
         catch (ActivityNotFoundException unavailable) { Toast.makeText(this, "Install a browser to open Moss", Toast.LENGTH_SHORT).show(); }
     }
     private void stopDelivery() {
-        new DeliveryPreferences(this).enabled(false);
-        stopService(new Intent(this, DeliveryService.class));
+        DeliveryActions.stop(this);
     }
     private void appSettings(String packageName) {
         try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + packageName))); }
@@ -153,6 +145,7 @@ public final class DeliveryActivity extends Activity {
             config = new SecretStore(this).load();
             text("identity", "Moss: " + config.getString("origin") + "\nAccount: " + config.optString("accountName", config.getString("ownerId")) + "\nRing: " + config.getString("sn"), 13, false);
             text("account-status", config.has("credential") ? "Account connected · device approval" : config.has("cookie") ? "Developer session · connect in browser for daily use" : "Account disconnected · connect in browser to resume", 15, false);
+            button("setup-options", "Ring setup and delivery options", () -> startActivity(new Intent(this, SetupActivity.class)));
             button("connect-account", new MossLink(this).pending() ? "Reopen browser approval" : "Connect Moss in browser", () -> link("begin"));
             if (new MossLink(this).pending()) button("cancel-link", "Cancel connection request", () -> link("cancel"));
             if (config.has("credential")) button("disconnect-account", "Disconnect Moss account", () -> link("disconnect"));
