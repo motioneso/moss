@@ -167,7 +167,9 @@
     "test:integration:3133": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/chat-reminder-controls.test.ts tests/integration/chat-reminder-notifications.test.ts tests/integration/settings-reminders.test.ts tests/integration/chat-reminders-delivery.test.ts tests/integration/chat-reminders-permissions.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/chat-reminders-save.test.ts tests/integration/chat-reminders-cancel-turn.test.ts tests/integration/chat-reminders-cancel.test.ts tests/integration/chat-reminders-local-clock.test.ts",
     "test:uat:3067": "MOSS_UAT_BROWSER=firefox tsx tests/uat/run-focus-judge-uat.ts",
     "test:recording-imports": "tsx scripts/test-integration.ts tests/integration/meeting-recording-imports.test.ts",
-    "test:recording-live": "tsx scripts/verify-recording-import-live.ts"
+    "test:recording-live": "tsx scripts/verify-recording-import-live.ts",
+    "test:integration:3567": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-mirror.test.ts tests/integration/connectors.test.ts tests/integration/foundation-schema-catalog.test.ts",
+    "test:integration:3567:ui": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-ui.test.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

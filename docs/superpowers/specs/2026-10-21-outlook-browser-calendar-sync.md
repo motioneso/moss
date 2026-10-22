@@ -1,6 +1,6 @@
 # Outlook calendar into Moss through a dedicated browser
 
-Status: proposed; awaiting Ben's approval of this concrete design.
+Status: approved by Ben on 2026-10-21 (`approve`); implementation authorized.
 Date: 2026-10-21
 Tracking: [task #3567](https://github.com/motioneso/moss/issues/3567).
 
@@ -15,8 +15,8 @@ Email collection remains a later slice; the prior email-send allowance does not
 expand the calendar work into sending messages or creating meetings.
 
 This is product integration, distinct from the disposable scripts under
-`spikes/o365-firefox-preview-prototype`. No product changes or real imports have
-been made under this design. The existing branch remains `moss/o365-email-talk`.
+`spikes/o365-firefox-preview-prototype`. Implementation and isolated UI proof are complete on this branch; no real
+calendar import or shared-instance change has been made under this design. The existing branch remains `moss/o365-email-talk`.
 
 ## Evidence and unresolved source properties
 
@@ -106,7 +106,7 @@ cancellation displayed for that occurrence can mark the mirror cancelled.
 Disappearance from a view alone is not confirmation of cancellation.
 
 A previously observed event missing from two complete scans of the same source
-and covered range becomes *unconfirmed*, with an owner-visible connection
+and covered range becomes _unconfirmed_, with an owner-visible connection
 warning. Do not silently delete it or advertise its time as confidently free.
 Partial scans, date navigation and authentication failure cannot generate this
 transition. The first implementation must show uncertainty through the existing
@@ -116,15 +116,15 @@ meeting or free-time calculation when it knows the source needs verification.
 Use the existing connection settings and Calendar surfaces. No new module or
 calendar screen is proposed. The required status/remediation copy is:
 
-| State | Owner sees | Remediation |
-| --- | --- | --- |
-| Collecting | Updating Outlook calendar | Wait for first complete refresh |
-| Current | Last refreshed time and covered date range | Sync now |
-| Partial/stale | Calendar may be incomplete; last complete refresh retained | Retry / inspect browser |
-| Sign-in needed | Outlook sign-in required; calendar is not current | Open dedicated browser and sign in |
-| Source changed | Outlook calendar layout or event identity unsupported | Pause; repair collector |
-| Unconfirmed event | Previously seen meeting needs verification | Check occurrence in Outlook |
-| Disconnected | Outlook calendar updates paused | Reconnect |
+| State             | Owner sees                                                 | Remediation                        |
+| ----------------- | ---------------------------------------------------------- | ---------------------------------- |
+| Collecting        | Updating Outlook calendar                                  | Wait for first complete refresh    |
+| Current           | Last refreshed time and covered date range                 | Sync now                           |
+| Partial/stale     | Calendar may be incomplete; last complete refresh retained | Retry / inspect browser            |
+| Sign-in needed    | Outlook sign-in required; calendar is not current          | Open dedicated browser and sign in |
+| Source changed    | Outlook calendar layout or event identity unsupported      | Pause; repair collector            |
+| Unconfirmed event | Previously seen meeting needs verification                 | Check occurrence in Outlook        |
+| Disconnected      | Outlook calendar updates paused                            | Reconnect                          |
 
 Existing events remain readable if disconnected; they carry stale source health.
 Disable Google-specific write/reply/RSVP/reschedule actions for this source in
@@ -158,9 +158,69 @@ DB gate using the repository's verification skill. Observe security assertions
 failing when their protections are removed. Record live UI evidence without
 publishing work data. No deployment or merge is included in this approval.
 
-## Approval requested
+## Approval
 
-Approve calendar-first implementation of this read-only, primary-calendar,
+Ben approved calendar-first implementation of this read-only, primary-calendar,
 30-day design, with the source-quality gates above. Changes to the destination,
 write capability, source coverage or processing scope require updating the
 accepted design. VM provisioning and broad email ingestion are separate work.
+
+## Operator setup and verification
+
+The connection is disabled when the optional operator binding is absent. Configure
+all three values together on the API and worker processes:
+`MOSS_OUTLOOK_BROWSER_ENDPOINT`, `MOSS_OUTLOOK_BROWSER_OWNER` (Moss user UUID), and
+`MOSS_OUTLOOK_BROWSER_ACCOUNT` (the expected Outlook account address). Keep these
+values outside the checkout. The endpoint must be a loopback HTTP CDP endpoint
+with an explicit port. Use a dedicated desktop Chrome profile and one Outlook
+calendar tab, English/Gregorian display, and exactly the primary Calendar selected.
+The owner signs in and completes MFA manually in that browser.
+
+The owner connects through Settings → Connections → Outlook calendar. The worker
+refreshes every five minutes; Sync now requests a bounded retry. Account or layout
+mismatch and sign-in failure pause automatic collection. Three incomplete attempts
+also pause until a manual retry. Binding changes cannot repurpose an existing
+connection: restore its original source before reconnecting. Disconnect stops
+imports and retains cached commitments; closing Chrome stops its signed-in session
+from being available to the collector. This slice does not provision a VM or
+manage browser startup/sign-in.
+
+The scoped database check is `test:integration:3567`. The isolated browser proof is
+`test:integration:3567:ui`, with claimed ports supplied through
+`MOSS_CALENDAR_UI_API_PORT` and `MOSS_CALENDAR_UI_WEB_PORT`. Launch both through
+`scripts/run-gate.sh`; never point either at a shared database. The UI proof uses
+invented third-party collector observations and runs real auth, Settings, queue,
+owner-scoped import, API and Calendar UI. It does not prove an actual work-calendar
+import into a shared Moss instance. Independent live Outlook source checks cover
+rendered collection and synthetic occurrence identity separately.
+
+## Verification record (2026-10-21)
+
+- Live Outlook source: complete five-week scans; settled identities survived
+  title/time/all-day edits, two simultaneous appointments, recurring occurrence
+  and exception edits, and an actual Chrome shutdown/relaunch. Account mismatch
+  and trusted human-input interruption were exercised.
+- Calendar scope: 107 unit tests pass. The scoped disposable-database suite passes
+  34 tests, including owner/worker RLS, grants, source binding, missing-event
+  reconciliation, failure checkpoints and bounded retries.
+- Real isolated Moss UI: sign in → Settings connection → queued import → repeated
+  refresh without duplicates → read-only event in Calendar → sign-in warning
+  retaining the checkpoint → disconnect retaining the event. API responses were
+  never intercepted. Only Outlook observations were invented third-party fixtures.
+- Negative controls: four independent interactive/staged delete/move tests fail
+  when their source guards are removed. Owner-binding, source-fingerprint and
+  feature-grant checks also fail with protections removed. The trusted-input test
+  fails with its interruption flag disabled. All protections were restored.
+- Synthetic Outlook appointments, the recurring series and exception were removed
+  through the UI. A subsequent complete five-week scan found zero synthetic
+  occurrences. The dedicated source browser was stopped and test ports released.
+- Consecutive collector refreshes complete from the final week left by the prior
+  refresh. The regression fails with the original navigation bound restored.
+- Full typecheck, lint and formatting pass. The repository file-size check is blocked by
+  unchanged `apps/web/src/chat/chat-drawer.tsx` at 1,001 lines, also present at
+  the branch's starting revision. No waiver or unrelated structural change was
+  added for it. This is not a passing full foundation/CI receipt.
+
+The implementation remains disabled without operator configuration. No work
+calendar has been imported into a shared instance, and no deployment or merge
+has been performed.

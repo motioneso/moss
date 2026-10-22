@@ -29,7 +29,11 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
         ) : (
           <span className="cal-peek__kind">
             <CalendarCheck size={13} />
-            {isTentative ? "Awaiting RSVP" : "On your calendar"}
+            {event.unconfirmed
+              ? "Needs verification in Outlook"
+              : isTentative
+                ? "Awaiting RSVP"
+                : "On your calendar"}
           </span>
         )}
         <PeekCloseButton aria-label="Close" onClick={onClose}>
@@ -42,6 +46,7 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
         </span>
         <h3 className="cal-peek__title">{event.title}</h3>
       </div>
+      {event.readOnly ? <p>Outlook · Read only. Check or change this event in Outlook.</p> : null}
       <div className="cal-peek__rows">
         <div className="cal-peek__row">
           <span className="ic">
@@ -84,7 +89,15 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
             <CategoryDot color={evColor} />
           </span>
           <div className="cal-peek__rowmain">
-            {isBlock ? `${assistantName} focus block` : isTentative ? "Pending RSVP" : "Accepted"}
+            {isBlock
+              ? `${assistantName} focus block`
+              : event.readOnly
+                ? event.unconfirmed
+                  ? "Needs verification"
+                  : "Observed in Outlook"
+                : isTentative
+                  ? "Pending RSVP"
+                  : "Accepted"}
           </div>
         </div>
       </div>

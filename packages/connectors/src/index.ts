@@ -38,3 +38,5 @@ export * from "./source-context/email-tasks.js";
 export * from "./source-context/email-action-links.js";
 export * from "./source-context/service.js";
 export * from "./source-context/runtime.js";
+
+export * from "./outlook-calendar-jobs.js";

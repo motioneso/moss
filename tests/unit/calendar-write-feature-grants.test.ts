@@ -35,6 +35,7 @@ describe("calendar write feature grants", () => {
         }
       },
       calendarRepository: {
+        listVisible: async () => [],
         upsertCachedEvent: async () => {
           cacheCalls += 1;
           return {} as never;
@@ -88,6 +89,7 @@ describe("calendar write feature grants", () => {
         }
       },
       calendarRepository: {
+        listVisible: async () => [],
         upsertCachedEvent: async () => {
           const error = new Error("new row violates row-level security policy");
           (error as { code?: string }).code = "42501";
@@ -137,6 +139,7 @@ describe("calendar write feature grants", () => {
         }
       },
       calendarRepository: {
+        listVisible: async () => [],
         getByExternalId: async () => ({ id: "cached-calendar-event-1" })
       }
     } as never);
