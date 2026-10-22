@@ -99,7 +99,6 @@ export async function readTimestampedTranscription(
   ) {
     throw invalidResponse();
   }
-  if (json.text.trim() && json.segments.length === 0) throw invalidResponse();
   const segments: TranscriptionSegment[] = [];
   let previousEnd = 0;
   let textLength = 0;
@@ -112,13 +111,21 @@ export async function readTimestampedTranscription(
       typeof start !== "number" ||
       !Number.isFinite(start) ||
       start < 0 ||
-      Math.round(previousEnd * 1000) - Math.round(start * 1000) > MAX_ADJACENT_OVERLAP_MS ||
       typeof end !== "number" ||
       !Number.isFinite(end) ||
-      end <= start ||
+      end < start ||
       end > Number.MAX_SAFE_INTEGER / 1000 ||
-      Math.round(end * 1000) <= Math.round(start * 1000) ||
       typeof text !== "string"
+    )
+      throw invalidResponse();
+    textLength += text.length;
+    if (textLength > MAX_TEXT_LENGTH) throw invalidResponse();
+    // Some ASR engines emit empty point markers, including inside the last speech
+    // segment. They carry no transcript or duration and must not trim that speech.
+    if (end === start && !text.trim()) continue;
+    if (
+      Math.round(previousEnd * 1000) - Math.round(start * 1000) > MAX_ADJACENT_OVERLAP_MS ||
+      Math.round(end * 1000) <= Math.round(start * 1000)
     )
       throw invalidResponse();
     const previous = segments.at(-1);
@@ -127,11 +134,10 @@ export async function readTimestampedTranscription(
       if (Math.round(start * 1000) <= Math.round(previous.start * 1000)) throw invalidResponse();
       segments[segments.length - 1] = { ...previous, end: start };
     }
-    textLength += text.length;
-    if (textLength > MAX_TEXT_LENGTH) throw invalidResponse();
     segments.push({ start, end, text });
     previousEnd = end;
   }
+  if (json.text.trim() && segments.length === 0) throw invalidResponse();
   signal?.throwIfAborted();
   return { text: json.text, segments };
 }

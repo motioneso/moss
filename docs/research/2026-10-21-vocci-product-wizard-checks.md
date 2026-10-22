@@ -224,6 +224,37 @@ passed, including finalization with the measured drift pattern. These generated
 fixtures are transport validation evidence, not physical recording or ASR proof.
 Full foundation and CI must rerun for these source changes.
 
+## Real meeting transcription regression
+
+Run `20261022-105852` repeated native setup through Ready Start. The real
+42-minute and 26-minute recordings both passed upload validation and created
+Meetings; the latter preserved four bookmarks. The run exited 1 while the
+harness waited 120 seconds for hold enrollment during transcription. Enrollment
+completed afterward. This is partial evidence, not a combined green result.
+
+The 26-minute recording subsequently failed transcription. Actual configured
+ASR inference reproduced the failure in its fourth 30-second window: an empty
+zero-duration segment overlapped the end of the preceding speech segment.
+The timestamp parser rejected the entire response before Meeting validation.
+
+The parser now ignores only empty or whitespace-only, exactly zero-duration
+markers after validating numeric bounds, string shape and text budget. It
+preserves speech and existing overlap limits, and rejects speech without any
+retained timestamped segments. Generated regression tests failed before the fix
+and passed afterward. The captured private response also failed before and
+passed after. All 53 windows of the actual 26-minute source then passed fresh
+ASR inference through the production parser and Meeting window validator.
+No audio or transcript content is committed. This replay validates transcript
+compatibility; it does not prove persisted Meeting summary or Main delivery.
+
+Focused timestamp/configured-transcription/routes/app-map suites passed all
+88 tests. Scoped ESLint passed. CI passed on previous source `b183b38ec` after
+a browser dependency-installation retry; its local foundation passed static,
+17,878 unit tests (three skipped) and 35 UAT-seed tests. Its integration run was
+stopped after the parser changed and invalidated the recorded source inputs.
+Those receipts do not validate this new fix. Root and test TypeScript checks
+also passed for the fix.
+
 ## Remaining
 
 Obtain a green combined production-wizard run with the reachable ring and prove
