@@ -13,6 +13,7 @@ import stat
 from pathlib import Path
 
 from broker import Broker
+from infrastructure import InfrastructurePolicy, validate_hosts
 from lifecycle import Inventory, Unavailable
 from podman import Podman
 from runtime import Runtime
@@ -31,7 +32,7 @@ def configuration(path):
     finally:
         os.close(descriptor)
     required = {'state', 'transport', 'socket', 'image', 'seccomp',
-                'allowed_uid', 'socket_gid', 'denied_networks'}
+                'allowed_uid', 'socket_gid', 'denied_networks', 'infrastructure_hosts'}
     if type(config) is not dict or set(config) != required:
         raise ValueError('Invalid service configuration')
     for key in ('state', 'transport', 'socket', 'seccomp'):
@@ -40,11 +41,12 @@ def configuration(path):
     for key in ('allowed_uid', 'socket_gid'):
         if type(config[key]) is not int or config[key] < 0:
             raise ValueError('Invalid service identity')
-    if (type(config['denied_networks']) is not list or not config['denied_networks'] or
+    if (type(config['denied_networks']) is not list or not 1 <= len(config['denied_networks']) <= 64 or
             any(type(network) is not str for network in config['denied_networks'])):
         raise ValueError('Infrastructure network denial configuration required')
     for network in config['denied_networks']:
         ipaddress.ip_network(network)
+    validate_hosts(config['infrastructure_hosts'])
     return config
 
 
@@ -53,7 +55,12 @@ async def serve(config):
     inventory = Inventory(config['state'])
     lock = ServiceLock(inventory.directory)
     broker = None
+    policy = InfrastructurePolicy(config['denied_networks'], config['infrastructure_hosts'])
+    refreshing = None
     try:
+        if not await policy.refresh():
+            raise Unavailable('Infrastructure discovery required')
+        refreshing = asyncio.create_task(policy.run())
         transport = Path(config['transport'])
         transport.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = transport.lstat()
@@ -63,7 +70,7 @@ async def serve(config):
         engine = Podman(image=config['image'], seccomp=config['seccomp'],
                         transport_root=transport, service_lock=lock)
         runtime = Runtime(inventory=inventory, engine=engine, transport_root=transport,
-                          denied_networks=config['denied_networks'])
+                          denied_networks=config['denied_networks'], infrastructure=policy)
         broker = Broker(runtime, allowed_uid=config['allowed_uid'], socket_gid=config['socket_gid'])
         stopped = asyncio.Event()
         loop = asyncio.get_running_loop()
@@ -74,6 +81,10 @@ async def serve(config):
             await broker.listen(Path(config['socket']))
             await stopped.wait()
     finally:
+        policy.invalidate()
+        if refreshing:
+            refreshing.cancel()
+            await asyncio.gather(refreshing, return_exceptions=True)
         if broker:
             await broker.close()
         lock.close()

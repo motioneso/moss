@@ -110,7 +110,8 @@ def verify(negative_control):
             'state': str(root / 'state'), 'transport': str(root / 'transport'),
             'socket': str(broker_path), 'image': 'sha256:' + 'a' * 64,
             'seccomp': str(root / 'seccomp.json'), 'allowed_uid': os.getuid(),
-            'socket_gid': os.getgid(), 'denied_networks': ['192.0.2.0/24']}))
+            'socket_gid': os.getgid(), 'denied_networks': ['192.0.2.0/24'],
+            'infrastructure_hosts': ['localhost']}))
         configuration.chmod(0o600)
         listener = socket.socket(socket.AF_UNIX)
         listener.settimeout(12)

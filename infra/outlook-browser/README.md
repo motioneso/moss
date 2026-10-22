@@ -43,7 +43,7 @@ volume. Native candidate-browser checks are described below. Image maintenance a
 network acceptance on both supported architectures remain release blockers.
 
 Egress accepts bounded HTTP/1.1 CONNECT authorities on port 443, rejects special-use IPv4/IPv6
-and configured infrastructure networks, rejects mixed private/public DNS answers, and connects to
+and configured/discovered infrastructure networks, rejects mixed private/public DNS answers, and connects to
 a validated numeric address without a second hostname lookup. Each tunnel is limited to five
 minutes and 60 seconds idle; each runtime has at most 64 active tunnels. Revocation closes active
 tunnels. TLS remains end-to-end between the client and remote service; this code does not decrypt
@@ -54,8 +54,9 @@ the tunnel. Public HTTPS servers are not restricted to Microsoft, allowing feder
 - Installer, deployment mounts/UID mapping and host-service hardening on supported installations.
 - Crash coverage inside actual engine/storage operations beyond the tested acknowledgment
   boundaries, and repetition against the maintained release image on supported hosts.
-- Populate/refresh the denied infrastructure networks, including the server's public addresses
-  and the app's public ingress; the special-use deny list alone does not identify those.
+- Installer delivery of complete public host/NAT and application ingress names/CIDRs, and
+  browser acceptance against those deployed addresses. Host-policy discovery/refresh is implemented
+  below; local interfaces alone cannot identify external NAT or reverse proxies.
 - Browser security-update delivery and release review, remaining managed-policy behavior coverage,
   ARM64 sandbox diagnostics, redirect/rebinding tests, public IPv6 and alternate-route browser proof.
 - Authenticated viewer/collector leases, real session revocation, user setup, account confirmation,
@@ -70,8 +71,24 @@ From `~/Jarv1s`, Python 3.12+:
 pnpm test:outlook-runtime
 ```
 
-This runs 38 tests plus twelve guard-removal checks against temporary copies of the actual source.
+This runs 55 tests plus 32 guard-removal checks against temporary copies of the actual source.
 CI runs the same command. No database, browser, credentials or network access is needed.
+
+The account-free native host-policy proof uses real interface discovery, DNS, Unix CONNECT and
+public TLS, with no browser or container:
+
+```sh
+PYTHONPATH=infra/outlook-browser python3 -B infra/outlook-browser/tests/verify_infrastructure.py
+```
+
+It first verifies ordinary Microsoft HTTPS with certificate checks. It then deliberately classifies
+that public endpoint as an application-ingress stand-in, closes an existing CONNECT, and checks
+hostname and resolved IPv4/IPv6 literal denial. Omitting the infrastructure policy must fail the
+same denial assertion on the reachable endpoint. No actual Moss ingress, account or deployment is
+used. Unit tunnel fixtures use real Unix proxy/echo sockets with disclosed DNS/upstream stand-ins;
+they exercise failed refresh, expiry without another request, DNS rotation, unchanged refresh,
+history exhaustion and service/runtime binding. The independent generation-barrier tests suppress
+proactive tunnel closure deliberately; separate tests require actual closure/cancellation.
 
 Optional real rootless Podman proofs use a **Python fixture**, not a browser or real account:
 
@@ -131,7 +148,7 @@ The test requires a working user-systemd bus; terminals without session variable
 ## Internal service configuration
 
 `service.py --config <trusted-json-file>` reads exactly `state`, `transport`, `socket`, `image`,
-`seccomp`, `allowed_uid`, `socket_gid` and `denied_networks`. Paths are absolute installation
+`seccomp`, `allowed_uid`, `socket_gid`, `denied_networks` and `infrastructure_hosts`. Paths are absolute installation
 configuration, never client arguments. The file must be a regular non-symlink, owned by the
 service account or root, with no group/other write permission. State/transport directories are
 service-owned 0700. The socket's parent must already be service-owned 0750 with socket_gid;
@@ -141,9 +158,25 @@ documented matching host UID and group when the installer/deployment seam is imp
 The user unit targets a dedicated non-root runtime account and is separate from the legacy
 browser service. It is a delivery template, not enabled by this change. Host NoNewPrivileges is
 not set because rootless Podman needs newuidmap/newgidmap; container no-new-privileges remains
-enforced. A nonempty explicit deny list is required, but that alone cannot discover the host's
-public addresses or application ingress. Automatic infrastructure policy discovery/refresh is
-still a hard release blocker. Never enable real sign-in from this foundation alone.
+enforced. The host requires iproute2 at `/usr/sbin/ip`. Both a nonempty explicit CIDR deny list
+(at most 64 entries) and infrastructure hostname list (at most 32 entries) are required. The trusted
+installer must include every public host/NAT and application ingress name, or its addresses in
+the CIDR list. Local interface discovery cannot infer external NAT/reverse-proxy addresses. Shared
+CDN addresses are denied conservatively too; there is no hostname exception to the address policy.
+
+Before engine recovery or broker listening, `infrastructure.py` discovers all interface addresses
+and resolves every configured name. Discovery repeats after each 30-second interval, with a
+ten-second discovery timeout and independent 60-second policy expiry. Configured names are always
+denied directly, including between DNS refreshes. Discovered addresses remain denied until service
+restart, alongside static CIDRs; a 4096-network history limit fails closed on exhaustion. Failed or
+expired discovery blocks new tunnels and closes existing ones. Any new address also closes all
+current tunnels; unchanged successful refresh preserves them. Egress checks the policy generation
+after destination DNS and again after dialing, before acknowledging a connection. Each runtime
+uses the same service-owned policy. No configuration, DNS answer or request content is logged.
+
+This is host-policy implementation and bounded native/fixture evidence. Installer population of
+complete infrastructure inputs, deployed browser ingress checks and supported-host/ARM64 acceptance
+remain hard release blockers. Never enable real sign-in from this foundation alone.
 
 The lifecycle socket grants trusted API/worker processes access to runtime references. It does
 not authenticate Moss users, bind browser sessions or authorize viewer/collector leases. Those

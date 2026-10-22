@@ -92,8 +92,11 @@ async def resolve_public(host, denied_networks):
 class Egress:
     """One instance/socket per runtime; revoke() closes existing tunnels too."""
 
-    def __init__(self, denied_networks, *, max_connections=64):
+    def __init__(self, denied_networks, *, infrastructure=None, max_connections=64):
         self.denied_networks = tuple(ipaddress.ip_network(n) for n in denied_networks)
+        self.infrastructure = infrastructure
+        if infrastructure is not None:
+            infrastructure.proxies.add(self)
         self.max_connections = max_connections
         self.tasks = set()
         self.writers = set()
@@ -106,15 +109,20 @@ class Egress:
         # Parent directory and socket mode are set/checked by the host runtime.
         self.server = await asyncio.start_unix_server(self.handle, path, limit=8192)
 
-    async def revoke(self):
-        self.revoked = True
-        if self.server:
-            self.server.close()
+    def close_connections(self):
         for writer in tuple(self.writers):
             writer.close()
-        pending = tuple(self.tasks)
-        for task in pending:
+        for task in tuple(self.tasks):
             task.cancel()
+
+    async def revoke(self):
+        self.revoked = True
+        if self.infrastructure is not None:
+            self.infrastructure.proxies.discard(self)
+        if self.server:
+            self.server.close()
+        pending = tuple(self.tasks)
+        self.close_connections()
         await asyncio.gather(*pending, return_exceptions=True)
         if self.server:
             await self.server.wait_closed()
@@ -133,15 +141,22 @@ class Egress:
             if len(header) > 8192:
                 raise Denied()
             host = connect_host(header)
-            addresses = await resolve_public(host, self.denied_networks)
+            generation, networks = (self.infrastructure.snapshot(host) if self.infrastructure
+                                    else (None, self.denied_networks))
+            addresses = await resolve_public(host, networks)
             if self.revoked:
                 raise Denied()
             # Numeric address, no hostname lookup in open_connection. This is the
             # enforcement point for redirects, IP literals and DNS rebinding.
             address = addresses[0]
-            source, upstream = await asyncio.wait_for(asyncio.open_connection(
-                address, 443, family=socket.AF_INET6 if ':' in address else socket.AF_INET), 10)
+            async with asyncio.timeout(10):
+                if self.infrastructure:
+                    self.infrastructure.check(generation)
+                source, upstream = await asyncio.open_connection(
+                    address, 443, family=socket.AF_INET6 if ':' in address else socket.AF_INET)
             self.writers.add(upstream)
+            if self.infrastructure:
+                self.infrastructure.check(generation)
             if self.revoked:
                 raise Denied()
             writer.write(b'HTTP/1.1 200 Connection Established\r\n\r\n')

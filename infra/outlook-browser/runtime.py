@@ -31,11 +31,12 @@ async def complete_engine(operation, runtime_id):
 
 
 class Runtime:
-    def __init__(self, *, inventory, engine, transport_root, denied_networks):
+    def __init__(self, *, inventory, engine, transport_root, denied_networks, infrastructure=None):
         self.inventory = inventory
         self.engine = engine
         self.transport_root = Path(transport_root)
         self.denied_networks = tuple(denied_networks)
+        self.infrastructure = infrastructure
         self.proxies = {}
         self.locks = {}
         self.closed = False
@@ -63,7 +64,7 @@ class Runtime:
                         if not stat.S_ISSOCK(path.lstat().st_mode):
                             raise Unavailable('Invalid runtime transport')
                         path.unlink()
-                    proxy = Egress(self.denied_networks)
+                    proxy = Egress(self.denied_networks, infrastructure=self.infrastructure)
                     await proxy.listen(str(path))
                     os.chmod(path, 0o600)
                     self.proxies[runtime_id] = proxy

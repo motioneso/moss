@@ -36,7 +36,7 @@ the external engine operation before releasing the inventory lock. No viewer, co
 installation/deployment wiring ships in this slice. A pinned candidate browser image now exists;
 its maintenance and release acceptance remain unfinished.
 
-Verification: `pnpm test:outlook-runtime` runs 38 tests and twelve guard-removal controls in CI.
+Verification: `pnpm test:outlook-runtime` runs 55 tests and 32 guard-removal controls in CI.
 Actual rootless Python fixtures also exercised public Microsoft TLS, 14 network checks, a real
 network-none negative control, separate profile volumes, idempotent allocation, container/profile
 deletion, inventory restart and unaffected second runtime. These are transport/engine proofs,
@@ -67,7 +67,7 @@ kill an actual broker subprocess and verify its surviving command supervisor blo
 until completion. These tests do not prove hard-crash recovery of actual Podman or Chromium.
 
 Crashes inside Podman/storage operations beyond the tested boundaries below,
-discovering/refreshing public host/app ingress deny addresses, and the remaining browser
+installer delivery of complete public host/app ingress denial inputs, and the remaining browser
 network/architecture acceptance remain hard merge blockers. The unit is not
 installed/enabled, no app/worker mounts are added yet, and the legacy runtime is unchanged.
 
@@ -149,13 +149,50 @@ controls. No database-touching test ran in this policy-only continuation.
 Full `pnpm verify:static` exited 0 at `4673358ff`; the subsequent Python-verifier/Markdown
 follow-up passed the strengthened native proof, touched-document formatting and diff checks.
 
+## Infrastructure denial refresh checkpoint
+
+The host service now requires trusted `infrastructure_hosts` alongside static `denied_networks`.
+Before recovery/listening it discovers interface addresses through the fixed host iproute2 command
+and resolves all configured infrastructure names. Refresh runs every 30 seconds after the previous
+attempt; discovery has a ten-second timeout and policy expires independently after 60 seconds.
+Configured names are denied directly between refreshes. The installer must supply all public
+host/NAT and app ingress names or CIDRs: local interfaces cannot infer those external addresses.
+This is internal service configuration; no app runtime requirement or product surface is enabled.
+
+Each runtime receives the shared policy. New addresses, failed discovery and expiry close current
+tunnels and block stale in-flight work. Policy generation is checked after destination resolution
+and after dialing, before CONNECT acknowledgment. Successful unchanged refresh preserves tunnels.
+Previously discovered addresses remain denied until service restart; exceeding 4096 networks fails
+closed. Installer delivery, complete deployed-address configuration and actual browser acceptance
+against that deployment remain unfinished.
+
+Native `verify_infrastructure.py` exited 0 with three proof groups: actual host-interface discovery
+and public Microsoft TLS with normal certificate verification; deliberately classifying that
+endpoint as a public application-ingress stand-in denies its hostname/resolved literals and closes
+an existing CONNECT (observed one IPv4 and five IPv6 addresses); omitting the infrastructure policy
+fails the same denial assertion on that reachable endpoint. This uses real DNS/Unix proxy/public
+TCP, with no browser, container or actual Moss ingress. No account, production service, host TCP
+listener or deployment is used.
+
+Runtime unit verification passed 55 tests plus 32 assertion-failing source guard-removal
+controls. Unit DNS/upstream fixtures are disclosed Unix echo stand-ins; they cover expiry without
+a new request, failed/partial discovery, IPv6, address history, unchanged refresh, service/runtime
+policy propagation and independent pre/post-dial generation checks. The generation tests suppress
+proactive closure to isolate those barriers; separate tests require actual tunnel closure.
+The real user-systemd service proof also passed with actual host discovery and an external-engine
+stand-in; its KillMode negative control again demonstrated late creation. No actual-engine/browser
+receipt is refreshed by this slice. No database-touching test ran.
+Full `pnpm verify:static` exited 0, including root/test/web/external-module typechecks and app-map
+generation. The final documentation-only receipt update also passes scoped formatting/diff checks.
+
 ## Remaining build work
 
 1. Complete production host broker browser operations and maintained browser image. Persisted
    tombstones reject delayed allocations after cleanup. Actual service-crash/orphaned-command
    tests now cover the boundaries above; interrupted engine/storage transactions and supported-host
-   coverage remain unverified. Never reuse a removed runtime reference. Complete public host/app
-   ingress denial and actual Chromium sandbox/network checks before claiming browser isolation.
+   coverage remain unverified. Never reuse a removed runtime reference. Complete installer delivery
+   of public host/app denial inputs and actual Chromium ingress/network checks before claiming
+   browser isolation.
 2. Private Unix transport, installer and every affected deployment configuration; optional runtime
    absence must preserve the legacy integration. Wire lifecycle sweeping when that service exists.
 3. Real browser-session authentication, same-origin/CSRF checks and runtime leases on all viewer

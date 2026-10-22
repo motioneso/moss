@@ -104,7 +104,7 @@ def verify(image, engine, negative_control):
             'state': str(root / 'state'), 'transport': str(root / 'transport'),
             'socket': str(path), 'image': image, 'seccomp': str(policy),
             'allowed_uid': os.getuid(), 'socket_gid': os.getgid(),
-            'denied_networks': ['192.0.2.0/24']}))
+            'denied_networks': ['192.0.2.0/24'], 'infrastructure_hosts': ['localhost']}))
         config.chmod(0o600)
         listener = socket.socket(socket.AF_UNIX)
         listener.bind(str(root / 'barrier.sock'))
