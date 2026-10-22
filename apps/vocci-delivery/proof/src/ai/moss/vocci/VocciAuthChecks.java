@@ -4,6 +4,7 @@ import android.app.Instrumentation;
 import android.os.Bundle;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.*;
 import org.json.*;
 
 /** Synthetic native-contract checks. They do not count as installed vendor acceptance. */
@@ -64,7 +65,7 @@ public final class VocciAuthChecks extends Instrumentation {
         }
         secrets = new SecretStore(getTargetContext(), "moss-vocci-auth-contract-test", "vocci-auth-contract-test.enc");
         try {
-            secrets.delete(); emailAndBindings(); resumedLookup(); tokenShapeGuards(); requiredMfa(); invalidAndThrottled(); unsupportedMfa(); lostVerificationRecovery(); cleanupOffline(); malformedBindings(); transportGuards();
+            secrets.delete(); recreatedControllerCleanup(); overlappingCleanup(); emailAndBindings(); resumedLookup(); tokenShapeGuards(); requiredMfa(); invalidAndThrottled(); unsupportedMfa(); lostVerificationRecovery(); cleanupOffline(); malformedBindings(); transportGuards();
             result.putString("result", "PASS"); result.putInt("contracts", passed); finish(-1, result);
         } catch (Throwable failure) {
             result.putString("result", "FAIL"); result.putString("check", failure instanceof AssertionError ? failure.getMessage() : failure instanceof VocciHttp.Failure ? ((VocciHttp.Failure) failure).code : failure.getClass().getSimpleName()); finish(1, result);
@@ -122,6 +123,55 @@ public final class VocciAuthChecks extends Instrumentation {
         fake.add("GET", "client", client("[{\"id\":\"sess_test\",\"status\":\"active\"}]"))
             .add("POST", "client/sessions/sess_test/remove", "{\"id\":\"sess_test\",\"status\":\"removed\"}")
             .add("GET", "client", client("[]"));
+    }
+    private void recreatedControllerCleanup() throws Exception {
+        Fake staleTransport = new Fake();
+        VocciAccount stale = new VocciAccount(secrets, staleTransport);
+        Fake activeTransport = begin().add("POST", "client/sign_ins/sia_test/attempt_first_factor", signIn("complete", ",\"created_session_id\":\"sess_test\""));
+        VocciAccount active = new VocciAccount(secrets, activeTransport);
+        active.begin(EMAIL); active.verify("123456"); activeTransport.complete();
+        // A recreated activity may retain an empty controller while another
+        // worker finishes verification. Cleanup must use the retained session.
+        staleTransport.add("GET", "client", client("[{\"id\":\"sess_test\",\"status\":\"active\"}]"))
+            .add("POST", "client/sessions/sess_test/remove", "{\"id\":\"sess_test\",\"status\":\"removed\"}")
+            .add("GET", "client", client("[]"));
+        stale.cleanup();
+        check(staleTransport.expected.isEmpty(), "recreated_cleanup_confirms_current_session_removal");
+        check(!secrets.exists(), "recreated_cleanup_removes_record_after_confirmation");
+        rejects("auth_step_invalid", () -> active.bindings());
+        activeTransport.complete(); passed++;
+    }
+    private void overlappingCleanup() throws Exception {
+        CountDownLatch verifying = new CountDownLatch(1), release = new CountDownLatch(1), cancelling = new CountDownLatch(1);
+        Fake auth = begin().add("POST", "client/sign_ins/sia_test/attempt_first_factor", signIn("complete", ",\"created_session_id\":\"sess_test\""));
+        VocciAccount active = new VocciAccount(secrets, (method, url, token, form, rotation) -> {
+            if (url.contains("/attempt_first_factor?")) {
+                verifying.countDown();
+                check(release.await(5, TimeUnit.SECONDS), "verification_released");
+            }
+            return auth.request(method, url, token, form, rotation);
+        });
+        active.begin(EMAIL);
+        Fake cleanupTransport = new Fake(); cleanup(cleanupTransport);
+        VocciAccount recreated = new VocciAccount(secrets, cleanupTransport);
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> verification = workers.submit(() -> { active.verify("123456"); return null; });
+            check(verifying.await(5, TimeUnit.SECONDS), "verification_started");
+            Future<?> cancellation = workers.submit(() -> { cancelling.countDown(); recreated.cleanup(); return null; });
+            check(cancelling.await(5, TimeUnit.SECONDS), "cleanup_started");
+            boolean blocked;
+            try { cancellation.get(200, TimeUnit.MILLISECONDS); blocked = false; }
+            catch (TimeoutException expected) { blocked = true; }
+            check(blocked, "cleanup_waits_for_inflight_verification");
+            release.countDown();
+            verification.get(5, TimeUnit.SECONDS); cancellation.get(5, TimeUnit.SECONDS);
+            auth.complete(); cleanupTransport.complete();
+            check(!secrets.exists(), "overlapping_cleanup_confirmed_and_removed_current_record"); passed++;
+        } finally {
+            release.countDown(); workers.shutdownNow();
+            check(workers.awaitTermination(5, TimeUnit.SECONDS), "overlapping_workers_stopped");
+        }
     }
     private void emailAndBindings() throws Exception {
         Fake fake = begin().add("POST", "client/sign_ins/sia_test/attempt_first_factor", signIn("complete", ",\"created_session_id\":\"sess_test\""))

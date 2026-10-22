@@ -6,6 +6,9 @@ import org.json.*;
 
 /** Serialized setup-only native sign-in. Call on a worker; UI receives no account tokens. */
 final class VocciAccount {
+    // A destroyed activity's worker may overlap its replacement. Keep the
+    // current session's cleanup material authoritative across controllers.
+    private static final Object TRANSACTION = new Object();
     enum Step { EMAIL, CODE, TOTP, CONNECTED, CLEANUP }
     private final SecretStore secrets;
     private final VocciHttp.Transport transport;
@@ -16,14 +19,29 @@ final class VocciAccount {
     }
     VocciAccount(SecretStore secrets, VocciHttp.Transport transport) throws Exception {
         this.secrets = secrets; this.transport = transport;
-        record = secrets.exists() ? secrets.load() : new JSONObject();
-        step = secrets.exists() ? Step.CLEANUP : Step.EMAIL;
+        synchronized (TRANSACTION) {
+            record = secrets.exists() ? secrets.load() : new JSONObject();
+            step = secrets.exists() ? Step.CLEANUP : Step.EMAIL;
+        }
+    }
+    private void refresh() throws Exception {
+        if (!secrets.exists()) { record = new JSONObject(); step = Step.EMAIL; return; }
+        JSONObject retained = secrets.load();
+        if (!retained.toString().equals(record.toString())) {
+            record = retained;
+            // Another controller advanced the attempt. Never reuse an old
+            // CODE/TOTP step against that controller's newer session.
+            step = Step.CLEANUP;
+        }
     }
     Step step() { return step; }
     boolean canResumeLookup() {
         return (step == Step.CLEANUP || step == Step.CONNECTED) && record.has("clientId") && record.optBoolean("isolatedClient") && record.optBoolean("verificationStarted") && record.has("sessionId");
     }
     void resumeLookup() throws Exception {
+        synchronized (TRANSACTION) { refresh(); resumeLookupSaved(); }
+    }
+    private void resumeLookupSaved() throws Exception {
         if (!canResumeLookup()) throw new VocciHttp.Failure("auth_step_invalid");
         JSONObject client = clerk("GET", "client", "");
         JSONArray sessions = client.getJSONArray("sessions");
@@ -63,6 +81,9 @@ final class VocciAccount {
         catch (Exception malformed) { throw new VocciHttp.Failure("auth_response_invalid"); }
     }
     void begin(String email) throws Exception {
+        synchronized (TRANSACTION) { refresh(); beginSaved(email); }
+    }
+    private void beginSaved(String email) throws Exception {
         if (step != Step.EMAIL || secrets.exists()) throw new VocciHttp.Failure("auth_cleanup_required");
         if (email.length() > 254 || !email.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) throw new VocciHttp.Failure("auth_email_invalid");
         // Save before any request so interrupted work is shown as recovery, never auto-resend.
@@ -87,6 +108,9 @@ final class VocciAccount {
         resend();
     }
     void resend() throws Exception {
+        synchronized (TRANSACTION) { refresh(); resendSaved(); }
+    }
+    private void resendSaved() throws Exception {
         if (step != Step.CODE) throw new VocciHttp.Failure("auth_step_invalid");
         if (System.currentTimeMillis() < resendAfter()) throw new VocciHttp.Failure("auth_resend_wait");
         record.put("resendAfter", System.currentTimeMillis() + 60000); save();
@@ -94,6 +118,9 @@ final class VocciAccount {
             VocciHttp.form("strategy", "email_code", "email_address_id", record.getString("emailId")));
     }
     void verify(String code) throws Exception {
+        synchronized (TRANSACTION) { refresh(); verifySaved(code); }
+    }
+    private void verifySaved(String code) throws Exception {
         if (step != Step.CODE && step != Step.TOTP) throw new VocciHttp.Failure("auth_step_invalid");
         if (!code.matches("[0-9]{6}")) throw new VocciHttp.Failure("auth_code_invalid");
         record.put("verificationStarted", true); save();
@@ -120,6 +147,9 @@ final class VocciAccount {
         step = Step.CLEANUP; throw new VocciHttp.Failure("auth_method_unsupported");
     }
     List<JSONObject> bindings() throws Exception {
+        synchronized (TRANSACTION) { refresh(); return bindingsSaved(); }
+    }
+    private List<JSONObject> bindingsSaved() throws Exception {
         if (step != Step.CONNECTED) throw new VocciHttp.Failure("auth_step_invalid");
         JSONObject token = clerk("POST", "client/sessions/" + record.getString("sessionId") + "/tokens", VocciHttp.form("organization_id", ""));
         String jwt = VocciHttp.header(token.getString("jwt"));
@@ -131,6 +161,9 @@ final class VocciAccount {
         catch (Exception malformed) { throw new VocciHttp.Failure("binding_response_invalid"); }
     }
     void cleanup() throws Exception {
+        synchronized (TRANSACTION) { refresh(); cleanupSaved(); }
+    }
+    private void cleanupSaved() throws Exception {
         if (!secrets.exists()) { step = Step.EMAIL; return; }
         step = Step.CLEANUP;
         if (!record.has("deviceToken")) {

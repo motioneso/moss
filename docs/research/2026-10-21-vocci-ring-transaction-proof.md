@@ -92,6 +92,12 @@ real native Verify-and-save acceptance. It returns only bounded diagnostic codes
 
 ## Remaining acceptance
 
+The subsequent canonical retry `20261021-195535` tested clean `1ce17b391`
+(inputs `22ede0407d7d`) and exited 1 while waiting at the initial secure phone
+lock, before a Moss link or Vocci sign-in. Installed state inspection afterward
+confirmed `EMPTY`, no staging and no configuration. The runner removed its
+disposable server; no setup acceptance is claimed for this retry.
+
 No new recording is needed for this slice. Next run the real native account
 selection, permission/handoff and physical identity/key proof against a disposable Moss account, then verify cancellation and
 interrupted-commit recovery. Preserve the original companion's configuration and

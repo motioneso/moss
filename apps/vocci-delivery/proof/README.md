@@ -32,6 +32,11 @@ It sends no new code. Other interrupted attempts require cleanup before a new si
 encrypted retry record. A changed native client/session is rejected. Never
 uninstall or clear this test app while cleanup remains pending.
 
+Account actions serialize across recreated screens and reload retained state
+before proceeding. An older screen cannot discard a newer session using an empty
+cached record. Installed synthetic lifecycle checks and their observed failing
+controls are recorded in the [account recreation evidence](../../../docs/research/2026-10-21-vocci-account-recreation.md).
+
 The separate app-private `no_backup/auth-proof-result.json` stores only the backend
 acceptance flag, validated ring count, cleanup-confirmation flag, truthful client
 identity and time. These fields support bounded textual evidence; they contain no
