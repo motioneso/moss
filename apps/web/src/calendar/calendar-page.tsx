@@ -1,3 +1,4 @@
+import { OutlookCalendarStatusPanel } from "./outlook-calendar-status.js";
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -52,7 +53,8 @@ export function CalendarPage() {
 
   const calendarQuery = useQuery({
     queryKey: queryKeys.calendar.list,
-    queryFn: () => listCalendarEvents()
+    queryFn: () => listCalendarEvents(),
+    refetchInterval: 30_000
   });
 
   const allViewEvents = useMemo(
@@ -107,6 +109,7 @@ export function CalendarPage() {
 
   return (
     <div className="cal-wrap" style={{ "--cal-h": HOUR_H + "px" } as React.CSSProperties}>
+      <OutlookCalendarStatusPanel />
       <div className="cal-toolbar">
         <div className="cal-toolbar__left">
           <Button variant="secondary" size="sm" onClick={() => setCursor(todayIn(timeZone))}>

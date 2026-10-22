@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Outlook local preview — prototype",
+  "version": "0.4.3",
+  "description": "Local Outlook preview and explicitly started, tab-local synthetic inbox/calendar watchers.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_title": "Outlook preview and local watchers",
+    "default_popup": "popup.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "outlook-preview-prototype@moss.invalid",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+  }
+}

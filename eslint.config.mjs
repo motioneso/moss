@@ -44,6 +44,11 @@ export default tseslint.config(
     }
   },
   js.configs.recommended,
+  {
+    // Standalone Firefox spike scripts run in extension pages and content scripts.
+    files: ["spikes/o365-firefox-preview-prototype/*.js"],
+    languageOptions: { globals: { ...globals.browser, browser: "readonly" } }
+  },
   ...tseslint.configs.recommended,
   {
     // Restored standalone CommonJS preview checks use Node and Playwright browser globals.

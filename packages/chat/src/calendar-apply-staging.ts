@@ -147,6 +147,12 @@ export async function deleteApplyEvent(
     cacheMirror: "not-cached",
     message
   });
+  const browserReadOnly = await dataContext.withDataContext(access, async (db) => {
+    const found = await resolveCalendarEventRef(db, deps.calendarRepository, undefined, eventRef);
+    return found.found && found.event.external_metadata?.source === "outlook-browser-calendar";
+  });
+  if (browserReadOnly)
+    return skipped("Outlook calendar is read-only. Change this event in Outlook.");
   const staged = await readApplyReads(deps, dataContext, access);
   if ("denied" in staged) return skipped(staged.denied);
   const token = await ensureApplyToken(deps, dataContext, access, staged.reads);
@@ -160,7 +166,8 @@ export async function deleteApplyEvent(
       active?.id,
       eventRef
     );
-    if (!outcome.found) return undefined;
+    if (!outcome.found || outcome.event.external_metadata?.source === "outlook-browser-calendar")
+      return undefined;
     const md = outcome.event.external_metadata as Record<string, unknown> | null;
     return {
       cacheId: outcome.event.id,
@@ -212,6 +219,16 @@ export async function rescheduleApplyEvent(
   newStart: Date,
   newEnd: Date
 ): Promise<RescheduleEventResult> {
+  const browserReadOnly = await dataContext.withDataContext(access, async (db) => {
+    const found = await resolveCalendarEventRef(db, deps.calendarRepository, undefined, eventRef);
+    return found.found && found.event.external_metadata?.source === "outlook-browser-calendar";
+  });
+  if (browserReadOnly)
+    return {
+      ok: false,
+      reason: "no_scope",
+      message: "Outlook calendar is read-only. Change this event in Outlook."
+    };
   const staged = await readApplyReads(deps, dataContext, access);
   if ("denied" in staged) {
     return { ok: false, reason: "no_scope", message: staged.denied };
@@ -228,7 +245,8 @@ export async function rescheduleApplyEvent(
       active?.id,
       eventRef
     );
-    if (!outcome.found) return undefined;
+    if (!outcome.found || outcome.event.external_metadata?.source === "outlook-browser-calendar")
+      return undefined;
     const md = outcome.event.external_metadata as Record<string, unknown> | null;
     return {
       cacheId: outcome.event.id,
