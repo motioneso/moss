@@ -66,6 +66,8 @@ const userScopedCountQueries: ReadonlyArray<readonly [table: string, predicate: 
   ["app.notification_reads", "user_id = $1::uuid"],
   ["app.connector_accounts", "owner_user_id = $1::uuid"],
   ["app.connector_oauth_pending", "owner_user_id = $1::uuid"],
+  // Its cascade trigger preserves profile-removal work in connector_outlook_cleanup.
+  ["app.connector_outlook_setups", "owner_user_id = $1::uuid"],
   ["app.calendar_events", "owner_user_id = $1::uuid"],
   ["app.email_messages", "owner_user_id = $1::uuid"],
   ["app.ai_provider_configs", "owner_user_id = $1::uuid"],
