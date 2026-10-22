@@ -354,10 +354,115 @@ Fresh CI is still required for that workflow change. Foundation
 `20261022-152714` was stopped after the workflow changed; it has no passing
 final-input verdict.
 
+## Fresh hold received after complete setup
+
+Run `20261022-152028` passed browser-approved Moss linking and restart retention,
+native Vocci sign-in, explicit ring selection/restart, first-attempt physical
+identity/key verification, fresh Moss-owner confirmation and atomic save. Actual
+Ready-screen Start and stable-inventory hold enrollment passed. Three normal
+entries completed, and the owner's new physical hold produced a receipt after
+enrollment, outside the eight-entry baseline. No readiness marker or baseline
+hold was substituted.
+
+The automatic Meeting summary did not reach the observer's saved condition
+within 150 seconds. The run exited 1 before visible Meeting output or hold
+review/Send/Main reply checks. Receipt arrival alone does not prove those checks.
+The observer now saves structural summary status and continues the independent
+hold check after a summary failure; a missing summary still fails combined
+acceptance. This private observer change compiles but has not passed a live run.
+
+Actual browser failure cleanup removed the disposable device session. Isolated
+configuration, staging and delivery were cleared; installed inspection confirmed
+EMPTY and original companion configuration/queue hashes matched the baseline.
+The owned browser and reverse stopped, and the phone timeout was restored. Native
+Stop was not observed in this run. Private copies of short normal and fresh hold
+audio were retained for server diagnosis without requesting another recording.
+Replays remain separate from combined physical setup acceptance.
+
+## Captured-audio runner diagnosis
+
+A separate no-phone replay imported the retained short normal recording through
+the real HTTP recording endpoint and completed transcription. The manually added
+proof model initially advertised only Chat, so automatic summary failed with
+`meeting_output_route_unavailable`. Enabling JSON and Summary through Settings
+exposed `meeting_output_subscription_isolation_unavailable`: the private host
+runner had not enabled per-user UID isolation. A separate retained-hold replay
+reached actual review and Send to Main, but its reply was interrupted. Neither
+replay establishes successful physical delivery.
+
+An owned disposable container now enables real per-user UID isolation, uses
+separate authentication and socket storage, and leaves production unchanged.
+The relevant runner source hashes match this branch. Its proof-only executable
+is the audited CLI version with the digest required by the constrained profile;
+no version or isolation guard was relaxed. Constrained RPC preflight and actual
+Meeting output availability now report ready/available. Replay
+`20261022-155541` still exited 1 with `meeting_output_provider_failed`; a real
+model probe identified a revoked proof credential. After a normal local CLI
+login refresh and supported proof-token provisioning, both constrained and
+ordinary fresh RPC probes passed. Replay `20261022-155858` completed transcription
+and saved one automatic summary; it exited 1 at the Main reply assertion.
+
+A separate loopback control reproduced the container networking mismatch: the
+runner could not reach a host-local HTTP endpoint on its bridge network, then
+could reach the same endpoint after switching the owned runner to host networking.
+Both RPC readiness probes passed again. This repairs the proof topology without
+changing app authentication or per-user homes. A new replay now also requires the
+actual Meeting transcript/summary and Main reply to be visible. That replay,
+`20261022-160251`, exited 0 on source HEAD `9493096ac` with two documentation
+files dirty (input fingerprint `0469d6cf7c47`). It observed the actual Meeting
+transcript and saved automatic summary, then the retained hold's review,
+explicit Send to Main, persisted reply and visible answer four. The replay uses
+an uncertain capture timestamp and is not fresh physical setup acceptance.
+Its disposable endpoint/worker/database and provider stopped afterward.
+
+All six CI workflows passed on `9493096ac`, including overall CI
+`39865534417` after the pretest browser-install retry. Local foundation
+`20261022-153110` has passed static checks, 17,888 unit tests (three skipped)
+and 35 UAT-seed checks; integration remains in progress. These receipts apply
+to their recorded inputs. Captured audio and diagnostic authentication artifacts
+remain private.
+
+## Current physical delivery and recovered output proof
+
+Run `20261022-160626` tested `9493096ac` with two evidence documents dirty
+(input fingerprint `1dfbdc789695`). Browser-approved Moss linking, restart,
+authorized Gmail-assisted native Vocci sign-in, explicit owned-ring selection
+and restart passed. Physical identity/key and fresh Moss-owner checks passed;
+configuration was saved atomically. Actual Ready-screen Start and stable-inventory
+hold enrollment passed with nine baseline identities. Normal recordings were
+retrieved from the ring, uploaded and processed in this setup session; a separate
+read-only check observed two saved automatic summaries.
+
+The owner reported completing a hold, but no fresh entry appeared before the
+420-second sample window. The journal included a ring connection failure. The
+owner brought the ring beside the phone, then repeated the hold and confirmed
+vibration. A new post-enrollment voice entry reached Moss just after the deadline.
+The canonical run entered its bounded recovery pause and ultimately **exited 1**;
+no completion marker or baseline hold was used to turn that result green.
+
+A separate observer continued against that same running disposable instance and
+actual configured phone, before canonical cleanup. It required a genuinely new
+recording outside the saved baseline and the matching current enrollment. It
+observed the actual Meeting transcript and saved automatic summary through the UI,
+the fresh hold transcript in review, explicit Send to Main, and a persisted and
+visible real text reply answering four. It then pressed the actual native Stop
+control and observed the stopped journal. This supplemental observer exited 0.
+These are recovered physical/UI observations, not captured-audio replay and not
+a passing canonical gate receipt.
+
+The canonical observer then used browser Active sessions to revoke the disposable
+device, observed its row disappear, confirmed isolated EMPTY and unchanged original
+configuration/queue hashes, and removed its browser and reverse. The wrapper was
+collected with exit 1; its provider stopped. The original phone timeout was restored
+to two minutes after hardware cleanup. No new owner action is pending. The first
+hold's absence is unexplained; vibration and proximity on the successful repeat
+do not establish its cause.
+
 ## Remaining
 
-Obtain a green combined production-wizard run with the reachable ring and prove
-fresh physical Meeting and opted-in Main/text delivery from the final controls.
+Obtain a green combined production-wizard automation receipt; the physical setup,
+Meeting outputs and fresh opted-in Main/text delivery have now been observed
+across the timed-out run and its separate successful recovery observer.
 Complete remaining recovery/upgrade and final-input foundation/CI acceptance.
 Authenticated-state native theme/font controls passed as documented above;
 secure-window images do not establish visual acceptance. No code-entry request

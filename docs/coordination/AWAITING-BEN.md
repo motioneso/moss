@@ -4,12 +4,6 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
-## Vocci fresh hold sample (#3565)
-
-Actual setup, Start and hold enrollment passed. Make a fresh hold sample saying
-"What is two plus two?", release, then reply done. No normal recording is needed.
-The current run observes receipt directly from the delivery journal.
-
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the
