@@ -15,4 +15,5 @@
   <instrumentation android:name="ai.moss.vocci.VocciAuthChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
   <instrumentation android:name="ai.moss.vocci.SetupLinkChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
   <instrumentation android:name="ai.moss.vocci.SetupRingChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.vocci.SetupPhysicalCheck" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
 </manifest>

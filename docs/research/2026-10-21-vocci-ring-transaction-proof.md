@@ -3,8 +3,8 @@
 Part of #3565 / draft PR #3566. Implements the
 [selected-ring transaction plan](../superpowers/plans/2026-10-21-vocci-ring-setup-transaction.md)
 after the completed [staged-link live proof](2026-10-21-vocci-staged-link-proof.md).
-The production launcher remains unchanged. Real selected-ring UI and physical
-verification are **unverified**; this is not finished product onboarding.
+The production launcher remains unchanged. The full native Verify-and-save flow is
+**unverified**; this is not finished product onboarding.
 
 ## Implemented boundary
 
@@ -35,7 +35,7 @@ screen has not yet passed installed live UI, theme or font-scale acceptance.
 ## Observed checks
 
 The final installed proof APK SHA-256 is
-`8ceba299f8cad62eb50341fff7b22dc5e966c8b06de47cf255f2dbfef5dfb8af`.
+`1c2a03c67335112a322217cab1f0f1835c648cfc66e902e0f3ddfbb0f81d636a`.
 Installed synthetic instrumentation passed:
 
 - `SetupRingChecks`: 28 contracts, including missing prerequisites, selected-field
@@ -69,6 +69,26 @@ Host crypto vectors, transfer/restart checks and WAV checks passed, including a
 generated two-hour WAV under the existing constrained heap. Sequential host and
 proof builds and APK signature verification passed. This does not add a two-hour
 hardware recording result.
+
+## Live selection and physical diagnosis
+
+Canonical live run `20261021-194231` on clean `d7a0959f4`
+(inputs `ae6aa121dafc`) passed real browser-approved Moss staging, native account
+confirmation/restart, owner-entered Vocci sign-in, read-only account inventory,
+confirmed temporary-session cleanup, explicit ring selection and selection restart.
+Android's actual permission UI removed the official app's Nearby devices access.
+The phone relocked during that handoff; the harness could not reach Verify. The
+full run exited 1 and is **not** a configuration-commit proof. Browser sign-out
+cleanup was not confirmed; the canonical runner destroyed its disposable server
+and database. Isolated staging was then removed after confirming that teardown.
+No original companion configuration or queue was edited.
+
+A development-only `SetupPhysicalCheck` then opened/closed `RingConnection` with
+the same actual UI-selected candidate before staging cleanup. It returned
+`result=PASS`, `configurationPresent=false`, instrumentation code `-1`: physical
+serial/device identity and the existing-key challenge passed. It neither confirms
+a fresh Moss owner nor commits configuration, and cannot replace the remaining
+real native Verify-and-save acceptance. It returns only bounded diagnostic codes.
 
 ## Remaining acceptance
 

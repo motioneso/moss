@@ -136,8 +136,20 @@ adb -s <phone> shell am instrument -w \
   ai.moss.vocci.setupproof/ai.moss.vocci.SetupRingChecks
 ```
 
-These contracts do not prove live physical setup. The selected-ring screen is
-built, but real native selection/physical verification remains unverified. The
+These contracts do not prove live physical setup. Real native selection and a separate physical diagnostic passed; the complete
+native Verify-and-save flow remains unverified. The
 production launcher still requires developer provisioning. Do not remove the
 proof app with an unconfirmed live account cleanup pending; a committed live test
 configuration also needs its disposable Moss device/session cleaned up first.
+
+For a failed live run, development instrumentation can isolate physical reachability
+and existing-key acceptance using the candidate selected through this actual UI:
+
+```bash
+adb -s <phone> shell am instrument -w \
+  ai.moss.vocci.setupproof/ai.moss.vocci.SetupPhysicalCheck
+```
+
+It returns only pass/fail, a bounded connection-stage code on failure, and whether
+a configuration already exists. It does not confirm the Moss owner, write setup
+state or publish configuration. This diagnostic is not an end-to-end setup pass.
