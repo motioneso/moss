@@ -273,3 +273,35 @@ prompts, sync/sign-in UI, password-form behavior, ARM64 or real Microsoft sign-i
 change only the policy JSON; no CDP helper or test bypass is shipped. No accounts or production
 services are used. Containers, profile volumes and control tags are removed; the supplied image
 and build cache remain until explicitly removed.
+
+## Candidate browser infrastructure policy
+
+After building the candidate, run the account-free browser network proof:
+
+```sh
+PYTHONPATH=infra/outlook-browser python3 -B infra/outlook-browser/tests/verify_browser_network.py --image sha256:<reported-image-id>
+```
+
+The same paired `--engine-root` / `--engine-runroot` options select a disposable store.
+The verifier uses actual Runtime/Podman/Egress, interface discovery, DNS and ordinary public
+Microsoft TLS. It checks candidate runner/relay/policy bytes, Chromium namespace/seccomp
+diagnostics and container isolation settings. Every public navigation uses a fresh query string.
+
+It observes the real 60-second policy expiry without advancing the clock: Chromium must report
+CONNECT failure, and real discovery must restore HTTPS. Trusted test code then classifies the
+public Microsoft endpoint as an infrastructure-ingress stand-in. Refresh must close the captured
+live transports and deny the hostname. Removing the direct hostname match while retaining the
+discovered addresses must still deny Chromium after destination resolution.
+
+Two controls must fail the same positive assertions. Omitting only Runtime's infrastructure-policy
+binding restores public HTTPS and fails browser denial. Suppressing only proactive tunnel closure
+leaves new-CONNECT hostname/address/generation checks active, but Chromium reuses its old tunnel
+and renders another public response; both transport-closure and browser-denial assertions fail.
+Restoring closure and invalidating policy must close those captured transports.
+
+The six proof groups passed on native x86_64. This is a deliberately reclassified public endpoint,
+not deployed Moss ingress acceptance. There is no TLS interception, certificate bypass, account,
+host TCP listener or production service. Redirect/rebinding, public IPv6 browser reachability,
+ARM64/supported hosts, installer population and authenticated product acceptance remain blockers.
+The verifier removes its three containers and profile volumes; the supplied candidate/base image
+and build cache remain until explicitly removed.

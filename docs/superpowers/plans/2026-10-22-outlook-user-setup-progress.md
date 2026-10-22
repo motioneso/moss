@@ -185,6 +185,39 @@ receipt is refreshed by this slice. No database-touching test ran.
 Full `pnpm verify:static` exited 0, including root/test/web/external-module typechecks and app-map
 generation. The final documentation-only receipt update also passes scoped formatting/diff checks.
 
+## Actual Chromium infrastructure-policy checkpoint
+
+`verify_browser_network.py` extends host-policy acceptance through actual candidate
+Runtime/Podman/Egress on native x86_64. It checks candidate runner/relay/policy bytes, Chromium's
+namespace/seccomp diagnostics and container isolation settings. Real interfaces, DNS and public
+Microsoft TLS are used, with fresh query strings for each public navigation. The real 60-second
+policy lifetime expires without clock injection; Chromium reports CONNECT failure, and an actual
+discovery refresh restores public HTTPS.
+
+Trusted test code then classifies the public Microsoft endpoint as an infrastructure-ingress
+stand-in. Refresh closes captured live browser transports and denies its hostname. Removing the
+direct hostname match while retaining discovered addresses still denies Chromium through
+destination resolution. A second runtime omits only the infrastructure-policy binding, restores
+public HTTPS and fails the exact browser-denial assertion.
+
+A third runtime removes only proactive tunnel closure. New-CONNECT hostname/address/generation
+checks remain active, but Chromium actually reuses its old tunnel and renders a fresh public
+response after refresh. The exact transport-closure and browser-denial assertions both fail.
+Restoring closure and invalidating policy closes the captured transports.
+
+Native receipt: candidate
+`sha256:e9453b6f05f8826b5e6f03f8a8218e2c66c7f9bffd84b9a96b6306c2e9e46dff`;
+`verify_browser_network.py` exited 0 with six proof groups. This is a deliberately reclassified
+public endpoint, not actual deployed
+Moss ingress. No TLS interception, certificate bypass, account, host TCP listener or production
+service is used. Redirect/rebinding, public IPv6 browser reachability, ARM64/supported hosts,
+maintained release delivery, installer/deployed-address acceptance and authenticated product work
+remain blockers. The verifier removes its three containers/profile volumes; task image/store
+cleanup is recorded on the PR. Runtime unit verification again passed 55 tests plus 32
+guard-removal controls. No database-touching test ran in this browser-only slice.
+Scoped Markdown formatting, verifier syntax and diff checks pass. The full static receipt above
+belongs to `6765604ed`; this test/Markdown-only slice does not claim a new full-static receipt.
+
 ## Remaining build work
 
 1. Complete production host broker browser operations and maintained browser image. Persisted
