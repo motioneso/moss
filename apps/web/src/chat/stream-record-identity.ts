@@ -80,7 +80,7 @@ export function mergeRecoveredReplies(
   let merged = current;
   for (const record of history) {
     if (
-      record.kind !== "reply" ||
+      (record.kind !== "reply" && record.kind !== "error") ||
       record.background ||
       !record.messageId ||
       !record.turnId ||

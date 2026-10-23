@@ -162,6 +162,25 @@ describe("recovered saved replies", () => {
   });
 });
 
+it("clears missed visual progress when reconnect finds a stored interrupted error", () => {
+  const pending: TranscriptRecord = {
+    kind: "status",
+    text: "Preparing visual…",
+    turnId: "turn-1",
+    visualState: "preparing"
+  };
+  const error: TranscriptRecord = {
+    kind: "error",
+    text: "Interrupted",
+    messageId: "error-1",
+    turnId: "turn-1"
+  };
+  expect(mergeRecoveredReplies([{ ...user, turnId: "turn-1" }, pending], [error])).toEqual([
+    { ...user, turnId: "turn-1" },
+    error
+  ]);
+});
+
 describe("record identity on the wire", () => {
   it("parses the turn id and the background mark", () => {
     expect(

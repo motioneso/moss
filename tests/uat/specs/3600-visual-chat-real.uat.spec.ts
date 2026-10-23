@@ -1,10 +1,24 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Locator } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { parseVisualProgram, type VisualReplyV1 } from "@moss/shared";
 import { bringUpRealChatModel, signInUatAdmin, requireUatProjectName } from "./real-chat-signin.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
+
+test.beforeEach(async ({ page }) => {
+  page.on("console", (message) => {
+    if (message.type() === "error")
+      console.log(`[visual-browser-error] ${message.text().slice(0, 1500)}`);
+  });
+  page.on("pageerror", (error) => console.log(`[visual-page-error] ${error.message}`));
+  page.on("requestfailed", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/assets/"))
+      console.log(
+        `[visual-asset-failure] ${new URL(request.url()).pathname} ${request.failure()?.errorText}`
+      );
+  });
+});
 
 const visualCases = [
   ["Show a visual summary of my project", { project: "Garden", hours: 6, ready: true }],
@@ -49,6 +63,18 @@ async function drawer(page: Page) {
   return dialog;
 }
 
+function savedVisualSlot(chat: Locator, envelope: VisualReplyV1) {
+  const section = parseVisualProgram(envelope.blocks[0]!.program!)![0]!;
+  const fact = section.facts[0]!;
+  const value = envelope.snapshots.find((snapshot) => snapshot.ref === fact.ref)!.fields[
+    fact.field
+  ];
+  return chat.getByLabel("Visual reply").filter({
+    has: chat.page().getByRole("heading", { name: section.title, exact: true }),
+    hasText: `${fact.field}: ${value === null ? "Unknown" : String(value)}`
+  });
+}
+
 test("real prompt to saved visual, reload, reconnect, copy and route evaluation (#3600)", async ({
   page,
   context
@@ -75,7 +101,7 @@ test("real prompt to saved visual, reload, reconnect, copy and route evaluation 
   }[] = [];
   const cases = [
     ...visualCases.map(([request, fields]) => ({
-      text: `${request}. Use chat.present with the registered data, and keep a useful prose answer.\n\n\`\`\`json\n${JSON.stringify(fields)}\n\`\`\``,
+      text: `${request}. Keep a useful prose answer too.\n\n\`\`\`json\n${JSON.stringify(fields)}\n\`\`\``,
       visual: true
     })),
     { text: "Reply in plain text only: what is two plus two?", visual: false },
@@ -101,7 +127,7 @@ test("real prompt to saved visual, reload, reconnect, copy and route evaluation 
     const visual = Boolean(saved.visualReply);
     if (visual) {
       const envelope: VisualReplyV1 = saved.visualReply;
-      const slot = chat.getByLabel("Visual reply").last();
+      const slot = savedVisualSlot(chat, envelope);
       await expect(slot.getByText("Your data", { exact: true })).toBeVisible();
       await expect(slot.getByText("Visual unavailable", { exact: true })).toHaveCount(0);
       for (const section of parseVisualProgram(envelope.blocks[0]!.program!)!) {
@@ -139,7 +165,7 @@ test("real prompt to saved visual, reload, reconnect, copy and route evaluation 
     console.log(`[visual-route] ${JSON.stringify({ ...results.at(-1), model: model.id })}`);
     if (visual && !firstSaved) {
       firstSaved = saved;
-      const slot = chat.getByLabel("Visual reply").last();
+      const slot = savedVisualSlot(chat, saved.visualReply);
       await expect(slot.getByText("Your data", { exact: true })).toBeVisible();
       await expect(slot.getByText("Not independently verified", { exact: true })).toBeVisible();
       await expect(slot.getByText("Visual unavailable", { exact: true })).toHaveCount(0);
@@ -159,7 +185,9 @@ test("real prompt to saved visual, reload, reconnect, copy and route evaluation 
       await page.reload();
       await drawer(page);
       await expect(
-        page.getByLabel("Visual reply").last().getByText("Your data", { exact: true })
+        savedVisualSlot(await drawer(page), saved.visualReply).getByText("Your data", {
+          exact: true
+        })
       ).toBeVisible();
       console.log(
         "[visual-lifecycle] saved identity, exact render, copy and reload assertions passed"
@@ -191,7 +219,18 @@ test("a real completion missed while offline hydrates after reconnect", async ({
   await signInUatAdmin(page);
   const chat = await drawer(page);
   const privacy = await (await page.request.get("/api/chat/privacy?surface=drawer")).json();
-  const before = await chat.getByLabel("Visual reply").count();
+  const initialHistory = await (
+    await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
+  ).json();
+  const before = initialHistory.messages.filter(
+    (message: { visualReply?: unknown }) => message.visualReply
+  ).length;
+  await expect(chat.getByLabel("Visual reply")).toHaveCount(before);
+  const dropped: string[] = [];
+  page.on("requestfailed", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (["/api/chat/turn", "/api/chat/stream"].includes(path)) dropped.push(path);
+  });
   await chat
     .getByLabel("Message Moss")
     .fill(
@@ -202,6 +241,11 @@ test("a real completion missed while offline hydrates after reconnect", async ({
     timeout: 90_000
   });
   await context.setOffline(true);
+  const network = await context.newCDPSession(page);
+  await network.send("Page.stopLoading");
+  await expect
+    .poll(() => dropped.includes("/api/chat/turn") && dropped.includes("/api/chat/stream"))
+    .toBe(true);
   let saved: { id: string; visualReply: VisualReplyV1 } | undefined;
   await expect
     .poll(
@@ -298,8 +342,12 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
   ).trim();
   expect(Number(killed)).toBeGreaterThan(0);
   const failure = await failed.completed;
-  expect(failure.ok()).toBe(false);
-  expect((await failure.json()).visualReply).toBeUndefined();
+  const failedReply = await failure.json();
+  console.log(
+    `[visual-engine-failure] ${JSON.stringify({ status: failure.status(), saved: Boolean(failedReply.assistantMessageId), visual: Boolean(failedReply.visualReply), reply: failedReply.reply?.slice(0, 200) })}`
+  );
+  expect(failedReply.visualReply).toBeUndefined();
+  expect(failedReply.assistantMessageId).toBeUndefined();
   await expect(chat.getByText("Preparing visual…", { exact: true })).toHaveCount(0);
   await expect(chat.getByLabel("Visual reply")).toHaveCount(0);
   console.log(
