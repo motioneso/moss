@@ -29,6 +29,18 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-23
+
+#### Added
+
+- **Choose your transcription provider.** Admins can choose one configured provider and model for everyone's voice input and Meeting transcripts. [PR #3602](https://github.com/motioneso/moss/pull/3602)
+- **Choose meeting transcript language.** You can choose the spoken language for new meeting transcription or let the transcription service detect it automatically. [PR #3594](https://github.com/motioneso/moss/pull/3594)
+- **Guided setup for existing Vocci rings.** Connect an existing Vocci ring to Moss on Android, then choose when recording delivery and hold-to-talk are enabled. [PR #3566](https://github.com/motioneso/moss/pull/3566)
+
+#### Fixed
+
+- **Meeting summaries use your default model.** Meeting summaries now support your configured Codex model alongside existing supported providers, without switching to another model. [PR #3576](https://github.com/motioneso/moss/pull/3576)
+
 ### 2026-10-22
 
 #### Fixed

@@ -1,11 +1,7 @@
 import { createCliStructuredAdapterFactory } from "./cli-structured-adapter.js";
 /**
- * Live-chat runtime wiring: construct a ChatSessionManager backed by the REAL
- * adapters (tmux CLI engine, DataContext persistence, on-disk persona renderer,
- * wall clock) from the foundation deps the API server already threads.
- *
- * The engineFactory is injectable so integration tests can swap in an in-memory
- * fake engine (no real tmux / `claude` binary). Everything else is real.
+ * Live-chat composition: configured engine, scoped persistence, persona and clock.
+ * Tests can inject an in-memory engine through engineFactory.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -44,6 +40,7 @@ import type { PgBoss } from "pg-boss";
 import type { NotesRecallPort } from "@moss/notes";
 
 import type { RecallPort } from "../recall-port.js";
+import type { VisualPresentationService } from "../visual/presentation-service.js";
 import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
 import type { ClassifierGateShadowRunner } from "./classifier-gate-shadow.js";
 import { PassiveContextRetriever, type PassiveMemoryGraphRecallPort } from "./passive-retrieval.js";
@@ -545,6 +542,8 @@ export interface CreateChatSessionRuntimeDeps {
    * gateway exists. Absent ⇒ every turn follows today's default-model path unchanged.
    */
   readonly classifierGateShadow?: ClassifierGateShadowRunner;
+  /** Internal only; production routes intentionally do not supply this service. */
+  readonly visualPresentation?: VisualPresentationService;
   /** Phase 2: MCP token lifecycle hooks — mint on engine launch, revoke on reap. */
   readonly mcpTokenLifecycle?: {
     readonly mint: (
@@ -787,6 +786,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     beginLaunchReplay: deps.mcpTokenLifecycle?.beginLaunchReplay,
     endLaunchReplay: deps.mcpTokenLifecycle?.endLaunchReplay,
     setCurrentTurnId: deps.mcpTokenLifecycle?.setCurrentTurn,
+    visualPresentation: deps.visualPresentation,
     clearCurrentTurnId: deps.mcpTokenLifecycle?.clearCurrentTurn,
     reconcileMcpTokens: deps.mcpTokenLifecycle?.reconcile,
     listMcpTokenSessionIds: deps.mcpTokenLifecycle?.listSessionIds,

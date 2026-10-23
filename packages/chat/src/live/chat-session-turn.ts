@@ -4,6 +4,7 @@ import { recordModelActivity } from "@moss/ai";
 import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
+import type { VisualPresentationTurn } from "../visual/presentation-service.js";
 import { answerDetailSteps } from "./activity-detail-steps.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
@@ -138,6 +139,9 @@ export async function runChatTurn(
   let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
   // #3128: the in-flight record, settled in the finally unless the turn saved.
   let liveTurn: LiveTurnRecord | undefined;
+  let visualTurn: VisualPresentationTurn | undefined;
+  const discardVisualTurn = () => visualTurn?.discard();
+  controller.signal.addEventListener("abort", discardVisualTurn, { once: true });
   try {
     await waitForOriginThreadTransition(host.originTransitions, sessionKey, controller.signal);
     if (controller.signal.aborted)
@@ -286,6 +290,15 @@ export async function runChatTurn(
       userText: text,
       attachments
     });
+    if (surface === DEFAULT_CHAT_SURFACE && session.threadId && host.deps.visualPresentation) {
+      visualTurn = host.deps.visualPresentation.begin(sessionKey, {
+        actorUserId,
+        threadId: session.threadId,
+        turnId
+      });
+      if (controller.signal.aborted) visualTurn.discard();
+      visualTurn.registerUserData({ text }, new Date(host.deps.clock.now()).toISOString());
+    }
     try {
       await submitPreparedTurn(session.engine, engineText);
       noteSessionSubmission(session.usage, engineText.text, "turn");
@@ -496,7 +509,10 @@ export async function runChatTurn(
       },
       surface
     );
-    if (stored !== undefined) liveTurn?.saved();
+    if (stored !== undefined) {
+      liveTurn?.saved();
+      visualTurn?.close();
+    }
     session.lastActivity = host.deps.clock.now();
     host.deps.touchMcpToken?.(sessionKey);
 
@@ -538,6 +554,8 @@ export async function runChatTurn(
     if (!controller.signal.aborted || error !== controller.signal.reason) throw error;
     return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, gateShadow);
   } finally {
+    controller.signal.removeEventListener("abort", discardVisualTurn);
+    if (visualTurn) host.deps.visualPresentation?.release(sessionKey, visualTurn);
     await liveTurn?.settle();
     // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
     gateShadow?.finish();

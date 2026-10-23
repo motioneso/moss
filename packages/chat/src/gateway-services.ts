@@ -39,6 +39,7 @@ import {
 } from "@moss/settings";
 
 import { ChatRepository } from "./repository.js";
+import type { VisualPresentationService } from "./visual/presentation-service.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
@@ -159,6 +160,8 @@ export function buildChatGatewayDependencies(args: {
   appActions?: AppActionsService;
   conversationProvenance?: ConversationProvenancePort;
   platformDiagnostics?: PlatformDiagnosticsService;
+  /** Internal assembly only; production routes omit it until visual integration is ready. */
+  visualPresentation?: VisualPresentationService;
   collaborators: {
     googleConnectionService?: GoogleConnectionService;
     googleApiClient?: GoogleApiClient;
@@ -254,6 +257,7 @@ export function buildChatGatewayDependencies(args: {
       memorySettings: new ChatUserMemorySettingsRepository()
     }),
     readToolServices:
+      args.visualPresentation ||
       args.collaborators.featureGrantService ||
       args.collaborators.sourceContextService ||
       args.collaborators.currentViewService ||
@@ -263,6 +267,7 @@ export function buildChatGatewayDependencies(args: {
       args.appActions ||
       args.platformDiagnostics
         ? {
+            ...(args.visualPresentation ? { visualPresentation: args.visualPresentation } : {}),
             ...(args.collaborators.featureGrantService
               ? { featureGrants: args.collaborators.featureGrantService }
               : {}),

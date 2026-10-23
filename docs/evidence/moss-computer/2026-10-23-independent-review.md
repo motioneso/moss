@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** reconstructed-candidate rapid fixed-host restart recovery PASS, scoped to the final r3 review below. Historical original-image recovery failure and earlier reviews are preserved; long-outage recovery remains unqualified.
+- **Current status:** startup-readiness-r8 stopped before image load at the required fresh RAM floor; startup readiness and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -193,3 +193,176 @@ original-image canvas-timeout/image-loss/Herdr incident causes, rebuilt-image Fi
 replacement, owner integration and manual/platform/release gates remain separate. The one next
 proposal is bounded active Firefox sandbox plus file/profile replacement qualification on the
 adopted image, not dispatched. No merge, automatic parent adoption or issue close.
+
+## Persistence r5: entry-rejection evidence accepted
+
+Reviewer `/root/persistence_entry_review`, independent of author/operator Codex `/root`, returned
+**PASS — bounded entry-rejection evidence accepted. No blocking findings.** The reviewer did not
+author fixes or edit files, retry the resource gate, restore an image or launch runtime.
+
+The exact [report](2026-10-23-persistence-preflight.md), [receipt](2026-10-23-persistence-preflight.json)
+and spec were checked against the dispatched handoff, inherited initial tool outputs and private
+receipts. Available RAM 8,330,731,520 bytes was below the 8,589,934,592-byte floor by 259,203,072
+bytes. Entry rejection follows the Start section's mandatory stop. The required image was absent;
+no load/build or launch preparation followed the failed RAM gate.
+
+Both private receipt hashes and sanitised values matched. Independent exact-label closure checks
+found no owned containers/networks and Moss remained `running healthy`. Earlier homes/archive
+were present at the claimed size; no content rehash or archive validation was asserted. Relative
+links, scoped privacy/formatting and whitespace checks passed; only the scoped checkpoint was
+added to the spec.
+
+| Exact accepted artifact      | SHA-256                                                            |
+| ---------------------------- | ------------------------------------------------------------------ |
+| Persistence-preflight report | `07c57d30aeb51da22f2bf35b768bdaf271b60924cf2a47480c185e701683ebdd` |
+| Persistence-preflight JSON   | `35c59e35f30f1b89747ce3cb8d597e663410d6c8997078eaf87ebf0d973420b5` |
+| Final spec                   | `7925e316adf85f6d6665daee4cc165b90e051fc3b1d049520fd6b049a157881d` |
+
+Initial entry measurements are explicitly transcript copies; original raw command files and the
+separate exact RAM-sample timestamp were not retained. These disclosed limits are non-blocking
+for accepting the entry rejection. Archive checksum/config/layers, active Firefox sandbox and
+replacement persistence remain NOT_RUN. This is no runtime qualification or product acceptance.
+The one next proposal is the same bounded qualification after fresh entry floors pass, including
+archive validation if needed and committed exact-artifact prelaunch review. No further run,
+automatic merge or issue close is dispatched.
+
+## Subsequent requirement amendment: idle sleep and wake
+
+After the persistence entry rejection, Ben required Computer to sleep when unused to release
+resources for other host work. Reviewer `/root/persistence_entry_review` independently returned
+**PASS — bounded sleep/wake requirement amendment accepted. No blocking findings.** No reviewer
+edits, runtime operations or resource-gate retries were performed.
+
+Exact amended spec SHA-256:
+`14378d6c2fb961aacd71071fbb213e048d3dabde0a37a96cf9fb667dd6b45dae`.
+This later spec supersedes the spec snapshot accepted for persistence-r5; both preflight report
+and JSON hashes remain unchanged. The operative requirement consistently replaces continuous
+running with idle sleep/on-demand wake. Clean stop is a future design requiring flushed state,
+active-work inhibition, no silent unsaved-work loss, owner checks and wake resource admission.
+The timeout/inhibitor decisions, live proof and same-PR product app-map updates remain pending.
+Scoped formatting and whitespace checks passed. This accepts a requirement amendment, with no
+implemented sleep/wake capability or resumed qualification claim.
+
+## Persistence r6: exact readiness and final rejection evidence
+
+Reviewer `/root/persistence_entry_review` performed read-only investigation, exact prelaunch review
+and exact final evidence review, with no authorship, fixes or runtime operations.
+
+The initial packet `fa461517106dfa8cfc136f286da2db473ed86800` was rejected before launch: overly broad
+content-process classification, zero-level environment exemption, missing pristine-copy green
+controls/WAL handling, shutdown race, unchecked cleanup exits/host-browser timeout cleanup and
+formatting. Revised `adedb01547f7ced71af325771170db20308c2af7` still had a shutdown-lock setup failure
+that bypassed emergency stop. That distinct gap was rejected before launch. Revised exact packet
+`08a3b2111d6d79ff2aa3972ab56f655e32ed10ef` received **PASS_READY — no blocking findings**, conditional
+on the live watchdog/healthy sample gate. All15 final artifacts, syntax/formatting/resolved config,
+actual retained archive checksum/config/seven layers and synthetic certificates were independently
+checked. Clipboard setter redirection and emergency exact-label shutdown were included.
+
+Accepted packet SHA-256 `02a28f03c5b7add2b09b5d2fb7a4740d334c536708fa5219a1ff8a08dafb79ab`;
+private artifact-manifest SHA-256 `2ecc8a88f66efa71683869f78a44584ef11b939b0988955c97d5147aa690e26a`.
+Readiness was not runtime acceptance.
+
+One subsequent run failed before actual sandbox collection at an invalid cached Firefox window.
+The reviewer independently accepted the exact final documents as **PASS — final rejection evidence
+accepted, no blocking findings**. Acceptance is limited to **REJECTED_INCOMPLETE_PROOF and verified
+closure**. Active Firefox sandbox and replacement persistence remain unqualified.
+
+All33 private receipt hashes matched, as did raw/sanitised values, unchanged15 launch artifacts,
+monitor/cgroup observations and closure facts. The exact bookmark existed on the disposable
+postmortem profile copy, and real retained main/WAL/designated-file hashes matched; that diagnostic
+was correctly excluded from clean UI flush/replacement acceptance. The47 repeated BadWindow
+occurrences, stop-rule weakness, unknown window-loss cause, missing gates and pre-cleanup inspect
+timing were preserved. Links, privacy, scoped Prettier and whitespace passed.
+
+| Exact accepted final artifact                    | SHA-256                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| [Report](2026-10-23-persistence-r6.md)           | `126f65643a632ef1411fb1fddbb098643abb16196c8400d15d567b589c884b04` |
+| [Sanitised JSON](2026-10-23-persistence-r6.json) | `fb743583f40396231fec70c98a8e1fe3a60cc9216e6ddcb20ecc61f96f44a158` |
+| Final spec                                       | `83dd88b6189259cee3c0372da4afd86eef6ddbd1d4ec6d46c2e45fe9210d610f` |
+
+Independent current closure checks found no exact-label containers, project network, listener or
+reservation5188, owned script/watchdog, recorded browser identity or ephemeral keys. Prior homes
+and archive remain present; Moss is healthy. No rehash of all prior contents was claimed.
+No further runtime, automatic merge, parent adoption or issue close follows. The sole next proposal
+is bounded current-window rediscovery/error handling and failure diagnostics, then separately
+reviewed/dispatched qualification with fresh resource gates.
+
+## Persistence r7: exact amended readiness
+
+Reviewer `/root/independent_review` independently verified the retained archive size/SHA256, actual
+config identity and all seven layers before PASS_RESTORE_READY for one bounded exact load. No
+reviewer authored files or performed runtime mutations.
+
+Initial candidate `071a27801` was NOT_READY: author and reviewer found that `terminal(command)`
+shadowed the command helper. Actual terminal call-site regression observed TypeError before the
+parameter correction and passed afterwards. No runtime launched from that candidate.
+
+Amended committed packet `93cbe881ebe6645a8610c85246280d89aa6555ae` received **PASS_READY**, conditional
+on the live alive/healthy watchdog/resource gate. Packet SHA256
+`c14026788dde8fee980ce64ee85bbe17db72d5575d303b9833fdf931c9f3e05f`; private18-artifact manifest
+SHA256 `911cd237a99a9d83f7add8b9226d069b8077ad8bd1a85cdeede75b00ab2675c7`.
+Reviewer checked every actual hash/table, regressions/Node/Python syntax, scoped formatting/whitespace,
+resolved configuration/security, synthetic certificates/foreign rejection, empty fresh home/socket,
+port reservation, exact image and cleanup design. No blockers remained; readiness was not runtime
+acceptance. Final r7 result review is recorded separately below after exact evidence review.
+
+## Persistence r7: final rejection evidence accepted
+
+Reviewer `/root/independent_review` returned **PASS — exact final r7 rejection evidence and verified
+closure accepted; no blocking findings**. Acceptance is limited to REJECTED_INCOMPLETE_PROOF and
+closure. Viewer/Firefox/window/sandbox/clean flush/persistence/replacement remain NOT_RUN.
+No reviewer authored fixes or performed runtime mutations.
+
+Before final acceptance, author privacy scan and independent review caught absolute host paths in
+public JSON dictionary keys. The sanitizer was corrected to clean keys as well as values; private
+closure receipts stayed unchanged. Corrected public bytes below passed renewed privacy checks.
+
+| Exact accepted final artifact                    | SHA-256                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| [Report](2026-10-23-persistence-r7.md)           | `cdbf14ce9066002869982d90437c96dc1ef3adf5fd6ece479da23dbd1714be59` |
+| [Sanitised JSON](2026-10-23-persistence-r7.json) | `01291249ab867c2fed850b542fca697170150204c77df02d52b2351f703d2e13` |
+| Final spec                                       | `ed6cf6e27c3c054b7e35f17bc5e2b3031fa604db78887428d3f54861853c96c7` |
+
+All32 raw receipt hashes, three supporting hashes and18 unchanged launch hashes matched. Raw and
+sanitised values agree, including closure keys and sampled isolation addresses. Actual pre-cleanup
+inspect settings/IDs/cgroups, protected502, no Firefox/harness/replacement, missing gateway upstream
+log and single-prelaunch-sample limits were independently checked. Scoped formatting/privacy/links/
+whitespace passed. The ledger before this final verdict append had SHA256
+`41a10aa89c5b504670f6f04b5185901aa136bdb12ff68e8011cee8ed4fd9ac27`.
+
+Independent current closure checks confirmed both full container IDs absent, zero owned labels/
+network/listener/reservation/scripts/host-browser identity/keys, retained homes/archive and healthy
+Moss. Next proposal is separately reviewed startup readiness with actual current UI/RFB and gateway/
+backend diagnostics. No second run, integration, merge, automatic parent adoption or issue close.
+
+## Startup readiness r8: pre-load rejection evidence accepted
+
+Reviewer `/root/readiness_review`, independent of author/operator Codex `/root`, returned
+**PASS — exact r8 rejection evidence and preparation closure accepted; no blocking findings.**
+No reviewer edits, resource-gate retries or runtime mutations occurred.
+
+The reviewer first independently verified the actual retained archive size/checksum, config identity
+and all seven actual layer payload hashes, returning PASS_RESTORE_READY conditional on fresh
+resource floors before one load and subsequent exact identity/layer inspection. Archive-verification
+receipt SHA256 `fc21d375c92822a19cad0f3486b5e3cba3439adae01bd9583a531ec84ac9f48f`.
+The fresh pre-load RAM gate failed before `docker load`:8,490,229,760 bytes, below8GiB by99,704,832.
+No image load, runtime, startup correction or launch packet was completed.
+
+| Exact accepted artifact                         | SHA-256                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| [r8 report](2026-10-23-startup-readiness-r8.md) | `35d1484b82816280bfc55b2429b3d6175ea3c6234f3d7d11a1e52bd73feae21d` |
+| [r8 JSON](2026-10-23-startup-readiness-r8.json) | `5b27658e19354551a781a3e84638c4ff507f90ffa51a661f32b8eeaf27636f73` |
+| Spec with section18                             | `b88f8b0fd39e0ff92e45666b6a62d6f42e88a78f49abc4e65ce4e23cc62d8eb7` |
+
+All eight raw receipt hashes and the closure checker hash matched. Raw/sanitised samples, archive,
+conditional review, closure and arithmetic agreed. The unrun load/runner/watchdog exits are null;
+pre-load wrapper1, operator closure0 and port release0 are recorded. Scoped formatting, privacy,
+relative links and whitespace passed.
+
+Independent current closure found zero exact-label containers/network/listener5184/reservation or
+owned private-root processes; fresh home/socket/identity directories were empty and no host-browser
+identities existed. Earlier homes including r7 and the archive remained; Moss was `running healthy`.
+This accepts **BLOCKED_BEFORE_LAUNCH** accuracy and preparation closure only. Startup/access/current
+UI/frame/input/runtime supervision, active Firefox sandbox and replacement persistence remain
+NOT_RUN or unqualified. One next proposal is the same bounded qualification after separately
+dispatched fresh capacity/identity/packet gates. No automatic retry, merge or issue close.
