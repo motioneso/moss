@@ -23,6 +23,8 @@ export interface CalendarViewEvent {
   readonly where: string | null;
   readonly attendeeCount: number;
   readonly status: string | null;
+  readonly readOnly?: boolean;
+  readonly unconfirmed?: boolean;
   // assigned by packDay
   _col?: number;
   _cols?: number;
@@ -134,6 +136,8 @@ export function dtoToViewEvent(dto: CalendarEventDto, timeZone: string): Calenda
     endsAt,
     where: dto.location,
     attendeeCount: dto.attendeeCount,
+    readOnly: dto.readOnly,
+    unconfirmed: dto.unconfirmed,
     status: dto.status
   };
 }

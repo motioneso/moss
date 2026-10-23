@@ -210,6 +210,8 @@ import {
   GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
   GoogleEmailWriteProvider,
   IMAP_SYNC_QUEUE_DEFINITIONS,
+  OUTLOOK_CALENDAR_QUEUE_DEFINITIONS,
+  registerOutlookCalendarWorker,
   ImapEmailWriteProvider,
   MONITOR_QUEUE_DEFINITIONS,
   buildFeatureGrantService,
@@ -1928,6 +1930,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       ...GOOGLE_SYNC_QUEUE_DEFINITIONS,
       ...GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
       ...IMAP_SYNC_QUEUE_DEFINITIONS,
+      ...OUTLOOK_CALENDAR_QUEUE_DEFINITIONS,
       ...EMAIL_REFRESH_QUEUE_DEFINITIONS,
       ...MONITOR_QUEUE_DEFINITIONS
     ],
@@ -1994,6 +1997,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         threadJudgementRequester,
         knownSenderAddresses
       });
+      const outlookWorkIds = await registerOutlookCalendarWorker(boss, deps.dataContext);
       const emailRefreshWorkIds = await registerEmailRefreshWorkers(boss, {
         dataContext: deps.dataContext,
         rootDb: deps.rootDb,
@@ -2014,6 +2018,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         ...googleWorkIds,
         googleSweepWorkId,
         ...imapWorkIds,
+        ...outlookWorkIds,
         ...emailRefreshWorkIds,
         ...monitorWorkIds
       ];

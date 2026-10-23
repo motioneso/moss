@@ -533,3 +533,31 @@ a new clean canonical script is not a substitute for those recorded observations
 No further email code, unlock or recording is requested. Keep #3565 open and
 PR #3566 draft while the remaining acceptance uncertainty is reviewed. No merge,
 production deployment or completed-onboarding claim.
+
+## Independent-review correction: return from selected ring
+
+The selected-ring step now offers **Choose another ring** before configuration
+is committed. It clears only the candidate from encrypted staging and returns
+to Vocci lookup with the confirmed Moss account still connected. Lookup needs
+another explicit Vocci sign-in because the previous temporary session was
+cleaned up and unselected binding keys were released. The action cannot replace
+a committed ring and does not start delivery, hold enrollment or ring proof.
+
+`SetupRingChecks` adds clear-selection, recreated-controller, confirmed-link
+retention, no-selected-ring verification rejection and replacement-proof cases.
+`SetupSelectionChecks` adds an installed synthetic contract over the production
+screen: a synthetic staged Moss approval and candidate enter the actual
+**Choose another ring** control, then assert that Vocci sign-in is available,
+Moss stays linked, and no runnable configuration was published. This fixture
+uses a synthetic Moss port and does not prove real account or ring behavior.
+
+Host protocol/crypto/generated two-hour PCM checks and the development APK build
+passed. The separate proof APK compiled successfully; its new instrumentation
+has not yet been executed in this correction record. The pending-download
+upgrade/restart acceptance finding remains open until its narrow evidence is
+recorded separately.
+
+The merge from current `main` preserves its CI installer implementation exactly:
+privileged system-dependency timeouts followed by runner-owned Chromium download.
+This supersedes the older single combined ten-minute installation workaround;
+no product test or assertion was relaxed.
