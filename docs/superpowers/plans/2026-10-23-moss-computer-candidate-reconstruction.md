@@ -28,6 +28,8 @@ Commit this packet before build. Use the installed legacy Docker builder's expli
 limits, without changing the global builder or daemon. Its deprecation is disclosed; this is one
 checkpoint, not a reusable tool. Fresh preflight must have at least 8 GiB available memory, 8 GiB
 root free, and 30 GiB data-filesystem free. Do not prune shared cache/images to obtain headroom.
+RUN-container cgroups do not cap the shared Docker daemon or base pulls. Monitor the actual Docker
+root filesystem too; stop if it differs from the measured data filesystem. Record this limit.
 
 Prepare a private run directory and temporary Dockerfile derived from the tracked original by
 inserting exactly one `LABEL com.moss.build=<unique-run>` immediately after its pinned `FROM`.
