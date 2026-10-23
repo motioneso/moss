@@ -296,6 +296,23 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
     });
     return { completed };
   };
+  // Load the lazy renderer before lifecycle assertions: its Suspense fallback uses
+  // the same readable Preparing label as proposal progress, but follows the save.
+  const warm = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/chat/turn" &&
+      response.request().method() === "POST",
+    { timeout: 180_000 }
+  );
+  await chat
+    .getByLabel("Message Moss")
+    .fill('Show a visual summary.\n```json\n{"setup":"Lifecycle baseline","ready":true}\n```');
+  await chat.getByLabel("Message Moss").press("Enter");
+  const warmReply = await (await warm).json();
+  expect(warmReply.visualReply).toBeDefined();
+  await expect(
+    savedVisualSlot(chat, warmReply.visualReply).getByText("Your data", { exact: true })
+  ).toBeVisible();
   const before = await chat.getByLabel("Visual reply").count();
   const stopped = await start();
   await chat.getByRole("button", { name: "Stop generating", exact: true }).click();
@@ -341,7 +358,7 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
     for (const pid of readdirSync("/proc").filter((p) => /^\\d+$/.test(p))) {
       try {
         const args = readFileSync("/proc/"+pid+"/cmdline", "utf8").split("\\0");
-        if (args[0] === "codex" || args[0]?.endsWith("/codex") || args[1]?.endsWith("/codex.js")) {
+        if (args[0] === "codex" || args[0]?.endsWith("/codex") || args[1]?.endsWith("/codex.js") || args.slice(0, 2).some((arg) => arg.includes("/codex-acp/"))) {
           process.kill(Number(pid), "SIGKILL"); killed++;
         }
       } catch {}
@@ -381,7 +398,15 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
       exact: true
     })
   ).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get("/api/chat/privacy?surface=drawer")).json()).incognito
+    )
+    .toBe(true);
   const privacy = await (await page.request.get("/api/chat/privacy?surface=drawer")).json();
+  expect(privacy.threadId).toBeTruthy();
+  expect(privacy.threadId).not.toBe(main.id);
   const completed = page.waitForResponse(
     (r) => new URL(r.url()).pathname === "/api/chat/turn" && r.request().method() === "POST",
     { timeout: 180_000 }
