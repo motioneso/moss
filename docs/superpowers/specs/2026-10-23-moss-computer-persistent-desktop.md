@@ -236,3 +236,20 @@ startup-readiness qualification with actual current UI/RFB and gateway/backend f
 retaining all protection/resource/error-stop gates. No second run, product/sleep implementation,
 owner integration, merge or issue close is dispatched. Sections14/16 retain their historical failures;
 adopted-image active sandbox and replacement persistence remain unqualified.
+
+## 18. Startup readiness r8: pre-load resource rejection
+
+After #3587, #3588 and #3595 merged, Ben dispatched the bounded
+[startup-readiness assignment](../handoffs/2026-10-23-moss-computer-startup-readiness.md).
+Initial fresh entry passed and the absent image's actual archive/config/seven layer payloads
+were independently verified. Restoration acceptance was conditional on fresh resource floors.
+The required pre-load sample then recorded available RAM8,490,229,760 bytes, below8GiB by
+99,704,832 bytes. The [r8 result](../../evidence/moss-computer/2026-10-23-startup-readiness-r8.md)
+is BLOCKED_BEFORE_LAUNCH: no image load, runtime or startup/access/frame/input proof occurred.
+
+The failed gate was not retried; no reclamation or infrastructure investigation followed.
+The newly reserved port was released, no owned runtime/keys remained, homes/archive were retained
+and Moss stayed healthy. Startup readiness and all previously missing qualification gates remain
+unqualified. One next proposal is a separately dispatched attempt after host capacity is available,
+with fresh identity/floors and exact independent packet review. No automatic rerun, product/sleep
+implementation, owner integration, merge or issue close is dispatched by this rejection.
