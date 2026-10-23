@@ -9,6 +9,11 @@ or act on. Asking “How did Liverpool do in their last match?” produces a com
 result alongside a short answer, without a request for a graphic. Asking a simple factual
 question can still produce a sentence.
 
+Moss can also compose a new visual during the conversation from the supported building
+blocks. The eight families below are polished starting patterns and acceptance examples;
+they are not an exhaustive set of layouts or a menu the person must choose from. On
+2026-10-23 Ben explicitly requested this adaptive behavior and real team logos in production.
+
 The first product scope includes eight reply families, a reusable visual vocabulary,
 source attribution, conversation-driven controls, and integration with Moss's existing
 action flow. A family is available when its module and an authorized data source are
@@ -36,7 +41,7 @@ approval of the earlier prototype alone. No new standalone product screen is pro
 
 ## User experience
 
-A reply normally contains a short answer, one primary visual, relevant sources/freshness,
+When a visual helps, the reply contains a short answer, one primary visual, relevant sources/freshness,
 and up to three useful follow-ups. Use at most three visual sections when the question
 needs detail. Do not turn every response into a dashboard, repeat the entire chart in
 prose, or make the person choose a visualization before receiving an answer.
@@ -45,6 +50,28 @@ Explicit instructions such as “just text”, “give me a table”, “compare
 more detail” take precedence over automatic presentation selection. Automatic selection
 uses the requested task, available typed data, conversation preferences and supported
 catalog. It must not depend on a hand-maintained list of team names or prompt phrases.
+
+### Model selection and composition
+
+Moss decides both whether a visual earns its space and which combination of components
+best communicates the answer. Use visuals when they clarify a result, reveal a pattern,
+organize a sequence, compare options or let the person explore a meaningful variable.
+Keep prose when a visual would repeat a simple answer or imply detail the data cannot support.
+No explicit “make a graphic” request or preassigned scenario is needed.
+
+The model may use a ready-made domain card, assemble a fresh composition of approved
+primitives, or combine both within the same reply limits. For example, “Here are five
+projects and six free hours; help me allocate the time” can produce an allocation chart,
+a proposed timeline and a duration control without adding a project-allocation template.
+The supplied project details are labeled as the person's data, and calculated allocations
+must fit the available time. Follow-up preferences can change the composition as well as
+the values; the layout need not remain the one shown in the first answer.
+
+Building a visual on the fly means choosing and arranging Moss's registered components,
+binding authorized data and offering supported interactions. Components retain their
+authored styling, data/asset rules and action boundaries. A new composition does not
+require new frontend code for each question; a genuinely new primitive still requires
+normal authored implementation and review.
 
 Visuals live inside the existing chat thread. They share its identity, spacing, fonts,
 source chips, feedback, copy and navigation behavior. Core chat and side chats use the
@@ -84,10 +111,18 @@ fixtures appearing in multiple reads by stable event identity. Preserve home/awa
 and align each score with its team. Display a draw without inventing a winner; extra-time,
 shootout and aggregate scores must remain distinct when supplied.
 
-The primary card shows team crests or accessible initial/name fallbacks, prominent scores,
-competition, local date, source status and a short takeaway. Scorers and minute values appear
-only when retrieved, grouped with the correct team. Missing scorer detail does not suppress a valid result. A null score is
-unknown, never zero. Do not infer possession, expected goals, scorers or other statistics.
+The primary card uses each team's real logo/crest from its reviewed provider or module
+asset descriptor, matched to the same stable identity as the score. Logos are the normal
+production presentation. Do not replace an available, permitted logo with the synthetic
+board's initial mark. Use an accessible initial/name fallback only when the logo is missing,
+blocked by the applicable asset policy or fails to load. Team names remain readable alongside
+logos, and a failed image never obscures the result. Do not generate approximate team logos
+or let the model choose arbitrary image URLs.
+
+Also show prominent scores, competition, local date, source status and a short takeaway.
+Scorers and minute values appear only when retrieved, grouped with the correct team.
+Missing scorer detail does not suppress a valid result. A null score is unknown, never zero.
+Do not infer possession, expected goals, scorers or other statistics.
 
 Record which competitions and date ranges the lookup actually covered. If a competition
 failed or coverage is incomplete, say “Latest available result” with that limitation rather
@@ -171,6 +206,13 @@ production adapter uses `@openuidev/react-lang` with a curated Moss library for 
 compositions. Fixed domain cards render ordinary Moss React components through the same
 catalog boundary. Do not adopt OpenUI's chat shell, hosted gateway, cloud telemetry or built-in
 tool/query/mutation components.
+
+The generic composition path is required release functionality, not a future extension
+after template selection. Supply the model with the active catalog's component semantics,
+data-binding rules and the choice to return prose alone. `chat.present` must accept a
+validated composition without a domain template ID; a generic composition declares its
+catalog kind, snapshot references and program. Domain normalizers supply data types and
+facts rather than choose every possible layout in advance.
 
 Before adoption, pin a published renderer version and verify the runtime gate below. The
 assessment's 1.0.1 release is an evaluation candidate, not permission to track upstream main.
@@ -359,7 +401,8 @@ incrementally, but the full catalog is not complete until the final acceptance s
    setup and configured chat engines. Validate a limited catalog, rejected constructs, error
    handling, bundle loading and development/production network requests. Prove one typed
    snapshot through `chat.present`, final reply, streaming, history, reconnect and copy.
-   Exercise 20 fixed examples on each engine/provider configuration used for rollout: at
+   Exercise 20 fixed examples on each engine/provider configuration used for rollout,
+   including new compositions with no matching domain template: at
    least 19 render the intended visual on the first attempt; all 20 retain useful text and
    no case crosses the action/data boundary. Record prompt/output overhead, model latency
    and incremental bundle size; no numeric savings claim is accepted without measurement.
@@ -368,7 +411,8 @@ incrementally, but the full catalog is not complete until the final acceptance s
    display as their authorized sources become available. No write controls at this stage.
    “Latest Liverpool match” and evening-weather advice are required live pilot cases.
 3. **Conversation controls.** Enable choices, bounded scenario sliders, follow-ups and supported
-   navigation. Verify context, unsent drafts, retry/deduplication and historical behavior.
+   navigation. Verify context, changes in composition after follow-ups, unsent drafts,
+   retry/deduplication and historical behavior.
 4. **Action integration and complete catalog.** Add real task/reminder controls and host-owned
    action summaries through existing action requests. Complete all eight families, all
    supported themes/surfaces, text-only destinations and map declarations before announcing
@@ -382,21 +426,24 @@ Implementation tests follow the repository's meaningful unit/contract/integratio
 conventions. Database-touching commands require the verify-gate workflow. The docs-only PR
 runs document/link/privacy checks; it does not claim product tests or production integration.
 
-| Case                      | Observable acceptance                                                                                                                                                                                                      |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Liverpool last match      | Latest completed fixture across covered competitions; correct team/score alignment, competition/date/status, sources, no explicit request for a graphic                                                                    |
-| Sports ambiguity and gaps | Men's/women's ambiguity resolved; missing scorers omitted; null scores stay unknown; failed competition changes “latest” claim; no-result and shootout/draw cases are correct                                              |
-| Evening weather           | Correct place/units/time zone and requested hourly window; missing hourly data cannot produce a rain window; correcting a place does not save preferences                                                                  |
-| Agenda and tasks          | Proposed vs actual blocks clear; genuine busy periods honored; overdue/completed state matches source; real completion follows normal action policy                                                                        |
-| Money and comparison      | Sourced arithmetic/period/currency correct; unknown criteria explicit; slider Apply creates a new contextual reply with the selected amount and no budget write                                                            |
-| Recommendation            | Source-backed facts/destination, optional artwork fallback, no fabricated subscription availability                                                                                                                        |
-| Action summary            | Real pending/success/denial/failure/conflict states; no success from prose; repeat click/reload cannot replay a write; revoked permission blocks the request                                                               |
-| Lifecycle                 | Refresh, reconnect, late/out-of-order events, side-chat switching, cancellation, deletion, export and incognito match the current host lifecycle; no cross-thread attachment                                               |
-| Failure and compatibility | Unknown version/component, invalid/oversized program, engine refusal and renderer exception preserve text/fallback; old messages unchanged; text-only destinations remain text                                             |
-| Provenance and privacy    | Fields map to the right snapshot/source and retrieval time; other actors' data and raw connector/approval secrets never enter visual metadata or fallback                                                                  |
-| Presentation and access   | Expanded, 404px drawer and 390px phone; light/dark/sage plus shipped custom themes, keyboard, touch, screen-reader equivalents, 200% zoom and reduced motion                                                               |
-| Boundaries                | Adversarial programs/events cannot call tools, invent trusted source refs, choose arbitrary routes/assets, or create side effects during render/reload; verify rejection with the guard removed where the repo requires it |
-| App map                   | Core and owning-module feature declarations accurately describe availability, controls, missing data and remediation                                                                                                       |
+| Case                      | Observable acceptance                                                                                                                                                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Automatic visual choice   | With supported data and without requesting a graphic, a match-result question gets a useful scorecard and a substantive comparison gets an appropriate visual; a simple question and explicit text-only instruction remain prose                |
+| New composition           | A prompt outside the starter layouts combines approved primitives from supplied/authorized data without new frontend code or a new template registration; a follow-up can change layout and values while preserving context, limits and sources |
+| Team logos                | Teams with available permitted logo assets show their correct real logos next to readable names; missing, blocked and failed assets use accessible fallbacks without hiding the score or inventing a logo                                       |
+| Liverpool last match      | Latest completed fixture across covered competitions; correct team/score alignment, competition/date/status, sources, no explicit request for a graphic                                                                                         |
+| Sports ambiguity and gaps | Men's/women's ambiguity resolved; missing scorers omitted; null scores stay unknown; failed competition changes “latest” claim; no-result and shootout/draw cases are correct                                                                   |
+| Evening weather           | Correct place/units/time zone and requested hourly window; missing hourly data cannot produce a rain window; correcting a place does not save preferences                                                                                       |
+| Agenda and tasks          | Proposed vs actual blocks clear; genuine busy periods honored; overdue/completed state matches source; real completion follows normal action policy                                                                                             |
+| Money and comparison      | Sourced arithmetic/period/currency correct; unknown criteria explicit; slider Apply creates a new contextual reply with the selected amount and no budget write                                                                                 |
+| Recommendation            | Source-backed facts/destination, optional artwork fallback, no fabricated subscription availability                                                                                                                                             |
+| Action summary            | Real pending/success/denial/failure/conflict states; no success from prose; repeat click/reload cannot replay a write; revoked permission blocks the request                                                                                    |
+| Lifecycle                 | Refresh, reconnect, late/out-of-order events, side-chat switching, cancellation, deletion, export and incognito match the current host lifecycle; no cross-thread attachment                                                                    |
+| Failure and compatibility | Unknown version/component, invalid/oversized program, engine refusal and renderer exception preserve text/fallback; old messages unchanged; text-only destinations remain text                                                                  |
+| Provenance and privacy    | Fields map to the right snapshot/source and retrieval time; other actors' data and raw connector/approval secrets never enter visual metadata or fallback                                                                                       |
+| Presentation and access   | Expanded, 404px drawer and 390px phone; light/dark/sage plus shipped custom themes, keyboard, touch, screen-reader equivalents, 200% zoom and reduced motion                                                                                    |
+| Boundaries                | Adversarial programs/events cannot call tools, invent trusted source refs, choose arbitrary routes/assets, or create side effects during render/reload; verify rejection with the guard removed where the repo requires it                      |
+| App map                   | Core and owning-module feature declarations accurately describe availability, controls, missing data and remediation                                                                                                                            |
 
 Record real installed-dev browser evidence on each user-facing implementation PR: the prompt,
 read/source path, rendered result and interaction outcome. Fixtures and the synthetic target
