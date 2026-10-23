@@ -1,3 +1,4 @@
+import { validateVisualCatalogReply } from "@moss/shared";
 import { randomUUID } from "node:crypto";
 
 import { sql } from "kysely";
@@ -16,7 +17,8 @@ import type {
   ChatSurface,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
-  SourceFreshnessV1
+  SourceFreshnessV1,
+  VisualReplyV1
 } from "@moss/shared";
 import type { StoredMeetingChatContext } from "@moss/shared";
 import { normalizeChatSurface } from "./live/chat-surface.js";
@@ -72,6 +74,7 @@ export interface CompletedTurnOptions {
   readonly meetingContext?: StoredMeetingChatContext;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
   readonly answerProvenance?: AnswerProvenanceMetadataV1;
+  readonly visualReply?: VisualReplyV1;
   /** #1133 — attachment display metadata (id/name/mime/size) — never bytes. */
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ChatActivityEventDto[];
@@ -623,6 +626,8 @@ export class ChatRepository {
     opts: CompletedTurnOptions | undefined,
     surface?: ChatSurface
   ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
+    const visual = opts?.visualReply ? validateVisualCatalogReply(opts.visualReply) : undefined;
+    if (visual && !visual.ok) throw new Error("Invalid visual reply at persistence boundary");
     assertDataContextDb(scopedDb);
 
     // Match the live persistence path: lock the parent before the action-history lock.
@@ -758,6 +763,7 @@ export class ChatRepository {
         ...(opts?.answerProvenance !== undefined
           ? { answerProvenanceV1: opts.answerProvenance }
           : {}),
+        ...(opts?.visualReply ? { visualReplyV1: opts.visualReply } : {}),
         ...(actionResults.length ? { actionResults } : {}),
         ...(activity.length ? { activity } : {}),
         ...(opts?.elapsedMs !== undefined ? { elapsedMs: opts.elapsedMs } : {}),

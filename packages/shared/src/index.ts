@@ -99,3 +99,4 @@ export * from "./meeting-recording-import-api.js";
 export * from "./outlook-calendar-api.js";
 export * from "./meeting-recording-upload-api.js";
 export * from "./visual-chat.js";
+export * from "./visual-chat-catalog.js";

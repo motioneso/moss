@@ -49,7 +49,8 @@ import type {
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   LocaleSettingsDto,
-  SourceFreshnessV1
+  SourceFreshnessV1,
+  VisualReplyV1
 } from "@moss/shared";
 import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/shared";
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
@@ -134,6 +135,7 @@ interface PersistTurnOptions {
   readonly threadId?: string | null;
   readonly invokedToolNames?: ReadonlySet<string>;
   readonly answerProvenance?: AnswerProvenanceMetadataV1;
+  readonly visualReply?: VisualReplyV1;
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ActionResultMetadata[];
   readonly activityRecords?: readonly TranscriptRecord[];
@@ -355,6 +357,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly threadId?: string | null;
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
+      readonly visualReply?: VisualReplyV1;
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
       readonly activityRecords?: readonly TranscriptRecord[];
@@ -596,6 +599,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       const completedOpts = {
         sourceFreshness,
         answerProvenance: opts?.answerProvenance,
+        visualReply: opts?.visualReply,
         attachments: opts?.attachments,
         actionResults: opts?.actionResults,
         activityRecords: opts?.activityRecords,

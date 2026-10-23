@@ -1,5 +1,6 @@
 import type { ToolContext } from "@moss/module-sdk";
-import { VISUAL_LIMITS, type VisualObject } from "@moss/shared";
+import { validateVisualCatalogReply, VISUAL_LIMITS, type VisualObject } from "@moss/shared";
+import { presentationContext, promptVisualFields } from "./user-data.js";
 
 import {
   VisualTurnRegistry,
@@ -16,7 +17,7 @@ export type PresentationResult =
   | FinalizeResult
   | { ok: false; code: "unavailable" | "already_presented"; fallbackText: string };
 
-/** Internal staging seam: shape/reference trust only, never permission to render a program. */
+/** One host-bound proposal, validated against the active read-only catalog. */
 export class VisualPresentationTurn {
   readonly registry: VisualTurnRegistry;
   private attempted = false;
@@ -31,6 +32,12 @@ export class VisualPresentationTurn {
 
   get reply(): TrustedVisualReply | undefined {
     return this.accepted;
+  }
+
+  registerPrompt(text: string, retrievedAt: string): string {
+    const fields = promptVisualFields(text);
+    const registered = this.registerUserData(fields, retrievedAt);
+    return registered.ok ? presentationContext(registered.ref, fields) : "";
   }
 
   /** Host-only path. Tool input cannot supply fields, provenance, identity or fallback. */
@@ -61,7 +68,11 @@ export class VisualPresentationTurn {
     }
     this.attempted = true;
     const result = this.registry.finalize(this.identity, proposal, this.fallbackText);
-    if (result.ok) this.accepted = result.reply;
+    if (result.ok) {
+      const semantic = validateVisualCatalogReply(result.reply);
+      if (!semantic.ok) return { ok: false, code: semantic.code, fallbackText: this.fallbackText };
+      this.accepted = result.reply;
+    }
     return result;
   }
 

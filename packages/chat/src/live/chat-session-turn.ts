@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { validateVisualCatalogReply, type VisualReplyV1 } from "@moss/shared";
 import { recordModelActivity } from "@moss/ai";
 import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
@@ -97,6 +98,7 @@ export async function runChatTurn(
   userMessageId?: string;
   assistantMessageId?: string;
   sourceFreshness?: SourceFreshnessV1 | null;
+  visualReply?: VisualReplyV1;
 }> {
   const sessionKey = surfaceSessionKey(actorUserId, surface);
   // #2956: one turn id files shadow, audit and answer rows across launch/replay retries.
@@ -225,7 +227,7 @@ export async function runChatTurn(
       session,
       opts?.moduleControl
     );
-    const engineText = await buildEngineText(
+    let engineText = await buildEngineText(
       {
         persistence: host.deps.persistence,
         conversationProvenance: host.deps.conversationProvenance,
@@ -290,14 +292,23 @@ export async function runChatTurn(
       userText: text,
       attachments
     });
-    if (surface === DEFAULT_CHAT_SURFACE && session.threadId && host.deps.visualPresentation) {
+    if (
+      surface === DEFAULT_CHAT_SURFACE &&
+      !session.incognito &&
+      session.threadId &&
+      host.deps.visualPresentation
+    ) {
       visualTurn = host.deps.visualPresentation.begin(sessionKey, {
         actorUserId,
         threadId: session.threadId,
         turnId
       });
       if (controller.signal.aborted) visualTurn.discard();
-      visualTurn.registerUserData({ text }, new Date(host.deps.clock.now()).toISOString());
+      const context = visualTurn.registerPrompt(
+        text,
+        new Date(host.deps.clock.now()).toISOString()
+      );
+      if (context) engineText = { ...engineText, text: `${engineText.text}\n\n${context}` };
     }
     try {
       await submitPreparedTurn(session.engine, engineText);
@@ -383,7 +394,13 @@ export async function runChatTurn(
         if (record.sequence !== undefined) flushPending(record.sequence);
         const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
         if (!rejectionOnly) {
-          host.emit(actorUserId, surface, record.kind === "reply" ? { ...record, turnId } : record);
+          // Engine output cannot publish a visual; only the validated post-save record can.
+          const { visualReply: _visual, visualFallbackText: _fallback, ...engineRecord } = record;
+          host.emit(
+            actorUserId,
+            surface,
+            record.kind === "reply" ? { ...engineRecord, turnId } : engineRecord
+          );
           if (record.kind !== "reply" && record.kind !== "status") {
             upsertActivityRecord(turnActivityRecords, record);
           }
@@ -477,6 +494,10 @@ export async function runChatTurn(
     if (controller.signal.aborted)
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
 
+    const checkedVisual = visualTurn?.reply
+      ? validateVisualCatalogReply(visualTurn.reply)
+      : undefined;
+    const visualReply = checkedVisual?.ok ? checkedVisual.reply : undefined;
     const stored = await host.deps.persistence.recordTurn(
       actorUserId,
       text,
@@ -489,6 +510,7 @@ export async function runChatTurn(
         threadId: session.threadId,
         invokedToolNames,
         answerProvenance,
+        visualReply,
         attachments:
           attachments.length > 0
             ? attachments.map((meta) => ({
@@ -531,13 +553,15 @@ export async function runChatTurn(
     }
 
     // Post-store: re-emit reply with messageId + sourceFreshness so live UI picks it up
-    if (stored?.assistantMessageId && stored.sourceFreshness !== undefined) {
+    if (stored?.assistantMessageId) {
       host.emit(actorUserId, surface, {
         kind: "reply",
         text: reply,
         messageId: stored.assistantMessageId,
         turnId,
+        actionThreadId: session.threadId ?? undefined,
         sourceFreshness: stored.sourceFreshness,
+        visualReply,
         ...(turnElapsedMs !== undefined ? { elapsedMs: turnElapsedMs } : {}),
         ...(turnUsage !== undefined ? { usage: turnUsage } : {})
       });
@@ -547,7 +571,8 @@ export async function runChatTurn(
       reply,
       userMessageId: stored?.userMessageId,
       assistantMessageId: stored?.assistantMessageId,
-      sourceFreshness: stored?.sourceFreshness
+      sourceFreshness: stored?.sourceFreshness,
+      ...(stored?.assistantMessageId && visualReply ? { visualReply } : {})
     };
   } catch (error) {
     if (!controller.signal.aborted) liveTurn?.interrupted();

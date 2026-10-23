@@ -1,4 +1,6 @@
 import type { AiCapabilityRouteReason, AiConfiguredModelDto, AiModelCapability } from "./ai-api.js";
+import { visualReplySchema } from "./visual-chat-schema.js";
+import type { VisualReplyV1 } from "./visual-chat.js";
 import type { SourceFreshnessV1 } from "./freshness-types.js";
 import type { MeetingChatCoverage } from "./meeting-chat-api.js";
 import type { WorkflowApprovalStatusDto } from "./workflows-api.js";
@@ -89,6 +91,8 @@ export interface UploadChatAttachmentResponse {
 }
 
 export interface ChatMessageDto {
+  readonly visualReply?: VisualReplyV1;
+  readonly visualFallbackText?: string;
   readonly meetingContext?: MeetingChatCoverage;
   readonly id: string;
   readonly threadId: string;
@@ -203,6 +207,8 @@ export interface ActionRequestDetails {
 }
 
 export interface TranscriptRecord {
+  readonly visualReply?: VisualReplyV1;
+  readonly visualFallbackText?: string;
   /** Captured destination for admitted voice turns; never changes browser selection. */
   readonly voiceThreadId?: string;
   /** Captured action origin, including events arriving after its turn completes. */
@@ -382,6 +388,8 @@ export interface AppendChatUserMessageRequest {
 }
 
 export interface SendChatTurnResponse {
+  readonly visualReply?: VisualReplyV1;
+  readonly visualFallbackText?: string;
   readonly reply: string;
   readonly userMessageId?: string;
   readonly assistantMessageId?: string;
@@ -714,6 +722,8 @@ const chatMessageSchema = {
       enum: ["stored", "pending", "blocked", "no_model", "working", "error"]
     },
     body: { type: "string" },
+    visualReply: visualReplySchema,
+    visualFallbackText: { type: "string", maxLength: 4000 },
     modelRoute: { anyOf: [chatModelRouteSchema, { type: "null" }] },
     tools: { type: "array", items: chatSelectedToolMetadataSchema },
     activity: { type: "array", items: chatActivityEventSchema },

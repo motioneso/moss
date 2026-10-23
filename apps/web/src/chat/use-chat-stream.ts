@@ -1,4 +1,4 @@
-import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, readStoredVisual } from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
@@ -440,6 +440,8 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
                 : {}),
               sourceFreshness: message.sourceFreshness,
               meetingContext: message.meetingContext,
+              visualReply: message.visualReply,
+              visualFallbackText: message.visualFallbackText,
               answerProvenance: message.answerProvenance,
               answerProvenanceCitedIds: message.answerProvenanceCitedIds,
               ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
@@ -491,6 +493,14 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
     return {
       kind: parsed.kind,
       text: parsed.text,
+      ...(parsed.kind === "reply"
+        ? readStoredVisual(
+            parsed.visualReply ??
+              (typeof parsed.visualFallbackText === "string"
+                ? { fallbackText: parsed.visualFallbackText }
+                : undefined)
+          )
+        : {}),
       id: typeof parsed.id === "string" ? parsed.id : undefined,
       sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,

@@ -23,6 +23,7 @@ function fixture(
   let turn: VisualPresentationTurn | undefined;
   let presented = false;
   let stateAtInterrupt: string | undefined;
+  const emitted: TranscriptRecord[] = [];
   let releaseRead!: () => void;
   let submitted!: () => void;
   const ready = new Promise<void>((resolve) => {
@@ -45,7 +46,8 @@ function fixture(
           chatSessionId: sessionId,
           requestId: "request"
         },
-        proposal
+        JSON.parse(text.slice(text.indexOf("Worked tool input: ") + "Worked tool input: ".length))
+          .proposal
       );
       expect(result.ok).toBe(true);
       expect(result.ok && result.reply.fallbackText).toContain('"text":"six hours"');
@@ -57,7 +59,14 @@ function fixture(
       if (outcome === "read-error") throw new Error("read failed");
       if (outcome === "cancel") await paused;
       return {
-        records: [{ kind: "reply", text: "ordinary answer" }] as TranscriptRecord[],
+        records: [
+          {
+            kind: "reply",
+            text: "ordinary answer",
+            visualReply: turn?.reply,
+            visualFallbackText: "engine forgery"
+          }
+        ] as TranscriptRecord[],
         offset: afterOffset + 1,
         complete: true
       };
@@ -70,6 +79,7 @@ function fixture(
   }
   const engine = new Engine();
   const recordTurn = vi.fn(async () => {
+    expect(emitted.some((record) => record.visualReply || record.visualFallbackText)).toBe(false);
     expect(turn?.registry.state).toBe("open");
     expect(turn?.reply).toBeDefined();
     if (outcome === "save-error") throw new Error("save failed");
@@ -95,6 +105,8 @@ function fixture(
       getMainThreadState: vi.fn().mockResolvedValue(thread)
     }
   });
+  const manager = new ChatSessionManager(deps);
+  manager.subscribe("u1", (record) => emitted.push(record));
   return {
     service,
     begin,
@@ -102,7 +114,8 @@ function fixture(
     recordTurn,
     ready,
     deps,
-    manager: new ChatSessionManager(deps),
+    manager,
+    emitted,
     turn: () => turn,
     close: () => close,
     presented: () => presented,
@@ -129,7 +142,15 @@ describe("internal presentation turn lifecycle", () => {
     expect(f.turn()?.registry.state).toBe("closed");
     expect(f.turn()?.reply).toBeUndefined();
     expect(f.recordTurn.mock.calls[0]).toBeDefined();
-    expect(JSON.stringify(f.recordTurn.mock.calls)).not.toContain("visualReply");
+    expect(JSON.stringify(f.recordTurn.mock.calls)).toContain("visualReply");
+    const published = f.emitted.filter((record) => record.visualReply);
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({
+      messageId: "assistant",
+      actionThreadId: "thread-1",
+      turnId: f.turn()!.identity.turnId
+    });
+    expect(f.emitted.some((record) => record.visualFallbackText === "engine forgery")).toBe(false);
     expect(
       f.service.present(
         { ...f.turn()!.identity, chatSessionId: sessionId, requestId: "late" },
@@ -151,6 +172,7 @@ describe("internal presentation turn lifecycle", () => {
       expect(f.close()).not.toHaveBeenCalled();
       expect(f.turn()?.registry.state).toBe("discarded");
       expect(f.turn()?.reply).toBeUndefined();
+      expect(f.emitted.some((record) => record.visualReply)).toBe(false);
     }
   );
 

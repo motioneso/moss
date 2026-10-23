@@ -1,3 +1,4 @@
+import { userDataVisualFeature } from "./visual/manifest.js";
 import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
 import { fileURLToPath } from "node:url";
 import { collectVoiceRequestExport } from "./voice-request-export.js";
@@ -497,6 +498,7 @@ export const chatModuleManifest = {
         "Each ACP reply shows elapsed time and the token counts reported by the provider.",
       featureFlagId: "chat.module"
     },
+    userDataVisualFeature,
     {
       id: "chat.model_picker",
       description:

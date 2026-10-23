@@ -16,6 +16,7 @@ import { readMeetingChatContext } from "./live/meeting-chat-runtime.js";
 import { readAttachments } from "./attachments-routes.js";
 import type { ShadowReport, ShadowReportRange } from "./classifier-shadow-repository.js";
 import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
+import { readStoredVisual } from "@moss/shared";
 import { toIsoString } from "./memory-serializers.js";
 
 /** Temporary shadow report (#2957): allowlisted day range, defaulting to 30. */
@@ -114,6 +115,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
     role: message.role,
     status: message.status,
     body: message.body,
+    ...(message.role === "assistant" ? readStoredVisual(toolMetadata.visualReplyV1) : {}),
     modelRoute: null,
     tools: readTools(toolMetadata.selectedTools),
     activity: readActivity(toolMetadata.activity),

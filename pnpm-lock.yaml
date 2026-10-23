@@ -225,6 +225,9 @@ importers:
       '@moss/workshop':
         specifier: workspace:*
         version: link:../../packages/workshop
+      '@openuidev/react-lang':
+        specifier: 1.0.1
+        version: 1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.3.6)
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
@@ -252,6 +255,9 @@ importers:
       remark-gfm:
         specifier: ^4
         version: 4.0.1
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -5768,6 +5774,9 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -6533,6 +6542,29 @@ snapshots:
 
   '@lukeed/ms@2.0.2': {}
 
+  '@modelcontextprotocol/sdk@1.30.0(zod@4.3.6)':
+    dependencies:
+      '@hono/node-server': 2.1.1(hono@4.13.5)
+      ajv: 8.20.0
+      ajv-formats: 3.0.1(ajv@8.20.0)
+      content-type: 1.0.5
+      cors: 2.8.6
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      express: 5.2.1
+      express-rate-limit: 8.7.0(express@5.2.1)
+      hono: 4.13.5
+      jose: 6.2.3
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.3.6
+      zod-to-json-schema: 3.25.2(zod@4.3.6)
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
   '@modelcontextprotocol/sdk@1.30.0(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.5)
@@ -6638,6 +6670,15 @@ snapshots:
 
   '@opentelemetry/semantic-conventions@1.41.1': {}
 
+  '@openuidev/devtools@0.3.0(@openuidev/observability@0.0.4)(@openuidev/react-lang@1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.3.6))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+    dependencies:
+      '@openuidev/observability': 0.0.4
+      lucide-react: 0.575.0(react@19.2.7)
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+    optionalDependencies:
+      '@openuidev/react-lang': 1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.3.6)
+
   '@openuidev/devtools@0.3.0(@openuidev/observability@0.0.4)(@openuidev/react-lang@1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@openuidev/observability': 0.0.4
@@ -6647,6 +6688,13 @@ snapshots:
     optionalDependencies:
       '@openuidev/react-lang': 1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
 
+  '@openuidev/lang-core@1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))(zod@4.3.6)':
+    dependencies:
+      ci-info: 4.4.0
+      zod: 4.3.6
+    optionalDependencies:
+      '@modelcontextprotocol/sdk': 1.30.0(zod@4.3.6)
+
   '@openuidev/lang-core@1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       ci-info: 4.4.0
@@ -6655,6 +6703,17 @@ snapshots:
       '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
 
   '@openuidev/observability@0.0.4': {}
+
+  '@openuidev/react-lang@1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.3.6)':
+    dependencies:
+      '@openuidev/devtools': 0.3.0(@openuidev/observability@0.0.4)(@openuidev/react-lang@1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.3.6))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@openuidev/lang-core': 1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))(zod@4.3.6)
+      '@openuidev/observability': 0.0.4
+      react: 19.2.7
+      zod: 4.3.6
+    optionalDependencies:
+      '@modelcontextprotocol/sdk': 1.30.0(zod@4.3.6)
+      react-dom: 19.2.7(react@19.2.7)
 
   '@openuidev/react-lang@1.0.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)':
     dependencies:
@@ -9769,9 +9828,16 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
+  zod-to-json-schema@3.25.2(zod@4.3.6):
+    dependencies:
+      zod: 4.3.6
+    optional: true
+
   zod-to-json-schema@3.25.2(zod@4.4.3):
     dependencies:
       zod: 4.4.3
+
+  zod@4.3.6: {}
 
   zod@4.4.3: {}
 
