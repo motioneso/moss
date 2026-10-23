@@ -122,11 +122,19 @@ Private references resolve below `../moss-computer-persistence-r7/`; credentials
 | `process.py`                    | `2ede92bae11e2fca8ccf611534d27bbfaf08311e63ed13e06732a38d92f9f5c7` |
 | `check-state.py`                | `50eb76dccb2ab4af6a6998d6fe0787d4eb606eca0971d0a3dffab34b0d5ae83c` |
 | `controls.py`                   | `c9e56dc2a2502a3fd5bab625e9549a42c767f3a16a91a75a8c484059c44ade18` |
-| `persistence.mjs`               | `e5596f0979ec27591355905cc073831527cace7c62133b0654356bd652bea4bb` |
+| `persistence.mjs`               | `3f9aedc564fb741bdec11b308e3da4f6312db9003788ade030ac86d4f88db555` |
 | `window.mjs`                    | `42699e01f2a2764c4ebd035248470c4b4780598b181aa4b8011cd3c59840897c` |
-| `window-test.mjs`               | `a103a2486822d877a2ed47ef7e9a67f76bd465e7f4d7425b587082ddc66f79d8` |
+| `window-test.mjs`               | `f68328b08caed9c6d3515ee58b8fcd997e5d7e61d99ea1ea191eff2da823f2c5` |
 | `diagnostics.py`                | `d78e0e28a87c383ce2c9d2a003f57ae0a4eee6e9e34607df7f6ddfa050ce0e51` |
 | `run.py`                        | `b982bd3673457e3fee2783502baa7179e75e7c1671870f0144b56b19022e21ae` |
 | `proof.json`                    | `471024dae85e4a749d79c5c258f3a20f8bda93267f485b1332e91c9d6d11851d` |
 | `receipts/resolved-config.json` | `cf59dfb249415d9a20e763a5b5aac5e263e0228da2535871128c9f0d0bfe42f3` |
 | `mutate.py`                     | `e8396dbe945be53f0563f5957d7b3354bb2b8a3b250afa9e2407e4a738d4308e` |
+
+## Prelaunch correction
+
+The first static candidate `071a27801` was NOT_READY: author and independent reviewer found that
+`terminal(command)` shadowed the new command adapter. No runtime was launched. The actual terminal
+call-site VM regression failed with TypeError, retained in `receipts/terminal-before.log`; parameter
+renamed to `input`, and the full focused regression passes. Exact revised hashes above supersede
+the first candidate. Reviewer acceptance must name this amended commit and manifest.
