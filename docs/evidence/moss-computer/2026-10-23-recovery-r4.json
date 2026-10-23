@@ -1,0 +1,622 @@
+{
+  "task": "3578",
+  "parent": "3577",
+  "run": "recovery-r4",
+  "status": "PASS_BOUNDED_AUTOMATED_DELAYED_RESTART_RELOAD",
+  "operator": "Codex /root; active automated finish; session 01a16941-f698-7f43-bac7-3c699b5576c6",
+  "packet_commit": "aa8c01601ffe4f65f803fb3cc47207720e2d09d7",
+  "packet_sha256": "be5b3c5b58bae6a46c6a8f4e66d07f94326fb88b42643c565920139b081d96d3",
+  "candidate_image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+  "image_load": "NOT_NEEDED; exact candidate present at fresh launch checks",
+  "runtime_hashes": {
+    "compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    "gateway/nginx.conf": "db73dba675487afbf4690bc05da04f24ba215ade649471516bcb2de8d8acf6be",
+    "supervise.py": "dea9bbce87445f0f1dbda6aa32903602ec9e0796375ff28b288c928c24189c6a",
+    "recovery.mjs": "10a19a006ffb292f4948c98dc829d0c255e8889988f760a99a3d31a05a7ca3dd",
+    "access-check.mjs": "d286deabe7b30f6b51e62e5f2d7571d69e24a7056a3589176442348d260dea89",
+    "access-controls.py": "17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628",
+    "isolation.py": "ab5bdd7418ed794f6eb02fad39a404bba2e6b95ad7eaad3d9a9fc0a2dc3e33f2",
+    "receipts/resolved-config.json": "340f9763873db840e80e5822755fdc29fb29fd0236ffb5e28a7e734feefdde14"
+  },
+  "source_sha256": {
+    "spikes/moss-computer/compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    "spikes/moss-computer/Dockerfile": "7334eb8946d90c55ed57d2e9e3b966716a8330c55c5affb28af7e522ba37503a",
+    "spikes/moss-computer/fixture.html": "20f3db461ada7dcaae9e98f79413cf4c99777c7679c31470250480f674a2c6e2",
+    "spikes/moss-computer/entrypoint.sh": "a13bb5769f8358e1b73db2fd254d4fabd98621901dca3e936c9dfdc16fe40949",
+    "spikes/moss-computer/requirements.txt": "b063d1812dfdb8a5069a3ad60986fdd5fab730fc5e9f711f960f13b14a852cf6",
+    "spikes/moss-computer/gateway.conf.template": "14b725a93df4913e114a32b52878141a182e58d0f0224284b699c8e25afa2374",
+    "spikes/moss-computer/README.md": "6de137ebcd1c065c9143c30775da218375c3b6e3ba863b9ea5cbf6f17e4c4973"
+  },
+  "host_preflight": {
+    "at_utc": "2026-10-23T15:00:01.304801+00:00",
+    "boot_local": "2026-10-20 21:46:59",
+    "docker_active_since_local": "2026-10-20 21:49:01",
+    "docker_restarts": 0,
+    "herdr_process_start_local": ["2026-10-23 06:53:52", "2026-10-23 07:09:19"],
+    "herdr_systemd_unit_found": false,
+    "initial_user_bus_query": "unavailable; retried with existing user bus successfully",
+    "incident_cause": "UNKNOWN; bounded logs do not establish a reboot, restart cause, or image disappearance cause",
+    "recent_log_bounds": {
+      "docker": "last 120 lines within 2h (32 returned)",
+      "kernel": "last 150 lines within 2h",
+      "user": "last 250 lines within 2h"
+    },
+    "oom_io_docker_restart_patterns": 0,
+    "ram_available_bytes": 17736851456,
+    "root_free_bytes": 13784465408,
+    "data_free_bytes": 1032718471168,
+    "swap_used_bytes": 8589905920,
+    "moss": "running healthy",
+    "candidate_present": true,
+    "port": 5189,
+    "preflight_duration_under_10_minutes": true
+  },
+  "containers": {
+    "desktop": "a175cc4e3c047ff4ecc8f4de21a018fdb23f457e064e1dddc6d8771155e6bb08",
+    "gateway_observed_prefix": "78c132c475ed",
+    "gateway_full_id": "NOT_RETAINED; no claim of full ID; bounded retrospective docker events returned zero events",
+    "replacement_performed": false
+  },
+  "command_exits": {
+    "compose_launch": 0,
+    "isolation": 0,
+    "access_controls_driver": 0,
+    "recovery": 0,
+    "compose_cleanup": 0,
+    "port_release": 0,
+    "supervisor_numeric_exit": "NOT_RETAINED; normal operator-closure receipt and process absence verified"
+  },
+  "recovery": {
+    "mode": "delayed-reload",
+    "container": "a175cc4e3c047ff4ecc8f4de21a018fdb23f457e064e1dddc6d8771155e6bb08",
+    "started": "2026-10-23T15:01:57.163Z",
+    "events": [
+      {
+        "at": 1792767718446,
+        "kind": "http-error",
+        "path": "/package.json",
+        "status": 404
+      },
+      {
+        "at": 1792767718446,
+        "kind": "console-error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "at": 1792767718447,
+        "kind": "console-error",
+        "text": "Couldn't fetch package.json: Error: 404 Not Found"
+      },
+      {
+        "at": 1792767719055,
+        "kind": "ws-open",
+        "path": "/websockify"
+      },
+      {
+        "at": 1792767721986,
+        "kind": "guest-killed"
+      },
+      {
+        "at": 1792767721989,
+        "kind": "ws-close"
+      },
+      {
+        "at": 1792767723103,
+        "kind": "ws-open",
+        "path": "/websockify"
+      },
+      {
+        "at": 1792767723144,
+        "kind": "ws-error",
+        "text": "Error during WebSocket handshake: Unexpected response code: 502"
+      },
+      {
+        "at": 1792767723144,
+        "kind": "console-error",
+        "text": "WebSocket connection to 'wss://localhost:5189/websockify' failed: Error during WebSocket handshake: Unexpected response code: 502"
+      },
+      {
+        "at": 1792767723145,
+        "kind": "ws-close"
+      },
+      {
+        "at": 1792767723145,
+        "kind": "console-error",
+        "text": "Failed when connecting: Connection closed (code: 1006)"
+      },
+      {
+        "at": 1792767735248,
+        "kind": "negative-control-failed-as-required"
+      },
+      {
+        "at": 1792767735378,
+        "kind": "guest-restarted"
+      },
+      {
+        "at": 1792767735378,
+        "kind": "browser-reload-requested"
+      },
+      {
+        "at": 1792767735931,
+        "kind": "browser-reload-returned"
+      },
+      {
+        "at": 1792767735940,
+        "kind": "http-error",
+        "path": "/package.json",
+        "status": 404
+      },
+      {
+        "at": 1792767735940,
+        "kind": "console-error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "at": 1792767735941,
+        "kind": "console-error",
+        "text": "Couldn't fetch package.json: Error: 404 Not Found"
+      },
+      {
+        "at": 1792767736542,
+        "kind": "ws-open",
+        "path": "/websockify"
+      }
+    ],
+    "snapshots": [
+      {
+        "phase": "baseline",
+        "at": 1792767719255,
+        "wsMessages": 6,
+        "wsBytes": 16589,
+        "uiConnected": true,
+        "rfbState": "connected",
+        "fbWidth": 1280,
+        "fbHeight": 800,
+        "domCanvases": [
+          {
+            "width": 1280,
+            "height": 800,
+            "attached": true,
+            "cssDisplay": "block",
+            "cssVisibility": "visible",
+            "rect": {
+              "x": 0,
+              "y": 500,
+              "width": 1280,
+              "height": 800
+            },
+            "parent": "DIV",
+            "colors": 345
+          }
+        ],
+        "rfbCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": true,
+          "cssDisplay": "block",
+          "cssVisibility": "visible",
+          "rect": {
+            "x": 0,
+            "y": 500,
+            "width": 1280,
+            "height": 800
+          },
+          "parent": "DIV",
+          "colors": 345
+        },
+        "detachedPriorCanvas": null,
+        "documentId": "doc-1792767718451",
+        "reconnectScheduled": false,
+        "screenAttached": true,
+        "targetId": "noVNC_container",
+        "targetChildren": 2,
+        "rootClasses": "noVNC_connected",
+        "status": "Connected (encrypted) to desktop@<proof-guest>"
+      },
+      {
+        "phase": "disconnected",
+        "at": 1792767721997,
+        "wsMessages": 25,
+        "wsBytes": 149238,
+        "uiConnected": false,
+        "domCanvases": [],
+        "rfbCanvas": null,
+        "detachedPriorCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": false,
+          "cssDisplay": "",
+          "cssVisibility": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "parent": "DIV",
+          "colors": 224
+        },
+        "documentId": "doc-1792767718451",
+        "reconnectScheduled": true,
+        "targetChildren": 1,
+        "rootClasses": "noVNC_reconnecting",
+        "status": "Connected (encrypted) to desktop@<proof-guest>"
+      },
+      {
+        "phase": "automatic-retry-failed",
+        "at": 1792767723157,
+        "wsMessages": 25,
+        "wsBytes": 149238,
+        "uiConnected": false,
+        "domCanvases": [],
+        "rfbCanvas": null,
+        "detachedPriorCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": false,
+          "cssDisplay": "",
+          "cssVisibility": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "parent": "DIV",
+          "colors": 224
+        },
+        "documentId": "doc-1792767718451",
+        "reconnectScheduled": false,
+        "targetChildren": 1,
+        "rootClasses": "",
+        "status": "Failed to connect to server"
+      },
+      {
+        "phase": "stopped-guest-negative-control",
+        "at": 1792767735248,
+        "wsMessages": 25,
+        "wsBytes": 149238,
+        "uiConnected": false,
+        "domCanvases": [],
+        "rfbCanvas": null,
+        "detachedPriorCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": false,
+          "cssDisplay": "",
+          "cssVisibility": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "parent": "DIV",
+          "colors": 224
+        },
+        "documentId": "doc-1792767718451",
+        "reconnectScheduled": false,
+        "targetChildren": 1,
+        "rootClasses": "",
+        "status": "Failed to connect to server"
+      },
+      {
+        "phase": "transport-reconnected",
+        "at": 1792767736613,
+        "wsMessages": 29,
+        "wsBytes": 149300,
+        "uiConnected": true,
+        "rfbState": "connected",
+        "fbWidth": 1280,
+        "fbHeight": 800,
+        "domCanvases": [
+          {
+            "width": 1280,
+            "height": 800,
+            "attached": true,
+            "cssDisplay": "block",
+            "cssVisibility": "visible",
+            "rect": {
+              "x": 0,
+              "y": 500,
+              "width": 1280,
+              "height": 800
+            },
+            "parent": "DIV",
+            "colors": 1
+          }
+        ],
+        "rfbCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": true,
+          "cssDisplay": "block",
+          "cssVisibility": "visible",
+          "rect": {
+            "x": 0,
+            "y": 500,
+            "width": 1280,
+            "height": 800
+          },
+          "parent": "DIV",
+          "colors": 1
+        },
+        "detachedPriorCanvas": null,
+        "documentId": "doc-1792767735946",
+        "reconnectScheduled": false,
+        "screenAttached": true,
+        "targetId": "noVNC_container",
+        "targetChildren": 2,
+        "rootClasses": "noVNC_connected",
+        "status": "Connected (encrypted) to desktop@<proof-guest>"
+      },
+      {
+        "phase": "recovered",
+        "at": 1792767736750,
+        "wsMessages": 31,
+        "wsBytes": 165807,
+        "uiConnected": true,
+        "rfbState": "connected",
+        "fbWidth": 1280,
+        "fbHeight": 800,
+        "domCanvases": [
+          {
+            "width": 1280,
+            "height": 800,
+            "attached": true,
+            "cssDisplay": "block",
+            "cssVisibility": "visible",
+            "rect": {
+              "x": 0,
+              "y": 500,
+              "width": 1280,
+              "height": 800
+            },
+            "parent": "DIV",
+            "colors": 337
+          }
+        ],
+        "rfbCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": true,
+          "cssDisplay": "block",
+          "cssVisibility": "visible",
+          "rect": {
+            "x": 0,
+            "y": 500,
+            "width": 1280,
+            "height": 800
+          },
+          "parent": "DIV",
+          "colors": 337
+        },
+        "detachedPriorCanvas": null,
+        "documentId": "doc-1792767735946",
+        "reconnectScheduled": false,
+        "screenAttached": true,
+        "targetId": "noVNC_container",
+        "targetChildren": 2,
+        "rootClasses": "noVNC_connected",
+        "status": "Connected (encrypted) to desktop@<proof-guest>"
+      }
+    ],
+    "baselineInput": {
+      "name": "baseline-1792767719256",
+      "path": "baseline-unique.txt",
+      "content": "baseline-1792767719256",
+      "via": "noVNC RFB.sendKey to prepared terminal"
+    },
+    "baselineDocumentId": "doc-1792767718451",
+    "disconnectObserved": true,
+    "mossDuringFailure": "running healthy",
+    "automaticRetryFailed": true,
+    "negativeControl": {
+      "expected": "TimeoutError",
+      "elapsedMs": 12010,
+      "error": "page.waitForFunction: Timeout 12000ms exceeded."
+    },
+    "recoveredDocumentId": "doc-1792767735946",
+    "recoveredInput": {
+      "name": "recovered-1792767736751",
+      "path": "recovered-unique.txt",
+      "content": "recovered-1792767736751",
+      "via": "noVNC RFB.sendKey to prepared terminal"
+    },
+    "status": "PASS",
+    "finished": "2026-10-23T15:02:19.374Z",
+    "wsMessages": 51,
+    "wsBytes": 298715
+  },
+  "timing_ms": {
+    "guest_kill_return_to_terminal_retry_failure": 1171,
+    "guest_kill_return_to_start_return": 13392,
+    "stopped_guest_frame_assertion": 12010,
+    "reload_request_to_return": 553,
+    "reload_request_to_connected_snapshot": 1235,
+    "reload_request_to_substantive_frame": 1372,
+    "reload_request_to_loop_finish_with_fresh_input": 3996
+  },
+  "timing_scope": "Host command events are recorded after command return; no stronger exact signal-to-ready measurement claimed",
+  "access": [
+    {
+      "path": "HTTP viewer",
+      "identity": "owner",
+      "status": 200
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "none",
+      "status": 400
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "foreign",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://localhost:5189",
+      "status": 101,
+      "protocol": "RFB 003.008"
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://foreign.invalid",
+      "status": 403
+    },
+    {
+      "path": "WS input",
+      "identity": "none",
+      "origin": "https://localhost:5189",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "foreign",
+      "origin": "https://localhost:5189",
+      "status": 400
+    }
+  ],
+  "access_negative_controls": {
+    "results": [
+      {
+        "case": "protected",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "mtls-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "origin-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "restored",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      }
+    ],
+    "restored_sha256": "db73dba675487afbf4690bc05da04f24ba215ade649471516bcb2de8d8acf6be"
+  },
+  "isolation": "PASS actual candidate/user/caps/default profiles/limits/mounts and bounded guest ENETUNREACH/ECONNREFUSED checks; raw receipt hashed",
+  "resources": {
+    "watchdog_samples": 21,
+    "last_sample_elapsed_seconds": 101.1,
+    "min_host_available_bytes": 13190008832,
+    "min_root_free_bytes": 13562937344,
+    "min_data_free_bytes": 1032716926976,
+    "max_home_socket_bytes": 1387482,
+    "final_cgroup_samples": [
+      {
+        "id": "78c132c475ed",
+        "role": "gateway",
+        "started": "2026-10-23T15:01:30.151211595Z",
+        "finished": "0001-01-01T00:00:00Z",
+        "oom_killed": false,
+        "memory_peak": "8187904",
+        "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "cpu_stat": "usage_usec 374686\nuser_usec 287361\nsystem_usec 87325\ncore_sched.force_idle_usec 0\nnr_periods 73\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "memory_max": "134217728",
+        "cpu_max": "50000 100000",
+        "pids_max": "32"
+      },
+      {
+        "id": "a175cc4e3c04",
+        "role": "desktop",
+        "started": "2026-10-23T15:02:15.286096927Z",
+        "finished": "2026-10-23T15:02:01.888348941Z",
+        "oom_killed": false,
+        "memory_peak": "212676608",
+        "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "cpu_stat": "usage_usec 1694519\nuser_usec 1326103\nsystem_usec 368416\ncore_sched.force_idle_usec 0\nnr_periods 34\nnr_throttled 1\nthrottled_usec 55611\nnr_bursts 0\nburst_usec 0",
+        "memory_max": "4294967296",
+        "cpu_max": "200000 100000",
+        "pids_max": "512"
+      }
+    ],
+    "snapshot_scope": "Guest cgroup resets at restart; final peak is post-restart only. Synthetic terminal workload, no sustained benchmark. Sampled10GiB home/socket threshold is not a quota; bounded tmpfs/logs remain."
+  },
+  "closure": {
+    "timestamp_utc": "2026-10-23T15:03:16.746087+00:00",
+    "containers_remaining": [],
+    "networks_remaining": [],
+    "listener_connect_errno": 111,
+    "port_released": true,
+    "ephemeral_key_files_remaining": [],
+    "owned_runtime_processes": [],
+    "browser_closed": "recovery harness finally awaited browser.close; node exited0",
+    "home_preserved": true,
+    "prior_r3_home_preserved": true,
+    "prior_r1_home_preserved": true,
+    "archive_preserved": true,
+    "moss": "running healthy",
+    "watchdog_stop": "operator closure\nNO_RUNNING_PROOF_CONTAINERS"
+  },
+  "historical_causes": "Original-image canvas timeout, image disappearance, and reported unexpected Herdr incident remain UNKNOWN",
+  "not_run": [
+    "Recovery without reload after the terminal automatic-retry failure",
+    "Arbitrary-duration outage or host/service restart resilience",
+    "Rebuilt-image Firefox sandbox/content and profile/replacement persistence acceptance",
+    "New watchdog fault injection; exact supervisor operator closure exercised only",
+    "Ben manual/MacBook viewing",
+    "Internet/provider jobs",
+    "Moss owner/session/revocation/download/lifecycle integration",
+    "Installer/platform/release acceptance"
+  ],
+  "raw_receipt_sha256": {
+    "access-controls.json": "0543586e07ae292b99660e9f2120442c7061d1b4eae2e04356a20b1232a7c975",
+    "access-mtls-removed.log": "581fbcbb7f307a41eb29a1383025eeb5e8952f77ebe7a803fc6070398efb2c44",
+    "access-origin-removed.log": "d93047534d8fe3091e319f1347decee1b26f374254d6c6f52ee6738df6c2246c",
+    "access-protected.log": "23ab8c2c937f2614a5fe82c3cafcabf30f8b68c49d1f017c088a293c073e1e7c",
+    "access-restored.log": "23ab8c2c937f2614a5fe82c3cafcabf30f8b68c49d1f017c088a293c073e1e7c",
+    "access.json": "c4b835e39699fa1a2f9790f3e2ecaeadf1737ed893b77b7bb3fe116dfcc199b0",
+    "backend-final-78c132c475ed.log": "ec63e9a5f852ad0554cf8cf276eebb820f32d0a7c9a28e6959b765e57ba5160e",
+    "backend-final-a175cc4e3c04.log": "16e8679644675be1ac6a5e4589d97886e13a8c7449f2a67ed508b91dcb92c8ef",
+    "backend-outage.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "cleanup.log": "80c5e18a66dc8d0cbd741fb282cb8df5bd9d6356a28b866a224a51d02df127f0",
+    "closure.json": "897eb5e5b6114aefbcbdac2f2ba5fe6e6247193bdb1decbba4a83b314eb6d9de",
+    "container-final-state.json": "9f63125a50cad4bf3fa0dd9fe0e449251f5a9a97c754bc55abaa87e7088d6177",
+    "container-ids.json": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "containers.json": "401ef3c6f6eb7ef55be9e6801564124c6245d42a5528d7ef72f355c2e1e2e122",
+    "docker-events-private.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docker-events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docker-info-private.json": "269014097356bdb48bd54abe06d03767e5e23b202cb38a0cca7eae82b554f820",
+    "docker-journal-private.log": "a8e6854a9dbb1e4cf1bfb5a97939a8a9a9e6dad9756f2625814bc44d4fbc5b86",
+    "docker-recent-private.log": "a8e6854a9dbb1e4cf1bfb5a97939a8a9a9e6dad9756f2625814bc44d4fbc5b86",
+    "gateway-outage.log": "39b55813a3452753ff1e4d9f89ba1abc63c7c226cdcf87a02adeb08393ce3e54",
+    "isolation.json": "30b6c312fde98d4d94c77fec15431dd150d038b62a18c70c26b36e2f9550e449",
+    "kernel-journal-private.log": "0da8b9b788e2198de4a53afeb12ba727bf348ac67a7a5adfe7e290b03ce156c6",
+    "launch-exit.txt": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "launch-gates.json": "7e3d32d01717da2b375457f5f1ebf7723ce41a4a98ac06cec5e676099e14c482",
+    "launch-hashes.json": "1c9c8c0d213278175f48a8c0f273d479ba298b11769458102e04b9e18236f378",
+    "launch.log": "f21a6f97075f23050b652f269b1c3b35e97f2bb8541dcd59b847fc163b45d4e0",
+    "monitor-stop.txt": "84b3c04b0a7557cd9f6d8e702ab3a861d27d47e8bf0469ebfccf15b9c67cd979",
+    "monitor.jsonl": "3c40e73e1f35e7fdcd514186f7a78116704cbd7188870e8fc255bb819069d804",
+    "port-release.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "preflight.json": "7ce740397341411fb34cabf17afdf024b3f95dc1b4793b9c8309b7f34ca567ea",
+    "recovery-delayed-reload.json": "2cbedafb09f5c2552e115b8bf593cab5044fbebc0c141c264a537379ab486578",
+    "recovery-delayed-reload.log": "edefac360d713264f13a0ab143d1cf7d059bce7ee7bc63d0f5492fcc87660817",
+    "recovery-exit.txt": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "resolved-config.json": "340f9763873db840e80e5822755fdc29fb29fd0236ffb5e28a7e734feefdde14",
+    "resources-baseline.jsonl": "542ccce9e340e68f6a8ca8546833c096c3e13589290343cdea0917ccfd2664db",
+    "resources-recovered.jsonl": "7e5b8a093c04a0bd0fff0a271fc26f3b29ffa0cbe042dc0f62804ae72314d7ce",
+    "run-access-controls.py.log": "9d16ecb0bfb646c89394f9b85d65d4047f12680f26bb2bc1eb179b4509854135",
+    "run-isolation.py.log": "95e251bff7a488ee12d33cf634152b43d92f82a1e1458065f8714aecfadb349f",
+    "source-hashes.json": "1f37a496be7eef2774904d41cfa1c62064485020bc4f06975a21da257e05f1c3",
+    "supervisor.log": "3b293faee81fbb5fba8ff13dd036f5f4ee7503b7392e171e6cee097db1af0ff6",
+    "user-journal-private.log": "9fdb40123a066de5d506112588726b0dde148f7c764eccaf7b60d6b497a7abf6",
+    "user-recent-private.log": "2389800929216b5e5f8d4b39bfb97762fa9c9b05d272e99132d0ab6f6bb25518"
+  },
+  "review": "Independent exact evidence review is recorded in 2026-10-23-independent-review.md"
+}
