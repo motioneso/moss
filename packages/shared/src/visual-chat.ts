@@ -353,6 +353,8 @@ function parseReply(value: unknown): VisualReplyV1 {
       return interaction;
     }
   );
+  const interactionIds = new Set(interactions.map((interaction) => interaction.interactionId));
+  if (interactionIds.size !== interactions.length) bad();
   return {
     version: VISUAL_REPLY_VERSION,
     catalogVersion: name(value.catalogVersion),

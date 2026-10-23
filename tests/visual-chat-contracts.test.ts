@@ -45,6 +45,23 @@ describe("validateVisualReply", () => {
     expect(result).toEqual({ ok: true, reply: reply() });
   });
 
+  it("rejects duplicate interaction IDs while accepting distinct IDs", () => {
+    const interaction = {
+      interactionId: "i1",
+      blockId: "b1",
+      kind: "follow_up",
+      label: "Explain",
+      descriptorId: "explain",
+      params: {}
+    };
+    const other = { ...interaction, descriptorId: "compare", params: { mode: "other" } };
+    expect(
+      validateVisualReply(reply({ interactions: [interaction, { ...other, interactionId: "i2" }] }))
+        .ok
+    ).toBe(true);
+    expect(failure(reply({ interactions: [interaction, other] })).code).toBe("malformed");
+  });
+
   it("returns unsupported_version but keeps the readable text", () => {
     const result = failure(reply({ version: 2 }));
     expect(result.code).toBe("unsupported_version");
