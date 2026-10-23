@@ -275,13 +275,13 @@ test("a real completion missed while offline hydrates after reconnect", async ({
   );
 });
 
-test("real accepted proposal clears on Stop, thread switch and engine failure; private data is deleted", async ({
+test("real accepted proposal clears on Stop, thread switch and engine failure", async ({
   page
 }) => {
   test.setTimeout(600_000);
   await signInUatAdmin(page);
   await bringUpRealChatModel(page);
-  let chat = await drawer(page);
+  const chat = await drawer(page);
   // Keep this visual lifecycle probe independent of passive project-memory recall (#3606).
   const prompt =
     'First call chat.present to show all these facts visually. After the tool succeeds, write a detailed 2000-word explanation of organizing a workshop.\n```json\n{"topic":"Workshop","hours":6,"ready":true}\n```';
@@ -391,7 +391,16 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
   console.log(
     "[visual-lifecycle] real CLI failure removed accepted visual; no response interception"
   );
+});
 
+test("real private visual request stays prose and unsaved through End and reload", async ({
+  page
+}) => {
+  test.setTimeout(240_000);
+  await signInUatAdmin(page);
+  await bringUpRealChatModel(page);
+  const chat = await drawer(page);
+  const main = await (await page.request.get("/api/chat/privacy?surface=drawer")).json();
   await chat.getByRole("button", { name: "More chat options" }).click();
   await chat.getByRole("menuitemcheckbox", { name: "Start private chat" }).click();
   await expect(
@@ -407,7 +416,7 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
     .toBe(true);
   const privacy = await (await page.request.get("/api/chat/privacy?surface=drawer")).json();
   expect(privacy.threadId).toBeTruthy();
-  expect(privacy.threadId).not.toBe(main.id);
+  expect(privacy.threadId).not.toBe(main.threadId);
   const completed = page.waitForResponse(
     (r) => new URL(r.url()).pathname === "/api/chat/turn" && r.request().method() === "POST",
     { timeout: 180_000 }
@@ -423,22 +432,32 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
   expect(privateReply.visualReply).toBeUndefined();
   expect(privateReply.assistantMessageId).toBeUndefined();
   await expect(chat.getByLabel("Visual reply")).toHaveCount(0);
+  const ended = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/chat/private/end"
+  );
   await chat.getByRole("button", { name: "End", exact: true }).click();
-  await expect
-    .poll(async () =>
-      (
-        await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
-      ).status()
-    )
-    .toBe(404);
-  await page.reload();
-  chat = await drawer(page);
+  expect((await ended).status()).toBe(204);
+  const endedHistory = await (
+    await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
+  ).json();
+  expect(endedHistory.messages).toEqual([]);
+  const visibleThreads = await (await page.request.get("/api/chat/threads?surface=drawer")).json();
   expect(
-    (
-      await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
-    ).status()
-  ).toBe(404);
+    visibleThreads.threads.some((thread: { id: string }) => thread.id === privacy.threadId)
+  ).toBe(false);
+  // #1086: the host retains empty bookkeeping until a post-exit sweep can
+  // confirm transcript cleanup; visual chat must preserve that lifecycle.
+  await page.reload();
+  await drawer(page);
+  const reloadedHistory = await (
+    await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
+  ).json();
+  expect(reloadedHistory.messages).toEqual([]);
+  const reloadedThreads = await (await page.request.get("/api/chat/threads?surface=drawer")).json();
+  expect(
+    reloadedThreads.threads.some((thread: { id: string }) => thread.id === privacy.threadId)
+  ).toBe(false);
   console.log(
-    "[visual-lifecycle] private reply remained prose/unsaved, and reload deleted its thread"
+    "[visual-lifecycle] private reply stayed prose/unsaved; End and reload kept private history empty and hidden; host cleanup bookkeeping retained"
   );
 });
