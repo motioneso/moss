@@ -99,6 +99,7 @@ export interface ChatPersistencePort {
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
       readonly visualReply?: VisualReplyV1;
+      readonly stopSignal?: AbortSignal;
       /** #1133 — display metadata for files sent with this turn (user-message tool_metadata). */
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];

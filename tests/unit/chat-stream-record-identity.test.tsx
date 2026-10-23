@@ -15,6 +15,7 @@ import {
 import {
   applyStreamRecord,
   mergeBackgroundRecords,
+  mergeRecoveredReplies,
   mergeHydratedRecords
 } from "../../apps/web/src/chat/stream-record-identity.js";
 import {
@@ -139,6 +140,28 @@ describe("mergeBackgroundRecords", () => {
   });
 });
 
+describe("recovered saved replies", () => {
+  it("recovers only observed turns, clears progress, replaces drafts and dedupes replay", () => {
+    const pending: TranscriptRecord = {
+      kind: "status",
+      text: "Preparing visual…",
+      turnId: "turn-1",
+      visualState: "preparing"
+    };
+    const saved = { ...storedReply, visualFallbackText: "Your data: hours: 6" };
+    const current = [{ ...user, turnId: "turn-1" }, pending, liveReply];
+    const history = [saved, { ...storedReply, messageId: "other", turnId: "foreign" }];
+    const merged = mergeRecoveredReplies(current, history);
+    expect(merged).toEqual([{ ...user, turnId: "turn-1" }, saved]);
+    expect(mergeRecoveredReplies(merged, history)).toEqual(merged);
+    expect(mergeRecoveredReplies([], history)).toEqual([]);
+    expect(mergeRecoveredReplies([{ ...user, turnId: "turn-1" }, pending], [saved])).toEqual([
+      { ...user, turnId: "turn-1" },
+      saved
+    ]);
+  });
+});
+
 describe("record identity on the wire", () => {
   it("parses the turn id and the background mark", () => {
     expect(
@@ -193,6 +216,44 @@ describe("Main stream reconnect", () => {
     lastActiveAt: new Date(0).toISOString(),
     lastMessagePreview: null
   };
+
+  it("hydrates a saved completion missed by the stream after reconnect", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(Probe, { surface: DEFAULT_CHAT_SURFACE }));
+    });
+    await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalledTimes(1));
+    const source = FakeEventSource.instances[0]!;
+    await act(async () => {
+      source.onmessage?.({ data: JSON.stringify({ ...user, turnId: "turn-1" }) });
+      source.onmessage?.({
+        data: JSON.stringify({
+          kind: "status",
+          text: "Preparing visual…",
+          turnId: "turn-1",
+          visualState: "preparing"
+        })
+      });
+    });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({
+      messages: [message({ id: "assistant-1", turnId: "turn-1", body: "Saved visual facts" })]
+    });
+    await act(async () => {
+      source.onopen?.();
+    });
+    await vi.waitFor(() =>
+      expect(JSON.stringify(renderer.toJSON())).toContain("Saved visual facts")
+    );
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Preparing visual");
+    await act(async () => {
+      source.onopen?.();
+    });
+    expect(JSON.stringify(renderer.toJSON()).split("Saved visual facts")).toHaveLength(2);
+    await act(async () => renderer.unmount());
+  });
 
   it("keeps voice activity and actionable approvals in their captured Main thread", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);

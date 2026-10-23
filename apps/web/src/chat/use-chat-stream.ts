@@ -28,6 +28,7 @@ import {
   applyStreamRecord,
   isBackgroundRecord,
   mergeBackgroundRecords,
+  mergeRecoveredReplies,
   mergeHydratedRecords
 } from "./stream-record-identity.js";
 
@@ -183,7 +184,10 @@ export function useChatStream(
           );
           setRecords((current) =>
             isCurrent() && hydratedDrawerThread.current === threadId
-              ? mergeBackgroundRecords(current, missed)
+              ? mergeRecoveredReplies(
+                  mergeBackgroundRecords(current, missed),
+                  recordsFromMessages(messages.filter((message) => message.threadId === threadId))
+                )
               : current
           );
         })
@@ -413,6 +417,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
           kind: "user",
           text: message.body,
           messageId: message.id,
+          turnId: message.turnId,
           meetingContext: message.meetingContext,
           attachments: message.attachments
         }
@@ -435,6 +440,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
               text: message.body,
               scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
+              turnId: message.turnId,
               ...(isDeliveredReminder(message)
                 ? { background: true as const, backgroundThreadId: message.threadId }
                 : {}),
@@ -493,6 +499,11 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
     return {
       kind: parsed.kind,
       text: parsed.text,
+      visualState:
+        parsed.kind === "status" &&
+        (parsed.visualState === "preparing" || parsed.visualState === "clear")
+          ? parsed.visualState
+          : undefined,
       ...(parsed.kind === "reply"
         ? readStoredVisual(
             parsed.visualReply ??

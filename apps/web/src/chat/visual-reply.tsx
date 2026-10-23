@@ -3,7 +3,7 @@ import { Button, Note } from "@moss/ui";
 import { readStoredVisual, visualReplyText, type TranscriptRecord } from "@moss/shared";
 import "./visual-reply.css";
 
-const VisualRenderer = lazy(() => import("./visual-renderer"));
+const VisualRenderer = lazy(() => import("./visual-renderer.js"));
 
 export function VisualFallback({ text }: { text: string }) {
   return (
@@ -31,8 +31,10 @@ class VisualBoundary extends Component<
 export function VisualReply({ record }: { record: TranscriptRecord }) {
   const [copyStatus, setCopyStatus] = useState("");
   if (record.kind !== "reply" || !record.messageId) return null;
-  const { visualReply } = readStoredVisual(record.visualReply);
-  const fallback = visualReply?.fallbackText ?? record.visualFallbackText;
+  const checked = readStoredVisual(record.visualReply);
+  const { visualReply } = checked;
+  const fallback =
+    visualReply?.fallbackText ?? checked.visualFallbackText ?? record.visualFallbackText;
   if (!fallback) return null;
   const unavailable = <VisualFallback text={fallback} />;
   return (

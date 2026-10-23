@@ -16,7 +16,14 @@ const proposal = {
 };
 
 function fixture(
-  outcome: "saved" | "unsaved" | "save-error" | "submit-error" | "read-error" | "cancel" = "saved"
+  outcome:
+    | "saved"
+    | "unsaved"
+    | "save-error"
+    | "submit-error"
+    | "read-error"
+    | "cancel"
+    | "save-cancel" = "saved"
 ) {
   const service = new VisualPresentationService();
   const begin = vi.spyOn(service, "begin");
@@ -26,6 +33,10 @@ function fixture(
   const emitted: TranscriptRecord[] = [];
   let releaseRead!: () => void;
   let submitted!: () => void;
+  let startedSave!: () => void;
+  const saving = new Promise<void>((resolve) => {
+    startedSave = resolve;
+  });
   const ready = new Promise<void>((resolve) => {
     submitted = resolve;
   });
@@ -82,6 +93,8 @@ function fixture(
     expect(emitted.some((record) => record.visualReply || record.visualFallbackText)).toBe(false);
     expect(turn?.registry.state).toBe("open");
     expect(turn?.reply).toBeDefined();
+    startedSave();
+    if (outcome === "save-cancel") await paused;
     if (outcome === "save-error") throw new Error("save failed");
     return outcome === "unsaved"
       ? undefined
@@ -113,6 +126,7 @@ function fixture(
     engine,
     recordTurn,
     ready,
+    saving,
     deps,
     manager,
     emitted,
@@ -136,7 +150,8 @@ describe("internal presentation turn lifecycle", () => {
         actorUserId: "u1",
         threadId: "thread-1",
         turnId: expect.any(String)
-      }
+      },
+      expect.any(Function)
     ]);
     expect(f.close()).toHaveBeenCalledOnce();
     expect(f.turn()?.registry.state).toBe("closed");
@@ -187,6 +202,18 @@ describe("internal presentation turn lifecycle", () => {
     expect(f.engine.submitted).toHaveLength(1);
     expect(f.turn()?.registry.state).toBe("discarded");
     expect(f.turn()?.reply).toBeUndefined();
+  });
+
+  it("clears proposal progress and refuses publication when Stop races with save", async () => {
+    const f = fixture("save-cancel");
+    const run = f.manager.submitTurn("u1", "User", "six hours");
+    await f.saving;
+    expect(f.emitted).toContainEqual(expect.objectContaining({ visualState: "preparing" }));
+    await f.manager.stopTurn("u1");
+    const result = await run;
+    expect(result.visualReply).toBeUndefined();
+    expect(f.emitted.some((record) => record.visualReply)).toBe(false);
+    expect(f.emitted.at(-1)).toMatchObject({ visualState: "clear" });
   });
 
   it("keeps existing text turns working when no presentation service is injected", async () => {

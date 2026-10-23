@@ -24,6 +24,7 @@ export type ChatRecordKind =
   | "action_request"
   | "action_result";
 export interface TranscriptRecord {
+  readonly visualState?: "preparing" | "clear";
   readonly visualReply?: VisualReplyV1;
   readonly visualFallbackText?: string;
   /** Captured destination for admitted voice turns; clients must filter by shown thread. */

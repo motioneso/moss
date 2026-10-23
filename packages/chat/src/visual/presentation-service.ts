@@ -25,7 +25,10 @@ export class VisualPresentationTurn {
   private accepted: TrustedVisualReply | undefined;
   private userDataRegistered = false;
 
-  constructor(readonly identity: Readonly<VisualTurnIdentity>) {
+  constructor(
+    readonly identity: Readonly<VisualTurnIdentity>,
+    private readonly onAccepted?: () => void
+  ) {
     this.identity = Object.freeze({ ...identity });
     this.registry = new VisualTurnRegistry(this.identity);
   }
@@ -72,6 +75,7 @@ export class VisualPresentationTurn {
       const semantic = validateVisualCatalogReply(result.reply);
       if (!semantic.ok) return { ok: false, code: semantic.code, fallbackText: this.fallbackText };
       this.accepted = result.reply;
+      this.onAccepted?.();
     }
     return result;
   }
@@ -91,9 +95,13 @@ export class VisualPresentationTurn {
 export class VisualPresentationService {
   private readonly turns = new Map<string, VisualPresentationTurn>();
 
-  begin(sessionId: string, identity: VisualTurnIdentity): VisualPresentationTurn {
+  begin(
+    sessionId: string,
+    identity: VisualTurnIdentity,
+    onAccepted?: () => void
+  ): VisualPresentationTurn {
     this.turns.get(sessionId)?.discard();
-    const turn = new VisualPresentationTurn(identity);
+    const turn = new VisualPresentationTurn(identity, onAccepted);
     this.turns.set(sessionId, turn);
     return turn;
   }

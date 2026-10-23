@@ -86,3 +86,28 @@ Independent Standards and Spec reviews inspect the exact final head. Resolve fin
 live evidence on the PR, require green CI, then squash merge using the reviewed head without
 admin override/branch deletion. Keep #3583 open for later stages. Preserve durable work by
 explicit-path commits/pushes and finish with clean tree and session-owned resources stopped.
+
+## Review resolutions
+
+The first independent review of `4b9d22ba1` found three integration gaps. Stop now passes its
+signal through the existing persistence transaction, checks after message writes and at the
+last transaction boundary, and suppresses publication if cancellation wins after the save await.
+A database commit that already won the race may remain in history. Proposal acceptance emits
+host-owned Preparing visual status; every terminal path clears that exact turn's status.
+The browser uses the validator's compatibility fallback for future HTTP envelopes.
+
+Reconnect catch-up previously recovered reminders only. History now exposes the existing stored
+turn ID, and the browser recovers a saved reply only for a turn already observed in the selected
+transcript. It replaces that turn's draft, clears progress and deduplicates the saved identity;
+it does not import older or foreign-thread replies. This is exercised by a real disconnect that
+misses both HTTP completion and the stream's saved reply.
+
+Portable archive output also needs the readable facts. The archive query moves to
+`packages/chat/src/archive-messages.ts`; its visibility predicate is shared with the repository.
+Archive and settings export use shared `storedVisualText`. Integration tests cover rollback
+after actual inserts, archive text, thread deletion and zero private visual rows. No new store.
+
+The acceptance script now uses twenty visual requests plus four prose/text-only controls,
+checks every rendered binding, records usage, program/fallback bytes and latency, and faults
+the real CLI after an accepted proposal to verify failure cleanup. Preliminary sixteen-visual
+results are not treated as the full acceptance gate.

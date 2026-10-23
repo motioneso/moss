@@ -98,6 +98,7 @@ describe("installed visual catalog boundaries", () => {
       expect(response.statusCode, response.body).toBe(200);
       const messages = response.json().messages;
       expect(messages[0].visualReply).toEqual(reply);
+      expect(messages[0].turnId).toBe("turn");
       const history = recordsFromMessages(messages);
       expect(mergeHydratedRecords([], history)[0]?.visualReply).toEqual(reply);
       const record = parseRecord(
@@ -137,6 +138,19 @@ describe("installed visual catalog boundaries", () => {
     expect(readStoredVisual({ ...reply, version: 2 })).toEqual({
       visualFallbackText: reply.fallbackText
     });
+  });
+
+  it("removes pending state after the host clears it", () => {
+    const pending = parseRecord(
+      JSON.stringify({
+        kind: "status",
+        text: "Preparing visual…",
+        id: "visual:turn",
+        visualState: "preparing"
+      })
+    )!;
+    const clear = parseRecord(JSON.stringify({ ...pending, text: "", visualState: "clear" }))!;
+    expect(applyStreamRecord([pending], clear)).toEqual([]);
   });
 
   it("adapts dev query ids and refuses a changed upstream bootstrap", () => {

@@ -136,6 +136,7 @@ interface PersistTurnOptions {
   readonly invokedToolNames?: ReadonlySet<string>;
   readonly answerProvenance?: AnswerProvenanceMetadataV1;
   readonly visualReply?: VisualReplyV1;
+  readonly stopSignal?: AbortSignal;
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ActionResultMetadata[];
   readonly activityRecords?: readonly TranscriptRecord[];
@@ -358,6 +359,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
       readonly visualReply?: VisualReplyV1;
+      readonly stopSignal?: AbortSignal;
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
       readonly activityRecords?: readonly TranscriptRecord[];
@@ -565,6 +567,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     if (threadId === null) return undefined;
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, operation, async (scopedDb) => {
+      opts?.stopSignal?.throwIfAborted();
       const thread =
         threadId === undefined
           ? ((await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)) ??
@@ -656,6 +659,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               )
             : undefined;
       if (result && handled && "save" in handled) await handled.save?.(result.userMessage.id);
+      opts?.stopSignal?.throwIfAborted();
       // #3311: only a stored model turn acknowledges the reminders it was shown.
       if (result && "executed" in turn && opts?.acknowledgeReminderMessageIds) {
         await this.reminders.acknowledgeMain(
@@ -718,6 +722,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
           await sendJob(this.boss, CHAT_ARCHIVE_DAY_QUEUE, archivePayload);
         }
       }
+      // Last in-transaction boundary: Stop before commit rolls back the message and visual together.
+      opts?.stopSignal?.throwIfAborted();
       return result
         ? {
             userMessageId: result.userMessage.id,

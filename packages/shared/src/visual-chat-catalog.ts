@@ -158,3 +158,8 @@ export function readStoredVisual(value: unknown): {
 export function visualReplyText(body: string, fallback?: string): string {
   return fallback ? `${body}\n\n${fallback}` : body;
 }
+
+export function storedVisualText(body: string, envelope: unknown): string {
+  const visual = readStoredVisual(envelope);
+  return visualReplyText(body, visual.visualReply?.fallbackText ?? visual.visualFallbackText);
+}

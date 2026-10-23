@@ -115,6 +115,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
     role: message.role,
     status: message.status,
     body: message.body,
+    ...(typeof toolMetadata.turnId === "string" ? { turnId: toolMetadata.turnId } : {}),
     ...(message.role === "assistant" ? readStoredVisual(toolMetadata.visualReplyV1) : {}),
     modelRoute: null,
     tools: readTools(toolMetadata.selectedTools),

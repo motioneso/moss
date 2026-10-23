@@ -91,6 +91,7 @@ export interface UploadChatAttachmentResponse {
 }
 
 export interface ChatMessageDto {
+  readonly turnId?: string;
   readonly visualReply?: VisualReplyV1;
   readonly visualFallbackText?: string;
   readonly meetingContext?: MeetingChatCoverage;
@@ -207,6 +208,7 @@ export interface ActionRequestDetails {
 }
 
 export interface TranscriptRecord {
+  readonly visualState?: "preparing" | "clear";
   readonly visualReply?: VisualReplyV1;
   readonly visualFallbackText?: string;
   /** Captured destination for admitted voice turns; never changes browser selection. */
@@ -722,6 +724,7 @@ const chatMessageSchema = {
       enum: ["stored", "pending", "blocked", "no_model", "working", "error"]
     },
     body: { type: "string" },
+    turnId: { type: "string" },
     visualReply: visualReplySchema,
     visualFallbackText: { type: "string", maxLength: 4000 },
     modelRoute: { anyOf: [chatModelRouteSchema, { type: "null" }] },

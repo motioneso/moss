@@ -14,6 +14,8 @@ export function applyStreamRecord(
   current: readonly TranscriptRecord[],
   record: TranscriptRecord
 ): readonly TranscriptRecord[] {
+  if (record.kind === "status" && record.visualState === "clear" && record.id)
+    return current.filter((item) => item.id !== record.id);
   if (record.messageId) {
     const stored = current.findIndex(
       (item) => item.kind === record.kind && item.messageId === record.messageId
@@ -68,6 +70,29 @@ export function mergeBackgroundRecords(
       isBackgroundRecord(record) && !current.some((item) => item.messageId === record.messageId)
   );
   return missing.length === 0 ? current : [...current, ...missing];
+}
+
+/** Recover completed replies only for turns already present in this selected transcript. */
+export function mergeRecoveredReplies(
+  current: readonly TranscriptRecord[],
+  history: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  let merged = current;
+  for (const record of history) {
+    if (
+      record.kind !== "reply" ||
+      record.background ||
+      !record.messageId ||
+      !record.turnId ||
+      !current.some((item) => item.turnId === record.turnId)
+    )
+      continue;
+    merged = applyStreamRecord(
+      merged.filter((item) => !(item.visualState === "preparing" && item.turnId === record.turnId)),
+      record
+    );
+  }
+  return merged;
 }
 
 export function upsertTranscriptRecord(

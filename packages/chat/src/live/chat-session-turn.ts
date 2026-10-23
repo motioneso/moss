@@ -251,7 +251,7 @@ export async function runChatTurn(
     if (engineText.locale) session.locale = engineText.locale;
     const currentProvider = await host.deps.persistence.resolveActiveProvider(actorUserId);
     await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
-    host.emit(actorUserId, surface, { kind: "user", text });
+    host.emit(actorUserId, surface, { kind: "user", text, turnId });
     // #3157 — an over-budget session hands off to a fresh one for this exact conversation.
     const servingThreadId = session.threadId;
     let rollover: Awaited<ReturnType<typeof rollOverSessionIfDue>>;
@@ -298,11 +298,23 @@ export async function runChatTurn(
       session.threadId &&
       host.deps.visualPresentation
     ) {
-      visualTurn = host.deps.visualPresentation.begin(sessionKey, {
-        actorUserId,
-        threadId: session.threadId,
-        turnId
-      });
+      visualTurn = host.deps.visualPresentation.begin(
+        sessionKey,
+        {
+          actorUserId,
+          threadId: session.threadId,
+          turnId
+        },
+        () =>
+          host.emit(actorUserId, surface, {
+            kind: "status",
+            id: `visual:${turnId}`,
+            turnId,
+            actionThreadId: servingThreadId ?? undefined,
+            text: "Preparing visual…",
+            visualState: "preparing"
+          })
+      );
       if (controller.signal.aborted) visualTurn.discard();
       const context = visualTurn.registerPrompt(
         text,
@@ -395,7 +407,12 @@ export async function runChatTurn(
         const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
         if (!rejectionOnly) {
           // Engine output cannot publish a visual; only the validated post-save record can.
-          const { visualReply: _visual, visualFallbackText: _fallback, ...engineRecord } = record;
+          const {
+            visualReply: _visual,
+            visualFallbackText: _fallback,
+            visualState: _state,
+            ...engineRecord
+          } = record;
           host.emit(
             actorUserId,
             surface,
@@ -511,6 +528,7 @@ export async function runChatTurn(
         invokedToolNames,
         answerProvenance,
         visualReply,
+        stopSignal: controller.signal,
         attachments:
           attachments.length > 0
             ? attachments.map((meta) => ({
@@ -535,6 +553,9 @@ export async function runChatTurn(
       liveTurn?.saved();
       visualTurn?.close();
     }
+    // A commit that won the Stop race may remain in history; never publish it into a stopped turn.
+    if (controller.signal.aborted)
+      return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
     session.lastActivity = host.deps.clock.now();
     host.deps.touchMcpToken?.(sessionKey);
 
@@ -579,6 +600,15 @@ export async function runChatTurn(
     if (!controller.signal.aborted || error !== controller.signal.reason) throw error;
     return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, gateShadow);
   } finally {
+    if (visualTurn)
+      host.emit(actorUserId, surface, {
+        kind: "status",
+        id: `visual:${turnId}`,
+        turnId,
+        actionThreadId: visualTurn.identity.threadId,
+        text: "",
+        visualState: "clear"
+      });
     controller.signal.removeEventListener("abort", discardVisualTurn);
     if (visualTurn) host.deps.visualPresentation?.release(sessionKey, visualTurn);
     await liveTurn?.settle();
