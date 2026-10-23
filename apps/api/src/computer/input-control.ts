@@ -57,7 +57,7 @@ export class ComputerInputControl {
     this.#requireOpen();
     await this.#assertLive(binding);
     this.#requireOpen();
-    const viewer: ComputerViewer = Object.freeze({ [viewerBrand]: true });
+    const viewer = Object.freeze<ComputerViewer>({ [viewerBrand]: true });
     this.#viewers.set(viewer, binding);
     return viewer;
   }
@@ -96,7 +96,7 @@ export class ComputerInputControl {
     this.#requireOpen();
     if (actorUserId !== this.deps.ownerUserId || this.#control.mode !== "moss")
       throw new ComputerInputDenied();
-    const lease: ComputerAgentLease = Object.freeze({ [leaseBrand]: true });
+    const lease = Object.freeze<ComputerAgentLease>({ [leaseBrand]: true });
     this.#leases.set(lease, { generation: this.#generation, grant: this.#control.grant });
     return lease;
   }

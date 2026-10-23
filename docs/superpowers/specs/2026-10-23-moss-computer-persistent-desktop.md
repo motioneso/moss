@@ -339,3 +339,24 @@ This qualifies bounded startup/protected viewer/fresh input only. Active Firefox
 profile flush, replacement persistence, idle sleep/wake and §21 app/browser owner watch/takeover
 remain separately bounded work. Propose the next bounded Firefox/sandbox/clean-shutdown/replacement
 qualification; no automatic rerun, merge, task3578/parent3577 closure or product implementation.
+
+## 23. Implementation dispatch and r12 prerequisite rejection
+
+Ben dispatched implementation in a fresh isolated worktree under the
+[implementation handoff](../handoffs/2026-10-23-moss-computer-implementation.md), superseding
+historical integration exclusions without waiving review, UI design, runtime safety or live proof.
+New child #3605 tracks the owner-control foundation; it depends on unmerged draft #3598.
+Neither parent #3577 nor qualification task #3578 is complete.
+
+The single reviewed [r12 attempt](../../evidence/moss-computer/2026-10-23-persistence-r12.md)
+passed complete backend/access controls, then failed the current UI/RFB connected predicate after 20 seconds.
+Frame/input/Firefox/flush/replacement were not reached. No runtime retry; independent closure
+confirmed resources/ephemeral keys absent, retained homes/archive and healthy Moss. Cause UNKNOWN.
+Accepted r11 evidence remains bounded historical acceptance, not owner integration or persistence.
+
+The committed [owner-control plan](../plans/2026-10-23-moss-computer-owner-control.md) permits
+independent internal session-bound/generation-fenced input policy implementation while dependent
+desktop qualification is blocked. It adds no usable Computer route, viewer, lifecycle or egress
+and must not be advertised as delivered desktop integration. Proposed
+[screen mockups](2026-10-23-moss-computer-screens.html) await Ben's approval before product UI;
+a self-contained preview was delivered to his Samsung phone for review, not approved by delivery.

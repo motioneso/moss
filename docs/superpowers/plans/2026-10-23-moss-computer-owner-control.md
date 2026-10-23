@@ -9,16 +9,16 @@ Independent reviewer: `/root/implementation_review`.
 
 ## Prerequisite ledger
 
-| Requirement                                                       | Current evidence                                 | Dependency                                                                         |
-| ----------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| Startup, protected viewer, fresh keyboard input                   | Accepted r11 report/JSON and exact review        | Reuse bounded acceptance; synthetic identities are not owner auth                  |
-| Rapid restart; bounded delayed restart and explicit reload        | Accepted r3/r4 evidence                          | No arbitrary-outage or sustained-fit claim                                         |
-| Adopted-image active Firefox sandbox, clean flush and replacement | One exact-reviewed r12 run dispatched separately | Required before dependent integrated desktop acceptance; record its actual outcome |
-| Current owner/session authorization                               | Existing auth-owned binding API, below           | Reuse; enforce at upgrade, transitions and each input dispatch                     |
-| UI design                                                         | Concrete mockups to review before product UI     | Ben owns the missing screen approval; independent backend work may proceed         |
-| Trusted lifecycle, installed storage and confined Internet egress | No qualified installed candidate                 | Hard blocker before integrated launch; implement/review separately                 |
-| Actual app/browser HTTPS/WSS path and revocation                  | Not qualified                                    | Required before calling the vertical slice delivered                               |
-| Installer/platform/MacBook/manual and downloads                   | Later distinct acceptance                        | No claim from this foundation                                                      |
+| Requirement                                                       | Current evidence                                                                                                                       | Dependency                                                                         |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Startup, protected viewer, fresh keyboard input                   | Accepted r11 report/JSON and exact review                                                                                              | Reuse bounded acceptance; synthetic identities are not owner auth                  |
+| Rapid restart; bounded delayed restart and explicit reload        | Accepted r3/r4 evidence                                                                                                                | No arbitrary-outage or sustained-fit claim                                         |
+| Adopted-image active Firefox sandbox, clean flush and replacement | [r12 rejected at current UI connection](../../evidence/moss-computer/2026-10-23-persistence-r12.md); sandbox/flush/replacement NOT_RUN | Required before dependent integrated desktop acceptance; record its actual outcome |
+| Current owner/session authorization                               | Existing auth-owned binding API, below                                                                                                 | Reuse; enforce at upgrade, transitions and each input dispatch                     |
+| UI design                                                         | Concrete mockups to review before product UI                                                                                           | Ben owns the missing screen approval; independent backend work may proceed         |
+| Trusted lifecycle, installed storage and confined Internet egress | No qualified installed candidate                                                                                                       | Hard blocker before integrated launch; implement/review separately                 |
+| Actual app/browser HTTPS/WSS path and revocation                  | Not qualified                                                                                                                          | Required before calling the vertical slice delivered                               |
+| Installer/platform/MacBook/manual and downloads                   | Later distinct acceptance                                                                                                              | No claim from this foundation                                                      |
 
 ## Current seams (this tree, not historical citations)
 
@@ -45,7 +45,7 @@ Independent reviewer: `/root/implementation_review`.
 ## Bounded implementation now: input-control boundary
 
 Implement `apps/api/src/computer/input-control.ts` with behavior tests in
-`tests/unit/computer-input-control.test.ts`. This is an internal API implementation prerequisite,
+`tests/unit/computer-input-control.test.ts`; publicly re-export the existing `BrowserSessionBinding` type from `packages/auth/src/index.ts`. This is an internal API implementation prerequisite,
 not a new module, route, viewer, launcher or shipped surface. It deliberately has no transport or
 runtime side effect and adds no currently false app-map entry. It must not be described as the
 first delivered vertical slice.
