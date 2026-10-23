@@ -28,7 +28,8 @@ export function summaryGenerationFailure(code?: string): {
     case "meeting_output_subscription_isolation_unavailable":
       return {
         status: "failed",
-        message: "Claude summaries aren’t available on this server setup. No other model was used."
+        message:
+          "Subscription summaries aren’t available on this server setup. No other model was used."
       };
     case "meeting_output_claude_subscription_unsupported":
       return {

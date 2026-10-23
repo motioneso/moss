@@ -59,3 +59,4 @@ export * from "./persistent-runtime-pool.js";
 export * from "./claude-persistent-runtime.js";
 
 export { probeConstrainedClaudeProvider } from "./constrained-claude-profile.js";
+export { findConstrainedCodexExecutable } from "./constrained-codex-profile.js";

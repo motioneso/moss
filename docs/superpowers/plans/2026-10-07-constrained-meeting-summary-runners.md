@@ -1,5 +1,10 @@
 # Default-model meeting summaries with constrained subscription runners
 
+Current follow-up: [2026-10-22 default-provider spec](../specs/2026-10-22-meeting-default-provider.md)
+supersedes the Codex exclusion below. Inspection and native removal-control tests now establish
+an empty-tool Codex profile using an explicit model catalog and feature configuration. This
+older plan records the original Claude-only implementation boundary.
+
 ## Approved scope
 
 Meeting summaries use the signed-in person's effective default model, through the same

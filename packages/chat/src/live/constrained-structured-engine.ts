@@ -13,6 +13,10 @@ import {
   ConstrainedClaudeUnsupportedError,
   parseConstrainedClaudeOutput
 } from "./constrained-claude-profile.js";
+import {
+  prepareConstrainedCodexProfile,
+  parseConstrainedCodexOutput
+} from "./constrained-codex-profile.js";
 
 const MAX_PROMPT_BYTES = 65_536;
 // Native JSON envelopes escape the reply; the shared validator separately caps raw content.
@@ -58,7 +62,7 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
       !this.identity ||
       !this.homeBase ||
       process.platform !== "linux" ||
-      this.provider !== "anthropic" ||
+      (this.provider !== "anthropic" && this.provider !== "openai-compatible") ||
       opts.mcpToken ||
       opts.mcpServerUrl ||
       opts.nativeSearch ||
@@ -70,6 +74,17 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
     this.opts = { ...opts, schema: structuredClone(opts.schema) };
     const model = opts.model === DEFAULT_MODEL_SENTINEL ? null : opts.model;
     const privateHome = join(opts.neutralDir, "constrained-home");
+    if (this.provider === "openai-compatible") {
+      if (!model || this.homeBase !== privateHome) throw unavailable();
+      this.launchProfile = await prepareConstrainedCodexProfile({
+        privateHome,
+        model,
+        schema: opts.schema,
+        io: this.io,
+        signal: this.controller.signal
+      });
+      return { offset: 0 };
+    }
     const made = await this.io.run("mkdir", ["-m", "700", privateHome]);
     if (made.code !== 0) throw unavailable();
     const command = await findConstrainedClaudeExecutable();
@@ -120,7 +135,10 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
       maxStderrBytes: 65_536
     })
       .then((result) => {
-        this.reply = parseConstrainedClaudeOutput(result.stdout);
+        this.reply =
+          this.provider === "anthropic"
+            ? parseConstrainedClaudeOutput(result.stdout)
+            : parseConstrainedCodexOutput(result.stdout);
       })
       .catch((error: unknown) => {
         if (error instanceof ConstrainedProcessError && error.code === "termination")

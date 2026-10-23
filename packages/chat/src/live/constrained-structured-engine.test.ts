@@ -8,6 +8,15 @@ import {
   runConstrainedStructuredProcess
 } from "./constrained-structured-process.js";
 import { prepareConstrainedClaudeProfile } from "./constrained-claude-profile.js";
+import { prepareConstrainedCodexProfile } from "./constrained-codex-profile.js";
+vi.mock("./constrained-codex-profile.js", () => ({
+  prepareConstrainedCodexProfile: vi.fn(async () => ({
+    command: "/managed/codex",
+    args: ["exec"],
+    env: { HOME: "/neutral/fresh/constrained-home" }
+  })),
+  parseConstrainedCodexOutput: (value: string) => JSON.parse(value).text
+}));
 vi.mock("node:fs/promises", () => ({
   access: vi.fn(async () => {}),
   realpath: vi.fn(async (path: string) => path)
@@ -111,11 +120,33 @@ describe("constrained runner engine", () => {
     await engine.kill();
     expect(retry).toHaveBeenCalledTimes(1);
   });
-  it("rejects a direct Codex profile before any launch preparation or transcript dispatch", async () => {
+  it("rejects Codex without the runner-created private home before transcript dispatch", async () => {
     const { engine } = fixture("openai-compatible");
     await expect(engine.launchStructured(opts)).rejects.toThrow();
     expect(prepareConstrainedClaudeProfile).not.toHaveBeenCalled();
     expect(runConstrainedStructuredProcess).not.toHaveBeenCalled();
+  });
+  it("runs Codex using the temporary login home and exact selected model", async () => {
+    const { io, identity } = fixture("openai-compatible");
+    const engine = new ConstrainedStructuredEngine(
+      "openai-compatible",
+      io,
+      "/neutral/fresh/constrained-home",
+      identity
+    );
+    await engine.launchStructured(opts);
+    expect(prepareConstrainedCodexProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privateHome: "/neutral/fresh/constrained-home",
+        model: "exact-model",
+        schema: opts.schema
+      })
+    );
+    expect(prepareConstrainedClaudeProfile).not.toHaveBeenCalled();
+    await engine.submitStructured("synthetic transcript");
+    await vi.waitFor(async () => expect((await engine.readStructured(0)).complete).toBe(true));
+    expect((await engine.readStructured(0)).text).toBe("{}");
+    await engine.kill();
   });
   it("refuses execution without the runner's owner identity", async () => {
     const { io } = fixture("anthropic");

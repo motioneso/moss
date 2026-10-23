@@ -11,6 +11,7 @@ import {
   type GenerateStructuredDeps,
   type ActiveModulesResolver
 } from "@moss/ai";
+import type { AiProviderKind } from "@moss/shared";
 import {
   getMeetingOutputTemplate,
   readMeetingCaptureCompleteness,
@@ -112,7 +113,8 @@ export function createMeetingOutputRuntime(deps: {
   readonly createConstrainedCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
   readonly probeConstrainedCli?: (
     actorUserId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    providerKind?: AiProviderKind
   ) => Promise<ConstrainedCliReadiness>;
 }) {
   const ai = new AiRepository();
@@ -128,8 +130,6 @@ export function createMeetingOutputRuntime(deps: {
     // Use the same effective default as chat, including admin locks and user overrides.
     // An unavailable enabled override must not disclose meeting evidence to a substitute.
     const model = await ai.selectChatModelForUser(db, { rejectUnavailableOverride: true });
-    if (model?.provider_auth_method === "cli" && model.provider_kind !== "anthropic")
-      throw new MeetingOutputError("meeting_output_subscription_unsupported");
     if (
       !model ||
       model.status !== "active" ||
@@ -184,13 +184,17 @@ export function createMeetingOutputRuntime(deps: {
         );
         return {
           usable: usableProvider(model, provider),
-          cli: model.provider_auth_method === "cli"
+          cli: model.provider_auth_method === "cli",
+          providerKind: model.provider_kind
         };
       });
       if (!selected.usable) return "model-unavailable";
       // Filesystem metadata only; no actor transaction remains open during the runner RPC.
       if (selected.cli)
-        return (await deps.probeConstrainedCli?.(actor.actorUserId)) ?? "model-unavailable";
+        return (
+          (await deps.probeConstrainedCli?.(actor.actorUserId, undefined, selected.providerKind)) ??
+          "model-unavailable"
+        );
       return "available";
     } catch (error) {
       // Keep retained summaries readable when configuration checks are temporarily unavailable.
@@ -259,7 +263,11 @@ export function createMeetingOutputRuntime(deps: {
       const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
       modelName = selected.model.provider_model_id;
       if (selected.model.provider_auth_method === "cli") {
-        const readiness = await deps.probeConstrainedCli?.(actor.actorUserId, input.signal);
+        const readiness = await deps.probeConstrainedCli?.(
+          actor.actorUserId,
+          input.signal,
+          selected.model.provider_kind
+        );
         if (readiness !== "available")
           throw new MeetingOutputError(
             readiness === "subscription-isolation-unavailable"
@@ -310,6 +318,8 @@ export function createMeetingOutputRuntime(deps: {
           selected.model.provider_kind === "anthropic"
         )
           throw new MeetingOutputError("meeting_output_claude_subscription_unsupported");
+        if (result.reason === "unsupported_transport")
+          throw new MeetingOutputError("meeting_output_subscription_unsupported");
         if (
           result.reason === "json_parse" ||
           result.reason === "schema_validation" ||

@@ -251,7 +251,12 @@ import {
   type DataContextRunner,
   type MossDatabase
 } from "@moss/db";
-import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale, type ProactiveSource } from "@moss/shared";
+import {
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale,
+  type ProactiveSource,
+  type AiProviderKind
+} from "@moss/shared";
 import {
   createEmailThreadProvider,
   emailModuleManifest,
@@ -780,7 +785,8 @@ export interface BuiltInRouteDependencies {
   >;
   readonly probeConstrainedCli?: (
     actorUserId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    providerKind?: AiProviderKind
   ) => Promise<ConstrainedCliReadiness>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
