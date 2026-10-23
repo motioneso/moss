@@ -3,7 +3,6 @@ import { catalogSchema, factProps, replyProps, sectionProps } from "./schemas.js
 
 const parser = createParser(catalogSchema, "Reply");
 const MAX_BYTES = 64 * 1024;
-const MAX_NESTING = 8;
 const MAX_NODES = 80;
 
 // The experiment accepts one root assignment, registered calls, arrays and JSON strings.
@@ -23,23 +22,33 @@ function allowedSyntax(program: string): boolean {
     if (match[0].trim()) tokens.push(match[0]);
   }
   if (tokens[0] !== "root" || tokens[1] !== "=") return false;
-  const stack: string[] = [];
+  let position = 2;
   let nodes = 0;
-  for (let i = 2; i < tokens.length; i++) {
-    const value = tokens[i]!;
-    if (value.startsWith('"')) continue;
-    if (["Reply", "Section", "Fact"].includes(value)) {
-      if (tokens[i + 1] !== "(" || ++nodes > MAX_NODES) return false;
-    } else if (value === "(" || value === "[") {
-      stack.push(value);
-      if (stack.length > MAX_NESTING) return false;
-    } else if (value === ")" || value === "]") {
-      if (stack.pop() !== (value === ")" ? "(" : "[")) return false;
-    } else if (value === ";") {
-      if (i !== tokens.length - 1 || stack.length) return false;
-    } else if (value !== ",") return false;
-  }
-  return stack.length === 0;
+  const take = (expected: string): boolean => {
+    if (tokens[position] !== expected) return false;
+    position++;
+    return true;
+  };
+  const string = (): boolean => {
+    if (!tokens[position]?.startsWith('"')) return false;
+    position++;
+    return true;
+  };
+  const list = (item: () => boolean): boolean => {
+    if (!take("[")) return false;
+    if (take("]")) return true;
+    if (!item()) return false;
+    while (take(",")) if (!item()) return false;
+    return take("]");
+  };
+  const call = (name: string, args: () => boolean): boolean =>
+    ++nodes <= MAX_NODES && take(name) && take("(") && args() && take(")");
+  const fact = (): boolean => call("Fact", string);
+  const section = (): boolean => call("Section", () => string() && take(",") && list(fact));
+  // This fixed grammar has at most six nested delimiters; it cannot recurse.
+  if (!call("Reply", () => list(section))) return false;
+  take(";");
+  return position === tokens.length;
 }
 
 function element(value: unknown, name: string): value is ElementNode {
