@@ -1,7 +1,7 @@
 # Moss Computer: one persistent owner desktop
 
 - **Date:** 2026-10-23 UTC
-- **Status:** Autonomous implementation authorised. Offline candidate implemented; partial qualification accepted only for covered cases. Reconstructed candidate rapid-restart recovery qualified by automated proof; long-outage recovery and Moss integration remain unqualified.
+- **Status:** Autonomous implementation authorised. Offline candidate implemented; partial qualification accepted only for covered cases. Reconstructed candidate rapid-restart and bounded delayed-restart/reload recovery qualified by automated proofs; arbitrary-outage recovery and Moss integration remain unqualified.
 - **Parent:** #3577. First qualification: #3578.
 - **Plan:** [Isolated qualification](../plans/2026-10-23-moss-computer-isolated-qualification.md).
 - **Authority:** Ben's supplied “Moss next steps after Stage 4, focused planning update 1”, MC0 request, device clarification, acceptance of the supplied v7 material without separate pack verification, instruction to write the spec/plan and proceed overnight, and subsequent explicit full authority to plan and implement autonomously, provider-agnostic and following repository guidelines.
@@ -139,4 +139,17 @@ reconstructed image. The synchronous readiness harness passed after a stopped-gu
 failed at the actual canvas assertion. Historical async readiness checks were unreliable; the
 original canvas-timeout cause remains unknown. This does not transfer earlier replacement/profile
 acceptance to the rebuild. Long-outage/reload, Moss integration and the other gates stay separate.
-The one next proposal is a bounded delayed-restart/reload proof, not an integration dispatch.
+At that checkpoint the next proposal was a bounded delayed-restart/reload proof, not an integration dispatch.
+
+## 13. Delayed-restart/reload checkpoint
+
+The [recovery-r4 result](../../evidence/moss-computer/2026-10-23-recovery-r4.md) qualifies one
+server-local automated delayed-restart loop on the same adopted image: observed terminal failed
+automatic retry while stopped, actual stopped-guest12s frame negative control, fixed host restart,
+then one explicit browser reload yielding a new document/RFB, substantive visible frame and fresh
+viewer-keyboard marker. Guest kill-return→start-return was13392ms; arbitrary-duration recovery or
+recovery without reload after terminal failure is not established. Exact evidence records collection
+limits and independent review; active runtime/listener/keys were closed and retained data preserved.
+No product integration or earlier-image Firefox/profile/replacement acceptance transfers. The one
+next proposal is a separately reviewed bounded active Firefox sandbox and file/profile replacement
+qualification on this adopted image; no further runtime is dispatched by this checkpoint.
