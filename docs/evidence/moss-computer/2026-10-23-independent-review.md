@@ -88,3 +88,32 @@ candidate, stopping before recovery runtime; it has not started.
 | Recovery preflight report        | `c7239714a7511cdbc6c04df2ee2fb8a73e7f7287b43bab5661e2d2b9950eaefd` |
 | Recovery preflight JSON          | `824512498af32a6b1c7cb9c2501a22f6f76d8899a80afd6d33cb12f34b3e0098` |
 | Dispatched/blocked recovery plan | `43c37819ca66608fe927ffe32a848bfdd970915ffeb80e25256be76e24ea4c64` |
+
+## Reconstruction checkpoint: adopt for later recovery trial
+
+Ben dispatched the proposed reconstruction checkpoint. Reviewer `/root/independent_review2`
+independently accepted staged build readiness, conditional on the actual resource/cancellation
+probe. That probe passed before the candidate build. Exact readiness hashes:
+
+| Artifact              | SHA-256                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| Reconstruction plan   | `bc82b637a8c6d7e8e37177105b36a5ceabadfafb0bf40b46a5cc26a22e96f57e` |
+| Run-scoped supervisor | `735d959829e24a2484eec3f9835706a0caf2a59831d320dac09a5d09c6d6b780` |
+| Derived Dockerfile    | `a55c342c055e6eaaf6feba9ec5805d82ee20e113eda0ec457b3d20dcda231765` |
+| Diagnostic Dockerfile | `2db0cee911f9b6b10bef0427eb9d313e33626617a5b514da5a104e57f1848575` |
+
+Final independent verdict: **PASS — ADOPT_FOR_LATER_RECOVERY_TRIAL**, exact candidate
+`sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf`.
+No blocking report inaccuracies. Reviewer independently checked package inventory equality,
+actual image configuration and packaged source, probe limits/cancellation, archive checksum/config
+identity/layer list, final image existence, no checkpoint containers and healthy Moss.
+
+| Exact reviewed report   | SHA-256                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| Reconstruction Markdown | `67986be966f9b3eb350598ec57d0578f5d6521957a94e481bdd3aa03626d79cb` |
+| Reconstruction JSON     | `9c7f2b07284e03af63015e24861fe99e084f56894d74a14b7a7b2048f7ab9459` |
+
+This accepts the reconstructed artifact for a later trial, granting no desktop, recovery,
+persistence or security acceptance for it. Earlier recovery failure and original image loss remain
+unexplained. The proposed next step independently reviews an amended recovery packet before
+runtime; this checkpoint stops here. No merge readiness or guide progress follows.
