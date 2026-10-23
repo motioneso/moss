@@ -1,0 +1,461 @@
+{
+  "task": "3578",
+  "parent": "3577",
+  "run": "recovery-r3",
+  "status": "PASS_BOUNDED_AUTOMATED_RAPID_RESTART_RECOVERY",
+  "operator": "Codex /root; active automated finish; session 01a1692d-a45e-7632-9df3-05f87eea5e67",
+  "source_at_dispatch": "f5ed18a39a58670dba739eaaf8e45a0366f0b064",
+  "candidate_image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+  "image_load": {
+    "image_missing_again_before_load": true,
+    "cause": "UNKNOWN",
+    "archive_verification": {
+      "archive_bytes": 1026041856,
+      "sha256": "48cdd56f8d026af02c873513d36c86ab48b3b9e0b169cefe7a4f2ab7a1ceb4f9",
+      "config_sha256": "c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "layers_verified": [
+        "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+        "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+        "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+        "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+        "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+        "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+        "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+      ],
+      "image_missing_before_load": true
+    },
+    "exit": 0
+  },
+  "runtime_hashes": {
+    "compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    "gateway/nginx.conf": "f6491689a53ef5d6c0d8bdc2eccd0041f7f8a0fb613ef75e9e0adbba50921bbd",
+    "supervise.py": "7185f9ed13dc6bea3b8e48c72f3b1e9aac4d487441a52f7ce655ad2789e90246",
+    "recovery.mjs": "0bcb27fdf5b2714af6a39052619f391b7d6d0e83d7f1ec28c7e49fe1df14eca1",
+    "access-check.mjs": "2314207e9f56d48260787ef6dbf94d982696742bf0a337f975d5c3f4d52b97c9",
+    "access-controls.py": "17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628",
+    "isolation.py": "d597e556b1439d6c790f9c6d00136d2d4b6c9744a2da87c6391a831b4d7b4b32",
+    "receipts/resolved-config.json": "f2dd64f949cd5ed1637d5c7d8248825e0eef02d05fef4902441fe0c62e754546"
+  },
+  "source_sha256": {
+    "spikes/moss-computer/compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    "spikes/moss-computer/Dockerfile": "7334eb8946d90c55ed57d2e9e3b966716a8330c55c5affb28af7e522ba37503a",
+    "spikes/moss-computer/fixture.html": "20f3db461ada7dcaae9e98f79413cf4c99777c7679c31470250480f674a2c6e2",
+    "spikes/moss-computer/entrypoint.sh": "a13bb5769f8358e1b73db2fd254d4fabd98621901dca3e936c9dfdc16fe40949",
+    "spikes/moss-computer/requirements.txt": "b063d1812dfdb8a5069a3ad60986fdd5fab730fc5e9f711f960f13b14a852cf6",
+    "spikes/moss-computer/gateway.conf.template": "14b725a93df4913e114a32b52878141a182e58d0f0224284b699c8e25afa2374",
+    "spikes/moss-computer/README.md": "6de137ebcd1c065c9143c30775da218375c3b6e3ba863b9ea5cbf6f17e4c4973"
+  },
+  "containers": {
+    "desktop": "099da610b35eb0cd8efb73b2a6cbb7531614e04197b684da022fc68f35d6c5f6",
+    "gateway_observed_prefix": "ffdd9569c46c",
+    "replacement_performed": false
+  },
+  "first_loop": {
+    "exit": 0,
+    "verdict": "PROVISIONAL_SUPERSEDED_BY_STRICT_LOOP",
+    "problem": "Async wait falsely returned while UI.connected was false. Later frame and keyboard evidence remains real."
+  },
+  "wait_sanity": {
+    "version": "1.60.0",
+    "results": [
+      {
+        "name": "sync-false",
+        "result": "TimeoutError",
+        "elapsed": 503
+      },
+      {
+        "name": "async-false",
+        "result": "RETURNED",
+        "value": false,
+        "elapsed": 3
+      }
+    ]
+  },
+  "frame_negative_control": {
+    "mode": "no-restart",
+    "exit": 1,
+    "error": "page.waitForFunction: Timeout 12000ms exceeded.",
+    "failure_dom_canvas_count": 0,
+    "failure_rfb_canvas": null,
+    "no_restart_event": true
+  },
+  "strict_recovery": {
+    "exit": 0,
+    "started": "2026-10-23T14:43:42.573Z",
+    "finished": "2026-10-23T14:43:51.348Z",
+    "action": "Automatic noVNC reconnect after fixed host docker start; no reload/new page/button",
+    "guest_kill_to_start_return_ms": 142,
+    "disconnect_observed": true,
+    "moss_during_failure": "running healthy",
+    "frames": {
+      "baseline": {
+        "phase": "baseline",
+        "at": 1792766624728,
+        "wsMessages": 6,
+        "wsBytes": 16590,
+        "uiConnected": true,
+        "rfbState": "connected",
+        "fbWidth": 1280,
+        "fbHeight": 800,
+        "domCanvases": [
+          {
+            "width": 1280,
+            "height": 800,
+            "attached": true,
+            "cssDisplay": "block",
+            "cssVisibility": "visible",
+            "rect": {
+              "x": 0,
+              "y": 500,
+              "width": 1280,
+              "height": 800
+            },
+            "parent": "DIV",
+            "colors": 345
+          }
+        ],
+        "rfbCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": true,
+          "cssDisplay": "block",
+          "cssVisibility": "visible",
+          "rect": {
+            "x": 0,
+            "y": 500,
+            "width": 1280,
+            "height": 800
+          },
+          "parent": "DIV",
+          "colors": 345
+        },
+        "screenAttached": true,
+        "targetId": "noVNC_container",
+        "targetChildren": 2,
+        "rootClasses": "noVNC_connected"
+      },
+      "disconnected": {
+        "phase": "disconnected",
+        "at": 1792766627446,
+        "wsMessages": 21,
+        "wsBytes": 147917,
+        "uiConnected": false,
+        "domCanvases": [],
+        "rfbCanvas": null,
+        "targetChildren": 1,
+        "rootClasses": "noVNC_reconnecting"
+      },
+      "transport-reconnected": {
+        "phase": "transport-reconnected",
+        "at": 1792766628624,
+        "wsMessages": 25,
+        "wsBytes": 147979,
+        "uiConnected": true,
+        "rfbState": "connected",
+        "fbWidth": 1280,
+        "fbHeight": 800,
+        "domCanvases": [
+          {
+            "width": 1280,
+            "height": 800,
+            "attached": true,
+            "cssDisplay": "block",
+            "cssVisibility": "visible",
+            "rect": {
+              "x": 0,
+              "y": 500,
+              "width": 1280,
+              "height": 800
+            },
+            "parent": "DIV",
+            "colors": 1
+          }
+        ],
+        "rfbCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": true,
+          "cssDisplay": "block",
+          "cssVisibility": "visible",
+          "rect": {
+            "x": 0,
+            "y": 500,
+            "width": 1280,
+            "height": 800
+          },
+          "parent": "DIV",
+          "colors": 1
+        },
+        "screenAttached": true,
+        "targetId": "noVNC_container",
+        "targetChildren": 2,
+        "rootClasses": "noVNC_connected"
+      },
+      "recovered": {
+        "phase": "recovered",
+        "at": 1792766628760,
+        "wsMessages": 27,
+        "wsBytes": 164481,
+        "uiConnected": true,
+        "rfbState": "connected",
+        "fbWidth": 1280,
+        "fbHeight": 800,
+        "domCanvases": [
+          {
+            "width": 1280,
+            "height": 800,
+            "attached": true,
+            "cssDisplay": "block",
+            "cssVisibility": "visible",
+            "rect": {
+              "x": 0,
+              "y": 500,
+              "width": 1280,
+              "height": 800
+            },
+            "parent": "DIV",
+            "colors": 337
+          }
+        ],
+        "rfbCanvas": {
+          "width": 1280,
+          "height": 800,
+          "attached": true,
+          "cssDisplay": "block",
+          "cssVisibility": "visible",
+          "rect": {
+            "x": 0,
+            "y": 500,
+            "width": 1280,
+            "height": 800
+          },
+          "parent": "DIV",
+          "colors": 337
+        },
+        "screenAttached": true,
+        "targetId": "noVNC_container",
+        "targetChildren": 2,
+        "rootClasses": "noVNC_connected"
+      }
+    },
+    "baseline_input": {
+      "name": "baseline-1792766624728",
+      "path": "baseline-unique.txt",
+      "content": "baseline-1792766624728",
+      "via": "noVNC RFB.sendKey to prepared terminal"
+    },
+    "recovered_input": {
+      "name": "recovered-1792766628760",
+      "path": "recovered-unique.txt",
+      "content": "recovered-1792766628760",
+      "via": "noVNC RFB.sendKey to prepared terminal"
+    },
+    "marker_creation": "Host only launches/activates terminal and reads marker; command is sent through actual viewer RFB.sendKey. Unique file absence checked before each input.",
+    "bounded_console_events": [
+      {
+        "at": 1792766623907,
+        "kind": "console-error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "at": 1792766623907,
+        "kind": "console-error",
+        "text": "Couldn't fetch package.json: Error: 404 Not Found"
+      },
+      {
+        "at": 1792766624507,
+        "kind": "ws-open",
+        "path": "/websockify"
+      },
+      {
+        "at": 1792766627439,
+        "kind": "guest-killed"
+      },
+      {
+        "at": 1792766627443,
+        "kind": "ws-close"
+      },
+      {
+        "at": 1792766627581,
+        "kind": "guest-restarted"
+      },
+      {
+        "at": 1792766628557,
+        "kind": "ws-open",
+        "path": "/websockify"
+      }
+    ]
+  },
+  "access": [
+    {
+      "path": "HTTP viewer",
+      "identity": "owner",
+      "status": 200
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "none",
+      "status": 400
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "foreign",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://localhost:5180",
+      "status": 101,
+      "protocol": "RFB 003.008"
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://foreign.invalid",
+      "status": 403
+    },
+    {
+      "path": "WS input",
+      "identity": "none",
+      "origin": "https://localhost:5180",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "foreign",
+      "origin": "https://localhost:5180",
+      "status": 400
+    }
+  ],
+  "access_negative_controls": {
+    "results": [
+      {
+        "case": "protected",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "mtls-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "origin-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "restored",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      }
+    ],
+    "restored_sha256": "f6491689a53ef5d6c0d8bdc2eccd0041f7f8a0fb613ef75e9e0adbba50921bbd"
+  },
+  "isolation": "PASS actual candidate/user/caps/default profiles/limits/mounts/route plus sampled ENETUNREACH and ECONNREFUSED checks; raw receipt hashed below",
+  "resources": {
+    "watchdog_samples": 51,
+    "last_elapsed_seconds": 252.8,
+    "min_host_available_bytes": 17447440384,
+    "max_home_socket_bytes": 1387549,
+    "last_stats": [
+      {
+        "BlockIO": "225kB / 0B",
+        "CPUPerc": "0.00%",
+        "Container": "ffdd9569c46c",
+        "ID": "ffdd9569c46c",
+        "MemPerc": "2.53%",
+        "MemUsage": "3.242MiB / 128MiB",
+        "Name": "moss-computer-recovery-r3-gateway-1",
+        "NetIO": "474kB / 3.37MB",
+        "PIDs": "3"
+      },
+      {
+        "BlockIO": "0B / 4.1kB",
+        "CPUPerc": "0.00%",
+        "Container": "099da610b35e",
+        "ID": "099da610b35e",
+        "MemPerc": "3.91%",
+        "MemUsage": "160MiB / 4GiB",
+        "Name": "moss-computer-recovery-r3-desktop-1",
+        "NetIO": "0B / 0B",
+        "PIDs": "71"
+      }
+    ],
+    "final_container_peaks": [
+      {
+        "id": "ffdd9569c46c",
+        "role": "gateway",
+        "memory_peak": "6168576",
+        "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0"
+      },
+      {
+        "id": "099da610b35e",
+        "role": "desktop",
+        "memory_peak": "176291840",
+        "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0"
+      }
+    ],
+    "limits": "Desktop2 CPU/4GiB/512PID; gateway0.5CPU/128MiB/32PID; no swap allowance",
+    "storage": "Sampled10GiB home/socket ceiling, not quota; bounded tmpfs/logs; nominal5s checks",
+    "peak_scope": "Desktop cgroup peak is after final restart, not whole-run aggregate; snapshots not benchmark"
+  },
+  "closure": {
+    "timestamp_utc": "2026-10-23T14:44:49Z",
+    "containers_remaining": [],
+    "networks_remaining": [],
+    "listener_connect_errno": 111,
+    "port_released": true,
+    "ephemeral_key_files_remaining": [],
+    "owned_runtime_processes": [],
+    "home_preserved": true,
+    "prior_home_preserved": true,
+    "archive_preserved": true,
+    "moss": "running healthy",
+    "supervisor_exit": 0
+  },
+  "historical_recovered_canvas_root_cause": "UNKNOWN; original image absent; async readiness flaw does not establish cause of historical canvas timeout",
+  "not_run": [
+    "Long-outage recovery, reload/fresh-page/button recovery",
+    "Rebuilt-image Firefox sandbox/content and profile/replacement persistence acceptance",
+    "New watchdog fault-injection controls; inherited supervisor only operator-closure exercised this run",
+    "Ben manual/MacBook viewing",
+    "Internet/provider jobs",
+    "Moss owner/session/revocation/download/lifecycle integration",
+    "Installer/platform/release acceptance"
+  ],
+  "raw_receipt_sha256": {
+    "archive-verification.json": "636bfa5a53a62ac6e7d009a463441891464e946a97feffd5a2917f3b92d67285",
+    "preflight.json": "cf48ddb814d3530b50abeecfd74a17bade818a09aabc1b538dea7b72f1566494",
+    "recovery-provisional.json": "9b876645cf4f8fd185d471645b962fa95c97e08706a0d2fe2cefbc09da535f78",
+    "recovery-provisional.log": "f26654e58a050fb3e01d9db43602040d3309f09742cf7e46a4e383ac4359dad3",
+    "recovery-first-harness.mjs": "417552576e79ed2d79a700b80a3d49464436340ef25305403deb08d4a6ecb8a8",
+    "wait-sanity.json": "c3d26f9b2c52706eafe4d6dc14597a081c62d04c6e2e206fe46190158c22769a",
+    "recovery-no-restart.json": "02f4dece871ddf68de307a3b8412a3302827d2d4c7cbd71f8797d13b7c6b0a95",
+    "recovery-no-restart.log": "4c3bfc26ace31be119ce0f8e04f98cf150c0cc2204c4de1f4a5498f842919342",
+    "recovery-automatic.json": "75469330cd1bffc1498406000b371d9014d1ad3606136403f5030e88c54e7aa1",
+    "recovery-automatic.log": "2cc30290fad2329a4a804ffbc142d4f32fcbec15568d95b390102f3e627089cf",
+    "isolation.json": "9e793cfd6f0a582cb9ba3d1baae697510a9bdcecc74c9adf67aec993f4dc7776",
+    "access.json": "57cc8f3ec40dd4fc6c47a46312659b6180b80e8dab531336881e20ccf230dbf4",
+    "access-controls.json": "175dab876e2f9acb98a1da8fd42f16f5f721342b1da408a78504887dcff0fb12",
+    "access-protected.log": "83f1badf98a05cc171d7e834931badb1ff7e6bb0cc57cda71fc4fc666739442a",
+    "access-mtls-removed.log": "e5d7b8afced87e6b5c8ab4b34dc0271638d2375b37a056e0f1cd7f5d5eac4099",
+    "access-origin-removed.log": "ceba93c4fde3a82d6599db99dc1e97d75b7587ad3c89b698ef29528717556034",
+    "access-restored.log": "83f1badf98a05cc171d7e834931badb1ff7e6bb0cc57cda71fc4fc666739442a",
+    "container-final-state.json": "cc18a8d0603e7f9465721e7f9cb87da72d9d7600641fd19450c79f973c9d7eeb",
+    "monitor.jsonl": "b2d9c97bd1d4429efdee49792525107831732559d255fc55f02ff3ff9634fc41",
+    "monitor-stop.txt": "84b3c04b0a7557cd9f6d8e702ab3a861d27d47e8bf0469ebfccf15b9c67cd979",
+    "supervisor.log": "e05ff21249552e0bd5a753b1a588f9b01c88ea0b5457e6e405d302fb631531a5",
+    "closure.json": "b8af5988003b512c7a8b61547bb55915b14481deb640f14ccf0c2e801477a3a8",
+    "resources-baseline.jsonl": "151a98f0a7cf563172ac5a8afa1a7f8a32c0c15edee5bdb1806ff862b41c3d31",
+    "resources-recovered.jsonl": "6e8406df5ee74d45c42c4f2349e4495192d8188a51b55491f5c3c97c4632e565",
+    "resources-final.jsonl": "86b116125a2e24a1d79859a7b140e1c0acd0086ab7d5c03364add72b5fc963be",
+    "backend-final.log": "ec0748606ba3e3be0810a6e1611d1aedd07b303f04d26bf205f38e0840f46cb9"
+  },
+  "review": "Independent exact report review recorded in 2026-10-23-independent-review.md"
+}

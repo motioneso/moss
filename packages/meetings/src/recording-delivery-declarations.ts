@@ -61,7 +61,7 @@ export const recordingDeliveryRoutes = [
 export const recordingUploadFeature = {
   id: "meetings.resumable_recordings",
   description:
-    "Developer uploads resume missing chunks for 24 hours. Meetings up to two hours use checkpointed transcription before analysis. Hold-to-talk stays limited to 120 seconds and enters Main. Consumer setup is not yet available.",
+    "Android setup connects existing owned rings. Uploads resume missing chunks for 24 hours. Meetings up to two hours use checkpointed transcription before analysis. Hold-to-talk stays limited to 120 seconds and enters Main.",
   errors: [
     {
       code: "recording_import_conflict",
@@ -73,7 +73,7 @@ export const recordingUploadFeature = {
       code: "recording_import_invalid",
       class: "validation",
       description:
-        "Use the approved canonical audio format, complete sidecar and matching SHA256 hashes. Chunks are at most 1 MiB."
+        "Use canonical audio, a complete sidecar and matching SHA256 hashes. Chunks are at most 1 MiB. Declared duration must match audio; long recordings allow bounded ring-clock drift."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];
@@ -112,7 +112,7 @@ export const recordingImportFeature = {
     }
   ],
   description:
-    "Developer imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Configured transcripts appear in Meetings history. Limit: 120 seconds. No request execution or consumer ring setup.",
+    "Legacy bundle imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Transcripts appear in Meetings history. Limit: 120 seconds; Android uses resumable uploads for longer recordings.",
   errors: [
     {
       code: "recording_import_invalid",

@@ -35,6 +35,9 @@ public final class DeliveryActivity extends Activity {
         setTheme(NativeTheme.isDark(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(state);
         if ("stop".equals(getIntent().getAction())) stopDelivery();
+        if (!new SecretStore(this).exists()) {
+            startActivity(new Intent(this, SetupActivity.class)); finish(); return;
+        }
         theme = new NativeTheme(this); getWindow().setBackgroundDrawable(new ColorDrawable(theme.paper));
         getWindow().setDecorFitsSystemWindows(false);
         getWindow().getDecorView().getWindowInsetsController().setSystemBarsAppearance(theme.dark ? 0 :
@@ -50,8 +53,8 @@ public final class DeliveryActivity extends Activity {
         scroll.addView(body); setContentView(scroll); scroll.requestApplyInsets();
         if (state != null) { restoreScrollY = state.getInt("scrollY"); connectionDetails = state.getBoolean("connectionDetails"); }
     }
-    @Override public void onSaveInstanceState(Bundle state) { state.putInt("scrollY", scroll.getScrollY()); state.putBoolean("connectionDetails", connectionDetails); super.onSaveInstanceState(state); }
-    @Override public void onResume() { super.onResume(); handler.post(refresh); }
+    @Override public void onSaveInstanceState(Bundle state) { if (scroll != null) state.putInt("scrollY", scroll.getScrollY()); state.putBoolean("connectionDetails", connectionDetails); super.onSaveInstanceState(state); }
+    @Override public void onResume() { super.onResume(); if (body != null) handler.post(refresh); }
     @Override public void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
     @Override public void onDestroy() { linking.shutdownNow(); super.onDestroy(); }
     private void link(String action) {
@@ -114,22 +117,14 @@ public final class DeliveryActivity extends Activity {
         button.setOnClickListener(v -> action.run());
     }
     private void command(String action) {
-        if (!"start".equals(action) && !new DeliveryPreferences(this).enabled()) {
-            Toast.makeText(this, "Start delivery before changing voice input, clearing audio or retrying.", Toast.LENGTH_LONG).show(); render(); return;
-        }
-        if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 1); return;
-        }
-        startForegroundService(new Intent(this, DeliveryService.class).setAction(action));
-        Toast.makeText(this, "Change queued", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, DeliveryActions.command(this, action), Toast.LENGTH_LONG).show(); render();
     }
     private void open(String origin, String path) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(origin + path))); }
         catch (ActivityNotFoundException unavailable) { Toast.makeText(this, "Install a browser to open Moss", Toast.LENGTH_SHORT).show(); }
     }
     private void stopDelivery() {
-        new DeliveryPreferences(this).enabled(false);
-        stopService(new Intent(this, DeliveryService.class));
+        DeliveryActions.stop(this);
     }
     private void appSettings(String packageName) {
         try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + packageName))); }
@@ -150,13 +145,14 @@ public final class DeliveryActivity extends Activity {
             config = new SecretStore(this).load();
             text("identity", "Moss: " + config.getString("origin") + "\nAccount: " + config.optString("accountName", config.getString("ownerId")) + "\nRing: " + config.getString("sn"), 13, false);
             text("account-status", config.has("credential") ? "Account connected · device approval" : config.has("cookie") ? "Developer session · connect in browser for daily use" : "Account disconnected · connect in browser to resume", 15, false);
+            button("setup-options", "Ring setup and delivery options", () -> startActivity(new Intent(this, SetupActivity.class)));
             button("connect-account", new MossLink(this).pending() ? "Reopen browser approval" : "Connect Moss in browser", () -> link("begin"));
             if (new MossLink(this).pending()) button("cancel-link", "Cancel connection request", () -> link("cancel"));
             if (config.has("credential")) button("disconnect-account", "Disconnect Moss account", () -> link("disconnect"));
             text("account-help", "Use the same Moss account that owns this queue. Your browser handles sign-in; ring setup and pending recordings are kept when reconnecting.", 13, false);
             if (!linkStatus.isEmpty()) text("link-status", linkStatus, 15, false);
         } catch (Exception unavailable) {
-            text("identity", "Setup needed: provision your existing ring binding and Moss session using the developer setup instructions, then Start delivery.", 13, false);
+            text("identity", "Saved setup could not be opened. Your existing account and queued recordings are kept. Restore the original setup before starting delivery.", 13, false);
         }
         text("restart-status", choices.enabled() ? "Delivery enabled · resumes after phone restart when Android permits." : "Delivery stopped · automatic restart is off.", 13, false);
         if (!choices.recovery().isEmpty()) text("recovery", choices.recovery(), 15, false);

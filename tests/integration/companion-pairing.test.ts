@@ -130,6 +130,104 @@ describe("Android browser-approved linking", () => {
     ).toBe("redeemed");
     await pairing.cancel({ attemptId: attempt.attemptId, verifier: VERIFIER });
   });
+  it("can cancel a lost Android redemption after approval expiry and another pairing request", async () => {
+    const input = await issue();
+    const originalClock = clock;
+    const android = createCompanionDevicesService({ pool, now, platform: "android" });
+    try {
+      clock = new Date(clock.getTime() + 11 * 60 * 1000);
+      await pairing.create(attemptInput({ platform: "android" }));
+      expect(await pairing.summarize({ approvalCode: input.attempt.approvalCode })).toBeNull();
+      await pairing.cancel({ attemptId: input.attempt.attemptId, verifier: "w".repeat(43) });
+      expect((await android.resolve(input)).actorUserId).toBe(userId);
+      await pairing.cancel({ attemptId: input.attempt.attemptId, verifier: VERIFIER });
+      await expect(android.resolve(input)).rejects.toMatchObject({ httpStatus: 401 });
+    } finally {
+      clock = originalClock;
+    }
+  });
+  it.each(["expiry cleanup", "explicit cancellation"])(
+    "preserves cancellation when redemption overlaps %s",
+    async (operation) => {
+      const originalClock = clock;
+      const attempt = await pairing.create(attemptInput({ platform: "android" }));
+      await pairing.decide({
+        approvalCode: attempt.approvalCode,
+        actorUserId: userId,
+        browserSessionId: sessionId,
+        decision: "approve"
+      });
+      // Pause the real redemption after its attempt claim, before its device insert
+      // becomes visible to another transaction. No service responses are replaced.
+      await bootstrapClient.query(`CREATE FUNCTION app.test_pause_companion_issue() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN PERFORM pg_advisory_xact_lock(3565, 3566); RETURN NEW; END $$`);
+      await bootstrapClient.query(`CREATE TRIGGER test_pause_companion_issue BEFORE INSERT ON app.companion_devices
+      FOR EACH ROW WHEN (NEW.pair_attempt_id = '${attempt.attemptId}'::uuid) EXECUTE FUNCTION app.test_pause_companion_issue()`);
+      await bootstrapClient.query("SELECT pg_advisory_lock(3565, 3566)");
+      let redemption: ReturnType<CompanionPairingService["redeem"]> | undefined;
+      let overlapping: Promise<unknown> | undefined;
+      try {
+        redemption = pairing.redeem({ attemptId: attempt.attemptId, verifier: VERIFIER });
+        const blocked = async () =>
+          Number(
+            (
+              await bootstrapClient.query<{ count: string }>(
+                "SELECT count(*) FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE $1",
+                ["%INSERT INTO app.companion_devices%"]
+              )
+            ).rows[0]?.count
+          ) > 0;
+        await expect.poll(blocked).toBe(true);
+        if (operation === "expiry cleanup") clock = new Date(clock.getTime() + 11 * 60 * 1000);
+        let completed = false;
+        overlapping = (
+          operation === "expiry cleanup"
+            ? pairing.create(attemptInput({ platform: "android" }))
+            : pairing.cancel({ attemptId: attempt.attemptId, verifier: VERIFIER })
+        ).then((value) => {
+          completed = true;
+          return value;
+        });
+        await expect
+          .poll(
+            async () =>
+              completed ||
+              Number(
+                (
+                  await bootstrapClient.query<{ count: string }>(
+                    "SELECT count(*) FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE $1",
+                    ["%companion_pair_attempts%"]
+                  )
+                ).rows[0]?.count
+              ) > 0
+          )
+          .toBe(true);
+        await bootstrapClient.query("SELECT pg_advisory_unlock(3565, 3566)");
+        const issued = await redemption;
+        await overlapping;
+        if (issued.status !== "issued") throw new Error("Expected Android credential");
+        issuedIds.push(issued.response.device.id);
+        const android = createCompanionDevicesService({ pool, now, platform: "android" });
+        const input = {
+          headers: { authorization: `Bearer ${issued.response.credential}` },
+          requestId: "overlapping-cleanup"
+        };
+        if (operation === "expiry cleanup") {
+          expect((await android.resolve(input)).actorUserId).toBe(userId);
+          await pairing.cancel({ attemptId: attempt.attemptId, verifier: VERIFIER });
+        }
+        await expect(android.resolve(input)).rejects.toMatchObject({ httpStatus: 401 });
+      } finally {
+        await bootstrapClient.query("SELECT pg_advisory_unlock(3565, 3566)");
+        await Promise.allSettled([redemption, overlapping]);
+        await bootstrapClient.query(
+          "DROP TRIGGER test_pause_companion_issue ON app.companion_devices"
+        );
+        await bootstrapClient.query("DROP FUNCTION app.test_pause_companion_issue()");
+        clock = originalClock;
+      }
+    }
+  );
   it("accepts Android through its resolver while the Mac resolver rejects that prefix", async () => {
     const input = await issue();
     const android = createCompanionDevicesService({ pool, now, platform: "android" });
