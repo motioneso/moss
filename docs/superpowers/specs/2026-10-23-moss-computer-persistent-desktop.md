@@ -313,3 +313,29 @@ and verify a safe resumption on the same desktop. Cover unauthorised access, sta
 reconnect and active-work sleep inhibition. Keep the app map truthful when those product surfaces
 ship. The isolated startup/probe fix continues as groundwork and grants none of this integrated,
 manual-device or platform acceptance.
+
+## 22. Bounded startup and fresh-input qualification: r11
+
+Ben's “yea fix it” authorised the bounded probe correction after r10, preserving its rejection.
+R10's greeting-only probes definitely stopped before initialization; complete bounded RFB3.8
+negotiation now precedes successful closure on guestTCP, UnixWS, gatewayWS and accessWS. Separate
+protocol-contract regressions caught the old false-positive behavior and passed the correction.
+They do not establish TigerVNC's blacklist trigger; r7's prior502 cause remains UNKNOWN.
+
+The single exact-reviewed r11 run passed actual complete readiness, unchanged protected access and
+mTLS/Origin removal/restoration controls0/1/1/0, current connected UI/RFB, attached visible1280x800
+canvas with345 sampled colours and exact fresh viewer-written file readback, plus initial/final
+sampled isolation. Runner/watchdog/cleanup/port release/operator closure all0; independent closure
+accepted absent owned runtime/keys, retained homes/archive/marker and healthy Moss. Two short monitor
+samples grant no sustained-fit claim. Synthetic identities grant no Moss owner-authentication proof.
+
+See the [r11 report](../../evidence/moss-computer/2026-10-23-startup-readiness-r11.md),
+[JSON](../../evidence/moss-computer/2026-10-23-startup-readiness-r11.json) and
+[packet](../plans/2026-10-23-moss-computer-startup-readiness-r11.md). The image's present-to-absent
+preparation observation remains unexplained; one freshly archive-verified/reviewed restore0 matched
+actual identity/platform/all seven layers before this run. No earlier acceptance transferred.
+
+This qualifies bounded startup/protected viewer/fresh input only. Active Firefox sandbox, clean
+profile flush, replacement persistence, idle sleep/wake and §21 app/browser owner watch/takeover
+remain separately bounded work. Propose the next bounded Firefox/sandbox/clean-shutdown/replacement
+qualification; no automatic rerun, merge, task3578/parent3577 closure or product implementation.

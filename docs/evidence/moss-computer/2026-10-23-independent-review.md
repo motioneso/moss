@@ -457,3 +457,45 @@ The one next proposal is separately dispatched bounded RFB probe/blacklist diagn
 exact image/security/access assertions, then exact review before another startup/UI/input proof.
 Active Firefox sandbox, clean flush, replacement persistence, idle sleep/wake and owner integration
 remain unqualified. No automatic retry, security weakening, product expansion, merge or issue close.
+
+## Startup readiness r11: complete probes, narrow live pass and closure
+
+Reviewer `/root/r9_evidence_review` independently accepted the actual archive size/checksum/config/
+seven payload layers at21:37:26.232074 UTC, conditional on fresh pre-load floors, one exact load
+and actual image/layer inspection. It treated explicit image absence after entry presence as the
+handoff's permitted restoration branch; the disappearance cause remains UNKNOWN. Load0 and actual
+identity/platform/seven layers matched. Earlier rejections/acceptance remain unchanged.
+
+PASS_LAUNCH_READY21:41:29 UTC covered committed packet
+`be5359b437b4f3b2df5a74028797aa29c82d60a1` and all60 actual private artifacts,
+manifest `5537c3c2570856d4a7016068173ccfe2d1eca5349d788d3b8ef49329e06de8c6`.
+Actual complete RFB3.8 guestTCP/UnixWS/gatewayWS/accessWS probes, unchanged access assertions/red
+controls, separate protocol-contract fixtures/red-green receipts, limits/mounts/synthetic identities,
+watchdog/mutation/diagnostics/cleanup and actual UI/input assertions were checked. No reviewer
+mutation/runtime/fixture execution occurred. Readiness remained conditional on fresh runner admission
+and a healthy first live watchdog sample.
+
+The single run passed all bounded live gates. Drivers0/1/1/0 produced intended signals, pristine
+configuration was restored exactly, current UI/RFB connected and attached visible1280x800 canvas
+had345 sampled colours. A fresh unique initially absent file received exact viewer keyboard bytes
+and exact readback. Initial/final sampled isolation passed; runner/watchdog/cleanup/port release/
+operator closure0. Only two short watchdog samples; no sustained-fit claim. One package.json404
+startup event did not prevent the predicates. No failure diagnostics were needed or run.
+
+Independent PASS_CLOSURE21:43:53.971326 UTC verified current absence of owned containers/network/
+listener5187/reservation/scripts/watchdog/recorded browser PID-start identities/keys, restored pristine
+gateway configuration, retained new/prior homes/archive and exact marker bytes, and healthy Moss/health.
+The supplemental r9-root assumption/check correction was retained and accepted as an operator
+read-only check error without a runtime retry. Earlier home contents were not comprehensively rehashed.
+
+Exact final review21:46:47.365216 UTC: **PASS — exact final r11 evidence accepted; no blocking findings**. Acceptance covers bounded startup/protected viewer/fresh input
+and closure only. The blacklist trigger remains a supported hypothesis without an actual-backend
+differential reproducer; r7's prior502 cause remains UNKNOWN. Active Firefox sandbox, clean profile
+flush, replacement persistence, idle sleep/wake and spec§21 app/browser watch/takeover owner integration
+remain unqualified. #3578/#3577 remain open; no rerun, merge or product expansion follows.
+
+| Exact final artifact                                                                              | SHA-256                                                            |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [r11 report](2026-10-23-startup-readiness-r11.md)                                                 | `e469a8160d5d4fb5f354876462e7ffb0bab7a09ae39373375621a67920504317` |
+| [r11 JSON](2026-10-23-startup-readiness-r11.json)                                                 | `71fbe6c59dcf4571169011ba6f238492b36bcf3bc3d863995717c16b1a954e0e` |
+| [Spec with sections21–22](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `35169fa4a1deaed1e357330428b3f2af1631319b0bc122a77ab22a986321c115` |
