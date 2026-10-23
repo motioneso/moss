@@ -281,6 +281,11 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # Azure's archive can stream packages too slowly for the bounded install.
+      - name: Use standard Ubuntu archive for browser dependencies
+        run: |
+          sudo python3 scripts/prepare-browser-apt-mirror.py
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
