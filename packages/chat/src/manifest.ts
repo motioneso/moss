@@ -22,6 +22,7 @@ import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
 import { chatReadAttachmentExecute } from "./attachment-tool.js";
+import { chatPresentTool } from "./visual/present-tool.js";
 import {
   chatSetResponseStyleExecute,
   chatResponseStylePresentation,
@@ -876,6 +877,7 @@ export const chatModuleManifest = {
     }
   ],
   assistantTools: [
+    chatPresentTool,
     {
       name: "chat.listTodaysTurns",
       description: "List today's non-incognito chat turns for the active actor.",
