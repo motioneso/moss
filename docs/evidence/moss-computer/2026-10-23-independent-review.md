@@ -153,3 +153,43 @@ Delayed-restart recovery remains unqualified, historical canvas root cause UNKNO
 Firefox/profile/replacement, Moss integration, remote manual, platform or release acceptance.
 One next proposal is an independently reviewed delayed-restart explicit reload proof; not dispatched.
 Task3578/parent3577 remain open and PR3579 draft. No merge or automatic parent adoption.
+
+## Recovery r4: delayed restart and one reload evidence accepted
+
+Reviewer `/root/delayed_review`, independent of author/operator Codex `/root`, issued
+**PASS_READY** for exact launch packet commit `aa8c01601ffe4f65f803fb3cc47207720e2d09d7`,
+then **PASS — bounded delayed-restart/reload evidence accepted; no blocking findings.**
+No reviewer authorship or edits. Fresh floors and watchdog alive/first healthy sample were checked
+before launch; exact eight runtime/config hashes matched the committed packet and launch bytes.
+
+Final independent review checked all42 raw receipt hashes, eight runtime hashes, seven source
+hashes and raw/sanitised agreement. Actual failed automatic retry preceded the stopped-guest frame
+assertion's12010ms timeout. One reload created a new document/RFB, substantive visible frame and
+fresh unique retained viewer-keyboard marker. Detached prior pixels and the initial one-colour
+transport frame did not qualify. Kill-return→start-return13392ms; reload→substantive frame1372ms.
+Access removal/restoration controls, actual isolation/cgroups and sampled resources were verified.
+
+Independent current closure checks found no r4 containers/network/listener5189/reservation,
+watchdog PID or keys; owned runtime closed, homes/archive retained and Moss healthy. Browser closure
+is supported by the harness awaiting `browser.close` and its finite exit0. Scoped formatting,
+whitespace, privacy and relative links passed.
+
+Full gateway ID and supervisor numeric exit were not retained; retrospective daemon event collection
+was empty. The reviewer explicitly found these disclosed collection limits **non-blocking for this
+narrow recovery acceptance**: full guest ID plus real UI/RFB/frame/input evidence establish recovery;
+normal supervisor stop receipt and current no-runtime checks establish closure. No daemon-event
+corroboration or broader host/service restart resilience is claimed.
+
+| Exact accepted artifact | SHA-256                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| Recovery-r4 report      | `29042adf34a0427d0ba3dc18f264032d057927d260e133737780166a6f7415a0` |
+| Recovery-r4 JSON        | `6984a6f9ea95b3d8223ae0a72a42bd552656d425fb5490f2bcf54a5974840e75` |
+| Final spec              | `95ff0fdc87fbade5dcb9c043da8f6e8cf7ab17542329d3af4dcacd1eea35b76b` |
+| Launch packet           | `be5b3c5b58bae6a46c6a8f4e66d07f94326fb88b42643c565920139b081d96d3` |
+
+Acceptance is one approximately13.4s guest outage with an explicit browser reload after terminal
+retry failure, on the exact adopted image. Arbitrary outages, recovery without reload, historical
+original-image canvas-timeout/image-loss/Herdr incident causes, rebuilt-image Firefox/profile/
+replacement, owner integration and manual/platform/release gates remain separate. The one next
+proposal is bounded active Firefox sandbox plus file/profile replacement qualification on the
+adopted image, not dispatched. No merge, automatic parent adoption or issue close.
