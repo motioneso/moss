@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Guided setup for existing Vocci rings.** Connect an existing Vocci ring to Moss on Android, then choose when recording delivery and hold-to-talk are enabled. [PR #3566](https://github.com/motioneso/moss/pull/3566)
 
+#### Fixed
+
+- **Meeting summaries use your default model.** Meeting summaries now support your configured Codex model alongside existing supported providers, without switching to another model. [PR #3576](https://github.com/motioneso/moss/pull/3576)
+
 ### 2026-10-22
 
 #### Fixed
