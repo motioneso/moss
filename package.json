@@ -72,6 +72,7 @@
     "start:worker": "pnpm --filter @moss/worker start",
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
+    "test:integration:3601": "tsx scripts/test-integration.ts tests/integration/ai-voice-endpoint.test.ts tests/integration/ai-capability-routes.test.ts tests/integration/ai-transcription.test.ts",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:integration:companion-pairing": "tsx scripts/test-integration.ts tests/integration/companion-pairing.test.ts",
     "test:chat-unread": "tsx scripts/test-integration.ts tests/integration/chat-unread.test.ts",

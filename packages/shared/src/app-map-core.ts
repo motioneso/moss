@@ -286,6 +286,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "aiproviders",
     label: "AI providers",
     description:
+      "The Transcription group lets an admin choose one active OpenAI-compatible API provider and Voice-capable model for everyone's voice input and Meeting transcripts. Add providers and models above. Existing voice endpoint keeps the saved endpoint and key as the upgrade default; selecting it restores that configuration form. Admin locks take precedence. An unavailable selected model stops transcription without switching providers; choose another model or Existing voice endpoint to recover. Loading or failed provider/model reads disable saving and offer Retry. Audio uploads preserve their MIME type and use matching filenames for known containers. " +
       "Configure instance AI providers, models, and bindings. Native commands require a working host sandbox; on restricted Linux container hosts an administrator installs the native-sandbox security profiles and Compose overlay documented in docs/native-command-sandbox.md. That opt-in overlay also prepares read-only access to the chat owner's private vault for their isolated CLI account. Unexpected ACLs, linked files, excessive vault entries or failed preparation refuse the send; see the same guide for recovery. Each provider card lists its models " +
       "with a Refresh models button (asks the provider for its current list; the line under the " +
       "list then reads 'Refreshed: N models', 'Not logged in', 'This provider cannot list its " +

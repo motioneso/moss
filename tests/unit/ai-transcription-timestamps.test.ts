@@ -20,6 +20,28 @@ function adapterFor(response: Response) {
 }
 
 describe("timestamped ASR (generated fixtures, no provider compatibility proof)", () => {
+  it.each([
+    ["audio/wav", "audio.wav"],
+    ["audio/x-wav", "audio.wav"],
+    ["audio/webm;codecs=opus", "audio.webm"],
+    ["audio/ogg;codecs=opus", "audio.ogg"],
+    ["audio/mp4", "audio.mp4"],
+    ["audio/mpeg", "audio.mp3"],
+    ["audio/flac", "audio.flac"],
+    ["audio/aac", "audio.aac"],
+    ["audio/unknown", "audio"],
+    ["", "audio"]
+  ])("preserves %s bytes and MIME with filename %s", async (type, filename) => {
+    const { adapter, fetch } = adapterFor(Response.json(payload));
+    const audio = new Blob([new Uint8Array([1, 2, 3])], { type });
+    await adapter.transcribeAudio({ ...input, audio, timestamps: "segment" });
+    const file = (fetch.mock.calls[0]![1]!.body as FormData).get("file");
+    expect(file).toBeInstanceOf(File);
+    expect((file as File).name).toBe(filename);
+    expect((file as File).type).toBe(type);
+    expect(new Uint8Array(await (file as File).arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
   it("opts into verbose segment timestamps at the configured endpoint and strips speaker claims", async () => {
     const { adapter, fetch } = adapterFor(
       Response.json({ ...payload, segments: [{ ...segment, speaker: "invented" }] })
