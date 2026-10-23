@@ -1,0 +1,543 @@
+{
+  "run": "persistence-r6",
+  "status": "REJECTED_INCOMPLETE_PROOF",
+  "operator": "Codex /root",
+  "session": "01a16981-6c86-7df1-82ab-397cf5db2e90",
+  "task": 3578,
+  "parent": 3577,
+  "launch_packet_commit": "08a3b2111d6d79ff2aa3972ab56f655e32ed10ef",
+  "readiness_review": {
+    "reviewer": "/root/persistence_entry_review",
+    "verdict": "PASS_READY",
+    "packet_sha256": "02a28f03c5b7add2b09b5d2fb7a4740d334c536708fa5219a1ff8a08dafb79ab",
+    "manifest_sha256": "2ecc8a88f66efa71683869f78a44584ef11b939b0988955c97d5147aa690e26a"
+  },
+  "archive_verification": {
+    "at_utc": "2026-10-23T16:51:37.276158+00:00",
+    "size_bytes": 1026041856,
+    "sha256": "48cdd56f8d026af02c873513d36c86ab48b3b9e0b169cefe7a4f2ab7a1ceb4f9",
+    "config_sha256": "c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "config_runtime": {
+      "os": "linux",
+      "architecture": "amd64",
+      "config": {
+        "Hostname": "",
+        "Domainname": "",
+        "User": "1000:1000",
+        "AttachStdin": false,
+        "AttachStdout": false,
+        "AttachStderr": false,
+        "Tty": false,
+        "OpenStdin": false,
+        "StdinOnce": false,
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOME=/home/desktop",
+          "DISPLAY=:0",
+          "XDG_RUNTIME_DIR=/run/desktop"
+        ],
+        "Cmd": ["/usr/local/bin/computer-desktop"],
+        "Image": "sha256:9de58e97d3bfb9ae3c05b6867cc77d9786a642d45339272e5c990dced45149a2",
+        "Volumes": null,
+        "WorkingDir": "",
+        "Entrypoint": ["/usr/bin/tini", "--"],
+        "Labels": {
+          "com.moss.build": "reconstruct-20261023-r2-candidate"
+        }
+      }
+    },
+    "layers": [
+      {
+        "sha256": "9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+        "match": true
+      },
+      {
+        "sha256": "cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+        "match": true
+      },
+      {
+        "sha256": "5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+        "match": true
+      },
+      {
+        "sha256": "87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+        "match": true
+      },
+      {
+        "sha256": "8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+        "match": true
+      },
+      {
+        "sha256": "7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+        "match": true
+      },
+      {
+        "sha256": "ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b",
+        "match": true
+      }
+    ],
+    "status": "PASS_EXACT_ARCHIVE_CONFIG_AND_SEVEN_LAYERS_NO_EXTRACTION"
+  },
+  "image_load": {
+    "at": "2026-10-23T16:54:24.520121+00:00",
+    "inspect_exit": 0,
+    "image_id": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "expected": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "match": true,
+    "layers": [
+      "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+      "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+      "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+      "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+      "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+      "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+      "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+    ],
+    "root_free_bytes": 8995782656,
+    "data_free_bytes": 1032573845504,
+    "load_log": "Loaded image: moss-computer-qualification:reconstruct-20261023-r2-candidate\n",
+    "load_wrapper_exit": 1,
+    "load_numeric_exit": 0,
+    "wrapper_failure": "post-load expected digest literal transcribed incorrectly; load itself returned zero; no retry load"
+  },
+  "runner": {
+    "started": "2026-10-23T17:05:48.816126+00:00",
+    "operations": [
+      {
+        "name": "launch",
+        "started": "2026-10-23T17:05:49.042668+00:00",
+        "finished": "2026-10-23T17:05:49.930080+00:00",
+        "exit": 0
+      },
+      {
+        "name": "isolation-before",
+        "started": "2026-10-23T17:05:49.930511+00:00",
+        "finished": "2026-10-23T17:05:50.354495+00:00",
+        "exit": 0
+      },
+      {
+        "name": "access-controls",
+        "started": "2026-10-23T17:05:50.354963+00:00",
+        "finished": "2026-10-23T17:05:54.957751+00:00",
+        "exit": 0
+      },
+      {
+        "name": "persistence",
+        "started": "2026-10-23T17:05:54.957858+00:00",
+        "finished": "2026-10-23T17:06:34.634494+00:00",
+        "exit": 1
+      },
+      {
+        "name": "cgroup-gateway",
+        "started": "2026-10-23T17:06:34.664082+00:00",
+        "finished": "2026-10-23T17:06:34.728056+00:00",
+        "exit": 0
+      },
+      {
+        "name": "cgroup-desktop",
+        "started": "2026-10-23T17:06:34.742793+00:00",
+        "finished": "2026-10-23T17:06:34.857040+00:00",
+        "exit": 0
+      },
+      {
+        "name": "failure-browser-close",
+        "started": "2026-10-23T17:06:34.857118+00:00",
+        "finished": "2026-10-23T17:06:34.921413+00:00",
+        "exit": 0
+      },
+      {
+        "name": "cleanup",
+        "started": "2026-10-23T17:06:40.407850+00:00",
+        "finished": "2026-10-23T17:06:40.672907+00:00",
+        "exit": 0
+      },
+      {
+        "name": "port-release",
+        "started": "2026-10-23T17:06:40.674670+00:00",
+        "finished": "2026-10-23T17:06:40.683360+00:00",
+        "exit": 0
+      }
+    ],
+    "first_healthy_sample": {
+      "elapsed": 0.0,
+      "heartbeat_age": 0.0,
+      "home_bytes": 0,
+      "host_available_bytes": 19291643904,
+      "data_free_bytes": 1032571895808,
+      "root_free_bytes": 8660062208,
+      "running": 0
+    },
+    "status": "FAIL",
+    "error": "AssertionError({'name': 'persistence', 'started': '2026-10-23T17:05:54.957858+00:00', 'finished': '2026-10-23T17:06:34.634494+00:00', 'exit': 1})",
+    "final_ids": [
+      "0c3c1246f4e8d6a87de17d4a496d0ceb3e640ced2511d9166708cb8415819843",
+      "84ed21bedf3e59e0ea398e273b7864c5c59aae2075e5ea891c7278876eb5e757"
+    ],
+    "supervisor_exit": 0,
+    "host_browser_closure": {
+      "signals": [],
+      "remaining": []
+    },
+    "closure_containers": "",
+    "closure_networks": "",
+    "listener": "",
+    "moss": "running healthy",
+    "finished": "2026-10-23T17:06:40.750946+00:00"
+  },
+  "proof": {
+    "started": "2026-10-23T17:05:55.437Z",
+    "meta": {
+      "token": "persistence-r6-bd49ddefa078",
+      "filename": "persistence-r6-bd49ddefa078.txt",
+      "url": "file:///opt/computer/fixture.html#persistence-r6-bd49ddefa078",
+      "title": "Moss persistence-r6-bd49ddefa078"
+    },
+    "events": [
+      {
+        "kind": "http",
+        "path": "/package.json",
+        "status": 404
+      }
+    ],
+    "frames": [
+      {
+        "phase": "before",
+        "ui": true,
+        "rfb": "connected",
+        "attached": true,
+        "width": 1280,
+        "height": 800,
+        "rect": {
+          "x": 0,
+          "y": 500,
+          "width": 1280,
+          "height": 800
+        },
+        "colors": 345
+      }
+    ],
+    "operations": [],
+    "identities": [
+      {
+        "phase": "before",
+        "id": "84ed21bedf3e59e0ea398e273b7864c5c59aae2075e5ea891c7278876eb5e757",
+        "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+        "mounts": [
+          {
+            "destination": "/socket",
+            "source": "<private-run>/socket",
+            "rw": true
+          },
+          {
+            "destination": "/home/desktop",
+            "source": "<private-run>/home",
+            "rw": true
+          }
+        ],
+        "started": "2026-10-23T17:05:49.516204717Z"
+      },
+      {
+        "phase": "gateway",
+        "id": "0c3c1246f4e8d6a87de17d4a496d0ceb3e640ced2511d9166708cb8415819843",
+        "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+        "mounts": [
+          {
+            "destination": "/socket",
+            "source": "<private-run>/socket",
+            "rw": false
+          },
+          {
+            "destination": "/gateway",
+            "source": "<private-run>/gateway",
+            "rw": false
+          }
+        ],
+        "started": "2026-10-23T17:05:49.509268668Z"
+      }
+    ],
+    "initiallyAbsent": {
+      "profileDatabase": true,
+      "file": true
+    },
+    "beforeInput": {
+      "filename": "persistence-r6-bd49ddefa078.txt",
+      "content": "persistence-r6-bd49ddefa078",
+      "initiallyAbsent": true,
+      "via": "actual noVNC RFB.sendKey"
+    },
+    "status": "FAIL",
+    "error": "Error: Polling timed out: Command failed: docker exec 84ed21bedf3e59e0ea398e273b7864c5c59aae2075e5ea891c7278876eb5e757 xdotool getwindowname 29360173\nX Error of failed request:  BadWindow (invalid Window parameter)\n  Major opcode of failed request:  20 (X_GetProperty)\n  Resource id in failed request:  0x1c0002d\n  Serial number of failed request:  22\n  Current serial number in output stream:  22\n\n    at poll (file://<private-run>/persistence.mjs:16:186)\n    at async sandbox (file://<private-run>/persistence.mjs:63:36)\n    at async file://<private-run>/persistence.mjs:86:2",
+    "finished": "2026-10-23T17:06:34.566Z"
+  },
+  "access_controls": {
+    "results": [
+      {
+        "case": "protected",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "mtls-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "origin-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "restored",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      }
+    ],
+    "restored_sha256": "285d0b3a705aba8dffa751614cd3a0aa7b12a34b75e71e89aaab5f0dec2ca21e"
+  },
+  "access_restored": [
+    {
+      "path": "HTTP viewer",
+      "identity": "owner",
+      "status": 200
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "none",
+      "status": 400
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "foreign",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://localhost:5188",
+      "status": 101,
+      "protocol": "RFB 003.008"
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://foreign.invalid",
+      "status": 403
+    },
+    {
+      "path": "WS input",
+      "identity": "none",
+      "origin": "https://localhost:5188",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "foreign",
+      "origin": "https://localhost:5188",
+      "status": 400
+    }
+  ],
+  "persistence_controls": null,
+  "monitor": {
+    "count": 10,
+    "min_available_bytes": 9295101952,
+    "min_root_free_bytes": 8628154368,
+    "min_data_free_bytes": 1032532877312,
+    "max_home_socket_bytes": 39483975,
+    "last_elapsed_seconds": 45.8,
+    "stop_receipt": "operator closure\nNO_RUNNING_PROOF_CONTAINERS\n"
+  },
+  "private_receipt_sha256": {
+    "access-controls.json": "353c3498cbf40fbf840c1924bda12c65c0a60039edf55e1b55d548860fde1f11",
+    "access-controls.log": "9d16ecb0bfb646c89394f9b85d65d4047f12680f26bb2bc1eb179b4509854135",
+    "access-mtls-removed.log": "6c0e01e647dae3684f00e67430990c9dbe61f6de424a645380ef466504f2f14c",
+    "access-origin-removed.log": "91a6f5541c7e2d7515927d6ac7277a181844576388ce364b3e368cec821dbfb1",
+    "access-protected.log": "3e277316bf13a26a924f81776240ed63ba56236bdcc679a4b687624131de87ff",
+    "access-restored.log": "3e277316bf13a26a924f81776240ed63ba56236bdcc679a4b687624131de87ff",
+    "access.json": "f38d99f2612e333bb8000b0da6b840834596295203748c7269e9811b9047037f",
+    "archive-verified.json": "52052b3fff4308ce0936f3628f3d5253a0d51689dbc5fd65d04548c1330db5b7",
+    "cgroup-desktop.log": "68fe466774b55d8c2f6303e0ecb05801357b32ea3c42ab4f34642582b61b4425",
+    "cgroup-gateway.log": "b4ece76da3ec1b02e656f5ee5243fae97bd41a56a68054059b5b29ad92f54f27",
+    "cleanup.log": "e74e71fd2ea1e66035384d947fe5e9814a5355654c49b34895cd3895286bba43",
+    "closure.json": "52bfb2640f43539b89849a53bb53a635bff99896206dd2653f7f62977cd599d4",
+    "failure-analysis.json": "c90bbbf96128bdd4be7ad86d50fff5146e9560caa716958041424c0743d19fdd",
+    "failure-browser-close.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "final-desktop-inspect.json": "65b7272d85faff612f651e07ea665e9901807e76e6e175f56f307cb38ad62ef7",
+    "final-gateway-inspect.json": "a3ccbe27ebbba3078d2787369f629cabbc7fb532ee15f6015bdfeaaa4b96cc98",
+    "host-browser-processes.json": "ed0a1188d45b6d956ae66417405fe5d2d9385fe41565625718022ffc1a2afd3a",
+    "image-load.json": "11468164127a598592b17f639a780a88e3b37e61646b39f6ae9223b9d254c4ed",
+    "image-load.log": "77f4262f0593dd9c7e65e2c2808cfeb87e93d928a2ef4f95d8e35f43fcf69dd2",
+    "isolation-before.json": "d5efef5dad4f522ac8f9d632f5143a32e73a6283d7801818847d2fc022c135f2",
+    "isolation-before.log": "95e251bff7a488ee12d33cf634152b43d92f82a1e1458065f8714aecfadb349f",
+    "isolation.json": "d5efef5dad4f522ac8f9d632f5143a32e73a6283d7801818847d2fc022c135f2",
+    "launch.log": "f82e10f40003f0a74f116504a85d7718b977a79cd820af745339cd7193fba6a3",
+    "monitor-stop.txt": "84b3c04b0a7557cd9f6d8e702ab3a861d27d47e8bf0469ebfccf15b9c67cd979",
+    "monitor.jsonl": "aa34238534a61397a39f59d56e0ba4e9c50b51d388608acdca095b7f9954869c",
+    "persistence.json": "c1fbf8068de4591e083959c376afb0a930c71b90a5f60b290f6b834cc9432ac9",
+    "persistence.log": "cf4c165265b14158352f072d1228011d64779bf5422b403dc523a825bae90ed5",
+    "port-release.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "postmortem-profile.json": "40e59aefe7aba63b19f0da08a1523b0ee70df34ed27c5028c4842a4ee9169dd3",
+    "preflight.json": "f246e7a389ceaf3f674505a0b4fa58dae5773d1fc7a90bf47993f70e3f8e28a2",
+    "resolved-config.json": "24d53d1cfe1de0e117baaef4b60ec66ec88b22b2085dba12a2ea14e87daa6a7d",
+    "run.json": "0f4f202fe8330f82828c0d6cb93edc41fd37b5b754004136c47dff940f61c436",
+    "supervisor.log": "df145f691ef7f31827afa8ae7c9444ebdcd52309a31a9fc8abc93cef5a429304"
+  },
+  "private_reference": "Sibling ../moss-computer-persistence-r6/; prior homes and archive retained",
+  "historical_causes": "Image disappearance and Herdr restart UNKNOWN; no infrastructure repair or investigation",
+  "limits": "One bounded automated offline proof only; sleep implementation, Moss owner/session/download/Internet/platform/manual/release gates separate.",
+  "closure": {
+    "at": "2026-10-23T17:07:54.313648+00:00",
+    "containers": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "networks": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "listener": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy"
+    },
+    "port_reservation": {
+      "list_exit": 0,
+      "owned_name_present": false
+    },
+    "ephemeral_identity_files": [],
+    "owned_script_processes": [],
+    "recorded_host_browser_remaining": [],
+    "retained_paths_present": {
+      "moss-computer-proof-r1/home": true,
+      "moss-computer-recovery-r3/home": true,
+      "moss-computer-recovery-r4/home": true,
+      "moss-computer-reconstruct-r2/candidate-image.tar": true
+    },
+    "new_home_present": true
+  },
+  "postmortem_profile": {
+    "qualification": "NOT_ACCEPTED: fallback SIGTERM closure, no real UI clean flush or replacement",
+    "real_home_unchanged": true,
+    "copy_source_file_hashes": {
+      "places.sqlite-wal": "2e0f404cc519af67ae6116e57988da8cdd9808b24f0a5cb3f876343310b47aa9",
+      "places.sqlite": "02957c61f8c0776ef693b57f606689ec4466721a122b4fb93e242eabf366d2d8"
+    },
+    "designated_file_sha256": "ddb6695f16af8070c2887578988543b2dd9109af20a165efe2af2ad8a43bc8f7",
+    "observed_bookmark_rows": [
+      [
+        "file:///opt/computer/fixture.html#persistence-r6-bd49ddefa078",
+        "Moss persistence-r6-bd49ddefa078"
+      ]
+    ]
+  },
+  "failure_analysis": {
+    "bad_window_error_count": 47,
+    "net_wm_desktop_error_count": 1,
+    "resource_ids": ["0x1c0002d"],
+    "explanation": "Cached Firefox window ID became invalid; bounded polling repeatedly retried identical window lookup until timeout. This violates intended two-identical-failures stop/rethink discipline and is a harness weakness, not runtime acceptance."
+  },
+  "qualification": {
+    "viewer_frame_and_fresh_keyboard": "PASS",
+    "current_image_access_removal_restoration": "PASS",
+    "initial_isolation": "PASS",
+    "active_firefox_sandbox": "NOT_COLLECTED: invalid cached window at diagnostics transition",
+    "clean_UI_close_and_flushed_state": "NOT_RUN",
+    "persistence_negative_controls": "NOT_RUN",
+    "container_replacement": "NOT_RUN",
+    "post_replacement_UI_and_sandbox": "NOT_RUN"
+  },
+  "process_before": null,
+  "isolation_before": [
+    {
+      "id": "0c3c1246f4e8d6a87de17d4a496d0ceb3e640ced2511d9166708cb8415819843",
+      "role": "gateway",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "network_mode": "moss-computer-persistence-r6_viewer",
+      "apparmor": "docker-default",
+      "proc": {
+        "Uid": "1000\t1000\t1000\t1000",
+        "CapEff": "0000000000000000",
+        "NoNewPrivs": "1",
+        "Seccomp": "2"
+      },
+      "limits": {
+        "memory": 134217728,
+        "swap_total": 134217728,
+        "pids": 32,
+        "nano_cpus": 500000000
+      },
+      "mounts": [
+        {
+          "destination": "/socket",
+          "rw": false
+        },
+        {
+          "destination": "/gateway",
+          "rw": false
+        }
+      ]
+    },
+    {
+      "id": "84ed21bedf3e59e0ea398e273b7864c5c59aae2075e5ea891c7278876eb5e757",
+      "role": "desktop",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "network_mode": "none",
+      "apparmor": "docker-default",
+      "proc": {
+        "Uid": "1000\t1000\t1000\t1000",
+        "CapEff": "0000000000000000",
+        "NoNewPrivs": "1",
+        "Seccomp": "2"
+      },
+      "limits": {
+        "memory": 4294967296,
+        "swap_total": 4294967296,
+        "pids": 512,
+        "nano_cpus": 2000000000
+      },
+      "mounts": [
+        {
+          "destination": "/socket",
+          "rw": true
+        },
+        {
+          "destination": "/home/desktop",
+          "rw": true
+        }
+      ],
+      "routes": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT",
+      "connects": [
+        {
+          "destination": "169.254.169.254",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "<private-range-test-A>",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "<private-range-test-B>",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "127.0.0.1",
+          "port": 1533,
+          "errno": 111
+        }
+      ]
+    }
+  ],
+  "cgroup_desktop": "memory.current\n960335872\nmemory.peak\n1000796160\nmemory.events\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\ncpu.stat\nusage_usec 12481159\nuser_usec 10229305\nsystem_usec 2251853\ncore_sched.force_idle_usec 0\nnr_periods 335\nnr_throttled 17\nthrottled_usec 1921317\nnr_bursts 0\nburst_usec 0\npids.current\n335\n",
+  "cgroup_gateway": "memory.current\n11472896\nmemory.peak\n13123584\nmemory.events\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\ncpu.stat\nusage_usec 499586\nuser_usec 379277\nsystem_usec 120308\ncore_sched.force_idle_usec 0\nnr_periods 76\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\npids.current\n5\n",
+  "process_after": null,
+  "isolation_after": null
+}

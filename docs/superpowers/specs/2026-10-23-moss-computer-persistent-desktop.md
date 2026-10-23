@@ -14,7 +14,7 @@ The intended host is the existing server running this work. Other Moss installat
 
 ## 2. Settled product decisions
 
-1. One desktop remains running alongside Moss once enabled, including after viewer disconnection.
+1. One persistent desktop is available once enabled. It automatically sleeps when unused to release host resources and wakes on demand. Enabled does not mean continuously running; see the idle-sleep amendment below.
 2. The owner can manually use its desktop, browser and terminal first.
 3. Designated files and the actual browser profile survive container removal and recreation. Website sessions can expire. Running processes and installed system packages have no persistence promise.
 4. New installations select Computer by default, with opt-out and resource disclosure. Existing installations receive an explicit add-on step.
@@ -31,14 +31,14 @@ Owner's browser
   -> dedicated Computer files/profile storage
 
 Trusted host lifecycle interface
-  -> fixed Computer enable / disable / recreate operations
+  -> fixed Computer enable / disable / sleep / wake / recreate operations
 ```
 
 This diagram is the proposed integration, not an observed running path.
 
 Use a separate Linux desktop image and dedicated storage. Do not reuse Moss vault, CLI-auth, model-cache or Sports volumes. LinuxServer webtop Ubuntu/Xfce was the first candidate. Its pinned Chromium launcher adds `--no-sandbox` under default Docker seccomp, so the unmodified candidate is rejected. The authorised research/implementation checkpoint below evaluates established alternatives; no vendor runtime claim is inherited.
 
-The integrated gateway must check the Computer owner on creation, status, view, input, reconnect and download requests, including WebSocket upgrades and active-session revocation. Administrator status alone grants no private-data access. Ticket ownership, expiry and replay semantics require their own reviewed contract.
+The integrated gateway must check the Computer owner on creation, status, view, input, reconnect, sleep, wake and download requests, including WebSocket upgrades and active-session revocation. Administrator status alone grants no private-data access. Ticket ownership, expiry and replay semantics require their own reviewed contract.
 
 Trusted viewer assets may use the Moss origin. Guest-controlled HTML, URLs and downloaded content must not acquire Moss-origin execution privileges. Downloads need owner checks, confined path resolution and safe attachment handling. A private network alone does not establish guest egress isolation: enforce restrictions against host, LAN, metadata and Moss service destinations.
 
@@ -56,7 +56,7 @@ Ben's overnight instruction authorises continued bounded preparation and safe is
 
 ### Later: integrated Moss proof
 
-No qualified Computer gateway/lifecycle candidate has been identified. Prepare and independently review that implementation as separate bounded work before its live proof. The integrated proof must cover owner, foreign-owner and unauthenticated requests through the actual HTTPS/WSS path, session expiry/logout/revocation, download confinement, replacement persistence, failure isolation and disable/re-enable. Test endpoints independently of navigation visibility.
+No qualified Computer gateway/lifecycle candidate has been identified. Prepare and independently review that implementation as separate bounded work before its live proof. The integrated proof must cover owner, foreign-owner and unauthenticated requests through the actual HTTPS/WSS path, session expiry/logout/revocation, download confinement, replacement persistence, failure isolation, disable/re-enable and idle sleep/wake. Test endpoints independently of navigation visibility.
 
 Ben subsequently authorised autonomous implementation, including the missing gateway/storage interfaces. Each bounded candidate still needs independent review and applicable live proof; isolated acceptance does not establish production deployment or release/platform readiness.
 
@@ -153,3 +153,65 @@ limits and independent review; active runtime/listener/keys were closed and reta
 No product integration or earlier-image Firefox/profile/replacement acceptance transfers. The one
 next proposal is a separately reviewed bounded active Firefox sandbox and file/profile replacement
 qualification on this adopted image; no further runtime is dispatched by this checkpoint.
+
+## 14. Adopted-image persistence entry rejection
+
+The dispatched [sandbox/replacement attempt](../../evidence/moss-computer/2026-10-23-persistence-preflight.md)
+stopped before launch: fresh available RAM was 8,330,731,520 bytes, below the required 8 GiB floor.
+The exact adopted image was absent; no archive verification/load or rebuild was attempted after
+the resource gate failed. Moss remained healthy and no proof runtime was created. Active Firefox
+sandbox and file/profile persistence across replacement remain NOT_RUN on this image. The next
+proposal is the same bounded qualification after fresh entry floors pass, with exact archive
+validation if needed and a committed, independently reviewed launch packet. No retry, production
+change, owner integration or manual/platform/release acceptance is dispatched by this result.
+
+## 15. Idle sleep and on-demand wake requirement
+
+Ben's 23 October resource-sharing clarification supersedes the earlier requirement to keep Computer
+running continuously while enabled: it should sleep when not in use. This is a product requirement
+for the later lifecycle implementation, not a change to the paused isolated qualification runtime.
+
+The initial design is a clean desktop-container stop after an idle grace period, releasing its
+resident memory and CPU demand while retaining designated files and browser profile data. A
+container pause or a blank display retains memory and does not meet the resource-release goal.
+Browser/profile writes must flush before stopping; inability to stop safely must be surfaced.
+Sleep preserves durable state, with no promise to resume unsaved work or live processes. The owner
+must be told this behavior before relying on it; apps reopen on wake.
+
+Opening Computer should wake it automatically. Later authorised Computer tasks should wake it
+before execution and keep it awake until their work finishes. A connected owner viewer or active
+operation prevents automatic sleep; viewer disconnection alone must not interrupt an active task.
+The idle timeout, activity/inhibitor contract and handling of untracked background work remain
+explicit lifecycle-design decisions. Automatic sleep must not discard unsaved work silently.
+
+Sleeping remains enabled and can wake on demand; disabled stays off until explicitly re-enabled.
+Neither operation deletes data. Wake must retain owner checks and resource admission controls; low
+headroom produces a truthful waiting/unavailable state instead of competing blindly with host work.
+
+Before claiming this capability, independently review and prove idle detection, clean flush/stop,
+measured memory reclamation, preserved file/profile state on wake, protection of active work,
+sleep/wake races and admission failure through the real product path. Product implementation must
+update the app map in the same PR. No sleep implementation, new runtime, unattended waiting or
+additional qualification is dispatched by this requirement amendment.
+
+## 16. Adopted-image persistence r6: incomplete proof
+
+Ben later resumed the same bounded assignment after freeing host resources. Fresh entry passed;
+retained archive/config/seven layers were verified and the exact adopted image loaded. The committed,
+independently reviewed [r6 packet](../plans/2026-10-23-moss-computer-persistence-r6.md) launched one
+supervised run. Its [result](../../evidence/moss-computer/2026-10-23-persistence-r6.md) is
+REJECTED_INCOMPLETE_PROOF: current viewer/frame/input and synthetic access/isolation checks passed,
+but a cached Firefox window ID became invalid before actual sandbox diagnostics. The polling
+harness wrongly repeated identical BadWindow errors; that stop-rule failure is retained.
+
+No clean UI flush, persistence negative controls, guest replacement or post-replacement acceptance
+was reached. A retained-profile copy contained the created bookmark after fallback SIGTERM; this
+is diagnostic only and establishes none of those missing gates. No Firefox sandbox/persistence
+failure is inferred from the harness error. Runtime, watchdog, browser, network, listener/reservation
+and ephemeral identities were closed; retained data remains and Moss is healthy.
+
+The next proposal is bounded window rediscovery/error handling and failure diagnostics, followed by
+fresh exact independent review and a separately dispatched qualification with resource gates.
+No rerun, product/sleep implementation, owner integration, merge or issue close is dispatched here.
+Section14 remains the historical r5 entry rejection; the adopted-image sandbox/replacement gates
+remain unqualified after r6.

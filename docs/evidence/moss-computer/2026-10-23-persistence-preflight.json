@@ -1,0 +1,73 @@
+{
+  "status": "BLOCKED_BEFORE_LAUNCH",
+  "run": "persistence-r5",
+  "operator": "Codex /root",
+  "session": "01a16981-6c86-7df1-82ab-397cf5db2e90",
+  "branch": "qualify/moss-computer-persistence",
+  "candidate_image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+  "task": 3578,
+  "parent": 3577,
+  "handoff_commit": "f467eb2c4",
+  "merged_checkpoint": "65fc78250fbca425b56e9a9bc9cc2325ce17a804",
+  "handoff_pr": 3587,
+  "first_image_check_at_utc": "2026-10-23T16:04:40Z",
+  "entry_gate": {
+    "ram_available_bytes": 8330731520,
+    "ram_floor_bytes": 8589934592,
+    "ram_deficit_bytes": 259203072,
+    "root_free_bytes": 11153100800,
+    "root_floor_bytes": 8589934592,
+    "data_free_bytes": 1033573777408,
+    "data_floor_bytes": 32212254720,
+    "swap_used_bytes": 8589881344
+  },
+  "image_inspect": {
+    "exit": 1,
+    "present": false,
+    "stderr": "Error response from daemon: No such image: sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf"
+  },
+  "evidence_limit": "Initial entry values transcribed from tool output; original raw command files and exact resource-sample timestamp not retained. Later closure was captured directly. No passing gate retry.",
+  "archive": {
+    "present_at_closure": true,
+    "size_bytes": 1026041856,
+    "checksum_config_layers_verification": "NOT_RUN after failed RAM gate",
+    "image_load": "NOT_RUN"
+  },
+  "actions": {
+    "launch_packet": "NOT_CREATED; stopped at Start section entry gate before launch preparation",
+    "port_claim": false,
+    "image_build": false,
+    "image_load": false,
+    "runtime_launch": false,
+    "browser_launch": false,
+    "watchdog_launch": false,
+    "keys_created": false,
+    "new_home_created": false,
+    "container_replacement": false
+  },
+  "qualification": {
+    "actual_firefox_active_sandbox": "NOT_RUN",
+    "real_viewer_input": "NOT_RUN",
+    "file_profile_creation_and_flush": "NOT_RUN",
+    "file_profile_negative_controls": "NOT_RUN",
+    "container_replacement_persistence": "NOT_RUN",
+    "post_replacement_sandbox": "NOT_RUN"
+  },
+  "closure": {
+    "at_utc": "2026-10-23T16:06:27.992766+00:00",
+    "moss": "running healthy",
+    "owned_container_ids": [],
+    "owned_network_ids": [],
+    "owned_port_reservation": false,
+    "owned_runtime_created": false,
+    "prior_home_and_archive_paths_present": true,
+    "prior_data_content_rehash": "NOT_RUN; no writes to prior data performed"
+  },
+  "raw_evidence": {
+    "entry-transcription.json": "c9a6e338aaadf1c57edefff56eea5180330ed3345f9f7a99624f9242372d1be7",
+    "closure.json": "a76280666ca5376df038acaa998cb4d2fa6a7ce779e978c664e9fb519a321f79"
+  },
+  "private_reference": "Sibling ../moss-computer-persistence-r5/; no runtime home/keys",
+  "next_proposal": "One separately dispatched attempt of this same bounded qualification after fresh RAM/root/data floors pass. Validate retained archive checksum/config/all seven layers before bounded exact load, then commit and independently review fresh launch packet before one supervised proof. No new attempt dispatched here.",
+  "historical_causes": "Image disappearance and reported Herdr restart UNKNOWN; no diagnosis/repair/prune/restart performed."
+}
