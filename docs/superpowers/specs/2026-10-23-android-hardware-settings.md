@@ -58,12 +58,14 @@ claiming developer-only upload are historical, not the current source contract.
 ## Telemetry boundary
 
 Read on the existing serialized service GATT connection. Do not open another competing
-ring connection from the activity. Read-only info/status/storage requests are separate
+ring connection from the activity. Non-destructive info/status/storage requests are separate
 from recording controls. Telemetry failure must not prevent completed-file delivery.
 Publish bounded snapshots with observation timestamps; UI reads never construct the
 write-owning delivery store. Do not log private ring identifiers or filenames.
 
-No destructive commands are part of the status/settings slice. Official Vocci's
+The official ring-info query carries the phone timestamp and aligns the ring clock;
+recording-state and storage queries only read status. No recording control, source
+deletion or binding change is part of the status/settings slice. Official Vocci's
 Reset ring handler calls clearAllFiles and sends RING_CMD_CLEAR_ALL_FILES; it is not
 a reconnect or restart action. Future destructive UI must use explicit labels.
 
@@ -84,3 +86,29 @@ a reconnect or restart action. Future destructive UI must use explicit labels.
 This branch starts from the current companion design checkout, which includes pending
 guided setup and provider-summary changes. Keep those prerequisite PRs explicit; do
 not merge this work ahead of them or claim they are already released.
+
+## Initial implementation slice
+
+The first product PR implements the native list, existing delivery/hold choices,
+non-destructive telemetry, ring capacity and supported audio-file count, phone-copy
+cleanup, connection guidance, usage guide and installed versions. It also implements
+the optional one-hour observation reminder. Timer continuity requires the same named
+normal recording, notification permission and observations at most two minutes apart;
+unknown status, a service restart or a longer gap resets it. This does not measure
+unobserved capture time. The one-hour policy is host-tested; a physical one-hour
+notification run remains separate endurance validation.
+
+Individual recording inventory/inspection/exclusion/deletion remains group 3; a count
+is not recording management. The native UI explicitly reports that management and
+firmware updating are unavailable. The shared Meetings settings already expose
+automatic summaries with the default model. Transcript-language and vocabulary
+settings are not present in the current Meetings preference contract or form; group
+4 must define their ASR capability handling rather than save unused settings.
+
+Protocol evidence: official Vocci 1.1.24/build 333 Hermes bundle SHA-256
+`50fb21f9f92c0b63ab093c714628ed3487cb7ec91842cba5eb492cd2d948ebf3`.
+Relevant functions: `parseRingInfoPayload`, `parseStorageStatusPayload`,
+`parseRecordingStatusPayload`, `deviceRecordingStateFromRecordByte`,
+`buildTimestampPayload`, `readRecordingStatus` and `sendGetStorageStatusCommand`.
+Static layouts were then checked against the configured physical legacy ring; no
+recording start/stop, file deletion, binding or firmware command was exercised.

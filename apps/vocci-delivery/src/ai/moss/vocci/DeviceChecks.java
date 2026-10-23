@@ -10,10 +10,10 @@ import org.json.JSONObject;
 
 /** Explicit developer instrumentation; optional ring reads, no control or private output. */
 public final class DeviceChecks extends Instrumentation {
-    private boolean ring;
+    private boolean ring, hardware;
     private int httpPort;
     private String linkAction;
-    @Override public void onCreate(Bundle args) { ring = "true".equals(args.getString("ring")); httpPort = Integer.parseInt(args.getString("httpPort", "0")); linkAction = args.getString("linkAction"); super.onCreate(args); start(); }
+    @Override public void onCreate(Bundle args) { ring = "true".equals(args.getString("ring")); hardware = "true".equals(args.getString("hardware")); httpPort = Integer.parseInt(args.getString("httpPort", "0")); linkAction = args.getString("linkAction"); super.onCreate(args); start(); }
     static void check(boolean value) { if (!value) throw new AssertionError("device assertion"); }
     private static void remove(File file) {
         File[] children = file.listFiles();
@@ -25,6 +25,24 @@ public final class DeviceChecks extends Instrumentation {
         try {
             if (linkAction != null) { LinkChecks.run(getTargetContext(), linkAction); result.putString("result", "PASS"); finish(-1, result); return; }
             if (httpPort > 0) { HttpChecks.run(httpPort); result.putString("httpContract", "json_null_post"); }
+            if (hardware) {
+                // Explicit non-uploading diagnostic. Refuse a competing delivery connection.
+                check(!new DeliveryPreferences(getTargetContext()).enabled());
+                JSONObject saved = new SecretStore(getTargetContext()).load();
+                try (RingConnection connection = new RingConnection(getTargetContext(), saved)) {
+                    java.util.Map<String, Integer> inventory = connection.inventory();
+                    long inventoryAt = System.currentTimeMillis();
+                    connection.readTelemetry();
+                    int recordings = 0;
+                    for (String name : inventory.keySet()) if (name.endsWith(".opus")) recordings++;
+                    HardwareStatus.publish(getTargetContext(), saved, connection.telemetry, inventoryAt, recordings);
+                    result.putBoolean("infoObserved", connection.telemetry.info != null);
+                    result.putBoolean("storageObserved", connection.telemetry.storage != null);
+                    result.putBoolean("recordingObserved", connection.telemetry.recording != null);
+                    check(connection.telemetry.info != null && connection.telemetry.storage != null && connection.telemetry.recording != null);
+                    result.putString("result", "PASS"); finish(-1, result); return;
+                }
+            }
             if (ring) {
                 try (RingConnection connection = new RingConnection(getTargetContext(), new SecretStore(getTargetContext()).load())) {
                     java.util.Map<String, Integer> inventory = connection.inventory();
