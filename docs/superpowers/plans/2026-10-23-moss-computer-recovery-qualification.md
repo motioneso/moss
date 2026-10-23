@@ -4,10 +4,17 @@ Part of #3577; completes the outstanding recovery gate of #3578. **Dispatched by
 Full autonomous implementation authority persists. This stop follows the bounded report/context
 discipline after repeated proof failures; it is not another permission requirement.
 
-**Current result: BLOCKED_MISSING_PINNED_CANDIDATE at preflight.** The required local image is no
-longer present; cause unknown. No recovery runtime launched. See the independently reviewed
-[preflight and one next proposal](../../evidence/moss-computer/2026-10-23-recovery-qualification.md).
-The requirements below remain the unexecuted recovery packet, not evidence of a new proof.
+**Active amendment: reconstructed candidate recovery r3.** The original missing-image
+[preflight](../../evidence/moss-computer/2026-10-23-recovery-qualification.md) remains historical.
+The [adopted reconstructed image](../../evidence/moss-computer/2026-10-23-candidate-reconstruction.md)
+is the only candidate for this new trial. Fresh inspection found it absent again; cause UNKNOWN.
+Its retained archive checksum, config and all seven layer digests were reverified before bounded
+loading (exit0). No reconstruction or host substitution. Runtime must await independent exact
+packet/config/supervisor/instrumentation review.
+
+Current Codex session `/root` is the active automated finish operator. Run `recovery-r3` uses fresh
+private runtime/home/socket/ephemeral identities, with reserved loopback port5180. The prior homes
+and candidate archive are retained. No Ben manual or MacBook acceptance is dispatched.
 
 ## One outcome and stop
 
@@ -23,7 +30,7 @@ without his attendance. This assignment can stop with an evidence-backed candida
 
 ## Pinned inputs and owned boundaries
 
-- Candidate: `sha256:5516b80402f9f4122a8551c6417c197356d73808ddfcf4b78f664c10c1e56c3a`;
+- Candidate: `sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf`;
   noVNC1.3, Websockify0.13, TigerVNC1.12, Xfce4.18, Firefox ESR153.5.1.
 - Target: the same Ubuntu24.04/x86_64 Moss server; server-local viewer first. MacBook manual and
   advertised-platform claims remain separate. Source and installed Moss identities stay separate.
@@ -58,6 +65,21 @@ fresh resource floors and the real viewer path. Default container protections re
 sampled10GiB writable-data threshold with margin, never a quota claim. The independent watchdog
 must stop on deadline, lost heartbeat, measurement failure and low headroom without relying on
 receipt writes. Fresh runtime material must not contain real credentials or website sessions.
+
+Run-scoped watchdog deadline30 minutes (stricter than the60-minute outer limit), heartbeat90s,
+nominal5s sampling; stop below8 GiB host available RAM,8 GiB root free or30 GiB data free.
+Sample both home and socket, fail closed on measurement/log failure, stop before writing final
+receipts and verify no running containers by exact `com.moss.proof=recovery-r3` label. Fallback
+kill uses the same label, never the prior run. Active operator also removes containers/network,
+keys and reservation. Host browser and image-load daemon work are outside container limits.
+
+Before crashing, require >=100×100 attached live canvas with >=10 sampled colours and a fresh
+keyboard-written unique file. Rerun affected proof-CA/Origin and guest isolation checks on this
+image. Instrument WebSocket update counts/bytes, console errors, UI/RFB state, every DOM canvas
+and current RFB canvas including attachment/visibility/target/geometry/colour count. Capture
+failures while page is open, then close browser. Keep the automatic mode unchanged for the
+first diagnostic loop. If it fails, present3–5 ranked falsifiable hypotheses before changing one
+variable; reload or fresh page are distinct modes, never automatic acceptance. No blind upgrade.
 
 Actively finish well before60 minutes. Confirm a normal substantive frame; abruptly stop the guest;
 observe the viewer's disconnect; restart it through the fixed host operation; perform the chosen
