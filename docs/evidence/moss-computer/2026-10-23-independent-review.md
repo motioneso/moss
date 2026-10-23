@@ -70,3 +70,21 @@ Moss. Full foundation/Moss live-UI/platform gates did not run for this internal 
 | Spec                    | `d9b671fcf45f9810896cb449c2cd0fb56ec274af0d4dafd5e3bffdb4b3b4896a` |
 | Qualification plan      | `f7ef806710d44a39cc3e51ad434db0eefa9d32d5c38da96d57d96063ff4e21b8` |
 | Proposed recovery plan  | `d61653771562c9d6e7584af61931e309ad94da5e16126d89bce9d7faf2c5c662` |
+
+## Recovery dispatch: missing candidate, reviewed preflight
+
+Ben dispatched the recovery packet with “proceed”. Before runtime, Docker reported the exact
+previous image absent. Reviewer `/root/independent_review2` independently checked the final
+report, receipt and packet and returned **PASS; no blocking findings** for report accuracy and
+the bounded reconstruction proposal. Recovery remains **NOT_RUN / BLOCKED_MISSING_PINNED_CANDIDATE**.
+
+The reviewer confirmed the image is absent, source hashes unchanged, retained marker present,
+no proof containers/listener5180, released port reservation and healthy Moss. No runtime acceptance
+transfers to a rebuild. The next proposal reconstructs and independently adopts/rejects one exact
+candidate, stopping before recovery runtime; it has not started.
+
+| Exact reviewed artifact          | SHA-256                                                            |
+| -------------------------------- | ------------------------------------------------------------------ |
+| Recovery preflight report        | `c7239714a7511cdbc6c04df2ee2fb8a73e7f7287b43bab5661e2d2b9950eaefd` |
+| Recovery preflight JSON          | `824512498af32a6b1c7cb9c2501a22f6f76d8899a80afd6d33cb12f34b3e0098` |
+| Dispatched/blocked recovery plan | `43c37819ca66608fe927ffe32a848bfdd970915ffeb80e25256be76e24ea4c64` |

@@ -4,6 +4,11 @@ Part of #3577; completes the outstanding recovery gate of #3578. **Dispatched by
 Full autonomous implementation authority persists. This stop follows the bounded report/context
 discipline after repeated proof failures; it is not another permission requirement.
 
+**Current result: BLOCKED_MISSING_PINNED_CANDIDATE at preflight.** The required local image is no
+longer present; cause unknown. No recovery runtime launched. See the independently reviewed
+[preflight and one next proposal](../../evidence/moss-computer/2026-10-23-recovery-qualification.md).
+The requirements below remain the unexecuted recovery packet, not evidence of a new proof.
+
 ## One outcome and stop
 
 On the same server and exact current candidate, establish why a socket reconnects after abrupt
