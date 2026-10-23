@@ -224,6 +224,8 @@ public final class HardwareActivity extends Activity {
                 text("hold-help", "Enable Hold-to-talk first. Hold the button while speaking, then release. In Moss, review the transcript and choose Send to Main. Moss replies with text.", 15, false);
                 rule("hold-rule"); text("offline-title", "Away from your phone", 20, true);
                 text("offline-help", "The ring saves audio locally. Leave Bluetooth and background delivery enabled on the phone for retrieval when they reconnect. Turning off delivery does not stop a recording on the ring.", 15, false);
+                rule("feedback-rule"); text("feedback-title", "Ring lights and vibration", 20, true);
+                text("feedback-help", "Light and vibration meanings have not been verified for this ring in Moss. Check the dated recording status in Vocci ring settings. A delivered recording appears as a Meeting or a hold transcript for review; a vibration alone does not confirm delivery.", 15, false);
                 break;
             case "about":
                 text("title", "About this ring", 30, true);

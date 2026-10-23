@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { webRoutes } from "../../apps/web/src/app-route-metadata.js";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
@@ -135,12 +136,33 @@ describe("app-map integrity and truthfulness", () => {
     }
   });
 
-  it("every app map setting resolves to a canonical settings section", () => {
+  it("every app map setting resolves to a canonical web section or declared Android activity", () => {
     const validSectionPattern = /^\/settings\?section=([a-z0-9_-]+)(&module=([a-z0-9_-]+))?$/;
     const coreSectionIds = new Set(CORE_APP_SETTINGS.map((s) => s.id));
     const moduleIds = new Set(getBuiltInModuleManifests().map((m) => m.id));
+    const androidManifest = readFileSync(
+      new URL("../../apps/vocci-delivery/AndroidManifest.xml", import.meta.url),
+      "utf8"
+    );
+    const androidPackage = /<manifest\b[^>]*\bpackage="([^"]+)"/.exec(androidManifest)?.[1];
+    const androidActivities = new Set(
+      [...androidManifest.matchAll(/<activity\b[^>]*\bandroid:name="([^"]+)"/g)].map(
+        (match) => match[1]
+      )
+    );
 
     for (const setting of appMap.settings) {
+      if (setting.path?.startsWith("android:")) {
+        const native = /^android:([^/]+)\/(\.[A-Za-z][A-Za-z0-9]*)$/.exec(setting.path);
+        expect(native?.[1], `Setting "${setting.id}" has an unknown Android package`).toBe(
+          androidPackage
+        );
+        expect(
+          androidActivities.has(native?.[2] ?? ""),
+          `Setting "${setting.id}" points at an undeclared Android activity`
+        ).toBe(true);
+        continue;
+      }
       const match = validSectionPattern.exec(setting.path ?? "");
       expect(
         match !== null,
