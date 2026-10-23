@@ -516,23 +516,42 @@ No further setup/sign-in run was launched.
 
 ## Acceptance accounting
 
-| Approved requirement     | Evidence available                                                                                                                                                                                            | Limit                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Native feasibility       | Actual email-code sign-in, accepted binding GET and temporary-session cleanup; installed native contracts                                                                                                     | Live account did not request MFA; TOTP and unsupported factors use synthetic contracts                    |
-| Fresh setup and delivery | Physical run `160626` plus its same-instance successful recovery: real setup, Start, Meeting transcript/summary, fresh current-enrollment hold review/Send/Main reply and Stop                                | Canonical wrapper exited 1; supplemental physical/UI observer exited 0                                    |
-| Recovery                 | Installed auth/link/ring contracts and guard-removal controls; actual native Cancel/browser revocation, restarts, interrupted-sign-in cleanup, permission-denial remediation and saved-selection verification | Not every network/MFA/identity failure was induced on the real account/ring                               |
-| Upgrade                  | Actual original configured-app replacement and Ready controls retained configuration/queue hashes without sign-in; installed Ready/recovery/voice contracts                                                   | Latest separate pending-download upgrade/restart observer failed and adds no passing evidence             |
-| Quality                  | Installed APK/UI contracts, host checks, complete foundation `153110` and all six CI workflows on `bcfcbc714`                                                                                                 | Receipts apply to their recorded inputs; native secure-window captures do not prove screenshot appearance |
+| Approved requirement     | Evidence available                                                                                                                                                                                                                                                                                                                                        | Limit                                                                                                                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native feasibility       | Actual email-code sign-in, accepted binding GET and temporary-session cleanup; installed native contracts                                                                                                                                                                                                                                                 | Live account did not request MFA; TOTP and unsupported factors use synthetic contracts                                                                                                                    |
+| Fresh setup and delivery | Physical run `160626` plus its same-instance successful recovery: real setup, Start, Meeting transcript/summary, fresh current-enrollment hold review/Send/Main reply and Stop                                                                                                                                                                            | Canonical wrapper exited 1; supplemental physical/UI observer exited 0                                                                                                                                    |
+| Recovery                 | Installed auth/link/ring contracts and guard-removal controls; actual native Cancel/browser revocation, restarts, interrupted-sign-in cleanup, permission-denial remediation and saved-selection verification                                                                                                                                             | Not every network/MFA/identity failure was induced on the real account/ring                                                                                                                               |
+| Upgrade                  | Actual original configured-app replacement preserved configuration/queue hashes; final [isolated installed proof](../../apps/vocci-delivery/upgrade-proof/README.md), `run-04`, passed 26 assertions covering APK replacement, Keystore/config reopening, partial/frozen bytes, source/queue/voice identity, actual Ready Start/Stop and stopped relaunch | Generated pending evidence and dummy account/ring data; no resumed physical pending transfer, enabled recovery, physical reboot or endurance claim. The earlier pending-download observer remains failed. |
+| Quality                  | Installed APK/UI contracts, host checks, complete foundation `153110` and all six CI workflows on `bcfcbc714`                                                                                                                                                                                                                                             | Receipts apply to their recorded inputs; native secure-window captures do not prove screenshot appearance                                                                                                 |
 
-## Remaining
+## Current review status
 
-Diagnose the focused upgrade/restart assertion and the unreliable combined UI
-observer at their narrow seams, using the existing evidence instead of repeating
-the entire account setup. The physical Meeting/Main path has already been observed;
-a new clean canonical script is not a substitute for those recorded observations.
-No further email code, unlock or recording is requested. Keep #3565 open and
-PR #3566 draft while the remaining acceptance uncertainty is reviewed. No merge,
-production deployment or completed-onboarding claim.
+The narrow upgrade persistence and selected-ring Back findings are resolved by
+the final [isolated installed proof](../../apps/vocci-delivery/upgrade-proof/README.md),
+recorded in proof documentation through `8712d0dd9`. `run-04` passed 26 named
+assertions, exit 0, against baseline product source `7acb4b6b0` and corrected
+candidate product source `901260d7e`. Actual APK replacement retained encrypted
+configuration and Keystore decryptability, partial/frozen evidence and
+source/queue/destination/voice state. Actual configured Ready skipped sign-in;
+Start reached the expected closed-loopback network failure before owner
+confirmation or ring access; native Stop and process relaunch preserved the
+immutable evidence and stopped choice. A fresh candidate installation also
+passed the actual **Choose another ring** control contract with synthetic Moss
+approval, retained linking, renewed lookup, rejected discarded candidate and no
+configuration publication.
+
+Independent Standards and Spec re-review accepted this bounded evidence with no
+remaining findings. The earlier real physical setup, Meeting and Main observations
+remain separate evidence. The old `run_17` upgrade observer and failed combined
+or intermediate harness runs remain failed. This proof does not establish resumed
+physical pending transfer, enabled background recovery, physical reboot or
+endurance. No further owner sign-in or new recording was required.
+
+The user's subsequent instruction authorizes merge after independent review,
+resolved findings and green required checks, superseding the earlier no-merge
+status. Final exact-HEAD CI and repository checks are still required before
+merging #3566 in dependency order. Keep #3565 open; this evidence does not claim
+production deployment or completion of the broader onboarding/endurance task.
 
 ## Independent-review correction: return from selected ring
 
@@ -551,11 +570,13 @@ screen: a synthetic staged Moss approval and candidate enter the actual
 Moss stays linked, and no runnable configuration was published. This fixture
 uses a synthetic Moss port and does not prove real account or ring behavior.
 
-Host protocol/crypto/generated two-hour PCM checks and the development APK build
-passed. The separate proof APK compiled successfully; its new instrumentation
-has not yet been executed in this correction record. The pending-download
-upgrade/restart acceptance finding remains open until its narrow evidence is
-recorded separately.
+At correction commit `901260d7e`, host protocol/crypto/generated two-hour PCM
+checks and the development APK build passed; the separate proof APK compiled,
+but the new instrumentation had not yet run. That interim status is superseded
+by the [final installed proof](../../apps/vocci-delivery/upgrade-proof/README.md)
+recorded through `8712d0dd9`: `run-04` passed the actual selection control and the
+bounded upgrade persistence/reopen path described above. Its synthetic selection
+responses and generated pending evidence remain explicitly disclosed.
 
 The merge from current `main` preserves its CI installer implementation exactly:
 privileged system-dependency timeouts followed by runner-owned Chromium download.
