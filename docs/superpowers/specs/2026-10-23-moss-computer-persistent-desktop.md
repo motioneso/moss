@@ -19,13 +19,14 @@ The intended host is the existing server running this work. Other Moss installat
 3. Designated files and the actual browser profile survive container removal and recreation. Website sessions can expire. Running processes and installed system packages have no persistence promise.
 4. New installations select Computer by default, with opt-out and resource disclosure. Existing installations receive an explicit add-on step.
 5. Disable stops Computer and retains its data. Data deletion is a separate explicit decision.
-6. Agent control, watch/stop/takeover, login handoffs and useful jobs follow in separately bounded work.
+6. Agent control, watch/stop/takeover, login handoffs and useful jobs are required product capabilities, implemented in separately bounded work.
 7. Preserve the desktop destination; a browser-only trial cannot redefine it.
+8. The same persistent Computer is accessible inside the Moss app and through a web browser. The owner can watch Moss work and take over mouse/keyboard control; see the integrated-access amendment below.
 
 ## 3. Recommended system
 
 ```text
-Owner's browser
+Owner in the Moss app or a web browser
   -> trusted Moss viewer and authenticated HTTPS/WSS gateway
   -> private persistent desktop companion
   -> dedicated Computer files/profile storage
@@ -292,3 +293,23 @@ blacklist diagnosis with unchanged image/security/assertions and exact review be
 No automatic retry, security weakening, product/sleep implementation, owner integration, merge or
 issue close follows. Startup/UI/input and previously missing sandbox/replacement gates remain
 unqualified; r8/r9 and all earlier rejection evidence remains unchanged.
+
+## 21. Integrated app/browser access, watching and takeover
+
+Ben clarified that accessing Moss's Computer must be possible inside the Moss app and through a
+web browser, so the owner can watch Moss work or take over. Both surfaces expose the same
+persistent desktop/session and files; a separate computer for each viewer would not meet this
+requirement. Watching should not take input control away from Moss.
+
+Taking over gives mouse/keyboard input to the owner and pauses Moss's computer input until control
+is explicitly returned. The integrated design must show who has control, prevent simultaneous
+conflicting owner/agent input, and preserve owner authentication/authorisation on viewing, input,
+reconnect and control transitions. Exact UI, handoff/resume and multi-viewer/disconnect behavior
+need their bounded design before product implementation; no new app surface is implemented here.
+
+Integrated acceptance must exercise both the Moss app and browser through the real owner path:
+watch visible work, take over and verify Moss stops issuing input, then explicitly return control
+and verify a safe resumption on the same desktop. Cover unauthorised access, stale agent input,
+reconnect and active-work sleep inhibition. Keep the app map truthful when those product surfaces
+ship. The isolated startup/probe fix continues as groundwork and grants none of this integrated,
+manual-device or platform acceptance.
