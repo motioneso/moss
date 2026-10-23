@@ -253,3 +253,18 @@ and Moss stayed healthy. Startup readiness and all previously missing qualificat
 unqualified. One next proposal is a separately dispatched attempt after host capacity is available,
 with fresh identity/floors and exact independent packet review. No automatic rerun, product/sleep
 implementation, owner integration, merge or issue close is dispatched by this rejection.
+
+## 19. Startup readiness r9: initial resource rejection
+
+After #3596 merged, Ben dispatched one fresh attempt through the
+[r9 handoff](../handoffs/2026-10-23-moss-computer-startup-readiness-r9.md). The initial fresh sample
+recorded available RAM6,813,106,176 bytes, below8GiB by1,776,828,416 bytes; root/data floors passed.
+The [r9 result](../../evidence/moss-computer/2026-10-23-startup-readiness-r9.md) is
+BLOCKED_BEFORE_LAUNCH. No runtime preparation, archive validation/load, launch packet, port
+reservation or startup/access/frame/input proof occurred. The resource gate was not retried.
+
+No owned runtime was started; exact-label/reservation readback was empty, prior homes/archive
+remained present and Moss stayed healthy. Startup readiness and all previously missing gates
+remain unqualified. One next proposal is the same bounded qualification after a separate dispatch
+when host capacity is available, with new identity, fresh floors and independent exact packet review.
+No automatic rerun, product/sleep implementation, owner integration, merge or issue close follows.

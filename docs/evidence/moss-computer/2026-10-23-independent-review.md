@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** startup-readiness-r8 stopped before image load at the required fresh RAM floor; startup readiness and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
+- **Current status:** startup-readiness-r9 stopped at initial entry below the required RAM floor; startup readiness and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -366,3 +366,40 @@ This accepts **BLOCKED_BEFORE_LAUNCH** accuracy and preparation closure only. St
 UI/frame/input/runtime supervision, active Firefox sandbox and replacement persistence remain
 NOT_RUN or unqualified. One next proposal is the same bounded qualification after separately
 dispatched fresh capacity/identity/packet gates. No automatic retry, merge or issue close.
+
+## Startup readiness r9: initial entry rejection evidence accepted
+
+Reviewer `/root/r9_evidence_review`, independent of author/operator Codex `/root`, returned
+**PASS — exact final r9 rejection evidence and verified no-preparation closure accepted; no blocking
+findings.** No reviewer edits, resource resampling or runtime mutations occurred.
+
+At19:15:05 UTC, available RAM6,813,106,176 bytes was below the8,589,934,592-byte floor by
+1,776,828,416 bytes. Root/data floors passed. Initial resource values are transcript copies,
+not a second sample or separately retained raw command output. The exact image was absent;
+archive verification/restoration review/load and all runtime preparation remained NOT_RUN.
+
+| Exact accepted artifact                         | SHA-256                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| [r9 report](2026-10-23-startup-readiness-r9.md) | `b160a608ae2faba9da16c075843632c8ea86c0cadea3112dd3667952ec92b201` |
+| [r9 JSON](2026-10-23-startup-readiness-r9.json) | `4396a8d800558bd6a5d3a2e2a23d52e597449c06bba1f6b607d030827e78f14f` |
+| Spec with section19                             | `03e54a968aca644c5c651fce213ad9eb878f45d3a64f354599f0b19df7655e3e` |
+
+All three private receipt hashes and raw/sanitised values matched; arithmetic, null unrun exits,
+NOT_RUN classifications and retained-data limits agreed with the transcript and dispatch. Scoped
+Prettier, whitespace, privacy and relative links passed. A generic privacy pattern initially matched
+prose `root/home/socket`; an absolute-path boundary corrected the check without document changes.
+
+Independent closure at19:17:01 UTC confirmed empty exact r9 container/network labels and no owned
+reservation or runtime processes; the runtime sibling remained absent. No port/listener, browser,
+watchdog, keys or runtime was created. The initial process substring scan falsely matched the review
+shell and exited1; a path-argument scan excluding shell command text exited0. This review
+instrumentation correction was not a resource-gate retry. Prior homes including r7/r8 and the
+archive remained present without comprehensive content rehash; Moss was `running healthy` and
+health returned `{"ok":true}`. Read-only Docker/devports/health checks exited0.
+
+Acceptance covers **BLOCKED_BEFORE_LAUNCH** accuracy and no-preparation closure only. Startup,
+protected access/controls, actual UI/RFB/frame/input and runtime isolation/supervision remain NOT_RUN.
+Active Firefox sandbox, clean flush, replacement persistence, idle sleep/wake and owner integration
+remain unqualified. One next proposal is a separately dispatched attempt when host capacity is
+available with new identity, fresh floors and exact independent packet review. No automatic rerun,
+merge or issue close follows.

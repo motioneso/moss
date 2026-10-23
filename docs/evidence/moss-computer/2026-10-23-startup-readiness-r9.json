@@ -1,0 +1,129 @@
+{
+  "run": "readiness-r9",
+  "status": "BLOCKED_BEFORE_LAUNCH",
+  "reason": "ENTRY_RAM_BELOW_FLOOR",
+  "operator": "Codex /root",
+  "branch": "qualify/moss-computer-startup-readiness-r9",
+  "base_commit": "e37c5c84694a70a734fe195dc8e44d64d17b672b",
+  "task": 3578,
+  "parent": 3577,
+  "prerequisites": {
+    "3596": {
+      "state": "MERGED",
+      "merged_at": "2026-10-23T19:08:26Z",
+      "merge_commit": "e37c5c84694a70a734fe195dc8e44d64d17b672b"
+    }
+  },
+  "entry": {
+    "at": "2026-10-23T19:15:05Z",
+    "source": "initial bounded tool transcript; no separately retained raw resource output",
+    "available_ram_bytes": 6813106176,
+    "root_free_bytes": 54376660992,
+    "data_free_bytes": 1003932835840,
+    "floors": {
+      "ram_root": 8589934592,
+      "data": 32212254720
+    },
+    "pass": false,
+    "ram_shortfall_bytes": 1776828416
+  },
+  "entry_checks_complete_at": "2026-10-23T19:16:06.785265+00:00",
+  "image_at_entry": {
+    "exact_digest": "ABSENT",
+    "inspect_exit": 1,
+    "tag": "NOT_INSPECTED"
+  },
+  "archive_verification": "NOT_RUN; entry failed",
+  "restoration_review": "NOT_RUN",
+  "load_attempted": false,
+  "runtime_started": false,
+  "image_load_exit": null,
+  "runner_exit": null,
+  "watchdog_exit": null,
+  "runtime_cleanup_exit": null,
+  "port": null,
+  "port_claim_exit": null,
+  "port_release_exit": null,
+  "closure_readback_exit": 0,
+  "closure": {
+    "at": "2026-10-23T19:16:06.785265+00:00",
+    "containers": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "networks": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "health": {
+      "exit": 0,
+      "stdout": "{\"ok\":true}",
+      "stderr": ""
+    },
+    "unused_runtime_root": true,
+    "retained_paths_present": {
+      "moss-computer-readiness-r8/home": true,
+      "moss-computer-persistence-r7/home": true,
+      "moss-computer-persistence-r6/home": true,
+      "moss-computer-recovery-r4/home": true,
+      "moss-computer-recovery-r3/home": true,
+      "moss-computer-proof-r1/home": true,
+      "moss-computer-reconstruct-r2/candidate-image.tar": true
+    },
+    "port_reservation": {
+      "list_exit": 0,
+      "owned_name_present": false
+    }
+  },
+  "preparation": "No runtime root/home/socket/keys/scripts/launch packet, port reservation, browser/watchdog, image load or runtime. Evidence-only rejection directory created after stop.",
+  "qualification": {
+    "guest_gateway_readiness": "NOT_RUN",
+    "protected_access": "NOT_RUN",
+    "access_protection_removal_restoration": "NOT_RUN",
+    "current_UI_RFB_frame": "NOT_RUN",
+    "fresh_viewer_keyboard_input": "NOT_RUN",
+    "runtime_isolation": "NOT_RUN",
+    "runtime_supervision": "NOT_RUN",
+    "Firefox_sandbox": "NOT_RUN",
+    "profile_flush": "NOT_RUN",
+    "replacement_persistence": "NOT_RUN",
+    "idle_sleep_wake": "NOT_RUN",
+    "Moss_owner_integration": "NOT_RUN"
+  },
+  "no_retry": true,
+  "private_reference": "../moss-computer-readiness-r9-rejection/; evidence only. Original initial resource output is transcript-only.",
+  "retention_limit": "Prior homes/archive presence checked, contents not comprehensively rehashed. No fresh archive acceptance.",
+  "next_proposal": "Separately dispatch the same bounded startup-readiness qualification when host capacity is available: new unused identity, fresh floors, exact archive verification/restoration review if absent, committed exact launch packet and independent review. No automatic rerun.",
+  "private_receipt_sha256": {
+    "entry.json": "b87f995944a7ad88ff45e508585d5ced5c043bc0a02326594d05761eb08d0e13",
+    "closure.json": "50d38c9c421784e4b304b92cbc68edac7fb271586c2de8ac785c80056de08d20",
+    "reviewer-closure.json": "09365f5c2193cbe602e608777cb82f2e8002f853b3e9f127b3664f29a7cb8db5"
+  },
+  "independent_closure": {
+    "reviewer": "/root/r9_evidence_review",
+    "at": "2026-10-23T19:17:01Z",
+    "verdict": "PASS_CLOSURE_ENTRY_REJECTION_ONLY",
+    "containers_exit": 0,
+    "networks_exit": 0,
+    "devports_list_exit": 0,
+    "owned_resources_present": false,
+    "moss_inspect_exit": 0,
+    "moss": "running healthy",
+    "health_exit": 0,
+    "health": {
+      "ok": true
+    },
+    "runtime_root_absent": true,
+    "prior_homes_archive_present": true,
+    "runtime_process_scan_exit": 0,
+    "owned_runtime_processes": [],
+    "instrumentation_note": "Initial broad substring proc scan matched the review shell itself and exited1. Corrected path-argument scan excludes shell command text and passed; no resource resampling or runtime."
+  }
+}
