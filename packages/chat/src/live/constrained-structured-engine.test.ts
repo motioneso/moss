@@ -120,6 +120,42 @@ describe("constrained runner engine", () => {
     await engine.kill();
     expect(retry).toHaveBeenCalledTimes(1);
   });
+  it("retries failed identity cleanup through public kill until it succeeds", async () => {
+    const { engine, identity } = fixture("anthropic");
+    let unavailable = true;
+    vi.mocked(identity.release).mockImplementation(async () => {
+      if (unavailable) throw new Error("storage unavailable");
+    });
+    await expect(engine.kill()).rejects.toThrow("storage unavailable");
+    await expect(engine.kill()).rejects.toThrow("storage unavailable");
+    unavailable = false;
+    await engine.kill();
+    expect(identity.release).toHaveBeenCalledTimes(3);
+    await engine.kill();
+    expect(identity.release).toHaveBeenCalledTimes(3);
+  });
+  it("retries cleanup that failed at the end of a running request before acknowledging stop", async () => {
+    const { engine, identity } = fixture("anthropic");
+    let unavailable = true;
+    vi.mocked(identity.release).mockImplementation(async () => {
+      if (unavailable) throw new Error("storage unavailable");
+    });
+    vi.mocked(runConstrainedStructuredProcess).mockImplementation(async (options) => {
+      await options.identity?.release();
+      return { stdout: '{"result":"{}"}', exitCode: 0, signal: null };
+    });
+    await engine.launchStructured(opts);
+    await engine.submitStructured("synthetic transcript");
+    await expect(engine.kill()).rejects.toThrow("storage unavailable");
+    unavailable = false;
+    await engine.kill();
+    expect(identity.release).toHaveBeenCalledTimes(3);
+  });
+  it("shares identity cleanup between concurrent stop requests", async () => {
+    const { engine, identity } = fixture("anthropic");
+    await Promise.all([engine.kill(), engine.kill()]);
+    expect(identity.release).toHaveBeenCalledOnce();
+  });
   it("rejects Codex without the runner-created private home before transcript dispatch", async () => {
     const { engine } = fixture("openai-compatible");
     await expect(engine.launchStructured(opts)).rejects.toThrow();

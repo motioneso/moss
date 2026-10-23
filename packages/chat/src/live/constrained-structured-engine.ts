@@ -39,6 +39,7 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
   private stopFailure?: ConstrainedProcessError;
   private complete = false;
   private released = false;
+  private releasing?: Promise<void>;
 
   constructor(
     readonly provider: ProviderKind,
@@ -179,12 +180,14 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
   async kill(): Promise<void> {
     this.controller.abort();
     if (this.running) await this.running;
-    else await this.release();
     if (this.stopFailure) {
       if (!this.stopFailure.retryCleanup) throw this.stopFailure;
       await this.stopFailure.retryCleanup();
       this.stopFailure = undefined;
     }
+    // A running request may have failed while preserving its refreshed login. Retain the
+    // engine until that cleanup succeeds, just as we do for unconfirmed process termination.
+    await this.release();
     this.complete = true;
   }
   async purgeTranscripts(): Promise<void> {
@@ -192,7 +195,14 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
   }
   private async release(): Promise<void> {
     if (this.released) return;
-    this.released = true;
-    await this.identity?.release();
+    this.releasing ??= Promise.resolve()
+      .then(() => this.identity?.release())
+      .then(() => {
+        this.released = true;
+      })
+      .finally(() => {
+        this.releasing = undefined;
+      });
+    await this.releasing;
   }
 }

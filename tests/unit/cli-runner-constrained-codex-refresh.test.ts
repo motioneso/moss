@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type * as FsPromises from "node:fs/promises";
 import {
   existsSync,
   mkdirSync,
@@ -14,8 +15,21 @@ import { PassThrough } from "node:stream";
 import { afterEach, expect, it, vi } from "vitest";
 
 const verification = vi.hoisted(() => ({
-  mode: "unavailable" as "unavailable" | "throws" | "available"
+  mode: "unavailable" as "unavailable" | "throws" | "available",
+  sharedWriteFails: false
 }));
+vi.mock("node:fs/promises", async (original) => {
+  const fs = await original<typeof FsPromises>();
+  return {
+    ...fs,
+    rename: async (from: string, to: string) => {
+      if (verification.sharedWriteFails && to.endsWith("/.codex/auth.json")) {
+        throw new Error("shared login write unavailable");
+      }
+      await fs.rename(from, to);
+    }
+  };
+});
 vi.mock("../../packages/cli-runner/src/codex-token-verify.js", async (original) => ({
   ...(await original<object>()),
   openAiCodexTokenVerifier: () => async () => {
@@ -40,9 +54,12 @@ vi.mock("node:child_process", async (original) => ({
 const { promoteCodexLogin } = await import("../../packages/cli-runner/src/codex-shared-login.js");
 const { preparePerUserStructuredLaunch } =
   await import("../../packages/cli-runner/src/per-user-structured.js");
+const { ConstrainedStructuredEngine } =
+  await import("../../packages/chat/src/live/constrained-structured-engine.js");
 const roots: string[] = [];
 afterEach(() => {
   verification.mode = "unavailable";
+  verification.sharedWriteFails = false;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -166,6 +183,31 @@ it("retains refresh during shared-login I/O failure and recovers after it is rep
   await next.childIdentity.release?.();
 });
 
+it.each([false, true])(
+  "recovers after shared promotion cannot write (owner write also fails: %s)",
+  async (ownerFails) => {
+    const { root, homes, ownerHome, launch, failures } = await setup();
+    const first = await launch("first");
+    homes.set(first.agentHome, login(2));
+    failures.ownerWrite = ownerFails;
+    verification.mode = "available";
+    verification.sharedWriteFails = true;
+    await first.childIdentity.release?.();
+    expect(existsSync(first.neutralDir)).toBe(false);
+    if (ownerFails) {
+      expect((await readRetainedCodexLogins(root)).map((entry) => entry.raw)).toEqual([login(2)]);
+    } else {
+      expect(homes.get(ownerHome)).toBe(login(2));
+    }
+    failures.ownerWrite = false;
+    verification.sharedWriteFails = false;
+    const next = await launch("next");
+    expect(homes.get(next.agentHome)).toBe(login(2));
+    expect(await readRetainedCodexLogins(root)).toEqual([]);
+    await next.childIdentity.release?.();
+  }
+);
+
 it("keeps the newest owner refresh when concurrent calls finish out of order", async () => {
   const { homes, ownerHome, launch } = await setup();
   const older = await launch("older");
@@ -210,11 +252,17 @@ it("refuses destructive cleanup when neither durable destination can be written,
   failures.ownerWrite = true;
   const recovery = join(root, ".codex", "refresh-recovery");
   writeFileSync(recovery, "unavailable");
-  await expect(first.childIdentity.release?.()).rejects.toThrow();
+  const engine = new ConstrainedStructuredEngine(
+    "openai-compatible",
+    first.io,
+    first.agentHome,
+    first.childIdentity
+  );
+  await expect(engine.kill()).rejects.toThrow();
   expect(existsSync(first.neutralDir)).toBe(true);
   expect(homes.get(first.agentHome)).toBe(login(2));
   rmSync(recovery);
-  await first.childIdentity.release?.();
+  await engine.kill();
   expect(existsSync(first.neutralDir)).toBe(false);
   expect((await readRetainedCodexLogins(root)).map((entry) => entry.raw)).toEqual([login(2)]);
 });
