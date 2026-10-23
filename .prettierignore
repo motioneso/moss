@@ -70,3 +70,6 @@ docs/superpowers/specs/assets/2026-10-03-activity-history/
 
 # Preserve the historical Meetings critique without reformatting its original review.
 docs/superpowers/mockups/meetings-minimal/critique.md
+
+# Byte-identical copy of the reviewed stage 4 runner protocol (#3538)
+scripts/uat-campaign/PROTOCOL.md
