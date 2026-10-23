@@ -1,7 +1,8 @@
 # Visual replies in Moss chat
 
-Status: draft for Ben's review. Ben approved the product direction and requested this
-specification on 2026-10-23; production implementation is not yet approved.
+Status: approved for planning and implementation by Ben on 2026-10-23, after reviewing
+the targets and the capabilities/limits. Delivery follows the staged runtime gate below;
+approval does not mean the production integration or release acceptance is complete.
 Tracking task: [#3583](https://github.com/motioneso/moss/issues/3583).
 
 Moss chooses a useful visual representation when it makes an answer easier to understand
@@ -35,9 +36,9 @@ subscribe to services, or make unavailable data available.
   The live prototype uses a small native HTML/JSON catalog, not the OpenUI runtime.
   Its successful model calls do not establish production renderer compatibility.
 
-The target board and implementation contracts below are proposals included in this review.
-Approval of this spec includes these designs; no new design approval is presumed from
-approval of the earlier prototype alone. No new standalone product screen is proposed.
+The target board and implementation contracts below are the approved design inputs.
+Ben requested an implementation plan and starting work after the capabilities/limits
+discussion. No new standalone product screen is proposed.
 
 ## User experience
 
