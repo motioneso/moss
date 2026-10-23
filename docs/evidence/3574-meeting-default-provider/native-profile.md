@@ -34,7 +34,12 @@ web search, planning, user input, shell/image/multi-agent/app/plugin/hook featur
 receives explicit HOME/CODEX_HOME/TMPDIR/PATH/LANG, without inherited endpoint overrides. Prompt
 travels on stdin. Schema is a private file. The existing bounded process runner enforces output,
 time, cancellation and process-group cleanup. Release reconciles refreshed login before removing
-the temporary home; existing shared-login signature and same-account checks still govern promotion.
+the temporary home. Before that reconciliation, it preserves a newer same-account refresh in the
+persistent owner home even when signature verification is unavailable. If owner I/O fails, it
+retains an auth-only candidate in the runner's `0600` recovery files for ordinary synchronization
+to verify later. Shared promotion still requires signature and same-account checks. If neither
+durable destination can be written, release reports a bounded error and defers temporary-home
+removal rather than deleting the only refreshed login.
 
 The opt-in native test uses the real x64 executable and a loopback synthetic Responses SSE
 server. It observes outgoing requests and files, with these controls:

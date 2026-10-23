@@ -27,6 +27,7 @@ import {
   CODEX_LOGIN_READ_LIMITS,
   codexPeerHomes,
   ownerCodexHomeAccess,
+  preserveTemporaryCodexLogin,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
 } from "./codex-shared-login.js";
@@ -187,6 +188,16 @@ export async function preparePerUserStructuredLaunch(
           () => undefined
         );
         if (codexHome) {
+          if (privateCodexHome) {
+            await preserveTemporaryCodexLogin(deps.homeBase, codexHome, privateCodexHome).catch(
+              () => {
+                console.warn(
+                  `[engine-host] ${key} Codex login preservation failed; cleanup deferred`
+                );
+                throw new Error("Codex login preservation failed; temporary home retained");
+              }
+            );
+          }
           await syncCodexLoginIntoHome(
             deps.homeBase,
             codexHome,
