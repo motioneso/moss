@@ -225,3 +225,20 @@ replacement persistence remain NOT_RUN. This is no runtime qualification or prod
 The one next proposal is the same bounded qualification after fresh entry floors pass, including
 archive validation if needed and committed exact-artifact prelaunch review. No further run,
 automatic merge or issue close is dispatched.
+
+## Subsequent requirement amendment: idle sleep and wake
+
+After the persistence entry rejection, Ben required Computer to sleep when unused to release
+resources for other host work. Reviewer `/root/persistence_entry_review` independently returned
+**PASS — bounded sleep/wake requirement amendment accepted. No blocking findings.** No reviewer
+edits, runtime operations or resource-gate retries were performed.
+
+Exact amended spec SHA-256:
+`14378d6c2fb961aacd71071fbb213e048d3dabde0a37a96cf9fb667dd6b45dae`.
+This later spec supersedes the spec snapshot accepted for persistence-r5; both preflight report
+and JSON hashes remain unchanged. The operative requirement consistently replaces continuous
+running with idle sleep/on-demand wake. Clean stop is a future design requiring flushed state,
+active-work inhibition, no silent unsaved-work loss, owner checks and wake resource admission.
+The timeout/inhibitor decisions, live proof and same-PR product app-map updates remain pending.
+Scoped formatting and whitespace checks passed. This accepts a requirement amendment, with no
+implemented sleep/wake capability or resumed qualification claim.
