@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-23
+
+#### Added
+
+- **Guided setup for existing Vocci rings.** Connect an existing Vocci ring to Moss on Android, then choose when recording delivery and hold-to-talk are enabled. [PR #3566](https://github.com/motioneso/moss/pull/3566)
+
 ### 2026-10-22
 
 #### Fixed
