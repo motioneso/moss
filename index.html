@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Moss weekly — Week of October 5, 2026</title>
-<meta name="description" content="Meetings you can record from your Mac, a chat that sits beside your page, Moss doing more of the app for you, and a long list of fixes.">
+<title>Moss weekly — Week of October 19, 2026</title>
+<meta name="description" content="Ring recordings start arriving in Moss, Outlook calendars come in read-only, chat works with API keys, and reminders behave. Here's the week.">
 <link rel="stylesheet" href="weekly.css">
 </head>
 <body>
@@ -12,26 +12,26 @@
 <header class="masthead">
   <div class="shell">
     <span class="wordmark">Moss weekly</span>
-    <span class="issue">Issue #41</span>
+    <span class="issue">Issue #42</span>
   </div>
 </header>
 
 <main class="shell">
 
   <div class="lede">
-    <h1>Week of October 5, 2026</h1>
-    <p>A big week. Meetings arrived and learned to record from your Mac, chat moved over to sit beside whatever you're looking at, and Moss can now handle a lot more of the app on your behalf. Settings, Activity and Tasks all got a fresh coat too, and the fixes are at the bottom if that's all you came for.</p>
+    <h1>Week of October 19, 2026</h1>
+    <p>This was the week Moss started listening. Recordings from a Vocci ring can now land in Meetings with a transcript and a summary, your Outlook calendar can show up next to everything else, and chat learned to work with an API key. Reminders also got two fixes, so the one you ask for first actually sticks.</p>
   </div>
 
   <section class="hero">
     <div>
       <p class="eyebrow">This week's headline</p>
-      <h2>Meetings, recorded from your Mac</h2>
+      <h2>Your ring recordings now reach Moss</h2>
     </div>
     <div class="hero-body">
-      <p>Moss now has a Meetings page that keeps the live transcript and your own notes side by side, with a summary written when you stop. Link your Mac once, then start, pause or stop recording from a small pill on your screen, choosing whether to capture your microphone, the call audio or both. You can hide the pill and the meeting keeps going. Your notes stay private, past meetings show up in History, and meeting data is included when you export your account.</p>
-      <p>The recording also got a lot sturdier over the week. It no longer stops itself a moment after you press Start, rides out microphone hiccups without a Resume, keeps going when you join a Teams or Google Meet call in your browser, cuts down on echo from your speakers, and stops writing repeated lines during silence. Summaries use your default model and tell you plainly when they can't run.</p>
-      <p class="refs"><a href="https://github.com/motioneso/moss/pull/2982">PR&nbsp;#2982</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3056">PR&nbsp;#3056</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3079">PR&nbsp;#3079</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3082">PR&nbsp;#3082</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3093">PR&nbsp;#3093</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3099">PR&nbsp;#3099</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3104">PR&nbsp;#3104</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3119">PR&nbsp;#3119</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3120">PR&nbsp;#3120</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3153">PR&nbsp;#3153</a></p>
+      <p>Record a conversation on a Vocci ring and it can now find its way into Meetings, complete with a transcript, a summary, any bookmarks you tapped, and tasks and follow-ups you can review before keeping. An Android companion app carries the recordings over, picks up where it left off if an upload gets interrupted, and handles meetings up to about two hours long.</p>
+      <p>If you opt in, a recording made while holding the ring's button is treated as a question for me instead. It shows up in your Main chat for you to check and send, and I answer in text. This is still an early preview: the Android app is installed by hand and pairing the ring takes some developer setup, so it isn't ready for everyone yet.</p>
+      <p class="refs"><a href="https://github.com/motioneso/moss/pull/3548">PR&nbsp;#3548</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3551">PR&nbsp;#3551</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3554">PR&nbsp;#3554</a></p>
     </div>
   </section>
 
@@ -40,86 +40,26 @@
     <hr class="hr">
     <div class="items">
       <article class="item">
-        <h4>Moss can do much more of the app from chat</h4>
-        <p>Ask in chat and Moss can now find and use many more of the app's own actions, such as reviewing memory suggestions. Anything that deletes, including deleting a note, always shows you a card to approve first, and those cards are calmer and clearer about what happened once you decide.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3071">PR&nbsp;#3071</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3094">PR&nbsp;#3094</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3091">PR&nbsp;#3091</a></p>
+        <h4>Outlook calendar, read-only</h4>
+        <p>Connect a dedicated Outlook browser and your upcoming meetings, from yesterday through the next 30 days, appear in Calendar and refresh every five minutes. Moss looks but never touches, and it warns you when the connection needs a fresh sign-in or can't be sure it saw everything. It needs to be set up by whoever runs your Moss before you can switch it on.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3568">PR&nbsp;#3568</a></p>
       </article>
       <article class="item">
-        <h4>Chat beside your page</h4>
-        <p>On a wide screen, chat now makes room for itself next to the page you're on, so you can see your day while you ask about it. An Expand button lets it fill the screen, and History and private chat live in a new More menu.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2941">PR&nbsp;#2941</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2958">PR&nbsp;#2958</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2961">PR&nbsp;#2961</a></p>
-      </article>
-      <article class="item">
-        <h4>More say over your theme</h4>
-        <p>The theme editor has a new look, and your own themes can now set the colour of the navigation bar and of the header at the top of every page. Paste a palette to pick from, or click part of the preview to change that colour.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3004">PR&nbsp;#3004</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3021">PR&nbsp;#3021</a></p>
-      </article>
-      <article class="item">
-        <h4>Choose your decision model</h4>
-        <p>The model that sorts your mail and judges your focus can now be Cloudflare's Clef or any service compatible with Jev.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3059">PR&nbsp;#3059</a></p>
-      </article>
-      <article class="item">
-        <h4>A model activity log for admins</h4>
-        <p>Admins can see every model call Moss makes, from chat replies to background jobs, with the time, kind, model and result, and without any chat content.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2900">PR&nbsp;#2900</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2904">PR&nbsp;#2904</a></p>
-      </article>
-      <article class="item">
-        <h4>Classifier trial tools for admins</h4>
-        <p>While the classifier runs as a trial, admins can open a report on how often it agreed with the main chat model over the last 7, 30 or 90 days. Anyone can ask Moss in chat to delete the trial records kept about their messages, and Moss confirms before it does.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2964">PR&nbsp;#2964</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2937">PR&nbsp;#2937</a></p>
+        <h4>Chat with your own API key</h4>
+        <p>Admins can now point chat at an Anthropic or OpenAI-compatible provider using an API key, including one at its own web address. Tools and confirmation cards work just as they do with a sign-in provider, and a pasted address with an extra slash or a trailing /v1 just works.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3540">PR&nbsp;#3540</a></p>
       </article>
     </div>
   </section>
 
   <section class="band">
-    <h3>Improved</h3>
+    <h3>Changed</h3>
     <hr class="hr">
     <div class="items">
       <article class="item">
-        <h4>Connected tools sort themselves</h4>
-        <p>When you add or refresh a connection, Moss sorts each of its tools by what it does, in the background, so there's no reviewing them one by one. Tools that only look things up or make ordinary changes run without asking, while sensitive tools still check with you, and tools that send things out do too unless you allow them to send without asking. Each connection page now uses the full width, groups tools by what they do, gives each one a single switch, and shows whether its safety check is ready.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3006">PR&nbsp;#3006</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3009">PR&nbsp;#3009</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3011">PR&nbsp;#3011</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3014">PR&nbsp;#3014</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3033">PR&nbsp;#3033</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3045">PR&nbsp;#3045</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2953">PR&nbsp;#2953</a></p>
-      </article>
-      <article class="item">
-        <h4>Settings, redesigned</h4>
-        <p>Settings now matches the rest of Moss and uses the whole screen. Connected accounts, your notes folder and services live together on one Connections page, a few pages have plainer names, and on a phone you pick a section from a menu.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2930">PR&nbsp;#2930</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2935">PR&nbsp;#2935</a></p>
-      </article>
-      <article class="item">
-        <h4>One activity history</h4>
-        <p>The Activity page shows every kind of work Moss did for you, with what happened, how long it took and the detail of each step. Filter by time, module or model, and your choices are remembered.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2976">PR&nbsp;#2976</a></p>
-      </article>
-      <article class="item">
-        <h4>Catch-up shows the emails worth your time</h4>
-        <p>The catch-up on Today lists each email worth knowing about, who it's from and what it says, with buttons to open it, reply, turn it into a task or dismiss it.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3031">PR&nbsp;#3031</a></p>
-      </article>
-      <article class="item">
-        <h4>A calmer, clearer Today</h4>
-        <p>The header says the right time of day and explains when a briefing isn't ready yet. Empty days get one quiet line instead of three empty messages, the smallest text is a touch larger, and the faint contour lines behind the header are back.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2929">PR&nbsp;#2929</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2931">PR&nbsp;#2931</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/2948">PR&nbsp;#2948</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3017">PR&nbsp;#3017</a></p>
-      </article>
-      <article class="item">
-        <h4>A refreshed Tasks page</h4>
-        <p>Tasks has a park-inspired layout with a visible list index, with quick capture and both task views close at hand.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2972">PR&nbsp;#2972</a></p>
-      </article>
-      <article class="item">
-        <h4>Your assistant, by name</h4>
-        <p>If you've given your assistant a name, it now shows throughout the app, from the loading screen to the menu and settings.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3032">PR&nbsp;#3032</a></p>
-      </article>
-      <article class="item">
-        <h4>Nicer waiting and small consistencies</h4>
-        <p>The loading screen appears straight away instead of a blank page, follows your light or dark setting, and shows a gently animated logo. Every page now has the same date line under its title.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2944">PR&nbsp;#2944</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3052">PR&nbsp;#3052</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3008">PR&nbsp;#3008</a></p>
-      </article>
-      <article class="item">
-        <h4>Chat works better with the keyboard</h4>
-        <p>Opening chat puts the cursor in the message box, Escape closes it and returns you to where you were, and on a phone the Tab key stays inside the chat.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/2938">PR&nbsp;#2938</a></p>
+        <h4>Job Search is archived</h4>
+        <p>Job Search is no longer offered as a module download. If you already have it installed, it stays put along with its data.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3561">PR&nbsp;#3561</a></p>
       </article>
     </div>
   </section>
@@ -128,23 +68,9 @@
     <h3>Fixed</h3>
     <hr class="hr">
     <ul class="fixes">
-      <li>Transactions from your connected banks arrive even when the bank's live balance check fails, and a first sync runs as soon as you connect. <a href="https://github.com/motioneso/moss/pull/3166">#3166</a></li>
-      <li>Moss no longer stalls for minutes while it indexes your notes, and checking email no longer hangs. <a href="https://github.com/motioneso/moss/pull/3030">#3030</a></li>
-      <li>With no AI model connected, chat says so and offers to connect one, and your draft no longer vanishes while you type. <a href="https://github.com/motioneso/moss/pull/2926">#2926</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/2965">#2965</a></li>
-      <li>Starting a new chat stops the reply still being written, so it can't spill into the new one. <a href="https://github.com/motioneso/moss/pull/2963">#2963</a></li>
-      <li>Refreshing the &quot;On your radar&quot; nudges on Today works again. <a href="https://github.com/motioneso/moss/pull/2967">#2967</a></li>
-      <li>Sports no longer promises a quiet night while one of your teams is playing or has played. <a href="https://github.com/motioneso/moss/pull/2945">#2945</a></li>
-      <li>Faint text is easier to read, small controls on Today are easier to tap on a phone, and the Activity filters wrap on narrow screens. <a href="https://github.com/motioneso/moss/pull/2946">#2946</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/2947">#2947</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/3060">#3060</a></li>
-      <li>The account menu shows just your name and picture, and fits on a phone without scrolling. <a href="https://github.com/motioneso/moss/pull/2988">#2988</a></li>
-      <li>The model button above the chat box shows a readable name instead of a technical code. <a href="https://github.com/motioneso/moss/pull/2980">#2980</a></li>
-      <li>Trail Marker's focus checks are deleted after 30 days as promised, and are included in exports and account deletion. <a href="https://github.com/motioneso/moss/pull/2977">#2977</a></li>
-      <li>A group switch on a connection turns every tool in the group on or off, and shows the right state. <a href="https://github.com/motioneso/moss/pull/2992">#2992</a></li>
-      <li>The notice before preparing a connection's tools says plainly what is sent as written. <a href="https://github.com/motioneso/moss/pull/2996">#2996</a></li>
-      <li>The classifier trial counts connected tools correctly, skips look-up tools it can never offer, and logs checks that time out. <a href="https://github.com/motioneso/moss/pull/3037">#3037</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/3050">#3050</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/3062">#3062</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/3064">#3064</a></li>
-      <li>Two notices with the same title each keep their own card. <a href="https://github.com/motioneso/moss/pull/3063">#3063</a></li>
-      <li>The top bar stays readable in a custom theme with dark mode on. <a href="https://github.com/motioneso/moss/pull/3018">#3018</a></li>
-      <li>The task details close button is back in the corner. <a href="https://github.com/motioneso/moss/pull/3007">#3007</a></li>
-      <li>The model filter list on Activity looks tidy again. <a href="https://github.com/motioneso/moss/pull/3048">#3048</a></li>
+      <li>Week and Month in Calendar open on today, and Month fits the screen without sideways scrolling, even on a phone. <a href="https://github.com/motioneso/moss/pull/3573">#3573</a></li>
+      <li>Tapping a reminder's alert or its notification opens that reminder in its chat, not the Today page. <a href="https://github.com/motioneso/moss/pull/3542">#3542</a></li>
+      <li>A reminder asked for in a brand-new account's very first chat message is saved, and it appears when it fires without reloading chat. <a href="https://github.com/motioneso/moss/pull/3544">#3544</a></li>
     </ul>
   </section>
 

@@ -1,0 +1,72 @@
+{
+  "issue": 42,
+  "slug": "2026-10-23",
+  "weekOf": "October 19, 2026",
+  "summary": "Ring recordings start arriving in Moss, Outlook calendars come in read-only, chat works with API keys, and reminders behave. Here's the week.",
+  "intro": "This was the week Moss started listening. Recordings from a Vocci ring can now land in Meetings with a transcript and a summary, your Outlook calendar can show up next to everything else, and chat learned to work with an API key. Reminders also got two fixes, so the one you ask for first actually sticks.",
+  "headline": {
+    "title": "Your ring recordings now reach Moss",
+    "body": [
+      "Record a conversation on a Vocci ring and it can now find its way into Meetings, complete with a transcript, a summary, any bookmarks you tapped, and tasks and follow-ups you can review before keeping. An Android companion app carries the recordings over, picks up where it left off if an upload gets interrupted, and handles meetings up to about two hours long.",
+      "If you opt in, a recording made while holding the ring's button is treated as a question for me instead. It shows up in your Main chat for you to check and send, and I answer in text. This is still an early preview: the Android app is installed by hand and pairing the ring takes some developer setup, so it isn't ready for everyone yet."
+    ],
+    "prs": [
+      3548,
+      3551,
+      3554
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Outlook calendar, read-only",
+          "body": "Connect a dedicated Outlook browser and your upcoming meetings, from yesterday through the next 30 days, appear in Calendar and refresh every five minutes. Moss looks but never touches, and it warns you when the connection needs a fresh sign-in or can't be sure it saw everything. It needs to be set up by whoever runs your Moss before you can switch it on.",
+          "prs": [
+            3568
+          ]
+        },
+        {
+          "title": "Chat with your own API key",
+          "body": "Admins can now point chat at an Anthropic or OpenAI-compatible provider using an API key, including one at its own web address. Tools and confirmation cards work just as they do with a sign-in provider, and a pasted address with an extra slash or a trailing /v1 just works.",
+          "prs": [
+            3540
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Changed",
+      "items": [
+        {
+          "title": "Job Search is archived",
+          "body": "Job Search is no longer offered as a module download. If you already have it installed, it stays put along with its data.",
+          "prs": [
+            3561
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "Week and Month in Calendar open on today, and Month fits the screen without sideways scrolling, even on a phone.",
+      "prs": [
+        3573
+      ]
+    },
+    {
+      "text": "Tapping a reminder's alert or its notification opens that reminder in its chat, not the Today page.",
+      "prs": [
+        3542
+      ]
+    },
+    {
+      "text": "A reminder asked for in a brand-new account's very first chat message is saved, and it appears when it fires without reloading chat.",
+      "prs": [
+        3544
+      ]
+    }
+  ]
+}

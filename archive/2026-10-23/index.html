@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moss weekly — Week of October 19, 2026</title>
+<meta name="description" content="Ring recordings start arriving in Moss, Outlook calendars come in read-only, chat works with API keys, and reminders behave. Here's the week.">
+<link rel="stylesheet" href="../../weekly.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="shell">
+    <span class="wordmark">Moss weekly</span>
+    <span class="issue">Issue #42</span>
+  </div>
+</header>
+
+<main class="shell">
+
+  <div class="lede">
+    <h1>Week of October 19, 2026</h1>
+    <p>This was the week Moss started listening. Recordings from a Vocci ring can now land in Meetings with a transcript and a summary, your Outlook calendar can show up next to everything else, and chat learned to work with an API key. Reminders also got two fixes, so the one you ask for first actually sticks.</p>
+  </div>
+
+  <section class="hero">
+    <div>
+      <p class="eyebrow">This week's headline</p>
+      <h2>Your ring recordings now reach Moss</h2>
+    </div>
+    <div class="hero-body">
+      <p>Record a conversation on a Vocci ring and it can now find its way into Meetings, complete with a transcript, a summary, any bookmarks you tapped, and tasks and follow-ups you can review before keeping. An Android companion app carries the recordings over, picks up where it left off if an upload gets interrupted, and handles meetings up to about two hours long.</p>
+      <p>If you opt in, a recording made while holding the ring's button is treated as a question for me instead. It shows up in your Main chat for you to check and send, and I answer in text. This is still an early preview: the Android app is installed by hand and pairing the ring takes some developer setup, so it isn't ready for everyone yet.</p>
+      <p class="refs"><a href="https://github.com/motioneso/moss/pull/3548">PR&nbsp;#3548</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3551">PR&nbsp;#3551</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/3554">PR&nbsp;#3554</a></p>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>New</h3>
+    <hr class="hr">
+    <div class="items">
+      <article class="item">
+        <h4>Outlook calendar, read-only</h4>
+        <p>Connect a dedicated Outlook browser and your upcoming meetings, from yesterday through the next 30 days, appear in Calendar and refresh every five minutes. Moss looks but never touches, and it warns you when the connection needs a fresh sign-in or can't be sure it saw everything. It needs to be set up by whoever runs your Moss before you can switch it on.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3568">PR&nbsp;#3568</a></p>
+      </article>
+      <article class="item">
+        <h4>Chat with your own API key</h4>
+        <p>Admins can now point chat at an Anthropic or OpenAI-compatible provider using an API key, including one at its own web address. Tools and confirmation cards work just as they do with a sign-in provider, and a pasted address with an extra slash or a trailing /v1 just works.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3540">PR&nbsp;#3540</a></p>
+      </article>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>Changed</h3>
+    <hr class="hr">
+    <div class="items">
+      <article class="item">
+        <h4>Job Search is archived</h4>
+        <p>Job Search is no longer offered as a module download. If you already have it installed, it stays put along with its data.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/3561">PR&nbsp;#3561</a></p>
+      </article>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>Fixed</h3>
+    <hr class="hr">
+    <ul class="fixes">
+      <li>Week and Month in Calendar open on today, and Month fits the screen without sideways scrolling, even on a phone. <a href="https://github.com/motioneso/moss/pull/3573">#3573</a></li>
+      <li>Tapping a reminder's alert or its notification opens that reminder in its chat, not the Today page. <a href="https://github.com/motioneso/moss/pull/3542">#3542</a></li>
+      <li>A reminder asked for in a brand-new account's very first chat message is saved, and it appears when it fires without reloading chat. <a href="https://github.com/motioneso/moss/pull/3544">#3544</a></li>
+    </ul>
+  </section>
+
+  <div class="cta">
+    <a href="https://github.com/motioneso/moss">View Moss on GitHub</a>
+  </div>
+
+</main>
+
+<footer class="colophon">
+  <div class="shell">
+    Moss · a weekly record of what shipped. <a href="../">Past issues</a>.
+  </div>
+</footer>
+
+</body>
+</html>
