@@ -1,6 +1,6 @@
-# Proposed next assignment: recover one existing desktop viewer
+# Recovery qualification: recover one existing desktop viewer
 
-Part of #3577; completes the outstanding recovery gate of #3578. **Proposed, not dispatched.**
+Part of #3577; completes the outstanding recovery gate of #3578. **Dispatched by Ben’s “proceed” on 23 October 2026.**
 Full autonomous implementation authority persists. This stop follows the bounded report/context
 discipline after repeated proof failures; it is not another permission requirement.
 
