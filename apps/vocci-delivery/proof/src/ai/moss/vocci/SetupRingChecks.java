@@ -59,7 +59,7 @@ public final class SetupRingChecks extends Instrumentation {
         try {
             reset(); prerequisites(); reset(); selectionAndCommit(); reset(); malformedSelection(); reset(); proofRetry();
             reset(); ownerChecks(); reset(); interruptedCommit(); reset(); conflictingCommit(); reset(); queueAppears();
-            reset(); offlineCancellation(); reset(); staleController();
+            reset(); offlineCancellation(); reset(); staleController(); reset(); changeSelection();
             result.putString("result", "PASS"); result.putInt("contracts", passed); finish(-1, result);
         } catch (Throwable failure) {
             result.putString("result", "FAIL"); result.putString("check", failure instanceof AssertionError ? failure.getMessage() : failure.getClass().getSimpleName()); finish(1, result);
@@ -84,6 +84,7 @@ public final class SetupRingChecks extends Instrumentation {
     private void prerequisites() throws Exception {
         Fake fake = new Fake(); SetupLink link = link(fake);
         rejects("setup_account_required", () -> link.selectBinding(ring()));
+        rejects("setup_account_required", link::clearBinding);
         rejects("setup_account_required", link::verifyAndCommit);
         link.begin(ORIGIN); rejects("setup_account_required", () -> link.selectBinding(ring()));
         link.check(); rejects("setup_ring_required", link::verifyAndCommit);
@@ -107,6 +108,7 @@ public final class SetupRingChecks extends Instrumentation {
         check(status.phase == SetupLink.Phase.COMMITTED && status.origin.equals(ORIGIN) && status.accountName.equals("Synthetic ring owner") &&
             status.ringSelected && status.ringSuffix.equals("123456"), "committed_summary_survives_restart");
         rejects("setup_already_configured", () -> restarted.selectBinding(ring()));
+        rejects("setup_already_configured", restarted::clearBinding);
         restarted.cancel(); check(config.exists() && fake.logouts == 0, "cancel_preserves_committed_config"); passed++;
     }
     private void malformedSelection() throws Exception {
@@ -175,5 +177,20 @@ public final class SetupRingChecks extends Instrumentation {
         Fake fake = new Fake(); SetupLink first = linked(fake); SetupLink stale = link(fake);
         first.selectBinding(ring()); stale.verifyAndCommit();
         check(config.exists() && fake.proofs == 1 && first.status().phase == SetupLink.Phase.COMMITTED, "recreated_controller_reads_latest_selection"); passed++;
+    }
+    private void changeSelection() throws Exception {
+        Fake fake = new Fake(); SetupLink first = linked(fake); SetupLink stale = link(fake);
+        first.selectBinding(ring());
+        stale.clearBinding();
+        SetupLink restarted = link(fake);
+        check(restarted.status().phase == SetupLink.Phase.LINKED && !restarted.status().ringSelected,
+            "change_ring_keeps_confirmed_moss_link_after_restart");
+        check(stage.load().getString("credential").equals(CREDENTIAL) && fake.logouts == 0 && fake.proofs == 0,
+            "change_ring_needs_no_network_or_physical_proof");
+        rejects("setup_ring_required", restarted::verifyAndCommit);
+        restarted.selectBinding(ring().put("sn", "replacement-654321").put("bindKey", "replacement-key"));
+        restarted.verifyAndCommit();
+        check(config.load().getString("sn").equals("replacement-654321") && fake.proofs == 1,
+            "replacement_requires_fresh_physical_verification"); passed++;
     }
 }

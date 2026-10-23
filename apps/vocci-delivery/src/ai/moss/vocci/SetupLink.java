@@ -88,6 +88,12 @@ final class SetupLink {
             record.put("binding", VocciBindings.selected(binding)); save();
         }
     }
+    void clearBinding() throws Exception {
+        synchronized (TRANSACTION) {
+            refresh(); requireLinked();
+            record.remove("binding"); save();
+        }
+    }
     private void requireLinked() throws Exception {
         requireUnconfigured();
         if (savedStatus().phase != Phase.LINKED) throw new IllegalStateException("setup_account_required");
