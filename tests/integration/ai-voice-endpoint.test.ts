@@ -389,6 +389,175 @@ describe("AI Voice (STT) endpoint (#874)", () => {
     expect(await voiceProviderStatusRow()).toMatchObject({ status: "disabled" });
   });
 
+  it("selects a configured provider for all unpinned users without changing chat or the legacy endpoint", async () => {
+    await putVoice({
+      baseUrl: "https://legacy.example",
+      modelName: "legacy-asr",
+      apiKey: "legacy-key"
+    });
+    const before = await voiceProviderRow();
+    const providerId = await seedAssistantProvider("Selected transcription");
+    const modelId = await seedAssistantModel(providerId, "selected-asr", ["transcription"]);
+    const chatBefore = await resolveChat(ids.userA);
+    expect((await bindTranscription(modelId)).statusCode).toBe(200);
+    for (const user of [ids.userA, ids.userB]) {
+      expect((await resolveTranscription(user)).model?.id).toBe(modelId);
+    }
+    expect(await resolveChat(ids.userA)).toEqual(chatBefore);
+    expect(await voiceProviderRow()).toEqual(before);
+    const listed = await server.inject({
+      url: "/api/ai/service-bindings",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+    expect(listed.json().bindings.transcription).toEqual({ kind: "model", modelId });
+    expect(listed.body).not.toContain("legacy-key");
+    expect((await clearTranscription()).statusCode).toBe(200);
+    expect((await resolveTranscription(ids.userB)).model?.provider_model_id).toBe("legacy-asr");
+    expect(await voiceProviderRow()).toEqual(before);
+  });
+
+  it("does not resurrect old transcription bindings or capability routes on upgrade", async () => {
+    await putVoice({
+      baseUrl: "https://legacy.example",
+      modelName: "legacy-asr",
+      apiKey: "legacy-key"
+    });
+    const providerId = await seedAssistantProvider("Old transcription binding");
+    const modelId = await seedAssistantModel(providerId, "old-asr", ["transcription"]);
+    await dataContext.withDataContext(ctx(ids.adminUser), async (db) => {
+      await db.db
+        .insertInto("app.instance_settings")
+        .values({
+          key: "ai.service_bindings",
+          value: { transcription: { kind: "model", modelId } },
+          updated_by_user_id: ids.adminUser
+        })
+        .execute();
+      await db.db
+        .insertInto("app.instance_settings")
+        .values({
+          key: "ai.capability_routes",
+          value: { transcription: modelId },
+          updated_by_user_id: ids.adminUser
+        })
+        .execute();
+    });
+    expect((await resolveTranscription(ids.userB)).model?.provider_model_id).toBe("legacy-asr");
+    expect((await bindTranscription(modelId)).statusCode).toBe(200);
+    expect((await resolveTranscription(ids.userB)).model?.id).toBe(modelId);
+    expect((await clearTranscription()).statusCode).toBe(200);
+    expect((await resolveTranscription(ids.userB)).model?.provider_model_id).toBe("legacy-asr");
+  });
+
+  it("does not fall back when the selected model becomes unavailable and retains pin precedence", async () => {
+    await putVoice({
+      baseUrl: "https://legacy.example",
+      modelName: "legacy-asr",
+      apiKey: "legacy-key"
+    });
+    const selectedProvider = await seedAssistantProvider("Selected transcription");
+    const selectedModel = await seedAssistantModel(selectedProvider, "selected-asr", [
+      "transcription"
+    ]);
+    expect((await bindTranscription(selectedModel)).statusCode).toBe(200);
+    const pinnedProvider = await seedAssistantProvider("Pinned chat");
+    await seedAssistantModel(pinnedProvider, "pinned-chat", ["chat"]);
+    await setProviderPin(ids.userB, pinnedProvider);
+    expect(await resolveTranscription(ids.userB)).toMatchObject({
+      model: null,
+      reason: "admin-pin-unavailable"
+    });
+    await dataContext.withDataContext(ctx(ids.adminUser), async (db) => {
+      await db.db
+        .updateTable("app.ai_configured_models")
+        .set({ status: "disabled" })
+        .where("id", "=", selectedModel)
+        .execute();
+    });
+    expect(await resolveTranscription(ids.userA)).toMatchObject({
+      model: null,
+      reason: "needs-config"
+    });
+    expect((await clearTranscription()).statusCode).toBe(200);
+    expect((await resolveTranscription(ids.userA)).model?.provider_model_id).toBe("legacy-asr");
+  });
+
+  it("rejects non-admin selection/clearing and incompatible provider selections", async () => {
+    const providerId = await seedAssistantProvider("Selected transcription");
+    const modelId = await seedAssistantModel(providerId, "selected-asr", ["transcription"]);
+    expect((await bindTranscription(modelId, ids.sessionB)).statusCode).toBe(403);
+    expect((await clearTranscription(ids.sessionB)).statusCode).toBe(403);
+    const chatId = await seedAssistantModel(providerId, "chat-only", ["chat"]);
+    expect((await bindTranscription(chatId)).statusCode).toBe(400);
+    expect((await bindTranscription(randomUUID())).statusCode).toBe(400);
+    expect((await bindTranscription(modelId)).statusCode).toBe(200);
+    const encrypted = createAiSecretCipher().encryptJson({ apiKey: "fixture-selection-key" });
+    for (const patch of [
+      { provider_kind: "anthropic" as const },
+      { auth_method: "cli" as const, acp_agent_id: "codex-acp" },
+      { status: "disabled" as const },
+      { status: "revoked" as const, revoked_at: new Date() }
+    ]) {
+      await dataContext.withDataContext(ctx(ids.adminUser), async (db) => {
+        await db.db
+          .updateTable("app.ai_provider_configs")
+          .set({
+            provider_kind: "openai-compatible",
+            auth_method: "api_key",
+            acp_agent_id: null,
+            status: "active",
+            revoked_at: null,
+            encrypted_credential: encrypted,
+            ...patch
+          })
+          .where("id", "=", providerId)
+          .execute();
+      });
+      expect((await bindTranscription(modelId)).statusCode).toBe(400);
+      expect(await resolveTranscription(ids.userA)).toMatchObject({
+        model: null,
+        reason: "needs-config"
+      });
+    }
+  });
+
+  it("rejects selection with a missing API key and fails closed if a selected key is cleared", async () => {
+    const providerId = await seedAssistantProvider("Selected transcription");
+    const modelId = await seedAssistantModel(providerId, "selected-asr", ["transcription"]);
+    expect((await bindTranscription(modelId)).statusCode).toBe(200);
+    const cleared = await server.inject({
+      method: "PATCH",
+      url: `/api/ai/providers/${providerId}`,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: { credentialPayload: {} }
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect((await bindTranscription(modelId)).statusCode).toBe(400);
+    const transcription = await server.inject({
+      method: "POST",
+      url: "/api/ai/transcriptions",
+      headers: { authorization: `Bearer ${ids.sessionB}`, "content-type": "audio/wav" },
+      payload: Buffer.from([1, 2, 3])
+    });
+    expect(transcription.statusCode).toBe(422);
+  });
+
+  function bindTranscription(modelId: string, session: string = ids.sessionAdmin) {
+    return server.inject({
+      method: "PUT",
+      url: "/api/ai/services/transcription/binding",
+      headers: { authorization: `Bearer ${session}` },
+      payload: { binding: { kind: "model", modelId } }
+    });
+  }
+  function clearTranscription(session: string = ids.sessionAdmin) {
+    return server.inject({
+      method: "DELETE",
+      url: "/api/ai/services/transcription/binding",
+      headers: { authorization: `Bearer ${session}` }
+    });
+  }
+
   // ---- helpers -------------------------------------------------------------------------------------
 
   function putVoice(payload: {

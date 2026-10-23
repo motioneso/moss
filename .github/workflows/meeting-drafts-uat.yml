@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/meeting-drafts-uat.yml"
+      - "scripts/prepare-browser-apt-mirror.py"
       - "packages/meetings/**"
       - "packages/auth/src/recording-capabilities.ts"
       - "packages/auth/src/companion-pairing.ts"
@@ -75,6 +76,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Use standard Ubuntu archive for browser dependencies
+        run: sudo python3 scripts/prepare-browser-apt-mirror.py
       - name: Install browser
         timeout-minutes: 10
         run: pnpm exec playwright install --with-deps chromium
@@ -144,6 +147,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Use standard Ubuntu archive for browser dependencies
+        run: sudo python3 scripts/prepare-browser-apt-mirror.py
       - name: Install browser
         timeout-minutes: 10
         run: pnpm exec playwright install --with-deps chromium

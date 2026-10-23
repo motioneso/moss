@@ -126,8 +126,8 @@ export interface AiCapabilityRouteDto {
  * #870 Slice 1: a per-service binding. The admin binds a user-facing service to EITHER a "mode"
  * (a tier resolved inside the instance-default provider) OR a specific model. This replaces the old
  * free-for-all per-capability model route + separate per-user tier preference with one unified knob
- * per service. Stored under `ai.service_bindings` in `app.instance_settings`. #874 HIGH-2: Chat is
- * the only bindable service — Voice (STT) is configured as its own dedicated endpoint, not a binding.
+ * per service. Stored under `ai.service_bindings` in `app.instance_settings`. Transcription
+ * accepts only a model binding and retains the existing endpoint when unbound.
  */
 export type AiServiceBinding =
   | { readonly kind: "mode"; readonly tier: AiModelTier }

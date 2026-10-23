@@ -35,9 +35,8 @@ const AUDIO_CONTENT_TYPE = /^audio\//;
  *   - HIGH-3: an admin per-user pin WINS. A pinned user's transcription is attempted INSIDE the
  *     pinned provider only; a miss returns no model (mic unavailable) — it never escapes to the
  *     instance voice endpoint.
- *   - CRIT-1 / HIGH-2: an un-pinned user resolves via the dedicated `purpose='voice'` endpoint
- *     (a single instance-wide OpenAI-compatible STT provider), never via cross-provider worker
- *     routing and never via a service binding.
+ *   - An un-pinned user follows the admin-selected transcription model, or the existing
+ *     voice endpoint when unbound. An unavailable selected model never falls back.
  * No model resolved -> 422 (pin-blocked, or no voice endpoint configured). The decoded audio
  * is sent to the resolved provider for processing. This route does not log or persist it,
  * or place it on a pg-boss job payload. The response contains text and optionally ASR
@@ -114,7 +113,9 @@ export function registerAiTranscriptionRoutes(
             adapter.transcribeAudio({
               model: { provider_model_id: model.provider_model_id },
               // Copy Buffer's ArrayBufferLike into a Blob-compatible ArrayBuffer.
-              audio: new Blob([Uint8Array.from(audio)]),
+              audio: new Blob([Uint8Array.from(audio)], {
+                type: request.headers["content-type"]
+              }),
               signal: controller.signal,
               ...(request.query.timestamps ? { timestamps: request.query.timestamps } : {}),
               // #2956: the transcription line is owned by the requesting user.

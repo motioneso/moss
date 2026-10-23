@@ -1,4 +1,5 @@
 import type { ScheduledReadPlan } from "../scheduled-reads/request.js";
+import type { VisualPresentationService } from "../visual/presentation-service.js";
 /**
  * Persistence + passive-retrieval port interfaces for ChatSessionManager, split out of
  * chat-session-manager.ts (#1157) to keep that file under the repo's 1000-line cap. All
@@ -368,6 +369,8 @@ export interface ChatSessionManagerDeps {
    * (tests, embedders) means tool rows carry no turn id.
    */
   readonly setCurrentTurnId?: (chatSessionId: string, turnId: string) => void;
+  /** Internal integration seam; production activation awaits the remaining visual gates. */
+  readonly visualPresentation?: VisualPresentationService;
   readonly clearCurrentTurnId?: (chatSessionId: string) => void;
   /**
    * #2159 — resolves once this session's MCP client has completed its first tools/list round

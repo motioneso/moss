@@ -858,6 +858,10 @@ export class AiRepository {
       .where("key", "in", [AI_SERVICE_BINDINGS_SETTING_KEY, AI_CAPABILITY_ROUTES_SETTING_KEY])
       .execute();
     const bindingRow = rows.find((row) => row.key === AI_SERVICE_BINDINGS_SETTING_KEY);
+    // New storage key: old pre-#874 transcription bindings must remain ignored on upgrade.
+    if (service === "transcription") {
+      return parseServiceBinding(bindingRow?.value?.["voice.transcription"]);
+    }
     const bindings = parseServiceBindingMap(bindingRow?.value);
     const bound = bindings[service];
     if (bound) return bound;
@@ -903,10 +907,10 @@ export class AiRepository {
     actorUserId: string
   ): Promise<AiServiceBinding> {
     assertDataContextDb(scopedDb);
-    if (service === SORTING_SERVICE_KEY) {
+    if (service === SORTING_SERVICE_KEY || service === "transcription") {
       // The sorting model has no mode: unset already means "run as today".
       if (binding.kind !== "model") {
-        throw new Error('Service "sorting" accepts only a model binding.');
+        throw new Error(`Service "${service}" accepts only a model binding.`);
       }
     } else if (
       !USER_FACING_SERVICES.has(service as AiModelCapability) &&
@@ -916,11 +920,12 @@ export class AiRepository {
     }
 
     const now = new Date();
+    const bindingKey = service === "transcription" ? "voice.transcription" : service;
     await scopedDb.db
       .insertInto("app.instance_settings")
       .values({
         key: AI_SERVICE_BINDINGS_SETTING_KEY,
-        value: { [service]: binding },
+        value: { [bindingKey]: binding },
         updated_by_user_id: actorUserId,
         created_at: now,
         updated_at: now
@@ -968,14 +973,14 @@ export class AiRepository {
    */
   async deleteModuleServiceBinding(
     scopedDb: DataContextDb,
-    service: ModuleServiceKey | SortingServiceKey,
+    service: ModuleServiceKey | SortingServiceKey | "transcription",
     actorUserId: string
   ): Promise<void> {
     assertDataContextDb(scopedDb);
     await scopedDb.db
       .updateTable("app.instance_settings")
       .set({
-        value: sql`instance_settings.value - ${service}`,
+        value: sql`instance_settings.value - ${service === "transcription" ? "voice.transcription" : service}`,
         updated_by_user_id: actorUserId,
         updated_at: new Date()
       })
@@ -1228,8 +1233,8 @@ export class AiRepository {
    * (Voice) #874 HIGH-3: transcription is special-cased AFTER the pin check. A pinned user's audio
    *     stays inside the pinned provider (an assistant provider cannot serve voice → mic unavailable,
    *     surfaced as `admin-pin-unavailable`, never escaping to the instance voice endpoint). An
-   *     un-pinned user resolves to the dedicated `purpose='voice'` endpoint — its OWN branch, never
-   *     the worker cross-provider path (CRIT-1) and never a service binding (HIGH-2).
+   *     un-pinned user follows the explicit instance transcription selection, or the existing
+   *     voice endpoint when unbound. No cross-provider automatic fallback.
    * (2) Un-pinned chat follows its service binding, resolved INSIDE the instance-default provider for
    *     a "mode" binding.
    * (3) Un-pinned worker capabilities keep H3: cross-provider `selectAutomaticModelForCapability`.
@@ -1310,12 +1315,17 @@ export class AiRepository {
       return { model: null, reason: "needs-config" };
     }
 
-    // (Voice) #874: un-pinned transcription resolves to the single instance voice(STT) endpoint. This
-    // is its OWN branch — placed before the worker branch so it never becomes cross-provider automatic
-    // (CRIT-1) and never reads a service binding (HIGH-2). No voice endpoint configured → unavailable
-    // (no cross-provider fallback, MED-2 "Voice is explicit"). The mic is user-facing so we don't
-    // logNeedsConfig here (would spam on every composer mount).
+    // Voice is explicit: a saved selection fails closed. Without one, retain the legacy endpoint.
+    // Never use worker auto-routing or fall back after an explicit selection becomes unavailable.
     if (isTranscription) {
+      const binding = await this.getServiceBinding(scopedDb, "transcription");
+      if (binding) {
+        const model =
+          binding.kind === "model"
+            ? await this.selectSharedTranscriptionModel(scopedDb, binding.modelId)
+            : undefined;
+        return model ? { model, reason: "manual-route" } : { model: null, reason: "needs-config" };
+      }
       const model = await this.selectVoiceTranscriptionModel(scopedDb);
       return model ? { model, reason: "manual-route" } : { model: null, reason: "needs-config" };
     }
@@ -1705,6 +1715,26 @@ export class AiRepository {
       .orderBy(sql`models.released_at desc nulls last`)
       .orderBy("models.created_at", "desc")
       .orderBy("models.id", "desc")
+      .executeTakeFirst();
+  }
+
+  /** Explicit instance selection; only a shared, active API-key provider can serve everyone. */
+  async selectSharedTranscriptionModel(
+    scopedDb: DataContextDb,
+    modelId: string
+  ): Promise<AiConfiguredModelSafeRow | undefined> {
+    assertDataContextDb(scopedDb);
+    return this.safeModelQuery(scopedDb)
+      .where("models.id", "=", modelId)
+      .where("providers.purpose", "=", "assistant")
+      .where("providers.provider_kind", "=", "openai-compatible")
+      .where("providers.auth_method", "=", "api_key")
+      .where("providers.encrypted_credential", "is not", null)
+      .where("providers.revoked_at", "is", null)
+      .where(sql<boolean>`app.owner_is_active_admin(${sql.ref("providers.owner_user_id")})`)
+      .where("models.status", "=", "active")
+      .where("providers.status", "=", "active")
+      .where(sql<boolean>`'transcription' = any(${sql.ref("models.capabilities")})`)
       .executeTakeFirst();
   }
 

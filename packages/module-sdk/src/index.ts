@@ -122,6 +122,8 @@ export interface ToolContext {
   readonly chatSessionId: string;
   /** Conversation captured when the server minted the token; absent is fail-closed. */
   readonly threadId?: string;
+  /** Active host turn captured at authenticated tool-call arrival; never a tool argument. */
+  readonly turnId?: string;
   /** IANA timezone string from the user's locale settings (e.g. "America/Chicago"). Absent when the gateway has no locale available (falls back to UTC at call site). */
   readonly localTimezone?: string;
   /** The person's effective locale. Format every time shown to them with it; absent outside the gateway. */
