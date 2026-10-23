@@ -268,3 +268,27 @@ remained present and Moss stayed healthy. Startup readiness and all previously m
 remain unqualified. One next proposal is the same bounded qualification after a separate dispatch
 when host capacity is available, with new identity, fresh floors and independent exact packet review.
 No automatic rerun, product/sleep implementation, owner integration, merge or issue close follows.
+
+## 20. Startup readiness r10: restored backend refusal
+
+Ben explicitly resumed after RAM recovered, authorising one fresh bounded attempt while retaining
+r9's entry rejection. Fresh entry and pre-load/pre-launch gates passed. The actual retained archive,
+config and seven layers were independently verified; one exact load and post-load identity/layer
+inspection passed. The committed [r10 packet](../plans/2026-10-23-moss-computer-startup-readiness-r10.md)
+and exact private artifacts received independent prelaunch acceptance.
+
+The single [r10 run](../../evidence/moss-computer/2026-10-23-startup-readiness-r10.md) passed positive
+guest/socket/gateway RFB probes, initial sampled isolation, protected access and both intended red
+controls. After byte-exact gateway configuration restoration, the driver exited0 but its owner
+payload contained RFB003.003 and “Too many security failures”, failing the required RFB003.008
+signal. Wrapper/runner1 reject the proof; UI/frame/input were NOT_RUN. Live diagnostics establish
+loopback backend blacklisting/refusal, with gateway upstream reset, but not its trigger. Probe
+side effects are a hypothesis; r7's502 cause remains UNKNOWN.
+
+Watchdog/cleanup/port release and operator closure exited0; independent closure found no owned
+runtime or ephemeral identities, retained homes/archive and healthy Moss. Two samples establish
+no sustained resource-fit claim. One next proposal is separately dispatched bounded RFB probe/
+blacklist diagnosis with unchanged image/security/assertions and exact review before another proof.
+No automatic retry, security weakening, product/sleep implementation, owner integration, merge or
+issue close follows. Startup/UI/input and previously missing sandbox/replacement gates remain
+unqualified; r8/r9 and all earlier rejection evidence remains unchanged.

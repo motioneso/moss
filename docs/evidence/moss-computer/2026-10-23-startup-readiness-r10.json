@@ -1,0 +1,719 @@
+{
+  "run": "readiness-r10",
+  "status": "REJECTED_INCOMPLETE_PROOF",
+  "reason": "RESTORED_RFB_PROTOCOL_SIGNAL_FAILED",
+  "operator": "Codex /root",
+  "task": 3578,
+  "parent": 3577,
+  "branch": "qualify/moss-computer-startup-readiness-r9",
+  "authority": "Ben explicitly said proceed after RAM recovery; one fresh attempt under inherited readiness protection/review gates; r9 rejection preserved",
+  "launch_packet_commit": "346ca8ff9e11005b359e497bc9d4a0f87b00da25",
+  "launch_packet_sha256": "adae12f5e1b0e4b19dee15f15519ec9c74d423c70d48e20fe27533851277c71c",
+  "launch_manifest_sha256": "27decaf07e7fbcd7f4f299e1144f57fbdca57fe2dc81a5f40ac58fea54ac03b4",
+  "entry": {
+    "at": "2026-10-23T21:14:06.781965+00:00",
+    "ram": 29907628032,
+    "root": 48547307520,
+    "data": 999886635008,
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "health": {
+      "exit": 0,
+      "stdout": "{\"ok\":true}",
+      "stderr": ""
+    },
+    "image": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Error response from daemon: No such image: sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf"
+    },
+    "pass": true
+  },
+  "archive_verification": {
+    "at": "2026-10-23T21:14:56.707733+00:00",
+    "archive_bytes": 1026041856,
+    "archive_sha256": "48cdd56f8d026af02c873513d36c86ab48b3b9e0b169cefe7a4f2ab7a1ceb4f9",
+    "config_sha256": "c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "layers": [
+      "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+      "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+      "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+      "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+      "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+      "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+      "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+    ],
+    "os": "linux",
+    "architecture": "amd64",
+    "result": "PASS"
+  },
+  "restoration_review": {
+    "reviewer": "/root/r9_evidence_review",
+    "at": "2026-10-23T21:15:23.862520Z",
+    "verdict": "PASS_RESTORE_READY",
+    "actual_archive_config_seven_layers_independently_verified": true,
+    "condition": "fresh admission immediately before at most one bounded exact load, then actual image identity/layers inspection; no runtime acceptance"
+  },
+  "pre_load": {
+    "at": "2026-10-23T21:16:47.844091+00:00",
+    "ram": 27653943296,
+    "root": 48451657728,
+    "data": 993990848512,
+    "pass": true
+  },
+  "image_load_exit": 0,
+  "restored_image": {
+    "at": "2026-10-23T21:16:56.166098+00:00",
+    "exit": 0,
+    "id": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "layers": [
+      "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+      "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+      "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+      "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+      "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+      "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+      "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+    ],
+    "os": "linux",
+    "architecture": "amd64"
+  },
+  "readiness_review": {
+    "reviewer": "/root/r9_evidence_review",
+    "verdict": "PASS_READY",
+    "commit": "346ca8ff9e11005b359e497bc9d4a0f87b00da25",
+    "packet_sha256": "adae12f5e1b0e4b19dee15f15519ec9c74d423c70d48e20fe27533851277c71c",
+    "manifest_sha256": "27decaf07e7fbcd7f4f299e1144f57fbdca57fe2dc81a5f40ac58fea54ac03b4",
+    "condition": "fresh admission/alive healthy watchdog before one supervised launch; no runtime acceptance",
+    "review_instrumentation_note": "Read-only image comparison initially assumed full Docker-inspect RootFS schema (KeyError); corrected to actual compact id/layers receipt and passed; no artifact changes."
+  },
+  "pre_launch": {
+    "at": "2026-10-23T21:21:15.838371+00:00",
+    "ram": 31577821184,
+    "root": 48287723520,
+    "data": 988008660992,
+    "pass": true
+  },
+  "runner_exit": 1,
+  "runner": {
+    "started": "2026-10-23T21:21:15.878747+00:00",
+    "operations": [
+      {
+        "name": "launch",
+        "started": "2026-10-23T21:21:16.096465+00:00",
+        "finished": "2026-10-23T21:21:17.316318+00:00",
+        "exit": 0
+      },
+      {
+        "name": "isolation-before",
+        "started": "2026-10-23T21:21:17.316619+00:00",
+        "finished": "2026-10-23T21:21:17.736827+00:00",
+        "exit": 0
+      },
+      {
+        "name": "readiness",
+        "started": "2026-10-23T21:21:17.737180+00:00",
+        "finished": "2026-10-23T21:21:18.051711+00:00",
+        "exit": 0
+      },
+      {
+        "name": "access-controls",
+        "started": "2026-10-23T21:21:18.051883+00:00",
+        "finished": "2026-10-23T21:21:22.528083+00:00",
+        "exit": 1
+      },
+      {
+        "name": "cgroup-desktop",
+        "started": "2026-10-23T21:21:22.553989+00:00",
+        "finished": "2026-10-23T21:21:22.618110+00:00",
+        "exit": 0
+      },
+      {
+        "name": "failure-diagnostics",
+        "started": "2026-10-23T21:21:22.618271+00:00",
+        "finished": "2026-10-23T21:21:23.333438+00:00",
+        "exit": 0
+      },
+      {
+        "name": "cgroup-gateway",
+        "started": "2026-10-23T21:21:23.346884+00:00",
+        "finished": "2026-10-23T21:21:23.410826+00:00",
+        "exit": 0
+      },
+      {
+        "name": "cleanup",
+        "started": "2026-10-23T21:21:26.481147+00:00",
+        "finished": "2026-10-23T21:21:26.746530+00:00",
+        "exit": 0
+      },
+      {
+        "name": "port-release",
+        "started": "2026-10-23T21:21:26.747607+00:00",
+        "finished": "2026-10-23T21:21:26.751167+00:00",
+        "exit": 0
+      }
+    ],
+    "first_healthy_sample": {
+      "elapsed": 0.0,
+      "heartbeat_age": 0.0,
+      "home_bytes": 0,
+      "host_available_bytes": 31586709504,
+      "data_free_bytes": 988008648704,
+      "root_free_bytes": 48287723520,
+      "running": 0
+    },
+    "status": "FAIL",
+    "error": "AssertionError({'name': 'access-controls', 'started': '2026-10-23T21:21:18.051883+00:00', 'finished': '2026-10-23T21:21:22.528083+00:00', 'exit': 1})",
+    "final_ids": [
+      "e484870c61aca2df873cc456e184c15f0d796cf512a424afaefadd1d7fb740f9",
+      "0af09db1005fc2f8ce7569a5a33f2841549227a5fb0ac17bb2961c39b48b3a2b"
+    ],
+    "supervisor_exit": 0,
+    "host_browser_closure": {
+      "not_launched_or_snapshot_unavailable": true,
+      "remaining": []
+    },
+    "closure_containers": "",
+    "closure_networks": "",
+    "listener": "",
+    "moss": "running healthy",
+    "finished": "2026-10-23T21:21:26.823888+00:00"
+  },
+  "elapsed_seconds": 10.945141,
+  "backend_readiness": {
+    "status": "PASS",
+    "elapsed_seconds": 0.2671000619998267,
+    "observations": [
+      {
+        "at": "2026-10-23T21:21:17.768484+00:00",
+        "stage": "guest",
+        "kind": "ready",
+        "exit": 0,
+        "observation": {
+          "rfb": {
+            "ready": true,
+            "rfb": "RFB 003.008",
+            "upgrade_101": null
+          },
+          "unix": {
+            "ready": true,
+            "rfb": "RFB 003.008",
+            "upgrade_101": true
+          },
+          "ready": true
+        }
+      },
+      {
+        "at": "2026-10-23T21:21:17.914712+00:00",
+        "stage": "gateway",
+        "kind": "ready",
+        "exit": 0,
+        "observation": {
+          "ready": true,
+          "status": 101,
+          "protocol": "RFB 003.008"
+        }
+      }
+    ],
+    "error": null
+  },
+  "access_controls": {
+    "raw_receipt": {
+      "results": [
+        {
+          "case": "protected",
+          "exit": 0,
+          "expected_exit": 0,
+          "observed_expected_assertion": true
+        },
+        {
+          "case": "mtls-removed",
+          "exit": 1,
+          "expected_exit": 1,
+          "observed_expected_assertion": true
+        },
+        {
+          "case": "origin-removed",
+          "exit": 1,
+          "expected_exit": 1,
+          "observed_expected_assertion": true
+        }
+      ],
+      "restored_sha256": "dc290b02ea1f4bf848c033c73deb3efae12471e4983a9a703846c9d2b3b60a54"
+    },
+    "raw_receipt_limit": "Saved in finally before final restored check. Only first three cases; fourth row reconstructed from retained assertion traceback and actual driver output.",
+    "restored_case": {
+      "case": "restored",
+      "exit": 0,
+      "expected_exit": 0,
+      "observed_expected_assertion": false,
+      "required_signal": "RFB 003.008",
+      "actual_owner_protocol": "RFB 003.003\n\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u001aToo many security failures",
+      "source": "access-controls.log and access-restored.log"
+    },
+    "restored_driver_results": [
+      {
+        "path": "HTTP viewer",
+        "identity": "owner",
+        "status": 200
+      },
+      {
+        "path": "HTTP viewer",
+        "identity": "none",
+        "status": 400
+      },
+      {
+        "path": "HTTP viewer",
+        "identity": "foreign",
+        "status": 400
+      },
+      {
+        "path": "WS input",
+        "identity": "owner",
+        "origin": "https://localhost:5184",
+        "status": 101,
+        "protocol": "RFB 003.003\n\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u001aToo many security failures"
+      },
+      {
+        "path": "WS input",
+        "identity": "owner",
+        "origin": "https://foreign.invalid",
+        "status": 403
+      },
+      {
+        "path": "WS input",
+        "identity": "none",
+        "origin": "https://localhost:5184",
+        "status": 400
+      },
+      {
+        "path": "WS input",
+        "identity": "foreign",
+        "origin": "https://localhost:5184",
+        "status": 400
+      }
+    ],
+    "numeric_driver_exits": [0, 1, 1, 0],
+    "all_required_signals_pass": false,
+    "pristine_configuration_restored_byte_exact": true
+  },
+  "failure_diagnostics": {
+    "exit": 0,
+    "captures": [
+      {
+        "at": "2026-10-23T21:21:22.708414+00:00",
+        "role": "desktop",
+        "name": "identity",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:22.708440+00:00",
+        "role": "desktop",
+        "name": "processes",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:22.760578+00:00",
+        "role": "desktop",
+        "name": "socket",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:22.818614+00:00",
+        "role": "desktop",
+        "name": "backend-error-log-tail",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:22.840464+00:00",
+        "role": "desktop",
+        "name": "window-tree",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:22.901785+00:00",
+        "role": "desktop",
+        "name": "active-clients",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:22.970940+00:00",
+        "role": "desktop",
+        "name": "terminal-log",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:23.107577+00:00",
+        "role": "gateway",
+        "name": "identity",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:23.107599+00:00",
+        "role": "gateway",
+        "name": "processes",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:23.166612+00:00",
+        "role": "gateway",
+        "name": "socket",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:23.229203+00:00",
+        "role": "gateway",
+        "name": "backend-error-log-tail",
+        "exit": 0,
+        "error": null
+      },
+      {
+        "at": "2026-10-23T21:21:23.247608+00:00",
+        "role": "gateway",
+        "name": "actual-config",
+        "exit": 0,
+        "error": null
+      }
+    ],
+    "observed": [
+      "Desktop live log: Connections: blacklisted: 127.0.0.1 at21:21:21.367 and21:21:22.388 UTC",
+      "Restored owner WebSocket101 returned RFB003.003 with Too many security failures",
+      "Gateway live log: recv() failed104 while proxying upgraded connection at21:21:21.368 UTC",
+      "Unix socket present UID1000 mode0600 in guest and gateway views"
+    ],
+    "cause_limit": "Backend blacklisting/refusal observed; why triggered not established. Greeting-only/aborted probes affecting backend accounting is a hypothesis. R7 protected502 cause remains UNKNOWN."
+  },
+  "qualification": {
+    "guest_socket_gateway_positive_probes": "PASS; actual RFB003.008 and Unix/gateway101 at probe time, not usable-viewer acceptance",
+    "initial_isolation": "PASS sampled",
+    "baseline_protected_access": "PASS",
+    "mtls_removal_control": "PASS intended red assertion",
+    "origin_removal_control": "PASS intended red assertion; backend refusal also observed",
+    "restored_access_protocol": "FAIL required RFB003.008 absent although driver0 and HTTP/WS status assertions passed",
+    "current_UI_RFB_frame": "NOT_RUN",
+    "fresh_viewer_keyboard_input": "NOT_RUN",
+    "post_input_isolation": "NOT_RUN",
+    "Firefox_sandbox": "NOT_RUN",
+    "profile_flush": "NOT_RUN",
+    "replacement_persistence": "NOT_RUN",
+    "idle_sleep_wake": "NOT_RUN",
+    "Moss_owner_integration": "NOT_RUN"
+  },
+  "container_inspects": {
+    "desktop": {
+      "id": "e484870c61aca2df873cc456e184c15f0d796cf512a424afaefadd1d7fb740f9",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "running_at_capture": true,
+      "oom_killed": false,
+      "started_at": "2026-10-23T21:21:17.0699221Z"
+    },
+    "gateway": {
+      "id": "0af09db1005fc2f8ce7569a5a33f2841549227a5fb0ac17bb2961c39b48b3a2b",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "running_at_capture": true,
+      "oom_killed": false,
+      "started_at": "2026-10-23T21:21:17.064732822Z"
+    }
+  },
+  "initial_isolation": [
+    {
+      "id": "e484870c61aca2df873cc456e184c15f0d796cf512a424afaefadd1d7fb740f9",
+      "role": "desktop",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "network_mode": "none",
+      "apparmor": "docker-default",
+      "proc": {
+        "Uid": "1000\t1000\t1000\t1000",
+        "CapEff": "0000000000000000",
+        "NoNewPrivs": "1",
+        "Seccomp": "2"
+      },
+      "limits": {
+        "memory": 4294967296,
+        "swap_total": 4294967296,
+        "pids": 512,
+        "nano_cpus": 2000000000
+      },
+      "mounts": [
+        {
+          "destination": "/home/desktop",
+          "rw": true
+        },
+        {
+          "destination": "/socket",
+          "rw": true
+        }
+      ],
+      "routes": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT",
+      "connects": [
+        {
+          "destination": "169.254.169.254",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "<private-range-test-A>",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "<private-range-test-B>",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "127.0.0.1",
+          "port": 1533,
+          "errno": 111
+        }
+      ]
+    },
+    {
+      "id": "0af09db1005fc2f8ce7569a5a33f2841549227a5fb0ac17bb2961c39b48b3a2b",
+      "role": "gateway",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "network_mode": "moss-computer-readiness-r10_viewer",
+      "apparmor": "docker-default",
+      "proc": {
+        "Uid": "1000\t1000\t1000\t1000",
+        "CapEff": "0000000000000000",
+        "NoNewPrivs": "1",
+        "Seccomp": "2"
+      },
+      "limits": {
+        "memory": 134217728,
+        "swap_total": 134217728,
+        "pids": 32,
+        "nano_cpus": 500000000
+      },
+      "mounts": [
+        {
+          "destination": "/gateway",
+          "rw": false
+        },
+        {
+          "destination": "/socket",
+          "rw": false
+        }
+      ]
+    }
+  ],
+  "monitor": {
+    "samples": [
+      {
+        "elapsed": 0.0,
+        "heartbeat_age": 0.0,
+        "home_bytes": 0,
+        "host_available_bytes": 31586709504,
+        "data_free_bytes": 988008648704,
+        "root_free_bytes": 48287723520,
+        "running": 0
+      },
+      {
+        "elapsed": 5.1,
+        "heartbeat_age": 1.8,
+        "home_bytes": 51803,
+        "host_available_bytes": 31227912192,
+        "data_free_bytes": 988006150144,
+        "root_free_bytes": 48284725248,
+        "running": 2
+      }
+    ],
+    "count": 2,
+    "stop_receipt": "operator closure\nNO_RUNNING_PROOF_CONTAINERS\n",
+    "limits": "Two samples, at0.0 and5.1 seconds only. No continuous or sustained workload/resource-fit claim; monitoring is not quota; host browser/daemon outside guest caps."
+  },
+  "watchdog_exit": 0,
+  "cleanup_exit": 0,
+  "port": 5184,
+  "port_claim_exit": 0,
+  "port_release_exit": 0,
+  "operator_closure_exit": 0,
+  "closure": {
+    "at": "2026-10-23T21:21:30.683915+00:00",
+    "containers": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "networks": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "listener": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "port_reservation": {
+      "list_exit": 0,
+      "owned_name_present": false
+    },
+    "ephemeral_identity_files": [],
+    "owned_script_processes": [],
+    "recorded_host_browser_remaining": [],
+    "retained_paths_present": {
+      "<private-run>/home": true,
+      "<private-siblings>/moss-computer-readiness-r8/home": true,
+      "<private-siblings>/moss-computer-persistence-r7/home": true,
+      "<private-siblings>/moss-computer-persistence-r6/home": true,
+      "<private-siblings>/moss-computer-recovery-r4/home": true,
+      "<private-siblings>/moss-computer-recovery-r3/home": true,
+      "<private-siblings>/moss-computer-proof-r1/home": true,
+      "<private-siblings>/moss-computer-reconstruct-r2/candidate-image.tar": true
+    }
+  },
+  "independent_closure": {
+    "reviewer": "/root/r9_evidence_review",
+    "verdict": "PASS_CLOSURE",
+    "at": "2026-10-23T21:22:18.829250Z",
+    "readback_exit": 0,
+    "containers_exit": 0,
+    "network_exit": 0,
+    "listener_exit": 0,
+    "devports_exit": 0,
+    "owned_runtime_processes": [],
+    "ephemeral_identities": [],
+    "host_browser_identity_present": false,
+    "startup_receipt_present": false,
+    "prior_homes_archive_present": true,
+    "moss": "running healthy",
+    "moss_inspect_exit": 0,
+    "health_exit": 0,
+    "health": {
+      "ok": true
+    },
+    "source": "transcribed independent read-only closure result; no separate reviewer raw command files"
+  },
+  "static_checks": {
+    "python_ast": 0,
+    "node_syntax": 0,
+    "window_regression_before": 1,
+    "window_regression_after": 0,
+    "correction": "Copied r7 regression referenced persistence.mjs; point at actual startup.mjs terminal call site. Prelaunch only.",
+    "compose_config": 0,
+    "no_persistence_Firefox_calls": true
+  },
+  "launch_artifacts": {
+    "compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    ".env": "8739f812e84b7df7c14f1f4698ae3064dc6db31ffce514b1b90270030eb5d190",
+    "port": "2086aa95003f19c850a91e79dacf1834298f6b931bf6507d56455564d72c8e44",
+    "gateway/nginx.conf": "dc290b02ea1f4bf848c033c73deb3efae12471e4983a9a703846c9d2b3b60a54",
+    "supervise.py": "cd2a4de9e29f190313720d9e64cf1b4d1337e18ff8ed1681ef14bcde86d32a4a",
+    "mutate.py": "e8396dbe945be53f0563f5957d7b3354bb2b8a3b250afa9e2407e4a738d4308e",
+    "isolation.py": "2f37313f160dcd87db40769205200accaf7f72828afe1ec707678b6f9577c35d",
+    "window.mjs": "42699e01f2a2764c4ebd035248470c4b4780598b181aa4b8011cd3c59840897c",
+    "window-test.mjs": "62598a202c418fa790566885b39c9b2cfe3f9cee76e2959926684b87c8ec9960",
+    "access-check.mjs": "959c980301381e18a711ecff7900e91576190477c6badc546e50c3f812b9b4ec",
+    "access-controls.py": "17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628",
+    "startup.mjs": "7113add1438f74b1324926ea6006879ca4f22b31673e4e4325e697ed293d5062",
+    "readiness.py": "b230e7b7f0cdf1d0af77d43141434b9f8a6bfd60e7f49ebcb8134f8e68e32b42",
+    "readiness-gateway.mjs": "fefece973c2da77fe28a354e61bd8b02414d8f9d296cdb2a67092a8a638b7152",
+    "diagnostics.py": "809400714554b8aaf2c48bfbc7c6eb353e1dbcc9607987f40e2f8889c9615bef",
+    "run.py": "008524691a5506326fab9856c9132a73fb3f65a39806c5d48915a0ef669d06a0",
+    "closure.py": "41ca574ece85c96a4cc149a0b2b3789ed39d5799e40a1eaa7f703aa6f67ce3eb",
+    "proof.json": "d3f57ff080fc38864fb3a23ec29b643d678ccfb1345f321a67bd8e8daef49f2f",
+    "receipts/resolved-config.json": "0cec13eec5c35874c959e5dad17710970d02c73c4902fcaa0172abf8208702a6",
+    "receipts/restored-image.json": "53fe8b991f356f4d7a5cf406d2c51c163d19905c69c3d34ef7e81bc75ff3041b",
+    "gateway/ca.crt": "7476b0e018f02d31355188a28b047107db8ef1c9201f20e6d09e6968e09c7a42",
+    "gateway/server.crt": "403062e4e5a4f0ab69628eff9b55f89a16a4541c76e2a07c80d5f495f3d67f5c",
+    "gateway/server.key": "f86069f8da7622f43dca4cbcacbe6dfbc58db3c35f0fbf5c6d38dbc796a44ba3",
+    "client/ca.crt": "7476b0e018f02d31355188a28b047107db8ef1c9201f20e6d09e6968e09c7a42",
+    "client/foreign.crt": "a2f916e17fc0666f6dbb5aeb1e53c1984c8b9a9eb150ed31e5020142369df744",
+    "client/foreign.key": "6c628c81a8c2e07e76052d6a7f8b7ea43c0101f20e0f87b12441a3b14c155a41",
+    "client/owner.crt": "2a05932d0c21cdb5d202468c3f06019a7a2bc8222cbcfd4745271a0323c0ba9c",
+    "client/owner.key": "5b702f8830bb933fd67513f410078f3447186ddb25dda23cfa69dc225e3467bc",
+    "pki/ca.crt": "7476b0e018f02d31355188a28b047107db8ef1c9201f20e6d09e6968e09c7a42",
+    "pki/ca.key": "6d383de0d5feec4e8dcb95dbb0c62bbfecefa654a2af5f25dca658360efd208e",
+    "pki/ca.srl": "8a41f9abbea0adda7571188f992295e994e8b215f16962390666b13462521b82",
+    "pki/foreign-ca.crt": "c6161aaec738f67b3f6a0808cd16e3248eaf1af0ce49822d2de469a7033c12ef",
+    "pki/foreign-ca.key": "f662ea9d27067a6f8a1f3dbc1db450a9e5684d74fa44fe35250e833ea36096aa",
+    "pki/foreign-ca.srl": "815fb21ac5eb7852e7dfba0126e31d2d7e5490f478be7e8fb568f0431338d3c6",
+    "pki/foreign.crt": "a2f916e17fc0666f6dbb5aeb1e53c1984c8b9a9eb150ed31e5020142369df744",
+    "pki/foreign.csr": "b74bbd8415d85d760ef07e39c19b6c79203f735e57d74bacdb8f6e300fc65353",
+    "pki/foreign.ext": "7ca07e27aec04afa70113d14e5f0d20fdc58dba47740cb0cb6e7fc220577240c",
+    "pki/foreign.key": "6c628c81a8c2e07e76052d6a7f8b7ea43c0101f20e0f87b12441a3b14c155a41",
+    "pki/owner.crt": "2a05932d0c21cdb5d202468c3f06019a7a2bc8222cbcfd4745271a0323c0ba9c",
+    "pki/owner.csr": "989d7cdff931c56402d69723a3efcf6e94a479c8223e14aa0eff87c1235c16fe",
+    "pki/owner.ext": "7ca07e27aec04afa70113d14e5f0d20fdc58dba47740cb0cb6e7fc220577240c",
+    "pki/owner.key": "5b702f8830bb933fd67513f410078f3447186ddb25dda23cfa69dc225e3467bc",
+    "pki/server.crt": "403062e4e5a4f0ab69628eff9b55f89a16a4541c76e2a07c80d5f495f3d67f5c",
+    "pki/server.csr": "04ec3e85c4c0dc909f99f7b56c78ae9c8005bc128f13e19612379c654b269f7a",
+    "pki/server.ext": "5d7cae230183e3ebd806d162dff84d03dcf128bb1295e14c9986abcc9659aba6",
+    "pki/server.key": "f86069f8da7622f43dca4cbcacbe6dfbc58db3c35f0fbf5c6d38dbc796a44ba3"
+  },
+  "private_reference": "../moss-computer-readiness-r10/; new home and earlier homes/scripts/receipts/archive retained. Ephemeral identities removed.",
+  "retention_limit": "Prior homes/archive presence checked, contents not comprehensively rehashed. Accepted launch credential hashes remain; actual ephemeral key/certificate files deleted at closure.",
+  "no_retry": true,
+  "next_proposal": "Separately dispatch bounded diagnosis of greeting-only/aborted RFB probe effects on backend blacklisting, preserving exact image/security/access assertions. Independently review any bounded correction before one fresh startup/UI/input attempt; no automatic rerun.",
+  "private_receipt_sha256": {
+    "access-controls.json": "0bf10eb47f96666ebe1dbf2c5d5153479f35b8aeab0d108c7d95f3fa6a1112cb",
+    "access-controls.log": "b830b5d7a03733bab7789826898521efb02e8a6a086f131d48e6e4e32aa01807",
+    "access-mtls-removed.log": "b65e27bf9f99255695dd6d733dd5acc7d8ea23fdf89078924789c03e83ffe7c5",
+    "access-origin-removed.log": "291d3b882ede821f81acc20a1a76bf9dd862dd67d6fd4c6ff723586b7ba60822",
+    "access-protected.log": "b5bb928cfca4dd7ce4462b4b826b1533780ff583a92d70e79af6673e08a0df12",
+    "access-restored.log": "2579dd55b19bfccb1c389d30a3b04aec2c027dff4411c7252c502f61f5a1b6d6",
+    "access.json": "919d20d020cc4155c9c185147b692cc8cba94d60981ffb97ed11c8ff6aeaddbc",
+    "archive-verification.json": "17a1b2d6d1840ceddd9dad41e3fa76175efdce4e4e3719dd71db0f9c4ceb6ce7",
+    "cgroup-desktop.log": "f17ff99f41f5cc1c3b7462d5d7e4d9d3fdaafd4ac35663888cad78a4d3cef823",
+    "cgroup-gateway.log": "f12f3b4cc63a4ed9fa32ca8d39658b5fcdc990af3a252bf081fdbf49f0fc594e",
+    "cleanup.log": "47ec35784c8c10f8a8bac5ff36e48b112a8fb215023e2b62ebd5f32af9e4a34e",
+    "closure.json": "395e08d3b868da78e682aa5db99526aae472e1f41913d1e2803e931719caa32c",
+    "entry.json": "6b608ae56b662f9d78e07cfae587b43096b30146ff99a60c791c1efbbac69cdb",
+    "failure-diagnostics.json": "7bf1f9de875a2dd752ae356290aa4444d37594df9628ace5a4a2d86732e81f62",
+    "failure-diagnostics.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "final-desktop-inspect.json": "21302613ad6273c1236192a86bf014f9f608cbde4929165c8c3f092e30d4e1fb",
+    "final-gateway-inspect.json": "68d995f8f3f18b44f95d8ecc7b2c6e62c40ca618363b8a0a8b31036dd61ab14e",
+    "image-load-exit.json": "40a35300bdf332d649900d17641924064f28000c298a421c5042b00acf9b5f47",
+    "image-load.log": "77f4262f0593dd9c7e65e2c2808cfeb87e93d928a2ef4f95d8e35f43fcf69dd2",
+    "independent-closure.json": "972901d96617f9f25015c3d5ed38fb78c01e7824c3a11b9745c9cef87a8e871a",
+    "inherited-assertions-check.json": "cd9ea1d4987601844668e6e92f0421612a9bce75934c5e97979deb812c3c4873",
+    "isolation-before.json": "0b48e5fb5ec3a87734fdde3401bcc79257499549139adc3102bc9b9cd1532fb1",
+    "isolation-before.log": "95e251bff7a488ee12d33cf634152b43d92f82a1e1458065f8714aecfadb349f",
+    "isolation.json": "0b48e5fb5ec3a87734fdde3401bcc79257499549139adc3102bc9b9cd1532fb1",
+    "launch.log": "f4de0b35f5b42dfc1e14c1c7e3518d5250ce05dadef7584cf116ddae381463a1",
+    "monitor-stop.txt": "84b3c04b0a7557cd9f6d8e702ab3a861d27d47e8bf0469ebfccf15b9c67cd979",
+    "monitor.jsonl": "95b35459eb225354f67bc6b7107b6997b168d7a6bbaae26e8c3f23c76936839c",
+    "operator-closure-exit.json": "be4f9b5c4e0395ea65b8b91bcc9b37a8f17bc7f94e7114b73f6d216ac672e38e",
+    "port-claim.json": "c0b1d30ddc695feff69f96dd42846dab1b6785912ae19b2cae7e598c60fd0fce",
+    "port-release.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "pre-launch.json": "25a8517e8f3895e7811512a91ade54691791d3f0d27b38703e3917fe8c0f4829",
+    "pre-load.json": "eb1d94ec324e5e801c5178e20703e4f386df676f1947945553fd734d91be85e9",
+    "preparation.json": "93d54c11c62b015a7facf0e279bb0e761967745cd621c509a1a4ea70366b0e89",
+    "readiness-review.json": "494f790eacb71e78642d81354e0245209a0abdb3e62c89203f27190803118fb2",
+    "readiness.json": "f219183c3d95f1e8420db1fbc91642bc3c73ed748681da6283595716cc264aea",
+    "readiness.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "resolved-config.json": "0cec13eec5c35874c959e5dad17710970d02c73c4902fcaa0172abf8208702a6",
+    "restoration-review.json": "7832c200d271d926a5dba2ac1998ea410d520cd3667a003cfcf77f309bf59271",
+    "restored-image.json": "53fe8b991f356f4d7a5cf406d2c51c163d19905c69c3d34ef7e81bc75ff3041b",
+    "run.json": "f07f6c425248e6f126760ad3012b8e26e9ab938c72dce82177e828f89dbb9ff4",
+    "runner-exit.json": "a532d72eda1382e5a09cf51b54e665e28bb0ae3dd2c03d7c5ac1abe27b3d204e",
+    "static-checks.json": "6d94a68628c4d05660be178b3efdf36f4f8f3de93ab8f47bf5b8eb33197559f8",
+    "supervisor.log": "c9d81e7c3dc55e8d54737d3a67b500e30f53ab2911f177d40ade930b1c023f4d",
+    "window-regression-after.log": "0a5ae1758810abd3be93648b31daa04b8ad1847c830f6331fab694e4e5e2a8df",
+    "window-regression-before.log": "e022e261650beff71c3c04a3b9536efa5e4edc5ccc778434cb59cc158c9b5506"
+  },
+  "private_support_sha256": {
+    "runner.log": "5c63e6d51f3c7c4e66a45a665c55d5ffb622ee4f33da03d7c190c97cee1ec7c6",
+    "artifacts.json": "27decaf07e7fbcd7f4f299e1144f57fbdca57fe2dc81a5f40ac58fea54ac03b4"
+  }
+}
