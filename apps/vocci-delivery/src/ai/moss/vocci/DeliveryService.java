@@ -24,6 +24,7 @@ public final class DeliveryService extends Service {
     private PowerManager.WakeLock wake;
     private final Map<String, Integer> previousInventory = new HashMap<>();
     private int reconnectAttempts;
+    private final RecordingReminder reminder = new RecordingReminder();
     @Override public void onCreate() {
         super.onCreate();
         NotificationManager manager = getSystemService(NotificationManager.class);
@@ -34,7 +35,7 @@ public final class DeliveryService extends Service {
         Intent stop = new Intent(this, DeliveryService.class).setAction("stop");
         PendingIntent action = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, "delivery").setContentTitle("Moss recording delivery").setContentText(text)
-            .setContentIntent(PendingIntent.getActivity(this, 2, new Intent(this, DeliveryActivity.class), PendingIntent.FLAG_IMMUTABLE))
+            .setContentIntent(PendingIntent.getActivity(this, 2, new Intent(this, HardwareActivity.class), PendingIntent.FLAG_IMMUTABLE))
             .setSmallIcon(android.R.drawable.stat_sys_upload).setOngoing(true)
             .addAction(new Notification.Action.Builder(null, "Stop", action).build()).build();
     }
@@ -116,6 +117,7 @@ public final class DeliveryService extends Service {
         active = new RingConnection(this, config);
         try {
             Map<String, Integer> inventory = active.inventory();
+            long inventoryAt = System.currentTimeMillis();
             voice.inventory(inventory, client);
             for (String name : store.retrievalOrder(inventory.keySet())) {
                 Integer packetSize = inventory.get(name);
@@ -139,8 +141,33 @@ public final class DeliveryService extends Service {
                 store.retrieved(id, sidecar);
             }
             previousInventory.clear(); previousInventory.putAll(inventory);
+            if (!stopping) {
+                active.readTelemetry();
+                try {
+                    long age = System.currentTimeMillis() - active.telemetry.recordingAt;
+                    boolean recent = active.telemetry.recordingAt > 0 && age >= 0 && age < 60000;
+                    boolean allowed = new DeliveryPreferences(this).recordingReminder() && getSystemService(NotificationManager.class).areNotificationsEnabled();
+                    if (reminder.observe(allowed && recent, active.telemetry.recording,
+                        active.telemetry.recordingSource, SystemClock.elapsedRealtime())) remindRecording();
+                } catch (Exception unavailable) { /* A phone reminder cannot fail recording delivery. */ }
+                int recordings = 0;
+                for (String name : inventory.keySet()) if (name.endsWith(".opus")) recordings++;
+                try { HardwareStatus.publish(this, config, active.telemetry, inventoryAt, recordings); }
+                catch (Exception unavailable) { /* Optional status storage never blocks completed audio delivery. */ }
+            }
         } finally { active.close(); active = null; }
         report(store.canDiscover() ? "waiting_for_completed_recordings" : "storage_capacity");
+    }
+    private void remindRecording() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (!manager.areNotificationsEnabled()) return;
+        manager.createNotificationChannel(new NotificationChannel("recording-reminder", "Long recordings", NotificationManager.IMPORTANCE_DEFAULT));
+        manager.notify(3551, new Notification.Builder(this, "recording-reminder")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Still recording on your ring?")
+            .setContentText("Your ring has been observed recording for an hour. Double-click its button to finish if you’re done.")
+            .setStyle(new Notification.BigTextStyle().bigText("Your ring has been observed recording for an hour. Double-click its button to finish if you’re done. Moss never stops a recording for you."))
+            .setContentIntent(PendingIntent.getActivity(this, 3, new Intent(this, HardwareActivity.class), PendingIntent.FLAG_IMMUTABLE))
+            .setAutoCancel(true).build());
     }
     private void deliver(MossClient client) throws Exception {
         for (String id : store.ids()) {

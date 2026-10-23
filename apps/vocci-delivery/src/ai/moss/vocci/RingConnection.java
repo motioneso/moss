@@ -18,6 +18,7 @@ final class RingConnection implements AutoCloseable {
     private final BlockingQueue<Event> events = new ArrayBlockingQueue<>(2048);
     private final ArrayDeque<Event> pending = new ArrayDeque<>();
     private final RingAuth.Decoder auth = new RingAuth.Decoder(), uart = new RingAuth.Decoder();
+    final RingTelemetry telemetry = new RingTelemetry();
     private BluetoothGatt gatt;
     private volatile boolean overflow, closed;
     private String stage = "connect";
@@ -76,15 +77,21 @@ final class RingConnection implements AutoCloseable {
         catch (Exception error) { close(); throw new IOException("ring_" + stage, error); }
     }
     private Event next() throws Exception {
+        return next(System.nanoTime() + TimeUnit.SECONDS.toNanos(20));
+    }
+    private Event next(long deadline) throws Exception {
         if (closed || overflow) throw new IOException("connection_closed");
-        Event e = events.poll(20, TimeUnit.SECONDS);
+        long wait = Math.min(TimeUnit.SECONDS.toNanos(20), Math.max(0, deadline - System.nanoTime()));
+        Event e = events.poll(wait, TimeUnit.NANOSECONDS);
         if (e == null || e.kind.equals("disconnected") || e.status != 0) throw new IOException("gatt_timeout_or_error");
         return e;
     }
     private void await(String kind) throws Exception {
-        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
+        await(kind, System.nanoTime() + TimeUnit.SECONDS.toNanos(25));
+    }
+    private void await(String kind, long end) throws Exception {
         while (System.nanoTime() < end) {
-            Event e = next();
+            Event e = next(end);
             if (e.kind.equals(kind)) return;
             pending.add(e);
             if (pending.size() > 2048) throw new IOException("gatt_overflow");
@@ -109,17 +116,36 @@ final class RingConnection implements AutoCloseable {
     }
     private final ArrayDeque<byte[]> responses = new ArrayDeque<>();
     private byte[] response(String id, int opcode) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+        return response(id, opcode, System.nanoTime() + TimeUnit.SECONDS.toNanos(60));
+    }
+    private byte[] response(String id, int opcode, long deadline) throws Exception {
         while (System.nanoTime() < deadline) {
             if (!responses.isEmpty()) return responses.remove();
-            Event event = pending.isEmpty() ? next() : pending.remove();
+            Event event = pending.isEmpty() ? next(deadline) : pending.remove();
             if (event.kind.equals(id)) {
                 (id.equals(RingAuth.AUTH_UUID) ? auth : uart).accept(event.bytes, (command, payload) -> {
+                    if (id.equals(RingProtocol.UART)) telemetry.accept(command, payload, System.currentTimeMillis());
                     if (command == opcode) responses.add(payload);
                 });
             } else if (event.kind.equals(RingProtocol.FILE)) throw new IOException("orphan_file_bytes");
         }
         throw new IOException("response_timeout");
+    }
+    void readTelemetry() throws InterruptedException {
+        // File delivery has priority. Three optional queries share a strict nine-second budget.
+        int[] opcodes = {RingTelemetry.RECORDING, RingTelemetry.STORAGE, RingTelemetry.INFO};
+        for (int n = 0; n < opcodes.length; n++) {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            try {
+                byte[] frame = opcodes[n] == RingTelemetry.INFO ? RingTelemetry.infoRequest(System.currentTimeMillis()) :
+                    opcodes[n] == RingTelemetry.STORAGE ? RingTelemetry.storageRequest() : RingTelemetry.recordingRequest();
+                if (gatt.writeCharacteristic(characteristic(RingProtocol.WRITE), frame, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) != BluetoothStatusCodes.SUCCESS)
+                    return;
+                await("write", deadline);
+                response(RingProtocol.UART, opcodes[n], deadline);
+            } catch (InterruptedException interrupted) { throw interrupted; }
+            catch (Exception unavailable) { /* Other optional fields may still be supported. */ }
+        }
     }
     Map<String, Integer> inventory() throws Exception {
         stage = "inventory";
@@ -151,6 +177,7 @@ final class RingConnection implements AutoCloseable {
             Event event = pending.isEmpty() ? next() : pending.remove();
             if (event.kind.equals(RingProtocol.FILE)) transfer.append(event.bytes);
             else if (event.kind.equals(RingProtocol.UART)) uart.accept(event.bytes, (command, payload) -> {
+                telemetry.accept(command, payload, System.currentTimeMillis());
                 if (command == 0x12) transfer.control(payload);
             });
         }

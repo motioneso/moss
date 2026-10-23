@@ -16,8 +16,9 @@ API 33; tested devices/results belong on the PR.
 
 ## Set up an already-owned ring
 
-Fresh installs open **Set up your ring**. Existing configured installs open the
-usual companion and keep their current ring, account, pending audio and hold choice.
+Fresh installs open **Set up your ring**. Configured installs open **Hardware**,
+with **Vocci ring** settings, and keep their current ring, account, pending audio
+and hold choice.
 The new wizard is implemented; its complete setup-to-recording live acceptance is
 still pending in #3565. Use a development build for this pre-release flow.
 
@@ -118,19 +119,41 @@ HTTP is accepted only at loopback for isolated development using an owned ADB
 reverse on a claimed devport. Remote delivery requires HTTPS; redirects are
 rejected. Never reuse/remove another session's forward or server.
 
-## Native screen
+## Native Hardware settings
 
-The existing status activity follows Moss’s Park Press roles: paper/forest colours,
-Archivo headings, sans body text, numbered sections with hairlines and 48 dp minimum
-controls. `NativeTheme.java` maps semantic roles from the web token source. Android’s
-system light/dark mode and font scale apply; insets keep controls outside system bars.
-The bundled Archivo Black TTF is converted from the repository’s Latin 900 WOFF2;
-its OFL license is included under `assets/fonts/` and packaged by `build.sh`.
+The launcher opens **Hardware → Vocci ring** using the selected flat Park Press
+settings list. The app is named **Moss** (development packages say **Moss (dev)**).
+Opening it starts neither delivery nor hold enrollment. Automatic delivery is the
+existing explicit Start/Stop choice; hold enrollment remains separately opted in.
+Delivery details keeps the previous status, account recovery and recent delivery UI.
+This does not add an embedded Moss web shell or a new web Hardware route.
 
-Snapshot polling updates keyed views in place. Unchanged snapshots retain controls,
-focus and scroll position; status changes update text and destinations. A theme
-recreation restores the scroll offset. The existing status screen keeps its saved configuration and destinations;
-fresh installs use the guided setup above.
+Battery, recording state, ring capacity and firmware are optional saved observations,
+with per-field times. A stale read never claims a current connection. Queries run on
+the service's serialized GATT connection after file retrieval, with at most nine
+seconds per cycle; telemetry failure cannot fail a recording. The standard ring-info
+query also aligns the ring clock with the phone, matching the official protocol.
+Storage and recording queries do not control recording. Malformed data retains its
+previous observation time. No destructive command is added. Snapshot polling preserves
+native controls,
+focus and scroll; system dark mode and font scale apply. Archivo is bundled under
+`assets/fonts/` with its OFL license.
+
+Ring storage and Phone audio stay separate. Completed phone-copy cleanup confirms
+its scope; optional seven-day cleanup keeps pending/failed/interrupted audio. Neither
+removes ring sources or Moss copies. Connection & permissions has Android permission,
+battery and official-app handoff guidance. How to use your ring explains double-click
+recording, bookmarks, hold review/send and offline behavior. About this ring shows
+saved identity and observed versions.
+
+An opt-in **Remind me after an hour** notification follows repeated observations
+of the same active recording. It requires delivery and notifications, sends once per
+observed recording and never stops capture. Unknown/missing status, observation gaps
+over two minutes, and service restart reset the timer. A missing source name cannot
+start a timer. This is observed time, not a measurement of the recording duration.
+
+Individual ring recording management and firmware updating are explicitly unavailable
+in this build; tracked in #3584.
 
 ## Durable behavior and limits
 
@@ -338,3 +361,9 @@ configured transcription. No network interception or substituted packet uploads.
 Keep recordings, private drivers, cookies, endpoint details and transcript text
 outside git. Record bounded assertion receipts on the PR. Restore phone state and
 release only owned resources even when a check fails.
+
+For explicit, non-uploading telemetry checks with delivery stopped, run DeviceChecks
+with `-e hardware true`. It authenticates the configured ring, reads inventory and
+status, and publishes a real Hardware snapshot without retrieving or uploading audio.
+It reports only field-availability booleans. Keep the official app from competing
+for Bluetooth and restore any temporary permission changes after the check.

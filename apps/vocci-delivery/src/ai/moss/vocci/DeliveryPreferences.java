@@ -16,6 +16,8 @@ final class DeliveryPreferences {
     }
     boolean autoCleanup() { return values.getBoolean("autoCleanup", false); }
     void autoCleanup(boolean enabled) { values.edit().putBoolean("autoCleanup", enabled).commit(); }
+    boolean recordingReminder() { return values.getBoolean("recordingReminder", false); }
+    void recordingReminder(boolean enabled) { values.edit().putBoolean("recordingReminder", enabled).commit(); }
     String recovery() { return values.getString("recovery", ""); }
     void recovery(String reason) { values.edit().putString("recovery", reason).commit(); }
 }
