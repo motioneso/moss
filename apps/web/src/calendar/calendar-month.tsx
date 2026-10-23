@@ -25,7 +25,7 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
   const rowCount = cells.length / 7;
 
   return (
-    <div className="cal-month" style={{ minWidth: 7 * 144, minHeight: 42 + rowCount * 112 }}>
+    <div className="cal-month" style={{ minHeight: 42 + rowCount * 112 }}>
       <div className="cal-month__head">
         {weekdayHeaders(locale).map((d, i) => (
           <div key={i} className="cal-month__dow">

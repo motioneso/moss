@@ -9,10 +9,11 @@ for (const [view, width] of [
   ["month", 390],
   ["month", 320]
 ] as const) {
-  test(`${view} at ${width}px stays selected and scrolls within its calendar region`, async ({
+  test(`${view} at ${width}px stays selected and ${view === "week" ? "scrolls within its calendar region" : "fits its calendar region"}`, async ({
     page
   }) => {
     await page.setViewportSize({ width, height: 844 });
+    await page.clock.setFixedTime(new Date("2026-09-10T17:00:00Z"));
     await page.addInitScript((selected) => {
       localStorage.setItem("moss.cal.view", selected);
       localStorage.setItem("moss.cal.cursor", "2026-09-10T00:00:00Z");
@@ -40,11 +41,23 @@ for (const [view, width] of [
       page: document.documentElement.scrollWidth,
       viewport: innerWidth
     }));
-    expect(metrics.scroll).toBeGreaterThan(metrics.width);
     expect(metrics.page).toBeLessThanOrEqual(metrics.viewport);
+    if (view === "week") {
+      expect(metrics.scroll).toBeGreaterThan(metrics.width);
+    } else {
+      expect(metrics.scroll).toBeLessThanOrEqual(metrics.width + 1);
+      await expect(page.locator(".cal-month__dow")).toHaveCount(7);
+    }
+    await region.evaluate((el) => {
+      el.scrollLeft = 0;
+    });
     await region.focus();
     await page.keyboard.press("ArrowRight");
-    await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    if (view === "week") {
+      await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    } else {
+      await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBe(0);
+    }
     await page.reload();
     await expect(
       page.getByRole("button", { name: view === "week" ? "Week" : "Month", exact: true })

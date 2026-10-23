@@ -221,7 +221,7 @@ for (const width of [1280, 390, 320]) {
     const noPageOverflow = () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 
-    // Week and Month scroll inside their own focusable region.
+    // Week may scroll inside its focusable region; Month fits all seven days.
     for (const name of ["Week", "Month"]) {
       await view.getByRole("button", { name }).click();
       const region = page.getByRole("region", { name: `Calendar ${name.toLowerCase()}` });
@@ -244,7 +244,7 @@ for (const width of [1280, 390, 320]) {
       expect
         .soft(overflow.sw <= overflow.iw + 1, `${name} at ${width}: page does not overflow`)
         .toBe(true);
-      if (width <= 390) {
+      if (width <= 390 && name === "Week") {
         const sc = await region.evaluate((r) => ({
           sw: r.scrollWidth,
           cw: r.clientWidth,
@@ -253,6 +253,9 @@ for (const width of [1280, 390, 320]) {
         console.log(`[${name} at ${width}: scrollWidth ${sc.sw}, clientWidth ${sc.cw}, ${sc.ox}]`);
         expect(sc.sw).toBeGreaterThan(sc.cw);
         expect(/(auto|scroll)/.test(sc.ox)).toBe(true);
+      }
+      if (name === "Month") {
+        expect(await region.evaluate((r) => r.scrollWidth <= r.clientWidth + 1)).toBe(true);
       }
     }
     // Day stays compact: no horizontal scroll, not a tab stop.

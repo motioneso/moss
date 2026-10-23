@@ -15,6 +15,8 @@ export interface CalendarEventDto {
   readonly allDay: boolean;
   readonly attendeeCount: number;
   readonly status: string | null;
+  readonly readOnly?: boolean;
+  readonly unconfirmed?: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -71,6 +73,8 @@ export const calendarEventDtoSchema = {
     allDay: { type: "boolean" },
     attendeeCount: { type: "number" },
     status: nullableStringSchema,
+    readOnly: { type: "boolean" },
+    unconfirmed: { type: "boolean" },
     createdAt: { type: "string" },
     updatedAt: { type: "string" }
   }

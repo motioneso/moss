@@ -1,0 +1,164 @@
+{
+  "task": "3578",
+  "parent": "3577",
+  "status": "PARTIAL_QUALIFICATION_RECOVERY_RENDERING_UNQUALIFIED",
+  "operator": "Codex /root; automated input, not Ben manual acceptance",
+  "source_base": "021fd9a0c",
+  "candidate_image": "sha256:5516b80402f9f4122a8551c6417c197356d73808ddfcf4b78f664c10c1e56c3a",
+  "base_amd64_manifest": "sha256:ec31d744f83f4a73447ba045aaab9409997efe5cc706eca4890c1be36cc1606a",
+  "source_sha256": {
+    "spikes/moss-computer/Dockerfile": "7334eb8946d90c55ed57d2e9e3b966716a8330c55c5affb28af7e522ba37503a",
+    "spikes/moss-computer/README.md": "6de137ebcd1c065c9143c30775da218375c3b6e3ba863b9ea5cbf6f17e4c4973",
+    "spikes/moss-computer/compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    "spikes/moss-computer/entrypoint.sh": "a13bb5769f8358e1b73db2fd254d4fabd98621901dca3e936c9dfdc16fe40949",
+    "spikes/moss-computer/fixture.html": "20f3db461ada7dcaae9e98f79413cf4c99777c7679c31470250480f674a2c6e2",
+    "spikes/moss-computer/gateway.conf.template": "14b725a93df4913e114a32b52878141a182e58d0f0224284b699c8e25afa2374",
+    "spikes/moss-computer/requirements.txt": "b063d1812dfdb8a5069a3ad60986fdd5fab730fc5e9f711f960f13b14a852cf6"
+  },
+  "viewer": {
+    "width": 1280,
+    "height": 800,
+    "sampledColors": 245
+  },
+  "access": [
+    {
+      "path": "HTTP viewer",
+      "identity": "owner",
+      "status": 200
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "none",
+      "status": 400
+    },
+    {
+      "path": "HTTP viewer",
+      "identity": "foreign",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://localhost:5180",
+      "status": 101,
+      "protocol": "RFB 003.008"
+    },
+    {
+      "path": "WS input",
+      "identity": "owner",
+      "origin": "https://foreign.invalid",
+      "status": 403
+    },
+    {
+      "path": "WS input",
+      "identity": "none",
+      "origin": "https://localhost:5180",
+      "status": 400
+    },
+    {
+      "path": "WS input",
+      "identity": "foreign",
+      "origin": "https://localhost:5180",
+      "status": 400
+    }
+  ],
+  "negative_controls": [
+    {
+      "removed_protection": "client-certificate",
+      "test_exit": 1,
+      "observed": "isolation assertion failed"
+    },
+    {
+      "removed_protection": "websocket-origin",
+      "test_exit": 1,
+      "observed": "isolation assertion failed"
+    },
+    {
+      "protections": "restored",
+      "test_exit": 0
+    }
+  ],
+  "replacement": {
+    "old_container": "22a0988d33d801d0f346b28b86f612bdb6ef6b36a464414fc3695e961e1d3a19",
+    "new_container": "08d1b9074d1fd7e40c2731c8fa568670675870921f67952edb55c65a543f6050",
+    "same_image": "sha256:5516b80402f9f4122a8551c6417c197356d73808ddfcf4b78f664c10c1e56c3a",
+    "retained_file_and_profile_bytes": true
+  },
+  "persistence_before": {
+    "file_sha256": "77e045a64f93775b215ac5eb2c87b43fd74710600a0b4af8ea827af6c0ac329a",
+    "places_sha256": "ccec6fa07cfef8123731936b5bfa660d9bbbeabf79ba372246c50c35fed4426f",
+    "bookmarks": [
+      ["file:///opt/computer/fixture.html?proof=marker-r1", "Moss Computer offline qualification"]
+    ]
+  },
+  "persistence_after": {
+    "file_sha256": "77e045a64f93775b215ac5eb2c87b43fd74710600a0b4af8ea827af6c0ac329a",
+    "bookmarks": [
+      ["file:///opt/computer/fixture.html?proof=marker-r1", "Moss Computer offline qualification"]
+    ],
+    "browser_reopened_retained_profile": true
+  },
+  "sandbox": {
+    "firefox": "153.5.1esr-1~deb12u1",
+    "seccomp_bpf": true,
+    "thread_synchronization": true,
+    "content_sandbox": true,
+    "effective_level": 6,
+    "user_namespaces": false,
+    "warning": "CanCreateUserNamespace clone EPERM; no full namespace isolation claim"
+  },
+  "recovery": {
+    "normal_viewer_reconnect": "PASS",
+    "replacement_reopen": "PASS",
+    "crash_socket_reconnect": "PASS in recorded attempts",
+    "crash_recovered_framebuffer": "FAIL: no qualifying nonzero canvas observed before 30s timeout",
+    "crash_recovered_keyboard": "NOT_REACHED",
+    "root_cause": "UNKNOWN"
+  },
+  "resources": {
+    "desktop_limit": {
+      "cpus": 2,
+      "memory_bytes": 4294967296,
+      "pids": 512
+    },
+    "gateway_limit": {
+      "cpus": 0.5,
+      "memory_bytes": 134217728,
+      "pids": 32
+    },
+    "idle_desktop_mib": 157.8,
+    "observed_interaction_desktop_mib": 687.2,
+    "observed_interaction_pids": 340,
+    "gateway_observed_mib_range": [3.086, 3.461],
+    "replacement_cgroup_memory_peak_bytes": 497995776,
+    "replacement_oom_kills": 0,
+    "image_bytes": 1006364444,
+    "retained_home_bytes_at_closure": 47998103,
+    "home_and_socket_stop_threshold_bytes": 10737418240,
+    "storage_enforcement": "sampled threshold, not quota; nominal5s checks plus measurement/stop latency",
+    "benchmark": false
+  },
+  "fail_closed": {
+    "measurement_failure": "socket directory unreadable",
+    "receipt_failure": "monitor-stop.txt is a directory",
+    "running_proof_containers": 0,
+    "observed_stop_within_seconds": 5
+  },
+  "closure": {
+    "proof_containers_remaining": 0,
+    "gateway_listener_closed": true,
+    "ephemeral_client_and_gateway_keys_removed": true,
+    "synthetic_home_preserved": true,
+    "production_moss": "running healthy",
+    "host_listener_5180_absent": true,
+    "owned_proof_browser_scripts_supervisor_remaining": 0
+  },
+  "not_run": [
+    "Ben manual acceptance",
+    "MacBook Air remote viewing",
+    "Internet browsing",
+    "Moss owner/foreign-owner routes and active session revocation",
+    "download confinement",
+    "installer/platform/release certification"
+  ]
+}

@@ -1,3 +1,5 @@
+import { registerOutlookCalendarRoutes } from "./outlook-calendar-routes.js";
+import { OUTLOOK_BROWSER_PROVIDER } from "./outlook-calendar-config.js";
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -93,6 +95,8 @@ export function registerConnectorsRoutes(
       cipher: secretCipher,
       probeClient: new LiveImapProbeClient()
     });
+
+  registerOutlookCalendarRoutes(server, dependencies);
 
   registerEmailRefreshRoutes(server, {
     resolveAccessContext: dependencies.resolveAccessContext,
@@ -318,6 +322,8 @@ export function registerConnectorsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const body = parseCreateAccountBody(request.body);
+        if (body.providerId === OUTLOOK_BROWSER_PROVIDER)
+          throw new HttpError(403, "Use the dedicated Outlook calendar connection.");
         const encryptedSecret = secretCipher.encryptJson(body.tokenPayload);
         const account = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
           repository.createAccount(scopedDb, {
@@ -344,12 +350,20 @@ export function registerConnectorsRoutes(
         const body = parseUpdateAccountBody(request.body);
         const encryptedSecret =
           body.tokenPayload === undefined ? undefined : secretCipher.encryptJson(body.tokenPayload);
-        const account = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.updateAccount(scopedDb, request.params.id, {
-            scopes: body.scopes,
-            status: body.status,
-            encryptedSecret
-          })
+        const account = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const current = (await repository.listAccounts(scopedDb)).find(
+              (a) => a.id === request.params.id
+            );
+            if (current?.provider_id === OUTLOOK_BROWSER_PROVIDER)
+              throw new HttpError(403, "Use the dedicated Outlook calendar connection.");
+            return repository.updateAccount(scopedDb, request.params.id, {
+              scopes: body.scopes,
+              status: body.status,
+              encryptedSecret
+            });
+          }
         );
 
         if (!account) {
