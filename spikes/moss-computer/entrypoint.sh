@@ -35,7 +35,7 @@ fi
 dbus-run-session -- xfce4-session &
 children+=("$!")
 # No web root here: the trusted gateway serves packaged noVNC assets.
-websockify --unix-listen=/socket/viewer.sock --unix-listen-mode=0600 \
+/usr/local/bin/websockify --unix-listen=/socket/viewer.sock --unix-listen-mode=0600 \
   --heartbeat=30 127.0.0.1:5900 &
 children+=("$!")
 

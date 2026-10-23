@@ -4,12 +4,15 @@ Internal qualification for #3578, part of #3577. This is not an installer or a
 shipped Moss capability. See the [spec](../../docs/superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md)
 and [plan](../../docs/superpowers/plans/2026-10-23-moss-computer-isolated-qualification.md).
 
-Reuse Debian's Xfce, TigerVNC, noVNC/websockify and Firefox ESR packages. The
+Reuse Debian's Xfce, TigerVNC, noVNC and Firefox ESR packages plus the hash-pinned
+Websockify 0.13 wheel (Debian's 0.10 lacks its Unix listener). The
 desktop is unprivileged, has no network, and exposes its viewer through a Unix
 socket. A separate unprivileged Nginx container serves immutable packaged viewer
 assets over authenticated HTTPS/WSS on a reserved loopback port. Its read-only
 socket mount contains no gateway keys or host sockets. Client certificates here
 are synthetic proof identities; they do not implement Moss ownership checks.
+Only the trusted gateway has a bridge network and loopback-published listener;
+the desktop has no bridge, route or published port.
 
 Build locally from this directory, record the resulting image ID and package
 inventory, and use that ID for both services. Apt inputs are mutable: the base

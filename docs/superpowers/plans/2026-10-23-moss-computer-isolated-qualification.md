@@ -4,11 +4,11 @@ Part of #3577. Implements only the first proof boundary from the [approved desig
 
 ## Current seams and decisions
 
-The design's source/ownership table is the seams ledger, pinned to `8814c9b43101e40619cf1e89055cf4eab2a6ce04`. This docs-only branch starts at `021fd9a0c`; no product changes or refreshed-source acceptance are implied.
+The design's source/ownership table is the seams ledger, pinned to `8814c9b43101e40619cf1e89055cf4eab2a6ce04`. This branch started with documentation at `021fd9a0c`; no product changes or refreshed-source acceptance are implied.
 
-No qualified Computer gateway/lifecycle candidate was identified. The first outcome therefore qualifies the desktop on the existing server, without claiming Moss owner-route security. Integrated gateway work and its proof stay separate. Do not use another existing proof instance or attach to production networks/volumes.
+At MC0, no qualified Computer gateway/lifecycle candidate was identified. The first outcome therefore qualifies the desktop on the existing server, without claiming Moss owner-route security. Integrated gateway work and its proof stay separate. Do not use another existing proof instance or attach to production networks/volumes.
 
-Candidate: `lscr.io/linuxserver/webtop:ubuntu-xfce`, Linux amd64. Registry inspection on 2026-10-23 returned:
+Initial candidate, subsequently rejected unchanged: `lscr.io/linuxserver/webtop:ubuntu-xfce`, Linux amd64. Registry inspection on 2026-10-23 returned:
 
 - Index: `sha256:278797c03b62454aaf05cd1fdeb35dbdc822846855020f9e5233f508a89980d9`.
 - amd64 manifest: `sha256:8ffd561faa3b33df0c076159ca071b44da948ba147f04267ba979553d5c6caa9`.
@@ -115,10 +115,10 @@ Full autonomous implementation authority supersedes the original missing-transpo
 Candidate ownership: Codex `/root` owns `spikes/moss-computer/Dockerfile`, `entrypoint.sh`, `compose.yaml`, `gateway.conf.template`, and `README.md`, plus these evidence documents. No new Moss module/UI surface is shipped by this internal spike, so no app-map Computer capability is declared.
 
 - Base: Debian bookworm-slim amd64 manifest `sha256:ec31d744f83f4a73447ba045aaab9409997efe5cc706eca4890c1be36cc1606a`; build identity/package inventory must be captured after build. Apt repositories are mutable; a local image ID is the exact candidate, not a reproducible-build claim.
-- Packages: standard Xfce desktop, TigerVNC, noVNC/websockify, Firefox ESR, terminal, D-Bus and init. No AI provider dependency. Run UID/GID 1000, no sudo, all capabilities dropped, no-new-privileges, Docker default seccomp/AppArmor retained.
+- Packages: standard Xfce desktop, TigerVNC, noVNC, Firefox ESR, terminal, D-Bus and init. Websockify 0.13.0 is a hash-pinned upstream wheel with distro-provided dependencies; Debian 0.10 lacks the required Unix-listener options. No AI provider dependency. Run UID/GID 1000, no sudo, all capabilities dropped, no-new-privileges, Docker default seccomp/AppArmor retained.
 - Transport: websockify Unix listener through a socket-only bind directory; separate unprivileged Nginx gateway container on a loopback `devports` reservation, HTTPS/WSS with an ephemeral proof CA/client certificate. No TCP guest/control publishing. Reject missing/foreign certificates and foreign WebSocket origins. Guest has no network, gateway configuration, keys, host socket or production volume. The gateway mounts only the socket directory read-only; symlinks resolve inside the gateway container, where no host sockets are present. Serve packaged noVNC assets directly from the gateway read-only image; guest only serves the fixed WS backend.
 - Storage: one dedicated persistent home including explicit Firefox profile and `Files/`; monitored 10 GiB stop threshold. Read-only root, tmpfs `/tmp` and `/run`, bounded shared memory and Docker log size. Do not call this a quota.
-- Finish: active operator `/root`, maximum 60 minutes after launch; separate supervisor checks monotonic deadline, host resources and heartbeat at five-second intervals, stops on measurement failure, and stops on parent loss. Retain synthetic data at closure, remove labelled containers, stop gateway, release listener, remove ephemeral certificate material.
+- Finish: active operator `/root`, maximum 60 minutes after launch; separate supervisor checks monotonic deadline, host resources and heartbeat at nominal five-second intervals (measurement and shutdown latency add to this), stops on measurement failure, and stops after heartbeat loss (up to90 seconds plus measurement/stop latency). Retain synthetic data at closure, remove labelled containers, stop gateway, release listener, remove ephemeral certificate material.
 
 Before launch, compile/inspect exact image contents and independently review configuration. Stop on browser sandbox incompatibility; do not add disabling flags, privileged mode or unconfined profiles. Failures in two equivalent attempts trigger a candidate/scope decision.
 
@@ -127,3 +127,15 @@ Qualification cases: real noVNC canvas/framebuffer plus keyboard input into term
 Meaningful verification: `bash -n spikes/moss-computer/entrypoint.sh` (exit 0), resolved `docker compose config` (exit 0), scoped Prettier/whitespace checks, independent exact-candidate review and executable live assertions. This internal image spike has no database or TS changes; no broad database gate is required merely to validate it. Future product integration keeps its own foundation/live-UI gates.
 
 Kill decision owner `/root`: if the maintained components cannot provide a sandboxed browser under the selected default host security, record the failure and revise/split before any further launch. No relay of unchanged retries.
+
+## Qualification design review and retained startup failure
+
+Independent reviewer accepted candidate commit `1f110888f2a6801554cd325d2de8d6db22aca243` with external supervisor SHA-256 `95abc5d8161c9c15d8b1666d1156549b688cf05b6ff3038ffe37c51b0284ffd9`. Prelaunch review corrected fixed Compose identity, omitted socket-directory accounting, Nginx temp paths and a cleanup/receipt ordering bug. Independent design review preferred the minimal Debian/noVNC composition; the separate research investigator preferred the native Selkies 2.1 desktop. The coordinator chose the smaller offline composition because this checkpoint needs only desktop input/persistence, accepting its component-packaging maintenance cost.
+
+The first actual launch failed before browser use: Debian Websockify 0.10 did not recognise `--unix-listen`, despite that option being supported in the newer inspected upstream source. Docker also did not publish the gateway listener on its internal-only bridge in this environment. Both services were immediately stopped. This is failed runtime readiness, not a passing source check. Correct the installed executable to pinned 0.13.0 and verify every supplied option during build. Only the trusted gateway receives a normal dedicated bridge for loopback publishing; desktop remains `network_mode: none`. Re-review the exact correction before retrying.
+
+## Current stop and exact next assignment
+
+Runtime advanced beyond the original blocked readiness result. Current status is partial qualification: accepted cases are recorded in the [evidence ledger](../../evidence/moss-computer/2026-10-23-isolated-qualification.md), with source/image hashes and failure limits. Crash socket reconnection passed before the framebuffer assertion failed; recovered viewing/input remains unqualified. All proof services/ports/keys are closed; home/profile data is preserved.
+
+The single next proposed assignment is [recovery qualification](2026-10-23-moss-computer-recovery-qualification.md), before shared owner integration. Repeated harness/recovery failures triggered this explicit scope stop rather than an unchanged retry or coordinator relay. The automation-server restart is recorded as an exception to the context aim. This checkpoint does not claim full implementation, a one-context success or a completed guide stage.

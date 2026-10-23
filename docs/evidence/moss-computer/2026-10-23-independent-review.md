@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Status:** PASS after the one permitted correction round. Documentation accepted; runtime remains `BLOCKED_BEFORE_LAUNCH`.
+- **Current status:** static candidate accepted; runtime evidence partial, recovery gate FAIL. Final exact-report review follows below. Historical documentation-only review is preserved.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -32,8 +32,41 @@ Accepted SHA-256:
 | Plan     | `1364a70f10732a7027b075aaf3f6c4bf9f6ffdb4208fda32e18e0459923c132d` |
 | Evidence | `bf24e1bea1888c8c64c9a53a09e95c6b4b45004280aa5c11eed72beee72143dd` |
 
-## Coordinator closure checks
+## Historical documentation-only closure at commit83ec63b2a
 
-The three accepted documents are preserved unchanged after correction review. Scoped Prettier and relative-link/private-content checks passed. No database, product UAT or full foundation gate ran for this docs/preflight change.
+The three accepted documents were preserved unchanged at that checkpoint after correction review. Later implementation amendments are reviewed separately below. Scoped Prettier and relative-link/private-content checks passed. No database, product UAT or full foundation gate ran for this docs/preflight change.
 
 At closure, `docker ps -a --filter name=moss-computer-qualification` returned no containers. Production `moss` was running and healthy. No image was pulled, proof runtime launched, port reserved or data volume created; there is no unattended job to finish. The task and parent remain open. The isolated documentation worktree is committed/pushed separately without modifying the original shared checkout or merging.
+
+## Autonomous implementation: first candidate review
+
+Ben subsequently authorised autonomous implementation. Reviewer independently accepted commit `1f110888f2a6801554cd325d2de8d6db22aca243` for one actively supervised offline qualification, using image `sha256:95edd6e239f22851b46c0748090d1ddebba50b2eae5223698b6c0a80a65b0c30`. This is launch-readiness approval, not runtime acceptance.
+
+Material prelaunch findings corrected: fixed Compose name could collide; monitor omitted writable socket directory; Nginx temp paths could target the read-only root; receipt writes could prevent fail-closed stopping; fallback run ID and stop-failure reporting needed to be explicit. Exact corrected supervisor hash: `95abc5d8161c9c15d8b1666d1156549b688cf05b6ff3038ffe37c51b0284ffd9`.
+
+Runtime exposed an installed dependency mismatch and missing published listener. Reviewer accepted the bounded correction direction (pinned Websockify 0.13 wheel, normal bridge only for trusted gateway) pending exact-file review. No browser or persistence acceptance followed the failed launch.
+
+## Final independent review: partial evidence accepted, recovery gate FAIL
+
+Reviewer `/root/independent_review2` did not author the candidate or evidence. It independently
+reviewed raw receipts and the final exact files. Verdict: **PASS for report accuracy and static
+candidate; recovery gate FAIL.** No blocking inaccurate claim remained. Full product acceptance
+and merge readiness do not follow.
+
+Accepted covered cases: substantive framebuffer and keyboard input, actual browser sandbox
+inspection with unavailable user namespaces disclosed, real replacement/file/profile/bookmark
+survival, observed failing security negative controls and fail-closed stopping. Crash transport
+reconnect passed before recovered rendering timed out; recovered input was not reached. Cause is
+unknown. The reviewer accepted one focused recovery qualification before owner integration.
+
+The reviewer independently confirmed source hashes against the receipt, shell syntax/whitespace,
+absence of proof containers/network/listener5180, removed ephemeral keys, retained home and healthy
+Moss. Full foundation/Moss live-UI/platform gates did not run for this internal candidate.
+
+| Exact reviewed artifact | SHA-256                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| Evidence ledger         | `f42c34d9fdfcf29b8b7aeca9302ee7a4dc8935f7fea6d781224b84058540bdb5` |
+| Runtime receipt         | `ebfb7e4fd6894b4bac59d173f2b888ca2b92293f14dde08cab67c2a881e88388` |
+| Spec                    | `d9b671fcf45f9810896cb449c2cd0fb56ec274af0d4dafd5e3bffdb4b3b4896a` |
+| Qualification plan      | `f7ef806710d44a39cc3e51ad434db0eefa9d32d5c38da96d57d96063ff4e21b8` |
+| Proposed recovery plan  | `d61653771562c9d6e7584af61931e309ad94da5e16126d89bce9d7faf2c5c662` |

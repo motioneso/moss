@@ -55,5 +55,4 @@ services:
         max-size: 2m
         max-file: "2"
 networks:
-  viewer:
-    internal: true
+  viewer: {}

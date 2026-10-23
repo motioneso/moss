@@ -1,7 +1,7 @@
 # Moss Computer: one persistent owner desktop
 
 - **Date:** 2026-10-23 UTC
-- **Status:** Autonomous implementation authorised; isolated qualification is the first bounded checkpoint. Runtime acceptance is outstanding.
+- **Status:** Autonomous implementation authorised. Offline candidate implemented; partial qualification accepted only for covered cases. Recovery rendering is unqualified; Moss integration is not implemented.
 - **Parent:** #3577. First qualification: #3578.
 - **Plan:** [Isolated qualification](../plans/2026-10-23-moss-computer-isolated-qualification.md).
 - **Authority:** Ben's supplied “Moss next steps after Stage 4, focused planning update 1”, MC0 request, device clarification, acceptance of the supplied v7 material without separate pack verification, instruction to write the spec/plan and proceed overnight, and subsequent explicit full authority to plan and implement autonomously, provider-agnostic and following repository guidelines.
@@ -50,7 +50,7 @@ Expose no additional public guest-control port. Give the guest no Docker socket,
 
 Qualify the pinned image, service user/init, private viewer, files/profile storage, replacement persistence, recovery and resource fit on the selected host. Use synthetic data only. This first outcome establishes no Moss owner-route security, installed-product integration or platform support claim.
 
-The accepted candidate envelope is at most two CPUs, 4 GiB RAM, 512 PIDs, no GPU and a 60-minute actively supervised runtime window. Storage limits, safe headroom and monitoring/cleanup failure behavior must be fixed before launch. A monitored byte ceiling must never be called an enforced quota.
+The desktop envelope is at most two CPUs, 4 GiB RAM and 512 PIDs; the separate gateway adds 0.5 CPU, 128 MiB and 32 PIDs. No GPU; at most a 60-minute actively supervised runtime window. Storage limits, safe headroom and monitoring/cleanup failure behavior must be fixed before launch. A monitored byte ceiling must never be called an enforced quota.
 
 Ben's overnight instruction authorises continued bounded preparation and safe isolated qualification. Codex `/root` is the active overnight host/finish operator. It may finish an automated session only while actively supervising it and able to perform final controls; no unattended overnight desktop or timer-only completion. Automated input is recorded as automated, not Ben's manual acceptance. Ben is the proposed finish operator for the later manual session; confirm attendance before dispatching that session.
 
@@ -119,8 +119,14 @@ At runtime closure, stop only the labelled proof desktop, confirm no proof proce
 
 Ben explicitly gave full authority to plan and implement autonomously and invited research/reuse. That supersedes the earlier missing-interface permission stop, not the repository review/security/live-proof gates. The first implementation may change the isolated candidate after documented comparison. Agent/model providers play no role in this manual desktop checkpoint.
 
-Preferred fallback for independent review: distro-packaged Xfce, TigerVNC, noVNC/websockify and Firefox ESR on a pinned Debian amd64 base. Reuse their viewer/protocol/browser implementations. Do not build a remote desktop protocol or custom Docker-exec byte tunnel. Websockify's documented Unix listener allows an offline guest (`network=none`) to be reached through one socket-only mount by a isolated trusted Nginx TLS gateway. Gateway material remains outside guest storage. A synthetic client certificate tests isolated viewer access; this is not Moss owner authentication.
+Implemented internal candidate, independently reviewed before launch: distro-packaged Xfce, TigerVNC, noVNC/websockify and Firefox ESR on a pinned Debian amd64 base. Reuse their viewer/protocol/browser implementations. Do not build a remote desktop protocol or custom Docker-exec byte tunnel. Websockify's documented Unix listener allows an offline guest (`network=none`) to be reached through one socket-only mount by a isolated trusted Nginx TLS gateway. Gateway material remains outside guest storage. A synthetic client certificate tests isolated viewer access; this is not Moss owner authentication.
 
 This offline qualification exercises browser/profile mechanics with local synthetic content. It cannot qualify useful Internet browsing. Product integration must add reviewed outbound HTTP(S)/DNS handling that excludes host/LAN/metadata/Moss services; no silent unrestricted bridge fallback. Guest-controlled pages and downloads stay outside the Moss origin.
 
 The proof home/files directory uses a monitored 10 GiB threshold, not a quota; the read-only image root and size-limited tmpfs contain other writes. An independent monotonic supervisor stops the labelled guest on timeout, missing heartbeat, measurement error, low headroom or threshold exceedance. The active operator closes gateway/listener and records retained data. No unattended persistence claim follows. A strict hard-quota requirement would be a separate storage/platform dependency.
+
+## 11. First implementation checkpoint result
+
+The [qualification ledger](../../evidence/moss-computer/2026-10-23-isolated-qualification.md) records real offline desktop input, active Firefox content sandbox diagnostics (user namespaces unavailable), isolated proof-CA route checks and negative controls, actual container replacement with retained file/profile/bookmark, resources and attended cleanup. Ben manual/MacBook cases, Internet browsing and Moss ownership integration remain NOT_RUN.
+
+Crash socket reconnection occurred, but recovered rendering/input did not qualify. Stop/split at that gate; the [one next proposed assignment](../plans/2026-10-23-moss-computer-recovery-qualification.md) addresses only recovered viewing/input. No production, installer, release or whole-guide-stage acceptance follows. Full implementation authority remains; no new routine permission is required.
