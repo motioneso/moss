@@ -682,19 +682,33 @@ it("reports unsupported Claude subscription profiles plainly without provider fa
   expect(generate).toHaveBeenCalledTimes(1);
 });
 
-it("fails unsupported subscriptions before credential lookup or any provider dispatch", async () => {
-  const generate = vi.fn();
+it("generates with the configured Codex default through its constrained transport", async () => {
+  const generate = vi.fn(async () => ({
+    rawText: JSON.stringify(content),
+    usage: { inputTokens: 0, outputTokens: 0 }
+  }));
   const adapter = vi.fn(() => ({ generateStructured: generate }));
   const h = setup(adapter);
   h.route.mockResolvedValue({ ...model, provider_auth_method: "cli" });
-  expect(await h.generationAvailability(actor)).toBe("subscription-unsupported");
-  await expect(h.generator(actor, input())).rejects.toMatchObject({
-    code: "meeting_output_subscription_unsupported"
-  });
-  expect(h.credential).not.toHaveBeenCalled();
+  h.credential.mockResolvedValue({ ...provider, auth_method: "cli" });
+  vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
+    { ...provider, auth_method: "cli" }
+  ]);
+  expect(await h.generationAvailability(actor)).toBe("available");
+  await expect(h.generator(actor, input())).resolves.toMatchObject({ content });
+  expect(h.probe).toHaveBeenCalledWith(actor.actorUserId, undefined, "openai-compatible");
+  expect(h.probe).toHaveBeenCalledWith(
+    actor.actorUserId,
+    expect.any(AbortSignal),
+    "openai-compatible"
+  );
   expect(h.fetch).not.toHaveBeenCalled();
-  expect(adapter).not.toHaveBeenCalled();
-  expect(generate).not.toHaveBeenCalled();
+  expect(adapter).toHaveBeenCalledWith("openai-compatible");
+  expect(generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      model: expect.objectContaining({ provider_model_id: model.provider_model_id })
+    })
+  );
 });
 
 it("checks constrained binary presence outside actor transactions before enabling Generate", async () => {
@@ -714,7 +728,7 @@ it("checks constrained binary presence outside actor transactions before enablin
     return "model-unavailable";
   });
   expect(await h.generationAvailability(actor)).toBe("model-unavailable");
-  expect(h.probe).toHaveBeenCalledExactlyOnceWith(actor.actorUserId);
+  expect(h.probe).toHaveBeenCalledExactlyOnceWith(actor.actorUserId, undefined, "anthropic");
   h.probe.mockResolvedValue("available");
   expect(await h.generationAvailability(actor)).toBe("available");
   expect(h.credential).not.toHaveBeenCalled();
@@ -776,7 +790,7 @@ it("preserves user cancellation during the constrained readiness probe without d
   await expect(h.generator(actor, { ...input(), signal: controller.signal })).rejects.toMatchObject(
     { code: "meeting_output_interrupted" }
   );
-  expect(h.probe).toHaveBeenCalledWith(actor.actorUserId, controller.signal);
+  expect(h.probe).toHaveBeenCalledWith(actor.actorUserId, controller.signal, "anthropic");
   expect(h.fetch).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
 });

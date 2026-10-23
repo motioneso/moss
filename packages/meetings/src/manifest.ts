@@ -393,7 +393,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.automatic_summary",
       description:
-        "Automatic summaries default on and use your default model without fallback, including supported Claude. Turn off Summarize automatically after Stop in Settings → Meetings. Only these rename Untitled meeting; Rewrite summary stays available."
+        "Automatic summaries default on and use your default model without fallback. Turn off Summarize automatically after Stop in Settings → Meetings. Only these rename Untitled meeting; Rewrite summary stays available."
     },
     {
       id: "transcribe.meeting",
@@ -626,7 +626,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.grounded_outputs",
       description:
-        "Generate evidence-checked summaries with your default model, without fallback. Claude availability depends on this server setup. Compare versions and exact sources; refresh to check availability without generating a summary.",
+        "Generate evidence-checked summaries with your default model, without fallback. Subscription availability depends on the selected provider's constrained runner. Compare versions and sources; refresh to check availability without generating.",
       errors: [
         {
           code: "meeting_output_unavailable",
@@ -638,13 +638,13 @@ export const meetingsModuleManifest = {
           code: "meeting_output_subscription_unsupported",
           class: "validation",
           description:
-            "Codex and other unconstrained subscription profiles do not support summaries yet. No replacement model is used. API-key and supported Claude profiles remain available."
+            "This subscription profile has no compatible structured summary transport. No replacement model is used. Ask an admin to check the selected provider's installed runner."
         },
         {
           code: "meeting_output_subscription_isolation_unavailable",
           class: "validation",
           description:
-            "Claude summaries aren’t available on this server setup. No other model was used."
+            "Subscription summaries aren’t available on this server setup. No other model was used."
         },
         {
           code: "meeting_output_claude_subscription_unsupported",

@@ -168,7 +168,7 @@ describe("constrained structured availability is an advisory metadata-only probe
   );
 
   it.each(["openai-compatible", "google"] as const)(
-    "rejects unsupported %s without probing its login",
+    "reports absent or unsupported %s without probing its login",
     async (provider) => {
       const { host, assertReadOnly } = await fixture("ready");
       await expect(
