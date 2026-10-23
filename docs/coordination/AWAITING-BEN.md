@@ -81,3 +81,14 @@ on 2026-10-21. Implementation and isolated-dev verification are authorized;
 source-quality checks remain required before imports are enabled (#3567).
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
+
+<!-- Resolved 2026-10-21: Ben completed production-wizard Vocci sign-in. Real
+inventory/selection/restart passed. The installed UI and state subsequently
+confirmed committed ring setup; the combined harness failed on ADB before its
+success observation. Browser cleanup signed out the disposable device, isolated
+configuration was removed and EMPTY confirmed. This is partial acceptance. -->
+
+<!-- Resolved 2026-10-22: Ben is available for phone/ring steps again.
+The latest proof passed physical Verify and Start/hold enrollment, then expired
+waiting for fresh samples. Ben is recording during his meeting; no additional
+user step is requested during it. Delivery of those samples is unverified. -->

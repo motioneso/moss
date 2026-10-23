@@ -139,7 +139,7 @@ export const aiModuleManifest = {
     {
       id: "ai.clip_transcription_timestamps",
       description:
-        "Transcription can return clip-relative segment timestamps when requested. This is file transcription, not streaming or speaker separation. Invalid or unsupported timestamps fail without changing providers.",
+        "File transcription can return clip-relative segment timestamps. Empty zero-duration markers are ignored; invalid speech timestamps fail without changing providers. Streaming and speaker separation are not supported.",
       remediations: [
         {
           id: "ai.clip_transcription.configure",

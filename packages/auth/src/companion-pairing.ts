@@ -85,7 +85,29 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
   const now = deps.now ?? (() => new Date());
 
   async function purgeExpired(): Promise<void> {
-    await pool.query("DELETE FROM app.companion_pair_attempts WHERE expires_at < $1", [now()]);
+    // Preserve lost-response cancellation proof while an issued device references
+    // it. Lock first, then check devices in a fresh READ COMMITTED snapshot: a
+    // single DELETE can wait on redemption yet miss its just-committed device.
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const expired = await client.query<{ id: string }>(
+        "SELECT id FROM app.companion_pair_attempts WHERE expires_at < $1 FOR UPDATE SKIP LOCKED",
+        [now()]
+      );
+      await client.query(
+        `DELETE FROM app.companion_pair_attempts a
+          WHERE a.id = ANY($1::uuid[])
+            AND NOT EXISTS (SELECT 1 FROM app.companion_devices d WHERE d.pair_attempt_id = a.id)`,
+        [expired.rows.map((row) => row.id)]
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   return {
@@ -314,16 +336,16 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
     },
 
     async cancel({ attemptId, verifier }) {
-      // Possession of the verifier is the whole authorization. A cancel wins against a
-      // late browser approval because the row is gone before the approval can land.
-      //
-      // Cancelling also undoes a link that already happened. A redeem can land in the
-      // moment between the person deciding to cancel and the request arriving, and a
-      // cancel that left that credential alive would leave a working Mac nobody meant to
-      // connect. Both deletes are one transaction, so neither can survive the other.
+      // Serialize with approval/redemption before inspecting devices. Otherwise
+      // a DELETE can miss an in-flight issued device, then clear its attempt link.
+      // The verifier authorizes both the lock and all following deletions.
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+        await client.query(
+          "SELECT id FROM app.companion_pair_attempts WHERE id = $1 AND verifier_hash = $2 FOR UPDATE",
+          [attemptId, sha256Base64url(verifier)]
+        );
         // The device goes first. Deleting the attempt clears the link column, so the
         // other order would leave the credential with nothing pointing at it.
         await client.query(

@@ -103,6 +103,64 @@ describe("timestamped ASR (generated fixtures, no provider compatibility proof)"
     });
   });
 
+  it.each(["", " \t\n"])(
+    "ignores empty zero-duration ASR markers (%j) without trimming speech",
+    async (text) => {
+      const value = {
+        text: "Generated boundary fixture",
+        segments: [
+          { start: 22.02, end: 29.88, text: "Generated boundary" },
+          { start: 29.88, end: 29.94, text: " fixture" }
+        ]
+      };
+      expect(
+        await readTimestampedTranscription(
+          Response.json({
+            ...value,
+            segments: [...value.segments, { start: 29.92, end: 29.92, text }]
+          })
+        )
+      ).toEqual(value);
+      expect(
+        await readTimestampedTranscription(
+          Response.json({ text: "", segments: [{ start: 0, end: 0, text }] })
+        )
+      ).toEqual({ text: "", segments: [] });
+    }
+  );
+
+  it.each([
+    { start: 1, end: 1, text: "Speech must not disappear" },
+    { start: -1, end: -1, text: "" },
+    { start: 2, end: 1, text: "" },
+    { start: Number.MAX_SAFE_INTEGER, end: Number.MAX_SAFE_INTEGER, text: "" },
+    { start: 1, end: 1, text: null },
+    { start: 1, end: 1.0001, text: "" }
+  ])("rejects invalid markers rather than silently dropping them %#", async (marker) => {
+    await expect(
+      readTimestampedTranscription(Response.json({ ...payload, segments: [segment, marker] }))
+    ).rejects.toThrow("Invalid or unsupported timestamped transcription response");
+  });
+
+  it("rejects untimestamped speech even when the provider includes only empty markers", async () => {
+    await expect(
+      readTimestampedTranscription(
+        Response.json({ text: "Generated speech", segments: [{ start: 0, end: 0, text: "" }] })
+      )
+    ).rejects.toThrow("Invalid or unsupported timestamped transcription response");
+  });
+
+  it("counts skipped marker whitespace toward the segment text limit", async () => {
+    await expect(
+      readTimestampedTranscription(
+        Response.json({
+          ...payload,
+          segments: [segment, { start: 0, end: 0, text: " ".repeat(1024 * 1024) }]
+        })
+      )
+    ).rejects.toThrow("Invalid or unsupported timestamped transcription response");
+  });
+
   it.each([
     { start: 29.959, end: 30, text: "More than one frame" },
     { start: -0.001, end: 30, text: "Negative timestamp" }

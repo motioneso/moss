@@ -15,6 +15,7 @@ import {
 } from "../../packages/meetings/src/recording-source-validation.js";
 import { RecordingImportInputError } from "../../packages/meetings/src/recording-validation-error.js";
 import { recordingBundle } from "../fixtures/recording-bundle.js";
+import { recordingUpload } from "../fixtures/recording-upload.js";
 
 function digest(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -50,7 +51,7 @@ function wavHeader(durationMs: number): Buffer {
   header.writeUInt32LE(durationMs * 32, 40);
   return header;
 }
-function metadata(durationMs: number): Buffer {
+function metadata(durationMs: number, elapsedDifferenceMs = 0): Buffer {
   const start = 1_792_470_000_000;
   return Buffer.from(
     [
@@ -58,7 +59,7 @@ function metadata(durationMs: number): Buffer {
       { btn: [String(start + durationMs), "1"] },
       { unknown: "preserved 🦉" },
       { duration: [String(start + durationMs), String(durationMs)] },
-      { record: [String(start + durationMs), "end"] }
+      { record: [String(start + durationMs + elapsedDifferenceMs), "end"] }
     ]
       .map((entry) => JSON.stringify(entry))
       .join(",")
@@ -66,6 +67,56 @@ function metadata(durationMs: number): Buffer {
 }
 
 describe("incremental source validation", () => {
+  it("accepts measured ring-clock drift in a 42-minute source with matching decoded duration", async () => {
+    const durationMs = 2_513_160;
+    const original = recordingUpload(durationMs);
+    const sidecar = metadata(durationMs, -4_160);
+    const read: RecordingSourceReader = async function* (kind) {
+      if (kind === "sidecar") yield sidecar;
+      else yield* original.chunks(kind);
+    };
+    const result = await validateRecordingSource(
+      {
+        ...original.manifest,
+        sidecar: { byteLength: sidecar.length, sha256: digest(sidecar) }
+      },
+      read
+    );
+    expect(result.durationMs).toBe(durationMs);
+    expect(result.recordedDurationMs).toBe(durationMs);
+    expect(result.endMs - result.startMs).toBe(durationMs - 4_160);
+  });
+
+  it.each([-1_501, 1_501])("retains the short-recording clock bound at %s ms", (drift) => {
+    expect(() =>
+      recordingSidecarMetadata(metadata(120_000, drift), 120_000, {
+        maxBytes: 256 * 1024,
+        maxEntries: 256 * 1024,
+        durationDigits: 7
+      })
+    ).toThrow(RecordingImportInputError);
+  });
+
+  it.each([-30_000, 30_000])("rejects excessive long-recording clock drift of %s ms", (drift) => {
+    expect(() =>
+      recordingSidecarMetadata(metadata(2_513_160, drift), 2_513_160, {
+        maxBytes: 256 * 1024,
+        maxEntries: 256 * 1024,
+        durationDigits: 7
+      })
+    ).toThrow(RecordingImportInputError);
+  });
+
+  it("rejects a mismatched declared duration despite acceptable long-recording clock drift", () => {
+    expect(() =>
+      recordingSidecarMetadata(metadata(2_513_160, -4_160), 2_515_000, {
+        maxBytes: 256 * 1024,
+        maxEntries: 256 * 1024,
+        durationDigits: 7
+      })
+    ).toThrow(RecordingImportInputError);
+  });
+
   it("validates every byte split of the WAV header and UTF8 sidecar", async () => {
     const { bundle, bytes } = fixture();
     bytes.sidecar = metadata(120);

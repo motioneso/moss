@@ -120,11 +120,16 @@ export function recordingSidecarMetadata(
       }
     }
   }
+  // The ring's wall clock and audio sample clock drift over long captures.
+  // Allow 0.2% elapsed-clock drift plus one second of timestamp quantization,
+  // retaining the 1.5-second floor for short recordings. The declared duration
+  // must still match decoded audio independently below.
+  const elapsedToleranceMs = Math.max(1500, 1000 + durationMs * 0.002);
   if (
     startMs === null ||
     endMs === null ||
     endMs < startMs ||
-    Math.abs(endMs - startMs - durationMs) > 1500 ||
+    Math.abs(endMs - startMs - durationMs) > elapsedToleranceMs ||
     recordedDurationMs === null ||
     Math.abs(recordedDurationMs - durationMs) > 1000
   )

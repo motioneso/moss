@@ -60,7 +60,9 @@ try {
   });
   const result = await execute("python3", [browserScript], {
     env: { ...process.env, VOCCI_LIVE_URL: `http://127.0.0.1:${port}` },
-    timeout: 900_000,
+    // Native sign-in and existing ring backlog can consume most of 15 minutes.
+    // Keep a bounded window for fresh samples and browser/device cleanup too.
+    timeout: 1_800_000,
     maxBuffer: 128 * 1024
   });
   process.stdout.write(result.stdout);
