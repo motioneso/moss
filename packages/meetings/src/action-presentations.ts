@@ -19,6 +19,7 @@ import type {
   MeetingRecord,
   MeetingTranscriptLedger
 } from "@moss/shared";
+import { isMeetingTranscriptLanguage } from "@moss/shared";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingOutputsRepository } from "./output-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
@@ -226,6 +227,15 @@ export const meetingPreferencesPresentation: RouteApprovalPresentation = async (
       ? current.rememberedSource
       : (body.rememberedSource as MeetingRememberedSource | null);
   const fields = presentApprovalFields(body, {
+    transcriptLanguage: {
+      label: "Transcript language",
+      present: (value) =>
+        value === null
+          ? "Automatic detection"
+          : isMeetingTranscriptLanguage(value)
+            ? `${new Intl.DisplayNames(["en"], { type: "language" }).of(value)} (${value})`
+            : null
+    },
     defaultCaptureMode: {
       label: "Default capture source",
       present: (value) =>
@@ -253,6 +263,7 @@ export const meetingPreferencesPresentation: RouteApprovalPresentation = async (
       ? (persistedDefault ?? effectiveSource?.mode ?? "computer-audio")
       : (body.defaultCaptureMode ?? effectiveSource?.mode ?? "computer-audio");
   const changes = [
+    ...(Object.hasOwn(body, "transcriptLanguage") ? ["Change the transcript language"] : []),
     ...(Object.hasOwn(body, "rememberedSource")
       ? [
           body.rememberedSource === null

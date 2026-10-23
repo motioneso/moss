@@ -12,6 +12,8 @@ export interface TranscribeAudioInput {
   readonly audio: Blob;
   readonly signal?: AbortSignal;
   readonly timestamps?: "segment";
+  /** Standard ASR input-language hint. Omit for automatic detection. */
+  readonly language?: string;
   /** Activity attribution; never sent as provider request content. */
   readonly ownerUserId?: string;
   readonly actionCode?: "transcribe.voice_note" | "transcribe.meeting";

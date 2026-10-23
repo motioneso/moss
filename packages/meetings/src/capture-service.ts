@@ -51,22 +51,8 @@ import {
 import { MeetingCaptureConnectionRepository } from "./capture-connection-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 
-export type MeetingCaptureTranscriber = (
-  actor: AccessContext,
-  input: {
-    audio: Uint8Array;
-    sampleRateHz: number;
-    signal: AbortSignal;
-    expectedModelRoute: string;
-    dispatch: <T>(
-      initiate: () => Promise<T>,
-      validate?: (db: DataContextDb) => Promise<void>
-    ) => Promise<T>;
-  }
-) => Promise<{
-  segments: readonly { startMs: number; endMs: number; text: string }[];
-  modelRoute: string;
-}>;
+import type { MeetingCaptureTranscriber } from "./capture-transcriber.js";
+export type { MeetingCaptureTranscriber } from "./capture-transcriber.js";
 export interface CaptureBrowserBinding extends AccessContext {
   readonly sessionId: string;
   readonly expiresAt: Date;
@@ -819,12 +805,18 @@ export class MeetingCaptureService {
       };
       // Silence still crosses the same admission fence and completes its source/epoch receipt.
       // No provider call means no live route check; speech still validates the reserved route.
+      const language = nearSilent
+        ? null
+        : await this.deps.dataContext.withDataContext(proof.actor, (db) =>
+            this.preferences.getTranscriptLanguage(db)
+          );
       const generated = nearSilent
         ? await dispatch(async () => ({ segments: [], modelRoute: reservation.modelRoute! }))
         : await abortable(
             signal,
             this.deps.transcribe(proof.actor, {
               audio: pcmWave(pcm, input.sampleRateHz),
+              ...(language ? { language } : {}),
               sampleRateHz: input.sampleRateHz,
               signal,
               expectedModelRoute: reservation.modelRoute!,

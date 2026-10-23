@@ -47,6 +47,7 @@ export class ConfiguredTranscriptionError extends Error implements Transcription
 }
 
 export interface ConfiguredTranscriptionInput {
+  readonly language?: string;
   /** A bounded, self-describing audio clip, not raw PCM. */
   readonly audio: Uint8Array;
   readonly signal: AbortSignal;
@@ -216,6 +217,7 @@ export function createConfiguredTranscription(deps: {
             audio: new Blob([Uint8Array.from(input.audio)], { type: "audio/wav" }),
             signal,
             timestamps: "segment",
+            ...(input.language ? { language: input.language } : {}),
             ownerUserId: actor.actorUserId,
             actionCode: "transcribe.meeting"
           }),
