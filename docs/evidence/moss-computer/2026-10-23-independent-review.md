@@ -193,3 +193,35 @@ original-image canvas-timeout/image-loss/Herdr incident causes, rebuilt-image Fi
 replacement, owner integration and manual/platform/release gates remain separate. The one next
 proposal is bounded active Firefox sandbox plus file/profile replacement qualification on the
 adopted image, not dispatched. No merge, automatic parent adoption or issue close.
+
+## Persistence r5: entry-rejection evidence accepted
+
+Reviewer `/root/persistence_entry_review`, independent of author/operator Codex `/root`, returned
+**PASS — bounded entry-rejection evidence accepted. No blocking findings.** The reviewer did not
+author fixes or edit files, retry the resource gate, restore an image or launch runtime.
+
+The exact [report](2026-10-23-persistence-preflight.md), [receipt](2026-10-23-persistence-preflight.json)
+and spec were checked against the dispatched handoff, inherited initial tool outputs and private
+receipts. Available RAM 8,330,731,520 bytes was below the 8,589,934,592-byte floor by 259,203,072
+bytes. Entry rejection follows the Start section's mandatory stop. The required image was absent;
+no load/build or launch preparation followed the failed RAM gate.
+
+Both private receipt hashes and sanitised values matched. Independent exact-label closure checks
+found no owned containers/networks and Moss remained `running healthy`. Earlier homes/archive
+were present at the claimed size; no content rehash or archive validation was asserted. Relative
+links, scoped privacy/formatting and whitespace checks passed; only the scoped checkpoint was
+added to the spec.
+
+| Exact accepted artifact      | SHA-256                                                            |
+| ---------------------------- | ------------------------------------------------------------------ |
+| Persistence-preflight report | `07c57d30aeb51da22f2bf35b768bdaf271b60924cf2a47480c185e701683ebdd` |
+| Persistence-preflight JSON   | `35c59e35f30f1b89747ce3cb8d597e663410d6c8997078eaf87ebf0d973420b5` |
+| Final spec                   | `7925e316adf85f6d6665daee4cc165b90e051fc3b1d049520fd6b049a157881d` |
+
+Initial entry measurements are explicitly transcript copies; original raw command files and the
+separate exact RAM-sample timestamp were not retained. These disclosed limits are non-blocking
+for accepting the entry rejection. Archive checksum/config/layers, active Firefox sandbox and
+replacement persistence remain NOT_RUN. This is no runtime qualification or product acceptance.
+The one next proposal is the same bounded qualification after fresh entry floors pass, including
+archive validation if needed and committed exact-artifact prelaunch review. No further run,
+automatic merge or issue close is dispatched.

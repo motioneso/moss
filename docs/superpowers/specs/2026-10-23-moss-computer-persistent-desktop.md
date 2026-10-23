@@ -153,3 +153,14 @@ limits and independent review; active runtime/listener/keys were closed and reta
 No product integration or earlier-image Firefox/profile/replacement acceptance transfers. The one
 next proposal is a separately reviewed bounded active Firefox sandbox and file/profile replacement
 qualification on this adopted image; no further runtime is dispatched by this checkpoint.
+
+## 14. Adopted-image persistence entry rejection
+
+The dispatched [sandbox/replacement attempt](../../evidence/moss-computer/2026-10-23-persistence-preflight.md)
+stopped before launch: fresh available RAM was 8,330,731,520 bytes, below the required 8 GiB floor.
+The exact adopted image was absent; no archive verification/load or rebuild was attempted after
+the resource gate failed. Moss remained healthy and no proof runtime was created. Active Firefox
+sandbox and file/profile persistence across replacement remain NOT_RUN on this image. The next
+proposal is the same bounded qualification after fresh entry floors pass, with exact archive
+validation if needed and a committed, independently reviewed launch packet. No retry, production
+change, owner integration or manual/platform/release acceptance is dispatched by this result.
