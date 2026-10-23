@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["text", "title", "metrics", "panels", "suggestions"],
+  "properties": {
+    "text": { "type": "string" },
+    "title": { "type": "string" },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "value"],
+        "properties": { "label": { "type": "string" }, "value": { "type": "string" } }
+      }
+    },
+    "panels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "title", "items", "min", "max", "value", "unit"],
+        "properties": {
+          "type": { "type": "string", "enum": ["chart", "table", "timeline", "choices", "slider"] },
+          "title": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "detail", "value"],
+              "properties": {
+                "label": { "type": "string" },
+                "detail": { "type": "string" },
+                "value": { "type": "number" }
+              }
+            }
+          },
+          "min": { "type": "number" },
+          "max": { "type": "number" },
+          "value": { "type": "number" },
+          "unit": { "type": "string" }
+        }
+      }
+    },
+    "suggestions": { "type": "array", "items": { "type": "string" } }
+  }
+}

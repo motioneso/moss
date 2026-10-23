@@ -1,0 +1,188 @@
+/* Prototype compositions on the existing Moss chat shell and semantic tokens. */
+.mockup-stage {
+  height: calc(100dvh - 90px);
+  min-height: 600px;
+}
+.live-welcome {
+  max-width: 650px;
+  margin: auto 0;
+  padding: 40px 0;
+}
+.live-welcome h2 {
+  font-size: var(--text-4xl);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-tight);
+  margin: 16px 0;
+}
+.live-welcome .mockup-lede {
+  color: var(--text-muted);
+}
+.live-starters,
+.live-choices {
+  display: grid;
+  gap: 12px;
+}
+.live-starters > button,
+.live-choices > button {
+  height: auto;
+  min-height: 64px;
+  white-space: normal;
+  align-items: flex-start;
+  flex-direction: column;
+  text-align: left;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+.live-starters small,
+.live-choices small {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+}
+.live-caption {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  margin-top: 20px;
+}
+.live-reply {
+  margin: 0 0 36px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.live-speaker {
+  font-weight: var(--weight-bold);
+  color: var(--accent-fg);
+  margin-bottom: 12px;
+}
+.live-prose {
+  font-size: var(--text-md);
+  line-height: 1.7;
+  max-width: 70ch;
+}
+.live-prose p {
+  white-space: pre-wrap;
+  margin-bottom: 16px;
+}
+.live-reply .visual-reply {
+  margin-top: 24px;
+}
+.live-panel {
+  margin: 24px 0;
+}
+.live-panel h3 {
+  font-size: var(--text-lg);
+  margin: 0 0 16px;
+  font-weight: var(--weight-bold);
+}
+.live-panel .visual-track > span {
+  background: var(--accent-fg);
+}
+.live-table {
+  width: 100%;
+  table-layout: fixed;
+}
+.live-table caption {
+  text-align: left;
+  margin: 0 0 8px;
+}
+.live-table th {
+  width: 30%;
+  text-align: left;
+  padding: 12px 12px 12px 0;
+  font-weight: var(--weight-semibold);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.live-table td {
+  white-space: pre-wrap;
+  vertical-align: top;
+}
+.live-range-label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+}
+.live-range-label > span {
+  color: var(--text-muted);
+}
+.live-range-label output {
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.live-range {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  accent-color: var(--accent-fg);
+  cursor: pointer;
+}
+.live-range:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+.live-range-limits {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin: 8px 0 16px;
+}
+.live-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+.live-suggestions > button {
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+  min-height: 36px;
+  text-align: left;
+}
+.live-pending {
+  color: var(--text-muted);
+  padding: 12px 0 24px;
+}
+.live-error {
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+}
+.live-error p {
+  margin-bottom: 12px;
+}
+.chatd__status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chatd__id {
+  min-width: 0;
+}
+.live-reply .visual-bar-label {
+  align-items: baseline;
+}
+.live-reply .visual-bar-label strong {
+  white-space: normal;
+  text-align: right;
+}
+@media (max-width: 700px) {
+  .mockup-stage {
+    height: calc(100dvh - 152px);
+    min-height: 500px;
+  }
+  .live-welcome {
+    padding: 12px 0;
+  }
+  .live-welcome h2 {
+    font-size: var(--text-3xl);
+  }
+  .live-starters > button,
+  .live-choices > button {
+    padding: 12px;
+  }
+  .live-prose {
+    font-size: var(--text-sm);
+  }
+}

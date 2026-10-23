@@ -581,4 +581,12 @@ const styles = [
 const fontNotice = read("apps/web/public/fonts/archivo/OFL.txt").replace(/[ \t]+$/gm, "");
 const html = `<!doctype html><!-- Embedded Archivo font licence:\n${fontNotice}\n--><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Moss — visual chat targets</title><style>${styles}</style></head><body>${renderToStaticMarkup(<Shell />)}${templates}<script type="application/json" id="example-data">${JSON.stringify(examples)}</script><script>${read("apps/web/src/chat/openui-mockup/mockup.js")}</script></body></html>`;
 writeFileSync(resolve(here, "index.html"), html);
+const live = html
+  .replace("Moss — visual chat targets", "Moss — live visual chat")
+  .replace("</style>", `${read("apps/web/src/chat/openui-mockup/live.css")}</style>`)
+  .replace(
+    `<script>${read("apps/web/src/chat/openui-mockup/mockup.js")}</script>`,
+    `<script>${read("apps/web/src/chat/openui-mockup/live.js")}</script>`
+  );
+writeFileSync(resolve(here, "live.html"), live);
 console.log("Built standalone mockup: apps/web/src/chat/openui-mockup/index.html");
