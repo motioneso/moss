@@ -105,7 +105,10 @@ misses both HTTP completion and the stream's saved reply.
 Portable archive output also needs the readable facts. The archive query moves to
 `packages/chat/src/archive-messages.ts`; its visibility predicate is shared with the repository.
 Archive and settings export use shared `storedVisualText`. Integration tests cover rollback
-after actual inserts, archive text, thread deletion and zero private visual rows. No new store.
+after actual inserts, archive text, a privileged fixture deletion's foreign-key cascade and zero
+private visual rows. Durable threads deliberately have no runtime deletion API; the cascade test
+uses the isolated database's bootstrap fixture channel and makes no user-facing deletion claim.
+No new store.
 
 The acceptance script now uses twenty visual requests plus four prose/text-only controls,
 checks every rendered binding, records usage, program/fallback bytes and latency, and faults

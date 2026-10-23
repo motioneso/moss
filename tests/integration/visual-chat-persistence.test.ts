@@ -71,7 +71,7 @@ describe("visual reply transaction and portable history", () => {
     ).toEqual([]);
   });
 
-  it("archives readable facts, deletes them with the thread and never saves private visuals", async () => {
+  it("archives readable facts, cascades fixture deletion and never saves private visuals", async () => {
     const thread = await runner.withDataContext(owner, (db) =>
       repository.openNewThread(db, { title: "Saved visual" })
     );
@@ -97,7 +97,17 @@ describe("visual reply transaction and portable history", () => {
     expect(archived?.body).toContain("Six hours.");
     expect(archived?.body).toContain(reply.fallbackText);
     expect(archived?.body).not.toContain("root =");
-    await runner.withDataContext(owner, (db) => repository.deleteThread(db, thread.id));
+    // Durable threads have no runtime delete API. Privileged fixture removal
+    // tests the existing foreign-key cascade, not a user-facing delete path.
+    const fixtureDb = createDatabase({
+      connectionString: connectionStrings.bootstrap,
+      maxConnections: 1
+    });
+    try {
+      await fixtureDb.deleteFrom("app.chat_threads").where("id", "=", thread.id).execute();
+    } finally {
+      await fixtureDb.destroy();
+    }
     expect((await readArchive()).some((message) => message.threadId === thread.id)).toBe(false);
     const privateThread = await runner.withDataContext(owner, (db) =>
       repository.openNewThread(db, { title: "Private", incognito: true })
