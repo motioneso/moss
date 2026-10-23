@@ -63,14 +63,16 @@ async function generate(
   input: GenerateStructuredProviderInput,
   factory: ChatEngineFactory
 ): Promise<StructuredProviderResult> {
-  if (kind !== "anthropic") throw new StructuredTransportUnavailableError();
+  const agentId =
+    kind === "anthropic" ? "claude-acp" : kind === "openai-compatible" ? "codex-acp" : undefined;
+  if (!agentId) throw new StructuredTransportUnavailableError();
   if (
     input.model.provider_kind !== kind ||
     !input.actorUserId ||
     input.nativeSearch ||
     input.scope ||
     input.closeScope ||
-    (input.acpAgentId != null && input.acpAgentId !== "claude-acp") ||
+    (input.acpAgentId != null && input.acpAgentId !== agentId) ||
     input.messages.length !== 1 ||
     input.messages[0]?.role !== "user"
   )
@@ -126,7 +128,13 @@ async function generate(
   } catch (error) {
     if (signal.aborted) throw abortError();
     // Fixed server-authored code survives RPC; never inspect or forward provider diagnostics.
-    if (error instanceof Error && error.message === "Constrained Claude runtime is unsupported") {
+    if (
+      error instanceof Error &&
+      [
+        "Constrained Claude runtime is unsupported",
+        "Constrained Codex runtime is unsupported"
+      ].includes(error.message)
+    ) {
       throw new StructuredTransportUnavailableError();
     }
     throw error;

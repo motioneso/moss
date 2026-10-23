@@ -3,7 +3,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "Android ring setup: browser-approved Moss link, native Vocci code, ring selection and physical Verify. Ready step: explicit Start/restart and hold opt-in to Main. Reopen from Ring setup and delivery options. Meetings: 2h; voice: 120s.",
+    "Android ring delivery; separate Main hold opt-in. Ring storage: stopped refresh, source inspection and durable owner/source exclusions. Current requests may finish; evidence stays. No undo or ring deletion. Meetings: 2h; voice: 120s.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
@@ -13,6 +13,31 @@ export const androidDeliveryFeature = {
     }
   ],
   errors: [
+    {
+      code: "recording_identity_change",
+      class: "prerequisite",
+      remediationRef: "meetings.android_developer_setup",
+      description:
+        "Saved recording management belongs to a different origin, owner, ring or source journal. Restore the original setup; neither exclusions nor queued audio are reassigned."
+    },
+    {
+      code: "source_changed",
+      class: "validation",
+      description:
+        "The selected source or advertised file sizes changed before exclusion. Refresh Ring storage, inspect the source and confirm again. No exclusion was saved."
+    },
+    {
+      code: "exclusion_limit",
+      class: "validation",
+      description:
+        "The bounded exclusion ledger has 1024 sources. No additional exclusion was saved; existing exclusions and recordings are retained."
+    },
+    {
+      code: "ring_unavailable",
+      class: "transient",
+      description:
+        "Ring storage refresh failed. Check Nearby devices, Bluetooth, competing Vocci access and the saved ring account, then explicitly refresh again. Prior inventory stays dated; delivery remains stopped if it was stopped."
+    },
     {
       code: "configuration_or_storage_required",
       class: "prerequisite",

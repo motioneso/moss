@@ -44,7 +44,7 @@ tree = ET.parse('AndroidManifest.xml'); root = tree.getroot()
 root.set(attr('versionCode'), code); root.set(attr('versionName'), name)
 app = root.find('application')
 app.set(attr('debuggable'), 'false'); app.set(attr('usesCleartextTraffic'), 'false')
-app.set(attr('label'), 'Moss ring companion')
+app.set(attr('label'), 'Moss')
 for item in root.findall('instrumentation'): root.remove(item)
 tree.write('build/AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
 PY

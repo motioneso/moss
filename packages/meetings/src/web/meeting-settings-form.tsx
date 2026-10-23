@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { Badge, Button, Divider, Field, FormLabel, SectionHead, Select, Switch } from "@moss/ui";
+import { MEETING_TRANSCRIPT_LANGUAGES } from "@moss/shared";
 import { useMeetingSettings } from "./meeting-settings-state.js";
 import { MeetingUnlinkDialog } from "./meeting-unlink-dialog.js";
 import "./meeting-settings.css";
+
+const languageNames = new Intl.DisplayNames(["en"], { type: "language" });
+const languages = MEETING_TRANSCRIPT_LANGUAGES.map((code) => ({
+  code,
+  name: languageNames.of(code) ?? code
+})).sort((a, b) => a.name.localeCompare(b.name, "en"));
 
 export function MeetingSettingsForm() {
   const state = useMeetingSettings();
@@ -83,6 +90,33 @@ export function MeetingSettingsForm() {
               <option value="computer-audio">Microphone + system audio</option>
               <option value="microphone-only">Microphone only</option>
             </Select>
+          </Field>
+          <Field>
+            <FormLabel htmlFor="meeting-settings-transcript-language">
+              Transcript language
+            </FormLabel>
+            <Select
+              id="meeting-settings-transcript-language"
+              aria-describedby="meeting-settings-language-hint"
+              value={state.data.transcriptLanguage ?? ""}
+              disabled={state.saving}
+              onChange={(event) => void state.saveLanguage(event.target.value || null)}
+            >
+              <option value="">Automatic detection</option>
+              {languages.map(({ code, name }) => (
+                <option key={code} value={code}>
+                  {name} ({code})
+                </option>
+              ))}
+            </Select>
+            <p id="meeting-settings-language-hint" className="jds-hint">
+              Choose the spoken language for new meeting transcription requests, including imported
+              recordings. This also applies to the next part of a recording already processing. Your
+              transcription service must support the chosen language and language hints. If it
+              rejects the choice, choose a supported language or Automatic detection for subsequent
+              requests. Failed normal imports cannot be restarted; their evidence stays retained.
+              Existing transcript text and hold-to-talk stay unchanged.
+            </p>
           </Field>
           <Switch
             ariaLabel="Summarize automatically after Stop"

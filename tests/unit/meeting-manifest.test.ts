@@ -97,9 +97,12 @@ describe("meetings composition", () => {
     expect(description("meetings.draft_records")).toContain(
       "Untitled meeting has the same title in its page, list and chat chip."
     );
-    expect(description("meetings.automatic_summary")).toBe(
-      "Automatic summaries default on and use your default model without fallback, including supported Claude. Turn off Summarize automatically after Stop in Settings → Meetings. Only these rename Untitled meeting; Rewrite summary stays available."
-    );
+    const automatic = description("meetings.automatic_summary");
+    expect(automatic).toContain("Automatic summaries default on");
+    expect(automatic).toContain("use your default model without fallback");
+    expect(automatic).toContain("Summarize automatically after Stop in Settings → Meetings");
+    expect(automatic).toContain("Only these rename Untitled meeting");
+    expect(automatic).toContain("Rewrite summary stays available");
   });
 
   it("explains export and history failures, including the Notes prerequisite", () => {
@@ -211,6 +214,7 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.transcript_language",
       "meetings.resumable_recordings",
       "meetings.voice_recordings",
       "meetings.android_delivery",

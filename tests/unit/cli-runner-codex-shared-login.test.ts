@@ -5,7 +5,15 @@
  * recently for the same account becomes the shared login. A different account never replaces it.
  */
 import { generateKeyPairSync, sign, type JsonWebKeyInput, type KeyObject } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -13,11 +21,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   instanceCodexAuthPath,
   planCodexLoginSync,
+  preserveTemporaryCodexLogin,
   promoteCodexLogin,
   publishNewestCodexLogin,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
 } from "../../packages/cli-runner/src/codex-shared-login.js";
+import {
+  readRetainedCodexLogins,
+  retainCodexLogin
+} from "../../packages/cli-runner/src/codex-login-recovery.js";
 import { createCodexTokenVerifier } from "../../packages/cli-runner/src/codex-token-verify.js";
 import { preparePerUserStructuredLaunch } from "../../packages/cli-runner/src/per-user-structured.js";
 
@@ -375,5 +388,87 @@ describe("createCodexTokenVerifier", () => {
     ["an empty segment", token.replace(/\.[^.]+\./, "..")]
   ])("rejects a signed token with %s", async (_label, altered) => {
     expect(await verify(altered)).toBe(false);
+  });
+});
+
+describe("temporary Codex login recovery", () => {
+  it("recovers an auth-only retained refresh through real signature verification", async () => {
+    const homeBase = tempHome();
+    const old = login("acct-owner", "owner-token", OLD);
+    const refreshed = login("acct-owner", "refreshed-token", NEW);
+    writeInstance(homeBase, old);
+    const inaccessible: CodexHomeAccess = {
+      read: async () => old,
+      write: async () => {
+        throw new Error("owner write unavailable");
+      }
+    };
+    await preserveTemporaryCodexLogin(homeBase, inaccessible, memoryHome(refreshed));
+    const dir = join(homeBase, ".codex", "refresh-recovery");
+    const files = readdirSync(dir);
+    expect(files).toHaveLength(1);
+    expect(statSync(join(dir, files[0]!)).mode & 0o777).toBe(0o600);
+    expect(readFileSync(join(dir, files[0]!), "utf8")).toBe(refreshed);
+
+    const next = memoryHome(null);
+    await syncCodexLoginIntoHome(homeBase, next, [], async () => false);
+    expect(next.current).toBe(old);
+    expect(await readRetainedCodexLogins(homeBase)).toHaveLength(1);
+    await syncCodexLoginIntoHome(homeBase, next, [], verify);
+    expect(next.current).toBe(refreshed);
+    expect(readFileSync(instanceCodexAuthPath(homeBase), "utf8")).toBe(refreshed);
+    expect(await readRetainedCodexLogins(homeBase)).toEqual([]);
+  });
+
+  it("never promotes a retained refresh with a forged signature", async () => {
+    const homeBase = tempHome();
+    const old = login("acct-owner", "owner-token", OLD);
+    writeInstance(homeBase, old);
+    await retainCodexLogin(homeBase, login("acct-owner", "forged-token", NEW, attacker.privateKey));
+    const next = memoryHome(null);
+    await syncCodexLoginIntoHome(homeBase, next, [], verify);
+    expect(next.current).toBe(old);
+    expect(readFileSync(instanceCodexAuthPath(homeBase), "utf8")).toBe(old);
+    expect(await readRetainedCodexLogins(homeBase)).toHaveLength(1);
+  });
+
+  it("never lets retained tokens switch the administrator's shared account", async () => {
+    const homeBase = tempHome();
+    const old = login("acct-owner", "owner-token", OLD);
+    writeInstance(homeBase, old);
+    await retainCodexLogin(homeBase, login("acct-other", "other-token", NEW));
+    const next = memoryHome(null);
+    await syncCodexLoginIntoHome(homeBase, next, [], verify);
+    expect(next.current).toBe(old);
+    expect(readFileSync(instanceCodexAuthPath(homeBase), "utf8")).toBe(old);
+    expect(await readRetainedCodexLogins(homeBase)).toEqual([]);
+  });
+
+  it("lets another user's signed newer refresh supersede retained auth", async () => {
+    const homeBase = tempHome();
+    writeInstance(homeBase, login("acct-owner", "owner-token", OLD));
+    await retainCodexLogin(homeBase, login("acct-owner", "refreshed-token", NEW));
+    const newest = login("acct-owner", "newest-token", "2026-09-23T20:25:18Z");
+    const next = memoryHome(null);
+    await syncCodexLoginIntoHome(homeBase, next, [memoryHome(newest)], verify);
+    expect(next.current).toBe(newest);
+    expect(await readRetainedCodexLogins(homeBase)).toEqual([]);
+  });
+
+  it("keeps recovery while the shared login's account identity is unusable", async () => {
+    const homeBase = tempHome();
+    const old = login("acct-owner", "owner-token", OLD);
+    const refreshed = login("acct-owner", "refreshed-token", NEW);
+    const unidentified = JSON.parse(old) as { tokens: { account_id: string } };
+    unidentified.tokens.account_id = "inconsistent-account";
+    writeInstance(homeBase, JSON.stringify(unidentified));
+    await preserveTemporaryCodexLogin(homeBase, memoryHome(old), memoryHome(refreshed));
+    await syncCodexLoginIntoHome(homeBase, memoryHome(null), [], verify);
+    expect(await readRetainedCodexLogins(homeBase)).toHaveLength(1);
+    writeInstance(homeBase, old);
+    const next = memoryHome(null);
+    await syncCodexLoginIntoHome(homeBase, next, [], verify);
+    expect(next.current).toBe(refreshed);
+    expect(await readRetainedCodexLogins(homeBase)).toEqual([]);
   });
 });

@@ -99,8 +99,17 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
 // Mirrors the real PERSONAL_GROUPS/ADMIN_GROUPS section ids and labels declared in
 // apps/web/src/settings/settings-page.tsx — kept truthful to that file rather than
 // any earlier draft, per #1110 spec anti-hallucination (settings-page.tsx is the
-// source of truth for what a user can actually reach).
+// source of truth for what a user can actually reach). Native Android settings
+// identify the installed activity instead of inventing a web settings route.
 export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
+  {
+    id: "android-hardware",
+    label: "Hardware (Moss for Android)",
+    description:
+      "In the native Android app, Hardware opens Vocci ring settings: Automatic delivery retrieves completed normal recordings into Meetings with retries and restart recovery after explicit opt-in; Hold-to-talk has separate enrollment and transcript review followed by Send to Main for text replies. Saved battery, recording state, ring storage and installed firmware show when last observed, never a live connection inferred from old data. Ring storage explicitly refreshes actual saved audio sources even while delivery is stopped, with dated inventory, advertised audio/sidecar sizes and retained completion metadata where known. Inspect a recording to confirm a durable owner/ring/source exclusion from further delivery; a current request may finish first, and already sent bytes or existing Moss items cannot be recalled. Exclusion preserves phone/ring evidence, survives restart and reinventory, and has no undo in this build. The list pages at 25 sources. An optional phone reminder notifies after the same named active recording is observed for an hour without stopping it; delivery and notification permission are required, and unknown status, gaps over two minutes or service restart reset the timer. Phone audio offers completed-copy cleanup and optional seven-day cleanup; ring and Moss copies stay intact. Connection & permissions explains Nearby devices, notifications, background battery use, competing Vocci access and account recovery. A ring guide covers recording, bookmarks and offline use; light and vibration meanings remain unverified, and vibration alone is not delivery confirmation. Delivery details retains recent Meeting and voice-request links. Opening Hardware starts no delivery or hold enrollment. Individual ring deletion and firmware updating are unavailable in this build. This is a native Android surface, not a web settings route.",
+    path: "android:ai.moss.vocci/.HardwareActivity",
+    scope: "user"
+  },
   {
     id: "profile",
     label: "Account & preferences",
@@ -455,6 +464,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "android_hardware_status_unavailable",
+    class: "transient",
+    remediationRef: "android_hardware_status_recovery",
+    description:
+      "Native ring battery, storage or recording status has not been observed, or an optional response was malformed. Hardware keeps prior valid values with their observation times; audio delivery is not failed by missing telemetry."
+  },
+  {
     code: "core.ai.action_not_approved",
     class: "permission",
     remediationRef: "core.ai.ask_user",
@@ -583,6 +599,13 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "android_hardware_status_recovery",
+    description:
+      "In Moss for Android, open Hardware → Vocci ring → Connection & permissions. Allow Nearby devices, keep Bluetooth on and the ring nearby, and use Automatic delivery for status refreshes. Resolve competing official Vocci access or account recovery in Delivery details; old observations remain explicitly dated.",
+    path: "android:ai.moss.vocci/.HardwareActivity",
+    scope: "user"
+  },
   {
     id: "core.ai.ask_user",
     description: "Ask the user to approve the action before trying it again.",

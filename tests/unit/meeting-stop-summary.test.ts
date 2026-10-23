@@ -41,7 +41,8 @@ function fixture() {
     defaultCaptureMode: null,
     rememberedSource: null,
     summarizeOnStop: true,
-    summaryTemplateId: "general"
+    summaryTemplateId: "general",
+    transcriptLanguage: null
   });
   const outputs = new MeetingOutputsRepository();
   vi.spyOn(outputs, "head").mockResolvedValue(null);
@@ -132,7 +133,8 @@ describe("automatic summary finalization admission", () => {
         defaultCaptureMode: null,
         rememberedSource: null,
         summarizeOnStop: false,
-        summaryTemplateId: "general"
+        summaryTemplateId: "general",
+        transcriptLanguage: null
       });
     if (condition === "notes-only")
       vi.mocked(f.outputs.inputs).mockResolvedValue({ ...f.inputs, transcript: null });

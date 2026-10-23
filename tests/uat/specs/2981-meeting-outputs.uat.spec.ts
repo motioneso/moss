@@ -228,16 +228,16 @@ test("reviewed summary versions create independent Tasks and private vault copie
     await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
     await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
     await test.step("summary availability follows the effective default without dispatch", async () => {
-      // Install the official locked Claude native binary in this disposable stack only.
-      // This existing install seam verifies the package; no login/model invocation follows.
-      const installed = await page.request.post("/api/onboarding/provider-install", {
-        data: { providerKind: "anthropic" }
-      });
-      expect(installed.status()).toBe(200);
-      expect(await installed.json()).toMatchObject({
-        installState: "installed",
-        version: "2.1.282"
-      });
+      // Install both locked native runtimes in this disposable stack. Readiness makes
+      // no model request and needs no login; generation below uses the HTTP fixture.
+      for (const providerKind of ["anthropic", "openai-compatible"]) {
+        const installed = await page.request.post("/api/onboarding/provider-install", {
+          data: { providerKind },
+          timeout: 180_000
+        });
+        expect(installed.status()).toBe(200);
+        expect(await installed.json()).toMatchObject({ installState: "installed" });
+      }
       const { stdout } = await exec(
         "docker",
         buildUatComposeArgs(project, [
@@ -255,7 +255,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       >;
       try {
         for (const [name, availability] of [
-          ["codex", "subscription-unsupported"],
+          ["codex", "available"],
           ["claude", "available"]
         ] as const) {
           expect(
@@ -275,18 +275,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
           const refreshed = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
           expect((await refreshed.json()).generationAvailability).toBe(availability);
           const generate = page.getByRole("button", { name: "Write summary", exact: true });
-          if (name === "codex") {
-            await expect(generate).toBeDisabled();
-            await expect(summary).toContainText(
-              "Summaries on this subscription aren’t supported yet. No other model was used."
-            );
-          } else {
-            // The production-like runner isolates each owner's structured calls.
-            // Readiness makes no model request and does not require login.
-            await expect(generate).toBeEnabled();
-            await expect(summary).not.toContainText("Claude summaries aren’t available");
-            await expect(summary).not.toContainText("Your default model is unavailable");
-          }
+          await expect(generate).toBeEnabled();
+          await expect(summary).not.toContainText("Subscription summaries aren’t available");
+          await expect(summary).not.toContainText("Your default model is unavailable");
           expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
         }
       } finally {
@@ -784,7 +775,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect(await vaultEvidence(project, meetingId)).toEqual(finalFiles);
     meetingId = undefined;
     console.log(
-      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. Real Codex effective default rejected; official locked Claude default available with Generate enabled on the per-user runner before generation or login; HTTP default restored for all generated artifacts. No whole long-meeting/model-quality/audio proof."
+      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. Codex and locked Claude effective defaults available with Generate enabled on the per-user runner before generation or login; HTTP default restored for all generated artifacts. No whole long-meeting/model-quality/audio proof."
     );
   } finally {
     try {

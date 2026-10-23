@@ -134,6 +134,7 @@ public final class DeliveryActivity extends Activity {
         position = 0; used.clear();
         NativeTheme.update(place("masthead", TextView.class, () -> theme.eyebrow(), 0), "MOSS / RING COMPANION");
         text("title", "Vocci → Moss", 32, true);
+        button("hardware", "Hardware settings", () -> startActivity(new Intent(this, HardwareActivity.class)));
         TextView intro = place("intro", TextView.class, () -> theme.text(15, false), 12); intro.setTextColor(theme.text);
         NativeTheme.update(intro, "Normal recordings become meetings. Hold-to-talk goes to Main chat, with text replies.");
         section("connection", "01", "Connection");

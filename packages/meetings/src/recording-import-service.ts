@@ -22,6 +22,7 @@ import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { RecordingUploadRepository } from "./recording-upload-repository.js";
 import { RecordingUploadService } from "./recording-upload-service.js";
 import { RecordingWindowService } from "./recording-window-service.js";
+import { MeetingPreferencesRepository } from "./preferences.js";
 
 export interface RecordingImportPayload {
   actorUserId: string;
@@ -49,6 +50,7 @@ export interface RecordingImportDependencies {
     actor: AccessContext,
     input: {
       audio: Uint8Array;
+      language?: string;
       signal: AbortSignal;
       expectedModelRoute: string;
       dispatch<T>(
@@ -268,7 +270,13 @@ export class RecordingImportService {
           : validateVoiceRecordingBundle(retained);
       });
       if (bundle.fingerprint !== row.fingerprint) throw new Error("Retained recording mismatch");
+      const language = row.meeting_id
+        ? await this.deps.dataContext.withDataContext(actor, (db) =>
+            new MeetingPreferencesRepository().getTranscriptLanguage(db)
+          )
+        : null;
       const result = await this.deps.transcribe(actor, {
+        ...(language ? { language } : {}),
         audio: Buffer.from(bundle.manifest.wav.base64, "base64"),
         signal: AbortSignal.timeout(35_000),
         expectedModelRoute: selected.modelRoute,

@@ -23,6 +23,7 @@ import type { TmuxIo } from "@moss/ai";
 import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 import type { AgentHomePrepareRun } from "./agent-home-prepare-run.js";
 import { openAiCodexTokenVerifier, type CodexTokenVerifier } from "./codex-token-verify.js";
+import { readRetainedCodexLogins, retainCodexLogin } from "./codex-login-recovery.js";
 import { Mutex } from "./mutex.js";
 import { listUserUidSlots } from "./uid-allocator.js";
 
@@ -188,17 +189,61 @@ async function publishNewest(
   verify: CodexTokenVerifier
 ): Promise<string | null> {
   const instance = parseCodexLogin(instanceRaw);
-  if (!instance) return instanceRaw;
-  const newer = candidates
+  if (!instance || instance.accountId === null) return instanceRaw;
+  const retained = await readRetainedCodexLogins(homeBase);
+  const newer = [...candidates, ...retained.map((entry) => entry.raw)]
     .map(parseCodexLogin)
     .filter((candidate): candidate is ParsedCodexLogin => supersedes(candidate, instance))
     .sort((a, b) => b.issuedAt - a.issuedAt);
+  let shared = instance;
   for (const candidate of newer) {
     if (!(await verify(candidate.accessToken).catch(() => false))) continue;
     await writeInstance(homeBase, candidate.raw);
-    return candidate.raw;
+    shared = candidate;
+    break;
   }
-  return instanceRaw;
+  // Discard obsolete/account-replaced recovery only after a durable shared login exists.
+  for (const entry of retained) {
+    const candidate = parseCodexLogin(entry.raw);
+    if (
+      !candidate ||
+      candidate.accountId !== shared.accountId ||
+      candidate.raw === shared.raw ||
+      candidate.issuedAt < shared.issuedAt
+    ) {
+      await entry.remove();
+    }
+  }
+  return shared.raw;
+}
+
+/**
+ * Preserve a temporary home's refresh before deleting it. A newer same-account owner copy may
+ * remain unverified, just as planCodexLoginSync already permits; shared promotion still verifies.
+ * If owner I/O fails, retain only auth in the runner's recovery store for the next ordinary sync.
+ */
+export async function preserveTemporaryCodexLogin(
+  homeBase: string,
+  home: CodexHomeAccess,
+  temporary: CodexHomeAccess
+): Promise<void> {
+  await withLock(homeBase, async () => {
+    const candidate = parseCodexLogin(await temporary.read());
+    if (!candidate || candidate.accountId === null) return;
+    try {
+      const instance = parseCodexLogin(await readInstance(homeBase));
+      const owner = parseCodexLogin(await home.read());
+      if (instance && instance.accountId === null)
+        throw new Error("shared login identity unavailable");
+      if (instance && !supersedes(candidate, instance)) return;
+      if (owner && (owner.raw === candidate.raw || supersedes(owner, candidate))) return;
+      if (!instance && owner && owner.accountId !== candidate.accountId) return;
+      await home.write(candidate.raw);
+    } catch {
+      // Failure here must propagate: cleanup cannot discard the only recoverable login.
+      await retainCodexLogin(homeBase, candidate.raw);
+    }
+  });
 }
 
 /** Peer copies read at once. Each read is a process run as that user. */

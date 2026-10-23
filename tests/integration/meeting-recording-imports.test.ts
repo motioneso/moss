@@ -108,6 +108,28 @@ const payload = (id: string, kind: "transcribe" | "abandoned" | "purge" = "trans
   kind
 });
 describe("completed recording imports through real owner DB/vault paths", () => {
+  it("reads the owner's saved language for short normal imports and omits automatic detection", async () => {
+    const preferences = new MeetingPreferencesRepository();
+    try {
+      for (const transcriptLanguage of ["es", null]) {
+        await context.withDataContext(actor, (db) =>
+          preferences.update(db, { transcriptLanguage })
+        );
+        const { service, deps, input } = setup();
+        const accepted = await service.accept(actor, input);
+        await service.process(actor, payload(accepted.id));
+        expect(deps.transcribe).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(deps.transcribe).mock.calls[0]![1].language).toBe(
+          transcriptLanguage ?? undefined
+        );
+        expect(await service.status(actor, accepted.id)).toMatchObject({ state: "complete" });
+      }
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null })
+      );
+    }
+  });
   it("blocks actual dispatch when the accepted recording owner is deactivated", async () => {
     const bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });
     let sent = false;

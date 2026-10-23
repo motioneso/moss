@@ -145,7 +145,8 @@ function fixture() {
     },
     defaultCaptureMode: "selected-app",
     summarizeOnStop: true,
-    summaryTemplateId: "general"
+    summaryTemplateId: "general",
+    transcriptLanguage: null
   });
   vi.spyOn(connections, "lockRequest").mockResolvedValue();
   const service = new MeetingCaptureConnectionService(deps, grants, connections, preferences);
@@ -206,7 +207,8 @@ describe("shared connection explicit Start and native claim", () => {
         rememberedSource: null,
         defaultCaptureMode: "computer-audio",
         summarizeOnStop: true,
-        summaryTemplateId: "general"
+        summaryTemplateId: "general",
+        transcriptLanguage: null
       });
       f.connection.inventory_json = JSON.stringify({
         ...inventory,
@@ -241,7 +243,8 @@ describe("shared connection explicit Start and native claim", () => {
       rememberedSource: null,
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
-      summaryTemplateId: "general"
+      summaryTemplateId: "general",
+      transcriptLanguage: null
     });
     f.connection.inventory_json = JSON.stringify({
       ...inventory,
@@ -282,7 +285,8 @@ describe("shared connection explicit Start and native claim", () => {
       rememberedSource: null,
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
-      summaryTemplateId: "general"
+      summaryTemplateId: "general",
+      transcriptLanguage: null
     });
     vi.mocked(f.connections.connections).mockResolvedValue(
       Array.from({ length: 32 }, (_, index) => ({
@@ -301,7 +305,8 @@ describe("shared connection explicit Start and native claim", () => {
       rememberedSource: null,
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
-      summaryTemplateId: "general"
+      summaryTemplateId: "general",
+      transcriptLanguage: null
     });
     vi.mocked(f.connections.connections).mockResolvedValue([
       f.connection,
@@ -315,7 +320,8 @@ describe("shared connection explicit Start and native claim", () => {
       rememberedSource: null,
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
-      summaryTemplateId: "general"
+      summaryTemplateId: "general",
+      transcriptLanguage: null
     });
     vi.mocked(f.deps.processingAvailability).mockImplementation(async () => {
       vi.mocked(f.connections.connections).mockResolvedValue([
@@ -474,7 +480,8 @@ describe("shared connection explicit Start and native claim", () => {
       rememberedSource: { deviceId: meetingId, microphoneId: "other-mic", mode: "microphone-only" },
       defaultCaptureMode: "microphone-only",
       summarizeOnStop: true,
-      summaryTemplateId: "general"
+      summaryTemplateId: "general",
+      transcriptLanguage: null
     });
     expect(await f.service.start(f.browser, meetingId, f.start)).toEqual(first);
     expect(f.connections.create).toHaveBeenCalledOnce();

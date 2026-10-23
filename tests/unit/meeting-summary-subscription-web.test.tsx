@@ -169,7 +169,7 @@ describe("meeting summary subscription availability", () => {
     ],
     [
       "subscription-isolation-unavailable",
-      "Claude summaries aren’t available on this server setup. No other model was used."
+      "Subscription summaries aren’t available on this server setup. No other model was used."
     ]
   ] as const)(
     "disables Generate with the specific subscription reason: %s",

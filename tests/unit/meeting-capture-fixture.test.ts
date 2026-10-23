@@ -35,6 +35,7 @@ describe("disclosed synthetic capture ASR fixture", () => {
     });
     expect(result.observation).toEqual({
       model: CAPTURE_FIXTURE_MODEL,
+      language: null,
       audioBytes: 6444,
       durationMs: 200,
       sampleRateHz: 16000,

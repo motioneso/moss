@@ -14,6 +14,7 @@ import {
 } from "@moss/meetings";
 import { VaultContextRunner } from "@moss/vault";
 import { recordingBundle, recordingFile } from "../fixtures/recording-bundle.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const previousVaultRoot = process.env.MOSS_VAULT_ROOT;
@@ -110,6 +111,7 @@ function setup(options: { fresh?: boolean; text?: string; failAdmission?: boolea
     source,
     snapshot,
     summary,
+    deps,
     attemptedId: () => attemptedId,
     async enable(recordingIds: string[] = []) {
       const enabled = await service.enableVoice(actor, { ...snapshot, recordingIds });
@@ -168,7 +170,20 @@ describe("explicit versioned voice recording receiver", () => {
       voice = await f.enable();
     const accepted = await f.service.acceptVoice(actor, voice);
     expect(accepted).toMatchObject({ state: "queued", voiceRequestId: null });
-    await f.process(accepted.id);
+    const transcribe = vi.spyOn(f.deps, "transcribe");
+    const preferences = new MeetingPreferencesRepository();
+    await context.withDataContext(actor, (db) =>
+      preferences.update(db, { transcriptLanguage: "es" })
+    );
+    try {
+      await f.process(accepted.id);
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(transcribe.mock.calls[0]![1]).not.toHaveProperty("language");
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null })
+      );
+    }
     const status = await f.service.voiceStatus(actor, accepted.id);
     expect(status).toMatchObject({ state: "complete", voiceRequestId: expect.any(String) });
     expect(await f.chat.status(actor, status!.voiceRequestId!)).toMatchObject({
