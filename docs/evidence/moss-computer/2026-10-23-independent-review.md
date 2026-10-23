@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** startup-readiness-r10 passed positive backend probes but rejected restored access on an explicit RFB security-failure response; UI/input and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
+- **Current status:** r11 accepted bounded startup/protected viewer/fresh input. The single r12 prerequisite attempt was rejected at current UI/RFB connection and independently closed; sandbox/flush/replacement remain unqualified. Internal owner-control policy at `d9159bab7` passed exact independent review and scoped verification; no app/browser integration acceptance or screen approval follows. Historical rulings remain below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -499,3 +499,64 @@ remain unqualified. #3578/#3577 remain open; no rerun, merge or product expansio
 | [r11 report](2026-10-23-startup-readiness-r11.md)                                                 | `e469a8160d5d4fb5f354876462e7ffb0bab7a09ae39373375621a67920504317` |
 | [r11 JSON](2026-10-23-startup-readiness-r11.json)                                                 | `71fbe6c59dcf4571169011ba6f238492b36bcf3bc3d863995717c16b1a954e0e` |
 | [Spec with sections21–22](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `35169fa4a1deaed1e357330428b3f2af1631319b0bc122a77ab22a986321c115` |
+
+## Implementation dispatch: r12 launch, rejection and closure
+
+Independent read-only reviewer `/root/implementation_review` accepted exact committed packet
+`6006873f4` and all 62 actual artifacts, manifest
+`ec8ffb245003175a3e83727872e4a807e89cf92a428e81dd367b3094cc057e43`.
+**PASS_READY** remained conditional on fresh admission and an alive healthy first watchdog sample.
+This accepted one attempt, not runtime suitability or a retry. The prelaunch fixture invocation
+initially named an absent startup file; the actual persistence call site was corrected and checked
+before launch. No runtime assertion retry occurred.
+
+The single r12 run passed fresh admission, complete RFB readiness and access drivers 0/1/1/0,
+then timed out at the current UI/RFB connected predicate. Frame/input/Firefox sandbox/clean flush/
+replacement were NOT_RUN. Runner 1 correctly rejected incomplete proof. Cause remains UNKNOWN;
+the `/package.json` 404 also occurred in passing r11 and does not establish causation.
+
+**PASS_CLOSURE**, 2026-10-23 22:02:25.273172 UTC, independently verified exact containers/network,
+listener/reservation, script processes/watchdog, six recorded browser PID/start identities and
+ephemeral keys absent; pristine gateway restored; retained homes/archive and healthy Moss/health.
+An operator process check found the failed harness already absent, so no signal was sent. The
+receipt wording was corrected to remove a speculative hang diagnosis. Watchdog/cleanup/port release
+were 0; 14 short samples grant no sustained-fit claim. No second attempt followed.
+
+## Owner-control plan and code: exact final acceptance
+
+The same independent reviewer did not author fixes. **PASS_PLAN** accepted `b0d69d5ea` for
+internal policy work while the UI/runtime gates remain blocked. The plan's agent authority was
+explicitly bound to the session returning control, with fresh liveness checks on every dispatch;
+viewer disconnect alone preserves authorized active work, session revocation/expiry does not.
+**PASS_CODE_REVIEW** accepted `a038dbf5b` within that local boundary scope.
+
+The subsequent root TypeScript check exposed an unexported auth type and widened frozen capability
+brands. Publicly exporting the existing `BrowserSessionBinding` type and supplying explicit
+`Object.freeze` generics corrected those errors without changing runtime behavior. Root tsc,
+17 unit tests, scoped lint and file-size checks then exited 0. Removing the generation comparison
+had produced an observed old-lease failure; restoring it returned all 17 tests to green.
+
+Final verdict: **PASS_EXACT_FINAL for `d9159bab7`; no blocking findings.** The reviewer compared
+all public r12 receipt fields against sanitized raw sources, all 39 raw receipt hashes and all
+27 surviving source hashes, deleted identities and diagnostic summaries. Final code/test/auth and
+plan/spec/report bytes matched that commit. Four exit receipts were 0; 60 mockup assertions and
+successful Taildrop receipt were checked. Phone delivery is not design approval.
+
+| Exact accepted artifact                                                                 | SHA-256                                                            |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [r12 report](2026-10-23-persistence-r12.md)                                             | `ba05bdba832a17d61177ae97b2a50d1a4f301ee9185fe17aff01e5a8c338e602` |
+| [r12 JSON](2026-10-23-persistence-r12.json)                                             | `43ef0b5ea948cb64dbaef744a62143b4b34eea980ee0e6af9f63c0091912a012` |
+| [Foundation evidence](2026-10-23-owner-control-foundation.md)                           | `441a0e3a4e5d884cbebb11c48ad4eda4968768f39ed43f30ef0d6217ac142195` |
+| [Owner-control plan](../../superpowers/plans/2026-10-23-moss-computer-owner-control.md) | `e74e487dbc4635a657603f1d0e7ea112945f9a6fe41c024a85aa4a0dfb93645f` |
+| Spec with section 23                                                                    | `3b21d5b09a36fb00bd7157801973851102e6aa53917601061ad320948a703b53` |
+| Input-control implementation                                                            | `6d3ce7f2f6441c9e397c8d4520c99996152f51f9beca8f836a43cc7355316641` |
+| Boundary tests                                                                          | `4d790afb49de806c1d873040fe6d361a9c20e587f788b081bbc89a8183c2f847` |
+| Auth public export                                                                      | `2d66ea3165b4551e3d0209da541d47c558d96f3249a3b64a963c8b79082e8dee` |
+
+Acceptance covers internal policy, accurate r12 rejection and closure only. The boundary cannot
+retract already-sent bytes; the future receiving gateway must be the sole writer and fence/drain
+queued input with key/button release. No raw noVNC passthrough or owner transport security is
+qualified. Persistence, actual owner HTTPS/WSS and active revocation, app/browser UI, trusted
+lifecycle/idle sleep/wake, installed storage, confined egress and release/platform proof remain
+open. Draft #3598 is unmerged; #3605/#3577/#3578 remain open. No runtime retry, automatic merge,
+deployment or issue closure follows this review.
