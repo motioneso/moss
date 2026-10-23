@@ -23,7 +23,7 @@ Exact-manifest image configuration inspection returned amd64/Linux, entrypoint `
 - Independent reviewer: existing `/root/independent_review`; it must not author these documents or the candidate.
 - Later manual operator/finish operator: Ben, proposed; confirm availability before that session.
 - Owned repository paths: this plan, the companion spec, `docs/evidence/moss-computer/2026-10-23-isolated-qualification.md`, and its independent review record.
-- Use one isolated worktree and branch. No shared source, Compose, auth, shell, app-map, packaging, database or Sports changes.
+- Use one isolated worktree and branch. No shared product auth, shell, app-map, deployment, database or Sports changes in the first checkpoint; isolated candidate files are owned under `spikes/moss-computer/`.
 - Runtime objects, if entry gates pass, must use a unique `moss-computer-qualification` prefix plus run ID and explicit ownership labels. Allocate any host listener using `devports`; no unreserved port and no listener reachable from LAN/tailnet.
 
 ## Step 1: preserve the approved decision
@@ -107,3 +107,23 @@ After a separately scoped and reviewed owner gateway/lifecycle build, prove the 
 - Missing private viewing or enforced egress is a stop, not authority for a new proxy/tooling project.
 - Independent document review round 1 required an explicit prohibition on weakening container/browser sandboxes. That prohibition is now explicit; incompatibility blocks launch. The report's proposed next assignment also names egress combined with viewing.
 - The final evidence report retains every failure and `NOT_RUN` case and names one next assignment only.
+
+## Implementation amendment: established offline stack
+
+Full autonomous implementation authority supersedes the original missing-transport/storage approval blocker. Preserve the initial blocked receipt as historical evidence. Current next step is independent design review, then one isolated candidate implementation and qualification; do not present the earlier blocked outcome as a current permission requirement.
+
+Candidate ownership: Codex `/root` owns `spikes/moss-computer/Dockerfile`, `entrypoint.sh`, `compose.yaml`, `gateway.conf.template`, and `README.md`, plus these evidence documents. No new Moss module/UI surface is shipped by this internal spike, so no app-map Computer capability is declared.
+
+- Base: Debian bookworm-slim amd64 manifest `sha256:ec31d744f83f4a73447ba045aaab9409997efe5cc706eca4890c1be36cc1606a`; build identity/package inventory must be captured after build. Apt repositories are mutable; a local image ID is the exact candidate, not a reproducible-build claim.
+- Packages: standard Xfce desktop, TigerVNC, noVNC/websockify, Firefox ESR, terminal, D-Bus and init. No AI provider dependency. Run UID/GID 1000, no sudo, all capabilities dropped, no-new-privileges, Docker default seccomp/AppArmor retained.
+- Transport: websockify Unix listener through a socket-only bind directory; separate unprivileged Nginx gateway container on a loopback `devports` reservation, HTTPS/WSS with an ephemeral proof CA/client certificate. No TCP guest/control publishing. Reject missing/foreign certificates and foreign WebSocket origins. Guest has no network, gateway configuration, keys, host socket or production volume. The gateway mounts only the socket directory read-only; symlinks resolve inside the gateway container, where no host sockets are present. Serve packaged noVNC assets directly from the gateway read-only image; guest only serves the fixed WS backend.
+- Storage: one dedicated persistent home including explicit Firefox profile and `Files/`; monitored 10 GiB stop threshold. Read-only root, tmpfs `/tmp` and `/run`, bounded shared memory and Docker log size. Do not call this a quota.
+- Finish: active operator `/root`, maximum 60 minutes after launch; separate supervisor checks monotonic deadline, host resources and heartbeat at five-second intervals, stops on measurement failure, and stops on parent loss. Retain synthetic data at closure, remove labelled containers, stop gateway, release listener, remove ephemeral certificate material.
+
+Before launch, compile/inspect exact image contents and independently review configuration. Stop on browser sandbox incompatibility; do not add disabling flags, privileged mode or unconfined profiles. Failures in two equivalent attempts trigger a candidate/scope decision.
+
+Qualification cases: real noVNC canvas/framebuffer plus keyboard input into terminal/browser; create a synthetic file through terminal input; create an actual browser bookmark/profile preference; close browser cleanly and record file/profile hashes and DB marker; remove container, preserve directory, recreate from exact image ID with a different container ID, reopen browser and verify markers; viewer disconnect/reconnect while desktop persists; guest stop/restart and browser reconnect; unauthenticated/foreign-client HTTP and WS denial, exact-origin WS denial, negative control with origin gate removed; desktop service/user and browser sandbox evidence; idle/interaction/replacement resources and final Moss health. All input is automated unless Ben actually attends. Internet browsing, Moss session isolation and MacBook manual acceptance remain NOT_RUN.
+
+Meaningful verification: `bash -n spikes/moss-computer/entrypoint.sh` (exit 0), resolved `docker compose config` (exit 0), scoped Prettier/whitespace checks, independent exact-candidate review and executable live assertions. This internal image spike has no database or TS changes; no broad database gate is required merely to validate it. Future product integration keeps its own foundation/live-UI gates.
+
+Kill decision owner `/root`: if the maintained components cannot provide a sandboxed browser under the selected default host security, record the failure and revise/split before any further launch. No relay of unchanged retries.

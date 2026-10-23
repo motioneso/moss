@@ -1,10 +1,10 @@
 # Moss Computer: one persistent owner desktop
 
 - **Date:** 2026-10-23 UTC
-- **Status:** MC0 design approved in conversation; first isolated qualification authorised, subject to entry gates. Runtime acceptance is outstanding.
+- **Status:** Autonomous implementation authorised; isolated qualification is the first bounded checkpoint. Runtime acceptance is outstanding.
 - **Parent:** #3577. First qualification: #3578.
 - **Plan:** [Isolated qualification](../plans/2026-10-23-moss-computer-isolated-qualification.md).
-- **Authority:** Ben's supplied “Moss next steps after Stage 4, focused planning update 1”, MC0 request, device clarification, acceptance of the supplied v7 material without separate pack verification, and instruction to write the spec/plan and proceed overnight.
+- **Authority:** Ben's supplied “Moss next steps after Stage 4, focused planning update 1”, MC0 request, device clarification, acceptance of the supplied v7 material without separate pack verification, instruction to write the spec/plan and proceed overnight, and subsequent explicit full authority to plan and implement autonomously, provider-agnostic and following repository guidelines.
 
 ## 1. Problem and outcome
 
@@ -36,7 +36,7 @@ Trusted host lifecycle interface
 
 This diagram is the proposed integration, not an observed running path.
 
-Use a separate Linux desktop image and dedicated storage. Do not reuse Moss vault, CLI-auth, model-cache or Sports volumes. LinuxServer webtop Ubuntu/Xfce is the first qualification candidate. Cua Xfce remains an alternative only if this candidate fails a material requirement; no automatic candidate switching is authorised.
+Use a separate Linux desktop image and dedicated storage. Do not reuse Moss vault, CLI-auth, model-cache or Sports volumes. LinuxServer webtop Ubuntu/Xfce was the first candidate. Its pinned Chromium launcher adds `--no-sandbox` under default Docker seccomp, so the unmodified candidate is rejected. The authorised research/implementation checkpoint below evaluates established alternatives; no vendor runtime claim is inherited.
 
 The integrated gateway must check the Computer owner on creation, status, view, input, reconnect and download requests, including WebSocket upgrades and active-session revocation. Administrator status alone grants no private-data access. Ticket ownership, expiry and replay semantics require their own reviewed contract.
 
@@ -58,7 +58,7 @@ Ben's overnight instruction authorises continued bounded preparation and safe is
 
 No qualified Computer gateway/lifecycle candidate has been identified. Prepare and independently review that implementation as separate bounded work before its live proof. The integrated proof must cover owner, foreign-owner and unauthenticated requests through the actual HTTPS/WSS path, session expiry/logout/revocation, download confinement, replacement persistence, failure isolation and disable/re-enable. Test endpoints independently of navigation visibility.
 
-Neither the first qualification nor this spec authorises the gateway build, production deployment, installer work or next proof automatically.
+Ben subsequently authorised autonomous implementation, including the missing gateway/storage interfaces. Each bounded candidate still needs independent review and applicable live proof; isolated acceptance does not establish production deployment or release/platform readiness.
 
 ## 5. Evidence and system fit
 
@@ -103,7 +103,7 @@ Current named product owners were not established. The qualification operator ow
 
 The first qualification needs actual desktop/browser/terminal input, a file hash and actual browser-profile marker surviving remove/recreate with different container IDs, reconnect/failure evidence, measured resources and disable preserving data. Record automated and manual cases separately.
 
-Before launch, independently review exact image/configuration, private viewing, egress, memory/storage safety and final controls. If any entry gate fails, return `BLOCKED_BEFORE_LAUNCH`, retain evidence and stop. Do not invent a gateway, change host firewall/account settings, select another host or start reusable tooling to get around the blocker.
+Before launch, independently review exact image/configuration, private viewing, egress, memory/storage safety and final controls. If any entry gate fails, return `BLOCKED_BEFORE_LAUNCH`, retain evidence and stop. Make a bounded design decision before implementing a missing interface. Do not change host firewall/account settings, select another host or start reusable tooling to get around a blocker.
 
 At runtime closure, stop only the labelled proof desktop, confirm no proof process/listener remains, confirm Moss health and preserve proof data. Data deletion, image pruning, production changes and a later proof need separate scope. Full overnight waiting is not a completion criterion.
 
@@ -114,3 +114,13 @@ At runtime closure, stop only the labelled proof desktop, confirm no proof proce
 - Ben accepted the supplied v7 material without further verification.
 - Ben requested these durable documents followed by bounded overnight progress; this supersedes the earlier planning-only limit only for documentation and the first isolated qualification.
 - Exact-document independent review and the qualification outcome are recorded in the companion evidence report. A readiness failure cannot be represented as runtime acceptance.
+
+## 10. Authorised implementation amendment
+
+Ben explicitly gave full authority to plan and implement autonomously and invited research/reuse. That supersedes the earlier missing-interface permission stop, not the repository review/security/live-proof gates. The first implementation may change the isolated candidate after documented comparison. Agent/model providers play no role in this manual desktop checkpoint.
+
+Preferred fallback for independent review: distro-packaged Xfce, TigerVNC, noVNC/websockify and Firefox ESR on a pinned Debian amd64 base. Reuse their viewer/protocol/browser implementations. Do not build a remote desktop protocol or custom Docker-exec byte tunnel. Websockify's documented Unix listener allows an offline guest (`network=none`) to be reached through one socket-only mount by a isolated trusted Nginx TLS gateway. Gateway material remains outside guest storage. A synthetic client certificate tests isolated viewer access; this is not Moss owner authentication.
+
+This offline qualification exercises browser/profile mechanics with local synthetic content. It cannot qualify useful Internet browsing. Product integration must add reviewed outbound HTTP(S)/DNS handling that excludes host/LAN/metadata/Moss services; no silent unrestricted bridge fallback. Guest-controlled pages and downloads stay outside the Moss origin.
+
+The proof home/files directory uses a monitored 10 GiB threshold, not a quota; the read-only image root and size-limited tmpfs contain other writes. An independent monotonic supervisor stops the labelled guest on timeout, missing heartbeat, measurement error, low headroom or threshold exceedance. The active operator closes gateway/listener and records retained data. No unattended persistence claim follows. A strict hard-quota requirement would be a separate storage/platform dependency.
