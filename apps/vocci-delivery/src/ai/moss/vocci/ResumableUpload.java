@@ -49,6 +49,7 @@ final class ResumableUpload {
             if (expected.getLong("byteLength") != actual.getLong("byteLength") || !expected.getString("sha256").equals(actual.getString("sha256")))
                 throw new DeliveryStore.Conflict("retained_source_changed");
         }
+        store.checkDelivery(id);
         JSONObject previous = entry.optJSONObject("uploadProgress");
         JSONObject progress = previous == null ? client.reserveUpload(PrivateFiles.read(store.file(id, "upload.json"), 4096)) : client.uploadProgress(previous.getString("id"));
         store.uploadProgress(id, progress);
@@ -70,14 +71,17 @@ final class ResumableUpload {
                     for (int index = 0; index < count; index++) {
                         if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
                         if (present[index]) continue;
+                        store.checkDelivery(id);
                         int size = (int) Math.min(CHUNK_BYTES, length - (long) index * CHUNK_BYTES);
                         byte[] bytes = new byte[size]; file.seek((long) index * CHUNK_BYTES); file.readFully(bytes);
                         store.uploadProgress(id, client.putChunk(uploadId, KINDS[k], index, bytes));
                     }
                 }
             }
+            store.checkDelivery(id);
             store.uploadProgress(id, client.finalizeUpload(uploadId));
         }
+        store.checkDelivery(id);
         return voice ? client.pollVoice(uploadId) : client.poll(uploadId);
     }
 }

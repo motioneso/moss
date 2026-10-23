@@ -10,6 +10,21 @@ import org.json.JSONObject;
 
 /** One service worker owns all writes. Atomic files are recovery boundaries. */
 final class DeliveryStore {
+    static final class Excluded extends Exception {}
+    interface Boundary { void run() throws Exception; }
+    RingRecordings recordings;
+    Boundary boundary;
+    boolean excluded(String id) { return recordings != null && recordings.excluded(id); }
+    void checkDelivery(String id) throws Exception {
+        if (boundary != null) boundary.run();
+        if (excluded(id)) throw new Excluded();
+    }
+    boolean deliveryDue(String id) throws Exception {
+        JSONObject entry = entries.getJSONObject(id);
+        String stage = entry.getString("stage");
+        return !excluded(id) && !stage.equals("discovered") && !completed(stage) && !stage.equals("failed") && !stage.equals("interrupted") &&
+            RetryPolicy.due(entry.optInt("attempts"), entry.optLong("nextAt"), System.currentTimeMillis());
+    }
     static final class Conflict extends Exception {
         Conflict(String code) { super(code); }
     }
@@ -68,14 +83,16 @@ final class DeliveryStore {
         for (String id : ids()) if (!entries.optJSONObject(id).optBoolean("cleared")) retained++;
         return retained < 100 && entries.length() < 1024 && hasStorageCapacity();
     }
-    boolean needsRetrieval(String id) throws Exception { return !contains(id) || entries.getJSONObject(id).getString("stage").equals("discovered"); }
+    boolean needsRetrieval(String id) throws Exception { return !excluded(id) && (!contains(id) || entries.getJSONObject(id).getString("stage").equals("discovered")); }
     boolean retrievalDue(String id) throws Exception {
+        if (excluded(id)) return false;
         if (!contains(id)) return true;
         JSONObject entry = entries.getJSONObject(id);
         return needsRetrieval(id) && RetryPolicy.due(entry.optInt("attempts"), entry.optLong("nextAt"), System.currentTimeMillis());
     }
     void discover(String id) throws Exception { discover(id, null); }
     void discover(String id, JSONObject voiceIntent) throws Exception {
+        if (excluded(id)) throw new Excluded();
         if (contains(id)) return;
         if (!canDiscover()) throw new IllegalStateException("storage_capacity");
         JSONObject entry = new JSONObject().put("stage", "discovered").put("attempts", 0).put("nextAt", 0);

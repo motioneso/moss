@@ -28,6 +28,9 @@ public final class HardwareActivity extends Activity {
     private Boolean deliveryChoice;
     private long deliveryChoiceAt;
     private Integer restoreY;
+    private String selectedId = "", pendingRecordingRequest = "";
+    private long pendingRecordingAt;
+    private int recordingPage;
     private final Runnable refresh = new Runnable() {
         @Override public void run() { render(); handler.postDelayed(this, 3000); }
     };
@@ -50,15 +53,21 @@ public final class HardwareActivity extends Activity {
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(theme.dp(24), theme.dp(12), theme.dp(24), theme.dp(32)); scroll.addView(body);
         setContentView(scroll); scroll.requestApplyInsets();
-        if (saved != null) { page = saved.getString("page", "hardware"); restoreY = saved.getInt("scrollY"); }
+        if (saved != null) {
+            page = saved.getString("page", "hardware"); restoreY = saved.getInt("scrollY");
+            selectedId = saved.getString("selectedId", ""); recordingPage = saved.getInt("recordingPage");
+            pendingRecordingRequest = saved.getString("recordingRequest", ""); pendingRecordingAt = saved.getLong("recordingAt");
+        }
     }
     @Override public void onResume() { super.onResume(); if (body != null) handler.post(refresh); }
     @Override public void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
     @Override public void onSaveInstanceState(Bundle saved) {
         saved.putString("page", page); if (scroll != null) saved.putInt("scrollY", scroll.getScrollY()); super.onSaveInstanceState(saved);
+        saved.putString("selectedId", selectedId); saved.putInt("recordingPage", recordingPage);
+        saved.putString("recordingRequest", pendingRecordingRequest); saved.putLong("recordingAt", pendingRecordingAt);
     }
     @Override public void onBackPressed() {
-        if (page.equals("hardware")) super.onBackPressed(); else show(page.equals("ring") ? "hardware" : "ring");
+        if (page.equals("hardware")) super.onBackPressed(); else show(page.equals("recording") ? "storage" : page.equals("ring") ? "hardware" : "ring");
     }
     private void show(String next) { page = next; render(); scroll.scrollTo(0, 0); }
     private <T extends View> T place(String key, Class<T> type, Supplier<T> factory, int gap) {
@@ -127,6 +136,76 @@ public final class HardwareActivity extends Activity {
         return field(snapshot, "recording", HardwareStatus.recordingLabel(state == null ? "" : state.optString("state")));
     }
     private static String bytes(long size) { return String.format(Locale.getDefault(), "%.1f MiB", size / 1048576.0); }
+    private void recordingCommand(Intent intent) {
+        if (!new SecretStore(this).exists()) { Toast.makeText(this, "Recover your saved setup first.", Toast.LENGTH_LONG).show(); return; }
+        if ("inspect-ring".equals(intent.getAction()) && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 1); return;
+        }
+        String request = UUID.randomUUID().toString(); intent.putExtra("requestId", request);
+        try {
+            if (startForegroundService(intent) == null) throw new IllegalStateException();
+            pendingRecordingRequest = request; pendingRecordingAt = System.currentTimeMillis();
+        } catch (IllegalStateException | SecurityException unavailable) {
+            Toast.makeText(this, "Change not confirmed. Review Android background permissions and retry.", Toast.LENGTH_LONG).show();
+        }
+        render();
+    }
+    private boolean recordingReceipt(JSONObject snapshot) {
+        if (pendingRecordingRequest.isEmpty()) return false;
+        JSONObject receipt = snapshot.optJSONObject("command");
+        if (receipt != null && pendingRecordingRequest.equals(receipt.optString("id"))) {
+            String result = receipt.optString("result");
+            text("command-result", result.equals("excluded") ? "Exclusion saved. Further delivery for this source is blocked." :
+                result.equals("refreshed") ? "Saved recordings refreshed." : result.equals("handoff_required") ? "Refresh blocked. Remove Vocci’s Nearby devices access in Connection & permissions, then retry." :
+                result.equals("source_changed") ? "Source changed. Refresh and select the recording again; exclusion was not saved." :
+                result.equals("exclusion_limit") ? "Exclusion storage is full. No exclusion was saved." : "Request failed. Keep the ring nearby, check Connection & permissions and retry.", 13, false);
+            return false;
+        }
+        boolean pending = System.currentTimeMillis() - pendingRecordingAt < 30000;
+        text("command-result", pending ? "Request pending. A current transfer may finish first; exclusion is not saved until confirmed here." :
+            "Request not confirmed. Refresh or retry; no saved exclusion is being claimed.", 13, false);
+        return pending;
+    }
+    private void recordings(JSONObject snapshot) {
+        JSONObject sources = snapshot.optJSONObject("sources");
+        if (sources == null) { text("inventory-unknown", "Saved recordings have not been checked. Refresh to inspect the ring without starting delivery.", 15, false); return; }
+        text("inventory-time", observed(snapshot.optLong("inventoryAt")) + " · saved observation, may be stale", 13, false);
+        List<String> ids = new ArrayList<>(); sources.keys().forEachRemaining(ids::add); Collections.sort(ids);
+        if (ids.isEmpty()) { text("empty", "No supported audio sources in the last ring inventory.", 15, false); return; }
+        int pages = (ids.size() + 24) / 25; recordingPage = Math.max(0, Math.min(recordingPage, pages - 1));
+        text("list-page", "Saved recordings · page " + (recordingPage + 1) + " of " + pages, 15, false);
+        for (int n = recordingPage * 25; n < Math.min(ids.size(), (recordingPage + 1) * 25); n++) {
+            String id = ids.get(n);
+            boolean excluded = snapshot.optJSONObject("exclusions") != null && snapshot.optJSONObject("exclusions").has(id);
+            row("source-" + id, id, excluded ? "Excluded from further delivery" : (id.startsWith("amsg_") ? "Hold audio source" : "Normal audio source") + " · inspect", () -> { selectedId = id; show("recording"); });
+        }
+        if (recordingPage > 0) button("previous", "Previous recordings", () -> { recordingPage--; render(); scroll.scrollTo(0, 0); });
+        if (recordingPage + 1 < pages) button("next", "More recordings", () -> { recordingPage++; render(); scroll.scrollTo(0, 0); });
+    }
+    private void inspectRecording(JSONObject snapshot, JSONObject delivery, boolean pending) {
+        text("title", "Recording on ring", 30, true); text("source", selectedId, 20, true);
+        JSONObject sources = snapshot.optJSONObject("sources"), item = sources == null ? null : sources.optJSONObject(selectedId);
+        if (item == null) { text("missing", "This source is absent from the latest saved inventory. Refresh Ring storage before selecting it again.", 15, false); return; }
+        text("observation", observed(snapshot.optLong("inventoryAt")) + " · ring presence may be stale", 13, false);
+        text("size", "Advertised audio: " + item.optInt("audioBytes") + " bytes\n" + (item.isNull("sidecarBytes") ? "No matching sidecar listed" : "Advertised metadata: " + item.optInt("sidecarBytes") + " bytes"), 15, false);
+        text("metadata", RecordingDetails.metadata(new File(getNoBackupFilesDir(), "delivery"), selectedId), 15, false);
+        JSONObject entries = delivery.optJSONObject("entries"), entry = entries == null ? null : entries.optJSONObject(selectedId);
+        text("delivery", RecordingDetails.delivery(entry), 15, false);
+        text("destination", entry != null && entry.has("voiceIntent") ? "Destination stays Main chat · transcript review and Send remain required." : "Normal delivery creates a Meeting. Hold destinations depend on saved enrollment; exclusion never changes consent.", 13, false);
+        boolean excluded = snapshot.optJSONObject("exclusions") != null && snapshot.optJSONObject("exclusions").has(selectedId);
+        if (excluded) text("excluded", "Excluded from further delivery. Ring recordings, phone evidence and any existing Moss item are kept.", 15, false);
+        else {
+            button("exclude", "Exclude from delivery", () -> {
+                final String id = selectedId, scope = snapshot.optString("scope"), selection = RingRecordings.selection(snapshot, id);
+                new android.app.AlertDialog.Builder(this).setTitle("Exclude this recording?")
+                    .setMessage(id + "\n\nSave an exclusion for this ring and account. Ring files and phone evidence stay. A current transfer may finish before this is saved. Bytes already sent, existing Meetings and Main chat items cannot be recalled. This build has no undo.")
+                    .setNegativeButton("Keep delivery", null).setPositiveButton("Exclude recording", (dialog, which) -> recordingCommand(new Intent(this, DeliveryService.class).setAction("exclude-recording")
+                        .putExtra("scope", scope).putExtra("recordingId", id).putExtra("selection", selection))).show();
+            });
+            views.get(page + "/exclude").setEnabled(!pending);
+        }
+        text("delete", "Deleting recordings from this ring is not available in this build. Your recordings stay on the ring.", 13, false);
+    }
     private void render() {
         position = 0; used.clear();
         DeliveryPreferences choices = new DeliveryPreferences(this);
@@ -135,7 +214,8 @@ public final class HardwareActivity extends Activity {
         try { config = new SecretStore(this).load(); } catch (Exception unavailable) { /* Show setup/recovery, keep existing data. */ }
         final JSONObject snapshot = config == null ? new JSONObject() : HardwareStatus.read(this, config);
         final JSONObject state = delivery(), voice = state.optJSONObject("voice");
-        if (!page.equals("hardware")) button("back", "‹ " + (page.equals("ring") ? "Hardware" : "Vocci ring"), this::onBackPressed);
+        final JSONObject recordings = config == null ? new JSONObject() : RingRecordings.read(this, config, state.optString("sourceDeviceId"));
+        if (!page.equals("hardware")) button("back", "‹ " + (page.equals("recording") ? "Ring storage" : page.equals("ring") ? "Hardware" : "Vocci ring"), this::onBackPressed);
         NativeTheme.update(place("eyebrow", TextView.class, () -> theme.eyebrow(), 12), "MOSS / SETTINGS / HARDWARE");
         switch (page) {
             case "hardware":
@@ -186,7 +266,15 @@ public final class HardwareActivity extends Activity {
                 }
                 if (snapshot.has("recordings")) text("count", snapshot.optInt("recordings") + " supported audio files on ring · " + observed(snapshot.optLong("inventoryAt")), 15, false);
                 text("keep", "Delivery keeps recordings on your ring. Phone audio cleanup affects only copies on this phone.", 15, false);
-                text("management", "Individual recording management is not available in this build.", 13, false);
+                boolean pending = recordingReceipt(recordings);
+                button("refresh", "Refresh saved recordings", () -> recordingCommand(new Intent(this, DeliveryService.class).setAction("inspect-ring")));
+                views.get(page + "/refresh").setEnabled(!pending);
+                recordings(recordings);
+                text("management", "Inspect a source to exclude further delivery. Ring deletion is unavailable in this build.", 13, false);
+                break;
+            case "recording":
+                boolean exclusionPending = recordingReceipt(recordings);
+                inspectRecording(recordings, state, exclusionPending);
                 break;
             case "phone":
                 text("title", "Phone audio", 30, true);

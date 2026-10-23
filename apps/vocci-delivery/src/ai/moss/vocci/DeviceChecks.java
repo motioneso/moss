@@ -209,6 +209,8 @@ public final class DeviceChecks extends Instrumentation {
             catch (IllegalArgumentException expected) { rejected = true; }
             check(rejected);
             VoiceDeliveryChecks.run(isolated, packets);
+            RecordingChecks.run(isolated, packets);
+            result.putString("recordingManagement", "scope_fields,stale_selection,exclusion_restart,reinventory,admission_race,chunk_boundary,queued_resume,retained_evidence,unknown_metadata,bounds,stopped_choices");
             RetentionChecks.run(isolated);
             RecoveryChecks.run(isolated);
             result.putString("recovery", "stopped_stays_stopped,boot,update,permission,rejected_background_start");

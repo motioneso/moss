@@ -152,8 +152,27 @@ observed recording and never stops capture. Unknown/missing status, observation 
 over two minutes, and service restart reset the timer. A missing source name cannot
 start a timer. This is observed time, not a measurement of the recording duration.
 
-Individual ring recording management and firmware updating are explicitly unavailable
-in this build; tracked in #3584.
+**Ring storage → Refresh saved recordings** explicitly reads the saved ring inventory
+without enabling delivery or hold enrollment, including while delivery is stopped.
+Keep Bluetooth available and relinquish the official app's Nearby devices access.
+The dated snapshot lists actual supported audio sources in pages of 25; absence from
+an old snapshot is not proof that a source is currently absent. Inspection separates
+advertised audio/sidecar bytes, retained completion/duration metadata where available,
+phone delivery and the last known Moss status. Missing metadata means unknown.
+
+**Exclude from delivery** confirms the selected source and saves an exclusion tied
+to the existing Moss origin/owner, ring and source journal. The service acknowledges
+only after an atomic save. A request waiting behind a current transfer is pending;
+an in-flight request may finish before exclusion commits. Later retrievals and
+uploads stop, including later chunks of a retained upload. Already sent bytes,
+accepted Meetings and existing Main items cannot be recalled. The exclusion survives
+restart and reinventory, leaves ring/phone evidence and saved destinations intact,
+and has no undo in this build. Changed source sizes require a fresh selection.
+The ledger retains at most 1024 exclusions and fails closed on a changed identity.
+
+Individual ring deletion and firmware updating remain unavailable, tracked in #3584.
+The official APK has a selected-file transport path, but complete legacy bundle
+removal and physical behavior have not been verified. No delete command is sent.
 
 ## Durable behavior and limits
 
