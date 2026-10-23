@@ -277,6 +277,26 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # Azure's archive can stream packages too slowly for the bounded install.
+      - name: Use standard Ubuntu archive for browser dependencies
+        run: |
+          sudo python3 - <<'PYTHON'
+          from pathlib import Path
+
+          apt = Path("/etc/apt")
+          sources = [apt / "apt-mirrors.txt", apt / "sources.list"]
+          sources += list((apt / "sources.list.d").glob("*.sources"))
+          sources += list((apt / "sources.list.d").glob("*.list"))
+          for source in sources:
+              if not source.is_file():
+                  continue
+              original = source.read_text()
+              updated = original.replace("azure.archive.ubuntu.com", "archive.ubuntu.com")
+              if updated != original:
+                  source.write_text(updated)
+                  print(f"Using archive.ubuntu.com in {source.name}")
+          PYTHON
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
