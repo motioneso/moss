@@ -38,8 +38,7 @@ export async function recordGatewayAuditRaw(
   // fire-and-forget (`void recordGatewayAudit(...)`), so the body starts now —
   // but the write below lands later. An explicit id (an approval hold captured
   // it at arrival, before the hold) wins; otherwise the live turn is read.
-  // Either way the id stays in a local; it never enters the context handed
-  // to module tools.
+  // This audit snapshot is independent of the context captured for the tool itself.
   const turnId = opts.turnId ?? deps.tokens.readCurrentTurnId(opts.chatSessionId);
   try {
     await deps.runner.withDataContext(access, (scopedDb) =>

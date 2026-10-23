@@ -16,11 +16,11 @@ bounded task is in the handoff. This plan is committed before code.
 
 | Assumed seam                            | Observed evidence and decision                                                                                                                                                                                                                                                                                                      |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Manifest tool discovery                 | `packages/ai/src/assistant-tools.ts:7` projects `assistantTools`; chat's declarations start at `packages/chat/src/manifest.ts:839`. Add a read tool requiring the internal presentation service.                                                                                                                                    |
+| Manifest tool discovery                 | `packages/ai/src/assistant-tools.ts:7` projects `assistantTools`; chat's declarations start at `packages/chat/src/manifest.ts:878`. Add a read tool requiring the internal presentation service.                                                                                                                                    |
 | Read execution services                 | `packages/ai/src/gateway/gateway.ts:674` selects services; `packages/chat/src/gateway-services.ts:256` constructs read services. Add an optional collaborator, omitted by production routes, so the tool stays unavailable there.                                                                                                   |
 | Captured actor/thread/session           | `packages/ai/src/gateway/gateway.ts:390` verifies the token before constructing `ToolContext`; SDK context at `packages/module-sdk/src/index.ts:119`. Capture optional turn ID from tokens before asynchronous preparation, never from arguments.                                                                                   |
-| Active turn identity                    | `packages/chat/src/live/chat-session-turn.ts:102` creates the host turn ID, `:193` checks resolved privacy/thread; `:294` submits. Bind an internal registry after final thread checks and before submission.                                                                                                                       |
-| Commit and cleanup                      | `packages/chat/src/live/chat-session-turn.ts:467` saves, `:505` checks stored result, `:539` enters finally. Close only on a stored result; discard on every other exit and release before asynchronous cleanup.                                                                                                                    |
+| Active turn identity                    | `packages/chat/src/live/chat-session-turn.ts:102` creates the host turn ID, `:189` checks resolved privacy/thread; `:290` submits. Bind an internal registry after final thread checks and before submission.                                                                                                                       |
+| Commit and cleanup                      | `packages/chat/src/live/chat-session-turn.ts:467` saves, `:499` checks stored result, `:540` enters finally. Close only on a stored result; discard on every other exit and release before asynchronous cleanup.                                                                                                                    |
 | Runtime dependency injection            | `packages/chat/src/live/runtime.ts:548` declares optional collaborators and `:789` forwards lifecycle hooks into manager deps. Forward one optional presentation service through this existing factory.                                                                                                                             |
 | Registry validation                     | `packages/chat/src/visual/turn-registry.ts:110` finalizes shape/ref ownership; semantic program/catalog validation is expressly absent. Trusted here means registry-owned snapshots, not renderer safety.                                                                                                                           |
 | Claude print                            | `packages/chat/src/live/structured-claude-engine.ts:540` attaches MCP; manifest reads can use this existing path.                                                                                                                                                                                                                   |
@@ -101,3 +101,58 @@ Initial seam check: #3590 remains open/unmerged. Gemini and constrained paths la
 seam above; no attempt to add that transport here. Later tasks own production composition-root
 activation, semantic catalog validation, persistence/live/history, UI, module normalization,
 installed-dev lifecycle proof and the 20-prompt configured-engine gate.
+
+### Implementation and negative controls
+
+The synchronous authenticated context capture lives in
+`packages/ai/src/gateway/tool-call-context.ts`; gateway preparation uses it before locale
+lookup. Legacy injected token doubles without turn lookup produce no turn context; the
+presentation service refuses those calls. The normal runtime factory forwards the optional
+service, and production routes still omit it. Source-file limits remain intact.
+
+`runChatTurn` registers bounded exact user text before submit. It listens for the host abort
+signal and discards immediately on Stop, before engine interruption finishes. Finally releases
+the binding before awaited live-turn settlement. Successful save closes it first; an undefined
+save, submit/read/save failure, watchdog exit or cancellation discards it. The accepted envelope
+is internal and is never added to recordTurn, live events or response DTOs.
+
+Each control below ran the named focused Vitest assertions, exited **1**, and had its mutation
+restored in a `finally` before further work. These test the named internal boundaries only;
+they establish neither source-read authorization nor renderer safety.
+
+| Removed protection                                                  |                                   Observed failed tests |
+| ------------------------------------------------------------------- | ------------------------------------------------------: |
+| Service actor/thread/turn comparisons                               |      4 (foreign actor, thread, turn and missing thread) |
+| Host turn ID in captured tool context                               |              1 (registered tool through actual gateway) |
+| Capture before awaited locale lookup (recaptured afterward instead) |                      1 (delayed call after replacement) |
+| Single presentation-attempt guard                                   |                3 (invalid proposal then second attempt) |
+| Service open-state check                                            |                      2 (close/discard refusal response) |
+| Text-only handler output (included accepted raw reply instead)      |               1 (raw program/snapshot output assertion) |
+| Close after successful save                                         |                          1 (successful lifecycle close) |
+| Finally release/discard                                             | 4 (unsaved, save failure, submit failure, read failure) |
+| Immediate host abort listener                                       |      1 (state already discarded at engine interruption) |
+
+The discard control was rerun after adding immediate-abort disposal: cancellation now discards
+through that independent path, while the other four exits still fail without finally cleanup.
+The cancellation fixture records state before releasing the engine read, so it distinguishes
+immediate disposal from eventual cleanup and does not rely on a timer.
+
+### Restored final verification
+
+All commands exited **0** on 2026-10-23:
+
+- Frozen-lockfile install completed without changing the lockfile.
+- The four focused Vitest files listed above: **90 tests passed**.
+- Gateway regression run: **39 tests passed** across
+  `tests/unit/gateway-read-tool.test.ts`, `gateway-action-origin-capture.test.ts`,
+  `gateway-launch-replay-refusal.test.ts`, `chat-gateway-dependencies.test.ts` and
+  `ai-gateway-audit-duration.test.ts` (all under `tests/unit/`).
+- Root `pnpm exec tsc --noEmit`; owning `@moss/chat`, `@moss/ai` and
+  `@moss/module-sdk` typechecks.
+- Scoped ESLint on all 13 changed TypeScript files with `--max-warnings=0`;
+  Prettier on those files and this plan; `pnpm check:file-size`; `git diff --check`.
+
+No database/full foundation command, server, browser or installed-dev UI acceptance was run.
+The optional presentation service remains absent from production routes. #3590 was checked
+open/unmerged before delivery, so the draft targets `feat/visual-chat-contracts`.
+Delivery links are posted on #3591 and #3583. Neither issue is closed; stage 1 remains incomplete.
