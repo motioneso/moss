@@ -98,6 +98,31 @@ afterEach(() => {
 });
 
 describe("configured timestamped transcription", () => {
+  it.each([undefined, "es"])(
+    "sends the actual language hint %s, omitting automatic detection",
+    async (language) => {
+      const h = setup();
+      await h.transcribe(actor, { ...(await h.input()), ...(language ? { language } : {}) });
+      const form = h.fetch.mock.calls[0]![1]!.body as FormData;
+      expect(form.get("language")).toBe(language ?? null);
+      expect(form.get("model")).toBe(model.provider_model_id);
+      expect(form.get("response_format")).toBe("verbose_json");
+      expect(form.get("file")).toBeInstanceOf(Blob);
+    }
+  );
+  it("surfaces rejected language hints without a fallback request", async () => {
+    const h = setup();
+    h.fetch.mockResolvedValue(new Response("Unsupported language", { status: 400 }));
+    await expect(
+      h.transcribe(actor, { ...(await h.input()), language: "es" })
+    ).rejects.toMatchObject({
+      code: "failed",
+      httpStatus: 400,
+      retryable: false
+    });
+    expect(h.fetch).toHaveBeenCalledTimes(1);
+    expect((h.fetch.mock.calls[0]![1]!.body as FormData).get("language")).toBe("es");
+  });
   it("retries a response-body connection failure without retaining transport text", async () => {
     const h = setup();
     const input = await h.input();

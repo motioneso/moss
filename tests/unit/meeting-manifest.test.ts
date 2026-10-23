@@ -214,6 +214,7 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.transcript_language",
       "meetings.resumable_recordings",
       "meetings.voice_recordings",
       "meetings.android_delivery",

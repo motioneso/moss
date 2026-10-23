@@ -46,7 +46,8 @@ const preferences: MeetingCapturePreferences = {
   defaultCaptureMode: null,
   rememberedSource: null,
   summarizeOnStop: true,
-  summaryTemplateId: "general"
+  summaryTemplateId: "general",
+  transcriptLanguage: null
 };
 let renderer: ReactTestRenderer;
 let client: QueryClient;

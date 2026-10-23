@@ -15,6 +15,7 @@ import { parseRecordingUpload } from "./recording-upload-manifest.js";
 import { readRecordingWindow, validateWindowTranscript } from "./recording-transcription-window.js";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
+import { MeetingPreferencesRepository } from "./preferences.js";
 
 /** One non-overlapping window per metadata-only job; commit + next job are atomic. */
 export class RecordingWindowService {
@@ -70,7 +71,13 @@ export class RecordingWindowService {
           throw new Error("Retained recording manifest changed");
         return readRecordingWindow(ctx, row.id, input.manifest, chunks, row.next_window_ms);
       });
+      const language = row.meeting_id
+        ? await this.deps.dataContext.withDataContext(actor, (db) =>
+            new MeetingPreferencesRepository().getTranscriptLanguage(db)
+          )
+        : null;
       const result = await this.deps.transcribe(actor, {
+        ...(language ? { language } : {}),
         audio: window.audio,
         signal: AbortSignal.timeout(35_000),
         expectedModelRoute: selected.modelRoute,

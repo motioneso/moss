@@ -49,6 +49,7 @@ export async function fixtureTranscription(form: FormData) {
       segments: [{ start: 0, end: durationMs / 1000, text: CAPTURE_FIXTURE_TEXT }]
     },
     observation: {
+      language: form.get("language"),
       model: CAPTURE_FIXTURE_MODEL,
       audioBytes: wave.length,
       durationMs,
@@ -90,6 +91,9 @@ export async function startMeetingCaptureFixtureServer(port = CAPTURE_FIXTURE_PO
           }).formData();
           const result = await fixtureTranscription(form);
           observations.push(result.observation);
+          // Disclosed unsupported-language case for the shared language acceptance spec.
+          if (result.observation.language === "aa")
+            return send(400, { error: "Unsupported language" });
           send(200, result.body);
         } catch {
           send(400, { error: "Invalid generated audio fixture" });

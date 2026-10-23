@@ -108,7 +108,7 @@ export const meetingsModuleManifest = {
       id: "meetings.module-settings",
       label: "Meetings",
       description:
-        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop or completed import on or off, and unlink the Mac.",
+        "Choose recording audio, transcript language and automatic summaries; see Mac link status and unlink your Mac.",
       path: "/settings?section=modules&module=meetings",
       scope: "user",
       permissionId: "meetings.write",
@@ -350,6 +350,27 @@ export const meetingsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "meetings.transcript_language",
+      description:
+        "Settings → Meetings sets a spoken-language hint for new live clips and normal import windows. Automatic detection omits the hint. Existing text and hold input stay unchanged. The configured ASR service must support the language parameter.",
+      errors: [
+        {
+          code: "transcription_failed",
+          class: "transient",
+          description:
+            "The transcription service may reject an unsupported language. Choose a supported language or Automatic detection for subsequent requests. Moss does not retry without the hint or switch providers."
+        }
+      ],
+      remediations: [
+        {
+          id: "meetings.reset_transcript_language",
+          path: "/settings?section=modules&module=meetings",
+          description:
+            "Choose a supported language or Automatic detection for subsequent requests. Changing this setting or replaying an upload does not restart failed normal imports. Evidence stays retained; failed live clips remain gaps."
+        }
+      ]
+    },
     recordingUploadFeature,
     recordingVoiceFeature,
     androidDeliveryFeature,

@@ -42,6 +42,7 @@ const device: MeetingCaptureDevice = {
   }
 };
 const newPreferences = (): MeetingCapturePreferences => ({
+  transcriptLanguage: null,
   defaultCaptureMode: "computer-audio",
   rememberedSource: null,
   summarizeOnStop: true,
@@ -166,7 +167,11 @@ beforeEach(() => {
             ? { rememberedSource: update.rememberedSource }
             : {}),
           summarizeOnStop: update.summarizeOnStop ?? preferences.summarizeOnStop,
-          summaryTemplateId: update.summaryTemplateId ?? preferences.summaryTemplateId
+          summaryTemplateId: update.summaryTemplateId ?? preferences.summaryTemplateId,
+          transcriptLanguage:
+            update.transcriptLanguage === undefined
+              ? preferences.transcriptLanguage
+              : update.transcriptLanguage
         };
       }
       return json(preferences);
@@ -199,6 +204,37 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("minimal Meetings settings (synthetic transport, not live Mac proof)", () => {
+  it("saves, reloads and clears transcript language without altering summary or audio", async () => {
+    await mount();
+    await select("meeting-settings-transcript-language", "es");
+    expect(writes().at(-1)?.body).toEqual({ transcriptLanguage: "es" });
+    expect(preferences.transcriptLanguage).toBe("es");
+    await act(async () => root.render(null));
+    await mount();
+    expect(
+      host.querySelector<HTMLSelectElement>("#meeting-settings-transcript-language")!.value
+    ).toBe("es");
+    await select("meeting-settings-transcript-language", "");
+    expect(writes().at(-1)?.body).toEqual({ transcriptLanguage: null });
+    expect(preferences).toMatchObject({
+      transcriptLanguage: null,
+      summarizeOnStop: true,
+      defaultCaptureMode: "computer-audio"
+    });
+  });
+  it("keeps a failed language choice for retry while the saved choice still applies", async () => {
+    await mount();
+    transport.mockRejectedValueOnce(new Error("Synthetic disconnect"));
+    await select("meeting-settings-transcript-language", "es");
+    expect(host.textContent).toContain("Couldn’t save your meeting settings");
+    expect(
+      host.querySelector<HTMLSelectElement>("#meeting-settings-transcript-language")!.value
+    ).toBe("es");
+    expect(preferences.transcriptLanguage).toBeNull();
+    await click("Retry");
+    expect(preferences.transcriptLanguage).toBe("es");
+    expect(writes().at(-1)?.body).toEqual({ transcriptLanguage: "es" });
+  });
   it("shows linked status, audio source, automatic summary switch and Unlink Mac", async () => {
     await mount();
     expect(host.textContent).toContain("Studio Mac");
@@ -212,7 +248,7 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
     expect([...host.querySelectorAll("button")].map((item) => item.textContent)).toEqual([
       "Unlink Mac"
     ]);
-    expect(host.querySelectorAll("select")).toHaveLength(1);
+    expect(host.querySelectorAll("select")).toHaveLength(2);
     expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
     expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(0);
     expect(summarySwitch().checked).toBe(true);

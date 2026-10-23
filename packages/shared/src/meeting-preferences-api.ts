@@ -1,5 +1,6 @@
 import type { GenerateMeetingOutputInput } from "./meeting-output-api.js";
 import type { MeetingCaptureSelection } from "./meeting-api.js";
+import { MEETING_TRANSCRIPT_LANGUAGES } from "./meeting-transcript-language.js";
 
 export type MeetingCaptureMode = MeetingCaptureSelection["mode"];
 export interface MeetingRememberedSource {
@@ -9,12 +10,14 @@ export interface MeetingRememberedSource {
   readonly mode: MeetingCaptureMode;
 }
 export interface MeetingCapturePreferences {
+  readonly transcriptLanguage: string | null;
   readonly rememberedSource: MeetingRememberedSource | null;
   readonly defaultCaptureMode: MeetingCaptureMode | null;
   readonly summarizeOnStop: boolean;
   readonly summaryTemplateId: GenerateMeetingOutputInput["templateId"];
 }
 export interface UpdateMeetingCapturePreferences {
+  readonly transcriptLanguage?: string | null;
   readonly rememberedSource?: MeetingRememberedSource | null;
   readonly defaultCaptureMode?: MeetingCaptureMode | null;
   readonly summarizeOnStop?: boolean;
@@ -33,6 +36,9 @@ const sourceSchema = {
   }
 } as const;
 const preferenceProperties = {
+  transcriptLanguage: {
+    anyOf: [{ const: null }, { type: "string", enum: MEETING_TRANSCRIPT_LANGUAGES }]
+  },
   rememberedSource: sourceSchema,
   defaultCaptureMode: {
     anyOf: [
@@ -57,7 +63,13 @@ export const updateMeetingCapturePreferencesSchema = {
 export const meetingCapturePreferencesSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["rememberedSource", "defaultCaptureMode", "summarizeOnStop", "summaryTemplateId"],
+  required: [
+    "rememberedSource",
+    "defaultCaptureMode",
+    "summarizeOnStop",
+    "summaryTemplateId",
+    "transcriptLanguage"
+  ],
   properties: {
     ...preferenceProperties
   }

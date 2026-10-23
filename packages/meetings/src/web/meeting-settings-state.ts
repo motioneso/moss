@@ -23,6 +23,7 @@ export const meetingSettingsKeys = {
   capabilities: meetingLinkKeys.capabilities
 };
 interface SettingsDraft {
+  readonly transcriptLanguage: string | null;
   readonly mode: MeetingCaptureMode;
   readonly summarizeOnStop: boolean;
   readonly changes: UpdateMeetingCapturePreferences;
@@ -31,6 +32,7 @@ interface SettingsDraft {
   readonly error: string | null;
 }
 const emptyDraft = (): SettingsDraft => ({
+  transcriptLanguage: null,
   mode: "computer-audio",
   summarizeOnStop: true,
   changes: {},
@@ -60,6 +62,7 @@ export function useMeetingSettings() {
         : {
             ...emptyDraft(),
             mode: savedMode(preferences.data!),
+            transcriptLanguage: preferences.data!.transcriptLanguage,
             summarizeOnStop: preferences.data!.summarizeOnStop
           }
     );
@@ -82,6 +85,10 @@ export function useMeetingSettings() {
     draft.update(() => ({
       ...current,
       mode: pending.defaultCaptureMode ?? current.mode,
+      transcriptLanguage:
+        pending.transcriptLanguage === undefined
+          ? current.transcriptLanguage
+          : pending.transcriptLanguage,
       summarizeOnStop: pending.summarizeOnStop ?? current.summarizeOnStop,
       changes: pending,
       dirty: true,
@@ -100,6 +107,7 @@ export function useMeetingSettings() {
       draft.update(() => ({
         ...emptyDraft(),
         mode: savedMode(saved),
+        transcriptLanguage: saved.transcriptLanguage,
         summarizeOnStop: saved.summarizeOnStop
       }));
     } catch {
@@ -108,11 +116,13 @@ export function useMeetingSettings() {
           ...value,
           requestKey: null,
           error:
-            pending.defaultCaptureMode !== undefined && pending.summarizeOnStop !== undefined
-              ? "Couldn’t save your audio source or automatic summary. Your choices are kept here; the saved settings still apply."
-              : pending.summarizeOnStop !== undefined
-                ? "Couldn’t save automatic summary. Your choice is kept here; the saved setting still applies."
-                : "Couldn’t save your audio source. Your choice is kept here."
+            pending.transcriptLanguage !== undefined
+              ? "Couldn’t save your meeting settings. Your choices are kept here; the saved settings still apply."
+              : pending.defaultCaptureMode !== undefined && pending.summarizeOnStop !== undefined
+                ? "Couldn’t save your audio source or automatic summary. Your choices are kept here; the saved settings still apply."
+                : pending.summarizeOnStop !== undefined
+                  ? "Couldn’t save automatic summary. Your choice is kept here; the saved setting still applies."
+                  : "Couldn’t save your audio source. Your choice is kept here."
         }));
     }
   }
@@ -124,6 +134,7 @@ export function useMeetingSettings() {
     saving: !!draft.data.requestKey || links.pending,
     save: (mode: "computer-audio" | "microphone-only") => save({ defaultCaptureMode: mode }),
     saveSummary: (summarizeOnStop: boolean) => save({ summarizeOnStop }),
+    saveLanguage: (transcriptLanguage: string | null) => save({ transcriptLanguage }),
     retry: () => void save(draft.data.changes),
     refresh: () => {
       connection.refresh();

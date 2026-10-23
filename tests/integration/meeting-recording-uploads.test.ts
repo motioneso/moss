@@ -31,6 +31,7 @@ import {
 import { recordingChunkPath } from "../../packages/meetings/src/recording-upload-manifest.js";
 import { recordingUpload } from "../fixtures/recording-upload.js";
 import { recordingBundle } from "../fixtures/recording-bundle.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 let app: Kysely<MossDatabase>,
@@ -125,6 +126,29 @@ async function serverFor(service: RecordingImportService) {
   return server;
 }
 describe("resumable recording transport and checkpointed transcription", () => {
+  it("applies changed language to subsequent normal windows", async () => {
+    const preferences = new MeetingPreferencesRepository();
+    try {
+      const { service, deps } = setup();
+      const normal = await upload(service, recordingUpload(60_000));
+      await service.uploads.finalize(actor, normal.id);
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: "es" })
+      );
+      await service.process(actor, job(normal.id));
+      expect(vi.mocked(deps.transcribe).mock.calls[0]![1].language).toBe("es");
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null })
+      );
+      await service.process(actor, job(normal.id, 30_000));
+      expect(vi.mocked(deps.transcribe).mock.calls[1]![1]).not.toHaveProperty("language");
+      expect(await service.status(actor, normal.id)).toMatchObject({ state: "complete" });
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null })
+      );
+    }
+  });
   it("finalizes a long recording with measured ring-clock drift through the HTTP receiver", async () => {
     const { service } = setup();
     const uploaded = await upload(service, recordingUpload(2_513_160, false, -4_160));
@@ -181,7 +205,18 @@ describe("resumable recording transport and checkpointed transcription", () => {
     };
     const uploaded = await upload(service, source);
     await service.uploads.finalize(actor, uploaded.id);
-    await service.process(actor, job(uploaded.id));
+    const preferences = new MeetingPreferencesRepository();
+    await context.withDataContext(actor, (db) =>
+      preferences.update(db, { transcriptLanguage: "es" })
+    );
+    try {
+      await service.process(actor, job(uploaded.id));
+      expect(vi.mocked(deps.transcribe).mock.calls[0]![1]).not.toHaveProperty("language");
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null })
+      );
+    }
     vi.mocked(deps.transcribe).mockRejectedValueOnce(new Error("Provider unavailable"));
     await service.process(actor, job(uploaded.id, 30_000));
     const failed = (await service.voiceStatus(actor, uploaded.id))!;

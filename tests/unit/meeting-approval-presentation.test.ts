@@ -181,7 +181,8 @@ const preferenceState = {
   defaultCaptureMode: "computer-audio" as const,
   rememberedSource: null,
   summarizeOnStop: true,
-  summaryTemplateId: "general" as const
+  summaryTemplateId: "general" as const,
+  transcriptLanguage: null
 };
 const recorder = (): CaptureConnection => ({
   owner_user_id: "owner",
@@ -312,6 +313,20 @@ describe("Meetings authored action disclosures", () => {
     expect(get).toHaveBeenCalledWith(db, id);
   });
 
+  it.each([
+    [null, "Automatic detection"],
+    ["es", "Spanish (es)"]
+  ])("names transcript language %s", async (transcriptLanguage, value) => {
+    const result = await meetingPreferencesPresentation(
+      db,
+      call({ transcriptLanguage }, false),
+      ctx
+    );
+    expect(result).toMatchObject({
+      title: "Change the transcript language",
+      fields: [{ label: "Transcript language", value }]
+    });
+  });
   it.each([null, "microphone-only", "selected-app", "computer-audio"])(
     "accepts the existing capture preference %s without adding capture operations",
     async (defaultCaptureMode) => {

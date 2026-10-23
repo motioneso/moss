@@ -178,6 +178,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         const form = new FormData();
         form.set("model", input.model.provider_model_id);
         form.set("file", input.audio, "audio");
+        if (input.language) form.set("language", input.language);
         if (input.timestamps === "segment") {
           form.set("response_format", "verbose_json");
           form.append("timestamp_granularities[]", "segment");
