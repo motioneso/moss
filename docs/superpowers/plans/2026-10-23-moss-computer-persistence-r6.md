@@ -74,7 +74,7 @@ Supervisor fallback exact label `com.moss.proof=persistence-r6`, deadline1800s, 
 nominal5s samples. Fail closed on measurement/log failure, RAM/root free below8GiB, data below30GiB,
 home/socket reaching10GiB. Monitoring is not quota. Host browser/daemon outside guest caps.
 Runner bounds launch40s/access90s/harness420s and actively cleans up in finally. Replacement mutations
-check watchdog alive/no stop receipt and acquire a shared lifecycle lock. Supervisor publishes stop intent before acquiring that lock, drains in-flight mutations and always kills/verifies residual exact-label services. New starts after intent fail. No unattended runtime, finish well before60 minutes.
+check watchdog alive/no stop receipt and acquire a shared lifecycle lock. Supervisor publishes stop intent before acquiring that lock, drains in-flight mutations and always kills/verifies residual exact-label services. New starts after intent fail. Shutdown lock/setup failure falls back to emergency exact-label kill/verification; mutation also rejects a zombie supervisor. Clipboard setter output is redirected so a daemon cannot retain the docker-exec output pipe. No unattended runtime, finish well before60 minutes.
 
 Record exact host-browser PID/start-time/group identities after launch and before close. Runner captures descendants before killing a timed-out harness, stops only owned process identities/groups and requires their absence; cleanup/port-release failures reject PASS. Capture full guest and gateway IDs, operations/exits/timestamps, cgroup observations and numeric
 supervisor exit. Close host browser and actual Firefox, stop supervisor/services, remove only owned
@@ -102,15 +102,15 @@ Hashes below resolve in the private sibling; `.env`/resolved config are reviewed
 | `compose.yaml`                  | `b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9` |
 | `.env`                          | `023160f9321189a06bf9181ab7e4e6453b5aea0b7c624099ae1e42051015e265` |
 | `gateway/nginx.conf`            | `285d0b3a705aba8dffa751614cd3a0aa7b12a34b75e71e89aaab5f0dec2ca21e` |
-| `supervise.py`                  | `0d0a21211797de384bbb9d7545e17d80415c0d5fa841396401c014857b27f760` |
+| `supervise.py`                  | `b1ba6bd3047ad0d8d3aa8d0afad1a83e55a35564b4122a2654afd1bff3603f87` |
 | `access-check.mjs`              | `2ebc9f93191006a891aee949b5b69829d92fa2edf0bf62f869f4e41673029512` |
 | `access-controls.py`            | `17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628` |
 | `isolation.py`                  | `12ab9f1e8fd47711e4d191d230d1d3b42f8315aac6a54f833b1b4c8830ccfece` |
 | `process.py`                    | `2ede92bae11e2fca8ccf611534d27bbfaf08311e63ed13e06732a38d92f9f5c7` |
 | `check-state.py`                | `50eb76dccb2ab4af6a6998d6fe0787d4eb606eca0971d0a3dffab34b0d5ae83c` |
 | `controls.py`                   | `c9e56dc2a2502a3fd5bab625e9549a42c767f3a16a91a75a8c484059c44ade18` |
-| `persistence.mjs`               | `abea703b9bcfcada5deac5f6656eab5cc4001972b259699070e99aa46bfe0408` |
+| `persistence.mjs`               | `63da28a354882edb10acd1de5e048a2dc8698202552abab16cb04e30d4711bb5` |
 | `run.py`                        | `47bbc7921cc0b3c535918d1064ceb546b44c895f9cd1894755057f281b0a5cfb` |
 | `proof.json`                    | `4539aad539382e4e825901464eeba01dd874891739887424d4d57164ed23f1d7` |
 | `receipts/resolved-config.json` | `24d53d1cfe1de0e117baaef4b60ec66ec88b22b2085dba12a2ea14e87daa6a7d` |
-| `mutate.py`                     | `c4a0ad67b0f9c62069adecda13b46b7e7b41b34ff24c3bd3d99ee618a19b4874` |
+| `mutate.py`                     | `e8396dbe945be53f0563f5957d7b3354bb2b8a3b250afa9e2407e4a738d4308e` |
