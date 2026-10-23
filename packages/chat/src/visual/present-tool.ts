@@ -25,7 +25,8 @@ export const chatPresentTool = {
     "If unavailable or invalid, answer in ordinary text without retrying or showing program text.",
   permissionId: "chat.view",
   risk: "read",
-  content: "user_authored",
+  // Fallbacks can carry supplied text; preserve the gateway's outside-content tracking.
+  content: "outside",
   requiresServices: ["visualPresentation"],
   inputSchema: {
     type: "object",

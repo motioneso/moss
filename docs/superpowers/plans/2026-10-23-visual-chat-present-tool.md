@@ -156,3 +156,29 @@ No database/full foundation command, server, browser or installed-dev UI accepta
 The optional presentation service remains absent from production routes. #3590 was checked
 open/unmerged before delivery, so the draft targets `feat/visual-chat-contracts`.
 Delivery links are posted on #3591 and #3583. Neither issue is closed; stage 1 remains incomplete.
+
+### Independent review and CI follow-up
+
+Ben authorized independent review and merge on 2026-10-23. Two read-only reviews inspected
+`3b074f940`: Standards found no blockers; Spec found one P1. `chat.present` incorrectly used
+the trusted-result exemption even though fallback text can carry supplied content. Changed
+the declaration to `outside`, retaining the gateway's existing wrapping and provenance
+admission. The tool adds no domain writes; gateway audit/provenance bookkeeping still applies.
+
+The gateway fixture now supplies an in-memory provenance port. Tests assert admission with
+captured actor/thread and `tool_external_content`, the `chat.present` source wrapper, and
+withholding all supplied fallback/private error details after failed admission. Changing the
+declaration back to `user_authored` made both new boundary assertions fail (exit **1**,
+2 failed / 19 skipped); the declaration was restored. The six-file focused and content-policy
+suite passed **167 tests** (exit **0**).
+
+CI also exposed inherited formatting in the target-board HTML. Applied Prettier without
+content edits; the standards reviewer independently confirmed the result equals Prettier's
+output on the original file byte-for-byte. Both reviewers rechecked the fixes and found no
+remaining blockers. Browser CI failures occurred during browser dependency installation:
+slow package downloads timed out, followed by a package-manager lock failure; test execution
+had not begun. Fresh CI must pass before merge.
+
+Draft PR: [#3593](https://github.com/motioneso/moss/pull/3593). Its target remains
+`feat/visual-chat-contracts` while #3590 is unmerged. Merging this slice into that dependency
+branch does not complete stage 1 or authorize merging the parent PRs into `main`.

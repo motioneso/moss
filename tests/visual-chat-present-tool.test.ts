@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { AssistantToolGateway, ConfirmationRegistry, SessionTokenRegistry } from "@moss/ai";
+import type { ConversationProvenancePort } from "@moss/ai";
 import type { ToolContext } from "@moss/module-sdk";
 import { listAssistantToolsFromManifests } from "../packages/ai/src/assistant-tools.js";
 import { chatModuleManifest } from "../packages/chat/src/manifest.js";
 import { buildChatGatewayDependencies } from "../packages/chat/src/gateway-services.js";
 import { chatPresentExecute } from "../packages/chat/src/visual/present-tool.js";
+import { CONTEXT_ADMISSION_UNAVAILABLE } from "../packages/ai/src/gateway/content-admission.js";
 import {
   PRESENTATION_UNAVAILABLE,
   VisualPresentationService
@@ -30,6 +32,7 @@ function open(service = new VisualPresentationService()) {
 }
 
 function gateway(service?: VisualPresentationService) {
+  const recordAdmission = vi.fn<ConversationProvenancePort["recordAdmission"]>(async () => {});
   const tokens = new SessionTokenRegistry();
   tokens.setCurrentTurnId(ctx.chatSessionId, identity.turnId);
   const token = tokens.mint({
@@ -50,9 +53,10 @@ function gateway(service?: VisualPresentationService) {
     confirmations: new ConfirmationRegistry(),
     notifier: { emit: vi.fn() },
     collaborators: {},
+    conversationProvenance: { isTainted: async () => false, recordAdmission },
     visualPresentation: service
   });
-  return { deps, tokens, token, gateway: new AssistantToolGateway(deps) };
+  return { deps, tokens, token, recordAdmission, gateway: new AssistantToolGateway(deps) };
 }
 
 describe("internal chat.present", () => {
@@ -174,7 +178,7 @@ describe("internal chat.present", () => {
 
   it("runs the registered tool through the gateway using host identity", async () => {
     const { service, turn, ref } = open();
-    const { gateway: gw, token } = gateway(service);
+    const { gateway: gw, token, recordAdmission } = gateway(service);
     const response = await gw.callTool(token, "chat.present", { proposal: proposal(ref) });
     expect(response).toMatchObject({
       ok: true,
@@ -184,7 +188,26 @@ describe("internal chat.present", () => {
       }
     });
     expect(turn.reply?.snapshots[0]?.ref).toBe(ref);
+    expect(recordAdmission).toHaveBeenCalledExactlyOnceWith(
+      identity.actorUserId,
+      identity.threadId,
+      "tool_external_content"
+    );
+    expect(response.ok && response.data).toMatchObject({
+      text: expect.stringContaining('<tool_result source="chat.present">')
+    });
     expect(JSON.stringify(response)).not.toContain(program);
+  });
+
+  it("withholds supplied fallback text when outside-content admission fails", async () => {
+    const { service, ref } = open();
+    const { gateway: gw, token, recordAdmission } = gateway(service);
+    recordAdmission.mockRejectedValue(new Error("private admission storage failure"));
+    const response = await gw.callTool(token, "chat.present", { proposal: proposal(ref) });
+    expect(recordAdmission).toHaveBeenCalledOnce();
+    expect(response).toEqual({ ok: false, error: CONTEXT_ADMISSION_UNAVAILABLE });
+    expect(JSON.stringify(response)).not.toContain("Your data");
+    expect(JSON.stringify(response)).not.toContain("private admission storage failure");
   });
 
   it("returns an ordinary tool fallback for malformed proposals, without throwing a correction", async () => {
