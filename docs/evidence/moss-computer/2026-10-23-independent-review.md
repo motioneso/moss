@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** static candidate accepted; runtime evidence partial, recovery gate FAIL. Final exact-report review follows below. Historical documentation-only review is preserved.
+- **Current status:** reconstructed-candidate rapid fixed-host restart recovery PASS, scoped to the final r3 review below. Historical original-image recovery failure and earlier reviews are preserved; long-outage recovery remains unqualified.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -117,3 +117,79 @@ This accepts the reconstructed artifact for a later trial, granting no desktop, 
 persistence or security acceptance for it. Earlier recovery failure and original image loss remain
 unexplained. The proposed next step independently reviews an amended recovery packet before
 runtime; this checkpoint stops here. No merge readiness or guide progress follows.
+
+## Recovery r3: rapid fixed-host restart evidence accepted
+
+Reviewer `/root/recovery_review`, independent of author/operator Codex `/root`, issued
+**PASS — exact reports and scoped rapid-restart recovery evidence accepted; no blocking findings.**
+No reviewer edits. The reviewer first blocked the frame predicate because a hidden canvas could
+pass; author added positive visible viewport geometry/styles and the reviewer accepted readiness.
+Exact initial packet at `f5ed18a39`: SHA-256
+`c4dcd53e53a76f92d1545d170f7dfe567b53c4857742be160ec7bbae17b95169`.
+
+The first loop exposed the installed Playwright async-false predicate returning immediately.
+Reviewer accepted the subsequent synchronous actual UI/RFB polling correction and amended packet,
+then independently confirmed the stopped-guest control failed at its actual12s frame assertion
+with empty canvases, and strict recovery passed real visible frame/fresh keyboard input. Earlier
+provisional evidence is retained, not used as final readiness proof. No viewer/image/security
+change was authored. Exact final runtime/supervisor/config hashes are in the
+[receipt](2026-10-23-recovery-r3.json).
+
+Final review independently checked all raw/source/runtime hashes, sanitised comparisons, retained
+marker bytes, current-image access removal/restoration controls, sampled resources, privacy and
+relative links, scoped formatting and whitespace. Closure inspection confirmed no proof containers,
+network, listener5180, reservation, owned scripts/watchdog or ephemeral keys; home/archive retained
+and Moss healthy. The watchdog's normal operator closure was exercised, no new fault injection.
+
+| Exact reviewed artifact | SHA-256                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| Recovery-r3 report      | `5aa5597b8594721527a9f8040dcd04e6e59f12c3e3b890124509ae901ae6f395` |
+| Recovery-r3 JSON        | `01e61804fb9d9a307654f9542dcd71cbfb9cf14bbe726d30f06adb498d0deac0` |
+| Final recovery packet   | `901e13041242d6cff0d3bfed238e2fe2d12895306efcb42ef4db99ef57f985cd` |
+| Final spec              | `424f5847d8138d7d0ccf14b497d57f5c742d85c4dda687321996a79ae881ffb3` |
+
+Acceptance is rapid restart only: kill→host-start-return142ms, WebSocket reopen about1.118s.
+Delayed-restart recovery remains unqualified, historical canvas root cause UNKNOWN. No rebuilt-image
+Firefox/profile/replacement, Moss integration, remote manual, platform or release acceptance.
+One next proposal is an independently reviewed delayed-restart explicit reload proof; not dispatched.
+Task3578/parent3577 remain open and PR3579 draft. No merge or automatic parent adoption.
+
+## Recovery r4: delayed restart and one reload evidence accepted
+
+Reviewer `/root/delayed_review`, independent of author/operator Codex `/root`, issued
+**PASS_READY** for exact launch packet commit `aa8c01601ffe4f65f803fb3cc47207720e2d09d7`,
+then **PASS — bounded delayed-restart/reload evidence accepted; no blocking findings.**
+No reviewer authorship or edits. Fresh floors and watchdog alive/first healthy sample were checked
+before launch; exact eight runtime/config hashes matched the committed packet and launch bytes.
+
+Final independent review checked all42 raw receipt hashes, eight runtime hashes, seven source
+hashes and raw/sanitised agreement. Actual failed automatic retry preceded the stopped-guest frame
+assertion's12010ms timeout. One reload created a new document/RFB, substantive visible frame and
+fresh unique retained viewer-keyboard marker. Detached prior pixels and the initial one-colour
+transport frame did not qualify. Kill-return→start-return13392ms; reload→substantive frame1372ms.
+Access removal/restoration controls, actual isolation/cgroups and sampled resources were verified.
+
+Independent current closure checks found no r4 containers/network/listener5189/reservation,
+watchdog PID or keys; owned runtime closed, homes/archive retained and Moss healthy. Browser closure
+is supported by the harness awaiting `browser.close` and its finite exit0. Scoped formatting,
+whitespace, privacy and relative links passed.
+
+Full gateway ID and supervisor numeric exit were not retained; retrospective daemon event collection
+was empty. The reviewer explicitly found these disclosed collection limits **non-blocking for this
+narrow recovery acceptance**: full guest ID plus real UI/RFB/frame/input evidence establish recovery;
+normal supervisor stop receipt and current no-runtime checks establish closure. No daemon-event
+corroboration or broader host/service restart resilience is claimed.
+
+| Exact accepted artifact | SHA-256                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| Recovery-r4 report      | `29042adf34a0427d0ba3dc18f264032d057927d260e133737780166a6f7415a0` |
+| Recovery-r4 JSON        | `6984a6f9ea95b3d8223ae0a72a42bd552656d425fb5490f2bcf54a5974840e75` |
+| Final spec              | `95ff0fdc87fbade5dcb9c043da8f6e8cf7ab17542329d3af4dcacd1eea35b76b` |
+| Launch packet           | `be5b3c5b58bae6a46c6a8f4e66d07f94326fb88b42643c565920139b081d96d3` |
+
+Acceptance is one approximately13.4s guest outage with an explicit browser reload after terminal
+retry failure, on the exact adopted image. Arbitrary outages, recovery without reload, historical
+original-image canvas-timeout/image-loss/Herdr incident causes, rebuilt-image Firefox/profile/
+replacement, owner integration and manual/platform/release gates remain separate. The one next
+proposal is bounded active Firefox sandbox plus file/profile replacement qualification on the
+adopted image, not dispatched. No merge, automatic parent adoption or issue close.
