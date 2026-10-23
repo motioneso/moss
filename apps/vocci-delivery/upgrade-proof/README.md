@@ -33,7 +33,8 @@ and voice enrollment. An unlocked phone is required for actual configured
 launcher/Ready traversal and native Start/Stop. Service restart uses a closed
 HTTPS loopback origin with dummy credentials; it must fail before owner
 confirmation, voice requests, upload or Bluetooth access. Only activity/failure
-metadata may change. No Moss response is mocked or intercepted.
+metadata may change. The upgrade/service path does not mock or intercept Moss
+responses; the separate selection contract uses disclosed synthetic link responses.
 
 The manifest retains production receiver declarations. The stopped-install
 replacement tests that package replacement does not start disabled delivery;
