@@ -3,7 +3,8 @@
 Approved scope: `docs/superpowers/specs/2026-10-23-android-hardware-settings.md`.
 Task #3584 stays open. Work in `~/Jarv1s/.claude/worktrees/vocci-meeting-preferences`,
 branch `feat/vocci-meeting-preferences`, stacked on `feat/vocci-recording-management`
-(draft #3592), then #3586, #3576 and guided setup #3566. No merge or deployment.
+(draft #3592), then #3586, #3576 and guided setup #3566. The later review mandate
+below supersedes the original no-merge instruction; no deployment is requested.
 
 ## Existing seams
 
@@ -174,3 +175,30 @@ custom vocabulary, additional automatic-processing controls, enhancement,
 firmware and the preceding slices' device-verification limits remain deferred.
 Keep this draft stacked and unmerged; do not treat this record as release proof for
 the whole Android Hardware task.
+
+## Independent review and merge mandate — 2026-10-23
+
+Ben subsequently requested independent review of this PR and its prerequisites,
+resolution of all findings, and merge in dependency order. The order is #3566 →
+#3576 → #3586 → #3592 → #3594. Required checks and live-path evidence still apply.
+This supersedes the earlier instruction to leave the stack unmerged. It does not
+complete task #3584 or authorize a production deployment or new physical recordings.
+
+Separate independent Standards and Spec reviewers examined #3594 at
+`892b1458617df25f148d2a117a51a0e1703e77d5`; both reported zero findings.
+They inspected the bounded language scope and its committed live evidence.
+
+CI on that commit exposed three exact expectations omitted from the focused local
+checks: the capture fixture's new `language: null` observation, the registry's new
+`meetings.transcript_language` feature, and the integration lifecycle's new
+`transcriptLanguage: null` default. Updated those expectations without weakening
+their exact comparisons and added the minimal lifecycle suite to
+`test:integration:3584`.
+
+After correction, the two affected unit files passed **10 tests**, exit 0.
+The isolated `test:integration:3584` gate passed **60 tests / 4 files**, exit 0,
+receipt `vocci_meeting_preferences-20261023-104741`; its disposable server was
+removed by the runner. The gate tested `892b1458617df25f148d2a117a51a0e1703e77d5`
+with the recorded dirty correction inputs. These results do not replace CI on the
+committed correction or reviews of the other PRs. No product code changed in this
+correction.
