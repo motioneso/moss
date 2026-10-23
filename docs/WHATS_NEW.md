@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Choose meeting transcript language.** You can choose the spoken language for new meeting transcription or let the transcription service detect it automatically. [PR #3594](https://github.com/motioneso/moss/pull/3594)
 - **Guided setup for existing Vocci rings.** Connect an existing Vocci ring to Moss on Android, then choose when recording delivery and hold-to-talk are enabled. [PR #3566](https://github.com/motioneso/moss/pull/3566)
 
 #### Fixed
