@@ -193,3 +193,25 @@ measured memory reclamation, preserved file/profile state on wake, protection of
 sleep/wake races and admission failure through the real product path. Product implementation must
 update the app map in the same PR. No sleep implementation, new runtime, unattended waiting or
 additional qualification is dispatched by this requirement amendment.
+
+## 16. Adopted-image persistence r6: incomplete proof
+
+Ben later resumed the same bounded assignment after freeing host resources. Fresh entry passed;
+retained archive/config/seven layers were verified and the exact adopted image loaded. The committed,
+independently reviewed [r6 packet](../plans/2026-10-23-moss-computer-persistence-r6.md) launched one
+supervised run. Its [result](../../evidence/moss-computer/2026-10-23-persistence-r6.md) is
+REJECTED_INCOMPLETE_PROOF: current viewer/frame/input and synthetic access/isolation checks passed,
+but a cached Firefox window ID became invalid before actual sandbox diagnostics. The polling
+harness wrongly repeated identical BadWindow errors; that stop-rule failure is retained.
+
+No clean UI flush, persistence negative controls, guest replacement or post-replacement acceptance
+was reached. A retained-profile copy contained the created bookmark after fallback SIGTERM; this
+is diagnostic only and establishes none of those missing gates. No Firefox sandbox/persistence
+failure is inferred from the harness error. Runtime, watchdog, browser, network, listener/reservation
+and ephemeral identities were closed; retained data remains and Moss is healthy.
+
+The next proposal is bounded window rediscovery/error handling and failure diagnostics, followed by
+fresh exact independent review and a separately dispatched qualification with resource gates.
+No rerun, product/sleep implementation, owner integration, merge or issue close is dispatched here.
+Section14 remains the historical r5 entry rejection; the adopted-image sandbox/replacement gates
+remain unqualified after r6.

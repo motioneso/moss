@@ -242,3 +242,47 @@ active-work inhibition, no silent unsaved-work loss, owner checks and wake resou
 The timeout/inhibitor decisions, live proof and same-PR product app-map updates remain pending.
 Scoped formatting and whitespace checks passed. This accepts a requirement amendment, with no
 implemented sleep/wake capability or resumed qualification claim.
+
+## Persistence r6: exact readiness and final rejection evidence
+
+Reviewer `/root/persistence_entry_review` performed read-only investigation, exact prelaunch review
+and exact final evidence review, with no authorship, fixes or runtime operations.
+
+The initial packet `fa461517106dfa8cfc136f286da2db473ed86800` was rejected before launch: overly broad
+content-process classification, zero-level environment exemption, missing pristine-copy green
+controls/WAL handling, shutdown race, unchecked cleanup exits/host-browser timeout cleanup and
+formatting. Revised `adedb01547f7ced71af325771170db20308c2af7` still had a shutdown-lock setup failure
+that bypassed emergency stop. That distinct gap was rejected before launch. Revised exact packet
+`08a3b2111d6d79ff2aa3972ab56f655e32ed10ef` received **PASS_READY — no blocking findings**, conditional
+on the live watchdog/healthy sample gate. All15 final artifacts, syntax/formatting/resolved config,
+actual retained archive checksum/config/seven layers and synthetic certificates were independently
+checked. Clipboard setter redirection and emergency exact-label shutdown were included.
+
+Accepted packet SHA-256 `02a28f03c5b7add2b09b5d2fb7a4740d334c536708fa5219a1ff8a08dafb79ab`;
+private artifact-manifest SHA-256 `2ecc8a88f66efa71683869f78a44584ef11b939b0988955c97d5147aa690e26a`.
+Readiness was not runtime acceptance.
+
+One subsequent run failed before actual sandbox collection at an invalid cached Firefox window.
+The reviewer independently accepted the exact final documents as **PASS — final rejection evidence
+accepted, no blocking findings**. Acceptance is limited to **REJECTED_INCOMPLETE_PROOF and verified
+closure**. Active Firefox sandbox and replacement persistence remain unqualified.
+
+All33 private receipt hashes matched, as did raw/sanitised values, unchanged15 launch artifacts,
+monitor/cgroup observations and closure facts. The exact bookmark existed on the disposable
+postmortem profile copy, and real retained main/WAL/designated-file hashes matched; that diagnostic
+was correctly excluded from clean UI flush/replacement acceptance. The47 repeated BadWindow
+occurrences, stop-rule weakness, unknown window-loss cause, missing gates and pre-cleanup inspect
+timing were preserved. Links, privacy, scoped Prettier and whitespace passed.
+
+| Exact accepted final artifact                    | SHA-256                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| [Report](2026-10-23-persistence-r6.md)           | `126f65643a632ef1411fb1fddbb098643abb16196c8400d15d567b589c884b04` |
+| [Sanitised JSON](2026-10-23-persistence-r6.json) | `fb743583f40396231fec70c98a8e1fe3a60cc9216e6ddcb20ecc61f96f44a158` |
+| Final spec                                       | `83dd88b6189259cee3c0372da4afd86eef6ddbd1d4ec6d46c2e45fe9210d610f` |
+
+Independent current closure checks found no exact-label containers, project network, listener or
+reservation5188, owned script/watchdog, recorded browser identity or ephemeral keys. Prior homes
+and archive remain present; Moss is healthy. No rehash of all prior contents was claimed.
+No further runtime, automatic merge, parent adoption or issue close follows. The sole next proposal
+is bounded current-window rediscovery/error handling and failure diagnostics, then separately
+reviewed/dispatched qualification with fresh resource gates.
