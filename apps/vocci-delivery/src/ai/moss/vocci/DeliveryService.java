@@ -25,11 +25,14 @@ public final class DeliveryService extends Service {
     private final Map<String, Integer> previousInventory = new HashMap<>();
     private int reconnectAttempts;
     private final RecordingReminder reminder = new RecordingReminder();
+    private int latestStartId;
+    private static final class OwnerMismatch extends Exception { }
+    static boolean recordingCommand(String action) { return "inspect-ring".equals(action) || "exclude-recording".equals(action); }
     @Override public void onCreate() {
         super.onCreate();
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel("delivery", "Recording delivery", NotificationManager.IMPORTANCE_LOW));
-        startForeground(3550, notification("Starting recording delivery"));
+        startForeground(3550, notification("Working with your ring"));
     }
     private Notification notification(String text) {
         Intent stop = new Intent(this, DeliveryService.class).setAction("stop");
@@ -51,28 +54,37 @@ public final class DeliveryService extends Service {
         }
         getSystemService(NotificationManager.class).notify(3550, notification(code.replace('_', ' ') + " · " + complete + " complete · " + failed + " failed · " + pending + " pending"));
     }
-    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+    @Override public synchronized int onStartCommand(Intent intent, int flags, int startId) {
+        latestStartId = startId;
         DeliveryPreferences choices = new DeliveryPreferences(this);
-        if (!choices.applyAction(intent == null ? null : intent.getAction())) { stopSelf(); return START_NOT_STICKY; }
-        if (intent != null && Arrays.asList("voice-on", "voice-off", "clear-completed", "retry-transcription").contains(intent.getAction())) commands.add(new Intent(intent));
+        String action = intent == null ? null : intent.getAction();
+        boolean enabled = choices.applyAction(action);
+        if (!enabled && !recordingCommand(action)) { stopSelf(); return START_NOT_STICKY; }
+        if (intent != null && (recordingCommand(action) || Arrays.asList("voice-on", "voice-off", "clear-completed", "retry-transcription").contains(action))) commands.add(new Intent(intent));
         synchronized (signal) { signal.notifyAll(); }
         if (!started) { started = true; worker.submit(this::run); }
-        return START_STICKY;
+        return enabled ? START_STICKY : START_NOT_STICKY;
     }
     private void run() {
+        boolean initialized = false;
         try {
             store = new DeliveryStore(this); voice = new VoiceDelivery(store);
             SecretStore secrets = new SecretStore(this);
             secrets.provision(this);
             JSONObject config = secrets.load();
             MossClient client = new MossClient(config);
+            store.recordings = new RingRecordings(this, config, store.state.getString("sourceDeviceId"));
+            store.boundary = () -> consumeCommands(client, config);
+            initialized = true;
             wake = getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moss:vocci-delivery");
             while (!stopping && !Thread.currentThread().isInterrupted()) {
                 try {
                     wake.acquire(4 * 60 * 60 * 1000L);
+                    consumeCommands(client, config);
+                    if (!new DeliveryPreferences(this).enabled()) break;
                     // Verify the credential's current owner before touching queued recordings.
                     if (!client.owner().equals(config.getString("ownerId"))) { report("owner_mismatch"); break; }
-                    consumeCommands(client); voice.synchronize(client);
+                    voice.synchronize(client);
                     if (new DeliveryPreferences(this).autoCleanup()) store.clearExpiredCompleted(System.currentTimeMillis());
                     if (getPackageManager().checkPermission(Manifest.permission.BLUETOOTH_CONNECT, OFFICIAL) == PackageManager.PERMISSION_GRANTED) {
                         report("handoff_required"); break;
@@ -83,6 +95,7 @@ public final class DeliveryService extends Service {
                         reconnectAttempts = 0;
                         deliver(client);
                     } else report("storage_capacity");
+                } catch (OwnerMismatch error) { report("owner_mismatch"); break;
                 } catch (MossClient.Rejected error) {
                     report(error.status == 401 || error.status == 403 ? "session_refresh_required" : error.terminal() ? "server_rejected" : "server_unavailable");
                     if (error.terminal()) break;
@@ -108,8 +121,10 @@ public final class DeliveryService extends Service {
             if (active != null) active.close();
             if (wake != null && wake.isHeld()) wake.release();
             if (stopping && store != null) try { store.activity("stopped"); } catch (Exception ignored) { /* Preserve private failures. */ }
-            started = false;
-            stopSelf();
+            synchronized (this) {
+                if (initialized && !stopping && !commands.isEmpty()) worker.submit(this::run);
+                else { commands.clear(); started = false; stopSelfResult(latestStartId); }
+            }
         }
     }
     private void retrieve(JSONObject config, MossClient client) throws Exception {
@@ -118,8 +133,10 @@ public final class DeliveryService extends Service {
         try {
             Map<String, Integer> inventory = active.inventory();
             long inventoryAt = System.currentTimeMillis();
+            store.recordings.inventory(inventory, inventoryAt);
             voice.inventory(inventory, client);
             for (String name : store.retrievalOrder(inventory.keySet())) {
+                consumeCommands(client, config);
                 Integer packetSize = inventory.get(name);
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
@@ -135,6 +152,8 @@ public final class DeliveryService extends Service {
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 if (!store.admitSidecar(id, sidecar)) continue;
+                consumeCommands(client, config);
+                if (store.excluded(id)) continue;
                 store.reserveRetrieval(id, packetSize, sidecarSize, sidecar);
                 try { active.retrieve(name, packetSize, store.file(id, "packets.bin")); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
@@ -174,11 +193,12 @@ public final class DeliveryService extends Service {
             if (stopping || Thread.currentThread().isInterrupted()) return;
             JSONObject entry = store.entries.getJSONObject(id);
             String stage = entry.getString("stage");
-            if (stage.equals("discovered") || DeliveryStore.completed(stage) || stage.equals("failed") || stage.equals("interrupted") ||
-                !RetryPolicy.due(entry.optInt("attempts"), entry.optLong("nextAt"), System.currentTimeMillis())) continue;
+            if (store.boundary != null) store.boundary.run();
+            if (!store.deliveryDue(id)) continue;
             report("delivering");
             try {
                 if (stage.equals("retrieved")) { store.freeze(id); stage = "ready"; }
+                store.checkDelivery(id);
                 store.beginAttempt(id);
                 if (stage.equals("voice-status")) {
                     store.chatStatus(id, client.chat(entry.getJSONObject("status").getString("voiceRequestId")));
@@ -189,6 +209,11 @@ public final class DeliveryService extends Service {
                           (voice ? client.acceptVoice(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024)) : client.accept(PrivateFiles.read(store.file(id, "bundle.json"), 8 * 1024 * 1024))));
                     store.accepted(id, status);
                 }
+            } catch (DeliveryStore.Excluded excluded) {
+                if (entry.optBoolean("inFlight")) store.abandonAttempt(id);
+            } catch (OwnerMismatch error) {
+                if (entry.optBoolean("inFlight")) store.abandonAttempt(id);
+                throw error;
             } catch (MossClient.Rejected error) {
                 if (stopping) throw new InterruptedException();
                 if (error.status == 401 || error.status == 403) {
@@ -205,11 +230,42 @@ public final class DeliveryService extends Service {
             }
         }
     }
-    private void consumeCommands(MossClient client) throws Exception {
+    private void inspect(JSONObject config) throws Exception {
+        if (getPackageManager().checkPermission(Manifest.permission.BLUETOOTH_CONNECT, OFFICIAL) == PackageManager.PERMISSION_GRANTED)
+            throw new IllegalStateException("handoff_required");
+        boolean owned = active == null;
+        if (owned) active = new RingConnection(this, config);
+        try {
+            Map<String, Integer> inventory = active.inventory();
+            long at = System.currentTimeMillis();
+            store.recordings.inventory(inventory, at);
+            active.readTelemetry();
+            int count = 0;
+            for (String name : inventory.keySet()) if (name.endsWith(".opus")) count++;
+            HardwareStatus.publish(this, config, active.telemetry, at, count);
+        } finally { if (owned) { active.close(); active = null; } }
+    }
+    private void consumeCommands(MossClient client, JSONObject config) throws Exception {
         Intent command;
-        while ((command = commands.peek()) != null) {
+        boolean ownerVerified = false;
+        while ((command = commands.poll()) != null) {
             String action = command.getAction();
-            if (action.equals("voice-on") || action.equals("voice-off")) voice.desired(action.equals("voice-on"));
+            // Local maintenance is available offline. Existing delivery commands still
+            // require the credential's live owner before touching the queue or server.
+            if (!recordingCommand(action) && !ownerVerified) {
+                if (!client.owner().equals(config.getString("ownerId"))) throw new OwnerMismatch();
+                ownerVerified = true;
+            }
+            if (action.equals("exclude-recording")) store.recordings.exclude(command.getStringExtra("scope"), command.getStringExtra("recordingId"),
+                command.getStringExtra("selection"), command.getStringExtra("requestId"));
+            else if (action.equals("inspect-ring")) {
+                String result = "refreshed";
+                try { inspect(config); }
+                catch (InterruptedException interrupted) { throw interrupted; }
+                catch (Exception unavailable) { result = "handoff_required".equals(unavailable.getMessage()) ? "handoff_required" : "ring_unavailable"; }
+                store.recordings.receipt(command.getStringExtra("requestId"), result);
+            }
+            else if (action.equals("voice-on") || action.equals("voice-off")) voice.desired(action.equals("voice-on"));
             else if (action.equals("clear-completed")) store.clearCompleted();
             else if (action.equals("retry-transcription")) {
                 String id = command.getStringExtra("recordingId");
@@ -218,7 +274,6 @@ public final class DeliveryService extends Service {
                     entry.getJSONObject("status").getString("state").equals("failed") && entry.getJSONObject("status").optBoolean("retryable"))
                     store.accepted(id, client.retryVoice(entry.getJSONObject("status").getString("id")));
             }
-            commands.remove();
         }
     }
     @Override public synchronized void onDestroy() {

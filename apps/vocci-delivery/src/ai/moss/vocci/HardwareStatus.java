@@ -10,12 +10,14 @@ final class HardwareStatus {
         try {
             JSONObject snapshot = PrivateFiles.json(file(context));
             return snapshot.optString("ringId").equals(config.getString("deviceId")) &&
+                snapshot.optString("ownerId").equals(config.getString("ownerId")) && snapshot.optString("origin").equals(config.getString("origin")) &&
                 snapshot.optString("sn").equals(config.getString("sn")) ? snapshot : new JSONObject();
         } catch (Exception unavailable) { return new JSONObject(); }
     }
     static void publish(Context context, JSONObject config, RingTelemetry telemetry, long inventoryAt, int recordings) throws Exception {
         JSONObject snapshot = read(context, config);
         snapshot.put("ringId", config.getString("deviceId")).put("sn", config.getString("sn"))
+            .put("ownerId", config.getString("ownerId")).put("origin", config.getString("origin"))
             .put("contactAt", Math.max(inventoryAt, Math.max(telemetry.recordingAt, Math.max(telemetry.storageAt, telemetry.infoAt))))
             .put("inventoryAt", inventoryAt).put("recordings", recordings);
         if (telemetry.info != null) snapshot.put("info", new JSONObject().put("at", telemetry.infoAt)
