@@ -24,5 +24,6 @@
   <instrumentation android:name="ai.moss.vocci.SetupRingChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
   <instrumentation android:name="ai.moss.vocci.SetupPhysicalCheck" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
   <instrumentation android:name="ai.moss.vocci.SetupUiChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.vocci.SetupSelectionChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
   <instrumentation android:name="ai.moss.vocci.SetupReadyChecks" android:targetPackage="ai.moss.vocci.setupproof" android:functionalTest="true" />
 </manifest>

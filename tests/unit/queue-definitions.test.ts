@@ -21,6 +21,7 @@ describe("registered queue definitions", () => {
       "connectors.google-sync-continuation",
       "connectors.google-sync-sweep",
       "connectors.imap-sync",
+      "connectors.outlook-calendar",
       "connectors.email-refresh-account",
       "connectors.email-refresh-dispatch",
       "connectors.email-refresh-sweep",

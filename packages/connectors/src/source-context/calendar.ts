@@ -1,3 +1,5 @@
+import { OUTLOOK_BROWSER_PROVIDER } from "../outlook-calendar-config.js";
+import { outlookHealthKey, readOutlookHealth } from "../outlook-calendar-jobs.js";
 import { withSavepoint, type CalendarEvent, type DataContextDb } from "@moss/db";
 import {
   DEFAULT_LOCALE_SETTINGS,
@@ -215,7 +217,7 @@ function isMidnightUtc(iso: string): boolean {
 function cacheItem(
   row: CalendarEvent,
   meta: SourceAccountMeta,
-  degradedReason: DegradedReason
+  degradedReason: DegradedReason | null
 ): UnflaggedItem {
   const startsAt = toIso(row.starts_at);
   const endsAt = toIso(row.ends_at);
@@ -230,6 +232,8 @@ function cacheItem(
     location: row.location,
     attendeeCount: attendeeCountFromMetadata(row),
     source: "cache",
+    readOnly: row.external_metadata?.source === OUTLOOK_BROWSER_PROVIDER,
+    unconfirmed: row.external_metadata?.mirrorUnconfirmed === true,
     degradedReason
   };
 }
@@ -273,6 +277,48 @@ export async function listCalendarContext(
   for (const account of calendarCapable) {
     const meta = accountMeta(account);
 
+    if (account.provider_id === OUTLOOK_BROWSER_PROVIDER) {
+      const grant = await deps.preferencesRepository.get(
+        scopedDb,
+        featureGrantsPrefKey(account.id)
+      );
+      if (!isFeatureGranted(grant, "calendar")) {
+        gaps.push({ account: meta, reason: "feature_grant_disabled" });
+        continue;
+      }
+      const health = readOutlookHealth(
+        await deps.preferencesRepository.get(scopedDb, outlookHealthKey(account.id))
+      );
+      const fresh =
+        account.status === "active" &&
+        health.state === "current" &&
+        !!health.lastCompleteAt &&
+        now.getTime() - Date.parse(health.lastCompleteAt) < 15 * 60_000;
+      const rows = (await loadCache()).filter((row) => row.connector_account_id === account.id);
+      unflagged.push(
+        ...rows
+          .map((row) =>
+            cacheItem(
+              row,
+              meta,
+              row.external_metadata?.mirrorUnconfirmed === true
+                ? "unconfirmed"
+                : fresh
+                  ? null
+                  : "source_stale"
+            )
+          )
+          .filter((item) => inWindow(item, now, window))
+      );
+      accounts.push({
+        account: meta,
+        source: "cache",
+        asOf: health.lastCompleteAt ?? null,
+        degradedReason: fresh ? null : "source_stale"
+      });
+      if (!fresh) gaps.push({ account: meta, reason: "service_unavailable" });
+      continue;
+    }
     if (account.status === "revoked") {
       gaps.push({ account: meta, reason: "connector_revoked" });
       continue;

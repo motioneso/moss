@@ -666,6 +666,8 @@ describe("Calendar and Email connector-backed read modules", () => {
       expect(dto.attendeeCount).toBe(3);
       expect(dto.status).toBe("confirmed");
       expect(dto.isMossBlock).toBe(false);
+      expect(dto.readOnly).toBe(false);
+      expect(dto.unconfirmed).toBe(false);
       expect("externalMetadata" in dto).toBe(false);
       expect("historyId" in dto).toBe(false);
       expect("labelIds" in dto).toBe(false);
@@ -683,10 +685,12 @@ describe("Calendar and Email connector-backed read modules", () => {
         "isMossBlock",
         "location",
         "ownerUserId",
+        "readOnly",
         "startsAt",
         "status",
         "summary",
         "title",
+        "unconfirmed",
         "updatedAt"
       ]);
     });
@@ -706,6 +710,8 @@ describe("Calendar and Email connector-backed read modules", () => {
       const dto = serializeCalendarEvent(row);
 
       expect(dto.isMossBlock).toBe(false);
+      expect(dto.readOnly).toBe(false);
+      expect(dto.unconfirmed).toBe(false);
       expect(dto.allDay).toBe(false);
       expect(dto.attendeeCount).toBe(0);
       expect(dto.status).toBeNull();

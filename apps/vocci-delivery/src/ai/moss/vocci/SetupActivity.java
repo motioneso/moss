@@ -32,7 +32,7 @@ public final class SetupActivity extends Activity {
     private Button startDelivery, stopDelivery, readySettings, readyPermissionsButton, readyHandoff;
     private Switch hold;
     private boolean updatingHold;
-    private Button connect, check, cancel, send, verifyCode, resend, changeEmail, resumeLookup, select, verifyRing, nearby, appSettings, handoff;
+    private Button connect, check, cancel, send, verifyCode, resend, changeEmail, resumeLookup, select, changeRing, verifyRing, nearby, appSettings, handoff;
     private RadioGroup rings;
     private List<JSONObject> inventory = Collections.emptyList();
     private boolean busy = true, lookedUp;
@@ -107,6 +107,10 @@ public final class SetupActivity extends Activity {
             perform(() -> { link.selectBinding(binding); inventory = Collections.emptyList(); return "Ring selected. Complete the Bluetooth handoff, then verify."; });
         }, true);
         rings.setOnCheckedChangeListener((group, id) -> select.setEnabled(!busy && id >= 3200));
+        changeRing = button(ringSection, "Choose another ring", () -> perform(() -> {
+            link.clearBinding(); inventory = Collections.emptyList(); lookedUp = false;
+            return "Moss stays connected. Sign into Vocci again to choose another ring.";
+        }), false);
         nearby = button(ringSection, "Allow Nearby devices", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 31), false);
         appSettings = button(ringSection, "Open companion app settings", () -> settings(getPackageName()), false);
         text(ringSection, "If Vocci is installed, open its Permissions and remove Nearby devices access, then return here. Your existing ownership and recordings are kept.", 15, false);
@@ -251,6 +255,8 @@ public final class SetupActivity extends Activity {
         changeEmail.setEnabled(authEnabled && (step != VocciAccount.Step.EMAIL || lookedUp));
         select.setVisibility(inventory.isEmpty() ? View.GONE : View.VISIBLE);
         select.setEnabled(enabled && rings.getCheckedRadioButtonId() >= 3200);
+        changeRing.setVisibility(linked && selected ? View.VISIBLE : View.GONE);
+        changeRing.setEnabled(enabled && linked && selected);
         for (int i = 0; i < rings.getChildCount(); i++) rings.getChildAt(i).setEnabled(enabled);
         NativeTheme.update(ringSummary, selected ? "Selected ring …" + snapshot.ringSuffix + ". Verify its physical identity and connection key." :
             !inventory.isEmpty() ? "Choose a ring listed on your Vocci account." : lookedUp ? "No rings are listed. Establish ownership in Vocci first, then retry." : "Sign into Vocci to list your existing rings.");

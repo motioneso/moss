@@ -9,7 +9,7 @@ export const androidDeliveryFeature = {
       id: "meetings.android_developer_setup",
       path: "/settings?section=modules&module=meetings",
       description:
-        "Open the Android companion: fresh installs show Set up your ring; configured installs keep their setup. See apps/vocci-delivery/README.md for the guide and acceptance limits. Meetings settings enable the receiver only."
+        "Fresh Android installs show Set up your ring. Choose another ring before Verify keeps Moss connected and repeats Vocci lookup. Configured installs keep setup. See apps/vocci-delivery/README.md. Meetings settings enable the receiver only."
     }
   ],
   errors: [

@@ -7,6 +7,7 @@ import {
 import {
   applyAdditionEventId,
   chooseSlot,
+  calendarMirrorBusy,
   focusBlockEventId,
   resolveCalendarEventRef,
   isAllDayInterval,
@@ -25,6 +26,7 @@ import {
   type RescheduleEventResult
 } from "@moss/calendar";
 import {
+  outlookCalendarAvailabilityIssue,
   GoogleApiError,
   GoogleConnectError,
   type GoogleConnectionService,
@@ -98,6 +100,13 @@ async function createApplyAdditionEvent(
 
   const staged = await readApplyReads(deps, dataContext, access);
   if ("denied" in staged) return denied(staged.denied);
+  const availabilityIssue = await dataContext.withDataContext(access, (db) =>
+    outlookCalendarAvailabilityIssue(db, start, end, {
+      repository: deps.connectorsRepository,
+      preferences: deps.preferencesRepository
+    })
+  );
+  if (availabilityIssue) return denied(availabilityIssue);
   const token = await ensureApplyToken(deps, dataContext, access, staged.reads);
   if ("denied" in token) return denied(token.denied);
 
@@ -107,7 +116,10 @@ async function createApplyAdditionEvent(
     timeMax: end.toISOString(),
     calendarId: "primary"
   });
-  const blocked = (freeBusy.busy ?? []).some(
+  const mirrorBusy = await dataContext.withDataContext(access, (db) =>
+    calendarMirrorBusy(db, start, end, deps.calendarRepository)
+  );
+  const blocked = [...(freeBusy.busy ?? []), ...mirrorBusy].some(
     (busy) => start.toISOString() < busy.end && busy.start < end.toISOString()
   );
   if (blocked) {
@@ -279,6 +291,23 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
         };
       }
 
+      const availabilityIssue = await outlookCalendarAvailabilityIssue(
+        scopedDb,
+        resolved.start,
+        resolved.end,
+        { repository: deps.connectorsRepository, preferences: deps.preferencesRepository }
+      );
+      if (availabilityIssue)
+        return {
+          created: false,
+          resolvedStart: resolved.start.toISOString(),
+          resolvedEnd: resolved.end.toISOString(),
+          shifted: false,
+          conflict: "none",
+          calendarMirror: "skipped-error",
+          message: availabilityIssue
+        };
+
       // 2. Fresh access token (refreshes on <60s-to-expiry, after approval).
       let accessToken: string;
       try {
@@ -318,7 +347,13 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
         // All-day events (reminders, holidays, ...) come back from freeBusy as busy too, but
         // they aren't real time conflicts — drop them before slot-picking runs (#1711).
         const timedBusy = fb.busy.filter((b) => !isAllDayInterval(b, tz));
-        slot = chooseSlot(resolved, timedBusy, resolved.durationMinutes);
+        const mirrorBusy = await calendarMirrorBusy(
+          scopedDb,
+          resolved.start,
+          resolved.end,
+          deps.calendarRepository
+        );
+        slot = chooseSlot(resolved, [...timedBusy, ...mirrorBusy], resolved.durationMinutes);
       } catch {
         return {
           created: false,
@@ -502,6 +537,13 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
         };
       }
 
+      if (row.external_metadata?.source === "outlook-browser-calendar")
+        return {
+          deleted: false,
+          googleDeleted: "skipped-no-scope",
+          cacheMirror: "not-cached",
+          message: "Outlook calendar is read-only. Change this event in Outlook."
+        };
       // 2. Scope gate — no Google call without calendar-write scope.
       const calendarScope = await deps.connectorsRepository.getCalendarWriteScopeState(scopedDb);
       if (!calendarScope?.hasScope) {
@@ -629,6 +671,12 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
         return { ok: false, reason: "not_found" };
       }
       const row = resolved.event;
+      if (row.external_metadata?.source === "outlook-browser-calendar")
+        return {
+          ok: false,
+          reason: "no_scope",
+          message: "Outlook calendar is read-only. Change this event in Outlook."
+        };
 
       // 2. Hard refusal on attendees — independent of the confirmation card (spec decision 2).
       // Read from external_metadata, already synced at sync time (google-sync-phases.ts:172).

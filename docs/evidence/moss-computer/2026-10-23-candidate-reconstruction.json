@@ -1,0 +1,218 @@
+{
+  "task": "3578",
+  "parent": "3577",
+  "status": "BUILT_ARCHIVED_RUNTIME_NOT_RUN",
+  "recorded_utc": "2026-10-23T14:23:05.440084+00:00",
+  "operator": "Codex /root; active build finish operator",
+  "source_commit": "1ed0fd7da",
+  "prior_image": "sha256:5516b80402f9f4122a8551c6417c197356d73808ddfcf4b78f664c10c1e56c3a",
+  "candidate_image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+  "candidate_tag": "moss-computer-qualification:reconstruct-20261023-r2-candidate",
+  "derivation": "Exact tracked build files; derived Dockerfile inserts one run-specific LABEL immediately after FROM. No desktop source/config edits.",
+  "plan_sha256": "bc82b637a8c6d7e8e37177105b36a5ceabadfafb0bf40b46a5cc26a22e96f57e",
+  "derived_dockerfile_sha256": "a55c342c055e6eaaf6feba9ec5805d82ee20e113eda0ec457b3d20dcda231765",
+  "probe_dockerfile_sha256": "2db0cee911f9b6b10bef0427eb9d313e33626617a5b514da5a104e57f1848575",
+  "supervisor_sha256": "735d959829e24a2484eec3f9835706a0caf2a59831d320dac09a5d09c6d6b780",
+  "probe": {
+    "phase": "probe",
+    "label": "reconstruct-20261023-r2-probe",
+    "command": [
+      "docker",
+      "build",
+      "--memory=4g",
+      "--memory-swap=4g",
+      "--cpu-period=100000",
+      "--cpu-quota=200000",
+      "--force-rm",
+      "--rm",
+      "--pull=false",
+      "--network=none",
+      "--iidfile",
+      "<private-run-dir>/receipts/probe-image-id.txt",
+      "--tag",
+      "moss-computer-qualification:reconstruct-20261023-r2-probe",
+      "<private-run-dir>/probe"
+    ],
+    "reason": "intentional probe cancellation",
+    "elapsed_seconds": 7.23,
+    "client_exit": 143,
+    "observed_build_containers": {
+      "ca78f1201126": {
+        "Memory": 4294967296,
+        "MemorySwap": 4294967296,
+        "CpuPeriod": 100000,
+        "CpuQuota": 200000,
+        "NetworkMode": "none",
+        "label": "reconstruct-20261023-r2-probe"
+      }
+    },
+    "remaining_containers": [],
+    "closure_verified": true
+  },
+  "build": {
+    "phase": "candidate",
+    "label": "reconstruct-20261023-r2-candidate",
+    "command": [
+      "docker",
+      "build",
+      "--memory=4g",
+      "--memory-swap=4g",
+      "--cpu-period=100000",
+      "--cpu-quota=200000",
+      "--force-rm",
+      "--rm",
+      "--pull=false",
+      "--network=default",
+      "--iidfile",
+      "<private-run-dir>/receipts/candidate-image-id.txt",
+      "--tag",
+      "moss-computer-qualification:reconstruct-20261023-r2-candidate",
+      "<private-run-dir>/candidate"
+    ],
+    "reason": "build completed",
+    "elapsed_seconds": 85.73,
+    "client_exit": 0,
+    "observed_build_containers": {
+      "594182944c46": {
+        "Memory": 4294967296,
+        "MemorySwap": 4294967296,
+        "CpuPeriod": 100000,
+        "CpuQuota": 200000,
+        "NetworkMode": "bridge",
+        "label": "reconstruct-20261023-r2-candidate"
+      },
+      "d6c1d83baef4": {
+        "Memory": 4294967296,
+        "MemorySwap": 4294967296,
+        "CpuPeriod": 100000,
+        "CpuQuota": 200000,
+        "NetworkMode": "bridge",
+        "label": "reconstruct-20261023-r2-candidate"
+      }
+    },
+    "remaining_containers": [],
+    "closure_verified": true
+  },
+  "comparison": {
+    "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "image_bytes": 1006387842,
+    "architecture": "amd64",
+    "os": "linux",
+    "config_differences": {
+      "ArgsEscaped": {
+        "prior": true,
+        "current": null
+      },
+      "Labels": {
+        "prior": null,
+        "current": {
+          "com.moss.build": "reconstruct-20261023-r2-candidate"
+        }
+      }
+    },
+    "package_count": 400,
+    "prior_package_count": 400,
+    "package_differences": {},
+    "prior_packages_sha256": "a0a10591fccf4b375ea47e9ba44b7854c60571f43db388c95472dc505cf07fc9",
+    "current_packages_sha256": "a0a10591fccf4b375ea47e9ba44b7854c60571f43db388c95472dc505cf07fc9",
+    "prior_websockify": {
+      "Name": "websockify",
+      "Version": "0.13.0",
+      "Requires": "jwcrypto, numpy, redis, requests"
+    },
+    "current_websockify": {
+      "Name": "websockify",
+      "Version": "0.13.0",
+      "Requires": "jwcrypto, numpy, redis, requests"
+    },
+    "source_file_checks": {
+      "entrypoint.sh": {
+        "source_sha256": "a13bb5769f8358e1b73db2fd254d4fabd98621901dca3e936c9dfdc16fe40949",
+        "image_sha256": "a13bb5769f8358e1b73db2fd254d4fabd98621901dca3e936c9dfdc16fe40949",
+        "match": true
+      },
+      "requirements.txt": {
+        "source_sha256": "b063d1812dfdb8a5069a3ad60986fdd5fab730fc5e9f711f960f13b14a852cf6",
+        "image_sha256": "b063d1812dfdb8a5069a3ad60986fdd5fab730fc5e9f711f960f13b14a852cf6",
+        "match": true
+      },
+      "fixture.html": {
+        "source_sha256": "20f3db461ada7dcaae9e98f79413cf4c99777c7679c31470250480f674a2c6e2",
+        "image_sha256": "20f3db461ada7dcaae9e98f79413cf4c99777c7679c31470250480f674a2c6e2",
+        "match": true
+      }
+    },
+    "inspection_container_started": false,
+    "source_sha256": {
+      "compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+      "Dockerfile": "7334eb8946d90c55ed57d2e9e3b966716a8330c55c5affb28af7e522ba37503a",
+      "fixture.html": "20f3db461ada7dcaae9e98f79413cf4c99777c7679c31470250480f674a2c6e2",
+      "entrypoint.sh": "a13bb5769f8358e1b73db2fd254d4fabd98621901dca3e936c9dfdc16fe40949",
+      "requirements.txt": "b063d1812dfdb8a5069a3ad60986fdd5fab730fc5e9f711f960f13b14a852cf6",
+      "gateway.conf.template": "14b725a93df4913e114a32b52878141a182e58d0f0224284b699c8e25afa2374",
+      "README.md": "6de137ebcd1c065c9143c30775da218375c3b6e3ba863b9ea5cbf6f17e4c4973"
+    }
+  },
+  "archive": {
+    "archive_name": "candidate-image.tar",
+    "archive_bytes": 1026041856,
+    "archive_sha256": "48cdd56f8d026af02c873513d36c86ab48b3b9e0b169cefe7a4f2ab7a1ceb4f9",
+    "image_config_sha256": "c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "configuration_identity_matches": true,
+    "all_layer_digests_match": true,
+    "layers": [
+      {
+        "sha256": "9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+        "tar_entries": 4226
+      },
+      {
+        "sha256": "cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+        "tar_entries": 22680
+      },
+      {
+        "sha256": "5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+        "tar_entries": 3
+      },
+      {
+        "sha256": "87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+        "tar_entries": 56
+      },
+      {
+        "sha256": "8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+        "tar_entries": 4
+      },
+      {
+        "sha256": "7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+        "tar_entries": 3
+      },
+      {
+        "sha256": "ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b",
+        "tar_entries": 4
+      }
+    ]
+  },
+  "build_logs_sha256": {
+    "probe-build.log": "d34141bf57a5a6f8db6926bb3c538358645ba6c7302924b9c1d4a42d33cde8b6",
+    "candidate-build.log": "000f6e10731c0ef51f8f9b8a48420877f81a3826872b6f4708493ee5dedc91dd"
+  },
+  "closure": {
+    "build_containers_remaining": 0,
+    "inspection_container_remaining": 0,
+    "desktop_started": false,
+    "proof_listener_created": false,
+    "port_reserved": false,
+    "keys_generated": false,
+    "prior_synthetic_home_preserved": true,
+    "production_moss": "running healthy"
+  },
+  "not_run": [
+    "Desktop baseline/frame/input on rebuilt image",
+    "Crash/reconnect and fresh recovered input",
+    "Rebuilt-image persistence/sandbox/access negative controls",
+    "Moss owner/session/download integration",
+    "Internet/provider jobs",
+    "Ben manual/MacBook acceptance",
+    "Installer/platform/release gates"
+  ],
+  "adoption_review": "See 2026-10-23-independent-review.md for exact-artifact verdict."
+}

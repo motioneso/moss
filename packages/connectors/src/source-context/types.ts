@@ -22,7 +22,9 @@ export type DegradedReason =
   | "provider_error"
   | "rate_limited"
   | "timeout"
-  | "internal_error";
+  | "internal_error"
+  | "source_stale"
+  | "unconfirmed";
 
 export type EmailActionability =
   | "needs_reply"
@@ -101,6 +103,8 @@ export interface CalendarContextItem {
   readonly allDay: boolean;
   readonly location: string | null;
   readonly attendeeCount: number;
+  readonly readOnly?: boolean;
+  readonly unconfirmed?: boolean;
   readonly flags: readonly CalendarContextFlag[];
   readonly source: SourceMode;
   readonly degradedReason: DegradedReason | null;

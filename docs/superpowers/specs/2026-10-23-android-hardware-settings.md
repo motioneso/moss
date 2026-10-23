@@ -98,6 +98,12 @@ unknown status, a service restart or a longer gap resets it. This does not measu
 unobserved capture time. The one-hour policy is host-tested; a physical one-hour
 notification run remains separate endurance validation.
 
+Light and vibration meanings remain unverified for the supported legacy ring. The
+guide states that limitation and points to dated ring status and actual Meeting or
+hold-transcript results instead of inventing a feedback legend. A reported vibration
+in the existing physical delivery evidence does not establish its meaning or prove
+delivery; a validated feedback legend remains deferred.
+
 Individual recording inventory/inspection/exclusion/deletion remains group 3; a count
 is not recording management. The native UI explicitly reports that management and
 firmware updating are unavailable. The shared Meetings settings already expose
