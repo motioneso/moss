@@ -22,6 +22,17 @@ describe("restricted visual runtime experiment", () => {
 
   it.each([
     "",
+    ...[
+      "()",
+      ",",
+      ",,,,",
+      " Reply([])",
+      ' Fact("hours")',
+      ',Fact("budget")',
+      '(Fact("budget"))'
+    ].map((suffix) => program.slice(0, -1) + suffix),
+    'root = Reply([Section("Missing comma" [Fact("hours")])]);',
+    'root = (Reply([Section("Grouped", [Fact("hours")])]));',
     program + " /* silently ignored by a permissive parser */",
     program + " root = Reply([]);",
     'root = Reply([Section("State", [Fact($field)])]);',
