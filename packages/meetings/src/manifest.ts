@@ -393,7 +393,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.automatic_summary",
       description:
-        "Automatic summaries use your default model without fallback. API-key, Codex and Claude routes use structured generation. Toggle Summarize automatically after Stop in Settings → Meetings; Rewrite summary stays available."
+        "Automatic summaries default on and use your default model without fallback. Turn off Summarize automatically after Stop in Settings → Meetings. Only these rename Untitled meeting; Rewrite summary stays available."
     },
     {
       id: "transcribe.meeting",
