@@ -1,0 +1,164 @@
+{
+  "run": "readiness-r8",
+  "status": "BLOCKED_BEFORE_LAUNCH",
+  "reason": "PRELOAD_RAM_BELOW_FLOOR",
+  "operator": "Codex /root",
+  "session": "01a16a09-742c-7ad2-b28b-1ba373a9b100",
+  "branch": "qualify/moss-computer-startup-readiness",
+  "base_commit": "7adef8b756d831245ca0050229b25c0213b8c6b8",
+  "task": 3578,
+  "parent": 3577,
+  "prerequisites": {
+    "3587": {
+      "state": "MERGED",
+      "merged_at": "2026-10-23T18:05:10Z",
+      "merge_commit": "c29003abb62c201caa2f1f78d86467332399efcf"
+    },
+    "3588": {
+      "state": "MERGED",
+      "merged_at": "2026-10-23T18:05:50Z",
+      "merge_commit": "126e34dbfa03242895bc573fe9001b3a443f157b"
+    },
+    "3595": {
+      "state": "MERGED",
+      "merged_at": "2026-10-23T18:32:36Z",
+      "merge_commit": "7adef8b756d831245ca0050229b25c0213b8c6b8"
+    }
+  },
+  "entry": {
+    "at": "2026-10-23T18:34:08.609264+00:00",
+    "available_ram_bytes": 9131032576,
+    "root_free_bytes": 54326714368,
+    "data_free_bytes": 1004072615936,
+    "floors": {
+      "ram_root": 8589934592,
+      "data": 32212254720
+    },
+    "pass": true
+  },
+  "initial_transcript_sample": {
+    "at": "2026-10-23T18:33:26Z",
+    "available_ram_bytes": 8677879808,
+    "root_free_bytes": 54327566336,
+    "data_free_bytes": 1004072648704,
+    "source": "transcript only; no separately retained raw output"
+  },
+  "entry_checks_complete_at": "2026-10-23T18:35:02.295421+00:00",
+  "image_at_entry": {
+    "tag": "ABSENT",
+    "exact_digest": "ABSENT",
+    "source": "separate tag/digest inspect transcript outputs; not retried"
+  },
+  "archive_verification": {
+    "at": "2026-10-23T18:35:02.295421+00:00",
+    "archive_bytes": 1026041856,
+    "archive_sha256": "48cdd56f8d026af02c873513d36c86ab48b3b9e0b169cefe7a4f2ab7a1ceb4f9",
+    "config_sha256": "c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "layers": [
+      "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+      "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+      "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+      "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+      "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+      "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+      "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+    ],
+    "os": "linux",
+    "architecture": "amd64",
+    "result": "PASS"
+  },
+  "restoration_review": {
+    "reviewer": "/root/readiness_review",
+    "verdict": "PASS_RESTORE_READY",
+    "archive_receipt_sha256": "fc21d375c92822a19cad0f3486b5e3cba3439adae01bd9583a531ec84ac9f48f",
+    "actual_archive_config_seven_layers_independently_verified": true,
+    "conditional": "Fresh resource floors before one bounded exact load and identity/layer inspect; no runtime acceptance"
+  },
+  "pre_load_gate": {
+    "at": "2026-10-23T18:36:17.381831+00:00",
+    "ram": 8490229760,
+    "root": 54320136192,
+    "data": 1004072312832,
+    "pass": false
+  },
+  "ram_shortfall_bytes": 99704832,
+  "image_load_exit": null,
+  "load_attempted": false,
+  "runtime_started": false,
+  "runner_exit": null,
+  "pre_load_wrapper_exit": 1,
+  "watchdog_exit": null,
+  "cleanup_exit": 0,
+  "port": 5184,
+  "port_claim_exit": 0,
+  "port_release_exit": 0,
+  "qualification": {
+    "guest_gateway_readiness": "NOT_RUN",
+    "protected_access": "NOT_RUN",
+    "access_protection_removal_restoration": "NOT_RUN",
+    "current_UI_RFB_frame": "NOT_RUN",
+    "fresh_viewer_keyboard_input": "NOT_RUN",
+    "runtime_isolation": "NOT_RUN",
+    "runtime_supervision": "NOT_RUN",
+    "Firefox_sandbox": "NOT_RUN",
+    "profile_flush": "NOT_RUN",
+    "replacement_persistence": "NOT_RUN",
+    "idle_sleep_wake": "NOT_RUN",
+    "Moss_owner_integration": "NOT_RUN"
+  },
+  "closure": {
+    "at": "2026-10-23T18:36:51.322606+00:00",
+    "containers": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "networks": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "listener": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "port_reservation": {
+      "list_exit": 0,
+      "owned_name_present": false
+    },
+    "ephemeral_identity_files": [],
+    "owned_script_processes": [],
+    "recorded_host_browser_remaining": [],
+    "retained_paths_present": {
+      "<private-run>/home": true,
+      "<private-siblings>/moss-computer-persistence-r6/home": true,
+      "<private-siblings>/moss-computer-recovery-r4/home": true,
+      "<private-siblings>/moss-computer-recovery-r3/home": true,
+      "<private-siblings>/moss-computer-proof-r1/home": true,
+      "<private-siblings>/moss-computer-reconstruct-r2/candidate-image.tar": true
+    }
+  },
+  "preparation": "Fresh identity/home/socket/receipt directories and port only; copied r7 scripts were never executed and discarded as unused scratch except closure.py. No keys, browser, watchdog, containers or launch packet. No readiness acceptance transferred.",
+  "private_reference": "../moss-computer-readiness-r8/; all previous homes/scripts/receipts/archive retained",
+  "no_retry": true,
+  "next_proposal": "Separately dispatch the same bounded startup-readiness qualification once host capacity is available, with new unused identity, fresh floors, exact archive verification/restoration review if absent, committed exact launch packet and independent review; no automatic rerun.",
+  "private_receipt_sha256": {
+    "archive-verification.json": "fc21d375c92822a19cad0f3486b5e3cba3439adae01bd9583a531ec84ac9f48f",
+    "closure-command.json": "ee0e6c3eab804ec15ea109bf8533596696f81393a9009f4149b5a535e57b5ac8",
+    "closure.json": "73f408a3743477fc40ecdc3f23f0effbbcf7d9ca6c23d5c6d32d7a45ecc8afb9",
+    "entry.json": "cc7b46a8dc7b87a978acaea38efd2e1c90d200fdf01f00d0c25b52edce2d15fd",
+    "port-claim.json": "c0b1d30ddc695feff69f96dd42846dab1b6785912ae19b2cae7e598c60fd0fce",
+    "port-release.json": "8676c4980a9117da2c3efbe52bed54bae6aebfbe69a566d19c6e4d316facbb0f",
+    "pre-load.json": "05fb226ccdcb656548b1e65331643de879f0dd95e4402c0363c72045d287c522",
+    "restoration-review.json": "6a42c3377acff73ce278c1bef7bc5169b3974ba1f804e0b3f31f026c3eb9d3d6"
+  },
+  "private_support_sha256": {
+    "closure.py": "dbe668fde94b149155184911282507fd31b94b874aa25e507dd59bbb7bc8a9e3"
+  }
+}

@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** latest persistence-r7 stopped at protected owner WebSocket502; replacement persistence remains unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
+- **Current status:** startup-readiness-r8 stopped before image load at the required fresh RAM floor; startup readiness and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -334,3 +334,35 @@ Independent current closure checks confirmed both full container IDs absent, zer
 network/listener/reservation/scripts/host-browser identity/keys, retained homes/archive and healthy
 Moss. Next proposal is separately reviewed startup readiness with actual current UI/RFB and gateway/
 backend diagnostics. No second run, integration, merge, automatic parent adoption or issue close.
+
+## Startup readiness r8: pre-load rejection evidence accepted
+
+Reviewer `/root/readiness_review`, independent of author/operator Codex `/root`, returned
+**PASS — exact r8 rejection evidence and preparation closure accepted; no blocking findings.**
+No reviewer edits, resource-gate retries or runtime mutations occurred.
+
+The reviewer first independently verified the actual retained archive size/checksum, config identity
+and all seven actual layer payload hashes, returning PASS_RESTORE_READY conditional on fresh
+resource floors before one load and subsequent exact identity/layer inspection. Archive-verification
+receipt SHA256 `fc21d375c92822a19cad0f3486b5e3cba3439adae01bd9583a531ec84ac9f48f`.
+The fresh pre-load RAM gate failed before `docker load`:8,490,229,760 bytes, below8GiB by99,704,832.
+No image load, runtime, startup correction or launch packet was completed.
+
+| Exact accepted artifact                         | SHA-256                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| [r8 report](2026-10-23-startup-readiness-r8.md) | `35d1484b82816280bfc55b2429b3d6175ea3c6234f3d7d11a1e52bd73feae21d` |
+| [r8 JSON](2026-10-23-startup-readiness-r8.json) | `5b27658e19354551a781a3e84638c4ff507f90ffa51a661f32b8eeaf27636f73` |
+| Spec with section18                             | `b88f8b0fd39e0ff92e45666b6a62d6f42e88a78f49abc4e65ce4e23cc62d8eb7` |
+
+All eight raw receipt hashes and the closure checker hash matched. Raw/sanitised samples, archive,
+conditional review, closure and arithmetic agreed. The unrun load/runner/watchdog exits are null;
+pre-load wrapper1, operator closure0 and port release0 are recorded. Scoped formatting, privacy,
+relative links and whitespace passed.
+
+Independent current closure found zero exact-label containers/network/listener5184/reservation or
+owned private-root processes; fresh home/socket/identity directories were empty and no host-browser
+identities existed. Earlier homes including r7 and the archive remained; Moss was `running healthy`.
+This accepts **BLOCKED_BEFORE_LAUNCH** accuracy and preparation closure only. Startup/access/current
+UI/frame/input/runtime supervision, active Firefox sandbox and replacement persistence remain
+NOT_RUN or unqualified. One next proposal is the same bounded qualification after separately
+dispatched fresh capacity/identity/packet gates. No automatic retry, merge or issue close.
