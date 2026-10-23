@@ -161,12 +161,16 @@ jobs:
           status=0
           for attempt in 1 2; do
             status=0
-            timeout --verbose --signal=TERM 5m pnpm exec playwright install --with-deps chromium \
+            # The timeout must own apt's privileges so it can stop apt before retrying.
+            sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m \
+              pnpm exec playwright install-deps chromium \
+              && timeout --verbose --signal=TERM --kill-after=15s 5m \
+                pnpm exec playwright install chromium \
               || status=$?
             if [ "$status" -eq 0 ]; then break; fi
           done
-          if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit-chromium-install budget=5m issue=#1534"
+          if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit-chromium-install budget=5m-per-phase issue=#1534"
           fi
           exit "$status"
 
@@ -280,21 +284,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # #1724: `--with-deps` can stall in apt, so bound and retry the install.
+      # #1724: Bound system dependencies separately from runner-owned browser downloads.
       - name: Install Playwright browsers
         run: |
           status=0
           for attempt in 1 2; do
             status=0
-            timeout --verbose --signal=TERM 5m pnpm exec playwright install --with-deps chromium \
+            # The timeout must own apt's privileges so it can stop apt before retrying.
+            sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m \
+              pnpm exec playwright install-deps chromium \
+              && timeout --verbose --signal=TERM --kill-after=15s 5m \
+                pnpm exec playwright install chromium \
               || status=$?
             if [ "$status" -eq 0 ]; then break; fi
-            if [ "$status" -eq 124 ]; then
-              echo "::warning title=Playwright install timed out::attempt $attempt of 2 hit the 5m budget"
+            if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+              echo "::warning title=Playwright install timed out::attempt $attempt of 2 hit a 5m phase budget"
             fi
           done
-          if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-install budget=5m issue=#1534"
+          if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-install budget=5m-per-phase issue=#1534"
           fi
           exit "$status"
 
