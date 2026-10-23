@@ -105,6 +105,13 @@ describe("visual reply transaction and portable history", () => {
     });
     try {
       await fixtureDb.deleteFrom("app.chat_threads").where("id", "=", thread.id).execute();
+      expect(
+        await fixtureDb
+          .selectFrom("app.chat_messages")
+          .select("id")
+          .where("thread_id", "=", thread.id)
+          .execute()
+      ).toEqual([]);
     } finally {
       await fixtureDb.destroy();
     }
