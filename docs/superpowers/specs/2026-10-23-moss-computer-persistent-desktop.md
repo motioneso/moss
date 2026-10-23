@@ -1,7 +1,7 @@
 # Moss Computer: one persistent owner desktop
 
 - **Date:** 2026-10-23 UTC
-- **Status:** Autonomous implementation authorised. Offline candidate implemented; partial qualification accepted only for covered cases. Recovery rendering is unqualified; Moss integration is not implemented.
+- **Status:** Autonomous implementation authorised. Offline candidate implemented; partial qualification accepted only for covered cases. Reconstructed candidate rapid-restart recovery qualified by automated proof; long-outage recovery and Moss integration remain unqualified.
 - **Parent:** #3577. First qualification: #3578.
 - **Plan:** [Isolated qualification](../plans/2026-10-23-moss-computer-isolated-qualification.md).
 - **Authority:** Ben's supplied “Moss next steps after Stage 4, focused planning update 1”, MC0 request, device clarification, acceptance of the supplied v7 material without separate pack verification, instruction to write the spec/plan and proceed overnight, and subsequent explicit full authority to plan and implement autonomously, provider-agnostic and following repository guidelines.
@@ -130,3 +130,13 @@ The proof home/files directory uses a monitored 10 GiB threshold, not a quota; t
 The [qualification ledger](../../evidence/moss-computer/2026-10-23-isolated-qualification.md) records real offline desktop input, active Firefox content sandbox diagnostics (user namespaces unavailable), isolated proof-CA route checks and negative controls, actual container replacement with retained file/profile/bookmark, resources and attended cleanup. Ben manual/MacBook cases, Internet browsing and Moss ownership integration remain NOT_RUN.
 
 Crash socket reconnection occurred, but recovered rendering/input did not qualify. Stop/split at that gate; the [one next proposed assignment](../plans/2026-10-23-moss-computer-recovery-qualification.md) addresses only recovered viewing/input. No production, installer, release or whole-guide-stage acceptance follows. Full implementation authority remains; no new routine permission is required.
+
+## 12. Reconstructed-candidate recovery checkpoint
+
+The [recovery-r3 result](../../evidence/moss-computer/2026-10-23-recovery-r3.md) qualifies real
+visible rendering and fresh viewer keyboard input after a rapid fixed-host restart on the adopted
+reconstructed image. The synchronous readiness harness passed after a stopped-guest frame control
+failed at the actual canvas assertion. Historical async readiness checks were unreliable; the
+original canvas-timeout cause remains unknown. This does not transfer earlier replacement/profile
+acceptance to the rebuild. Long-outage/reload, Moss integration and the other gates stay separate.
+The one next proposal is a bounded delayed-restart/reload proof, not an integration dispatch.

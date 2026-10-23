@@ -4,13 +4,13 @@ Part of #3577; completes the outstanding recovery gate of #3578. **Dispatched by
 Full autonomous implementation authority persists. This stop follows the bounded report/context
 discipline after repeated proof failures; it is not another permission requirement.
 
-**Active amendment: reconstructed candidate recovery r3.** The original missing-image
+**Completed bounded amendment: reconstructed candidate recovery r3.** The original missing-image
 [preflight](../../evidence/moss-computer/2026-10-23-recovery-qualification.md) remains historical.
 The [adopted reconstructed image](../../evidence/moss-computer/2026-10-23-candidate-reconstruction.md)
 is the only candidate for this new trial. Fresh inspection found it absent again; cause UNKNOWN.
 Its retained archive checksum, config and all seven layer digests were reverified before bounded
-loading (exit0). No reconstruction or host substitution. Runtime must await independent exact
-packet/config/supervisor/instrumentation review.
+loading (exit0). No reconstruction or host substitution. Runtime followed independent exact
+packet/config/supervisor/instrumentation review. See the [bounded result](../../evidence/moss-computer/2026-10-23-recovery-r3.md); no further runtime is dispatched by this packet.
 
 Current Codex session `/root` is the active automated finish operator. Run `recovery-r3` uses fresh
 private runtime/home/socket/ephemeral identities, with reserved loopback port5180. The prior homes
@@ -80,6 +80,13 @@ and current RFB canvas including attachment/visibility/target/geometry/colour co
 failures while page is open, then close browser. Keep the automatic mode unchanged for the
 first diagnostic loop. If it fails, present3–5 ranked falsifiable hypotheses before changing one
 variable; reload or fresh page are distinct modes, never automatic acceptance. No blind upgrade.
+
+Installed Playwright1.60.0 returned immediately for an async false wait predicate; a synchronous
+false predicate timed out. Synchronously poll the actual imported UI and current RFB state.
+The first r3 frame/input pass remains provisional; the corrected harness later passed separately. Run
+a stopped-guest negative control through the same frame assertion (expected exit1), then restart
+through the fixed host operation and rerun automatic recovery. Keep both attempts. This readiness
+assertion defect does not establish the cause of the historical rendering failure.
 
 Actively finish well before60 minutes. Confirm a normal substantive frame; abruptly stop the guest;
 observe the viewer's disconnect; restart it through the fixed host operation; perform the chosen
