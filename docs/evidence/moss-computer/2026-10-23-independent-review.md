@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** reconstructed-candidate rapid fixed-host restart recovery PASS, scoped to the final r3 review below. Historical original-image recovery failure and earlier reviews are preserved; long-outage recovery remains unqualified.
+- **Current status:** latest persistence-r7 stopped at protected owner WebSocket502; replacement persistence remains unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -286,3 +286,51 @@ and archive remain present; Moss is healthy. No rehash of all prior contents was
 No further runtime, automatic merge, parent adoption or issue close follows. The sole next proposal
 is bounded current-window rediscovery/error handling and failure diagnostics, then separately
 reviewed/dispatched qualification with fresh resource gates.
+
+## Persistence r7: exact amended readiness
+
+Reviewer `/root/independent_review` independently verified the retained archive size/SHA256, actual
+config identity and all seven layers before PASS_RESTORE_READY for one bounded exact load. No
+reviewer authored files or performed runtime mutations.
+
+Initial candidate `071a27801` was NOT_READY: author and reviewer found that `terminal(command)`
+shadowed the command helper. Actual terminal call-site regression observed TypeError before the
+parameter correction and passed afterwards. No runtime launched from that candidate.
+
+Amended committed packet `93cbe881ebe6645a8610c85246280d89aa6555ae` received **PASS_READY**, conditional
+on the live alive/healthy watchdog/resource gate. Packet SHA256
+`c14026788dde8fee980ce64ee85bbe17db72d5575d303b9833fdf931c9f3e05f`; private18-artifact manifest
+SHA256 `911cd237a99a9d83f7add8b9226d069b8077ad8bd1a85cdeede75b00ab2675c7`.
+Reviewer checked every actual hash/table, regressions/Node/Python syntax, scoped formatting/whitespace,
+resolved configuration/security, synthetic certificates/foreign rejection, empty fresh home/socket,
+port reservation, exact image and cleanup design. No blockers remained; readiness was not runtime
+acceptance. Final r7 result review is recorded separately below after exact evidence review.
+
+## Persistence r7: final rejection evidence accepted
+
+Reviewer `/root/independent_review` returned **PASS — exact final r7 rejection evidence and verified
+closure accepted; no blocking findings**. Acceptance is limited to REJECTED_INCOMPLETE_PROOF and
+closure. Viewer/Firefox/window/sandbox/clean flush/persistence/replacement remain NOT_RUN.
+No reviewer authored fixes or performed runtime mutations.
+
+Before final acceptance, author privacy scan and independent review caught absolute host paths in
+public JSON dictionary keys. The sanitizer was corrected to clean keys as well as values; private
+closure receipts stayed unchanged. Corrected public bytes below passed renewed privacy checks.
+
+| Exact accepted final artifact                    | SHA-256                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| [Report](2026-10-23-persistence-r7.md)           | `cdbf14ce9066002869982d90437c96dc1ef3adf5fd6ece479da23dbd1714be59` |
+| [Sanitised JSON](2026-10-23-persistence-r7.json) | `01291249ab867c2fed850b542fca697170150204c77df02d52b2351f703d2e13` |
+| Final spec                                       | `ed6cf6e27c3c054b7e35f17bc5e2b3031fa604db78887428d3f54861853c96c7` |
+
+All32 raw receipt hashes, three supporting hashes and18 unchanged launch hashes matched. Raw and
+sanitised values agree, including closure keys and sampled isolation addresses. Actual pre-cleanup
+inspect settings/IDs/cgroups, protected502, no Firefox/harness/replacement, missing gateway upstream
+log and single-prelaunch-sample limits were independently checked. Scoped formatting/privacy/links/
+whitespace passed. The ledger before this final verdict append had SHA256
+`41a10aa89c5b504670f6f04b5185901aa136bdb12ff68e8011cee8ed4fd9ac27`.
+
+Independent current closure checks confirmed both full container IDs absent, zero owned labels/
+network/listener/reservation/scripts/host-browser identity/keys, retained homes/archive and healthy
+Moss. Next proposal is separately reviewed startup readiness with actual current UI/RFB and gateway/
+backend diagnostics. No second run, integration, merge, automatic parent adoption or issue close.

@@ -215,3 +215,24 @@ fresh exact independent review and a separately dispatched qualification with re
 No rerun, product/sleep implementation, owner integration, merge or issue close is dispatched here.
 Section14 remains the historical r5 entry rejection; the adopted-image sandbox/replacement gates
 remain unqualified after r6.
+
+## 17. Adopted-image persistence r7: protected access rejection
+
+Ben dispatched bounded current-window/error-handling corrections and one fresh qualification through
+this [handoff](../handoffs/2026-10-23-moss-computer-window-persistence.md). Fresh entry passed; the
+retained archive/config/seven layers were verified and exact image restored once. Corrected private
+harness regressions and amended committed packet passed independent prelaunch review.
+
+The single [r7 run](../../evidence/moss-computer/2026-10-23-persistence-r7.md) stopped at the first
+protected owner WebSocket assertion:502, expected101. Initial sampled isolation passed, but actual
+viewer/Firefox/window/sandbox testing, clean flush, persistence controls and replacement were not
+reached. A startup-readiness timing gap is only a hypothesis; absent gateway upstream diagnostics
+leave the cause UNKNOWN. No retry or relaxed assertion occurred. Real-window corrections remain
+unqualified by runtime. One prelaunch watchdog sample does not establish continuous host headroom.
+
+Active cleanup and closure checks found no owned runtime/listener/reservation/ephemeral identities;
+homes/archive remain and Moss is healthy. The next proposal is one separately reviewed bounded
+startup-readiness qualification with actual current UI/RFB and gateway/backend failure diagnostics,
+retaining all protection/resource/error-stop gates. No second run, product/sleep implementation,
+owner integration, merge or issue close is dispatched. Sections14/16 retain their historical failures;
+adopted-image active sandbox and replacement persistence remain unqualified.
