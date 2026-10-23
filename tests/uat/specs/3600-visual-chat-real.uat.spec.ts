@@ -280,6 +280,7 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
 }) => {
   test.setTimeout(600_000);
   await signInUatAdmin(page);
+  await bringUpRealChatModel(page);
   let chat = await drawer(page);
   const prompt =
     'First call chat.present to show all these facts visually. After the tool succeeds, write a detailed 2000-word explanation of organizing a workshop.\n```json\n{"project":"Workshop","hours":6,"ready":true}\n```';
@@ -314,6 +315,25 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
   await expect(chat.getByText("Preparing visual…", { exact: true })).toHaveCount(0);
   console.log("[visual-lifecycle] switching to a side chat discarded the old pending visual");
 
+  // The fault-injection scenario is independent of the new side chat's first model turn.
+  // The preceding attempt after a switch listed tools but returned prose without a call.
+  await chat.getByRole("button", { name: "Open conversations" }).click();
+  await chat.getByRole("button", { name: "Main chat", exact: true }).click();
+  const threads = await (await page.request.get("/api/chat/threads?surface=drawer")).json();
+  const main = threads.threads.find((thread: { isMain: boolean }) => thread.isMain);
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get("/api/chat/privacy?surface=drawer")).json()).threadId
+    )
+    .toBe(main.id);
+  const mainHistory = await (
+    await page.request.get(`/api/chat/threads/${main.id}/messages?surface=drawer`)
+  ).json();
+  const baselineVisuals = mainHistory.messages.filter(
+    (message: { visualReply?: unknown }) => message.visualReply
+  ).length;
+  await expect(chat.getByLabel("Visual reply")).toHaveCount(baselineVisuals);
   const failed = await start();
   // Fault the real third-party CLI process in this disposable container. Moss responses are unmodified.
   const killCli = `import { readdirSync, readFileSync } from "node:fs";
@@ -349,7 +369,7 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
   expect(failedReply.visualReply).toBeUndefined();
   expect(failedReply.assistantMessageId).toBeUndefined();
   await expect(chat.getByText("Preparing visual…", { exact: true })).toHaveCount(0);
-  await expect(chat.getByLabel("Visual reply")).toHaveCount(0);
+  await expect(chat.getByLabel("Visual reply")).toHaveCount(baselineVisuals);
   console.log(
     "[visual-lifecycle] real CLI failure removed accepted visual; no response interception"
   );
