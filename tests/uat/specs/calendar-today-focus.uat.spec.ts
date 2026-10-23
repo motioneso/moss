@@ -55,6 +55,11 @@ for (const width of [1280, 390, 320]) {
       localStorage.setItem("moss.cal.cursor", "2026-08-01T00:00:00Z");
     });
     await page.goto("/calendar");
+    // Exercise the unchanged shared styles in light, dark and a park theme.
+    await page.evaluate((w) => {
+      document.documentElement.dataset.colorMode = w === 390 ? "dark" : "light";
+      document.documentElement.dataset.theme = w === 320 ? "sage" : "default";
+    }, width);
     const view = page.getByRole("group", { name: "View" });
     await todayVisible(page, ".cal-tg__dayhd.is-today");
     await expect(page.locator(".cal-tg__dayhd.is-today")).toContainText("24");
