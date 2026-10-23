@@ -417,10 +417,12 @@ Its disposable endpoint/worker/database and provider stopped afterward.
 
 All six CI workflows passed on `9493096ac`, including overall CI
 `39865534417` after the pretest browser-install retry. Local foundation
-`20261022-153110` has passed static checks, 17,888 unit tests (three skipped)
-and 35 UAT-seed checks; integration remains in progress. These receipts apply
-to their recorded inputs. Captured audio and diagnostic authentication artifacts
-remain private.
+`20261022-153110` completed with exit 0 on clean `9493096ac`, input fingerprint
+`eae05e3c331b`: static checks, 17,888 unit tests (three skipped), 35 UAT-seed
+checks and 4,076 integration checks (two skipped across 392 files) passed.
+Integration took 3,638 seconds; quiet log intervals did not establish a failure.
+The owned database container was removed. These receipts apply to their recorded
+inputs. Captured audio and diagnostic authentication artifacts remain private.
 
 ## Current physical delivery and recovered output proof
 
@@ -458,13 +460,76 @@ to two minutes after hardware cleanup. No new owner action is pending. The first
 hold's absence is unexplained; vibration and proximity on the successful repeat
 do not establish its cause.
 
+## Permission denial, saved-selection recovery and final CI
+
+Focused native checks in runs `20261022-163642` and `20261022-164704` denied
+Nearby devices access to the isolated proof package only. Pressing the actual
+Verify control showed the actionable permission remediation. Configuration
+remained absent, encrypted selection remained staged, and the original
+companion configuration and queue hashes were unchanged. Interrupted native
+sign-in was also recovered through the actual Clean up sign-in control; a new
+request waited until Send code was enabled. No prior code or session was assumed
+valid after cleanup.
+
+Both canonical runs still exited 1 while automating the subsequent permission
+grant. In the second run, a separate observer opened the actual native Allow
+Nearby devices action, observed Android's permission-controller dialog, pressed
+its Allow control and confirmed the platform grant. Without another email code,
+it pressed the actual Verify ring control on the saved selection. Physical
+verification and atomic publication completed; staging was absent and the
+original companion hashes remained unchanged. The recovery observer exited 0;
+this does not change the canonical failure into a passing receipt. The exact
+cause of the missed automated permission grant is unresolved.
+
+Actual browser failure cleanup then revoked the disposable device and observed
+its row disappear. Isolated EMPTY and unchanged original hashes were confirmed;
+the owned browser and reverse stopped. No new recording was requested in these
+permission checks.
+
+All six CI workflows completed successfully on `bcfcbc714`, including overall
+CI `39871720426`, Android `39871720779`, app actions `39871720459`, Meeting
+revocation `39871720631`, Meeting security `39871720513` and Meeting draft UI
+`39871720714`. Unit and draft-UI jobs each needed one pretest dependency-install
+retry. The retries passed without relaxing assertions. Local foundation
+`20261022-153110` remains the complete passing receipt for its earlier recorded
+inputs; this documentation update does not turn it into a receipt for a new HEAD.
+
+## Bounded follow-up and stopping the repeated setup cycle
+
+Focused run `20261022-170202` tested `bcfcbc714` with this evidence document
+dirty (fingerprint `a6c212b98f7b`). Native/browser account setup, real Vocci sign-in,
+explicit selection/restart, actual Android Nearby grant after one explicit
+request retry, physical identity/key verification, fresh-owner confirmation,
+atomic save and actual Ready Start passed again. The journal showed a genuine
+pending ring download and hold opt-in requested; fresh hold enrollment and new
+Meeting output were not claimed in this run.
+
+The run was narrowed to a separate pending-download upgrade check instead of
+waiting for another download of old long audio. That observer failed an assertion;
+it did not retain enough assertion detail to identify the exact failed condition.
+It is **not** a passing upgrade/restart receipt or evidence of a product regression.
+The canonical observer was terminated through its owned cleanup path and exited 1.
+Actual browser revocation, isolated EMPTY and original configuration/queue hashes
+were confirmed. Its API, database, provider, browser and reverse stopped; the owned
+proof runner stopped afterward. The phone timeout was restored to two minutes.
+No further setup/sign-in run was launched.
+
+## Acceptance accounting
+
+| Approved requirement     | Evidence available                                                                                                                                                                                            | Limit                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Native feasibility       | Actual email-code sign-in, accepted binding GET and temporary-session cleanup; installed native contracts                                                                                                     | Live account did not request MFA; TOTP and unsupported factors use synthetic contracts                    |
+| Fresh setup and delivery | Physical run `160626` plus its same-instance successful recovery: real setup, Start, Meeting transcript/summary, fresh current-enrollment hold review/Send/Main reply and Stop                                | Canonical wrapper exited 1; supplemental physical/UI observer exited 0                                    |
+| Recovery                 | Installed auth/link/ring contracts and guard-removal controls; actual native Cancel/browser revocation, restarts, interrupted-sign-in cleanup, permission-denial remediation and saved-selection verification | Not every network/MFA/identity failure was induced on the real account/ring                               |
+| Upgrade                  | Actual original configured-app replacement and Ready controls retained configuration/queue hashes without sign-in; installed Ready/recovery/voice contracts                                                   | Latest separate pending-download upgrade/restart observer failed and adds no passing evidence             |
+| Quality                  | Installed APK/UI contracts, host checks, complete foundation `153110` and all six CI workflows on `bcfcbc714`                                                                                                 | Receipts apply to their recorded inputs; native secure-window captures do not prove screenshot appearance |
+
 ## Remaining
 
-Obtain a green combined production-wizard automation receipt; the physical setup,
-Meeting outputs and fresh opted-in Main/text delivery have now been observed
-across the timed-out run and its separate successful recovery observer.
-Complete remaining recovery/upgrade and final-input foundation/CI acceptance.
-Authenticated-state native theme/font controls passed as documented above;
-secure-window images do not establish visual acceptance. No code-entry request
-is pending; authorized existing Gmail access can finish the next sign-in. Keep #3565 open and PR #3566 draft.
-No merge, production deployment or completed-onboarding claim.
+Diagnose the focused upgrade/restart assertion and the unreliable combined UI
+observer at their narrow seams, using the existing evidence instead of repeating
+the entire account setup. The physical Meeting/Main path has already been observed;
+a new clean canonical script is not a substitute for those recorded observations.
+No further email code, unlock or recording is requested. Keep #3565 open and
+PR #3566 draft while the remaining acceptance uncertainty is reviewed. No merge,
+production deployment or completed-onboarding claim.
