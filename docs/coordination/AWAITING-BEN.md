@@ -75,6 +75,10 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+No open Outlook calendar decision. Ben approved the
+[calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
+on 2026-10-21. Implementation and isolated-dev verification are authorized;
+source-quality checks remain required before imports are enabled (#3567).
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
 

@@ -1,3 +1,4 @@
+import { OutlookCalendarStatusPanel } from "../calendar/outlook-calendar-status.js";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -78,6 +79,7 @@ export function ConnectionsPane() {
           </dl>
         </>
       )}
+      {!anyFlow ? <OutlookCalendarStatusPanel settings /> : null}
       <div hidden={folderFlow || serviceFlow}>
         <ConnectedPane embedded onFlowChange={onAccountFlow} />
       </div>

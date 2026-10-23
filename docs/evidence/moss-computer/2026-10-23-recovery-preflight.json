@@ -1,0 +1,31 @@
+{
+  "task": "3578",
+  "parent": "3577",
+  "recorded_utc": "2026-10-23T13:28:30.097084+00:00",
+  "status": "BLOCKED_MISSING_PINNED_CANDIDATE",
+  "source_commit": "db3d135ab1fc9fd68405db62db270199c6b07219",
+  "candidate_image": "sha256:5516b80402f9f4122a8551c6417c197356d73808ddfcf4b78f664c10c1e56c3a",
+  "image_inspect_exit": 1,
+  "image_inspect_error": "Error response from daemon: No such image: sha256:5516b80402f9f4122a8551c6417c197356d73808ddfcf4b78f664c10c1e56c3a",
+  "source_hashes_match_prior_receipt": {
+    "spikes/moss-computer/Dockerfile": true,
+    "spikes/moss-computer/README.md": true,
+    "spikes/moss-computer/compose.yaml": true,
+    "spikes/moss-computer/entrypoint.sh": true,
+    "spikes/moss-computer/fixture.html": true,
+    "spikes/moss-computer/gateway.conf.template": true,
+    "spikes/moss-computer/requirements.txt": true
+  },
+  "proof_containers_present": 0,
+  "production_moss": "running healthy",
+  "port_5180_reserved_then_released": true,
+  "listener_5180_present": false,
+  "build_attempted": false,
+  "runtime_launched": false,
+  "keys_generated": false,
+  "prior_synthetic_home_preserved": true,
+  "candidate_disappearance_cause": "UNKNOWN",
+  "runtime_recovery": "NOT_RUN: exact image unavailable",
+  "cache_assessment": "No Computer build entries identified by bounded description inspection; no claim that all cache possibilities were exhaustively eliminated. No build attempted; network=none/pull=false would not guarantee cache-only restoration.",
+  "independent_preflight_verdict": "BLOCKED_MISSING_PINNED_CANDIDATE by /root/independent_review2"
+}

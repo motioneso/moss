@@ -39,10 +39,19 @@ describe("Park Press integrated recovery declarations", () => {
     }
   );
 
-  it("describes retained Calendar views and accessible narrow scrolling", () => {
+  it("describes retained Calendar views, today focus, and responsive scrolling", () => {
     const calendar = map.screens.find((item) => item.id === "calendar");
     expect(calendar?.path).toBe("/calendar");
-    for (const phrase of ["Day", "Week", "Month", "scroll horizontally", "retains loaded"]) {
+    for (const phrase of [
+      "Day",
+      "Week",
+      "Month",
+      "view choice persists",
+      "Week/Month open on today",
+      "Month fits the screen",
+      "Week can scroll sideways",
+      "failed refreshes retain events"
+    ]) {
       expect(calendar?.description).toContain(phrase);
     }
   });

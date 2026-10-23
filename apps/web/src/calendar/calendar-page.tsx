@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
+import { OutlookCalendarStatusPanel } from "./outlook-calendar-status.js";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -35,7 +36,10 @@ export function CalendarPage() {
   const [view, setView] = useState<CalendarView>(loadPersistedView);
   const locale = useUserLocale();
   const timeZone = locale.timezone;
-  const [savedCursor, setCursor] = useState<Date | null>(loadPersistedCursor);
+  const [savedCursor, setCursor] = useState<Date | null>(() =>
+    view === "day" ? loadPersistedCursor() : null
+  );
+  const bodyRef = useRef<HTMLDivElement>(null);
   const cursor = useMemo(() => savedCursor ?? todayIn(timeZone), [savedCursor, timeZone]);
   const [workWeek, setWorkWeek] = useState<boolean>(loadPersistedWorkWeek);
   const [peek, setPeek] = useState<CalendarViewEvent | null>(null);
@@ -52,7 +56,8 @@ export function CalendarPage() {
 
   const calendarQuery = useQuery({
     queryKey: queryKeys.calendar.list,
-    queryFn: () => listCalendarEvents()
+    queryFn: () => listCalendarEvents(),
+    refetchInterval: 30_000
   });
 
   const allViewEvents = useMemo(
@@ -89,6 +94,19 @@ export function CalendarPage() {
     }));
   }, [view, cursor, weekDays, eventsByDay]);
 
+  const hasCalendarData = calendarQuery.data !== undefined;
+  useEffect(() => {
+    bodyRef.current?.querySelector<HTMLElement>(".is-today")?.scrollIntoView?.({
+      block: "nearest",
+      inline: "center"
+    });
+  }, [cursor, view, workWeek, timeZone, hasCalendarData]);
+
+  function pickView(nextView: CalendarView) {
+    if (nextView !== "day") setCursor(todayIn(timeZone));
+    setView(nextView);
+  }
+
   const label = rangeLabel(cursor, view, view === "week" ? weekDays : [cursor], locale);
 
   const heldToday = useMemo(
@@ -107,6 +125,7 @@ export function CalendarPage() {
 
   return (
     <div className="cal-wrap" style={{ "--cal-h": HOUR_H + "px" } as React.CSSProperties}>
+      <OutlookCalendarStatusPanel />
       <div className="cal-toolbar">
         <div className="cal-toolbar__left">
           <Button variant="secondary" size="sm" onClick={() => setCursor(todayIn(timeZone))}>
@@ -146,7 +165,7 @@ export function CalendarPage() {
           <Segmented
             ariaLabel="View"
             value={view}
-            onChange={setView}
+            onChange={pickView}
             options={(["day", "week", "month"] as const).map((v) => ({
               value: v,
               label: v.charAt(0).toUpperCase() + v.slice(1)
@@ -172,7 +191,7 @@ export function CalendarPage() {
           ) : null}
         </div>
       ) : null}
-      {view !== "day" ? (
+      {view === "week" ? (
         <p className="cal-scroll-hint jds-caption" id="calendar-scroll-hint">
           Scroll sideways to see more days, or choose Day for a closer look.
         </p>
@@ -205,10 +224,11 @@ export function CalendarPage() {
       {calendarQuery.data ? (
         <div
           className="cal-body"
+          ref={bodyRef}
           role="region"
           aria-label={`Calendar ${view}`}
           tabIndex={view === "day" ? undefined : 0}
-          aria-describedby={view === "day" ? undefined : "calendar-scroll-hint"}
+          aria-describedby={view === "week" ? "calendar-scroll-hint" : undefined}
         >
           {view === "month" ? (
             <CalendarMonth

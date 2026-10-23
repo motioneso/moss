@@ -2,6 +2,8 @@ import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ToolExecute } from "@moss/module-sdk";
 import {
+  outlookCalendarStatusSchema,
+  outlookCalendarActionRouteSchema,
   calendarListLiveEventsInputSchema,
   calendarListLiveEventsResponseSchema,
   createConnectorAccountRequestSchema,
@@ -63,7 +65,8 @@ export const connectorsModuleManifest = {
       "sql/0144_google_sync_sweep_accounts.sql",
       "sql/0215_connector_sync_previous_run.sql",
       "sql/0244_email_refresh.sql",
-      "sql/0248_connector_email_history_id.sql"
+      "sql/0248_connector_email_history_id.sql",
+      "sql/0331_outlook_browser_calendar.sql"
     ],
     migrationDirectories: ["packages/connectors/sql"],
     ownedTables: [
@@ -128,6 +131,37 @@ export const connectorsModuleManifest = {
     }
   ],
   routes: [
+    {
+      method: "GET",
+      path: "/api/connectors/outlook-calendar",
+      permissionId: "connectors.view",
+      responseSchema: outlookCalendarStatusSchema,
+      chat: { access: "read" }
+    },
+    {
+      method: "POST",
+      path: "/api/connectors/outlook-calendar/connect",
+      requestSchema: outlookCalendarActionRouteSchema.body,
+      responseSchema: outlookCalendarStatusSchema,
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "connectors.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/connectors/outlook-calendar/refresh",
+      requestSchema: outlookCalendarActionRouteSchema.body,
+      responseSchema: outlookCalendarStatusSchema,
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "connectors.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/connectors/outlook-calendar/disconnect",
+      requestSchema: outlookCalendarActionRouteSchema.body,
+      responseSchema: outlookCalendarStatusSchema,
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "connectors.manage"
+    },
     {
       method: "GET",
       path: "/api/connectors/providers",
@@ -301,6 +335,57 @@ export const connectorsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "connectors.outlook_browser_coverage",
+      description:
+        "Calendar shows the last complete refresh and covered dates. Missing meetings remain reserved. Calendar creation requires a current complete source with no unconfirmed meetings and coverage of the requested window."
+    },
+    {
+      id: "connectors.outlook_browser_read_only",
+      description:
+        "Outlook browser events support reading only. Change meetings in Outlook. Email, invites, RSVP, deletion and rescheduling are unavailable through this connection."
+    },
+    {
+      id: "connectors.outlook_browser_calendar",
+      description:
+        "Read-only Outlook primary calendar, yesterday through the next 30 days, refreshed every five minutes. Requires an operator-bound dedicated browser and human sign-in. Connect, retry or disconnect in Connections settings.",
+      errors: [
+        {
+          code: "connectors.outlook.availability_unverified",
+          class: "prerequisite",
+          remediationRef: "connectors.outlook.inspect_browser",
+          description:
+            "Calendar creation requires a current complete Outlook refresh with no unconfirmed meetings and coverage of the requested window. Sync or reconnect, then retry within covered dates."
+        },
+        {
+          code: "connectors.outlook.sign_in_needed",
+          class: "prerequisite",
+          remediationRef: "connectors.outlook.inspect_browser",
+          description: "Sign in to Outlook in the dedicated browser, then choose Sync now."
+        },
+        {
+          code: "connectors.outlook.partial",
+          class: "transient",
+          description:
+            "Coverage is incomplete or stale; the last complete checkpoint and cached meetings remain available. Retry is bounded; choose Sync now after inspecting the browser."
+        },
+        {
+          code: "connectors.outlook.source_changed",
+          class: "prerequisite",
+          remediationRef: "connectors.outlook.inspect_browser",
+          description:
+            "Account mismatch or unsupported calendar layout or identity pauses collection for repair."
+        }
+      ],
+      remediations: [
+        {
+          id: "connectors.outlook.inspect_browser",
+          description:
+            "Inspect the dedicated Outlook browser, sign in or repair the collector, then use Sync now in Connections. Reconnect when disconnected.",
+          path: "/settings?section=connections"
+        }
+      ]
+    },
     {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.connectors.email-sort",

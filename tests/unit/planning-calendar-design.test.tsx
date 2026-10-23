@@ -37,6 +37,8 @@ let container: HTMLDivElement;
 let root: Root;
 let client: QueryClient;
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-10T17:00:00Z"));
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   localStorage.setItem("moss.cal.cursor", "2026-09-10T00:00:00Z");
@@ -52,6 +54,7 @@ afterEach(() => {
   client.clear();
   container.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 async function render() {
   await act(async () =>
@@ -110,7 +113,7 @@ describe("calendar responsive and recovery contracts", () => {
     act(() => button("Retry").click());
     await eventually(() => expect(container.querySelector('[role="alert"]')).toBeNull());
   });
-  it("keeps explicit Day, Week and Month selection and makes dense views keyboard-scrollable regions", async () => {
+  it("keeps Week keyboard-scrollable and fits Month without a sideways-scroll hint", async () => {
     await render();
     await eventually(() => expect(container.textContent).toContain(event.title));
     const region = () => container.querySelector<HTMLElement>('.cal-body[role="region"]')!;
@@ -119,11 +122,35 @@ describe("calendar responsive and recovery contracts", () => {
     act(() => button("Month").click());
     expect(localStorage.getItem("moss.cal.view")).toBe("month");
     expect(region().getAttribute("aria-label")).toBe("Calendar month");
-    expect(container.querySelector<HTMLElement>(".cal-month")?.style.minWidth).toBe("1008px");
+    expect(region().hasAttribute("aria-describedby")).toBe(false);
+    expect(container.querySelector("#calendar-scroll-hint")).toBeNull();
+    expect(container.querySelector<HTMLElement>(".cal-month")?.style.minWidth).toBe("");
     act(() => button("Day").click());
     expect(localStorage.getItem("moss.cal.view")).toBe("day");
     expect(region().hasAttribute("tabindex")).toBe(false);
     expect(container.querySelector<HTMLElement>(".cal-tg")?.style.minWidth).toBe("0px");
+  });
+  it.each(["week", "month"])(
+    "opens saved %s on today instead of the old saved date",
+    async (view) => {
+      localStorage.setItem("moss.cal.view", view);
+      localStorage.setItem("moss.cal.cursor", "2026-08-10T00:00:00Z");
+      await render();
+      await eventually(() => expect(container.querySelector(".is-today")).not.toBeNull());
+      expect(container.querySelector(".cal-range")?.textContent).toContain("Sep");
+    }
+  );
+  it("returns to today when selecting Week or Month after navigating away", async () => {
+    await render();
+    await eventually(() => expect(container.querySelector(".is-today")).not.toBeNull());
+    act(() => button("Previous").click());
+    expect(container.querySelector(".is-today")).toBeNull();
+    act(() => button("Month").click());
+    expect(container.querySelector(".cal-mcell.is-today")).not.toBeNull();
+    act(() => button("Previous").click());
+    expect(container.querySelector(".is-today")).toBeNull();
+    act(() => button("Week").click());
+    expect(container.querySelector(".cal-tg__dayhd.is-today")).not.toBeNull();
   });
   it("opens the shared modal peek and restores focus after Escape", async () => {
     await render();

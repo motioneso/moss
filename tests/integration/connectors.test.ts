@@ -15,6 +15,7 @@ import {
   GOOGLE_SYNC_QUEUE_DEFINITIONS,
   GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
   IMAP_SYNC_QUEUE_DEFINITIONS,
+  OUTLOOK_CALENDAR_QUEUE_DEFINITIONS,
   EMAIL_REFRESH_QUEUE_DEFINITIONS,
   MONITOR_QUEUE_DEFINITIONS,
   connectorsModuleManifest,
@@ -205,7 +206,8 @@ describe("Connectors encrypted foundation", () => {
       "sql/0144_google_sync_sweep_accounts.sql",
       "sql/0215_connector_sync_previous_run.sql",
       "sql/0244_email_refresh.sql",
-      "sql/0248_connector_email_history_id.sql"
+      "sql/0248_connector_email_history_id.sql",
+      "sql/0331_outlook_browser_calendar.sql"
     ]);
     expect(manifest?.settings?.map((surface) => surface.path)).toEqual([
       "/settings?section=connections",
@@ -215,6 +217,7 @@ describe("Connectors encrypted foundation", () => {
       ...GOOGLE_SYNC_QUEUE_DEFINITIONS,
       ...GOOGLE_SYNC_SWEEP_QUEUE_DEFINITIONS,
       ...IMAP_SYNC_QUEUE_DEFINITIONS,
+      ...OUTLOOK_CALENDAR_QUEUE_DEFINITIONS,
       ...EMAIL_REFRESH_QUEUE_DEFINITIONS,
       ...MONITOR_QUEUE_DEFINITIONS
     ]);
@@ -314,6 +317,7 @@ describe("Connectors encrypted foundation", () => {
     expect(body.providers.map((provider) => provider.id)).toEqual([
       "google-calendar",
       "microsoft-calendar",
+      "outlook-browser-calendar",
       "google-email",
       "microsoft-email",
       "google",

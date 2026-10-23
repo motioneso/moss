@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-22
+
+#### Fixed
+
+- **Calendar focuses today and fits month view.** Week and Month open on today, and Month fits the screen without sideways scrolling. [PR #3573](https://github.com/motioneso/moss/pull/3573)
+
 ### 2026-10-21
 
 #### Fixed
@@ -38,6 +44,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Read-only Outlook calendar connection.** Connect a dedicated Outlook browser to see upcoming meetings in Moss, with automatic refreshes and clear warnings when updates need attention. [PR #3568](https://github.com/motioneso/moss/pull/3568)
 - **Process ring recordings in Moss.** Ring recordings can generate meeting summaries and follow-ups, while opted-in voice requests can receive text replies in the main chat. [PR #3554](https://github.com/motioneso/moss/pull/3554)
 - **Chat can now use an API-key provider.** Admins can pick an Anthropic or OpenAI-compatible (Chat Completions) provider that uses an API key, including one at its own web address, and chat works with it the same way, tools and confirmation cards included. [PR #3540](https://github.com/motioneso/moss/pull/3540)
 

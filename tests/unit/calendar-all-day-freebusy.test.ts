@@ -11,7 +11,7 @@
 // to the band and these tests go red.
 import { describe, expect, it } from "vitest";
 
-import { dataContextBrand, type DataContextDb } from "@moss/db";
+import { dataContextBrand, type DataContextDb, type CalendarEvent } from "@moss/db";
 import { buildCalendarWriteService } from "@moss/chat";
 
 const scopedDb = { db: {} as never, [dataContextBrand]: true } satisfies DataContextDb;
@@ -38,10 +38,14 @@ const ctx = {
  * Builds the service with a freeBusy that behaves like Google's: it clips each busy interval to
  * the requested bounds. Records the bounds it was asked for so a test can assert them directly.
  */
-function buildService(busy: ReadonlyArray<{ start: string; end: string }>) {
+function buildService(
+  busy: ReadonlyArray<{ start: string; end: string }>,
+  mirrors: CalendarEvent[] = []
+) {
   const asked: { timeMin: string; timeMax: string }[] = [];
   const service = buildCalendarWriteService({
     connectorsRepository: {
+      listAccounts: async () => [],
       getCalendarWriteScopeState: async () => ({
         accountId: "00000000-0000-0000-0000-00000000ca10",
         hasScope: true
@@ -67,12 +71,41 @@ function buildService(busy: ReadonlyArray<{ start: string; end: string }>) {
       },
       insertEvent: async ({ eventId }: { eventId: string }) => ({ id: eventId })
     },
-    calendarRepository: { upsertCachedEvent: async () => ({ id: "cached-1" }) }
+    calendarRepository: {
+      listVisible: async () => mirrors,
+      upsertCachedEvent: async () => ({ id: "cached-1" })
+    }
   } as never);
   return { service, asked };
 }
 
 describe("focus block scheduling around all-day events", () => {
+  it("does not offer time occupied by an unconfirmed Outlook meeting", async () => {
+    const { service } = buildService(
+      [],
+      [
+        {
+          id: "invented-row",
+          owner_user_id: "owner",
+          connector_account_id: "account",
+          external_id: "invented",
+          title: "Invented",
+          location: null,
+          summary: null,
+          body_excerpt: null,
+          created_at: MORNING_BAND.start,
+          updated_at: MORNING_BAND.start,
+          starts_at: MORNING_BAND.start,
+          ends_at: MORNING_BAND.end,
+          external_metadata: { source: "outlook-browser-calendar", mirrorUnconfirmed: true }
+        } satisfies CalendarEvent
+      ]
+    );
+    const result = await service.createEvent(scopedDb, ctx, MORNING_BAND);
+    expect(result.created).toBe(false);
+    expect(result.conflict).toBe("no-clear-slot");
+  });
+
   it("asks freeBusy about whole local days, not the band it wants to schedule in", async () => {
     const { service, asked } = buildService([]);
     await service.createEvent(scopedDb, ctx, MORNING_BAND);
