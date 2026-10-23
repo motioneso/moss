@@ -282,8 +282,9 @@ test("real accepted proposal clears on Stop, thread switch and engine failure; p
   await signInUatAdmin(page);
   await bringUpRealChatModel(page);
   let chat = await drawer(page);
+  // Keep this visual lifecycle probe independent of passive project-memory recall (#3606).
   const prompt =
-    'First call chat.present to show all these facts visually. After the tool succeeds, write a detailed 2000-word explanation of organizing a workshop.\n```json\n{"project":"Workshop","hours":6,"ready":true}\n```';
+    'First call chat.present to show all these facts visually. After the tool succeeds, write a detailed 2000-word explanation of organizing a workshop.\n```json\n{"topic":"Workshop","hours":6,"ready":true}\n```';
   const start = async () => {
     const completed = page.waitForResponse(
       (r) => new URL(r.url()).pathname === "/api/chat/turn" && r.request().method() === "POST",
