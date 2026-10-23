@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 
 /** Shared explicit UI commands. Only the service owns delivery and voice journal writes. */
 final class DeliveryActions {
+    static final String CHANGE_QUEUED = "Change queued";
     static String command(Activity activity, String action) {
         if (!"start".equals(action) && !new DeliveryPreferences(activity).enabled())
             return "Start delivery before changing voice input, clearing audio or retrying.";
@@ -17,7 +18,7 @@ final class DeliveryActions {
         }
         try {
             ComponentName started = activity.startForegroundService(new Intent(activity, DeliveryService.class).setAction(action));
-            return started == null ? "Delivery could not start. Reopen the companion and try again." : "Change queued";
+            return started == null ? "Delivery could not start. Reopen the companion and try again." : CHANGE_QUEUED;
         } catch (IllegalStateException | SecurityException unavailable) {
             return "Android could not start delivery. Review permissions and background settings, then try again.";
         }

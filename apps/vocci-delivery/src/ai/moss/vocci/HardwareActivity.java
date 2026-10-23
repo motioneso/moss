@@ -25,6 +25,8 @@ public final class HardwareActivity extends Activity {
     private String page = "hardware";
     private int position;
     private boolean updating;
+    private Boolean deliveryChoice;
+    private long deliveryChoiceAt;
     private Integer restoreY;
     private final Runnable refresh = new Runnable() {
         @Override public void run() { render(); handler.postDelayed(this, 3000); }
@@ -85,15 +87,19 @@ public final class HardwareActivity extends Activity {
         Button button = place(key, Button.class, () -> theme.button(action, false), 12);
         NativeTheme.update(button, title); button.setOnClickListener(v -> action.run());
     }
-    private void toggle(String key, String label, boolean checked, java.util.function.Consumer<Boolean> action) {
+    private Switch toggle(String key, String label, boolean checked, java.util.function.Consumer<Boolean> action) {
         Switch control = place(key, Switch.class, () -> {
             Switch view = new Switch(this); theme.toggle(view); view.setText(label);
             view.setOnCheckedChangeListener((v, value) -> { if (!updating) { action.accept(value); render(); } }); return view;
         }, 12);
         updating = true;
         try { control.setChecked(checked); } finally { updating = false; }
+        return control;
     }
-    private void command(String action) { Toast.makeText(this, DeliveryActions.command(this, action), Toast.LENGTH_LONG).show(); }
+    private String command(String action) {
+        String result = DeliveryActions.command(this, action);
+        Toast.makeText(this, result, Toast.LENGTH_LONG).show(); return result;
+    }
     private void diagnostics() { startActivity(new Intent(this, DeliveryActivity.class)); }
     private JSONObject delivery() {
         try { return PrivateFiles.json(new File(getNoBackupFilesDir(), "delivery/state.json")); }
@@ -124,6 +130,7 @@ public final class HardwareActivity extends Activity {
     private void render() {
         position = 0; used.clear();
         DeliveryPreferences choices = new DeliveryPreferences(this);
+        if (deliveryChoice != null && (choices.enabled() == deliveryChoice || SystemClock.elapsedRealtime() - deliveryChoiceAt >= 5000)) deliveryChoice = null;
         JSONObject config = null;
         try { config = new SecretStore(this).load(); } catch (Exception unavailable) { /* Show setup/recovery, keep existing data. */ }
         final JSONObject snapshot = config == null ? new JSONObject() : HardwareStatus.read(this, config);
@@ -144,7 +151,12 @@ public final class HardwareActivity extends Activity {
                 text("battery", battery(snapshot), 15, false); text("recording", recording(snapshot), 15, false);
                 text("status-note", "Status is a saved observation. It refreshes while automatic delivery is running and the ring is nearby.", 13, false);
                 rule("status-rule");
-                toggle("delivery", "Automatic delivery", choices.enabled(), enabled -> { if (enabled) command("start"); else DeliveryActions.stop(this); });
+                Switch delivery = toggle("delivery", "Automatic delivery", deliveryChoice == null ? choices.enabled() : deliveryChoice, enabled -> {
+                    if (enabled) {
+                        if (DeliveryActions.CHANGE_QUEUED.equals(command("start"))) { deliveryChoice = true; deliveryChoiceAt = SystemClock.elapsedRealtime(); }
+                    } else DeliveryActions.stop(this);
+                });
+                delivery.setEnabled(deliveryChoice == null);
                 text("delivery-help", "After you finish a normal recording, Moss retrieves it and creates a Meeting automatically. Uploads retry when your connection returns.", 13, false);
                 text("delivery-state", choices.enabled() ? "Enabled · " + state.optString("activity", "starting").replace('_', ' ') : "Stopped · recordings remain on the ring", 13, false);
                 if (!choices.recovery().isEmpty()) text("recovery", choices.recovery(), 13, false);
