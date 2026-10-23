@@ -50,7 +50,7 @@ import {
 import { ChatLockGroup } from "./settings-ai-chat-lock-group";
 import { YoloAdminGroup } from "./settings-yolo-admin-group";
 import { WebSearchKeyGroup } from "./settings-web-search-key-group";
-import { VoiceConfigGroup } from "./settings-voice-config-group";
+import { TranscriptionConfigGroup } from "./settings-transcription-config-group";
 import { SortingModelRow } from "./settings-ai-sorting-row";
 import {
   type AiAuthMethod,
@@ -838,8 +838,7 @@ export function AiProvidersPane() {
           session initializes, and the saved choice is passed into the next ACP launch.
         </Note>
       ) : null}
-      {/* #874: Voice (STT) is its own dedicated admin section, independent of the chat providers. */}
-      <VoiceConfigGroup />
+      <TranscriptionConfigGroup />
       <ChatLockGroup />
       <WebSearchKeyGroup />
       <YoloAdminGroup />

@@ -230,9 +230,8 @@ describe("AI service bindings + instance-default resolver", () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it("rejects binding a non-chat capability (#874 HIGH-2: only Chat is bindable)", async () => {
-    // A worker capability was never bindable; #874 HIGH-2 also drops transcription (Voice moved to
-    // its dedicated endpoint). Both must 400 at the route as "not bindable".
+  it("rejects worker bindings and transcription mode bindings", async () => {
+    // Workers stay automatic, and transcription requires a specific model.
     const worker = await server.inject({
       method: "PUT",
       url: "/api/ai/services/summarization/binding",
@@ -292,24 +291,18 @@ describe("AI service bindings + instance-default resolver", () => {
     });
   });
 
-  // #874 HIGH-2: `transcription` is no longer a bindable service (Voice is its own dedicated
-  // endpoint). The old "two services bound concurrently" M1 lost-update test is gone with it — chat
-  // is now the ONLY bindable service, so a cross-service concurrent write is unreachable. What
-  // remains worth guarding is the repository-level rejection: setServiceBinding must refuse a
-  // non-user-facing service outright, so no assistant provider can ever be wired to Voice from here.
-  it("setServiceBinding rejects transcription at the repository layer (#874 HIGH-2)", async () => {
-    const voiceId = await seedModel("high2-voice", ["transcription"], "interactive");
-
+  // Transcription is explicit: a mode cannot choose a provider implicitly.
+  it("setServiceBinding rejects transcription mode bindings at the repository layer", async () => {
     await expect(
       dataContext.withDataContext(adminContext(), (scopedDb) =>
         repository.setServiceBinding(
           scopedDb,
           "transcription",
-          { kind: "model", modelId: voiceId },
+          { kind: "mode", tier: "interactive" },
           ids.adminUser
         )
       )
-    ).rejects.toThrow(/not bindable/);
+    ).rejects.toThrow(/only a model binding/);
 
     const stored = await dataContext.withDataContext(adminContext(), (scopedDb) =>
       repository.getServiceBinding(scopedDb, "transcription")
