@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-22
+
+#### Fixed
+
+- **Calendar focuses today and fits month view.** Week and Month open on today, and Month fits the screen without sideways scrolling. [PR #3573](https://github.com/motioneso/moss/pull/3573)
+
 ### 2026-10-21
 
 #### Fixed
