@@ -41,11 +41,11 @@ Public paths use canonical `~/Jarv1s`; private resolved paths/keys are not commi
    must copy over a fresh clipboard sentinel, assert actual binary/profile, Seccomp-BPF and thread
    synchronisation true, content sandbox true and effective level6. Preserve User Namespaces=false.
    Capture actual parent/content arguments, executable/status and sandbox-related environment;
-   require real content processes with additional seccomp filters beyond Firefox parent, no disabling
-   overrides. These diagnostic observations do not certify universal browser security or namespaces.
+   require actual file/web tab processes (excluding RDD/socket helpers) with additional seccomp filters beyond Firefox parent, no disabling
+   overrides, including zero sandbox levels. Parent identity/environment mandatory; unreadable child exe/environment fields are recorded as visibility limits, never passing defaults for core status/filter observations. These diagnostic observations do not certify universal browser security or namespaces.
 4. Close Firefox via viewer Alt+F4/confirmation; poll actual parent disappearance. Read-only SQLite
    and exact file check require unique URL/title row and bytes. Retain hashes. On separate disposable
-   copies, alter file or delete bookmark and require same check to exit1 at expected assertion.
+   copies, first require the identical check to pass, then alter file or delete exactly one existing bookmark row and require same check to exit1 at expected assertion. Require absent/empty WAL before read-only immutable checks/copies; no unflushed profile acceptance.
    Recheck real home hashes unchanged; controls never edit it.
 5. Stop and REMOVE exact guest, record numeric exits/timestamps and require old full ID absent.
    Create new guest with distinct full ID, same exact image and resolved designated home. Gateway
@@ -74,9 +74,9 @@ Supervisor fallback exact label `com.moss.proof=persistence-r6`, deadline1800s, 
 nominal5s samples. Fail closed on measurement/log failure, RAM/root free below8GiB, data below30GiB,
 home/socket reaching10GiB. Monitoring is not quota. Host browser/daemon outside guest caps.
 Runner bounds launch40s/access90s/harness420s and actively cleans up in finally. Replacement mutations
-check watchdog alive/no stop receipt. No unattended runtime, finish well before60 minutes.
+check watchdog alive/no stop receipt and acquire a shared lifecycle lock. Supervisor publishes stop intent before acquiring that lock, drains in-flight mutations and always kills/verifies residual exact-label services. New starts after intent fail. No unattended runtime, finish well before60 minutes.
 
-Capture full guest and gateway IDs, operations/exits/timestamps, cgroup observations and numeric
+Record exact host-browser PID/start-time/group identities after launch and before close. Runner captures descendants before killing a timed-out harness, stops only owned process identities/groups and requires their absence; cleanup/port-release failures reject PASS. Capture full guest and gateway IDs, operations/exits/timestamps, cgroup observations and numeric
 supervisor exit. Close host browser and actual Firefox, stop supervisor/services, remove only owned
 containers/network/listener/reservation and fresh synthetic keys. Retain new/prior homes and receipts.
 Require no owned containers/network/listener and healthy Moss. Independent final review, sanitised
@@ -86,23 +86,31 @@ Idle sleep is a future product requirement only. No owner/session/UI/download/In
 installer/manual-MacBook acceptance. Prior image acceptance cannot fill adopted-image gates.
 Historical image disappearance and Herdr incident causes UNKNOWN. News/Direct On gates stay separate.
 
+## Readiness revision
+
+Initial exact review rejected `fa461517` before any runtime: wrong content-process classification,
+zero-level environment exemption, missing pristine-copy controls/WAL handling, shutdown race,
+unchecked cleanup exits/host-browser timeout cleanup, and packet formatting. Revised bytes below
+address those findings and require fresh independent acceptance; prior hashes remain in git history.
+
 ## Exact artifacts
 
 Hashes below resolve in the private sibling; `.env`/resolved config are reviewed privately.
 
-| Artifact | SHA-256 |
-| --- | --- |
-| `compose.yaml` | `b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9` |
-| `.env` | `023160f9321189a06bf9181ab7e4e6453b5aea0b7c624099ae1e42051015e265` |
-| `gateway/nginx.conf` | `285d0b3a705aba8dffa751614cd3a0aa7b12a34b75e71e89aaab5f0dec2ca21e` |
-| `supervise.py` | `8c9c6c9286a74e27964aeb4cd44d1452c27fec1fb508f57d99c00761907af96a` |
-| `access-check.mjs` | `2ebc9f93191006a891aee949b5b69829d92fa2edf0bf62f869f4e41673029512` |
-| `access-controls.py` | `17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628` |
-| `isolation.py` | `12ab9f1e8fd47711e4d191d230d1d3b42f8315aac6a54f833b1b4c8830ccfece` |
-| `process.py` | `1673f1034f251917cee1dbaaba6ce4182978aa0600e5598824ca76e985b412de` |
-| `check-state.py` | `638dbd361d1ec90b83189838236a9641f6cd4224ae675096e19bd0a0a800510e` |
-| `controls.py` | `4315ab293e78d2839f58853f468bc1e66dcf4f4ff7c07e785e0efc09ba768a63` |
-| `persistence.mjs` | `dd5fd15284bcc1f55914f5567194eee197ada2ba02ae3c4da0affcabf7a1036a` |
-| `run.py` | `f6075daac874454121d68e27139313f865d356d7794e3d66314ea18b4bcaa681` |
-| `proof.json` | `4539aad539382e4e825901464eeba01dd874891739887424d4d57164ed23f1d7` |
+| Artifact                        | SHA-256                                                            |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `compose.yaml`                  | `b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9` |
+| `.env`                          | `023160f9321189a06bf9181ab7e4e6453b5aea0b7c624099ae1e42051015e265` |
+| `gateway/nginx.conf`            | `285d0b3a705aba8dffa751614cd3a0aa7b12a34b75e71e89aaab5f0dec2ca21e` |
+| `supervise.py`                  | `0d0a21211797de384bbb9d7545e17d80415c0d5fa841396401c014857b27f760` |
+| `access-check.mjs`              | `2ebc9f93191006a891aee949b5b69829d92fa2edf0bf62f869f4e41673029512` |
+| `access-controls.py`            | `17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628` |
+| `isolation.py`                  | `12ab9f1e8fd47711e4d191d230d1d3b42f8315aac6a54f833b1b4c8830ccfece` |
+| `process.py`                    | `2ede92bae11e2fca8ccf611534d27bbfaf08311e63ed13e06732a38d92f9f5c7` |
+| `check-state.py`                | `50eb76dccb2ab4af6a6998d6fe0787d4eb606eca0971d0a3dffab34b0d5ae83c` |
+| `controls.py`                   | `c9e56dc2a2502a3fd5bab625e9549a42c767f3a16a91a75a8c484059c44ade18` |
+| `persistence.mjs`               | `abea703b9bcfcada5deac5f6656eab5cc4001972b259699070e99aa46bfe0408` |
+| `run.py`                        | `47bbc7921cc0b3c535918d1064ceb546b44c895f9cd1894755057f281b0a5cfb` |
+| `proof.json`                    | `4539aad539382e4e825901464eeba01dd874891739887424d4d57164ed23f1d7` |
 | `receipts/resolved-config.json` | `24d53d1cfe1de0e117baaef4b60ec66ec88b22b2085dba12a2ea14e87daa6a7d` |
+| `mutate.py`                     | `c4a0ad67b0f9c62069adecda13b46b7e7b41b34ff24c3bd3d99ee618a19b4874` |
