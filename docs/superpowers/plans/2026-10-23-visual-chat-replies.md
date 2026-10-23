@@ -9,11 +9,14 @@ until the runtime gate supplies evidence. Work stays in one task worktree under 
 ## Current state
 
 - Spec and eight-family design targets approved; production support is not implemented.
-- Start: runtime evaluation in `spikes/visual-chat-runtime/`, isolated from app entry points.
+- Runtime experiment implemented in `spikes/visual-chat-runtime/`, isolated from app entry points.
 - First checkpoint: actual published runtime, Moss React/Zod/Vite setup, useful text fallback,
   restricted composition, development/production network behavior and measured bundle size.
 - Full stage 1 additionally requires actual chat tool/persistence/engine/browser evidence.
   Passing the isolated experiment alone does not pass that gate.
+- [Stage-1a evidence](../../research/2026-10-23-visual-chat-runtime-evaluation.md): restricted
+  runtime/catalog experiment, browser loading checks and bundle measurements recorded.
+  Recommendation: proceed to stage 1b; full stage 1 and production support remain incomplete.
 
 ## Verified seams and gaps
 
@@ -175,4 +178,7 @@ Commands are unpiped; expected exit code is 0 unless a negative control is expli
   and limits. Real logos and on-the-fly composition remain required release behavior.
 - 2026-10-23: separate server live record and explicit response schema verified above;
   both must change alongside the shared DTO. No general visual metadata currently exists.
-- 2026-10-23: runtime evaluation started; runtime/network/engine acceptance not yet passed.
+- 2026-10-23: isolated runtime/browser experiment passed with an inspected development adapter.
+  Initial browser failure exposed the automatic inspector and bracket-form environment check;
+  guard-removal and loader-removal controls failed as intended. See the evidence note.
+  Production lifecycle, authorized snapshots and configured-engine acceptance remain open.

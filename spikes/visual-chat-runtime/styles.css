@@ -1,0 +1,20 @@
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+}
+main {
+  max-width: 48rem;
+  margin: var(--space-7) auto;
+  padding: var(--space-4);
+}
+.runtime-sections,
+.runtime-section {
+  display: grid;
+  gap: var(--space-5);
+}
+details {
+  margin-top: var(--space-5);
+}
