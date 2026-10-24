@@ -3,10 +3,15 @@ import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db
 import { handleRouteError } from "@moss/module-sdk";
 import {
   getWeatherTodayRouteSchema,
+  getWeatherForecastRouteSchema,
+  type WeatherForecastQuery,
   LOCALE_PREFERENCE_KEY,
   resolveEffectiveLocale
 } from "@moss/shared";
 import { WeatherService } from "./weather-service.js";
+
+import { WeatherForecastReader } from "./forecast/reader.js";
+import { configureWeatherForecastRead } from "./forecast/tool.js";
 
 interface WeatherRoutesDependencies {
   readonly dataContext: DataContextRunner;
@@ -44,6 +49,27 @@ export function registerWeatherRoutes(
     logger: dependencies.logger,
     fetchFn: dependencies.fetchFn
   });
+
+  const forecastReader = new WeatherForecastReader(
+    dependencies.preferencesRepo,
+    dependencies.fetchFn
+  );
+  configureWeatherForecastRead(forecastReader);
+  server.get<{ Querystring: WeatherForecastQuery }>(
+    "/api/weather/forecast",
+    { schema: getWeatherForecastRouteSchema },
+    async (request, reply) => {
+      try {
+        const access = await dependencies.resolveAccessContext(request);
+        const read = await dependencies.dataContext.withDataContext(access, (db) =>
+          forecastReader.read(db, access.actorUserId, request.query, request.ip)
+        );
+        return read;
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
 
   server.get(
     "/api/weather/today",

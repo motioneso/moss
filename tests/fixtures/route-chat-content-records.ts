@@ -62,6 +62,7 @@ export const RECORDS_EXPECTED_ROWS = [
   "email PATCH /api/email/briefing-settings blocked self_authority",
   "email GET /api/email/task-creation-mode read user_authored",
   "email PUT /api/email/task-creation-mode blocked self_authority",
+  "weather GET /api/weather/forecast read outbound",
   "weather GET /api/weather/today read"
 ] as const;
 
