@@ -151,3 +151,8 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   +5,990 JavaScript bytes (+1,911 gzip) and +487 CSS bytes. No token-savings claim.
 - 2026-10-24: removing the session allowlist guard made the Weather denial test fail
   (exit 1); restored the guard. This supplements the source-ID negative control.
+- 2026-10-24: Spec re-review of `a991e4e52` found that the new prose evaluator
+  incorrectly required a degree glyph. Accepted equivalent ordinary Fahrenheit/
+  Celsius/degrees wording while retaining source bounds, unit and nonanswer checks;
+  all 12 prose-evaluator cases passed. Installed receipts also collect available
+  per-message token usage; those totals do not measure marginal visual token cost.

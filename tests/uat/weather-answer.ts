@@ -18,13 +18,16 @@ export function hasUsefulWeatherAnswer(reply: unknown, forecast: WeatherWindowDt
   const temperatures = forecast.intervals.map((item) => item.temperature);
   const degree = forecast.unit === "imperial" ? "F" : "C";
   const measurements = [
-    ...reply.matchAll(/(-?\d+(?:\.\d+)?)\s*(?:[–—−-]\s*(-?\d+(?:\.\d+)?))?\s*°\s*([FC])?/gi)
+    ...reply.matchAll(
+      /(-?\d+(?:\.\d+)?)\s*(?:(?:[–—−-]|to|and)\s*(-?\d+(?:\.\d+)?))?\s*(?:°\s*(F(?:ahrenheit)?|C(?:elsius)?)?|degrees?(?:\s*(F(?:ahrenheit)?|C(?:elsius)?))?|\b(Fahrenheit|Celsius|[FC])\b)/gi
+    )
   ];
   // A sourced temperature makes the short interpretation useful without relying on the card.
   if (!measurements.length) return false;
   return measurements.every(
     (match) =>
-      (!match[3] || match[3].toUpperCase() === degree) &&
+      (!(match[3] || match[4] || match[5]) ||
+        (match[3] || match[4] || match[5])!.charAt(0).toUpperCase() === degree) &&
       [match[1], match[2]]
         .filter((value) => value !== undefined)
         .every(

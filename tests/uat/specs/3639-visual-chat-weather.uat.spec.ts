@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInUatAdmin, bringUpRealChatModel } from "./real-chat-signin.js";
-import type { VisualReplyV1, WeatherForecastRead } from "@moss/shared";
+import type { ChatMessageDto, VisualReplyV1, WeatherForecastRead } from "@moss/shared";
 import { hasUsefulWeatherAnswer } from "../weather-answer.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
@@ -85,6 +85,8 @@ test("ordinary evening questions use actual place-local intervals and immutable 
     elapsedMs: number;
     replyBytes: number;
     visualBytes: number;
+    promptBytes: number;
+    assistantMessageId: string;
   }[] = [];
   let firstEnvelope: VisualReplyV1 | undefined;
   for (const [index, prompt] of prompts.entries()) {
@@ -98,7 +100,9 @@ test("ordinary evening questions use actual place-local intervals and immutable 
       useful,
       elapsedMs,
       replyBytes: Buffer.byteLength(saved.reply),
-      visualBytes: Buffer.byteLength(JSON.stringify(envelope ?? null))
+      visualBytes: Buffer.byteLength(JSON.stringify(envelope ?? null)),
+      promptBytes: Buffer.byteLength(prompt),
+      assistantMessageId: saved.assistantMessageId
     });
     console.log(
       `[weather-route] ${JSON.stringify({ ...results.at(-1), prompt, reply: saved.reply.slice(0, 1500), providerModel: model.providerModelId })}`
@@ -152,6 +156,20 @@ test("ordinary evening questions use actual place-local intervals and immutable 
   }
   console.log(
     `[weather-gate] ${JSON.stringify({ providerModel: model.providerModelId, results })}`
+  );
+  const privacy = await (await page.request.get("/api/chat/privacy?surface=drawer")).json();
+  const history: { messages: ChatMessageDto[] } = await (
+    await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
+  ).json();
+  console.log(
+    `[weather-usage] ${JSON.stringify(
+      results.map((result) => ({
+        index: result.index,
+        usage:
+          history.messages.find((message) => message.id === result.assistantMessageId)?.usage ??
+          null
+      }))
+    )}`
   );
   expect(results.filter((r) => r.visual).length).toBeGreaterThanOrEqual(19);
   expect(results.every((r) => r.useful)).toBe(true);
