@@ -43,7 +43,8 @@ Frozen digests: `evidence-sha256.json`.
   It covers durable admission/claims/replay, legacy/new policy, no speech,
   pagination of 101 rows/equal timestamps, owner isolation/export, receiver, schema catalog,
   account lifecycle and canonical interrupted/action history. Container removed.
-- Security negative control, suffix 20261024-092803: receipt RLS disabled only in
+- Security negative control (log filename suffix 20261024-092803; runner start
+  092804): receipt RLS disabled only in
   the throwaway server; owner list/read/export assertions failed as expected,
   exit 1 (three failures), container removed. Normal protected run passed afterward.
 - Isolated `test:normal-chat-live`, suffix 20261024-093651: exit 0, NORMAL CHAT LIVE PASS; clean product head above, fingerprint
@@ -67,8 +68,9 @@ Disabling the selected chat model caused real preclaim unavailability; restoring
 it recovered queued input automatically. A pre-upgrade legacy fixture stayed
 ready-to-send inline until its one-request recovery control was clicked. All six
 voice turns matched exactly their reserved user/assistant message IDs. A 390-pixel
-viewport asserted no horizontal transcript overflow. No voice POST occurred on
-mount/reload; initial automatic input required no browser send endpoint call.
+viewport asserted no horizontal transcript overflow. Before replay/reload, the
+browser emitted no Chat Send/turn POST while the initial automatic input completed.
+Replay used the actual receiver API; reload recovered one canonical saved pair.
 
 Generated sine audio/synthetic packet framing and disclosed loopback ASR/chat
 stand-ins exercise Moss's real receiver, transcription adapter, durable jobs,
