@@ -261,12 +261,7 @@ function Persona({ who }: { readonly who: string }) {
             options={["Concise", "Balanced", "Detailed"]}
             onChange={(v) =>
               chatSettingsMutation.mutate({
-                chat: {
-                  responseStyle: v.toLowerCase() as ChatResponseStyle,
-                  ...(chatSettingsQuery.data?.chat.openCodeModel
-                    ? { openCodeModel: chatSettingsQuery.data.chat.openCodeModel }
-                    : {})
-                }
+                chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
               })
             }
           />
@@ -357,28 +352,9 @@ function ChatModel({
     queryFn: getChatModelOverrideSettings,
     retry: false
   });
-  const chatSettingsQuery = useQuery({
-    queryKey: queryKeys.chat.settings,
-    queryFn: getChatSettings,
-    retry: false
-  });
   const settings = settingsQuery.data?.settings;
   const mutation = useMutation({
-    mutationFn: async (modelId: string | null) => {
-      const selectedModel = modelId
-        ? selectableOverrideModels.find((model) => model.id === modelId)
-        : defaultModel;
-      if (selectedModel?.providerKind === "openai-compatible") {
-        const chatSettings = await getChatSettings();
-        if (chatSettings.chat.openCodeModel !== undefined) {
-          const cleared = await putChatSettings({
-            chat: { responseStyle: chatSettings.chat.responseStyle }
-          });
-          queryClient.setQueryData(queryKeys.chat.settings, cleared);
-        }
-      }
-      return putChatModelOverride({ modelId });
-    },
+    mutationFn: (modelId: string | null) => putChatModelOverride({ modelId }),
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.ai.chatModelOverride, result);
       const model = result.settings.effectiveOverrideModelId
@@ -407,9 +383,6 @@ function ChatModel({
     ? (selectableOverrideModels.find((m) => m.id === currentOverride) ?? null)
     : defaultModel;
   const hasWebSearch = selectedModel?.capabilities.includes("web-search") ?? false;
-  const canReaffirmSelection =
-    selectedModel?.providerKind === "openai-compatible" &&
-    chatSettingsQuery.data?.chat.openCodeModel !== undefined;
 
   return (
     <Group
@@ -440,16 +413,6 @@ function ChatModel({
                   </option>
                 ))}
               </Select>
-              {canReaffirmSelection ? (
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  disabled={mutation.isPending || settingsQuery.isLoading}
-                  onClick={() => mutation.mutate(currentOverride)}
-                >
-                  Use {selectedModel.providerDisplayName} for chat
-                </Button>
-              ) : null}
               {hasWebSearch ? <Badge tone="steel">Web search</Badge> : null}
             </Field>
           ) : (

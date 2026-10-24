@@ -4,6 +4,11 @@ import { Button } from "@moss/ui";
 import { Badge } from "./settings-ui";
 import { assistantName } from "../api/use-assistant-name.js";
 
+/** "Claude CLI 2.1.282" when the runner reported a version, "Claude CLI" otherwise. */
+export function cliVersionLine(name: string, tools: AiCliToolsDto | undefined): string {
+  return tools?.version ? `${name} CLI ${tools.version}` : `${name} CLI`;
+}
+
 /**
  * #2689 slice 4: what a tool update is doing, beside the version on a CLI provider card. The text
  * comes from the server's stored state. Retry shows only for the two states an admin can act on.

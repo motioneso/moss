@@ -35,11 +35,7 @@ import {
   type MossDatabase,
   type PreferencesPort
 } from "@moss/db";
-import {
-  CHAT_SETTINGS_PREFERENCE_KEY,
-  DEFAULT_CHAT_SURFACE,
-  normalizeChatSettings
-} from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 import type {
   AnswerProvenanceMetadataV1,
   AiAuthMethod,
@@ -116,8 +112,6 @@ export interface DataContextChatPersistenceDeps {
   ) => Promise<Date | null>;
   /** Used to read the user's IANA timezone from their locale preference (key "locale"). */
   readonly localePreferences?: PreferencesPort;
-  /** Reads the user's saved ACP model choice for the live launch. */
-  readonly chatPreferences?: PreferencesPort;
   /** Builds the cipher that opens API-key provider credentials for chat launches. */
   readonly resolveAiSecretCipher?: () => AiSecretCipher;
   /** #3128 — this process's boot id; tests pass one per simulated boot. */
@@ -165,7 +159,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly boss: PgBoss | undefined;
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
   private readonly localePreferences: PreferencesPort | undefined;
-  private readonly chatPreferences: PreferencesPort | undefined;
   private readonly resolveAiSecretCipher: (() => AiSecretCipher) | undefined;
   private readonly bootId: string;
   private readonly canProposeBoundedAction: DataContextChatPersistenceDeps["canProposeBoundedAction"];
@@ -181,7 +174,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.boss = deps.boss;
     this.connectorSyncAt = deps.connectorSyncAt;
     this.localePreferences = deps.localePreferences;
-    this.chatPreferences = deps.chatPreferences;
     this.resolveAiSecretCipher = deps.resolveAiSecretCipher;
     this.bootId = deps.bootId ?? CHAT_PROCESS_BOOT_ID;
     this.editCliAdapter = deps.editCliAdapter;
@@ -230,19 +222,14 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     acpModel?: string;
     providerConfigRevision?: string;
   }> {
-    const { model, openCodeModel, revision } = await this.run(
+    const { model, revision } = await this.run(
       actorUserId,
       "resolve-provider",
       async (scopedDb) => {
         // Sequential: model selection can write through a savepoint.
         const model = await this.ai.selectChatModelForUser(scopedDb);
-        const rawChatSettings = await this.chatPreferences?.get(
-          scopedDb,
-          CHAT_SETTINGS_PREFERENCE_KEY
-        );
         return {
           model,
-          openCodeModel: normalizeChatSettings(rawChatSettings).openCodeModel,
           revision: await chatLaunchRevision(this.ai, scopedDb, model)
         };
       }
@@ -253,7 +240,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     }
 
     const provider = toLiveProvider(model);
-    const acpModel = chatAcpModel(model, openCodeModel);
+    const acpModel = chatAcpModel(model);
     return {
       provider,
       model: model.provider_model_id,
