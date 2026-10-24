@@ -26,6 +26,19 @@ describe("normal voice input reconciliation", () => {
     const result = mergeVoiceInputRecords([], [receipt("b"), receipt("a")], new Map());
     expect(result.map((record) => record.turnId)).toEqual(["a", "b"]);
   });
+  it.each(["2026-10-24T09:00:00.000Z", "2026-10-24T10:00:00.000Z"])(
+    "places an older pending page before a newer live turn, preserving its activity (%s)",
+    (createdAt) => {
+      const live: TranscriptRecord[] = [
+        { kind: "user", text: "Identical text", turnId: "b" },
+        { kind: "tool", text: "Current lookup", turnId: "b" },
+        { kind: "reply", text: "Current response", turnId: "b" }
+      ];
+      const older = { ...receipt("a", "ready-to-send"), createdAt };
+      const result = mergeVoiceInputRecords(live, [receipt("b", "dispatching"), older], new Map());
+      expect(result).toEqual([{ kind: "user", text: older.transcript, turnId: "a" }, ...live]);
+    }
+  );
   it("replaces live rows by saved identity while retaining tool and unrelated activity", () => {
     const live: TranscriptRecord[] = [
       { kind: "user", text: "Identical text", turnId: "a" },

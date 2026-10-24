@@ -115,3 +115,9 @@ production data or phone operations. Report the concrete blocker; preserve queue
 
 - Static registry check found0332 reserved by open PR#3571; use0333, verified
   against current open migration claims. No applied migration was edited.
+
+- Product review r1: Standards0; Spec P2 found older pending pages appended after
+  newer live voice turns. Reconciliation now anchors missing inputs before the next
+  known voice turn, with older-date and equal-time identity-order regressions.
+  The live harness also uses the shipped Chat & briefing Settings label and waits
+  for the ordinary private-exit transition instead of racing it with a reload.

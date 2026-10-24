@@ -11,6 +11,7 @@ export function mergeVoiceInputRecords(
   const ordered = [...requests].sort(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
   );
+  const positions = new Map(ordered.map((request, index) => [request.turnId, index]));
   for (const request of ordered) {
     const saved = recovered.get(request.turnId) ?? [];
     const replacements = saved.filter((record) => record.messageId);
@@ -25,6 +26,10 @@ export function mergeVoiceInputRecords(
       (record) => record.kind === "user" && record.turnId === request.turnId
     );
     if (!hasUser) {
+      const nextVoiceIndex = records.findIndex(
+        (record) =>
+          record.turnId && (positions.get(record.turnId) ?? -1) > positions.get(request.turnId)!
+      );
       if (saved.length) {
         const lastSaved = history
           .map((record) => record.messageId)
@@ -35,8 +40,12 @@ export function mergeVoiceInputRecords(
             (record) =>
               record.messageId && records.some((item) => item.messageId === record.messageId)
           );
-        const nextIndex = nextSaved
+        const historyIndex = nextSaved
           ? records.findIndex((record) => record.messageId === nextSaved.messageId)
+          : -1;
+        const anchors = [nextVoiceIndex, historyIndex].filter((index) => index >= 0);
+        const nextIndex = anchors.length
+          ? Math.min(...anchors)
           : records.findIndex(
               (record) =>
                 record.kind === "user" &&
@@ -44,13 +53,16 @@ export function mergeVoiceInputRecords(
                 !requests.some((request) => request.turnId === record.turnId)
             );
         records.splice(nextIndex < 0 ? records.length : nextIndex, 0, ...saved);
-      } else if (request.transcript)
-        records.push({
-          kind: "user",
-          text: request.transcript,
-          turnId: request.turnId
-        });
-      else records.push({ kind: "status", text: request.statusMessage, turnId: request.turnId });
+      } else {
+        const placeholder: TranscriptRecord = request.transcript
+          ? {
+              kind: "user",
+              text: request.transcript,
+              turnId: request.turnId
+            }
+          : { kind: "status", text: request.statusMessage, turnId: request.turnId };
+        records.splice(nextVoiceIndex < 0 ? records.length : nextVoiceIndex, 0, placeholder);
+      }
     } else {
       for (const record of saved) {
         if (record.messageId && !records.some((item) => item.messageId === record.messageId)) {

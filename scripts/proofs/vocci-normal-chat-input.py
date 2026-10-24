@@ -207,9 +207,8 @@ try:
             assert 'Private deferral input proof' not in drawer.inner_text()
             drawer.get_by_role('button', name='More chat options', exact=True).click()
             page.get_by_role('menuitemcheckbox', name='Leave private chat', exact=True).click()
-            # Return to Main using its ordinary conversation picker if private exit leaves an ended view.
-            page.reload(wait_until='commit')
-            page.get_by_role('button', name='Chat with Moss', exact=True).click()
+            expect(drawer.get_by_text('Private chat: not saved to history.', exact=False)).to_have_count(0)
+            expect(composer).to_be_editable(timeout=60000)
             replied(context, page, private_id)
             expect(drawer.locator('.chatd-msg--me .chatd-bubble').filter(has_text='Private deferral input proof')).to_have_count(1, timeout=30000)
             step(4, 'Private selection hid voice evidence and deferred effects until Main; normal history recovered')
@@ -256,7 +255,10 @@ try:
         except Exception:
             (out / 'failure.txt').write_text(traceback.format_exc())
             if 'page' in locals():
-                (out / 'failure-dom.txt').write_text(page.locator('body').inner_text(timeout=5000))
+                try:
+                    (out / 'failure-dom.txt').write_text(page.locator('body').inner_text(timeout=5000))
+                except Exception as diagnostic_error:
+                    (out / 'failure-diagnostic.txt').write_text(str(diagnostic_error))
             (out / 'requests.json').write_text(json.dumps(records, indent=2))
             raise
         finally:
