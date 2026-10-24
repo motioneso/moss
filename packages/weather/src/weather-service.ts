@@ -1,16 +1,17 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
-import type { WeatherLocationDto, WeatherTodayDto, WeatherUnit } from "@moss/shared";
+import type { WeatherTodayDto, WeatherUnit } from "@moss/shared";
 import { fetchOpenMeteoForecast, WeatherUnavailableError } from "./open-meteo.js";
-import { geocodeIp } from "./ip-geocoder.js";
+import {
+  WeatherLocationResolver,
+  weatherUnit,
+  type ResolvedWeatherLocation
+} from "./preferences.js";
 import { WeatherCache } from "./weather-cache.js";
-import { lookupCityForTimeZone } from "./timezone-city.js";
 
 const WEATHER_LOCATION_KEY = "weather-location";
 const WEATHER_UNIT_KEY = "weather-unit";
-const DEFAULT_WEATHER_UNIT: WeatherUnit = "imperial";
 const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
-const GEO_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 interface WeatherServiceDependencies {
   readonly preferencesRepo: PreferencesPort;
@@ -20,19 +21,14 @@ interface WeatherServiceDependencies {
 }
 
 interface CachedWeather {
-  readonly resolvedLocation: ResolvedLocation;
+  readonly resolvedLocation: ResolvedWeatherLocation;
   readonly unit: WeatherUnit;
   readonly data: WeatherTodayDto;
 }
 
-interface ResolvedLocation {
-  readonly location: WeatherLocationDto;
-  readonly source: "stored-preference" | "ip-geo" | "timezone-fallback";
-}
-
 export class WeatherService {
   private readonly weatherCache = new WeatherCache<CachedWeather>();
-  private readonly geoCache = new WeatherCache<WeatherLocationDto | null>();
+  private readonly locationResolver: WeatherLocationResolver;
   private readonly preferencesRepo: PreferencesPort;
   private readonly dataContext: DataContextRunner;
   private readonly logger: FastifyBaseLogger;
@@ -43,6 +39,7 @@ export class WeatherService {
     this.dataContext = deps.dataContext;
     this.logger = deps.logger;
     this.fetchFn = deps.fetchFn ?? fetch;
+    this.locationResolver = new WeatherLocationResolver(this.fetchFn);
   }
 
   /**
@@ -89,55 +86,24 @@ export class WeatherService {
     const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
       this.preferencesRepo.get(scopedDb, WEATHER_UNIT_KEY)
     );
-    return raw === "metric" || raw === "imperial" ? raw : DEFAULT_WEATHER_UNIT;
+    return weatherUnit(raw);
   }
 
   private async resolveLocation(
     accessContext: AccessContext,
     requestIp: string | null,
     timeZone: string | null
-  ): Promise<ResolvedLocation | null> {
+  ): Promise<ResolvedWeatherLocation | null> {
     const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
       this.preferencesRepo.get(scopedDb, WEATHER_LOCATION_KEY)
     );
-    if (raw && typeof raw === "object") {
-      const r = raw as Record<string, unknown>;
-      if (typeof r.lat === "number" && typeof r.lon === "number" && typeof r.label === "string") {
-        this.logger.info({ step: "stored-preference" }, "weather location resolved");
-        return {
-          location: { lat: r.lat, lon: r.lon, label: r.label },
-          source: "stored-preference"
-        };
-      }
-    }
-
-    // Fall back to IP geo (cached by IP, not by user)
-    let geo: WeatherLocationDto | null | undefined = null;
-    if (requestIp !== null) {
-      geo = this.geoCache.get(requestIp);
-      if (geo === undefined) {
-        geo = await geocodeIp(requestIp, this.fetchFn);
-        this.geoCache.set(requestIp, geo, GEO_CACHE_TTL_MS);
-      }
-    }
-    if (geo) {
-      this.logger.info({ step: "ip-geo" }, "weather location resolved");
-      return { location: geo, source: "ip-geo" };
-    }
-
-    // Fall back to a static timezone->city table (no new outbound egress)
-    const cityFallback = timeZone === null ? null : lookupCityForTimeZone(timeZone);
-    if (cityFallback) {
-      this.logger.info({ step: "timezone-fallback" }, "weather location resolved");
-      return { location: cityFallback, source: "timezone-fallback" };
-    }
-
-    this.logger.info({ step: "unresolved" }, "weather location unresolved");
-    return null;
+    const resolved = await this.locationResolver.resolve(raw, requestIp, timeZone);
+    this.logger.info({ step: resolved?.source ?? "unresolved" }, "weather location resolved");
+    return resolved;
   }
 }
 
-function sameLocation(left: ResolvedLocation, right: ResolvedLocation): boolean {
+function sameLocation(left: ResolvedWeatherLocation, right: ResolvedWeatherLocation): boolean {
   return (
     left.source === right.source &&
     left.location.lat === right.location.lat &&

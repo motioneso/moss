@@ -124,3 +124,14 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
 - 2026-10-24: existing Weather read lacks interval timestamps and forecast-place zone.
   Weather service resolves preferences through a transaction runner; tool execution
   already supplies a scoped database, so the new reader must not nest that runner.
+- 2026-10-24: the registry enforces a 240-character app-map description limit at boot.
+  The first installed candidate failed during build on this limit, before acceptance.
+  The corrected description is 212 characters. A second build found the missing web
+  workspace dependency needed by the generated visual import; added `@moss/weather`
+  to `apps/web`. Both failures remain in the verification record.
+- 2026-10-24: source-ID negative control: temporarily removing the Open-Meteo ID
+  check made `rejects malformed source snapshots` fail (Vitest exit 1); restored
+  it and observed the Weather unit/card suite pass (22 tests, exit 0).
+  Gateway tests exercise registered built-in declarations, session allowlist denial,
+  absent-module denial and an allowed scoped read. These are deterministic evidence,
+  not installed-model acceptance.
