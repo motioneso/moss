@@ -124,3 +124,17 @@ address poll/deadline and exact URL predicate, send each shortcut once, and keep
 assertion. Test the activation/focus ordering at the actual call site with delayed-focus and
 wrong-focus controls. This enforces an input precondition; it is not a proven explanation of r18.
 Independently review fresh r19 artifacts and closure; do not blindly replay the unchanged packet.
+
+### R19 replacement readback: use an observable distinct initial URL
+
+R19 observed clean flush, passing copied-data negative controls, actual same-home/image replacement,
+unchanged durable hashes, fresh connected frame and viewer input. The reopened Firefox `about:blank`
+address read failed: actual focus was correct, clipboard stayed sentinel, and the retained cropped
+toolbar shows Firefox intentionally renders an empty address field for that URL. Copy therefore
+cannot return the literal `about:blank` required by the harness. R20 uses a unique unbookmarked
+local fixture URL with a control fragment different from the persisted bookmark target. Require
+exact initial-control URL readback through the same viewer/clipboard before bookmark-only search,
+then exact persisted-target URL readback. This retains the not-already-on-target control and all
+durability/security/UI assertions; it changes the unobservable blank-URL implementation. Verify
+distinctness and actual caller ordering offline, then require the full live sequence and independent
+review of the exact fresh packet. Historical r18's initial read failure remains unexplained.
