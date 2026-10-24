@@ -134,15 +134,21 @@ describe("staged closure publication; external approval and runtime qualificatio
       expect(await fs.readdir(t.request.output.path)).toEqual([]);
     }
   );
-  it.each([
-    [],
-    ["/request"],
-    ["/request", "a".repeat(64), "extra"],
-    ["relative", "a".repeat(64)],
-    ["/request", "A".repeat(64)],
-    ["/request", ""]
-  ])("refuses malformed argv %j", (argv) => {
+  it.each(
+    [
+      [],
+      ["/request"],
+      ["/request", "a".repeat(64), "extra"],
+      ["relative", "a".repeat(64)],
+      ["/request", "A".repeat(64)],
+      ["/request", ""]
+    ].map((argv) => ({ argv }))
+  )("refuses malformed argv $argv", ({ argv }) => {
     expect(() => publicationArguments(argv)).toThrow();
+  });
+  it("accepts exactly the explicit request path and external hash", () => {
+    const argv = ["/request", "a".repeat(64)];
+    expect(publicationArguments(argv)).toEqual(argv);
   });
   it("rejects open schema, unsafe root mode and missing hashes", async () => {
     const t = await fixture();
