@@ -171,3 +171,17 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   reads both authorized location-resolution paths before the matrix and requires exact
   equality to one complete DTO, including provenance; it never ignores that field.
   This stopped run is retained and does not establish the twenty-case acceptance gate.
+- 2026-10-24: run 6 on `f4d7c18e4` exposed an actual configured-engine failure:
+  case 2 asked for clarification after looking up shortened `San Diego` despite the
+  saved qualified California identity. Of four attempted prompts, three had useful
+  correct cards and one had an unnecessary clarification. Case 4 then stopped the
+  harness because a new authorized retrieval timestamp differed from the initial
+  baseline. This is incomplete acceptance and includes a genuine usefulness failure.
+  The proposed repair resolves matching city/qualifier references through the saved
+  identity, while conflicting places still use lookup/ambiguity and never save changes.
+  Three saved-identity regressions failed before the repair. An explicit conflicting
+  region regression preserves conversational correction. The harness now checks each
+  card against its contemporaneous independent authorized source and accumulates
+  matrix assertion failures so an early mismatch does not hide later cases.
+  Ben's actual decision is required before dependent rollout; neither this repair
+  nor a later retry silently waives or erases the failed configured-engine run.

@@ -45,7 +45,7 @@ export const weatherModuleManifest = {
     {
       id: "weather.visual_forecast",
       description:
-        "Chat shows immutable hourly forecasts in the place’s time zone and saved units. Approximate places, missing hours and unknown rain/wind are labeled. Place corrections never save Settings; history never refetches.",
+        "Chat shows immutable local hourly forecasts in saved units. Matching city names reuse the saved place. Approximate places, missing hours and unknown rain/wind are labeled. Corrections never save Settings; history never refetches.",
       errors: [
         {
           code: "weather_location_ambiguous",

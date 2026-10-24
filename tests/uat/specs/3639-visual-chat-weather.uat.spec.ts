@@ -78,8 +78,7 @@ test("ordinary evening questions use actual place-local intervals and immutable 
   expect(source.forecast.timeZone).toBe("America/Los_Angeles");
   expect(source.forecast.coverage).toBe("complete");
   expect(source.forecast.intervals).toHaveLength(4);
-  // The model may omit place or reuse the qualified place from conversation context.
-  // Establish both independently authorized DTOs, preserving exact provenance assertions.
+  // Both omitted and matching conversational place names retain the saved identity.
   const conversationResponse = await page.request.get(
     `/api/weather/forecast?dayOffset=0&startHour=18&endHour=22&place=${encodeURIComponent(source.forecast.place)}`
   );
@@ -87,12 +86,8 @@ test("ordinary evening questions use actual place-local intervals and immutable 
   const conversationSource: WeatherForecastRead = await conversationResponse.json();
   expect(conversationSource.status).toBe("forecast");
   if (conversationSource.status !== "forecast") throw new Error("Qualified place unavailable");
-  expect(conversationSource.forecast).toEqual({
-    ...source.forecast,
-    locationSource: "conversation"
-  });
+  expect(conversationSource.forecast).toEqual(source.forecast);
   console.log(`[weather-conversation-source] ${JSON.stringify(conversationSource)}`);
-  const authorizedForecasts = [source.forecast, conversationSource.forecast];
   const results: {
     index: number;
     visual: boolean;
@@ -108,7 +103,28 @@ test("ordinary evening questions use actual place-local intervals and immutable 
     const { saved, elapsedMs } = await turn(page, prompt);
     const envelope: VisualReplyV1 | undefined = saved.visualReply;
     const visual = envelope?.blocks[0]?.kind === "weather.forecast";
-    const useful = hasUsefulWeatherAnswer(saved.reply, source.forecast);
+    // A turn may make a fresh authorized read. Compare with the current cached source,
+    // rather than assuming its retrieval timestamp must equal the pre-matrix baseline.
+    const turnSourceResponse = await page.request.get(
+      "/api/weather/forecast?dayOffset=0&startHour=18&endHour=22"
+    );
+    expect(turnSourceResponse.ok()).toBe(true);
+    const turnSource: WeatherForecastRead = await turnSourceResponse.json();
+    console.log(
+      `[weather-turn-source] ${JSON.stringify({ index: index + 1, source: turnSource })}`
+    );
+    if (turnSource.status !== "forecast") throw new Error("Turn source unavailable");
+    expect.soft(turnSource.forecast).toMatchObject({
+      place: source.forecast.place,
+      locationSource: "stored-preference",
+      approximate: false,
+      timeZone: source.forecast.timeZone,
+      unit: source.forecast.unit,
+      coverage: "complete",
+      requestedStart: source.forecast.requestedStart,
+      requestedEnd: source.forecast.requestedEnd
+    });
+    const useful = hasUsefulWeatherAnswer(saved.reply, turnSource.forecast);
     results.push({
       index: index + 1,
       visual,
@@ -123,7 +139,7 @@ test("ordinary evening questions use actual place-local intervals and immutable 
       `[weather-route] ${JSON.stringify({ ...results.at(-1), prompt, reply: saved.reply.slice(0, 1500), providerModel: model.providerModelId })}`
     );
     if (!visual) continue;
-    expect(authorizedForecasts).toContainEqual(envelope!.snapshots[0]!.fields);
+    expect.soft(envelope!.snapshots[0]!.fields).toEqual(turnSource.forecast);
     const slot = (await drawer(page)).getByLabel("Visual reply").last();
     await expect(
       slot.getByRole("heading", { name: "Local weather forecast", exact: true })
@@ -186,8 +202,8 @@ test("ordinary evening questions use actual place-local intervals and immutable 
       }))
     )}`
   );
-  expect(results.filter((r) => r.visual).length).toBeGreaterThanOrEqual(19);
-  expect(results.every((r) => r.useful)).toBe(true);
+  expect.soft(results.filter((r) => r.visual).length).toBeGreaterThanOrEqual(19);
+  expect.soft(results.every((r) => r.useful)).toBe(true);
   for (const prompt of [
     "Text only: will I need a jacket tonight?",
     "No visual. Tell me the evening weather in one sentence.",

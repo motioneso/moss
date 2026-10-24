@@ -42,11 +42,26 @@ export class WeatherForecastReader {
       };
     // Preference failures remain data-context failures; do not fetch a guessed-unit fallback.
     const unit = weatherUnit(await this.preferences.get(db, "weather-unit"));
-    const raw = query.place ? null : await this.preferences.get(db, "weather-location");
+    const raw = await this.preferences.get(db, "weather-location");
     const savedZone = query.place ? null : await readSavedWeatherZone(db, this.preferences);
     let resolved: ResolvedWeatherLocation | null = null;
     try {
-      if (query.place) {
+      const stored = weatherLocation(raw);
+      const placeParts = (query.place ?? "")
+        .split(",")
+        .map((part) => part.trim().toLocaleLowerCase());
+      const storedParts = stored?.label.split(",").map((part) => part.trim().toLocaleLowerCase());
+      // A shortened reference to the saved city retains its already-resolved identity.
+      // Conflicting qualifiers still take the normal lookup/clarification path.
+      if (
+        query.place &&
+        stored &&
+        storedParts &&
+        placeParts[0] === storedParts[0] &&
+        placeParts.slice(1).every((part) => storedParts.slice(1).includes(part))
+      ) {
+        resolved = { location: stored, source: "stored-preference" };
+      } else if (query.place) {
         const [city = "", ...qualifiers] = query.place
           .split(",")
           .map((v) => v.trim().toLocaleLowerCase());

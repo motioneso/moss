@@ -344,6 +344,75 @@ describe("authorized Weather reads and snapshots", () => {
     expect(h.values.get("weather-location")).toEqual(weatherPlace.location);
     expect(h.preferences.upsert).not.toHaveBeenCalled();
   });
+  it.each(["Los Angeles", "los angeles, california", "Los Angeles, United States"])(
+    "uses the saved identity when conversational place %s matches it",
+    async (place) => {
+      const h = harness();
+      h.fetchFn.mockImplementation(
+        async (url) =>
+          new Response(
+            JSON.stringify(
+              String(url).includes("geocoding")
+                ? {
+                    results: [
+                      {
+                        name: "Los Angeles",
+                        admin1: "California",
+                        country: "United States",
+                        latitude: 34.05,
+                        longitude: -118.24
+                      },
+                      {
+                        name: "Los Angeles",
+                        admin1: "Biobío",
+                        country: "Chile",
+                        latitude: -37.47,
+                        longitude: -72.35
+                      }
+                    ]
+                  }
+                : hourlyPayload()
+            )
+          )
+      );
+      expect(await h.reader.read(scoped, "actor", { place })).toMatchObject({
+        status: "forecast",
+        forecast: { place: weatherPlace.location.label, locationSource: "stored-preference" }
+      });
+      expect(h.fetchFn).toHaveBeenCalledTimes(1);
+      expect(String(h.fetchFn.mock.calls[0]![0])).not.toContain("geocoding");
+      expect(h.preferences.upsert).not.toHaveBeenCalled();
+    }
+  );
+  it("honors a conflicting conversational region instead of selecting the saved same-name city", async () => {
+    const h = harness();
+    h.fetchFn.mockImplementation(
+      async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).includes("geocoding")
+              ? {
+                  results: [
+                    {
+                      name: "Los Angeles",
+                      admin1: "Biobío",
+                      country: "Chile",
+                      latitude: -37.47,
+                      longitude: -72.35
+                    }
+                  ]
+                }
+              : hourlyPayload()
+          )
+        )
+    );
+    expect(await h.reader.read(scoped, "actor", { place: "Los Angeles, Chile" })).toMatchObject({
+      status: "forecast",
+      forecast: { place: "Los Angeles, Biobío, Chile", locationSource: "conversation" }
+    });
+    expect(h.preferences.upsert).not.toHaveBeenCalled();
+    expect(h.values.get("weather-location")).toEqual(weatherPlace.location);
+  });
   it("returns missing coverage without fabricating intervals or registering a card", async () => {
     const h = harness();
     const payload = hourlyPayload();
