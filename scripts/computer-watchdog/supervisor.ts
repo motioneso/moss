@@ -46,6 +46,12 @@ export interface SupervisorOutcome {
   readonly collectorIdentity: WatchdogProcessIdentity | null;
 }
 
+export interface SupervisorTerminalHooks {
+  readonly signal: AbortSignal;
+  /** Synchronous local latch only; cannot postpone fencing or observer finalization. */
+  terminal(): void;
+}
+
 /** Fixed native child. No shell, executable override, inherited environment or extra descriptors. */
 export function spawnComputerCollector(
   deployment: SupervisorDeployment,
@@ -147,6 +153,7 @@ export function runComputerSupervisor(input: {
   now(): number;
   signals: NodeJS.EventEmitter;
   lifetime?: { configuration: ComputerLifetimeConfiguration; socketPath: string };
+  terminalHooks?: SupervisorTerminalHooks;
 }): Promise<SupervisorOutcome> {
   const { configuration, journal, heartbeats } = input;
   const policy = new ComputerWatchdogPolicy(configuration);
@@ -210,6 +217,11 @@ export function runComputerSupervisor(input: {
       };
       // This timer stays referenced. The CLI exits even when kernel I/O never settles.
       const deadline = setTimeout(finish, 5000);
+      try {
+        input.terminalHooks?.terminal();
+      } catch {
+        persistenceFailed = true;
+      }
       // Initiate delivery independently of collector termination and journal I/O.
       void lifetime?.stop().then((fenced) => {
         receiverFenced = fenced;
@@ -400,8 +412,10 @@ export function runComputerSupervisor(input: {
       });
     heartbeats.on("data", heartbeat).once("end", operatorStop).once("error", operatorStop);
     input.signals.on("SIGTERM", operatorStop).on("SIGINT", operatorStop);
+    input.terminalHooks?.signal.addEventListener("abort", operatorStop, { once: true });
     const timer = setInterval(tick, 1000);
-    tick();
+    if (input.terminalHooks?.signal.aborted) operatorStop();
+    else tick();
   });
 }
 
@@ -409,7 +423,8 @@ export async function superviseDeployment(
   deployment: SupervisorDeployment,
   startedAtMs: number,
   watchdog: WatchdogProcessIdentity,
-  started: () => void
+  started: () => void,
+  terminalHooks?: SupervisorTerminalHooks
 ): Promise<SupervisorOutcome> {
   const configuration = {
     runId: deployment.configuration.runId,
@@ -434,6 +449,7 @@ export async function superviseDeployment(
     startCollector: () => spawnComputerCollector(deployment, watchdog),
     verifyRunner: () => readComputerProcess(configuration.runner),
     now: computerMonotonicMs,
-    signals: process
+    signals: process,
+    terminalHooks
   });
 }

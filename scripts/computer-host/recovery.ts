@@ -13,7 +13,7 @@ export interface ComputerStopIntent {
   readonly roots: readonly RootIdentity[];
   readonly state: HostState;
 }
-interface StopReceipt {
+export interface StopReceipt {
   readonly intent: ComputerStopIntent;
   readonly bytes: Buffer;
   readonly dev: number;
@@ -175,22 +175,40 @@ export async function stopComputerRecovery(
   docker: ComputerDocker
 ): Promise<ComputerRecoveryResult> {
   const receipt = await persistComputerStop(store);
+  return reconcileComputerStop(store, docker, receipt);
+}
+
+/** Shared exact cleanup. Normal callers additionally require their actual supervisor fence. */
+export async function reconcileComputerStop(
+  store: HostStateStore,
+  docker: ComputerDocker,
+  receipt: StopReceipt,
+  assertCurrent: () => void = () => {}
+): Promise<ComputerRecoveryResult> {
+  assertCurrent();
+  await assertStop(store, receipt);
   if (store.state.generation === Number.MAX_SAFE_INTEGER) throw failure();
-  await store.save({ ...store.state, enabled: false, generation: store.state.generation + 1 });
+  let state = JSON.stringify(store.state);
+  const guard: ComputerMutationGuard = {
+    check: () => assertStop(store, receipt),
+    assertCurrent() {
+      assertCurrent();
+      if (JSON.stringify(store.state) !== state) throw failure();
+    }
+  };
+  await store.save(
+    { ...store.state, enabled: false, generation: store.state.generation + 1 },
+    guard
+  );
+  state = JSON.stringify(store.state);
   const inventory = await docker.inventory(store.state.resources);
   await assertStop(store, receipt);
   const resources = store.state.resources.map(
     (resource) =>
       inventory.find((entry) => entry.resource.role === resource.role)?.resource ?? resource
   );
-  await store.save({ ...store.state, resources });
-  const state = JSON.stringify(store.state);
-  const guard: ComputerMutationGuard = {
-    check: () => assertStop(store, receipt),
-    assertCurrent() {
-      if (JSON.stringify(store.state) !== state) throw failure();
-    }
-  };
+  await store.save({ ...store.state, resources }, guard);
+  state = JSON.stringify(store.state);
   for (const role of ROLES) {
     const entry = inventory.find((resource) => resource.resource.role === role);
     if (entry) await docker.remove(entry.resource, guard);

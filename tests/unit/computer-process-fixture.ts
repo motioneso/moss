@@ -1,4 +1,5 @@
 import { ComputerRootLifetime } from "../../scripts/computer-watchdog/lifetime.js";
+import type { ComputerLifetimeConfiguration } from "../../apps/api/src/computer/lifetime-protocol.js";
 import { lifetimeNow, lifetimePath } from "../../apps/api/src/computer/lifetime-protocol.js";
 import { lifetimeConfiguration } from "./computer-lifetime-fixture.js";
 import { once } from "node:events";
@@ -17,7 +18,7 @@ import { fencePacket } from "./computer-rfb-fixture.js";
 
 export async function processFixture(
   executable: boolean | string = false,
-  options: { autoLifetime?: boolean } = {}
+  options: { autoLifetime?: boolean; lifetime?: ComputerLifetimeConfiguration } = {}
 ) {
   const auth = await authFixture();
   const guestSocketPath = join(auth.root, "guest.sock");
@@ -69,7 +70,7 @@ export async function processFixture(
     guestSocketPath,
     authSocketPath: auth.socketPath,
     socketPath,
-    lifetime: lifetimeConfiguration()
+    lifetime: options.lifetime ?? lifetimeConfiguration()
   };
   let closeService: () => Promise<void>;
   let childExit: Promise<number | null> | undefined;
