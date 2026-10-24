@@ -128,7 +128,9 @@ public final class DeliveryActivity extends Activity {
         position = 0; used.clear();
         NativeTheme.update(place("masthead", TextView.class, () -> theme.eyebrow(), 0), "HARDWARE / VOCCI RING");
         text("title", "Delivery details", 30, true);
-        button("hardware", "‹ Hardware", this::finish);
+        button("hardware", "‹ Hardware", () -> {
+            startActivity(new Intent(this, HardwareActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)); finish();
+        });
         TextView intro = place("intro", TextView.class, () -> theme.text(15, false), 12); intro.setTextColor(theme.text);
         NativeTheme.update(intro, "Recent recordings and connection help.");
         section("connection", "Connection");

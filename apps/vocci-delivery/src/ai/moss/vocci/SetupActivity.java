@@ -306,7 +306,6 @@ public final class SetupActivity extends Activity {
             voice == null ? "Hold-to-talk off" : voice.has("disableId") ? "Turning hold-to-talk off" : voice.has("snapshot") ? "Saving voice enrollment" :
             voice.has("enablement") ? "Voice enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Hold-to-talk off");
         startDelivery.setEnabled(enabled && readable);
-        startDelivery.setVisibility(choices.enabled() ? View.GONE : View.VISIBLE);
         stopDelivery.setEnabled(enabled && choices.enabled());
         stopDelivery.setVisibility(choices.enabled() ? View.VISIBLE : View.GONE);
         connection.setEnabled(enabled);

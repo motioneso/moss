@@ -65,7 +65,7 @@ final class NativeTheme {
     }
     private GradientDrawable buttonGround(boolean primary, boolean focused) {
         GradientDrawable ground = new GradientDrawable(); ground.setColor(primary ? accent : surface); ground.setCornerRadius(dp(4));
-        ground.setStroke(dp(focused ? 2 : 1), focused ? accentText : (primary ? accent : line)); return ground;
+        ground.setStroke(dp(focused ? 2 : 1), focused ? (primary ? onAccent : accentText) : (primary ? accent : line)); return ground;
     }
     void toggle(Switch view) {
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15); view.setTextColor(text); view.setTypeface(sans);
