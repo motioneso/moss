@@ -99,7 +99,8 @@ responses/errors/logs returned. Results contain generation, enabled, state and f
 Missing/stopped/unqualified prerequisites never report available.
 
 - **status:** inspect only configured instance resources; report disabled, unavailable or running
-  only when the qualified pair is actually running. No startup and no mutation.
+  only when the configured pair's Docker processes are actually running. This is process state,
+  never receiving readiness or usable owner access. No startup and no mutation.
 - **enable:** preserve home, require exact installed images, qualified gateway and fresh supervised
   admission; create/start exactly one fixed guest/gateway pair. No automatic retry.
 - **disable:** durably set enabled=false, stop gateway first (fence input), stop guest, remove only
