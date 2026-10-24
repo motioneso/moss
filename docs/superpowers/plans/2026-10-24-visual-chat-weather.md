@@ -247,3 +247,15 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   all composed text. The file-size check passes and all 51 targeted prose/persona
   tests pass. This structural repair requires renewed exact-head review and gates;
   the earlier CI failure and superseded local run remain disclosed.
+- 2026-10-24: supplemental installed run 10 on `d2baaf72b` discovered
+  Codex economy `gpt-6-luna`, rather than the earlier `gpt-5.6-luna`.
+  It failed with only 1/20 intended Weather visuals against the unchanged 19/20
+  requirement. All twenty full answers were useful and source-grounded on manual
+  assessment; Sports, four prose controls, novel composition, unchanged preferences
+  and the first card's immutable reload/drawer/390px/themes passed. The actual
+  preference and sample failures from run 9 remain a separate retained failure.
+  The run-10 logs do not distinguish omitted reads/proposals from rejected
+  registration/presentation; no cause is claimed. The harness now records existing
+  history tool activity names/outcomes and captured turn/message IDs before teardown,
+  without changing prompts, assertions, configured model or product behavior.
+  Further diagnosis and a new exact-head gate are required; no merge or successor.

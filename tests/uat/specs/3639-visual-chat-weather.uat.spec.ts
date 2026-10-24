@@ -193,6 +193,21 @@ test("ordinary evening questions use actual place-local intervals and immutable 
     await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`)
   ).json();
   console.log(
+    `[weather-activity] ${JSON.stringify(
+      results.map((result) => {
+        const message = history.messages.find((item) => item.id === result.assistantMessageId);
+        return {
+          index: result.index,
+          assistantMessageId: result.assistantMessageId,
+          turnId: message?.turnId,
+          activity: message?.activity
+            .filter((event) => event.kind === "tool")
+            .map(({ kind, toolName, outcome }) => ({ kind, toolName, outcome }))
+        };
+      })
+    )}`
+  );
+  console.log(
     `[weather-usage] ${JSON.stringify(
       results.map((result) => ({
         index: result.index,
