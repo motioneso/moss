@@ -58,7 +58,8 @@ its actual output imports any nonbuiltin external dependency. No generic build f
   the module location, never the invocation cwd. Bundle only the existing fixed executable using
   locked esbuild, platform=node, target=node24, format=cjs, write=false, metafile=true,
   sourcemaps disabled and optional ws native accelerators compiled out. Validate the actual
-  external imports are Node builtins before publishing any output. No network or subprocess.
+  external imports are Node builtins before publishing any output. No network; only locked esbuild's
+  native compiler subprocess is permitted, never Docker/host/guest execution.
 - `scripts/build-computer-gateway.ts`: opt-in CLI taking exactly one output directory;
   `package.json` adds `build:computer-gateway`. No import into ordinary API/host boot.
 - `infra/computer-gateway/Dockerfile` and `.dockerignore`: copied verbatim into the output.
@@ -77,8 +78,13 @@ its actual output imports any nonbuiltin external dependency. No generic build f
 - Receipt records format/Node target, exact base, bundle hash/size, recipe/dockerignore hashes,
   compiler version and sorted repository-relative input hashes plus package.json/API manifest/
   pnpm lock hashes. No absolute paths, local session IDs, timestamps, owner identity, config,
-  cookie, viewer ID or raw source content. Receipt is provenance, never runtime acceptance.
-  Same input bytes/toolchain must produce the same output bytes. No image ID is invented.
+  cookie, viewer ID or raw source content. An onLoad plugin captures and hashes the exact byte
+  buffers handed to the compiler for each source/module; never attest these from post-build
+  reads alone. Capture recipe/dockerignore, build tooling and root/API/lock/vendor package
+  metadata before compilation. Before publishing, reread every captured file and reject any
+  changed/missing input; distinguish compiler-source hashes from build-control hashes. Receipt
+  is provenance, never runtime acceptance. Same input bytes/toolchain must produce the same
+  output bytes. No image ID is invented.
 
 ## Behavior and verification
 
@@ -90,7 +96,9 @@ stable control, intentional close, active auth push and exact TERM endpoint/chil
 lookup/Fence fixtures do not prove actual TigerVNC, owner login, image Node24 or 128MiB fit.
 
 Assert receipt hashes match actual source/context bytes; deterministic repeated builds agree;
-existing output/symlink remains untouched. Inject a nonbuiltin external through a temporary
+existing output/symlink remains untouched. After real compilation, simulate a changed filesystem
+read at the input-stability boundary and assert rejection before any output publication; do not
+mutate tracked sources. Inject a nonbuiltin external through a temporary
 esbuild test plugin/interception at the build boundary to prove publication rejects it, without
 changing production entry selection. Observe removing the external-import guard fail at the
 intended rejection assertion; restoring must pass. Observe removing the compiled optional-module
@@ -143,3 +151,12 @@ separate from replaceable raw RFB. App-map and affected dev/prod config accompan
 Actual login→chat/browser→frame/input→takeover→return/intentional-close and hostile/expired/revoked
 active-session/stale-input controls require independent exact live evidence and closure.
 Idle sleep/wake, confined Internet egress and platform/release remain separately bounded work.
+
+## Plan review ledger
+
+Independent read-only security/spec R1 on `8b93c9e16`: BLOCKED. Accepted B1: esbuild
+necessarily starts its native compiler child; permit that fixed compiler only. Accepted B2:
+post-build hashes alone can attest bytes different from compilation; capture actual onLoad
+byte buffers, separate control metadata, and reject changed/missing files before publication,
+with a focused stability-boundary test. No disputed findings. Exact amendment requires R2
+acceptance before code. Immutable report/hash retained with final evidence.
