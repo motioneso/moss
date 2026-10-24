@@ -104,6 +104,15 @@ describe("installed Weather prose assessment", () => {
     ).toBe(false);
   });
   it.each([
+    ["- **21:00:** 57°F", true],
+    ["- **22:00:** 57°F", false],
+    ["- **18:00:** 57°F", false]
+  ])("grounds an explicit hourly row in its source sample: %s", (row, useful) => {
+    expect(
+      hasUsefulWeatherAnswer(`Evening temperatures:\n${row}\nBring a light layer.`, forecast)
+    ).toBe(useful);
+  });
+  it.each([
     "I don't know whether you need a jacket; perhaps check another forecast.",
     "Bring a jacket: this evening will be around 90°F at your saved location.",
     "Bring a jacket: this evening will be around 90 degrees Fahrenheit at your saved location.",

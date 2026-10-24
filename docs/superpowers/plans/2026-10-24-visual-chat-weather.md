@@ -226,7 +226,17 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   floating-point distance was `0.6000000000000085` at an inclusive `0.6` bound.
   Its exact observed-red regression permits only `1e-9` machine-noise slack;
   an unsupported 5.01°F difference remains rejected. Generic trusted guidance
-  now preserves source units unless the user explicitly asks otherwise; the
-  app map reflects it. Retain run 9 as failed and obtain the required actual
+  now preserves resolved saved units unless the user asks otherwise, while
+  retaining conversions for requested calculations/comparisons; the app map
+  reflects it. Retain run 9 as failed and obtain the required actual
   decision on this new unit failure before dependent rollout. The obsolete
   `dcd5935` gate was stopped with the official stop command (143).
+- 2026-10-24: full manual run-9 review also found cases 8 and 12 inventing an
+  explicit fifth `22:00: 66°F` sample from the exclusive window end. The independent
+  Spec reviewer confirmed this is unsupported source expansion, distinct from a
+  truthful final-hour/end-of-window summary. Include both in the pending decision.
+  Generic guidance now lists only supplied sample times; interval ends alone do
+  not establish extra samples. Observed-red regressions bind explicit hourly rows
+  to actual place-local source times/values and reject invented endpoints/wrong
+  hours. Keep whole-answer manual review because this bounded checker does not
+  cover every possible natural-language claim. No complete acceptance claim.

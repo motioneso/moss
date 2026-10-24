@@ -75,23 +75,27 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Weather rollout — prose ignores saved units (#3639 / #3583)
+### Weather rollout — prose units and unsupported samples (#3639 / #3583)
 
 Agent: `visual-chat-weather`. PR #3648 remains unmerged. Ben approved
 continuing the prior saved-place and Sports repairs under all unchanged gates.
 Run 9 on `dcd5935` produced 20/20 exact-source Weather cards and passed Sports
 preservation, but one prose answer used Celsius despite saved Fahrenheit units.
-The independent Spec reviewer confirmed this is an actual preference failure.
+Two answers also invented a fifth 22:00 sample at the window's exclusive end.
+The independent Spec reviewer confirmed these actual preference/grounding failures.
 A separate correct rounded difference hit floating-point noise in the evaluator.
 
-Prepared repair: generic trusted guidance preserves source units unless the
-user explicitly requests different units; app map updated. The evaluator's
+Prepared repair: generic trusted guidance preserves resolved saved units while
+retaining conversions for requested calculations/comparisons, and lists only
+source-supplied sample times; app map updated. The evaluator's
 exact observed-red rounding regression adds only machine-noise epsilon at the
 unchanged bound; unsupported differences and wrong saved units remain rejected.
+New observed-red hourly-row regressions reject invented end samples and values
+assigned to the wrong source hour while accepting the actual final sample.
 Recommendation: continue the repair with unchanged installed acceptance,
 independent review, full gate and CI, then merge/launch-next only if all pass.
 Alternative: hold Weather and dependent rollout. The committed Weather handoff
-requires Ben's actual decision on this new unit failure before rollout. No
+requires Ben's actual decision on these new failures before rollout. No
 renderer, threshold or scope waiver is requested. Independent work continues.
 
 ### Vocci adapter recovery — phone unlock (#3565)

@@ -28,6 +28,15 @@ export function hasUsefulWeatherAnswer(reply: unknown, forecast: WeatherWindowDt
   );
   // Source-grounded rain advice can be useful without repeating temperatures from the card.
   if (!measurements.length && (!rain.length || !/rain|umbrella/i.test(reply))) return false;
+  const clock = new Intl.DateTimeFormat("en-GB", {
+    timeZone: forecast.timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  });
+  const samples = new Map(
+    forecast.intervals.map((item) => [clock.format(new Date(item.startsAt)), item.temperature])
+  );
   return (
     rain.every(
       (match) =>
@@ -37,6 +46,12 @@ export function hasUsefulWeatherAnswer(reply: unknown, forecast: WeatherWindowDt
     ) &&
     measurements.every((match) => {
       const prefix = reply.slice(Math.max(0, match.index! - 50), match.index).replace(/[*_]/g, "");
+      const hourlyRow = prefix.match(/(?:^|\n)\s*(?:[-•]\s*)?(\d{1,2}):(\d{2}):\s*$/);
+      const sample = hourlyRow
+        ? samples.get(`${hourlyRow[1]!.padStart(2, "0")}:${hourlyRow[2]}`)
+        : undefined;
+      if (hourlyRow && sample === undefined) return false;
+      const bounds = sample === undefined ? temperatures : [sample];
       const difference = prefix.match(
         /\b(drop|decrease|rise|increase)\s+of\s+(?:(?:about|around|roughly|approximately)\s+)?$/i
       );
@@ -52,8 +67,8 @@ export function hasUsefulWeatherAnswer(reply: unknown, forecast: WeatherWindowDt
           .filter((value) => value !== undefined)
           .every((value) =>
             change === null
-              ? Number(value) >= Math.min(...temperatures) - 0.6 &&
-                Number(value) <= Math.max(...temperatures) + 0.6
+              ? Number(value) >= Math.min(...bounds) - 0.6 &&
+                Number(value) <= Math.max(...bounds) + 0.6
               : change >= 0 && Math.abs(Number(value) - change) <= 0.6 + 1e-9
           )
       );

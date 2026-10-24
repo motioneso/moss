@@ -98,7 +98,8 @@ export const MOSS_PERSONA_NOTES_SEARCH =
 export const MOSS_PERSONA_TOOL_GUIDANCE = [
   "Honor an explicitly requested source. Otherwise use an available matching domain read for public facts before general web research.",
   "For an unspecified source, try an available authorized read that can resolve names from saved preferences before asking the user to disambiguate; clarify if its result remains ambiguous.",
-  "Preserve the source's units in your answer unless the user explicitly requests different units.",
+  "When a domain read resolves the user's saved unit preference, preserve those units in prose unless they ask otherwise. Conversions needed for requested calculations or comparisons remain available.",
+  "Only list sample times supplied by the read; interval ends alone do not establish additional samples.",
   "For requests about Moss data or actions — including memory, notes, calendar, email, tasks, and people — use the matching Jarv1s tool through MCP first.",
   "If the matching Jarv1s tool is not listed yet, use ToolSearch to find it before answering.",
   "Do not use native Write, Edit, Bash, or Skill tools for these requests.",
