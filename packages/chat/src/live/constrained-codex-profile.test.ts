@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   ConstrainedCodexUnsupportedError,
   constrainedCodexCatalog,
+  findConstrainedCodexExecutable,
   parseConstrainedCodexOutput,
   prepareConstrainedCodexProfile
 } from "./constrained-codex-profile.js";
@@ -61,6 +62,29 @@ it("reports missing or unreadable binaries without exposing their paths", async 
   ).rejects.toBeInstanceOf(ConstrainedCodexUnsupportedError);
 });
 
+it("rejects unapproved executable bytes without executing the PATH launcher", async () => {
+  const root = await mkdtemp(join(tmpdir(), "unapproved-constrained-codex-"));
+  try {
+    const executablePath = join(root, "codex");
+    const marker = join(root, "executed");
+    await writeFile(executablePath, `#!/bin/sh\ntouch '${marker}'\n`);
+    await chmod(executablePath, 0o700);
+    expect(await findConstrainedCodexExecutable(root)).toBeUndefined();
+    await expect(
+      prepareConstrainedCodexProfile({
+        privateHome: join(root, "home"),
+        model: "selected-model",
+        schema: {},
+        io: createRealTmuxIo(),
+        executablePath
+      })
+    ).rejects.toBeInstanceOf(ConstrainedCodexUnsupportedError);
+    expect(await readdir(root)).not.toContain("executed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function files(path: string): Promise<string[]> {
   const entries = await readdir(path, { withFileTypes: true });
   return (
@@ -76,6 +100,31 @@ async function files(path: string): Promise<string[]> {
 // no real sign-in, subscription, private transcript, or vendor inference request is used.
 const executablePath = process.env.CONSTRAINED_CODEX_NATIVE;
 describe.skipIf(!executablePath)("pinned native Codex profile", () => {
+  it("resolves an approved promoted artifact through the managed npm layout", async () => {
+    const root = await mkdtemp(join(tmpdir(), "managed-constrained-codex-"));
+    try {
+      const bin = join(root, "bin");
+      const packages = join(root, "releases", "promoted", "node_modules", "@openai");
+      const launcher = join(packages, "codex", "bin", "codex.js");
+      const target =
+        process.arch === "arm64" ? "aarch64-unknown-linux-musl" : "x86_64-unknown-linux-musl";
+      const nativeDir = join(packages, `codex-linux-${process.arch}`, "vendor", target, "bin");
+      await mkdir(bin, { recursive: true });
+      await mkdir(join(packages, "codex", "bin"), { recursive: true });
+      await mkdir(nativeDir, { recursive: true });
+      await writeFile(
+        launcher,
+        "#!/usr/bin/env node\nthrow new Error('must not execute launcher');\n"
+      );
+      await chmod(launcher, 0o700);
+      await symlink(launcher, join(bin, "codex"));
+      await symlink(executablePath!, join(nativeDir, "codex"));
+      expect(await findConstrainedCodexExecutable(bin)).toBe(join(nativeDir, "codex"));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("withholds tools and project instructions, and avoids session rollouts; removal controls expose each", async () => {
     const root = await mkdtemp(join(tmpdir(), "native-constrained-codex-"));
     const requests: Record<string, unknown>[] = [];

@@ -677,7 +677,7 @@ export const meetingsModuleManifest = {
           code: "meeting_output_route_unavailable",
           class: "validation",
           description:
-            "Your default model is unavailable or cannot produce structured summaries. No replacement is used. Check Settings → AI providers or ask an admin, then refresh summaries and try again."
+            "Your default model is unavailable for structured summaries. No replacement is used. Check AI providers and installed CLI compatibility with the constrained runner, then refresh summaries and retry."
         },
         {
           code: "meeting_output_route_changed",
