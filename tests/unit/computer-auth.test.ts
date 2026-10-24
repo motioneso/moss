@@ -47,7 +47,7 @@ describe("Computer private auth IPC", () => {
   it("pushes revocation to an idle active policy and fences its old lease", async () => {
     const f = await authFixture();
     cleanups.push(() => f.close());
-    const invalidated = deferred();
+    const invalidated = vi.fn();
     const control = new ComputerInputControl({
       ownerUserId: OWNER,
       sessions: { assertLive: (input) => client.assertLive(input) },
@@ -57,7 +57,7 @@ describe("Computer private auth IPC", () => {
       binding(),
       vi.fn(() => {
         control.invalidateSession(SESSION);
-        invalidated.resolve();
+        invalidated();
       })
     );
     const viewer = await control.connect(client.binding);
@@ -65,7 +65,7 @@ describe("Computer private auth IPC", () => {
     const lease = control.acquireAgentLease(OWNER);
     const writes = vi.fn<() => undefined>(() => undefined);
     f.invalidations.invalidate({ actorUserId: OWNER, sessionId: SESSION });
-    await invalidated.promise;
+    await vi.waitFor(() => expect(invalidated).toHaveBeenCalledTimes(1), { timeout: 200 });
     expect(control.snapshot().mode).toBe("paused");
     await expect(control.dispatchAgent(lease, writes)).rejects.toThrow();
     expect(writes).not.toHaveBeenCalled();
@@ -272,6 +272,7 @@ describe("Computer private auth IPC", () => {
     expect(() => {
       for (let i = 0; i < 30; i++) channel.send({ padding: "x".repeat(3000) });
     }).toThrow();
+    expect(raw.writableLength).toBeLessThanOrEqual(65_536);
     raw.destroy();
   });
 

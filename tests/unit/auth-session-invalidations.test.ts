@@ -3,8 +3,7 @@ import pg from "pg";
 import { SessionInvalidations } from "../../packages/auth/src/session-invalidations.js";
 import { createMeSessionsService } from "../../packages/auth/src/session-service.js";
 import { createBetterAuthOptions } from "../../packages/auth/src/index.js";
-import { betterAuth } from "../../packages/auth/node_modules/better-auth/dist/index.mjs";
-import { memoryAdapter } from "../../packages/auth/node_modules/better-auth/dist/adapters/memory-adapter/index.mjs";
+import { createVendorMemoryAuth } from "../../packages/auth/src/__tests__/vendor-memory-auth.js";
 import { authFixture, binding, deferred, OWNER, SESSION } from "./computer-auth-fixture.js";
 
 function sessionFixture() {
@@ -150,17 +149,7 @@ describe("auth-owned active session invalidations", () => {
       undefined,
       source
     );
-    const store = {
-      users: [],
-      better_auth_sessions: [],
-      auth_accounts: [],
-      auth_verifications: []
-    };
-    const auth = betterAuth({
-      ...options,
-      database: memoryAdapter(store),
-      databaseHooks: { session: options.databaseHooks?.session }
-    });
+    const auth = createVendorMemoryAuth(options);
     const signup = await auth.api.signUpEmail({
       body: {
         name: "Synthetic",

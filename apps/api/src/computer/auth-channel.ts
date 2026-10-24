@@ -108,7 +108,7 @@ export class ComputerAuthChannel {
       frame.length > FRAME_LIMIT ||
       this.socket.destroyed ||
       !this.socket.writable ||
-      this.socket.writableLength > BACKLOG_LIMIT
+      this.socket.writableLength + frame.length > BACKLOG_LIMIT
     )
       throw new ComputerAuthUnavailable();
     this.socket.write(frame);

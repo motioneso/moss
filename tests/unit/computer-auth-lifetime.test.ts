@@ -21,12 +21,12 @@ afterEach(async () => {
 
 describe("Computer auth active lifetime", () => {
   it("polls while idle and closes at the two-second outstanding-check deadline", async () => {
-    const started = deferred();
-    const invalidated = deferred();
+    const checked = vi.fn();
+    const invalidated = vi.fn();
     const server = await fakeAuthServer((value, channel) => {
       if (!isRecord(value)) return;
       if (value.type === "bind") channel.send(liveFrame(value.requestId));
-      else started.resolve();
+      else checked();
     });
     cleanups.push(() => server.close());
     vi.useFakeTimers({
@@ -36,27 +36,34 @@ describe("Computer auth active lifetime", () => {
       socketPath: server.socketPath,
       viewerId: randomUUID(),
       ownerUserId: OWNER,
-      onInvalidate: invalidated.resolve
+      onInvalidate: invalidated
     });
     await vi.advanceTimersByTimeAsync(2000);
-    await started.promise;
+    await vi.waitFor(() => expect(checked).toHaveBeenCalledTimes(1), { timeout: 200 });
     await vi.advanceTimersByTimeAsync(2000);
-    await invalidated.promise;
+    expect(invalidated).toHaveBeenCalledTimes(1);
     await expect(client.assertLive({ actorUserId: OWNER, sessionId: SESSION })).rejects.toThrow();
   });
 
   it("expires idle clients absolutely even with successful fresh replies", async () => {
-    const f = await authFixture();
-    cleanups.push(() => f.close());
     vi.useFakeTimers({
       toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "performance"]
     });
-    const lost = deferred();
-    const client = await f.connect(binding(SESSION, Date.now() + 1000), vi.fn(lost.resolve));
+    const b = binding(SESSION, Date.now() + 1000);
+    const server = await fakeAuthServer((value, channel) => {
+      if (isRecord(value)) channel.send(liveFrame(value.requestId, b));
+    });
+    cleanups.push(() => server.close());
+    const lost = vi.fn();
+    const client = await connectComputerAuth({
+      socketPath: server.socketPath,
+      viewerId: randomUUID(),
+      ownerUserId: OWNER,
+      onInvalidate: lost
+    });
     await vi.advanceTimersByTimeAsync(1000);
-    await lost.promise;
+    expect(lost).toHaveBeenCalledTimes(1);
     await expect(client.assertLive({ actorUserId: OWNER, sessionId: SESSION })).rejects.toThrow();
-    expect(f.assertLive).toHaveBeenCalledTimes(1);
   });
 
   it("bounds initial bind authorization and never accepts its late completion", async () => {

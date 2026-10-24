@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { chmod, lstat, realpath, unlink } from "node:fs/promises";
+import { chmod, link, lstat, mkdtemp, realpath, rmdir, unlink } from "node:fs/promises";
 import { createServer, type Socket } from "node:net";
-import { dirname, isAbsolute } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type {
   BrowserSessionBinding,
   SessionBindingsService,
@@ -74,7 +74,6 @@ export async function serveComputerAuth(deps: {
     let entry: IssuedBinding | undefined;
     let viewerId = "";
     let ended = false;
-    let pending = 0;
     const ids = new Set<string>();
     const deadlines = new Set<ReturnType<typeof setTimeout>>();
     const stop = () => {
@@ -96,9 +95,7 @@ export async function serveComputerAuth(deps: {
         if (ended) return;
         const bindingFrame = !entry;
         if (
-          !(bindingFrame
-            ? fields(value, "requestId,type,viewerId")
-            : fields(value, "requestId,type")) ||
+          !fields(value, bindingFrame ? "requestId,type,viewerId" : "requestId,type") ||
           !isUuid(value.requestId) ||
           ids.has(value.requestId) ||
           ids.size >= AUTH_REQUEST_LIMIT ||
@@ -138,7 +135,6 @@ export async function serveComputerAuth(deps: {
         ids.add(value.requestId);
         const requestId = value.requestId;
         authWork++;
-        pending++;
         const deadline = performance.now() + AUTH_DEADLINE_MS;
         const timer = setTimeout(stop, AUTH_DEADLINE_MS);
         deadlines.add(timer);
@@ -169,32 +165,50 @@ export async function serveComputerAuth(deps: {
           } finally {
             // Closing a socket does not cancel a database promise or release its work budget.
             authWork--;
-            pending--;
             clearTimeout(timer);
             deadlines.delete(timer);
           }
         })();
-        if (pending > AUTH_PENDING_LIMIT) stop();
       },
       stop
     );
   });
-  // createServer never unlinks an existing Unix endpoint.
+  let bindDirectory: string | undefined;
+  let published = false;
+  let identity: Awaited<ReturnType<typeof lstat>> | undefined;
+  const removeEndpoint = async () => {
+    // Node owns only its private bind path; the published alias is ours to remove.
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (published) {
+      const remaining = await lstat(deps.socketPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+        return null;
+      });
+      if (remaining && remaining.dev === identity?.dev && remaining.ino === identity.ino)
+        await unlink(deps.socketPath);
+    }
+    if (bindDirectory) await rmdir(bindDirectory);
+  };
   try {
+    bindDirectory = await mkdtemp(join(dirname(deps.socketPath), ".auth-"));
+    const bindPath = join(bindDirectory, "s");
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(deps.socketPath, () => {
+      server.listen(bindPath, () => {
         server.removeListener("error", reject);
         resolve();
       });
     });
-    await chmod(deps.socketPath, 0o600);
+    await chmod(bindPath, 0o600);
+    identity = await lstat(bindPath);
+    await link(bindPath, deps.socketPath);
+    published = true;
   } catch (error) {
     unsubscribe();
-    server.close();
+    await removeEndpoint();
     throw error;
   }
-  const identity = await lstat(deps.socketPath);
+  let closing: Promise<void> | undefined;
   return {
     issue(binding: BrowserSessionBinding): string {
       if (closed || issued.size >= 4 || binding.actorUserId !== deps.ownerUserId)
@@ -215,16 +229,14 @@ export async function serveComputerAuth(deps: {
       const entry = issued.get(viewerId);
       if (entry) retire(viewerId, entry);
     },
-    async close(): Promise<void> {
+    close(): Promise<void> {
+      if (closing) return closing;
       closed = true;
       unsubscribe();
       for (const [id, entry] of issued) retire(id, entry);
       for (const socket of sockets) socket.destroy();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-      // Node removes the bound socket on server.close; never remove a replacement endpoint.
-      const remaining = await lstat(deps.socketPath).catch(() => null);
-      if (remaining && remaining.dev === identity.dev && remaining.ino === identity.ino)
-        await unlink(deps.socketPath);
+      closing = removeEndpoint();
+      return closing;
     }
   };
 }
