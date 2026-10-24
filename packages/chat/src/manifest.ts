@@ -97,7 +97,8 @@ export const chatModuleManifest = {
       "sql/0321_chat_repeating_reads.sql",
       "sql/0322_chat_responsibility_agreements.sql",
       "sql/0323_chat_unread_messages.sql",
-      "sql/0327_chat_voice_requests.sql"
+      "sql/0327_chat_voice_requests.sql",
+      "sql/0333_chat_automatic_voice_inputs.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -190,7 +191,7 @@ export const chatModuleManifest = {
     {
       id: "chat.voice_requests",
       description:
-        "Review ring transcripts in Main with Send and Open reply. Private/module/other chats hide review. Links open owned receipts without sending. Busy chats defer; runner outages keep requests queued. Interrupted turns never auto-replay.",
+        "New ring text sends automatically in Main as normal messages/replies. Legacy pending inputs keep inline Send; Load older pages retained inputs. Private/other chats hide evidence and defer dispatch; interrupted turns never auto-replay.",
       featureFlagId: "chat.module"
     },
     {

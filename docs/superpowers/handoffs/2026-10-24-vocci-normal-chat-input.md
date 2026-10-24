@@ -1,5 +1,16 @@
 # Vocci: ring commands use the normal chat input
 
+## Controlling update — 2026-10-24
+
+Ben subsequently clarified in the successor conversation: “I don't want to wait
+for explicit send, the text should send automatiocally”. This supersedes the
+explicit-Send/editable-composer requirement below for ring input. Follow the
+[updated spec](../specs/2026-10-24-vocci-normal-chat-input.md) and
+[bounded plan](../plans/2026-10-24-vocci-normal-chat-input.md). Existing browser
+microphone input remains an editable draft. Preserve legacy pending requests,
+owner/Main/privacy/selection and replay fences; no phone/production operation.
+The original Start text below is retained as historical context where superseded.
+
 ## Start
 
 Ben's new direction in the owning conversation, 2026-10-24:

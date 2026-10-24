@@ -188,7 +188,7 @@ describe("explicit versioned voice recording receiver", () => {
     const status = await f.service.voiceStatus(actor, accepted.id);
     expect(status).toMatchObject({ state: "complete", voiceRequestId: expect.any(String) });
     expect(await f.chat.status(actor, status!.voiceRequestId!)).toMatchObject({
-      state: "ready-to-send",
+      state: "queued",
       automatic: false,
       transcript: "Synthetic voice question"
     });

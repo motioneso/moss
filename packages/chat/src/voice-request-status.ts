@@ -17,6 +17,8 @@ export function voiceRequestStatus(row: VoiceRequest): ChatVoiceRequestStatus {
     sourceDeviceId: row.source_device_id,
     recordingId: row.recording_id,
     threadId: row.thread_id,
+    turnId: row.turn_id,
+    createdAt: row.created_at.toISOString(),
     transcript: row.transcript,
     state: row.state,
     capturedAt: row.captured_at?.toISOString() ?? null,
