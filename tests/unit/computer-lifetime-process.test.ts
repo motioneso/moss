@@ -140,9 +140,11 @@ describe("real supervisor to receiving core lifetime, disclosed native executabl
       release = resolve;
     });
     cleanups.push(async () => release());
+    let retired: ComputerReceivingGateway | undefined;
     const close = vi
       .spyOn(ComputerReceivingGateway.prototype, "close")
-      .mockImplementation(function () {
+      .mockImplementation(function (this: ComputerReceivingGateway) {
+        retired = this;
         void original.call(this);
         return held;
       });
@@ -150,7 +152,7 @@ describe("real supervisor to receiving core lifetime, disclosed native executabl
     const watcherClosed = once(watcher, "close");
     expect(await f.lifetime.stop()).toBe(true);
     expect(close).toHaveBeenCalled();
-    expect(close.mock.contexts[0]!.snapshot().closed).toBe(true);
+    expect(retired?.snapshot().closed).toBe(true);
     await Promise.all([controllerClosed, watcherClosed]);
     await expect.poll(() => f.events).toContainEqual(["key", 65, false]);
     await expect(f.open()).rejects.toThrow();
