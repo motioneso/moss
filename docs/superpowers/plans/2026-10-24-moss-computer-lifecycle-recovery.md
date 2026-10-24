@@ -65,7 +65,7 @@ known-ID initial inspect404 proves absence. No fixture or predicate replaces the
 ## Existing-only state and irreversible marker
 
 Files: `scripts/computer-host/recovery.ts`, `scripts/computer-recovery.ts`; narrow additions to
-`state.ts` and `operations.ts`; `tests/unit/computer-host-recovery.test.ts` and fixture extensions
+`state.ts`, `operations.ts` and `docker.ts`; `tests/unit/computer-host-recovery.test.ts` and fixture extensions
 only as necessary. No general job framework, new configuration field or public endpoint.
 
 `HostStateStore.openExisting(config): Promise<HostStateStore>` acquires the same exclusive lock,
@@ -77,8 +77,14 @@ initialization if a terminal marker exists; stop evidence must not become a fres
 `store.assertLaunchable(): Promise<void>` refuses that latch and any `stop.json` path, including
 malformed, symlinked or partially persisted markers. Seeing any marker permanently latches this
 store even if someone later removes it. Enable/recreate check before admission and again before
-each create/start after asynchronous work. A failure returns unavailable and invokes the existing
+each create/start after asynchronous work. Docker create/start require an explicit launch-guard
+callback, with no default successful guard; start invokes it after its awaited inspect, immediately
+before its actual POST. Persist a late create's full ID even when terminal state now prevents start.
+A failure returns unavailable and invokes the existing
 invalidator; there is no configuration override. This is local launch refusal, not remote fencing.
+Normal mutating API requests refuse a terminal store before saving or Docker mutation; only the
+explicit recovery operation may proceed. State saves on a terminal store cannot enable it or drop/
+replace resource tuples. Null-to-full-ID resolution is allowed at the same role/creation generation.
 
 `persistComputerStop(store): Promise<ComputerStopIntent>` first latches, validates roots and writes
 one exclusive NOFOLLOW|NONBLOCK0600 single-link regular `stop.json`, bounded16KiB. Exact fields:
@@ -90,8 +96,9 @@ not durable-stop success. An existing valid marker is revalidated and file+direc
 before resumed cleanup; mere existence does not acknowledge a previous failed fsync.
 
 Its snapshot binds instance, canonical roots, request generation and each original role/creation
-generation/full ID or pending intent. Recovery permits only subsets and pending-null to validated
-full-ID resolution at the same role/generation. A known ID, role or generation cannot be replaced,
+generation/full ID or pending intent. Recovery permits only pending-null to validated full-ID
+resolution at the same role/generation. Terminal state retains all original resource tuples and
+every resolved full ID even after removal. A known ID, role or generation cannot be replaced,
 and current generation cannot precede the snapshot. No terminal marker reset or fresh run here.
 The existing root marker also binds owner/config. Unsafe or inconsistent markers block mutation.
 
@@ -103,12 +110,15 @@ Resolving an intent in memory is inspection only; missing pending names remain u
 No missing-image/spec or list error can erase a known ID. It does not claim stopped resources.
 
 `stopComputerRecovery(store, docker)` persists/revalidates/fsyncs the terminal marker first, then
-validates the entire inventory before mutation. Persist all resolved full IDs and enabled=false
-before stopping resources. Preserve the original request generation; this is root-only terminal
-reconciliation, not a new API CAS request. Validate marker compatibility before saving or mutation.
+advances the durable request generation once and sets enabled=false, then validates the entire
+inventory before mutation. Generation exhaustion fails without mutation. Persist all resolved full
+IDs before stopping resources. Resource creation generations remain unchanged. Each explicit stop
+invocation invalidates previous API CAS requests; immutable stop snapshot retains its first generation.
+Validate marker compatibility before saving or mutation.
 Under the held lock, remove gateway then desktop through the exact fixed adapter. Revalidate roots
-and marker before each mutation and save remaining identities only after the adapter acknowledges
-removal. On ANY gateway error halt before desktop, retaining unresolved/failed identities. Lost
+and marker before each mutation. Retain every full ID in terminal state after adapter removal;
+report actual remaining inventory separately, and recheck it before local command success.
+On ANY gateway error halt before desktop, retaining unresolved/failed identities. Lost
 DELETE acknowledgement is uncertain; a later invocation may reconcile initial known-ID404.
 If gateway was initially known absent, complete inventory validation permits stopping the desktop.
 Pending gateway404 blocks all cleanup. Never retry a create/start or infer a new identity.
@@ -145,7 +155,9 @@ lost remove result retained then reconciled, home retained, no volumes, and laun
 admission/create/start including stop arriving during awaited admission/create. Native executable
 inspect and stop must use only fixture Docker, then leave exact owned fixtures/children closed.
 Observe intended removed-guard failures for stop durability, marker launch refusal, existing-only
-open, tuple binding, pending intent retention and gateway-first halt; restore byte-for-byte.
+open, tuple binding, pending intent retention, CAS advance and gateway-first halt; restore byte-for-byte.
+Hold Docker start's inspect across terminal entry and assert no actual start POST; late-create
+completion retains its captured full ID. A terminal save cannot erase a resolved ID after cleanup.
 
 Before implementation obtain independent read-only security and Spec acceptance of this exact
 committed contract. After implementation independent Standards+Spec/security at pinned base,
@@ -168,3 +180,13 @@ installed usability; actual owner cookie/Origin/HTTPS/WSS/chat/agent leases and 
 hostile/revoked/stale/pressed-input evidence precede #3616 completion. App-map and dev/prod config
 accompany product wiring. Reuse accepted r21 persistence; r12/r18 causes unknown. Keep parents open.
 No model calls here; later UI derives from records, model only chooses authorized tasks/next input.
+
+## Review rulings
+
+Plan security R1 on `c6bfeee3c`: blocked two accepted findings. Retain every resolved full ID in
+terminal state after cleanup (the first immutable stop snapshot may contain only a pending intent),
+and advance durable CAS generation before each root stop invocation's mutations. Also spell out
+the required guard after Docker start's awaited inspect and immediately before its POST; test
+that race and retain late-create IDs. Spec R1 accepted the bounded scope, with the same asynchronous
+start seam highlighted for implementation review. No disputed ruling; amended exact plan needs
+independent acceptance before code.
