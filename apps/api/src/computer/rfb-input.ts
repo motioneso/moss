@@ -21,6 +21,13 @@ type ViewerStream = {
   readonly connection: RfbServerConnection;
 };
 
+export interface ComputerRfbConnection {
+  readonly viewer: ComputerViewer;
+  readonly connection: RfbServerConnection;
+  readonly transport: Duplex;
+  readonly parserStream: Duplex;
+}
+
 /** Receiving prerequisite only; owner transport, framebuffer fan-out and lifecycle are not wired. */
 export class ComputerRfbInput {
   readonly #control: ComputerInputControl;
@@ -42,6 +49,7 @@ export class ComputerRfbInput {
       readonly now: () => Date;
       readonly upstream: RfbClient;
       readonly timeoutMs?: number;
+      readonly onConnection?: (input: ComputerRfbConnection) => void;
     }
   ) {
     this.#timeoutMs = deps.timeoutMs ?? 2000;
@@ -210,7 +218,8 @@ export class ComputerRfbInput {
       stream.destroy();
       throw new ComputerRfbUnavailable();
     }
-    const connection = new RfbServerConnection(boundedRfbInputStream(stream), {
+    const parserStream = boundedRfbInputStream(stream);
+    const connection = new RfbServerConnection(parserStream, {
       width: this.deps.upstream.width,
       height: this.deps.upstream.height,
       name: "Moss Computer"
@@ -235,6 +244,12 @@ export class ComputerRfbInput {
     connection.on("key", (event) => input({ type: "key", ...event }));
     connection.on("pointer", (event) => input({ type: "pointer", ...event }));
     // No clipboard/extension/raw forwarding. Only the two normalized events above reach input.
+    try {
+      this.deps.onConnection?.({ viewer, connection, transport: stream, parserStream });
+    } catch (error) {
+      this.#retire(entry);
+      throw error;
+    }
   }
 
   #retire(entry: ViewerStream): void {

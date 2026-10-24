@@ -192,3 +192,8 @@ Add intended behavioral regressions for all three. No disputed findings. Process
 also cap WebSocket payload/queues before its decoder; this core begins at an already connected
 Duplex and cannot qualify that absent transport or total image fit. Exact amended plan requires
 R2 acceptance before implementation.
+
+R2 on `d071911c2451e3a412d58150a333dc3652931ca4`: PASS_BOUNDED_RECEIVING_CORE_PLAN.
+No remaining plan blockers within the internal no-launch scope. Reviewer independently checked
+public Framebuffer allocation/put paths and the amended backlog, local-retirement and rgbx
+contracts. Source, evidence, actual TigerVNC, image/runtime and owner acceptance remain separate.
