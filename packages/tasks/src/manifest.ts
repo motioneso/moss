@@ -21,6 +21,8 @@ import {
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { taskSummaryTemplate } from "./summary/contract.js";
+import { taskSummaryTool } from "./summary/tool.js";
 import { taskListTarget, taskTagTarget, taskTagAssignmentTarget } from "./chat-targets.js";
 import {
   taskApprovalActions,
@@ -486,6 +488,7 @@ export const tasksModuleManifest = {
     }
   ],
   assistantTools: [
+    taskSummaryTool,
     {
       name: "tasks.list",
       description:
@@ -808,7 +811,29 @@ export const tasksModuleManifest = {
         )}; assignments to that tag will be removed.`
     }
   ],
+  visualTemplates: [taskSummaryTemplate],
   features: [
+    {
+      id: "tasks.visual_summary",
+      description:
+        "Chat shows up to twelve owned/shared tasks with status, priority, local due days, source time and coverage. Recurrence is not advanced; reminders are excluded. Saved cards never refetch or change tasks.",
+      errors: [
+        {
+          code: "tasks_summary_unavailable",
+          class: "transient",
+          description:
+            "A failed read or invalid visual retains readable text; no task change is performed."
+        }
+      ],
+      remediations: [
+        {
+          id: "tasks_summary_retry",
+          description:
+            "Ask for a fresh task summary or inspect Tasks. Change saved timezone in Profile when local days are incorrect.",
+          path: "/tasks"
+        }
+      ]
+    },
     {
       id: "tasks.quick_capture",
       description:
