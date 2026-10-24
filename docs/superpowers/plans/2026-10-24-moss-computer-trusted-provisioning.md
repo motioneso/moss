@@ -54,7 +54,11 @@ and signer/namespace provenance remain unpublished/unqualified here. Owner: prov
 ## Actual publisher contract
 
 Add `scripts/computer-provision.ts` and focused `scripts/computer-provision/` config/publication/run
-modules, affected Docker read-only helper and narrow gateway config-loader change. No dependency,
+modules, affected Docker read-only helper and narrow gateway config-loader change. Extend the
+canonical HostStateStore.close with its existing mutation-guard contract for final lock release:
+validate/close the descriptor before guarded final metadata/equality/deadline checks, then unlink
+synchronously with no await after the last guard. Close/check failure retains the lock path; do
+not recreate an already released lock. No dependency,
 HostConfig field, app-map capability or dev/prod default changes. No socket-policy change.
 
 `computer-provision <trusted-config>` is root-only Linux, builtin-only CJS, absolute native Node.
