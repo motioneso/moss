@@ -18,23 +18,61 @@ vi.mock("../../scripts/computer-watchdog/trust.js", async (original) => ({
 }));
 
 /** Actual Unix Docker protocol/files/runner; disclosed root/runtime/namespace/Node trust projection. */
-export async function provisionFixture() {
+export async function provisionFixture(
+  registerCleanup: (close: () => Promise<void>) => void,
+  nativeGatewayGid?: number
+) {
   const nativeUid = process.getuid!();
+  const nativeGid = process.getgid!();
   const host = await isolatedConfig();
   const root = dirname(host.config.stateDir);
+  const handles: fs.FileHandle[] = [];
+  let node: ReturnType<typeof spawn> | undefined;
+  let docker: ReturnType<typeof createServer> | undefined;
+  const execArgv = process.execArgv;
+  const close = async () => {
+    process.execArgv = execArgv;
+    vi.unstubAllEnvs();
+    const stopped = await Promise.allSettled([
+      ...handles.map((file) => file.close()),
+      (async () => {
+        if (node?.pid && node.exitCode === null && node.signalCode === null) {
+          const exited = once(node, "exit");
+          node.kill("SIGKILL");
+          await exited;
+        }
+      })(),
+      (async () => {
+        if (docker?.listening) {
+          docker.closeAllConnections();
+          await new Promise<void>((resolve, reject) =>
+            docker!.close((error) => (error ? reject(error) : resolve()))
+          );
+        }
+      })()
+    ]);
+    const removed = await Promise.allSettled([host.close()]);
+    const failures = [...stopped, ...removed].filter((r) => r.status === "rejected");
+    if (failures.length) throw new AggregateError(failures, "Provision fixture cleanup failed");
+  };
+  registerCleanup(close);
   for (const name of ["output", "input", "data", "docker-data", "monitor"])
     await fs.mkdir(join(root, name), { mode: 0o700 });
   await fs.chmod(host.config.gatewayConfigDir, 0o750);
-  const node = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+  if (nativeGatewayGid !== undefined)
+    await fs.chown(host.config.gatewayConfigDir, nativeUid, nativeGatewayGid);
+  node = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
     stdio: "ignore",
     detached: true
   });
   await once(node, "spawn");
   const runner = await trust.processIdentity(node.pid!);
-  const handles: fs.FileHandle[] = [];
-  const project = <T extends { uid: number | bigint; mode: number | bigint }>(stat: T): T =>
+  const project = <T extends { uid: number | bigint; gid: number | bigint; mode: number | bigint }>(
+    stat: T
+  ): T =>
     Object.assign(stat, {
       uid: typeof stat.uid === "bigint" ? 0n : 0,
+      gid: typeof stat.gid === "bigint" ? 1000n : 1000,
       mode: typeof stat.mode === "bigint" ? stat.mode & ~0o022n : stat.mode & ~0o022
     });
   const originalStat = fs.lstat;
@@ -57,13 +95,12 @@ export async function provisionFixture() {
     );
     const chown = file.chown.bind(file);
     vi.spyOn(file, "chown").mockImplementation((uid, gid) =>
-      chown(uid === 0 ? nativeUid : uid, gid)
+      chown(uid === 0 ? nativeUid : uid, gid === 1000 ? nativeGid : gid)
     );
     return file;
   });
   vi.spyOn(process, "getuid").mockReturnValue(0);
   vi.spyOn(process, "geteuid").mockReturnValue(0);
-  const execArgv = process.execArgv;
   process.execArgv = [];
   for (const key of [
     "NODE_OPTIONS",
@@ -121,7 +158,7 @@ export async function provisionFixture() {
     };
   });
   const calls: { method: string; path: string }[] = [];
-  const docker = createServer((request, response) => {
+  docker = createServer((request, response) => {
     const url = new URL(request.url!, "http://fixture.invalid");
     calls.push({ method: request.method!, path: url.pathname });
     const send = (status: number, body: unknown) =>
@@ -184,6 +221,8 @@ export async function provisionFixture() {
   const deployment = await loadProvisionDeployment(path, artifact);
   return {
     nativeUid,
+    nativeGid,
+    nativeStat: originalStat,
     io: fs,
     root,
     host: host.config,
@@ -207,15 +246,6 @@ export async function provisionFixture() {
         now: () => now,
         interrupted: () => interrupted
       }),
-    async close() {
-      process.execArgv = execArgv;
-      vi.unstubAllEnvs();
-      for (const file of handles) await file.close();
-      node.kill("SIGKILL");
-      await once(node, "exit");
-      docker.closeAllConnections();
-      await new Promise<void>((resolve) => docker.close(() => resolve()));
-      await host.close();
-    }
+    close
   };
 }

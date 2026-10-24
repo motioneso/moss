@@ -21,10 +21,8 @@ afterEach(async () => {
   vi.restoreAllMocks();
   for (const close of cleanups.splice(0).reverse()) await close();
 });
-async function fixture() {
-  const f = await provisionFixture();
-  cleanups.push(() => f.close());
-  return f;
+async function fixture(nativeGatewayGid?: number) {
+  return provisionFixture((close) => cleanups.push(close), nativeGatewayGid);
 }
 const exists = async (path: string) =>
   fs.lstat(path).then(
@@ -79,12 +77,26 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
     expect((await fs.lstat(join(f.host.gatewayConfigDir, "gateway.json"))).mode & 0o7777).toBe(
       0o640
     );
+    expect((await f.nativeStat(join(f.host.gatewayConfigDir, "gateway.json"))).gid).toBe(
+      f.nativeGid
+    );
     // Exclusive prior output refusal keeps all original bytes and the failed attempt's lock.
     expect(await f.run()).toBe(2);
     expect(await fs.readFile(join(f.configuration.output.path, "prepared.json"), "utf8")).toBe(
       receipt
     );
     expect(await exists(join(f.host.stateDir, "daemon.lock"))).toBe(true);
+  });
+  it("accepts disclosed group projection with a different physical directory group", async () => {
+    const group = process.getgroups!().find((gid) => gid !== 1000) ?? process.getgid!();
+    const pending = fixture(group);
+    await expect(pending).resolves.toBeDefined();
+    const f = await pending;
+    expect((await f.nativeStat(f.host.gatewayConfigDir)).gid).toBe(group);
+    expect(await f.run()).toBe(0);
+    expect((await f.nativeStat(join(f.host.gatewayConfigDir, "gateway.json"))).gid).toBe(
+      f.nativeGid
+    );
   });
   it.each([
     "running",
@@ -263,6 +275,7 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
   it.each([
     "gateway-mode",
     "gateway-owner",
+    "gateway-group",
     "namespace",
     "output-overlap",
     "output-mode",
@@ -270,11 +283,14 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
   ])("rejects changed deployment %s before acquisition", async (mode) => {
     const f = await fixture();
     if (mode === "gateway-mode") await fs.chmod(f.host.gatewayConfigDir, 0o700);
-    if (mode === "gateway-owner") {
+    if (mode === "gateway-owner" || mode === "gateway-group") {
       const stat = vi.mocked(f.io.lstat).getMockImplementation()!;
       vi.spyOn(f.io, "lstat").mockImplementation(async (...args: Parameters<typeof fs.lstat>) => {
         const value = await stat(...args);
-        if (String(args[0]) === f.host.gatewayConfigDir) value.uid = 123;
+        if (String(args[0]) === f.host.gatewayConfigDir) {
+          if (mode === "gateway-owner") value.uid = 123;
+          else value.gid = 123;
+        }
         return value;
       });
     }
@@ -382,7 +398,7 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
     expect(await exists(join(f.configuration.output.path, "prepared.json"))).toBe(true);
     expect(await exists(join(f.host.stateDir, "daemon.lock"))).toBe(true);
   });
-  it.each(["mode", "hardlink", "symlink", "ancestor"])(
+  it.each(["mode", "hardlink", "symlink", "ancestor", "group"])(
     "root-delivered gateway consumer rejects unsafe %s",
     async (mode) => {
       const f = await fixture();
@@ -400,6 +416,23 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
           const value = await stat(...args);
           if (String(args[0]) === f.root) value.uid = 123;
           return value;
+        });
+      }
+      if (mode === "group") {
+        const open = vi.mocked(f.io.open).getMockImplementation()!;
+        vi.spyOn(f.io, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+          const file = await open(...args);
+          if (String(args[0]) === path) {
+            const stat = vi.mocked(file.stat).getMockImplementation()!;
+            vi.spyOn(file, "stat").mockImplementation(
+              async (...args: Parameters<typeof file.stat>) => {
+                const value = await stat(...args);
+                value.gid = 123;
+                return value;
+              }
+            );
+          }
+          return file;
         });
       }
       await expect(readComputerGatewayConfig(path)).rejects.toThrow();
@@ -501,6 +534,7 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
             elapsedMs,
             argv: [process.execPath, "-e", code, bundle, f.path],
             nativeUid: f.nativeUid,
+            nativeGid: f.nativeGid,
             pid: child.pid,
             exit,
             signal,
