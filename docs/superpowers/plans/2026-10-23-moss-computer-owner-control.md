@@ -218,3 +218,9 @@ No model calls, app-map entry or new runtime attempt; this is internal behavior 
 chat/browser e2e above remains blocked by receiving transport/lifecycle/egress and persistence
 qualification. Kill this candidate if it requires changing unexpected-disconnect safety or
 granting authority from an unauthenticated close event; Codex owns that decision.
+
+Implemented and independently accepted at `f7a26e6f3`: 28 focused tests pass, the removed close
+generation guard produced two expected failures, and root TypeScript/scoped lint/static checks
+exited 0. See the [foundation evidence](../../evidence/moss-computer/2026-10-23-owner-control-foundation.md)
+and [review ledger](../../evidence/moss-computer/2026-10-23-independent-review.md). This completes
+the bounded close operation; receiving transport and integrated desktop delivery remain open.

@@ -560,3 +560,32 @@ qualified. Persistence, actual owner HTTPS/WSS and active revocation, app/browse
 lifecycle/idle sleep/wake, installed storage, confined egress and release/platform proof remain
 open. Draft #3598 is unmerged; #3605/#3577/#3578 remain open. No runtime retry, automatic merge,
 deployment or issue closure follows this review.
+
+## Authenticated intentional-close follow-on
+
+Ben approved the chat-integrated layout with concise copy and intentional close returning control
+to Moss. The separate destination and close-leaves-paused UI proposals are superseded. Copy-only
+revision `4f0441121` removed visible screenshot labels; that exact revision passed independent
+review. Earlier transfer/mockup receipts remain historical design evidence, not desktop acceptance.
+
+Independent **PASS_PLAN** accepted `d49f58c27` before the close operation was implemented;
+plan SHA-256 `196e3093b59517dc7fc4963faa5ea3a006b9fb6d7393faf1338a84fa24c1710c`.
+**PASS_CODE_REVIEW** and then **PASS_EXACT_FINAL** accepted
+`f7a26e6f3802160c018ec45030ce8fe2c4e809b5`; no blocking findings. Review covered fresh
+authorization, generation fencing, ownership-only return, guaranteed disconnect cleanup and
+watcher/lease preservation. Reviewers made no edits and launched no runtime.
+
+Removing only the close generation guard produced two expected failures/26 passes: a stale close
+resumed a later takeover and concurrent closes both reported success. Restoring the guard returned
+28 passing tests. Root TypeScript, scoped ESLint, file-size, formatting and whitespace exited 0.
+The reviewer checked explicit tool-exit receipts and all four candidate source/test/evidence/spec
+hashes against committed bytes. Private receipt SHA-256:
+`71a369940a87d29aa08c0a44f32f66a03f5b140964ec39a705f4cf42a5ac2dc6`.
+Accepted input-control source SHA-256:
+`a695b1f08121aec42da9520cff4dcc4ca42f09a3770cde597df66b2d9850f624`.
+
+Acceptance is internal policy only. There is no transport caller, UI wiring or receiving protocol
+writer. Unexpected disconnect remains separate from authenticated intentional close. Persistence,
+real owner HTTPS/WSS/active revocation, receiving-side queue fencing and key/button release,
+installed storage/lifecycle/idle and confined egress remain open. No runtime retry, merge,
+deployment or issue closure is authorized.

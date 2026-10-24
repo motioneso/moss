@@ -66,6 +66,11 @@ close resumed a newer takeover, and both concurrent closes reported success. Res
 returned all 28 tests to green. Raw logs: `close-fence-red.log` and `close-unit-final.log` in the
 same private sibling. This is local policy evidence, not protocol or live desktop acceptance.
 
+Root TypeScript, scoped ESLint, file-size, formatting and whitespace checks all exited 0 for
+this follow-on. Explicit process-exit receipts and exact candidate hashes are retained in
+`close-verification.json`; silent logs alone were not treated as success. Independent exact-final
+review accepted `f7a26e6f3` with no findings. No DB/foundation or integrated live gate ran.
+
 ## Open gates
 
 The [single r12 prerequisite attempt](2026-10-23-persistence-r12.md) was rejected at UI/RFB connection;
