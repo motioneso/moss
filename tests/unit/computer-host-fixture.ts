@@ -68,6 +68,7 @@ export async function hostFixture(
   const calls: { method: string; path: string; body: unknown }[] = [];
   const faults = {
     startRole: "",
+    exitRole: "",
     unknownCreate: false,
     createWithoutResult: false,
     stop: false,
@@ -148,7 +149,10 @@ export async function hostFixture(
             container.Config.Labels["com.moss.computer.role"] === faults.startRole
           )
             return send(500);
-          container.State.Running = true;
+          container.State.Running = !(
+            isRecord(container.Config.Labels) &&
+            container.Config.Labels["com.moss.computer.role"] === faults.exitRole
+          );
           return send(204);
         case "stop":
           if (faults.stop) return send(500);
@@ -167,7 +171,7 @@ export async function hostFixture(
     });
   });
   await new Promise<void>((resolve) => dockerServer.listen(config.dockerSocket, resolve));
-  const admission = { assertAdmitted: vi.fn(async () => {}) };
+  const admission = { assertAdmitted: vi.fn(async () => {}), invalidate: vi.fn(() => {}) };
   const docker = new ComputerDocker(config);
   let store = await HostStateStore.open(config);
   let operations = new ComputerHostOperations(

@@ -143,7 +143,13 @@ checks exclude delayed reply resurrection. No cookie/token/ticket in URL, logs o
 This is a required design boundary, not an implemented auth channel or accepted live ordering.
 
 Enable/recreate require a host-private admission port supplied by the independently reviewed
-runtime operator. In this slice the runner deliberately supplies **unavailable** admission: it
+runtime operator. Its `assertAdmitted(): Promise<void>` checks fresh launch admission;
+`invalidate(): void` synchronously closes future receiving admission before disable stops and
+on operation failures, including a non-running final startup inspection. The invalidator must not
+throw; a throwing implementation permanently blocks later launches in that daemon while exact
+disable cleanup remains permitted. Cleanup attempts both verified resources and retains failed
+identities. This internal port does not implement active auth/watchdog enforcement.
+In this slice the runner deliberately supplies **unavailable** admission: it
 cannot launch. A later runtime integration must implement fresh RAM/root≥8GiB/data≥30GiB and
 healthy-Moss checks; exact alive independent watchdog, initial complete healthy sample, fixed
 label, PID/start identity, ≤1800s monotonic run, heartbeat≤90s, nominal5s samples, fail closed on

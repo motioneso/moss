@@ -10,8 +10,11 @@ import type { HostStateStore, HostResource } from "./state.js";
 /** Only an independently reviewed runtime operator may implement this launch admission port. */
 export interface ComputerRuntimeAdmission {
   assertAdmitted(): Promise<void>;
+  /** Synchronously closes future receiving admission; implementations must not throw. */
+  invalidate(): void;
 }
 export const unavailableAdmission: ComputerRuntimeAdmission = {
+  invalidate() {},
   async assertAdmitted() {
     throw new Error("Computer runtime admission unavailable");
   }
@@ -19,6 +22,7 @@ export const unavailableAdmission: ComputerRuntimeAdmission = {
 
 export class ComputerHostOperations {
   #busy = false;
+  #admissionBroken = false;
   constructor(
     private readonly store: HostStateStore,
     private readonly docker: ComputerDocker,
@@ -54,12 +58,16 @@ export class ComputerHostOperations {
       });
       if (request.operation !== "disable") {
         try {
-          if (!this.store.config.gatewayImage) return this.#result("prerequisite-unavailable");
+          if (!this.store.config.gatewayImage || this.#admissionBroken)
+            throw new Error("Computer runtime prerequisites unavailable");
           await this.admission.assertAdmitted();
         } catch {
+          this.#invalidateAdmission();
           return this.#result("prerequisite-unavailable");
         }
         await this.docker.images();
+      } else {
+        this.#invalidateAdmission();
       }
       // Validate the complete inventory BEFORE stopping any resource, including partial pairs.
       const resources = await this.docker.inventory(this.store.state.resources);
@@ -83,8 +91,11 @@ export class ComputerHostOperations {
           );
           await this.docker.start(resource);
         }
-        return await this.#status();
+        const result = await this.#status();
+        if (result.state !== "running") throw new Error("Computer pair failed startup");
+        return result;
       } catch {
+        this.#invalidateAdmission();
         // Reconcile the persisted exact intents once. An unknown create is never retried.
         try {
           const inventory = await this.docker.inventory(this.store.state.resources);
@@ -96,6 +107,7 @@ export class ComputerHostOperations {
         return this.#result("runtime-unavailable");
       }
     } catch {
+      this.#invalidateAdmission();
       return this.#result("runtime-unavailable");
     } finally {
       this.#busy = false;
@@ -118,13 +130,26 @@ export class ComputerHostOperations {
   async #remember(resources: readonly HostResource[]): Promise<void> {
     await this.store.save({ ...this.store.state, resources });
   }
+  #invalidateAdmission(): void {
+    try {
+      this.admission.invalidate();
+    } catch {
+      this.#admissionBroken = true;
+    }
+  }
   async #removeAll(): Promise<void> {
+    let failed = false;
     for (const role of ROLES) {
       const resource = this.store.state.resources.find((entry) => entry.role === role);
       if (!resource) continue;
-      await this.store.assertRoots();
-      await this.docker.remove(resource);
-      await this.#remember(this.store.state.resources.filter((entry) => entry.role !== role));
+      try {
+        await this.store.assertRoots();
+        await this.docker.remove(resource);
+        await this.#remember(this.store.state.resources.filter((entry) => entry.role !== role));
+      } catch {
+        failed = true;
+      }
     }
+    if (failed) throw new Error("Computer cleanup incomplete");
   }
 }

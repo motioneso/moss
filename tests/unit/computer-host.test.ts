@@ -254,6 +254,62 @@ describe("Computer fixed host control (real Unix IPC, Docker HTTP stand-in only)
     expect(JSON.stringify(result)).not.toContain("PRIVATE_DOCKER_SECRET");
     expect(f.containers.size).toBe(0);
     expect(f.store.state.resources).toHaveLength(0);
+    expect(f.admission.invalidate).toHaveBeenCalled();
+  });
+
+  it("successful start reply followed by early exit invalidates admission and cleans the surviving pair", async () => {
+    const f = await fixture({ admitted: true });
+    f.faults.exitRole = "desktop";
+    expect(await f.client.request(binding(), "enable", 0)).toMatchObject({
+      state: "unavailable",
+      reason: "runtime-unavailable"
+    });
+    expect(f.admission.invalidate).toHaveBeenCalledTimes(1);
+    expect(f.containers.size).toBe(0);
+    expect(f.store.state.resources).toHaveLength(0);
+  });
+
+  it("early exit with failed cleanup attempts both resources and retains exact identities", async () => {
+    const f = await fixture({ admitted: true });
+    f.faults.exitRole = "desktop";
+    f.faults.remove = true;
+    expect((await f.client.request(binding(), "enable", 0)).reason).toBe("runtime-unavailable");
+    const resources = f.store.state.resources;
+    expect(resources).toHaveLength(2);
+    expect(resources.every((r) => r.id !== null && f.containers.has(r.id))).toBe(true);
+    expect(f.calls.filter((c) => c.method === "DELETE").map((c) => c.path)).toEqual(
+      resources.map((r) => `/containers/${r.id}?force=0&v=0`)
+    );
+    expect(f.admission.invalidate).toHaveBeenCalledTimes(1);
+    f.faults.remove = false;
+    expect((await f.client.request(binding(), "disable", 1)).state).toBe("disabled");
+    expect(f.containers.size).toBe(0);
+  });
+
+  it("disable invalidates receiving admission before the first stop", async () => {
+    const f = await fixture({ admitted: true });
+    await f.client.request(binding(), "enable", 0);
+    let invalidatedBeforeStop = false;
+    f.admission.invalidate.mockImplementation(() => {
+      invalidatedBeforeStop = [...f.containers.values()].every((c) => c.State.Running);
+    });
+    expect((await f.client.request(binding(), "disable", 1)).state).toBe("disabled");
+    expect(invalidatedBeforeStop).toBe(true);
+    expect(f.admission.invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("a broken invalidator prevents later launches but still permits exact disable cleanup", async () => {
+    const f = await fixture({ admitted: true });
+    await f.client.request(binding(), "enable", 0);
+    f.admission.invalidate.mockImplementation(() => {
+      throw new Error("broken invalidator");
+    });
+    expect((await f.client.request(binding(), "disable", 1)).state).toBe("disabled");
+    f.calls.length = 0;
+    expect((await f.client.request(binding(), "enable", 2)).reason).toBe(
+      "prerequisite-unavailable"
+    );
+    expect(f.calls).toHaveLength(0);
   });
 
   it("reconciles unknown create exactly once, without retrying create", async () => {
