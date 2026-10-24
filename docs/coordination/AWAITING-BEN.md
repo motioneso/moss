@@ -75,30 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Weather rollout — Sports preservation failure (#3639 / #3583)
-
-Agent: `visual-chat-weather`. PR #3648 remains unmerged. Ben's “Yes” resolved
-the prior saved-place repair recommendation. Installed run 7 on `087e30d`
-produced 20/20 exact-source Weather cards, but the Sports preservation case
-asked whether Liverpool meant the men's first team despite a saved follow,
-instead of trying the authorized result read. This is a real configured-engine
-failure; the separate useful-prose evaluator also falsely rejected a correct
-rounded 5°F difference. The complete retained receipt is on PR #3648.
-
-Prepared repair: generic guidance tries an available authorized preference-
-resolving read before disambiguation, respecting explicit sources and genuine
-ambiguity. The evaluator validates source-derived temperature differences;
-its new regression was observed red before the fix. Targeted prose/persona
-tests pass 46 cases and the app map is updated. Independent review found no
-implementation blockers; final exact-head installed/full gate/CI remain required.
-
-Recommendation: continue this bounded repair through the unchanged twenty-
-prompt evaluation, independent review and all gates; merge and launch the next
-slice only if they pass. Alternative: hold Weather and dependent rollout. The
-committed Weather handoff requires Ben's actual decision for the new Sports
-acceptance failure before merge/dependent rollout. No renderer, threshold or
-scope waiver is requested. Independent verification continues.
-
 ### Vocci adapter recovery — phone unlock (#3565)
 
 The existing unlock request is routed to `vocci-adapter-recovery`; exclusive

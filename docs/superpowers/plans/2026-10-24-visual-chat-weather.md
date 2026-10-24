@@ -208,3 +208,12 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   the complete preservation reply before asserting its visual/source. Re-review,
   fresh exact-head gate/CI and installed evaluation are required. Retain the kill
   gate for this actual failure; no complete acceptance or merge claim yet.
+- 2026-10-24: Ben explicitly chose “Continue after every unchanged gate passes
+  (Recommended)” for the separate run-7 Sports preservation failure and reviewed
+  repair. The decision covers unchanged installed acceptance, independent review,
+  full gate and CI, with merge and verified successor only if all pass. Removed
+  the resolved new Awaiting-Ben entry. This is no renderer, threshold or scope
+  waiver. The obsolete `6f61b03` full gate was stopped with the official stop
+  command (143), and its installed build was stopped before prompt evaluation
+  so both can restart on the final ruling commit. These are superseded runs,
+  not passing acceptance evidence or hidden model retries.
