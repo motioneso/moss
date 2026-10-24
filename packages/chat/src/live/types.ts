@@ -1,6 +1,11 @@
 import type { CallCardDetails, ProviderKind } from "@moss/ai"; // "anthropic" | "openai-compatible" | "google"
 import type { ActionRequestPreview } from "@moss/module-sdk";
-import type { ChatTurnOriginV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
+import type {
+  ChatTurnOriginV1,
+  ChatTurnUsageDto,
+  SourceFreshnessV1,
+  VisualReplyV1
+} from "@moss/shared";
 
 export type ChatRecordKind =
   | "user"
@@ -19,6 +24,9 @@ export type ChatRecordKind =
   | "action_request"
   | "action_result";
 export interface TranscriptRecord {
+  readonly visualState?: "preparing" | "clear";
+  readonly visualReply?: VisualReplyV1;
+  readonly visualFallbackText?: string;
   /** Captured destination for admitted voice turns; clients must filter by shown thread. */
   readonly voiceThreadId?: string;
   /** Captured action origin, including events arriving after its turn completes. */

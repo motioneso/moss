@@ -360,6 +360,9 @@ export function ChatDrawer(props: ChatDrawerProps) {
               kind: "reply",
               text: result.reply,
               messageId: result.assistantMessageId,
+              visualReply: "visualReply" in result ? result.visualReply : undefined,
+              visualFallbackText:
+                "visualFallbackText" in result ? result.visualFallbackText : undefined,
               sourceFreshness: "sourceFreshness" in result ? result.sourceFreshness : undefined,
               ...("meetingContext" in result
                 ? {

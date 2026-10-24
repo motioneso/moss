@@ -94,6 +94,8 @@ export interface VisualPresentationProposalV1 {
 }
 
 export type VisualFailureCode =
+  | "unsupported_catalog"
+  | "invalid_program"
   | "not_object"
   | "unsupported_version"
   | "too_large"

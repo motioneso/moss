@@ -38,7 +38,9 @@ public final class UpgradeFixture extends Instrumentation {
             .put("sn", "synthetic-upgrade-ring").put("deviceId", "synthetic-upgrade-device").put("bindKey", "synthetic-upgrade-key");
         new SecretStore(getTargetContext()).save(config);
         DeliveryPreferences choices = new DeliveryPreferences(getTargetContext());
-        choices.enabled(false); choices.autoCleanup(false);
+        String enabled = arguments.getString("enabled", "false");
+        check(enabled.equals("true") || enabled.equals("false"), "explicit_enabled_choice_required");
+        choices.enabled(Boolean.parseBoolean(enabled)); choices.autoCleanup(false);
         DeliveryStore store = new DeliveryStore(getTargetContext());
         byte[] silence = new byte[25];
         for (int n = 0; n < 5; n++) {

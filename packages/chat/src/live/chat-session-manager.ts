@@ -1,4 +1,4 @@
-import type { SourceFreshnessV1 } from "@moss/shared";
+import type { SourceFreshnessV1, VisualReplyV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import {
@@ -214,6 +214,7 @@ export class ChatSessionManager {
     userMessageId?: string;
     assistantMessageId?: string;
     sourceFreshness?: SourceFreshnessV1 | null;
+    visualReply?: VisualReplyV1;
   }> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);

@@ -15,6 +15,7 @@ import { createApiServer } from "../../apps/api/src/server.js";
 import { SessionTokenRegistry } from "@moss/ai";
 import { ChatRepository, CliChatUnavailableError, registerChatLiveRoutes } from "@moss/chat";
 import { PageContextStore } from "../../packages/chat/src/live/page-context-store.js";
+import { presentationContext } from "../../packages/chat/src/visual/user-data.js";
 import type { ChatEngineFactory } from "@moss/module-registry";
 import {
   DataContextRunner,
@@ -81,10 +82,18 @@ const fakeEngineFactory: ChatEngineFactory = (provider, sessionKey) =>
  * Every turn now carries a fresh `<current_time_context>` block ahead of the user's text
  * (#1869), and this suite runs against the real wall clock (no injected `now`), so the exact
  * timestamp is not asserted — only that the fake engine's echo wraps the original text with
- * that block still in front.
+ * that block still in front. Drawer turns also append host-owned visual guidance. Validate that
+ * entire suffix so arbitrary page context cannot be hidden by trimming the echo.
  */
 function isTimeEchoOf(body: string, text: string): boolean {
-  return body.startsWith("echo:<current_time_context>\n") && body.endsWith(`\n\n${text}`);
+  const boundary = body.indexOf("\n\nVisual presentation for this turn:");
+  const timeEcho = boundary < 0 ? body : body.slice(0, boundary);
+  if (!timeEcho.startsWith("echo:<current_time_context>\n") || !timeEcho.endsWith(`\n\n${text}`))
+    return false;
+  if (boundary < 0) return true;
+  const suffix = body.slice(boundary + 2);
+  const ref = /"ref":"([^"]+)"/.exec(suffix)?.[1];
+  return Boolean(ref && suffix === presentationContext(ref, { text }));
 }
 
 describe("Chat live API (turn / clear / switch / stream)", () => {
@@ -305,8 +314,8 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
 
     expect(response.statusCode).toBe(200);
     // The fake engine echoes back exactly what it received as engine text (§FakeLiveEngine.submit
-    // above) other than the always-prepended time block; the echo ending in the original text
-    // with nothing else folded in proves no <page_context> block was added server-side.
+    // above) apart from the time block and the validated host visual guidance. Checking the
+    // complete echo proves no forged <page_context> block was added server-side.
     expect(isTimeEchoOf(response.json<{ reply: string }>().reply, "hello text-only")).toBe(true);
   });
 
