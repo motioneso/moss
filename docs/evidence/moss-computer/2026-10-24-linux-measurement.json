@@ -1,0 +1,411 @@
+{
+  "schema_version": 1,
+  "task_issues": [3618, 3616, 3577],
+  "base": "5897df5a7cfe127ba35f5e4ec2e7ed9d1a519409",
+  "source": "45820eda5ca9cd5a5b6c0e3645318a323a594aac",
+  "plan": "30fb5c168df1578edc88c472bb172571e0449d92",
+  "source_and_plan_sha256": {
+    "scripts/computer-watchdog/linux.ts": "11c874ad05d592d04cfa0f14100e0adab26136e9586dd9309acdb9de68ce82b2",
+    "scripts/computer-watchdog/linux-files.ts": "69635eabf10659ea12cb4e7957a0192153a3514dee4eb276569649f29c620427",
+    "tests/unit/computer-watchdog-linux.test.ts": "6580370897fe17da8b465eafdd2809bbb2a13e7defe189aaec0f239fff563535",
+    "tests/unit/computer-watchdog-linux-files.test.ts": "33bd72879862fe2527052a043c27b426b1d3b42bdb1489db8e3685f7d0d13ea0",
+    "docs/superpowers/plans/2026-10-24-moss-computer-linux-measurement.md": "ddd7c82a86e09d5c8d0033d4a33306fd87cd8859a075ac8c958a858b22c3da10"
+  },
+  "stable_bytes": "Committed source/test/plan bytes match before-control originals, restored controls and final working tree; no source changes after source acceptance.",
+  "tests": {
+    "files": 5,
+    "passed": 199
+  },
+  "checks": [
+    {
+      "name": "behavior-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-host-client.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 31.36,
+      "log_sha256": "e9e15b23b6aa73d2843adc7b7f9c93292029cffbf488bdcd9b3f19689299ea14"
+    },
+    {
+      "name": "root-tsc-final",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 141.39,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc-final",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 96.71,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-watchdog/linux.ts",
+        "scripts/computer-watchdog/linux-files.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 2.88,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "scripts/computer-watchdog/linux.ts",
+        "scripts/computer-watchdog/linux-files.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "docs/superpowers/plans/2026-10-24-moss-computer-linux-measurement.md"
+      ],
+      "exit": 0,
+      "seconds": 2.04,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-final",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 9.73,
+      "log_sha256": "3c521c6cc30e7ca32d416e264920989ac574ec684df6abce4b6c7f90359171f4"
+    },
+    {
+      "name": "whitespace-final",
+      "command": ["git", "diff", "5897df5a7cfe127ba35f5e4ec2e7ed9d1a519409...HEAD", "--check"],
+      "exit": 0,
+      "seconds": 0.01,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "controls": [
+    {
+      "name": "process-start",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "-t",
+        "reads real current and detached"
+      ],
+      "exit": 1,
+      "seconds": 1.71,
+      "source_path": "scripts/computer-watchdog/linux.ts",
+      "original_sha256": "11c874ad05d592d04cfa0f14100e0adab26136e9586dd9309acdb9de68ce82b2",
+      "mutant_sha256": "661e3beef9ce748a8b56ca2a8b7e779df739abab1c5dd62b8b82d48530034b93",
+      "restored_sha256": "11c874ad05d592d04cfa0f14100e0adab26136e9586dd9309acdb9de68ce82b2",
+      "log_sha256": "fcc95089be8413ff2ee8bd3d3f570af984507ad2e1055eb7d3c595ae45fb2246",
+      "assertion_failure_observed": true,
+      "intended_assertion": "changed startTicks accepted instead of rejected"
+    },
+    {
+      "name": "nofollow",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "-t",
+        "rejects a child symlink even"
+      ],
+      "exit": 1,
+      "seconds": 1.53,
+      "source_path": "scripts/computer-watchdog/linux-files.ts",
+      "original_sha256": "69635eabf10659ea12cb4e7957a0192153a3514dee4eb276569649f29c620427",
+      "mutant_sha256": "56a00bbc6d80899fc029dc8e682729cd8f96b94950ce0c72749bd86e68ceb97c",
+      "restored_sha256": "69635eabf10659ea12cb4e7957a0192153a3514dee4eb276569649f29c620427",
+      "log_sha256": "d708dab66cd94e1dd4d3ad10e33a71f17583551868e123e66e4ed2b67376432c",
+      "assertion_failure_observed": true,
+      "intended_assertion": "AssertionError: promise resolved \"8192\" instead of rejecting"
+    },
+    {
+      "name": "root-pin",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "-t",
+        "refuses a replacement root"
+      ],
+      "exit": 1,
+      "seconds": 1.62,
+      "source_path": "scripts/computer-watchdog/linux-files.ts",
+      "original_sha256": "69635eabf10659ea12cb4e7957a0192153a3514dee4eb276569649f29c620427",
+      "mutant_sha256": "dba05e50cea9f24d8fa15a775bab28e16fd5a44bd387a805d93be18d0896fb19",
+      "restored_sha256": "69635eabf10659ea12cb4e7957a0192153a3514dee4eb276569649f29c620427",
+      "log_sha256": "41e7b6e9750918c89b5d973cf5f97b8d4c640066b363f76ada581cb4cb5a8f12",
+      "assertion_failure_observed": true,
+      "intended_assertion": "AssertionError: promise resolved \"4096\" instead of rejecting"
+    },
+    {
+      "name": "memory-duplicate",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "-t",
+        "refuses duplicate memory"
+      ],
+      "exit": 1,
+      "seconds": 1.62,
+      "source_path": "scripts/computer-watchdog/linux.ts",
+      "original_sha256": "11c874ad05d592d04cfa0f14100e0adab26136e9586dd9309acdb9de68ce82b2",
+      "mutant_sha256": "7d31ab38c010cceb7df438fc7446774f6e2c994fe2abccaa45270cf3a073ae58",
+      "restored_sha256": "11c874ad05d592d04cfa0f14100e0adab26136e9586dd9309acdb9de68ce82b2",
+      "log_sha256": "1567fc12cea3466755bcdf529a33624bdf01ea07317d45f59bf46ff1ec760d29",
+      "assertion_failure_observed": true,
+      "intended_assertion": "AssertionError: promise resolved \"{ measuredAtMs: 1000, \u2026(7) }\" instead of rejecting"
+    },
+    {
+      "name": "original-time",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "-t",
+        "anchors time before first"
+      ],
+      "exit": 1,
+      "seconds": 1.69,
+      "source_path": "scripts/computer-watchdog/linux.ts",
+      "original_sha256": "11c874ad05d592d04cfa0f14100e0adab26136e9586dd9309acdb9de68ce82b2",
+      "mutant_sha256": "52d32380e70aa9c4152596d979320bd80072991316484757b275d33cf0166354",
+      "restored_sha256": "11c874ad05d592d04cfa0f14100e0adab26136e9586dd9309acdb9de68ce82b2",
+      "log_sha256": "e6499f495b741075c71e00af8dfc5bac88c4a7dae6ac5861c546f80177f4754a",
+      "assertion_failure_observed": true,
+      "intended_assertion": "AssertionError: expected 5999 to be 1000 // Object.is equality"
+    },
+    {
+      "name": "filename-alias",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "-t",
+        "rejects invalid UTF8 names"
+      ],
+      "exit": 1,
+      "seconds": 1.55,
+      "source_path": "scripts/computer-watchdog/linux-files.ts",
+      "original_sha256": "69635eabf10659ea12cb4e7957a0192153a3514dee4eb276569649f29c620427",
+      "mutant_sha256": "c26483c5174c7b5d839ac92248657775b1e0b81118f9ebb5e797d5f2ea9ac035",
+      "restored_sha256": "69635eabf10659ea12cb4e7957a0192153a3514dee4eb276569649f29c620427",
+      "log_sha256": "a842140040692563da7b9dade8d5ec72d86e38b04c68d7abfd85dccdd2bedd84",
+      "assertion_failure_observed": true,
+      "intended_assertion": "AssertionError: promise resolved \"12288\" instead of rejecting"
+    }
+  ],
+  "reviews": [
+    {
+      "round": "plan-security-spec-r1",
+      "candidate": "600090a39fd50909b9153ba32d9da9963f2702a2",
+      "verdict": "BLOCKED_INVALID_UTF8_ALIAS",
+      "sha256": "53bd241a62de7b5b8385026b71b36dd03d438aba81d45c5a66f2cff43c298dcf"
+    },
+    {
+      "round": "plan-security-spec-r2",
+      "candidate": "30fb5c168df1578edc88c472bb172571e0449d92",
+      "verdict": "PASS_BOUNDED_LINUX_MEASUREMENT_PLAN",
+      "sha256": "7d2c4cb2382485a0e72d8b1d2cd0653062ccf34d290ec80318b6b300e0117af4"
+    },
+    {
+      "round": "standards-source-r1",
+      "candidate": "45820eda5ca9cd5a5b6c0e3645318a323a594aac",
+      "verdict": "SOURCE_ACCEPTED",
+      "sha256": "e33f24965b973547c4b5fc19f73a9119443a70bfb276e6337ef5a4f254656a83"
+    },
+    {
+      "round": "spec-source-r1",
+      "candidate": "45820eda5ca9cd5a5b6c0e3645318a323a594aac",
+      "verdict": "PASS_BOUNDED_LINUX_MEASUREMENT_SOURCE",
+      "sha256": "503f6683963dc4d4737aaeb5b849b013d232f76b66ec36a316b0ca1ae4d98147"
+    },
+    {
+      "round": "security-source-r1",
+      "candidate": "45820eda5ca9cd5a5b6c0e3645318a323a594aac",
+      "verdict": "PASS_BOUNDED_LINUX_MEASUREMENT_SOURCE",
+      "sha256": "ad60631b943e85c9358309114cda053877a05bad38a08636bab748f104499ec0"
+    }
+  ],
+  "initial_attempts": [
+    {
+      "name": "behavior-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts"
+      ],
+      "exit": 1,
+      "seconds": 2.06,
+      "log_sha256": "bb06b107f3d33f8de4df1ccb2aeaab7b1e1f11cd7b899d9cd32e07aa990b3672"
+    },
+    {
+      "name": "behavior-r2",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 7.36,
+      "log_sha256": "e18aa8a4000ac1b2f450c2f878b47dada7f5d6dd2eeb0f4c63cd50932cc65e14"
+    },
+    {
+      "name": "behavior-r3",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-host-client.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 12.28,
+      "log_sha256": "1a606187ffcfd1d5a1af948d44fd74c6a81af4dc028a5a5c62b47468bacaaf0e"
+    },
+    {
+      "name": "root-tsc-r1",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 136.14,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc-r1",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 98.82,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-watchdog/linux.ts",
+        "scripts/computer-watchdog/linux-files.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 10.14,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-r2",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-watchdog/linux.ts",
+        "scripts/computer-watchdog/linux-files.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 2.62,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "scripts/computer-watchdog/linux.ts",
+        "scripts/computer-watchdog/linux-files.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "docs/superpowers/plans/2026-10-24-moss-computer-linux-measurement.md"
+      ],
+      "exit": 0,
+      "seconds": 1.05,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    }
+  ],
+  "installation": {
+    "exit": 0,
+    "log_sha256": "6a137c0a9df59c62c1d56ee403f1a4710c03e707099b8557b2e795eb6bbe2b08",
+    "command": [
+      "pnpm",
+      "--filter",
+      "moss",
+      "--filter",
+      "@moss/api...",
+      "--filter",
+      "@moss/worker...",
+      "--filter",
+      "@moss/web...",
+      "--filter",
+      "@moss/visual-chat*",
+      "install",
+      "--frozen-lockfile",
+      "--offline"
+    ]
+  },
+  "initial_failure": "BehaviorR1: namespace spying could not redefine fs.open (23 failed/8 passed). Corrected test-only vi.mock facade; R2 31 passed, R3/final199 passed. No production fallback introduced.",
+  "unchanged_paths_sha256": {
+    "package.json": "7e7e05989abf0519c761238adea9991695c3103fa62808aacd94305ab80c7199",
+    "pnpm-lock.yaml": "c1aeb9ba0c811c1a43a78e9148edf2cc79f19876ff77c482adba8e25d81e009b",
+    "scripts/computer-host.ts": "73af27f13ea5f9f5fda0a78f0c42c5c88994d1974e5e7ebc698da3a37846cade",
+    "scripts/computer-host/operations.ts": "f92d53fe1f952ed9370c73e0bb9d6bb09e6279757732888476bf17d26333e662",
+    "scripts/computer-watchdog/policy.ts": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d"
+  },
+  "resources": {
+    "scope": "Read-only /proc helpers; temporary filesystem trees, ordinary short-lived Node test children, FIFO and Unix socket metadata; host/client regression uses recording Docker HTTP stand-in.",
+    "full_collection_fixtures": "Effective UID, process/memory/disk reads and clock are spied fixtures; actual temp trees/descriptors. Fixture health/log/run/stop fields are supplied separately to demonstrate actual policy composition.",
+    "root_deployment_or_namespace_trust": false,
+    "os_supervisor_or_complete_health_logs": false,
+    "admission_or_receiving_invalidation_or_closure": false,
+    "docker_image_guest_db_browser_tcp_production_mutations": false,
+    "persistence": "Accepted r21 reused without requalification; r12/r18 causes remain unknown."
+  },
+  "required_pending": [
+    "Independent exact final evidence acceptance",
+    "Required exact PR CI and independent premerge clearance",
+    "Actual merge and verified fresh isolated successor until actual owner integration"
+  ]
+}
