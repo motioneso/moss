@@ -5,7 +5,12 @@ import type { RootIdentity } from "../computer-host/config.js";
 import { ComputerDocker } from "../computer-host/docker.js";
 import { assertRoot, descriptorPath, openRoot } from "../computer-watchdog/linux-files.js";
 import { checkMossReadiness } from "../computer-watchdog/observe.js";
-import { processIdentity, sha256, supervisorError } from "../computer-watchdog/trust.js";
+import {
+  boundedFile,
+  processIdentity,
+  sha256,
+  supervisorError
+} from "../computer-watchdog/trust.js";
 import type { WatchdogProcessIdentity } from "../computer-watchdog/policy.js";
 import type { ClosureDeployment } from "./config.js";
 import type { ClosureRecords } from "./records.js";
@@ -57,7 +62,34 @@ interface Entry {
   mode: number;
 }
 const directoryFlags = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
+// Linux O_PATH inspects sockets and regular files without opening their content.
+const pathFlags = 0x200000 | constants.O_NOFOLLOW;
 const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+async function mountId(file: FileHandle): Promise<string> {
+  const text = (await boundedFile(`/proc/self/fdinfo/${file.fd}`, 4096)).toString("utf8");
+  const ids = [...text.matchAll(/^mnt_id:\s+([1-9][0-9]*)$/gm)];
+  if (ids.length !== 1) throw supervisorError();
+  return ids[0]![1]!;
+}
+async function assertEntryMount(
+  path: string,
+  expected: string,
+  entry: Pick<Entry, "dev" | "ino" | "mode">
+): Promise<void> {
+  const file = await open(path, pathFlags);
+  try {
+    const opened = await file.stat();
+    if (
+      (await mountId(file)) !== expected ||
+      opened.dev !== entry.dev ||
+      opened.ino !== entry.ino ||
+      opened.mode !== entry.mode
+    )
+      throw supervisorError();
+  } finally {
+    await file.close();
+  }
+}
 
 /** Enumerate and probe underlying bind sockets, not merely their published aliases. */
 export async function inspectClosureEndpoints(
@@ -69,6 +101,7 @@ export async function inspectClosureEndpoints(
   for (let i = 0; i < roots.length; i++) {
     const root = roots[i]!;
     const directory = await openRoot(root);
+    let rootMount = "";
     const scan = async (dir: FileHandle, depth: number, prefix: string): Promise<Entry[]> => {
       if (depth > 3) throw supervisorError();
       const iterator = await opendir(descriptorPath(dir), { bufferSize: 16 });
@@ -83,6 +116,7 @@ export async function inspectClosureEndpoints(
           const stat = await lstat(path);
           if (stat.dev !== root.dev || !(stat.isDirectory() || stat.isFile() || stat.isSocket()))
             throw supervisorError();
+          await assertEntryMount(path, rootMount, stat);
           entries.push({
             name: prefix + entry.name,
             dev: stat.dev,
@@ -94,7 +128,12 @@ export async function inspectClosureEndpoints(
             const child = await open(path, directoryFlags);
             try {
               const opened = await child.stat();
-              if (opened.dev !== stat.dev || opened.ino !== stat.ino || opened.mode !== stat.mode)
+              if (
+                opened.dev !== stat.dev ||
+                opened.ino !== stat.ino ||
+                opened.mode !== stat.mode ||
+                (await mountId(child)) !== rootMount
+              )
                 throw supervisorError();
               entries.push(...(await scan(child, depth + 1, prefix + entry.name + "/")));
             } finally {
@@ -102,6 +141,7 @@ export async function inspectClosureEndpoints(
             }
           }
           const after = await lstat(path);
+          await assertEntryMount(path, rootMount, after);
           if (after.dev !== stat.dev || after.ino !== stat.ino || after.mode !== stat.mode)
             throw supervisorError();
         }
@@ -111,6 +151,7 @@ export async function inspectClosureEndpoints(
       return entries.sort((a, b) => a.name.localeCompare(b.name));
     };
     try {
+      rootMount = await mountId(directory);
       const before = await scan(directory, 0, "");
       for (const name of fixed[i] ?? [])
         await probeClosedSocket(`${descriptorPath(directory)}/${name}`);
@@ -121,7 +162,7 @@ export async function inspectClosureEndpoints(
       count = previousCount;
       if (!equal(before, after)) throw supervisorError();
       await assertRoot(root);
-      observed.push({ root, entries: after });
+      observed.push({ root, mountId: rootMount, entries: after });
     } finally {
       await directory.close();
     }

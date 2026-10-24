@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { build } from "esbuild";
-import { createPublicKey, verify } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import * as fs from "node:fs/promises";
@@ -31,6 +31,7 @@ const cleanups: (() => Promise<unknown>)[] = [];
 let identities: WatchdogProcessIdentity[];
 let bundle: string;
 let bundleDir: string;
+let nativeReceipt = 0;
 beforeAll(async () => {
   identities = [];
   for (let i = 0; i < 5; i++) identities.push(await deadClosureProcess());
@@ -58,7 +59,9 @@ async function fixture() {
   return f;
 }
 async function native(f: Awaited<ReturnType<typeof fixture>>) {
-  const child = spawn(process.execPath, [bundle, f.deployment.config.path, f.readySocket], {
+  const startedAtNs = process.hrtime.bigint();
+  const argv = [bundle, f.deployment.config.path, f.readySocket];
+  const child = spawn(process.execPath, argv, {
     stdio: ["ignore", "pipe", "pipe"]
   });
   let output = "";
@@ -68,7 +71,44 @@ async function native(f: Awaited<ReturnType<typeof fixture>>) {
   child.stderr.on("data", (b) => {
     output += String(b);
   });
-  const [code] = await once(child, "exit");
+  const [code] = await once(child, "close");
+  const finishedAtNs = process.hrtime.bigint();
+  const capture = process.env.COMPUTER_CLOSURE_TEST_RECEIPTS;
+  if (capture) {
+    await fs.mkdir(capture, { recursive: true });
+    const name = `native-${++nativeReceipt}`;
+    const receipt = await fs
+      .readFile(join(f.deployment.configuration.receipt.path, "closure.jsonl"))
+      .catch(() => Buffer.alloc(0));
+    const artifact = await fs.readFile(bundle);
+    const hash = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
+    await fs.writeFile(join(capture, name + ".jsonl"), receipt);
+    await fs.writeFile(join(capture, "fixture.cjs"), artifact);
+    await fs.writeFile(
+      join(capture, name + ".public.der"),
+      createPublicKey(f.deployment.signingKey).export({ type: "spki", format: "der" })
+    );
+    await fs.writeFile(
+      join(capture, name + ".json"),
+      JSON.stringify(
+        {
+          argv: [process.execPath, ...argv],
+          pid: child.pid,
+          uid: process.getuid!(),
+          node: process.version,
+          exit: code,
+          startedAtNs: startedAtNs.toString(),
+          finishedAtNs: finishedAtNs.toString(),
+          outputBytes: Buffer.byteLength(output),
+          outputSha256: hash(output),
+          artifactSha256: hash(artifact),
+          receiptSha256: hash(receipt)
+        },
+        null,
+        2
+      ) + "\n"
+    );
+  }
   expect(output).toBe("");
   return code;
 }
@@ -201,6 +241,24 @@ describe("independently executed closure, disclosed trusted-config/Unix readines
 });
 
 describe("fail-closed observation and persistence boundaries", () => {
+  it("refuses a disclosed same-device bind mount identity without performing any actual mount", async () => {
+    const f = await fixture();
+    const root = f.deployment.roots.find((r) => r.path === f.host.config.gatewayDir)!;
+    await fs.writeFile(join(root.path, "bindfile"), "inert file");
+    await expect(inspectClosureEndpoints([root], [[]])).resolves.toMatch(/^[0-9a-f]{64}$/);
+    const fdinfo = join(f.root, "different-mount-id");
+    await fs.writeFile(fdinfo, "mnt_id:\t999999999\n");
+    const original = fs.open;
+    const paths = new Set<number>();
+    vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+      const path = String(args[0]);
+      const fake = [...paths].some((fd) => path === `/proc/self/fdinfo/${fd}`);
+      const handle = await original(fake ? fdinfo : args[0], args[1], args[2]);
+      if (path.endsWith("/bindfile")) paths.add(handle.fd);
+      return handle;
+    });
+    await expect(inspectClosureEndpoints([root], [[]])).rejects.toThrow();
+  });
   it("refuses an actual surviving detached process and a reused expected PID", async () => {
     const child = spawn(
       process.execPath,
