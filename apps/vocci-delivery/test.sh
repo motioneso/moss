@@ -10,4 +10,5 @@ java -cp build/host-tests ai.moss.vocci.ProtocolTest
 java -cp build/host-tests ai.moss.vocci.RingTelemetryTest
 java -cp build/host-tests ai.moss.vocci.RecordingReminderTest
 java -Xmx32m -cp build/host-tests ai.moss.vocci.PcmWavWriterTest
+python3 -m unittest discover -s upgrade-proof -p test_replacement_broadcasts.py
 ./build.sh

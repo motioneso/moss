@@ -77,7 +77,10 @@ timeout, Bluetooth state, official-app grants or the production companion.
 
 Between initialization and observation it sends no force-stop, shell broadcast,
 manual Start or instrumentation command. Only new replacement broadcast records
-count. Enabled delivery must reach the real service's stored closed-network
+count. The actual record header and Intent must identify this exact package and
+replacement action. DELIVERED must belong to the named receiver's own state,
+never another receiver, another broadcast or a trailing historical summary.
+PENDING/SKIPPED do not pass even if a service is present. Enabled delivery must reach the real service's stored closed-network
 failure; disabled delivery must stay stopped; missing Nearby devices permission
 must save the actual recovery advice without starting the service. Every case
 must retain the source identity, queue, voice state, encrypted configuration and
@@ -90,6 +93,16 @@ Release the devport after all owned work stops. This generated-data diagnostic
 proves neither physical transfer nor production update, reboot/unlock recovery,
 interrupted-chunk resume or endurance. A passing unmodified receiver does not
 explain a historical skipped broadcast.
+
+The original #3625 positive dispatch claims were invalidated by this parser bug;
+its original receipts remain unchanged. The corrected retained target states are
+PENDING (enabled/permission-denied) and SKIPPED (disabled), not DELIVERED. See
+`docs/evidence/vocci/2026-10-24-replacement-observer-correction.md`. Focused parser
+regressions run through `test.sh` and independently with:
+
+```sh
+python3 -m unittest discover -s apps/vocci-delivery/upgrade-proof -p test_replacement_broadcasts.py
+```
 
 ## Recorded checks, 2026-10-23
 
