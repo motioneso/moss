@@ -79,7 +79,10 @@ Output is a pre-existing pinned root-owned0700 RootIdentity with trusted ancestr
 Inspect actual host roots plus data/dockerData/monitor and optional capture; output must have no
 overlap in EITHER direction with any of them. Request, installer, verifier and Node stay outside
 output and those roots. Do not mkdir/chown an installation directory or alter existing code.
-Require all configured roots/trust to remain stable. A root operator supplies the trust root;
+Require all configured roots/trust to remain stable. Host roots retain inspectRoots permissions and
+pinned assertRoot identities: guest UID1000 writable home/socket roots are valid under root-controlled
+ancestry. Strict assertTrustedPath applies to trusted data/docker/monitor/capture/output roots,
+not guest-writable mount targets. A root operator supplies the trust root;
 the generated manifest cannot attest that operator or replace independent installed acceptance.
 
 Generate one native Ed25519 key pair. Exclusively publish `output/closure-key.pem` (PKCS8 PEM,
@@ -166,3 +169,12 @@ gate, accepted r21 and unknown r12/r18 causes. Installed qualification, descenda
 prelaunch health, new-run/reset/uncertain-create quiescence, actual Node24/128MiB/TigerVNC/fixed
 lifecycle, API leases/dispatch and real owner HTTPS/WSS/chat/hostile live acceptance remain gated.
 No production deployment. A prerequisite never finishes actual owner integration.
+
+## Source-review correction R1
+
+Both independent reviewers found blanket strict-root ancestry checks on host mount targets would
+reject the existing UID1000 desktop home/socket contract. Retain canonical inspectRoots checks
+and pinned assertRoot identities for host roots; do not force guest mount targets to UID0.
+Strict root trust remains on private configuration/code/key/output and supervisor trusted roots.
+Add actual publisher/loader coverage with projected UID1000 home/socket, and unsafe host ancestry
+and replacement rejection. This corrects composition without relaxing installation authority.
