@@ -66,8 +66,9 @@ native process identities remain exercised. These projections do not qualify ins
 Held capture file/directory elapsed5008.603/5013.826ms; held first-sample file/directory
 elapsed5009.970/5034.706ms, despite repeated TERM/INT. Unsignalled held collection exits at5017.805ms;
 signalled collection fails promptly at483.377ms. All satisfy observed original-timer bounds
-4900<=elapsed<6800ms where a lower bound applies. Positive acknowledgement at1508.185ms follows
-actual sample file+directory fsync; exact native callback equality at1011.126ms refuses acknowledgement.
+4900<=elapsed<6800ms where a lower bound applies. Positive fixture elapsed1508.185ms, with acknowledgement after
+actual sample file+directory fsync; boundary fixture elapsed1011.126ms and injects exact native callback
+equality, refusing acknowledgement. These elapsed values measure native exit, not acknowledgement time.
 Every receipt records exit2, no native signal and empty stdout/stderr, with retained lock/capture
 output and GET-only Docker calls. The positive fixture deliberately fails without an installed
 receiver; acknowledgement means first durable healthy sample, never activation, closure or admission.
