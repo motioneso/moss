@@ -270,3 +270,12 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   [Full receipt](https://github.com/motioneso/moss/pull/3648#issuecomment-6385973546).
   Retain runs 9 and 10 as failed. The combined actual failure decision remains
   pending; only independent verification continues before dependent rollout.
+- 2026-10-24: Ben explicitly chose “Continue after every unchanged gate passes
+  (Recommended)” for both the run-9 prose-failure question and the combined
+  run-9/run-10 recommendation after run 11's passing matrix. The combined
+  question disclosed run 10's 1/20 result and unresolved cause. Continue every
+  unchanged gate, then merge and launch-next only if all pass, retaining all
+  failures. This is no renderer, prompt, threshold or scope waiver. Removed
+  the resolved Awaiting-Ben entry. Stopped the early `8201fffb2` local gate
+  with the official command so the required full gate can test this final
+  ruling commit; the superseded run is not passing evidence.
