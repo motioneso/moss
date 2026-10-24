@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./settings": "./src/settings/index.tsx"
+    "./settings": "./src/settings/index.tsx",
+    "./visual": "./src/summary/contract.ts",
+    "./web/visual": "./src/summary/card.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -47,6 +47,7 @@ import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
+  mergeFallbacks,
   reconcileFallbacks,
   recordsFromMessages,
   shouldEndPrivateChatOnStreamDisconnect,
@@ -455,10 +456,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
         )
       : [];
   const displayRecords = reviewing ? [...persistedRecords, ...liveTail] : props.records;
-  const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
   const effectiveRecords: readonly TranscriptRecord[] = [
-    ...displayRecords,
-    ...visibleFallbackRecords,
+    ...mergeFallbacks(fallbackRecords, displayRecords),
     ...(pendingUser
       ? [
           {

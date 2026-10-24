@@ -1,0 +1,17 @@
+.tasks-summary {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tasks-summary__rows {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tasks-summary__rows li {
+  display: grid;
+  gap: var(--space-2);
+}

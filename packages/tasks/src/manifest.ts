@@ -1,5 +1,6 @@
 import {
   taskItemsToolOutputSchema,
+  taskFocusToolOutputSchema,
   taskListItemsToolOutputSchema,
   taskTagItemsToolOutputSchema,
   taskMutationToolOutputSchema,
@@ -21,6 +22,8 @@ import {
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { taskSummaryTemplate } from "./summary/contract.js";
+import { taskSummaryTool } from "./summary/tool.js";
 import { taskListTarget, taskTagTarget, taskTagAssignmentTarget } from "./chat-targets.js";
 import {
   taskApprovalActions,
@@ -486,6 +489,7 @@ export const tasksModuleManifest = {
     }
   ],
   assistantTools: [
+    taskSummaryTool,
     {
       name: "tasks.list",
       description:
@@ -529,12 +533,12 @@ export const tasksModuleManifest = {
     {
       name: "tasks.focus",
       description:
-        "Get the focus list — the highest-priority tasks to work on today: overdue tasks plus at-risk tasks (Medium+ priority, due within 48 h or do-date past), ranked by priority, urgency, and effort.",
+        "Get ranked overdue and at-risk tasks (Medium+ priority, due within 48 h or do-date past). Existing recurrence reconciliation applies. Optional todayContext independently reads open tasks due today/earlier plus undated work; it is not the Focus ranking. Its source-bound visual proposal can accompany concise grounded prose: use the returned proposal unchanged when useful.",
       permissionId: "tasks.view",
       risk: "read",
       content: "outside",
       inputSchema: { type: "object", properties: {} },
-      outputSchema: taskItemsToolOutputSchema,
+      outputSchema: taskFocusToolOutputSchema,
       execute: taskFocusExecute
     },
     {
@@ -808,7 +812,29 @@ export const tasksModuleManifest = {
         )}; assignments to that tag will be removed.`
     }
   ],
+  visualTemplates: [taskSummaryTemplate],
   features: [
+    {
+      id: "tasks.visual_summary",
+      description:
+        "Chat summarizes up to twelve owned/shared tasks with source time and coverage; no recurrence advance or reminders. Focus adds separate today context but keeps its ranking/reconciliation. Saved cards never refetch.",
+      errors: [
+        {
+          code: "tasks_summary_unavailable",
+          class: "transient",
+          description:
+            "An unavailable summary or visual retains readable text. Focus retains its items if supplemental context fails; its existing recurrence behavior still applies."
+        }
+      ],
+      remediations: [
+        {
+          id: "tasks_summary_retry",
+          description:
+            "Ask for a fresh task summary or inspect Tasks. Change saved timezone in Profile when local days are incorrect.",
+          path: "/tasks"
+        }
+      ]
+    },
     {
       id: "tasks.quick_capture",
       description:
