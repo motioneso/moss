@@ -40,9 +40,11 @@ Current source seams, checked before this plan (graph covers API; scripts requir
   Launch operations do not provision per-run gateway configuration after create/save and before
   start. That missing service remains implementation work after this existing-resource slice.
 
-Reuse the existing endpoint with a dedicated lifetime header, instead of a new mount/root socket
-hierarchy. A separate endpoint could simplify routing but would add ownership/mount machinery
-without distinguishing same-UID API/gateway callers. Authenticate with config-held per-run HMAC
+Use a fixed sibling lifetime endpoint in the existing gateway IPC directory, with the same private
+publication helper and mounts. Reusing one endpoint avoids a second publication but complicates
+reserving a lifetime slot independently of anonymous API headers; a fixed sibling keeps the
+existing API budget intact without new ownership/mount machinery. Neither pathname nor same-UID
+access distinguishes API/gateway callers. Authenticate with config-held per-run HMAC
 proofs; pathname or Unix UID alone never proves trusted root identity. Replacement may deny
 service but cannot furnish a valid fencing proof without the secret. Installed config isolation
 and root deployment are separate exact-packet acceptance requirements, not established here.
@@ -66,18 +68,20 @@ Gateway config requires `lifetime` in addition to its existing four fields. No l
 executable fallback. Root config optionally adds `lifetime`; old `observe` remains read-only.
 New explicit CLI `fence <trusted-config>` requires it; `observe` refuses it to prevent a misleading
 configured-but-inactive boundary. Collector mode can parse either schema, but opens no IPC.
-Root derives the fixed host endpoint `<host.gatewayDir>/gateway.sock`; gateway container config
-uses its corresponding fixed mount path. No browser/environment/request-selected target.
+Root derives the fixed host endpoint `<host.gatewayDir>/lifetime.sock`; gateway derives
+`lifetime.sock` in its existing socketPath parent, distinct from its other configured paths. No browser/environment/request-selected target.
 Validate binding run/instance against root config and exact enabled state requestGeneration,
 both full IDs and immutable creation generations before/after observations. In fenced mode,
 exact Docker inventory must contain both running resources; absence or replacement is terminal.
+Any stop.json path also refuses fenced observation; check before and after all observation I/O.
 
 ## Authenticated bounded lifetime
 
 All messages use exact keys, fixed types and HMAC-SHA256 with constant-time MAC comparison.
 MAC input is domain-separated by protocol version, message type, canonical binding and all
-message fields except MAC. No secret travels to a receiver-controlled endpoint. Receiver begins
-with a signed challenge containing a fresh random128bit session nonce, fresh128bit challenge
+message fields except MAC. No secret travels to a receiver-controlled endpoint. Root begins with an exact lifetime header carrying a fresh random128bit root nonce. Every
+subsequent frame and MAC binds that root nonce; replay to a fresh root connection is invalid.
+Receiver begins with a signed challenge containing a fresh random128bit session nonce, fresh128bit challenge
 nonce and sequential counter1. Root verifies proof before responding. Alive response and active
 acknowledgement bind those exact fields with their own type-separated MACs. Never reflect a MAC
 as another message type. One receiver challenge outstanding; sequential counters<=4096.
@@ -91,15 +95,19 @@ before connecting/responding; no publication from a late sample completion. Ever
 rechecks current policy.tick, including run/heartbeat/sample gap; IPC messages do not renew runner
 heartbeat, restamp measurements or replace nominal5s collection. Existing receipt age<5s and
 gap<10s remain distinct. Root permits at most one outstanding challenge response/ack, with a
-local2s absolute acknowledgement deadline. It treats malformed/forged/stale/late/extra messages,
+local2s absolute acknowledgement deadline. Also bound connection establishment, the first signed
+challenge and every subsequent next-challenge idle phase by an absolute root-local2s deadline.
+Partial/invalid bytes never refresh a deadline; equality expires. It treats malformed/forged/stale/late/extra messages,
 EOF, connection error, active-ack timeout or receiver loss as terminal supervisor failure.
 
-Gateway reserves its existing exclusive endpoint before guest connection. It admits no API
+Gateway reserves both exclusive API and fixed sibling lifetime endpoints before guest connection.
+It admits no API
 viewer/control/watch connection before authenticated lifetime activation; unbound API sockets
-are rejected immediately. Initial lifetime must arrive within5s of endpoint publication; this
+are rejected immediately. Initial authenticated lifetime must complete within5s of the first endpoint publication; this
 absolute startup deadline does not reset during guest setup. Startup/lifetime loss during awaited
 guest/core creation destroys late completions before API admission. Keep one pending/active
-lifetime slot, distinct from12 API sockets. Candidate lifetime headers have a2s absolute limit;
+lifetime slot, distinct from12 API sockets. The dedicated lifetime listener accepts only one pending or active connection. Candidate lifetime
+headers have a2s absolute limit;
 invalid authentication fails the entire gateway closed. Once one lifetime has bound, replacement
 attempts close the core; never reconnect/restart into a former epoch.
 
@@ -195,3 +203,11 @@ BlockBefore Fence and fresh post-Fence auth; stable control is separate from rep
 Real cookie/exact Origin/HTTPS/WSS/trusted assets/chat/agent leases and positive/hostile/expired/
 revoked/stale-input live evidence precede owner completion. Product app-map and dev/prod config
 accompany product wiring. Dev servers require devports5180–5299. Keep parent issues open.
+
+## Contract review ledger
+
+R1 self-review requires a fresh root nonce as well as receiver nonces to defeat replay to a
+replaced endpoint. Independent Spec review also requires absolute initial/idle challenge deadlines,
+not only response acknowledgements. Fixed sibling lifetime IPC keeps the independent socket slot
+without shared-header classification complexity. Fenced observation explicitly rejects stop.json.
+All are contract corrections before implementation; exact amended plan needs independent acceptance.
