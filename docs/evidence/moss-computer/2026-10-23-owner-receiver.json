@@ -1,0 +1,135 @@
+{
+  "status": "INTERNAL_RECEIVER_VERIFIED_OWNER_INTEGRATION_NOT_DELIVERED",
+  "candidate": "59c50b636a8935b984b4f47829ab56ca8d5f3848",
+  "acceptedPlan": "a679246322c08f94bf55e90251a8bec9085d785a",
+  "testCount": 59,
+  "negativeControls": [
+    {
+      "control": "epoch",
+      "test": "rejects owner events queued before the same viewer later regains control",
+      "exit": 1,
+      "logSha256": "98743ef15302ff230c096eb2dce5ce8fd8ac09ddd376d4fdc0d3e9c40ce36aa1"
+    },
+    {
+      "control": "release",
+      "test": "graceful shutdown releases keys before the final receiving barrier",
+      "exit": 1,
+      "logSha256": "dd7b56e61a9137a8dc9d29fabe5089c722602a797a41e4758d660369b3aca5b7"
+    },
+    {
+      "control": "backlog",
+      "test": "bounds actual stalled upstream backlog",
+      "exit": 1,
+      "logSha256": "4d9c77fcac6f2f9e36ec4e88316c0d46710d2d6bf19c377eebe1b63643489cd1"
+    },
+    {
+      "control": "watcher",
+      "test": "never upgrades a watcher parser",
+      "exit": 1,
+      "logSha256": "8a26af39d471c6d5a2a8da587683aa40235715854d272e20f1caadcde378ca2b"
+    },
+    {
+      "control": "ingress",
+      "test": "bounds parser ingress and watcher count",
+      "exit": 1,
+      "logSha256": "528b839de953848864341fa298f4f7b0a119cb0247c8bc5ba9e999e4dbd614a0"
+    },
+    {
+      "control": "queue",
+      "test": "bounds queued work without later writes",
+      "exit": 1,
+      "logSha256": "045eb4ea253bb84e36ea384a4e686994a29c42fdd609922c4a39ce5dee463852"
+    },
+    {
+      "control": "pressed",
+      "test": "bounds normalized key/pointer values and pressed-key count",
+      "exit": 1,
+      "logSha256": "874215be5616dbd32e6428082b57d5f0fad34f1b62fda3202382e224d43abd61"
+    },
+    {
+      "control": "fence-flags",
+      "test": "fails closed on invalid Fence flags",
+      "exit": 1,
+      "logSha256": "ed5ab891abb0c1d8fc0a13fe750338716f4ba8a02f96b4bfd4e5ead1640fc0dd"
+    },
+    {
+      "control": "fence-payload",
+      "test": "fails closed on invalid Fence payload",
+      "exit": 1,
+      "logSha256": "9533954db00bd21ff45d5935407d0841f3d4f9ab5190d63ca7b4dcc7b561dd60"
+    },
+    {
+      "control": "post-fence-auth",
+      "test": "rejects a fresh post-Fence session denial before opening admission",
+      "exit": 1,
+      "logSha256": "da71ff0ff4244d0d1f8f98dda7f9d939bef0603ec2c9ec9a103fd799f987d7ce"
+    },
+    {
+      "control": "completion",
+      "test": "keeps an old completion closed across receiver-only parser replacement",
+      "exit": 1,
+      "logSha256": "e959ce1ce4f9cfe3df4b30a6bbc5eb72dd4b5a723d32257beec3ea2ae986395a"
+    },
+    {
+      "control": "pointer-release",
+      "test": "never upgrades a watcher parser",
+      "exit": 1,
+      "logSha256": "5e7d70c7c75310ef9b9afd81b9f2c3751e25e713937440e5b8f9b68cf00a6fa5"
+    }
+  ],
+  "runtimeStarted": false,
+  "dbCommandsRun": false,
+  "openGates": [
+    "fixed lifecycle/storage and separate gateway #3618",
+    "owner session HTTPS/WSS and chat UI #3619",
+    "live TigerVNC Fence receive ordering",
+    "real owner input/frame and hostile-session controls",
+    "runtime admission and independent closure"
+  ],
+  "verification": [
+    {
+      "check": "test",
+      "command": "pnpm exec vitest run tests/unit/computer-input-control.test.ts tests/unit/computer-rfb-input.test.ts",
+      "exit": 0,
+      "logSha256": "3b87fbfcc5bf61a05acdca1b6d21cc63ec4252353514ac3b0be6e6b88e4c8817"
+    },
+    {
+      "check": "root-tsc",
+      "command": "pnpm exec tsc --noEmit",
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "tests-tsc",
+      "command": "pnpm exec tsc -p tsconfig.tests.json --noEmit",
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "lint",
+      "command": "pnpm exec eslint <changed source/tests> --max-warnings=0",
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "format",
+      "command": "pnpm exec prettier --check <changed source/tests/manifests/lock>",
+      "exit": 0,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "check": "size",
+      "command": "pnpm check:file-size",
+      "exit": 0,
+      "logSha256": "f62e1bfc908e616209f429b5b6e8679534382e421db216240c685c6916fd6c67"
+    }
+  ],
+  "sourceCandidate": "bf5b21bd313734598434a6331b406e3b168b0f85",
+  "independentReview": {
+    "reviewer": "/root/owner_plan_review",
+    "candidate": "a9cfba203e8f3a64b434daa5577d62fca04c1d3c",
+    "verdict": "PASS_BOUNDED_RECEIVER_DEPENDENCY",
+    "receiptSha256": "b6d9a47bf5037e1e79515edf8cea1f3783fe0fd6f45f789e5f8b889301a9bcd1",
+    "liveAcceptance": false
+  }
+}
