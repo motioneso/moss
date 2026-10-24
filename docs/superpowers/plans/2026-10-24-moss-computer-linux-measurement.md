@@ -81,6 +81,10 @@ identity. Traverse through `/proc/self/fd/<open-directory-fd>/<entry>`, opening 
 NOFOLLOW before traversing; never concatenate unchecked guest paths to operator roots. Stream
 entries with opendir, depth<=32 and <=100000 entries across a tree. Reject cross-device entries,
 identity changes, read errors and scan-budget exhaustion; close every handle/iterator on failure.
+Reject directory entry names containing U+FFFD (conservative invalid-UTF8 refusal), slash, NUL,
+or dot/dotdot before constructing any descriptor-relative path. Node string decoding must never
+map distinct invalid-byte names onto a smaller replacement-character sibling. Include a real
+Buffer-path invalid-UTF8 filename/sibling regression and an observed removed-name-guard failure.
 Count every entry conservatively using max(logical size, blocks\*512,4096), including directories,
 symlink inode storage and repeated hardlinks. Do not follow symlinks or open file/FIFO/device/socket
 contents. Permit ordinary Unix sockets and FIFOs as metadata. Reject device nodes. Compare child
@@ -153,3 +157,11 @@ live evidence/closure before #3616/#3577 closes. Idle sleep/wake, confined usefu
 and platform/release remain separately bounded. Keep all parent issues open. After actual merge
 launch/verify a fresh isolated successor with the same continuing instruction via herdr-handoff;
 record durable routing name plus actual session UUID and handoff-read execution.
+
+## Review rulings
+
+Independent read-only security/spec R1 on `600090a39`: BLOCKED. Accepted: default UTF8
+directory-name decoding can alias a large invalid-byte filename to a small literal U+FFFD sibling,
+undercounting the tree. Conservatively reject all U+FFFD entry names before constructing paths;
+add a real raw Buffer-path collision regression and removed-guard control. No disputed findings.
+Exact amended plan requires independent acceptance before implementation.
