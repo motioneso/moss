@@ -192,3 +192,11 @@ opening guest transport. Publishing only after core startup could let a duplicat
 a second guest upstream before detecting an existing listener. Accept no client while starting;
 failed startup and concurrent shutdown must remove the owned endpoint. Independent R3 contract
 review required before this ordering amendment is implemented. Existing R1/R2 rulings stand.
+
+R1 receipt SHA-256 ad2ec29b70254ae757f2de92c3b2c5ba206abc2176436915f432d0a36b6890d5.
+R2 accepted f9fe03136ea7cb7c13c601962f3eadd346c2d44d, receipt SHA-256
+4e7a0bd61cdb45db2473fbaf52171c46a5c3138617b6f78e49ff5d9201589435.
+R3 accepted startup-order amendment bc2143f1ccfbd7c2a2f57c61f6c0b5874b84db5e, receipt SHA-256
+72f20deb99a9fa5a139dbb63a6a40a40f5f4cd2d7807da90669489ff14a3c18f.
+Runner signal handlers precede configuration/startup. Its fixed listening line indicates IPC/core
+composition has completed, not frame readiness, qualified image fit or owner usability.
