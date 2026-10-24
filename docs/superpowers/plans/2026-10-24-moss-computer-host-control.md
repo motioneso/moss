@@ -68,11 +68,21 @@ All directories must already exist, be absolute canonical nonsymlink paths with 
 nonoverlapping roots. Never create, chown, delete or migrate home data automatically. Home and
 guest socket directory are dedicated to this instance; a host-private identity marker binds the
 canonical paths and owner/instance before operations. Changed ownership/path configuration fails
-closed. API IPC is distinct from guest socket and host state. Host state and IPC permissions are
+closed. Record root device/inode/owner/mode in the private identity marker and revalidate before
+each operation; require trusted ancestors that API/guest cannot rename. Guest-owned home/socket
+roots may contain guest-controlled entries, but their parent is host-controlled. API IPC is distinct from guest socket and host state. Host state and IPC permissions are
 validated; symlinked state files, replacement roots and an existing listener/lock fail closed.
 A single exclusive daemon lock prevents competing controllers; do not steal a stale lock.
 
-Persist `{generation, enabled}` atomically with file and directory fsync. Generation increments
+Persist `{generation, enabled, resources}` atomically with file and directory fsync. Each resource
+records its role, separate creation generation, deterministic name and full immutable Docker ID
+(or a pending create intent). Persist the intent before create, the returned ID before start, and
+retain old resource identities until verified removal. CAS generation never substitutes for the
+resource generation: a failed/no-op operation must leave the existing pair reachable to disable.
+On daemon restart, reconcile only recorded IDs/intents. A timed-out create is not retried; inspect
+the intent's exact deterministic name once and validate all identity/spec fields before recording
+its full ID. If Docker remains unreachable, retain unavailable pending state for explicit recovery.
+Never conclude an unknown Docker result means no container exists. Generation increments
 and is durable **before** every mutation, including failed operations. Serialize operations;
 reject busy work instead of keeping an unbounded queue. Every mutating request carries the
 expected generation, and stale requests perform no Docker mutation. Daemon restart never
@@ -142,8 +152,8 @@ any real enable/recreate. No fake Fence/auth/admission result establishes runtim
 
 ## Files, checks and kill gate
 
-Host modules under `scripts/computer-host/` plus opt-in `scripts/computer-host.ts`; private API
-client `apps/api/src/computer/host-client.ts`; behavior tests `tests/unit/computer-host*.test.ts`.
+Host modules under `scripts/computer-host/` plus opt-in `scripts/computer-host.ts`; pure IPC contract
+and private API client `apps/api/src/computer/host-contract.ts` and `host-client.ts`; behavior tests `tests/unit/computer-host*.test.ts`.
 No runtime dependency change. Inspect installed dependencies/cache, then scoped frozen tooling
 install. Before tests, search Hindsight conventions. Before any DB command use verify-gate with
 isolated target; no DB/foundation command is needed for this internal slice.
