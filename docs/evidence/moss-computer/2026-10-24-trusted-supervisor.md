@@ -54,7 +54,7 @@ Each final control exited1 at the intended assertion; source was restored byte-f
 | Config byte comparison                       | Changed config resolved instead of rejecting         |
 | Path-segment ancestry                        | Forbidden `..monitor` descendant accepted            |
 | Earliest observation timestamp               | Returned3000 instead of original1000                 |
-| Independent one-second tick                  | Hung collector produced zero stop calls              |
+| Independent one-second tick                  | Zero owned-collector kill calls at5s                 |
 | Terminal reentry guard pair                  | Stop persistence called twice instead of once        |
 | Keep OS signal handlers through finalization | Child died by SIGTERM instead of normal finalization |
 | Raw owned collector PID retention            | Stop call lost expected PID303                       |

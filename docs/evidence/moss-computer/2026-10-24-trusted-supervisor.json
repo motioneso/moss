@@ -266,7 +266,7 @@
       "restoredSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
       "logSha256": "842b297e8e4f6294b2758fcd515d5ba74c324209bff27a0b8c3af30a5416265a",
       "expectedExit": 1,
-      "observedAssertion": "Zero durable stop calls while collector hangs",
+      "observedAssertion": "Owned collector kill expected1 got0 at5s; first assertion fails before stop-journal assertion",
       "intendedAssertionInspected": true
     },
     {
