@@ -377,25 +377,6 @@
       "sourceRestored": true
     },
     {
-      "name": "one-shot-latch",
-      "command": [
-        "pnpm",
-        "exec",
-        "vitest",
-        "run",
-        "tests/unit/computer-watchdog-supervisor.test.ts",
-        "-t",
-        "acknowledges exactly once only after",
-        "--reporter=dot"
-      ],
-      "exit": 1,
-      "intendedAssertionFailure": true,
-      "seconds": 1.428,
-      "patchSha256": "f52a24ef8c8f40fafba82c74ec25b0476eb38833552963ee2408ea39cb572aa0",
-      "logSha256": "140bd9bbe0120a3607a40db9948441b65273e10abe2391f6a114679f9adb6ac7",
-      "sourceRestored": true
-    },
-    {
       "name": "immediate-composition-ack",
       "command": [
         "pnpm",
@@ -450,6 +431,25 @@
       "seconds": 10.896,
       "patchSha256": "418e35216c4f3a174090a9382411cd305aac2c3ffdedf63e704f85736af9b546",
       "logSha256": "569b5bbcaf6f51a9d3c1abef687524c29d0a5207f9c050366f257405666e15c2",
+      "sourceRestored": true
+    },
+    {
+      "name": "one-shot-notification",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "acknowledges exactly once only after",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 6.199,
+      "patchSha256": "ea4bd28156b06cea8582429dd5bdc20ea2733f394eba47e87f34070f433a728e",
+      "logSha256": "312a23fc5f38c74e336279f67586c7f70904512e0272f4f2fe2fcd8b251864b0",
       "sourceRestored": true
     }
   ],
@@ -519,6 +519,30 @@
     {
       "file": "controls-r2-binding.json",
       "sha256": "31414ca1444102e9098bdf90a4ad8a4d1d66737db4358c528fce5fb320c9bab1"
+    },
+    {
+      "file": "controls-r2.json",
+      "sha256": "c0cac378b926d7b40d556c34ea9088b885020cd3311157f68619a729b9071fda"
+    },
+    {
+      "file": "control-r2-one-shot-latch.log",
+      "sha256": "140bd9bbe0120a3607a40db9948441b65273e10abe2391f6a114679f9adb6ac7"
+    },
+    {
+      "file": "control-r2-one-shot-latch.patch",
+      "sha256": "f52a24ef8c8f40fafba82c74ec25b0476eb38833552963ee2408ea39cb572aa0"
+    },
+    {
+      "file": "controls-r3.json",
+      "sha256": "ea55d816e20e03844b265e50d11667d9667a7583e3e77a5923ab41e025e2f987"
+    },
+    {
+      "file": "security-local-r1.md",
+      "sha256": "1457504fb4cd46f5a4d5f76fbc12bc1a25a833e50df0c92c4ea1a7a3ca70f2c5"
+    },
+    {
+      "file": "spec-local-r1.md",
+      "sha256": "5f0c3e89778c4c2cc2bc13eb0cb51f8cbe72b0e8e2f45cc35cdfb99b4e25aac5"
     }
   ],
   "limitations": [

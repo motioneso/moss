@@ -34,10 +34,15 @@ changed-file Prettier; file-size and diff checks; four builtin-only Node24-targe
 (watchdog/host/provision/closure); gateway context build. The batch used two isolated file workers.
 Builds package internal tooling/context only, never Computer images or runtime.
 
-All9 corrected removed-protection controls exit1 at intended assertions, with production restored
+All9 final corrected removed-protection controls exit1 at intended assertions, with production restored
 byte-for-byte: sample persistence await, owned inspection, bootstrap equality, terminal continuation
 checks, post-lifetime recheck, one-shot latch, premature composition acknowledgement, native callback
 equality and original native timer. Every accepted patch/log and restoration binding is hash-bound.
+The original one-shot removal stopped the second sample at bootstrap expiry before testing duplicate
+notification. Local Security review rejected that confounded control; the first local Spec acceptance
+is withdrawn. Corrected r3 bypasses only the notification condition, preserving deadline retirement,
+and fails at the actual callback count2 versus expected1. Both reports and original r2 log/patch/manifest
+are retained and excluded from final acceptance. Production and final check bytes remain unchanged.
 The initial sample-await control falsely passed because a simultaneous inspection hold concealed
 the missing await. Its raw patch/log/manifest remain retained and excluded. The corrected isolated
 sample-only hold exposes the removed protection. No failed round was overwritten.
