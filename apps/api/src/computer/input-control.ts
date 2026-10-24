@@ -41,6 +41,7 @@ export class ComputerInputControl {
       readonly ownerUserId: string;
       readonly sessions: Pick<SessionBindingsService, "assertLive">;
       readonly now: () => Date;
+      readonly onTransition?: () => void;
     }
   ) {}
 
@@ -195,5 +196,14 @@ export class ComputerInputControl {
   #transition(control: Control): void {
     this.#generation += 1;
     this.#control = control;
+    try {
+      this.deps.onTransition?.();
+    } catch (error) {
+      this.#closed = true;
+      this.#viewers.clear();
+      this.#generation += 1;
+      this.#control = { mode: "paused" };
+      throw error;
+    }
   }
 }
