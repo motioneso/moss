@@ -61,7 +61,7 @@ export const recordingDeliveryRoutes = [
 export const recordingUploadFeature = {
   id: "meetings.resumable_recordings",
   description:
-    "Android setup connects existing owned rings. Uploads resume missing chunks for 24 hours. Meetings up to two hours use checkpointed transcription before analysis. Hold-to-talk stays limited to 120 seconds and enters Main.",
+    "Android connects owned rings; uploads resume for 24 hours. Meetings up to two hours transcribe in windows. Segment ends may exceed audio by 500 ms and are clamped; larger drift fails with evidence retained. Hold: 120 seconds, sent to Main.",
   errors: [
     {
       code: "recording_import_conflict",

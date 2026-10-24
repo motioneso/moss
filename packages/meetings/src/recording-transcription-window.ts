@@ -51,7 +51,7 @@ export async function readRecordingWindow(
   if (copied !== audio.length - 44) throw new Error("Incomplete recording window");
   return { audio, startMs, endMs, durationMs };
 }
-export function validateWindowTranscript(
+export function normalizeWindowTranscript(
   segments: readonly { startMs: number; endMs: number; text: string }[],
   durationMs: number
 ) {
@@ -66,10 +66,13 @@ export function validateWindowTranscript(
         !Number.isSafeInteger(segment.startMs) ||
         !Number.isSafeInteger(segment.endMs) ||
         segment.startMs < 0 ||
+        segment.startMs >= durationMs ||
         segment.endMs <= segment.startMs ||
-        segment.endMs > durationMs ||
+        // ASR timestamps are estimates; only bound small trailing end drift.
+        segment.endMs > durationMs + 500 ||
         typeof segment.text !== "string"
     )
   )
     throw new Error("Invalid recording window transcript");
+  return segments.map((segment) => ({ ...segment, endMs: Math.min(segment.endMs, durationMs) }));
 }
