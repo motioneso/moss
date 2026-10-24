@@ -61,6 +61,7 @@ function harness(
     lifetime?: boolean;
     started?: () => void;
     holdInspect?: boolean;
+    holdCollectorWrite?: boolean;
     abort?: AbortController;
   } = {}
 ) {
@@ -72,6 +73,7 @@ function harness(
   const close = deferred<void>();
   const sampleWrite = deferred<void>();
   const inspection = deferred<void>();
+  const collectorWrite = deferred<void>();
   let inspections = 0;
   const heartbeats = new PassThrough();
   const signals = new EventEmitter();
@@ -90,7 +92,9 @@ function harness(
     inspect: vi.fn(() =>
       options.holdInspect && ++inspections === 2 ? inspection.promise : Promise.resolve()
     ),
-    collector: vi.fn(async () => {}),
+    collector: vi.fn(() =>
+      options.holdCollectorWrite ? collectorWrite.promise : Promise.resolve()
+    ),
     sample: vi.fn(() => (options.holdSample ? sampleWrite.promise : Promise.resolve())),
     stop: vi.fn(() =>
       options.failStop
@@ -129,6 +133,7 @@ function harness(
     close.resolve();
     sampleWrite.resolve();
     inspection.resolve();
+    collectorWrite.resolve();
     heartbeats.destroy();
   });
   const advance = async (ms: number) => {
@@ -150,6 +155,7 @@ function harness(
     close,
     sampleWrite,
     inspection,
+    collectorWrite,
     signals,
     heartbeats,
     advance,
@@ -363,6 +369,33 @@ describe("first complete durable healthy bootstrap; disclosed driver ports", () 
     expect(f.journal.sample).toHaveBeenCalledTimes(2);
     expect(started).toHaveBeenCalledTimes(1);
     expect(f.journal.stop).not.toHaveBeenCalled();
+  });
+  it("held sample persistence alone cannot acknowledge", async () => {
+    const started = vi.fn();
+    const f = harness({ started, holdSample: true });
+    await f.advance(0);
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(started).not.toHaveBeenCalled();
+    expect(f.journal.inspect).toHaveBeenCalledTimes(1);
+    f.sampleWrite.resolve();
+    await f.advance(0);
+    expect(started).toHaveBeenCalledTimes(1);
+  });
+  it("collector identity persistence must settle before actual collection is released", async () => {
+    const started = vi.fn();
+    const f = harness({ started, holdCollectorWrite: true });
+    await f.advance(0);
+    expect(f.journal.collector).toHaveBeenCalledTimes(1);
+    expect(f.job.collect).not.toHaveBeenCalled();
+    expect(started).not.toHaveBeenCalled();
+    f.collectorWrite.resolve();
+    await f.advance(0);
+    expect(f.job.collect).toHaveBeenCalledTimes(1);
+    expect(started).not.toHaveBeenCalled();
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(started).toHaveBeenCalledTimes(1);
   });
   it.each(["sample", "inspection"])(
     "refuses bootstrap equality after held %s even with fresh measurement",
