@@ -601,15 +601,52 @@ export function reconcileFallbacks(
 ): readonly TranscriptRecord[] {
   const unmatched = [...liveRecords];
   return fallbacks.filter((fallback) => {
-    const idx = unmatched.findIndex(
-      (record) =>
-        record.kind === fallback.kind &&
-        (record.messageId && fallback.messageId
-          ? record.messageId === fallback.messageId
-          : record.text === fallback.text)
-    );
+    const idx = unmatched.findIndex((record) => sameFallbackRecord(record, fallback));
     if (idx === -1) return true;
     unmatched.splice(idx, 1);
     return false;
   });
+}
+
+function sameFallbackRecord(record: TranscriptRecord, fallback: TranscriptRecord): boolean {
+  return (
+    record.kind === fallback.kind &&
+    (record.messageId && fallback.messageId
+      ? record.messageId === fallback.messageId
+      : record.text === fallback.text)
+  );
+}
+
+/** Keep HTTP-only messages between their shared live message anchors, including turn activity. */
+export function mergeFallbacks(
+  fallbacks: readonly TranscriptRecord[],
+  liveRecords: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  const before = Array.from({ length: liveRecords.length + 1 }, (): TranscriptRecord[] => []);
+  const claimed = new Set<number>();
+  let pending: TranscriptRecord[] = [];
+  let lastAnchor = -1;
+  for (const fallback of fallbacks) {
+    const anchor = liveRecords.findIndex(
+      (record, index) => !claimed.has(index) && sameFallbackRecord(record, fallback)
+    );
+    if (anchor === -1) {
+      pending.push(fallback);
+      continue;
+    }
+    before[anchor]!.push(...pending);
+    pending = [];
+    claimed.add(anchor);
+    lastAnchor = anchor;
+  }
+  // A completed HTTP reply can precede a new streamed turn before that turn's POST finishes.
+  const nextTurn =
+    lastAnchor < 0
+      ? -1
+      : liveRecords.findIndex((record, index) => index > lastAnchor && record.kind === "user");
+  before[nextTurn < 0 ? liveRecords.length : nextTurn]!.push(...pending);
+  return [
+    ...liveRecords.flatMap((record, index) => [...before[index]!, record]),
+    ...before[liveRecords.length]!
+  ];
 }

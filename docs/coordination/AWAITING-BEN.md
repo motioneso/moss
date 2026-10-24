@@ -83,7 +83,13 @@ after immutable reload/theme checks, prompt 2 displayed prose and a fresh card,
 but its POST response was never observed within 180,000 ms and the composer
 reported a network error. Actual runner exit 1; only one JSON reply was retained.
 The twenty-prompt matrix is incomplete. Root cause remains unproven.
-Earlier failures remain disclosed.
+Earlier failures remain disclosed. Unchanged diagnostic run 7 returned three
+source-correct HTTP replies, then its last-card source-time assertion failed:
+visible 18:15:17.599Z versus saved 18:15:26.289Z. A deterministic actual-drawer
+reproduction separately proved that an older HTTP-only fallback can render after
+a newer streamed reply. A generic message-anchor merge repair is being verified;
+its role in run 7 remains unproven, and run 6's network cause is still unknown.
+[Combined evidence](https://github.com/motioneso/moss/issues/3583#issuecomment-6387829099).
 
 Decision: continue bounded diagnosis/repair and rerun the unchanged frozen matrix,
 requiring every review/local/CI/installed gate before merge and successor launch
