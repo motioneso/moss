@@ -49,6 +49,7 @@ export class ComputerRfbInput {
       readonly now: () => Date;
       readonly upstream: RfbClient;
       readonly timeoutMs?: number;
+      readonly assertLifetime?: () => void;
       readonly onConnection?: (input: ComputerRfbConnection) => void;
     }
   ) {
@@ -264,6 +265,7 @@ export class ComputerRfbInput {
   }
 
   #current(epoch: number, barrier: Promise<void>): void {
+    this.deps.assertLifetime?.();
     if (this.#closed || epoch !== this.#epoch || barrier !== this.#barrier)
       throw new ComputerInputDenied();
   }

@@ -646,12 +646,28 @@ describe("shared meeting recording protocol (isolated gate only)", () => {
       sampleRateHz: 16000,
       pcmBase64: Buffer.alloc(32000, 1).toString("base64")
     };
+    await context.withDataContext(f.owner, (db) =>
+      new MeetingPreferencesRepository().update(db, {
+        transcriptLanguage: "en",
+        transcriptVocabulary: ["Moss", "Vocci"]
+      })
+    );
     expect(await f.service.audio(active.headers, "audio", clip)).toMatchObject({ status: "saved" });
     expect(await f.service.audio(active.headers, "replay", clip)).toMatchObject({
       status: "saved",
       replayed: true
     });
     expect(f.deps.transcribe).toHaveBeenCalledOnce();
+    expect(vi.mocked(f.deps.transcribe).mock.calls[0]![1]).toMatchObject({
+      language: "en",
+      prompt: "Moss, Vocci"
+    });
+    await context.withDataContext(f.owner, (db) =>
+      new MeetingPreferencesRepository().update(db, {
+        transcriptVocabulary: [],
+        transcriptLanguage: null
+      })
+    );
     const transcript = await context.withDataContext(f.owner, (db) =>
       new MeetingTranscriptRepository().snapshotWithSources(db, f.meeting.id, {
         maxSegments: 50,

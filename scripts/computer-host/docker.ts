@@ -32,9 +32,26 @@ export interface InspectedResource {
 
 class KnownContainerAbsent extends Error {}
 
+export interface ComputerMutationGuard {
+  check(): Promise<void>;
+  assertCurrent(): void;
+}
+
 /** Host-only Docker client. No exec, arbitrary command, image pull or API import/caller. */
 export class ComputerDocker {
   constructor(private readonly config: HostConfig) {}
+  async #mutate(
+    method: "POST" | "DELETE",
+    path: string,
+    guard: ComputerMutationGuard | undefined,
+    body?: unknown
+  ): Promise<unknown> {
+    if (guard) {
+      await guard.check();
+      guard.assertCurrent();
+    }
+    return this.#call(method, path, body);
+  }
   #call(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<unknown> {
     return hostJsonRequest({
       socketPath: this.config.dockerSocket,
@@ -149,36 +166,44 @@ export class ComputerDocker {
       throw new Error("Untracked Computer container");
     return inspected;
   }
-  async create(resource: HostResource): Promise<string> {
-    const reply = await this.#call(
+  async create(resource: HostResource, guard: ComputerMutationGuard): Promise<string> {
+    if (!guard) throw new Error("Computer launch guard required");
+    const reply = await this.#mutate(
       "POST",
       `/containers/create?name=${resourceName(this.config, resource)}`,
+      guard,
       resourceSpec(this.config, resource)
     );
     if (!isRecord(reply) || !fullDockerId(reply.Id))
       throw new Error("Unknown Computer create result");
     return reply.Id;
   }
-  async start(resource: HostResource): Promise<void> {
+  async start(resource: HostResource, guard: ComputerMutationGuard): Promise<void> {
+    if (!guard) throw new Error("Computer launch guard required");
     const { resource: verified } = await this.inspect(resource);
-    await this.#call("POST", `/containers/${verified.id}/start`);
+    await this.#mutate("POST", `/containers/${verified.id}/start`, guard);
   }
-  async remove(resource: HostResource): Promise<void> {
+  async remove(resource: HostResource, guard?: ComputerMutationGuard): Promise<void> {
     let verified = await this.inspect(resource);
     if (verified.running) {
       try {
-        await this.#call("POST", `/containers/${verified.resource.id}/stop?t=10`);
+        await this.#mutate("POST", `/containers/${verified.resource.id}/stop?t=10`, guard);
       } catch (error) {
         // A timeout has unknown outcome. Reinspect the same full ID before an emergency kill.
         verified = await this.inspect(verified.resource);
-        if (verified.running)
-          await this.#call("POST", `/containers/${verified.resource.id}/kill?signal=SIGKILL`);
+        if (verified.running) {
+          await this.#mutate(
+            "POST",
+            `/containers/${verified.resource.id}/kill?signal=SIGKILL`,
+            guard
+          );
+        }
         if (error instanceof HostHttpError && error.status === 404) throw error;
       }
     }
     verified = await this.inspect(verified.resource);
     if (verified.running) throw new Error("Computer failed to stop");
     // Never force-remove a running resource, and never remove volumes.
-    await this.#call("DELETE", `/containers/${verified.resource.id}?force=0&v=0`);
+    await this.#mutate("DELETE", `/containers/${verified.resource.id}?force=0&v=0`, guard);
   }
 }

@@ -154,6 +154,7 @@ describe("minimal meeting lifecycle (real isolated storage, synthetic provider)"
     const preferences = new MeetingPreferencesRepository();
     const defaults = {
       transcriptLanguage: null,
+      transcriptVocabulary: [],
       defaultCaptureMode: "computer-audio",
       rememberedSource: null,
       summarizeOnStop: true,

@@ -81,6 +81,7 @@ export * from "./meeting-transcript-api.js";
 export * from "./meeting-record-api.js";
 export * from "./meeting-preferences-api.js";
 export * from "./meeting-transcript-language.js";
+export * from "./meeting-vocabulary.js";
 export * from "./meeting-transcript-storage-api.js";
 export * from "./meeting-chat-api.js";
 export * from "./meeting-output-api.js";

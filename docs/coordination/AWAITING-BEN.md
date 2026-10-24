@@ -75,46 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Vocci adapter recovery — phone unlock (#3565)
-
-The existing unlock request is routed to `vocci-adapter-recovery`; exclusive
-runtime/phone/production ownership transferred to `vocci-copy-rollout`.
-The predecessor's explicit-device preflight
-found the authorized phone online with Bluetooth ON and the exact live foreground
-service, but its lock-screen observation reports locked; native UI comparison and
-the single authorized adapter check cannot proceed. No adapter change was issued.
-Private `adapter-recovery/preflight.json` records the checks. Tested checkout
-was the adapter-recovery slice; later documentation and copy-rollout work does
-not provide a fresh unlocked/native preflight. The existing notification remains
-routed to its originating agent; do not send another unlock request.
-
-Please unlock the authorized phone when convenient and tell this agent. Recommended:
-continue the bounded check after a fresh preflight. Alternatively defer physical
-acceptance; offline observer correction/review can proceed independently. No new
-recording, enrollment or reinstallation is requested.
-
-### Shared Meeting vocabulary — proposed experience (#3584)
-
-The [feasibility and design proposal](../superpowers/specs/2026-10-24-meeting-vocabulary-proposal.md)
-establishes the current ASR seams and provider contracts. This is a product design
-decision, not an environment blocker. No setting or implementation has shipped.
-
-Recommendation: an owner-scoped list of spellings in Meetings settings, explicit
-Save/Clear, an explicit matching transcript language, and verified selected-target
-prompt support. Unknown support keeps the setting unavailable. If a later target
-or language becomes incompatible with a saved list, preserve it and reject affected
-ASR requests; never silently drop it. Existing failure semantics mean live gaps and
-terminal normal-import failures are possible. Clearing/restoring support affects
-subsequent requests and does not repair those failures.
-Alternative: a best-effort standard prompt with no support guarantee, retaining
-transcription when a compatible endpoint silently ignores hints.
-
-Ben must choose the experience and support promise before implementation planning.
-The reviewed proposal and primary-source research are the decision material; their
-merge does not approve product behavior. Adapter budget proof and live-path
-verification remain technical gates after the decision. The existing physical
-unlock notification stays separate and must not be duplicated.
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;

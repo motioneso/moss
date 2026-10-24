@@ -5,6 +5,7 @@ export type MeetingCaptureTranscriber = (
   input: {
     audio: Uint8Array;
     language?: string;
+    readonly prompt?: string;
     sampleRateHz: number;
     signal: AbortSignal;
     expectedModelRoute: string;

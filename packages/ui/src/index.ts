@@ -86,6 +86,7 @@ export { PeekPanel } from "./peek-panel.js";
 export type { PeekPanelProps } from "./peek-panel.js";
 export { Segmented } from "./segmented.js";
 export type { SegmentedOption, SegmentedProps, SegmentedTone } from "./segmented.js";
+export { Textarea } from "./textarea.js";
 export { Select } from "./select.js";
 export { StatTile } from "./stat-tile.js";
 export type { StatTileProps } from "./stat-tile.js";

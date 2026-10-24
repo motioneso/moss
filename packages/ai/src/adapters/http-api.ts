@@ -191,6 +191,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         const extension = AUDIO_EXTENSIONS[input.audio.type.split(";")[0] ?? ""];
         form.set("file", input.audio, extension ? `audio.${extension}` : "audio");
         if (input.language) form.set("language", input.language);
+        if (input.prompt !== undefined) form.set("prompt", input.prompt);
         if (input.timestamps === "segment") {
           form.set("response_format", "verbose_json");
           form.append("timestamp_granularities[]", "segment");

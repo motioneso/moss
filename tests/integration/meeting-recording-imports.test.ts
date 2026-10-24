@@ -113,7 +113,10 @@ describe("completed recording imports through real owner DB/vault paths", () => 
     try {
       for (const transcriptLanguage of ["es", null]) {
         await context.withDataContext(actor, (db) =>
-          preferences.update(db, { transcriptLanguage })
+          preferences.update(db, {
+            transcriptLanguage,
+            transcriptVocabulary: transcriptLanguage ? ["Moss", "José"] : []
+          })
         );
         const { service, deps, input } = setup();
         const accepted = await service.accept(actor, input);
@@ -122,13 +125,30 @@ describe("completed recording imports through real owner DB/vault paths", () => 
         expect(vi.mocked(deps.transcribe).mock.calls[0]![1].language).toBe(
           transcriptLanguage ?? undefined
         );
+        expect(vi.mocked(deps.transcribe).mock.calls[0]![1].prompt).toBe(
+          transcriptLanguage ? "Moss, José" : undefined
+        );
         expect(await service.status(actor, accepted.id)).toMatchObject({ state: "complete" });
       }
     } finally {
       await context.withDataContext(actor, (db) =>
-        preferences.update(db, { transcriptLanguage: null })
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
       );
     }
+  });
+  it("retains a safe terminal failure when the admitted request rejects before commit", async () => {
+    const { service, input } = setup({
+      transcribe: async (_actor, request) =>
+        request.dispatch(async () => {
+          throw new Error("Synthetic immediate transport rejection");
+        })
+    });
+    const accepted = await service.accept(actor, input);
+    await service.process(actor, payload(accepted.id));
+    expect(await service.status(actor, accepted.id)).toMatchObject({
+      state: "failed",
+      code: "transcription_failed"
+    });
   });
   it("blocks actual dispatch when the accepted recording owner is deactivated", async () => {
     const bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });

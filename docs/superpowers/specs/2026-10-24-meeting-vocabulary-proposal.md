@@ -1,7 +1,11 @@
 # Shared Meeting vocabulary — feasibility and proposed design
 
-Task #3584, approved Android Hardware scope group 4. **Status: proposal for Ben's
-decision; implementation is not approved by this document.** Research and current
+Task #3584, approved Android Hardware scope group 4. **Historical proposal:
+Ben subsequently approved the best-effort alternative.** The controlling
+[decision](2026-10-24-meeting-vocabulary-decision.md) supersedes pending-approval
+statements and the strict supported-target recommendation below. Its strict
+availability/rejection behavior was not selected. No vocabulary implementation
+has shipped. Research and current
 source inspected on 2026-10-24 at base
 `4e08402beb8879ceffd0e091199782f91b6555c8`.
 

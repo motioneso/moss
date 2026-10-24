@@ -6,7 +6,7 @@ import pg from "pg";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import { AiRepository, createAiSecretCipher } from "@moss/ai";
+import { AiRepository, createAiSecretCipher, createConfiguredTranscription } from "@moss/ai";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -146,6 +146,58 @@ describe("AI Voice (STT) endpoint (#874)", () => {
     const resolved = await resolveTranscription(ids.userB);
     expect(resolved.reason).toBe("manual-route");
     expect(resolved.model?.provider_model_id).toBe("parakeet-ctc");
+  });
+
+  it("transports vocabulary through actual legacy and pinned resolver paths", async () => {
+    await putVoice({
+      baseUrl: "https://legacy.invalid",
+      modelName: "legacy-asr",
+      apiKey: "synthetic-key"
+    });
+    const requests: { url: string; form: FormData }[] = [];
+    const runtime = createConfiguredTranscription({
+      dataContext,
+      repository,
+      fetch: async (url, options) => {
+        requests.push({ url: String(url), form: options!.body as FormData });
+        return new Response(
+          JSON.stringify({
+            text: "Ignored hints accepted",
+            segments: [{ start: 0, end: 0.1, text: "Ignored hints accepted" }]
+          })
+        );
+      }
+    });
+    async function send() {
+      const actor = ctx(ids.userB);
+      const selected = await runtime.availability(actor);
+      await runtime.transcribe(actor, {
+        audio: new Uint8Array([1, 2, 3]),
+        language: "en",
+        prompt: "Moss, Vocci",
+        signal: new AbortController().signal,
+        expectedModelRoute: selected.modelRoute!,
+        dispatch: async (send, validate) => {
+          await dataContext.withDataContext(actor, async (db) => validate?.(db));
+          return send();
+        }
+      });
+    }
+    await send();
+    const providerId = await seedAssistantProvider("Pinned vocabulary provider");
+    await seedAssistantModel(providerId, "pinned-asr", ["transcription"]);
+    await setProviderPin(ids.userB, providerId);
+    await send();
+    expect(requests).toHaveLength(2);
+    expect(requests[0]!.url).toBe("https://legacy.invalid/v1/audio/transcriptions");
+    expect(requests.map((request) => request.form.get("model"))).toEqual([
+      "legacy-asr",
+      "pinned-asr"
+    ]);
+    for (const request of requests) {
+      expect(request.form.get("language")).toBe("en");
+      expect(request.form.get("prompt")).toBe("Moss, Vocci");
+    }
   });
 
   it("(c) reports transcription unavailable with a reason when no voice endpoint is configured", async () => {

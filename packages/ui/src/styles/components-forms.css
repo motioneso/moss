@@ -416,3 +416,12 @@
   width: 100%;
   height: 32px;
 }
+
+.jds-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  resize: vertical;
+  line-height: var(--leading-normal);
+}

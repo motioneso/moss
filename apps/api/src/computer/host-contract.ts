@@ -24,6 +24,10 @@ export interface ComputerHostResult {
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+/** Exact own JSON fields shared by the bounded private IPC protocols. */
+export function gatewayFields(value: unknown, keys: string): value is Record<string, unknown> {
+  return isRecord(value) && Object.keys(value).sort().join(",") === keys;
+}
 export function isGeneration(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }

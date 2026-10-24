@@ -76,6 +76,7 @@ export async function hostFixture(
     imageBytes: 0,
     remove: false,
     removeWithoutResult: false,
+    beforeCreateResult: null as (() => Promise<void>) | null,
     holdStart: null as Promise<void> | null
   };
   const dockerServer = createServer((request, response) => {
@@ -129,6 +130,7 @@ export async function hostFixture(
           })
         };
         if (!faults.createWithoutResult) containers.set(id, container);
+        await faults.beforeCreateResult?.();
         return send(faults.unknownCreate || faults.createWithoutResult ? 500 : 201, {
           Id: id,
           message: "PRIVATE_DOCKER_SECRET"
@@ -182,6 +184,13 @@ export async function hostFixture(
     options.admitted ? admission : unavailableAdmission
   );
   let service = await serveComputerHost(store, operations);
+  let controlOpen = true;
+  async function releaseControl() {
+    if (!controlOpen) return;
+    await service.close();
+    await store.close();
+    controlOpen = false;
+  }
   const assertLive = vi.fn(async () => {});
   const client = new ComputerHostClient({
     socketPath: service.socketPath,
@@ -207,6 +216,7 @@ export async function hostFixture(
     client,
     assertLive,
     raw,
+    releaseControl,
     get store() {
       return store;
     },
@@ -217,15 +227,14 @@ export async function hostFixture(
       return service.socketPath;
     },
     async restart(runtimeAdmission: ComputerRuntimeAdmission = unavailableAdmission) {
-      await service.close();
-      await store.close();
+      await releaseControl();
       store = await HostStateStore.open(config);
       operations = new ComputerHostOperations(store, docker, runtimeAdmission);
       service = await serveComputerHost(store, operations);
+      controlOpen = true;
     },
     async close() {
-      await service.close();
-      await store.close();
+      await releaseControl();
       dockerServer.closeAllConnections();
       await new Promise<void>((resolve) => dockerServer.close(() => resolve()));
       await rm(root, { recursive: true, force: true });
