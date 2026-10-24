@@ -11,9 +11,11 @@ import { execUatSql } from "./job-search-board-sql.js";
 //   (tests/uat/fixtures/classifier-fixture-server.ts) and prefers the calendar listing tool.
 // - The main chat model is the scripted backend (chat script "classifier-shadow"). When the gate
 //   answers, the scripted reply never appears.
+// The general calendar seed installs a fake Google account. A live read correctly marks that
+// account as a gap, so this proof uses the ordinary empty calendar on its throwaway instance.
 export const uatLevel = {
   level: "admin+data",
-  without: [],
+  without: ["calendar"],
   withoutNewsJsonBinding: true,
   chatScript: "classifier-shadow",
   withClassifierFixture: true
