@@ -81,7 +81,8 @@ async function captureTask(page: Page, title: string, due: string | null, done =
         /\/api\/tasks\/[^/]+$/.test(new URL(r.url()).pathname) && r.request().method() === "PATCH"
     );
     await page
-      .getByRole("checkbox", { name: `Complete ${title}`, exact: true })
+      .locator("label.jds-check")
+      .filter({ has: page.getByRole("checkbox", { name: `Complete ${title}`, exact: true }) })
       .first()
       .click();
     expect((await completed).ok()).toBe(true);
