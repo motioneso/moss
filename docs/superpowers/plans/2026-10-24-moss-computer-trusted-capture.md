@@ -179,3 +179,13 @@ identity. Correction distinguishes pure parser from live loader, adds cgroup nam
 and descriptor mount-ID checks, and identifies the exact new modules. Security also identified
 that the actual journal descriptor was write-only; controlled O_RDWR enables same-FD readback.
 All failed review reports remain private. Exact amended-commit acceptance is required before code.
+
+Source R1 at9abed395: Security found capture's final clock check preceded the Promise handoff;
+the native callback could clear a now-expired bootstrap timer. Correction rechecks equality
+before driver installation, before invoking the start callback and inside the actual native
+timer-clear acknowledgement. A regression executes actual capture then crosses equality in its
+awaited continuation; a separate native OS-clock fixture crosses equality inside that callback.
+Spec requested positive native continuation evidence; corrected native tests acknowledge the
+actual driver's bootstrap-timer retirement after capture, then deliberately fail without an
+installed receiver. That acknowledgement is not native run success or closure qualification.
+Both R1 reports and all failed fixture runs remain private.

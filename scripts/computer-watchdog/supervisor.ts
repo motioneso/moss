@@ -455,7 +455,16 @@ export async function superviseDeployment(
         () => interrupted || terminalHooks?.signal.aborted === true
       );
     }
-    if (interrupted || terminalHooks?.signal.aborted) throw supervisorError();
+    const assertStartup = () => {
+      if (
+        interrupted ||
+        terminalHooks?.signal.aborted ||
+        (deployment.configuration.capture && computerMonotonicMs() - startedAtMs >= 5000)
+      )
+        throw supervisorError();
+    };
+    // Capture's last guard precedes an awaited continuation. Do not clear a now-expired timer.
+    assertStartup();
     const result = runComputerSupervisor({
       configuration,
       ...(deployment.configuration.lifetime
@@ -474,6 +483,7 @@ export async function superviseDeployment(
       signals: process,
       terminalHooks
     });
+    assertStartup();
     started();
     return result;
   } finally {

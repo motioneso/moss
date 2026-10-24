@@ -1,4 +1,5 @@
 // OS projections only. The unchanged production CJS owns its real lock, journal, capture and timer.
+import type * as nativeFs from "node:fs";
 import { createRequire } from "node:module";
 import * as fs from "node:fs/promises";
 import { join, dirname } from "node:path";
@@ -26,7 +27,12 @@ export async function prepareNativeCapture(configPath: string, held: string) {
     chownPath(path, uid === 0 ? nativeUid : uid, gid === 1000 ? nativeGid : gid);
   const stat = io.lstat;
   io.lstat = (async (...args: Parameters<typeof fs.lstat>) =>
-    project(await stat(map(args[0]), ...(args.slice(1) as [])))) as typeof fs.lstat;
+    project(
+      await stat(
+        String(args[0]) === process.execPath ? fixture.artifact : map(args[0]),
+        ...(args.slice(1) as [])
+      )
+    )) as typeof fs.lstat;
   const realpath = io.realpath;
   io.realpath = (async (...args: Parameters<typeof fs.realpath>) =>
     String(args[0]).startsWith("/sys/fs/cgroup")
@@ -38,12 +44,46 @@ export async function prepareNativeCapture(configPath: string, held: string) {
     if (String(args[0]) === "/sys/fs/cgroup") result.type = 0x63677270n;
     return result;
   }) as typeof fs.statfs;
+  const monotonic = process.hrtime.bigint;
+  let productionStartedAtMs: bigint | undefined;
+  process.hrtime.bigint = () => {
+    const actual = monotonic();
+    const stack = new Error().stack ?? "";
+    if (stack.includes("computerMonotonicMs") && productionStartedAtMs === undefined)
+      productionStartedAtMs = actual / 1_000_000n;
+    if (
+      held === "boundary" &&
+      stack.includes("acknowledgeStartup") &&
+      productionStartedAtMs !== undefined
+    ) {
+      process.send!({ type: "boundary", atNs: actual.toString() });
+      return (productionStartedAtMs + 5000n) * 1_000_000n;
+    }
+    return actual;
+  };
   let timerStartedAtNs = "";
+  let bootstrap: ReturnType<typeof setTimeout> | undefined;
   const timer = global.setTimeout;
   global.setTimeout = ((fn: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => {
     if (ms === 5000 && !timerStartedAtNs) timerStartedAtNs = process.hrtime.bigint().toString();
-    return timer(fn, ms, ...args);
+    const handle = timer(fn, ms, ...args);
+    if (ms === 5000 && !bootstrap) bootstrap = handle;
+    return handle;
   }) as typeof setTimeout;
+  const clear = global.clearTimeout;
+  global.clearTimeout = ((handle: ReturnType<typeof setTimeout>) => {
+    if (["continue", "boundary"].includes(held) && handle === bootstrap) {
+      const nativeFs = createRequire(configPath)("node:fs") as typeof nativeFs;
+      if (nativeFs.existsSync(join(config.capture.path, "capture.json")))
+        process.send!({
+          type: "continued",
+          timerStartedAtNs,
+          atNs: process.hrtime.bigint().toString(),
+          pid: process.pid
+        });
+    }
+    return clear(handle);
+  }) as typeof clearTimeout;
   const open = io.open;
   io.open = async (...args: Parameters<typeof fs.open>) => {
     const path = String(args[0]);

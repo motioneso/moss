@@ -12,6 +12,10 @@ import {
 const startedAtMs = computerMonotonicMs();
 // Bootstrap cannot wait indefinitely for untrusted/missing configuration or a stuck mount.
 const startupDeadline = setTimeout(() => process.exit(2), 5000);
+function acknowledgeStartup(): void {
+  if (computerMonotonicMs() - startedAtMs >= 5000) throw supervisorError();
+  clearTimeout(startupDeadline);
+}
 async function main(): Promise<number> {
   const [mode, configPath, ...rest] = process.argv.slice(2);
   if (
@@ -73,10 +77,8 @@ async function main(): Promise<number> {
     throw supervisorError();
   // Journal startup is still under the independent bootstrap deadline. Driver owns later deadlines.
   if (mode === "manage")
-    return manageDeployment(deployment, startedAtMs, watchdog, () => clearTimeout(startupDeadline));
-  const result = superviseDeployment(deployment, startedAtMs, watchdog, () =>
-    clearTimeout(startupDeadline)
-  );
+    return manageDeployment(deployment, startedAtMs, watchdog, acknowledgeStartup);
+  const result = superviseDeployment(deployment, startedAtMs, watchdog, acknowledgeStartup);
   // Do not clear until creation has settled: superviseDeployment installs timers after its await.
   // Its first policy tick includes all startup time.
   const outcome = await result;

@@ -11,6 +11,8 @@ import {
   loadSupervisorDeployment,
   sha256
 } from "../../scripts/computer-watchdog/trust.js";
+import { ProvisionPublication } from "../../scripts/computer-provision/publication.js";
+import * as capture from "../../scripts/computer-capture/run.js";
 import { superviseDeployment } from "../../scripts/computer-watchdog/supervisor.js";
 
 vi.mock("node:fs", async (original) => ({ ...(await original<typeof syncFs>()) }));
@@ -76,6 +78,21 @@ describe("capture trust and native managed composition; disclosed OS projections
     expect(await fs.lstat(join(f.capture, "capture.json"))).toBeDefined();
     expect(await f.store.ownedLock()).toBeDefined();
   });
+  it("refuses capture publication beyond64KiB before writing output", async () => {
+    const f = await fixture();
+    await expect(
+      ProvisionPublication.create(
+        f.config.capture,
+        "capture.json",
+        { oversize: "x".repeat(65536) },
+        0o600,
+        f.config.capture.gid,
+        async () => {},
+        () => {}
+      )
+    ).rejects.toThrow();
+    expect(await fs.readdir(f.capture)).toEqual([]);
+  });
   it("existing journal append refuses start-only provenance", async () => {
     const f = await fixture();
     await f.journal.collector(f.gateway);
@@ -94,8 +111,24 @@ describe("capture trust and native managed composition; disclosed OS projections
     expect(await f.store.ownedLock()).toBeDefined();
     expect(await fs.readdir(f.capture)).toEqual([]);
   });
-  it.each(["file", "directory"])(
-    "native manage retains lock/output at absolute original5s bootstrap bound with held %s persistence and repeated signals",
+  it("refuses bootstrap equality in actual capture's awaited continuation before driver/start acknowledgement", async () => {
+    const f = await fixture();
+    await f.journal.close();
+    await fs.unlink(join(f.config.monitor.path, "observation.jsonl"));
+    const actual = capture.captureManagedProcesses;
+    vi.spyOn(capture, "captureManagedProcesses").mockImplementation(async (...args) => {
+      await actual(...args);
+      f.setNow(f.startedAtMs + 5000);
+    });
+    const started = vi.fn();
+    await expect(
+      superviseDeployment(f.deployment, f.startedAtMs, f.watchdog, started, undefined, f.store)
+    ).rejects.toThrow();
+    expect(started).not.toHaveBeenCalled();
+    expect(await f.store.ownedLock()).toBeDefined();
+  });
+  it.each(["file", "directory", "continue", "boundary"])(
+    "native manage retains lock/output at absolute original5s bootstrap bound with %s persistence and repeated signals",
     async (held) => {
       const f = await fixture();
       await f.journal.close();
@@ -156,6 +189,7 @@ describe("capture trust and native managed composition; disclosed OS projections
         ],
         { stdio: ["pipe", "pipe", "pipe", "ipc"], detached: true, env: {} }
       );
+      const exited = once(child, "exit");
       let stdout = "",
         stderr = "";
       child.stdout.on("data", (b) => {
@@ -187,17 +221,28 @@ describe("capture trust and native managed composition; disclosed OS projections
             { timeout: 4500 }
           )
           .toBe("held");
-        child.kill("SIGTERM");
-        const signal = setInterval(() => child.kill("SIGINT"), 300);
-        const [code, nativeSignal] = await once(child, "exit");
+        if (held !== "boundary") child.kill("SIGTERM");
+        const signal =
+          held !== "boundary" ? setInterval(() => child.kill("SIGINT"), 300) : undefined;
+        const [code, nativeSignal] = await exited;
         clearInterval(signal);
         const finishedAtNs = process.hrtime.bigint();
-        const elapsedMs = Number(finishedAtNs - BigInt(messages[0]!.timerStartedAtNs)) / 1e6;
+        const elapsedMs =
+          Number(finishedAtNs - BigInt(messages[0]!.timerStartedAtNs ?? startedAtNs)) / 1e6;
         expect(code).toBe(2);
         expect(nativeSignal).toBe(null);
         expect(stdout).toBe("");
         expect(stderr).toBe("");
-        expect(elapsedMs).toBeGreaterThanOrEqual(4900);
+        if (["file", "directory"].includes(held)) expect(elapsedMs).toBeGreaterThanOrEqual(4900);
+        expect(messages[0]!.type).toBe(
+          held === "continue" ? "continued" : held === "boundary" ? "boundary" : "held"
+        );
+        if (held === "boundary") expect(messages.some((m) => m.type === "continued")).toBe(false);
+        if (held === "continue") {
+          const receipt = JSON.parse(await fs.readFile(join(f.capture, "capture.json"), "utf8"));
+          expect(receipt.watchdog.pid).toBe(child.pid);
+          expect(receipt.coverage).toBe("sampled-cgroup-v2");
+        }
         expect(elapsedMs).toBeLessThan(6800);
         expect(await fs.lstat(join(f.host.stateDir, "daemon.lock"))).toBeDefined();
         expect(await fs.lstat(join(f.capture, "capture.json"))).toBeDefined();

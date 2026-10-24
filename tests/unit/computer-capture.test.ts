@@ -79,7 +79,8 @@ describe("managed process snapshot: actual files/Unix Docker/child groups; discl
     "lock",
     "stop",
     "signal",
-    "capture-root"
+    "capture-root",
+    "output-bytes"
   ])("rejects %s change after actual capture fsync and retains failed output", async (key) => {
     const f = await fixture();
     let injected = false;
@@ -109,6 +110,7 @@ describe("managed process snapshot: actual files/Unix Docker/child groups; discl
           await fs.rename(path, path + ".retained");
           await fs.writeFile(path, bytes, { mode: 0o600 });
         }
+        if (key === "output-bytes") await fs.writeFile(join(f.capture, "capture.json"), "{}");
         if (key === "artifact") await fs.writeFile(f.deployment.artifactPath, "changed");
         if (key === "journal")
           await fs.appendFile(join(f.config.monitor.path, "observation.jsonl"), "{}\n");
@@ -180,12 +182,31 @@ describe("managed process snapshot: actual files/Unix Docker/child groups; discl
     "symlink",
     "oversize",
     "mount",
-    "namespace"
+    "namespace",
+    "missing-init",
+    "member-mismatch",
+    "entries",
+    "depth"
   ])("rejects unsafe cgroup %s observations", async (key) => {
     const f = await fixture();
     if (key === "duplicate")
       await fs.appendFile(f.cgRoot + f.groups[0] + "/cgroup.procs", f.gateway.pid + "\n");
-    if (key === "foreign") f.membership.set(f.gateway.pid, "/foreign");
+    if (key === "foreign") {
+      await fs.rename(f.cgRoot + f.groups[0], f.cgRoot + "/foreign");
+      f.membership.set(f.gateway.pid, "/foreign");
+    }
+    if (key === "missing-init") await fs.writeFile(f.cgRoot + f.groups[0] + "/cgroup.procs", "");
+    if (key === "member-mismatch") f.membership.set(f.descendant.pid, f.groups[0]!);
+    if (key === "entries")
+      for (let n = 0; n < 257; n++) await fs.writeFile(f.cgRoot + f.groups[0] + `/file${n}`, "");
+    if (key === "depth") {
+      let path = f.cgRoot + f.groups[0];
+      for (let n = 0; n < 9; n++) {
+        path += "/child";
+        await fs.mkdir(path);
+        await fs.writeFile(path + "/cgroup.procs", "");
+      }
+    }
     if (key === "overlap")
       f.membership.set(f.desktop.pid, f.groups[0]! + "/docker-" + f.resources[1]!.id + ".scope");
     if (key === "host-member") f.membership.set(process.pid, f.groups[0]!);
