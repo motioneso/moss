@@ -98,6 +98,18 @@ Alternative: hold Weather and dependent rollout. The committed Weather handoff
 requires Ben's actual decision on these new failures before rollout. No
 renderer, threshold or scope waiver is requested. Independent work continues.
 
+Supplemental run 10 on `d2baaf72b` discovered Codex economy `gpt-6-luna`
+and failed with 1/20 intended visuals; all twenty full answers were useful.
+No host defect or root cause is established. Exact-head diagnostic run 11 on
+`8d20d9c70` passed with 20/20 correct cards and useful full answers, all
+preservation/control assertions and runner exit 0. Every matrix turn records
+a Weather read and presentation. The private scan retained zero Codex trace
+files; it provides no additional evidence about run 10's unresolved cause.
+Both independent reviewers approve `8d20d9c70`. The combined recommendation
+remains to continue every unchanged gate and merge/launch-next only if all pass,
+retaining both failures. The session has asked for the actual combined decision
+and queued `needs-ben`; the earlier run-7 ruling is preserved separately.
+
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;

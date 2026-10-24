@@ -259,3 +259,14 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   history tool activity names/outcomes and captured turn/message IDs before teardown,
   without changing prompts, assertions, configured model or product behavior.
   Further diagnosis and a new exact-head gate are required; no merge or successor.
+- 2026-10-24: exact clean `8d20d9c70` passed installed run 11: Playwright
+  and diagnostic runner exit 0, discovered Codex economy `gpt-6-luna`, 20/20
+  exact-source cards and useful full answers manually assessed against actual
+  saved Fahrenheit and 18/19/20/21 samples. Four prose controls, novel composition,
+  Sports preservation, unchanged preferences and immutable reload/drawer/390px/themes
+  passed. History records a Weather read and presentation on every matrix turn.
+  The private scan captured zero Codex JSONL files, so it adds no model trace and
+  does not establish run 10's cause. Both independent reviewers approved `8d20d9c70`.
+  [Full receipt](https://github.com/motioneso/moss/pull/3648#issuecomment-6385973546).
+  Retain runs 9 and 10 as failed. The combined actual failure decision remains
+  pending; only independent verification continues before dependent rollout.
