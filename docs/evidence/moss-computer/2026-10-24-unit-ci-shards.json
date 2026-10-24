@@ -8,19 +8,22 @@
     ".github/workflows/ci.yml": "257745c8152f47a7ee6c159db990a9a818919e593091d8ae3309acbc50dae3d1",
     "scripts/test-unit.ts": "db06b25bcdcad3323eff955d422142fc7bcb5353c465932215ddd6b6cdbcda62",
     "tests/unit/test-unit-plan.test.ts": "08888e2e2678af3858b4b3b5a6dab84d8b5aa575a5e68df9db14163ce40eb0f7",
-    "tests/unit/ci-phase-deadlines.test.ts": "171d36b33863aa4ce7456d7a034fe0bc18f136b4cbfbf775c515d6e47e4ff856",
-    "docs/superpowers/plans/2026-10-24-unit-ci-shards.md": "fe402a74ed8a49fd9f5e4ebe6e4cee53b3eef17caaf039d163ec722f853461f3"
+    "tests/unit/ci-phase-deadlines.test.ts": "171d36b33863aa4ce7456d7a034fe0bc18f136b4cbfbf775c515d6e47e4ff856"
   },
   "priorTimeouts": [
     {
       "run": 40129465819,
       "job": 120977890529,
-      "passingFiles": 1453
+      "passingFiles": 1453,
+      "bindingCases": 50,
+      "bindingMilliseconds": 119971
     },
     {
       "run": 40130553399,
       "job": 120981187176,
-      "passingFiles": 1450
+      "passingFiles": 1450,
+      "bindingCases": 54,
+      "bindingMilliseconds": 125328
     }
   ],
   "checks": [
@@ -180,7 +183,9 @@
     "ci-controls-r1/results.json": "d88fc8b661c0baca5e55d72310c6d67f1d39c051691e56146505e787774ac77c",
     "ci-types-completion-r1.json": "9f1259f380c4f6ce2540b30575947bbdfdbb06cdbc6e06dd786fe5daa6759d8e",
     "security-ci-source-local-r1.md": "6009ca051c023ee0e6afe6a16f7ab7723e50bfee2f4d32a39f9594e18045c6f5",
-    "spec-ci-source-local-r1.md": "3e295a0489856bfb7fa2657b8f95851c69c6c225bcc57931bcb81a0a8dc5d9b7"
+    "spec-ci-source-local-r1.md": "3e295a0489856bfb7fa2657b8f95851c69c6c225bcc57931bcb81a0a8dc5d9b7",
+    "security-ci-final-docs-r1.md": "8a40565890105b3b5ad61383bbb78354127f1252a246d3fcab5b6ed2a5ee179f",
+    "spec-ci-final-docs-r1.md": "b0dc03a6cf370ae78bd2f3a97bca6b53fdd53902f7aa2fb7677af33ec3c81d24"
   },
   "computerEvidence": {
     "checkedSource": "6db03b5cb07ecb243a825178bc7ed0c73660d757",
@@ -201,5 +206,15 @@
     "security": "ACCEPT_EXACT_CI_SOURCE_LOCAL_R1",
     "standardsSpec": "ACCEPT_EXACT_CI_SOURCE_AND_BOUNDED_LOCAL_R1",
     "limits": "Full actual CI executions/union/deadline/aggregate and final exact public docs remain separate gates."
+  },
+  "acceptedImplementationPlanSha256": "fe402a74ed8a49fd9f5e4ebe6e4cee53b3eef17caaf039d163ec722f853461f3",
+  "correctedPlan": {
+    "path": "docs/superpowers/plans/2026-10-24-unit-ci-shards.md",
+    "sha256": "4ced0306b26b94bd33d278a34d10c9bc3b869256a37a5724d02a0943e0b4c5b9",
+    "change": "Historical case-count correction only; operational implementation contract unchanged from accepted planCommit."
+  },
+  "rejectedFinalDocsRound": {
+    "head": "78222a8e88925ef495ff81ac981692c5115af5b8",
+    "finding": "Prior runs had50/54capture-binding cases, not54in both; corrected in plan and MD; both rejection reports retained."
   }
 }

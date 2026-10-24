@@ -11,8 +11,8 @@ app-map declaration, database, Computer image/runtime or deployment operation ch
 Two complete workflow attempts stopped the unit command at its existing 15-minute
 budget: runs40129465819/job120977890529 and40130553399/job120981187176. They had
 1453 and1450 passing files respectively, all32 Computer suites, and continued
-reporting passing files until TERM. The new54-case capture-binding suite passed
-in both (about125s on the latter runner). This establishes incomplete suite
+reporting passing files until TERM. The capture-binding suite passed50 cases
+in the first and54 in the second (119971ms and125328ms respectively). This establishes incomplete suite
 execution due to budget, not a proven cleanup hang or a precise attribution of
 total cost between added fixtures and runner throughput. Keep both failed receipts.
 
@@ -86,3 +86,8 @@ than refuse. Standards/Spec independently found the same normalization while
 considering delegated vendor semantics acceptable only with narrower claims.
 Retain both R1 reports. The corrected contract above validates only the new
 dedicated input before spawn; existing ordinary CLI forwarding is unchanged.
+
+Both final-doc reviews rejected candidate78222a8e's claim that54 binding cases
+passed in both timed-out runs. Raw logs show50 then54; correct that count here
+and in the public evidence while retaining both rejected review reports. The
+implementation contract and checked CI source82637b1e are unchanged.

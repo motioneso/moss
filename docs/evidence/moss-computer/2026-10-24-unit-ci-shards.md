@@ -11,8 +11,11 @@ The CI correction changes no Computer production or fixture source.
 Candidate4ccf3801 and candidate2e80e5269 hit the unchanged15m unit deadline in
 CI40129465819/job120977890529 and CI40130553399/job120981187176. They had1453
 and1450 passing files, including every32 Computer suite, and continued passing
-until TERM. Neither is an accepted complete unit result. The new54-case binding
-suite passed in both; its latter runner duration was125328ms. This establishes
+until TERM. Neither is an accepted complete unit result. The binding suite
+passed50 cases in the first and54 in the second, taking119971ms and125328ms
+respectively. Both final-doc reviews rejected candidate78222a8e's inaccurate
+54-in-both wording; their rejected reports remain retained and both this document
+and the plan are corrected. This establishes
 budget exhaustion with work remaining, without attributing all cost to fixtures
 or claiming a proven hang. Both raw logs and failed receipts remain retained.
 
