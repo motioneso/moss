@@ -85,6 +85,7 @@ export function parseState(value: unknown): HostState {
 /** Owns the one daemon lock, canonical storage identity and fsynced operation/resource state. */
 export class HostStateStore {
   #state: HostState;
+  #stopRequested = false;
   private constructor(
     readonly config: HostConfig,
     readonly roots: RootIdentity[],
@@ -95,6 +96,12 @@ export class HostStateStore {
   }
 
   static async open(config: HostConfig): Promise<HostStateStore> {
+    return this.#open(config, true);
+  }
+  static async openExisting(config: HostConfig): Promise<HostStateStore> {
+    return this.#open(config, false);
+  }
+  static async #open(config: HostConfig, initialize: boolean): Promise<HostStateStore> {
     const roots = await inspectRoots(config);
     const lockPath = join(config.stateDir, "daemon.lock");
     const lock = await open(
@@ -112,7 +119,10 @@ export class HostStateStore {
       const statePath = join(config.stateDir, "state.json");
       const markerExists = await exists(markerPath);
       const stateExists = await exists(statePath);
+      store.#stopRequested = await exists(join(config.stateDir, "stop.json"));
       if (markerExists !== stateExists) throw new Error("Incomplete Computer host state");
+      if (!markerExists && (!initialize || store.#stopRequested))
+        throw new Error("Existing Computer host state required");
       const marker = { config, roots };
       if (markerExists) {
         if (JSON.stringify(await privateJson(markerPath)) !== JSON.stringify(marker))
@@ -131,6 +141,20 @@ export class HostStateStore {
   get state(): HostState {
     return this.#state;
   }
+  get stopRequested(): boolean {
+    return this.#stopRequested;
+  }
+  latchStop(): void {
+    this.#stopRequested = true;
+  }
+  assertNotStopped(): void {
+    if (this.#stopRequested) throw new Error("Computer lifecycle is terminal");
+  }
+  async assertLaunchable(): Promise<void> {
+    this.assertNotStopped();
+    if (await exists(join(this.config.stateDir, "stop.json"))) this.latchStop();
+    this.assertNotStopped();
+  }
   async assertRoots(): Promise<void> {
     if (JSON.stringify(await inspectRoots(this.config)) !== JSON.stringify(this.roots))
       throw new Error("Computer roots replaced");
@@ -145,6 +169,21 @@ export class HostStateStore {
   }
   async save(state: HostState): Promise<void> {
     parseState(state);
+    if (
+      this.#stopRequested &&
+      (state.enabled ||
+        state.resources.length !== this.#state.resources.length ||
+        this.#state.resources.some(
+          (before) =>
+            !state.resources.some(
+              (after) =>
+                before.role === after.role &&
+                before.generation === after.generation &&
+                (before.id === null || before.id === after.id)
+            )
+        ))
+    )
+      throw new Error("Terminal Computer identities must be retained");
     await this.assertRoots();
     await this.#write("state.json", state);
     this.#state = state;
