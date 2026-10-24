@@ -414,3 +414,33 @@ healthy Moss were checked. Independent exact evidence/closure review belongs in 
 The next proposal is a bounded browser-boundary diagnostic candidate before any new causal patch
 or runtime proof. Approved chat design and internal owner-control acceptance remain unchanged;
 issues #3577/#3578/#3605 stay open. No merge, deployment or new runtime authority follows.
+
+## 27. Continued viewer diagnosis and bounded replacement persistence accepted
+
+Ben directly instructed continued repair, superseding section 26's unsupported-repair stopping
+decision. The [continued diagnostic plan](../plans/2026-10-23-moss-computer-viewer-diagnosis.md)
+preserves historical failures and all original runtime protections. Separately committed and
+independently reviewed fresh packets corrected observed watchdog first-sample, Firefox process-title,
+copied SQLite connection-lifetime and bookmark-navigation harness faults. No causal explanation
+or noVNC connection patch is claimed for the original r12 timeout.
+
+The exact [r21 packet](../plans/2026-10-23-moss-computer-viewer-r21.md) completed the full bounded
+offline sequence. The [report](../../evidence/moss-computer/2026-10-23-persistence-r21.md) and
+[JSON](../../evidence/moss-computer/2026-10-23-persistence-r21.json) record complete RFB readiness,
+protected access and removed-protection controls, real current UI/RFB, visible 1280×800 frames
+with 346/338 colours, fresh viewer input, active Firefox sandbox level 6 with actual added tab
+filters, clean shutdown/profile flush, intended file/bookmark negative controls, distinct full
+desktop replacement on the same home/image, unchanged durable hashes before reopening, and actual
+bookmark-only navigation to the exact persisted URL/file readback. Final database bytes may change
+after browser revisit; before-reopen hashes matched the baseline.
+
+Independent runtime/closure review passed all 39 checks. Six short watchdog samples satisfy
+floors/heartbeat/home limits, with explicit operator closure and no running proof containers;
+no sustained resource-fit claim follows. Owned runtime, reservations and ephemeral keys are absent,
+retained homes/archive remain and Moss is healthy. Exact final evidence review is in the review ledger.
+
+This supersedes persistence's earlier NOT_RUN status for the bounded offline amd64 proof only.
+Actual Moss owner HTTPS/WSS/revocation, receiving-side sole writer and queue/key fencing,
+chat/browser UI, installed storage/lifecycle/idle sleep-wake, confined Internet egress and platform
+release cases remain open. Synthetic mTLS does not qualify product ownership. Issues #3577/#3578/
+#3605 stay open; draft #3612 stacks on unmerged #3607 and #3598. No deployment or merge occurred.
