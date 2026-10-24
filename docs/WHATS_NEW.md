@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Evening weather cards in chat.** Moss can show hourly temperature, rain and wind forecasts for your local evening, with clear sources and missing-data labels. [PR #3648](https://github.com/motioneso/moss/pull/3648)
 - **Meeting transcript vocabulary.** Save spellings for names and terms to guide future meeting transcripts, with best-effort results from your audio service. [PR #3653](https://github.com/motioneso/moss/pull/3653)
 - **Sourced Sports results in chat.** Moss can show the latest available completed match with team logos, the score, its source and coverage when a visual helps your Sports question. [PR #3633](https://github.com/motioneso/moss/pull/3633)
 
