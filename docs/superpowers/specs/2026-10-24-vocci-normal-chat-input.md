@@ -32,7 +32,9 @@ never upgrade an old request. No speech creates no turn. Provider failure before
 claim preserves retryable queued work. Uncertain dispatch after effects stays
 interrupted, with no automatic retry or one-click resubmission.
 
-All pending requests remain retained. Show multiple arrivals in stable chronological
+All pending requests remain retained and accessible through bounded keyset pages
+and a Load older voice inputs control in the normal transcript, including beyond100
+receipts. Show multiple arrivals in stable chronological
 order; polling, reload/remount and links only read receipts, never send. Recover
 completed saved turns missed by the live stream, deduplicating with stable turn and
 message identity. Hide ring evidence outside confirmed owner Main, in private/module

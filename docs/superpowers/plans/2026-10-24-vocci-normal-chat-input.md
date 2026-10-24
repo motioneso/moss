@@ -40,6 +40,12 @@ mounts and risk changing legacy consent. Persist policy at admission instead.
    the existing timestamp/explicit-confirmation rule. Fingerprint stays canonical
    to the source envelope so a replay cannot change policy or create a new turn.
 3. Public status adds stable `turnId` and `createdAt`. Extend schema/fixtures.
+   Add bounded keyset pagination to the receipt list: optional beforeCreatedAt and
+   beforeId query parameters together, ordered created_at DESC,id DESC, at most100
+   per page and nextCursor in the response. The normal transcript offers Load older
+   voice inputs; pending recovery remains accessible beyond100 rows. Test101 legacy
+   pending rows across page boundaries, including equal timestamps. Completed
+   history remains independently bounded by the existing message API.
    Query under owner/Main/privacy/selection fences, with an owner-specific key.
    Replace disclosure/list with canonical Thread inputs and recorded status rows.
    Deduplicate pending bubbles against live/saved turn IDs, never transcript text.
@@ -59,7 +65,15 @@ mounts and risk changing legacy consent. Persist policy at admission instead.
    DOM tests exercise no disclosure, normal bubbles/status, live/history dedup,
    multiple requests, legacy lost-response retry, immediate hiding at every fence,
    owner cache change and no POST on mount/remount/links.
-6. Real dev UI/data proof under verify-gate: disposable owner signup, actual Settings
+6. Real dev UI/data proof: commit `scripts/proofs/vocci-normal-chat-input.py`
+   as the executable acceptance harness, invoked by package script
+   `test:normal-chat-live` (build:web then the existing isolated
+   `scripts/verify-recording-import-live.ts` with VOCCI_LIVE_BROWSER_SCRIPT set).
+   Run `scripts/run-gate.sh start --gate test:normal-chat-live`, then
+   `scripts/run-gate.sh wait --follow`, expected exit0. Record run/fingerprint,
+   assertions and raw private artifact paths in
+   `docs/evidence/vocci/2026-10-24-normal-chat-input.md` and the PR comment.
+   Real dev UI/data proof under verify-gate: disposable owner signup, actual Settings
    provider selection, generated versioned audio via receiver/enablement and real
    ASR/chat stand-ins. Show automatic normal message/reply, unsent typed draft,
    busy/private deferral, multiple arrivals, reload, immutable replay, provider
@@ -93,3 +107,7 @@ production data or phone operations. Report the concrete blocker; preserve queue
   premise. It does not enroll production hold or grant device/deployment access.
 - Legacy queued/review receipts retain their policy; no migration mass-dispatch.
 - Physical recovery acceptance is separate; #3565/#3584 stay open.
+
+- Plan review r1: Standards P2 requires named executable UI harness and gate;
+  Spec P2 requires access beyond100 receipts. Added exact harness/command/artifact
+  and keyset pagination with101-row coverage before implementation.
