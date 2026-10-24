@@ -13,7 +13,7 @@ export interface ComputerStopIntent {
   readonly roots: readonly RootIdentity[];
   readonly state: HostState;
 }
-interface StopReceipt {
+export interface StopReceipt {
   readonly intent: ComputerStopIntent;
   readonly bytes: Buffer;
   readonly dev: number;
@@ -175,6 +175,18 @@ export async function stopComputerRecovery(
   docker: ComputerDocker
 ): Promise<ComputerRecoveryResult> {
   const receipt = await persistComputerStop(store);
+  return reconcileComputerStop(store, docker, receipt);
+}
+
+/** Shared exact cleanup. Normal callers additionally require their actual supervisor fence. */
+export async function reconcileComputerStop(
+  store: HostStateStore,
+  docker: ComputerDocker,
+  receipt: StopReceipt,
+  assertCurrent: () => void = () => {}
+): Promise<ComputerRecoveryResult> {
+  assertCurrent();
+  await assertStop(store, receipt);
   if (store.state.generation === Number.MAX_SAFE_INTEGER) throw failure();
   await store.save({ ...store.state, enabled: false, generation: store.state.generation + 1 });
   const inventory = await docker.inventory(store.state.resources);
@@ -188,6 +200,7 @@ export async function stopComputerRecovery(
   const guard: ComputerMutationGuard = {
     check: () => assertStop(store, receipt),
     assertCurrent() {
+      assertCurrent();
       if (JSON.stringify(store.state) !== state) throw failure();
     }
   };
