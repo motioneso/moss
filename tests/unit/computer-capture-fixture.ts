@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import type { PathLike } from "node:fs";
-import type * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { vi } from "vitest";
 import { provisionFixture } from "./computer-provision-fixture.js";
