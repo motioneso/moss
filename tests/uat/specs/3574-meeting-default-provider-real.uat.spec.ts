@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import type { MeetingOutputArtifact } from "@moss/shared";
+import { installPromotedMeetingCodex } from "./meeting-promoted-codex.js";
 import { meetingRow, openMeetingAction } from "./meeting-minimal-ui.js";
-import { bringUpRealChatModel, signInUatAdmin } from "./real-chat-signin.js";
+import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -10,7 +11,7 @@ test.use({ trace: "off", screenshot: "off", video: "off" });
 // Short synthetic source, real subscription inference. No intercepted Moss/provider responses.
 // This proves configured-default dispatch and visible validated output, not audio/ASR or
 // whole long-meeting coverage. The disposable provisioner owns login copying and cleanup.
-test("Meeting summary uses the configured Codex default through the real UI (#3574)", async ({
+test("Meeting summary uses the configured Codex default after a CLI update (#3565)", async ({
   page
 }) => {
   test.setTimeout(360_000);
@@ -22,6 +23,7 @@ test("Meeting summary uses the configured Codex default through the real UI (#35
   await page.getByRole("button", { name: "AI providers", exact: true }).click();
   await expect(page.getByRole("heading", { name: "AI providers", exact: true })).toBeVisible();
   const model = await bringUpRealChatModel(page);
+  installPromotedMeetingCodex(requireUatProjectName());
   const effective = await page.request.get("/api/ai/chat-model-override");
   expect(effective.status()).toBe(200);
   expect((await effective.json()).settings.selectedModel.id).toBe(model.id);

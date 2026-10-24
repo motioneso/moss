@@ -13,19 +13,39 @@ export class ConstrainedCodexUnsupportedError extends CliChatUnavailableError {
   }
 }
 
-// Matches the integrity-verified packages in the runner recipe.
+// The image floor stays aligned with the runner recipe; promoted releases require
+// explicit native-profile verification before joining this allowlist.
 export const CONSTRAINED_CODEX_VERSION = "0.157.1";
-export const CONSTRAINED_CODEX_SHA256: Readonly<Record<string, string>> = {
-  x64: "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
-  arm64: "9cbc3cdcc18ca336523ffa7d64207a1ae1f5991f823081d0a37bcb3a748de093"
+export const CONSTRAINED_CODEX_RELEASES: Readonly<
+  Record<string, Readonly<Record<string, string>>>
+> = {
+  [CONSTRAINED_CODEX_VERSION]: {
+    x64: "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
+    arm64: "9cbc3cdcc18ca336523ffa7d64207a1ae1f5991f823081d0a37bcb3a748de093"
+  },
+  "0.159.3": {
+    x64: "8bf204b36a2f6dd0dab73aa2f639892e67ef9ac8befccb4a05b1496ebf25c479",
+    arm64: "54a834b6b16d8a01ff80f7f9cee4aedec35a61c90379e088792623bf1b4c1e3d"
+  }
 };
+
+function isSupportedDigest(hash: string): boolean {
+  return Object.values(CONSTRAINED_CODEX_RELEASES).some(
+    (release) => release[process.arch] === hash
+  );
+}
+
 const digest = createExecutableDigestCache();
 
 /** Resolve npm's launcher to the native artifact; do not execute an arbitrary PATH wrapper. */
 export async function findConstrainedCodexExecutable(
   searchPath = process.env.PATH ?? ""
 ): Promise<string | undefined> {
-  if (process.platform !== "linux" || !CONSTRAINED_CODEX_SHA256[process.arch]) return undefined;
+  if (
+    process.platform !== "linux" ||
+    !CONSTRAINED_CODEX_RELEASES[CONSTRAINED_CODEX_VERSION]?.[process.arch]
+  )
+    return undefined;
   const target =
     process.arch === "arm64" ? "aarch64-unknown-linux-musl" : "x86_64-unknown-linux-musl";
   for (const directory of searchPath.split(delimiter)) {
@@ -51,8 +71,7 @@ export async function findConstrainedCodexExecutable(
       for (const candidate of candidates) {
         try {
           await access(candidate, constants.X_OK);
-          if ((await digest(candidate)) === CONSTRAINED_CODEX_SHA256[process.arch])
-            return candidate;
+          if (isSupportedDigest(await digest(candidate))) return candidate;
         } catch {
           // Only the known native artifact is eligible.
         }
@@ -116,7 +135,7 @@ export async function prepareConstrainedCodexProfile(options: {
     if (
       !command ||
       !isAbsolute(command) ||
-      (await digest(command, options.signal)) !== CONSTRAINED_CODEX_SHA256[process.arch]
+      !isSupportedDigest(await digest(command, options.signal))
     )
       throw new ConstrainedCodexUnsupportedError();
   } catch {
