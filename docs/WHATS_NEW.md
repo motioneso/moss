@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Respect excluded ring recordings.** Excluded recordings no longer offer or start transcription retries. [PR #3622](https://github.com/motioneso/moss/pull/3622)
 - **More reliable recording transcription.** Recordings now finish transcribing when the speech service places a segment slightly beyond the end of its audio. [PR #3610](https://github.com/motioneso/moss/pull/3610)
 - **Meeting summaries after a chat tool update.** Meeting summaries work with the verified newer chat tool while keeping your chosen default model. [PR #3608](https://github.com/motioneso/moss/pull/3608)
 - **Meeting summaries use your default model.** Meeting summaries now support your configured Codex model alongside existing supported providers, without switching to another model. [PR #3576](https://github.com/motioneso/moss/pull/3576)
