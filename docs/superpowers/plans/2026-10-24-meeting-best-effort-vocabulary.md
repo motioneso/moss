@@ -165,3 +165,10 @@ An unavailable physical device does not block this software slice.
   during short/window admission commit. Match capture's existing immediate rejection
   observer while preserving eventual error propagation, backoff and no fallback;
   add real-DB immediate-rejection regressions. No production action.
+
+- Product `b8593a87a`: Standards 0 / Spec 0. Clean-head unit 403 and isolated
+  integration 102 passed; RLS/lock negative controls failed as expected. Live run
+  5 passed all six real UI/transport steps, including changed next-window hints
+  and empty omission after Clear. Full failures and observer limitations are in
+  the [evidence](../../evidence/vocci/2026-10-24-best-effort-vocabulary.md). Final
+  immutable-head evidence reviews and required CI remain merge gates on PR #3653.
