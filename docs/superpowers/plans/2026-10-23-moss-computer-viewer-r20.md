@@ -108,7 +108,7 @@ image, sandbox relaxation or Internet egress. Synthetic mTLS does not qualify pr
 
 ## Exact immutable inputs
 
-Manifest SHA-256 `97b2e6cd7bd94b19bad672183484dae247e2abee25c34d7b3daf8e53dbe6074d`; 55 immutable inputs, excluding receipts and manifest itself.
+Manifest SHA-256 `e112528762096c4ce6700cdd90244c820183d0b0b512bd655a50e81b9688bc0b`; 55 immutable inputs, excluding receipts and manifest itself.
 
 | Artifact                     | SHA-256                                                            |
 | ---------------------------- | ------------------------------------------------------------------ |
@@ -126,7 +126,7 @@ Manifest SHA-256 `97b2e6cd7bd94b19bad672183484dae247e2abee25c34d7b3daf8e53dbe607
 | `compose.yaml`               | `b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9` |
 | `controls-lifecycle-test.py` | `fb5d00e261e7fcfc67b8526790c2a1d92eb29e0a228dad6c8a59550fd6f5f1b2` |
 | `controls.py`                | `ad5e88095ccd2a2d669381a7f26707ae2d28d6a6f67f953d8f17c6de799cfc31` |
-| `diagnostic-check.mjs`       | `4d60c6b3be499a0eec487cc84bfb52f9fd138d997053fe42208c473e09cb8cb6` |
+| `diagnostic-check.mjs`       | `03468ad6f5c52f4e7668c9d9d0ddfb6dee204fc894b0ac989ea542f8a6c5a456` |
 | `diagnostics.py`             | `809400714554b8aaf2c48bfbc7c6eb353e1dbcc9607987f40e2f8889c9615bef` |
 | `focus-test.mjs`             | `d91e5020221fcd2f1b8daace548497887fabd1161689363cae4ee4e901dcc403` |
 | `gateway/ca.crt`             | `5dfe26995c3ca617d6dae839af137ec039193bb807a00fd47eef0e120af48843` |
