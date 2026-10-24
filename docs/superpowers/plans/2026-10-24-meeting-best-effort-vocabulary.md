@@ -54,6 +54,13 @@ the following evidence rather than treating an old graph as current.
    Reject a nonempty save with automatic detection, and reject clearing language
    while keeping saved terms. Empty clears always work. Recheck this invariant
    when assembling each request; invalid settings fail safely before audio fetch.
+   Serialize Meeting preference updates before reading/validating/writing with
+   an owner-scoped transaction advisory lock. Extend the canonical structured-state
+   preference repository with `lock(db, namespace): Promise<void>` and
+   `getMany(db, keys): Promise<Record<string, unknown>>`; read the language/list
+   pair in one SELECT snapshot. This prevents concurrent clear-language/save-list
+   writes from both succeeding against obsolete state, and mixed reads during an
+   atomic language/list change. No direct cross-module table access.
 5. Read language and vocabulary through one canonical Meeting ASR-options method,
    used per non-silent live clip, normal short import and normal long window.
    Forward optional `prompt` through the existing configured AI port and HTTP
@@ -112,6 +119,8 @@ respective wiring/validation/owner isolation protections are absent.
 - Isolated integration: owner isolation, defaults/partial writes, live speech
   hints (silence no call), short import and per-window updated hints; hold/raw
   independent. Existing transcripts/checkpoints retained.
+  Concurrent clear-language/save-list admits only one valid transition; readers
+  of an atomic language/list update see a complete old or new pair.
 - Real live UI: fresh isolated owner signup → actual Settings → language → Save →
   reload → validation/error/draft/retry → Clear. Run real normal recording import
   through Moss's unchanged API/service/configured adapter to an explicitly
@@ -136,3 +145,10 @@ Kill gate owner: vocabulary builder. Stop release if complete-hint bounds,
 language/selected-route transport, owner isolation, UI persistence/error proof or
 required reviews/CI fail. Missing semantic hint support alone is not a kill gate.
 An unavailable physical device does not block this software slice.
+
+## Review ledger
+
+- Plan `87683d9c2`: Standards 0 findings. Spec P2: independent key reads/writes
+  can validate obsolete combinations under concurrency. Resolved in this revision
+  by canonical owner-scoped update locking and single-snapshot key reads; isolated
+  concurrent regression required. Original private reports are retained.
