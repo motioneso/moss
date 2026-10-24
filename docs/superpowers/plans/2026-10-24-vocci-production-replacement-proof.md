@@ -53,6 +53,12 @@ the target; line 126 then matches receiver and delivery words across joined reco
 The previous dispatch acceptance is therefore withdrawn pending exact parsing.
 Retain the historical receipts unchanged and correct their public interpretation.
 
+**Revised slice boundary:** ship the parser regression and evidence corrections
+first, independently reviewed and CI-green, then hand the prepared production
+replacement to a verified fresh session. The executing owner must not install the
+production candidate during this correction slice. The production steps below
+remain the next slice's plan, subject to fresh state/signing/version checks.
+
 Before the production replacement, extract the dump parser into
 `apps/vocci-delivery/upgrade-proof/replacement_broadcasts.py` and add a focused
 standard-library regression in `test_replacement_broadcasts.py`. First run the

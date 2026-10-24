@@ -10,6 +10,8 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 
+from replacement_broadcasts import replacement_records, receiver_delivered
+
 PACKAGE = "ai.moss.vocci.upgradeproof"
 SERVICE = "ai.moss.vocci.DeliveryService"
 BLUETOOTH = "android.permission.BLUETOOTH_CONNECT"
@@ -82,10 +84,7 @@ def main():
 
     def broadcasts():
         dump = adb("shell", "dumpsys", "activity", "broadcasts")
-        blocks = re.split(r"(?m)(?=\s*BroadcastRecord\{)", dump)
-        return {re.search(r"BroadcastRecord\{(\S+)", block)[1]: block[:12000]
-                for block in blocks if PACKAGE in block and "android.intent.action.MY_PACKAGE_REPLACED" in block
-                and re.search(r"BroadcastRecord\{(\S+)", block)}
+        return replacement_records(dump, PACKAGE)
 
     try:
         check(5180 <= args.port <= 5299, "claimed_port_range")
@@ -119,11 +118,12 @@ def main():
         check("Success" in adb("install", "-r", str(args.candidate), timeout=90), "candidate_replaced_baseline")
         deadline = time.monotonic() + 35
         while True:
-            history = "\n".join(block for key, block in broadcasts().items() if key not in previous_broadcasts)
+            records = {key: block for key, block in broadcasts().items() if key not in previous_broadcasts}
+            history = "\n".join(records.values())
             service = SERVICE in adb("shell", "dumpsys", "activity", "services", PACKAGE)
             current = state()
             advice = choices().get("recovery", "")
-            delivered = "ai.moss.vocci.DeliveryRecovery" in history and "DELIVERED" in history
+            delivered = any(receiver_delivered(block, PACKAGE, "ai.moss.vocci.DeliveryRecovery") for block in records.values())
             observed = current.get("activity") == "retry_pending" if args.case == "enabled" else bool(advice) if args.case == "permission-denied" else True
             if (delivered and observed) or time.monotonic() >= deadline:
                 break

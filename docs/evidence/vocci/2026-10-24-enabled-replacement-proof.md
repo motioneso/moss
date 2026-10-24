@@ -7,18 +7,21 @@ Starting main: `fa6e5ed51b8eb4bec5ed011fde83e761f3c69547` (#3622).
 
 ## Result and limits
 
-Actual versioned replacement of the disposable upgrade-proof package dispatched
-the unchanged production recovery receiver and started the real foreground
-service on the authorized Android API 37 phone. The real service reached its
-stored retry state against generated credentials and a closed HTTPS loopback
-origin. Source identity, exact queue/voice state, encrypted configuration and
-retained evidence hashes were unchanged. This is an installed OS dispatch/service
-diagnostic, not a real ring/account/upload or production update acceptance.
+**Correction after #3625:** the dispatch assertion was a false positive. It joined
+records selected partly through trailing historical summaries, then searched for
+the receiver name and DELIVERED anywhere in that combined text. Unrelated delivery
+could satisfy it. The exact enabled and permission-denied target records show
+PENDING; the disabled target shows SKIPPED with `mBroadcastConsumerSkip`. Automatic
+receiver dispatch is not established, and the earlier product-fix kill-gate
+conclusion is withdrawn. Original receipts remain unchanged and superseded.
 
-The unmodified receiver passed, so the plan's kill gate ended the product-fix
-line. No production Java or manifest changed. The historical production
-`mBroadcastConsumerSkip` cause remains unresolved. Older AOSP source uses that
-token as a generic queue-cleanup reason; it does not establish this phone's cause.
+The installed service, stored outcomes and preservation checks below remain
+observations from generated-data runs on Android API 37; they do not establish
+that the named replacement receiver was delivered. No production Java or manifest
+changed. The historical production skip cause remains unresolved. Older AOSP
+source is reference material, not a description of this phone's implementation.
+See `2026-10-24-replacement-observer-correction.md` for the parser regression and
+strict reevaluation, and the [PR errata](https://github.com/motioneso/moss/pull/3625#issuecomment-6380011834).
 
 ## Inputs and executable observations
 
@@ -40,18 +43,18 @@ carry that serial. No force-stop, shell broadcast, manual Start or instrumentati
 occurs between fixture initialization and post-replacement observation. Only new
 package-replacement records count.
 
-| Case                               | Exit | Android dispatch | Real service | Stored outcome                              |
-| ---------------------------------- | ---- | ---------------- | ------------ | ------------------------------------------- |
-| Enabled, Nearby devices granted    | 0    | Delivered        | Present      | `retry_pending` at closed loopback endpoint |
-| Disabled                           | 0    | Delivered        | Absent       | `stopped`; disabled choice retained         |
-| Enabled, Nearby devices denied     | 0    | Delivered        | Absent       | Actual Nearby devices recovery advice       |
-| Enabled, replacement action absent | 1    | Absent           | Absent       | `os_dispatched_replacement_receiver` failed |
+| Case                               | Original exit  | Exact target state | Real service | Stored outcome                              |
+| ---------------------------------- | -------------- | ------------------ | ------------ | ------------------------------------------- |
+| Enabled, Nearby devices granted    | 0, invalidated | PENDING            | Present      | `retry_pending` at closed loopback endpoint |
+| Disabled                           | 0, invalidated | SKIPPED            | Absent       | `stopped`; disabled choice retained         |
+| Enabled, Nearby devices denied     | 0, invalidated | PENDING            | Absent       | Actual Nearby devices recovery advice       |
+| Enabled, replacement action absent | 1              | No target record   | Absent       | `os_dispatched_replacement_receiver` failed |
 
-Each successful case compared source identity, queue, voice and immutable file
+The three originally green cases compared source identity, queue, voice and immutable file
 digests before/after replacement. Every installed case, including the failed
 negative control, removed only its owned disposable package and confirmed absence.
-The negative receipt stays failed; it proves the observer detects a missing OS
-recovery path rather than merely successful APK installation.
+The negative receipt stays failed. It detects the absent action but did not
+establish that the positive cases' dispatch assertion was sound.
 
 Two earlier observer attempts stopped before device mutation: signature tooling
 could not find Java, then the external-source negative copy exposed a fixture
@@ -71,7 +74,6 @@ production Java separately from the fixture. Those failed receipts remain failed
 - No interrupted-chunk, reboot/unlock, offline/out-of-range, ASR, physical sample,
   production hold or endurance claim follows. #3565 and #3584 remain open.
 
-Private build/observer/broadcast receipts remain outside git. The next bounded
-slice is actual production signed-replacement verification including the merged
-exclusion correction, followed by the remaining recovery queue. See
+Private build/observer/broadcast receipts remain outside git. Correct the observer
+and acceptance interpretation before actual production signed replacement. See
 `docs/superpowers/handoffs/2026-10-24-vocci-production-replacement-continuation.md`.

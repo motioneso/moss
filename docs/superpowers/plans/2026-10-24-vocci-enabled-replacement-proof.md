@@ -102,9 +102,12 @@ real-path acceptance before merge.
 
 ## Recorded decision
 
-The unchanged receiver passed the installed enabled replacement diagnostic, along
-with disabled and missing-permission controls. Removing the replacement action
-from a private candidate made the same observer fail its dispatch assertion.
-The product-fix kill gate therefore fired: this slice ships diagnostic tooling
-and bounded evidence, with no production recovery implementation change. See
+**Superseded:** the original observer reported passing enabled/disabled/permission
+dispatch and fired the product-fix kill gate. Subsequent exact-record inspection
+found PENDING/SKIPPED target receivers; unrelated DELIVERED text had satisfied the
+joined assertion. That acceptance and kill-gate conclusion are withdrawn. Removing
+the action did fail, but that negative control did not validate the positive
+assertion. No production recovery implementation changed. The correction plan is
+`2026-10-24-vocci-production-replacement-proof.md`; it now ships strict parsing
+and regression coverage before a fresh production diagnostic. See
 `docs/evidence/vocci/2026-10-24-enabled-replacement-proof.md` for inputs and limits.

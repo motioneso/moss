@@ -10,8 +10,9 @@ is needed. This document advances the next diagnostic; the earlier handoff owns
 the full queue, acceptance limits and device/data boundaries.
 
 1. Run `pnpm install`. Read AGENTS.md, CLAUDE.md, DEVELOPMENT_STANDARDS.md, both
-   handoffs and `docs/evidence/vocci/2026-10-24-enabled-replacement-proof.md` in
-   full. Recheck live #3565/#3584 and the three approved specifications linked
+   handoffs, `docs/evidence/vocci/2026-10-24-enabled-replacement-proof.md` and
+   `docs/evidence/vocci/2026-10-24-replacement-observer-correction.md` in full.
+   Recheck live #3565/#3584 and the three approved specifications linked
    from the earlier handoff. Check the predecessor PR's actual merge status.
 2. Read the latest private `~/.local/state/moss/vocci-recovery/runtime.md` before
    configured runtime/device access. If the predecessor is still completing CI
@@ -30,7 +31,10 @@ the full queue, acceptance limits and device/data boundaries.
    signing material private. A new recording is unnecessary merely to observe
    package replacement dispatch and service startup.
 5. Capture dispatch and service evidence before post-update UI traversal. Preserve
-   the same record's failure if recovery fails. Minimize an actual failure and
+   the same record's failure if recovery fails. Use the corrected exact-record,
+   exact-receiver parser; unrelated DELIVERED or historical-summary text cannot
+   pass dispatch. PENDING is not observed delivery even if a service is present.
+   Minimize an actual failure and
    rank falsifiable hypotheses before a product change. If it passes, record that
    narrow production acceptance and advance to another remaining recovery gap;
    a successful update without a pending source is not interrupted-upload proof.
@@ -42,11 +46,20 @@ the full queue, acceptance limits and device/data boundaries.
 
 ## What this session established
 
-The unchanged recovery receiver and real foreground service are testable across
-actual versioned APK replacement under the isolated upgrade-proof identity.
-Generated local data, a closed HTTPS loopback origin and the existing fixture
-keep the diagnostic separate from real ownership, ring traffic and production.
-Exact observations and input hashes belong to the evidence record.
+The original #3625 dispatch claim is withdrawn: the observer combined unrelated
+DELIVERED text with target records that were actually PENDING or SKIPPED. The
+product-fix kill-gate conclusion is also withdrawn. Generated-data service/state
+observations remain separately bounded; they do not prove target receiver delivery.
+The correction slice adds strict parser regressions and corrects the committed
+evidence without rewriting original receipts or changing product recovery code.
+
+Production preflight in the correction session reopened the saved native identity,
+confirmed delivery enabled, hold/cleanup off and three existing queue entries.
+Original timeout and official-app Bluetooth permission handoff were retained.
+Signed candidate 20261026 was built from reviewed merged production Java and
+matched the installed certificate, but **was not installed**. Recheck actual
+installed version, candidate provenance and availability; a cached artifact is not
+permission to bypass fresh checks. Read the private current runtime notes.
 
 The production failure's generic `mBroadcastConsumerSkip` token does not identify
 its cause. AOSP Android 15 source was only reference material; the authorized
