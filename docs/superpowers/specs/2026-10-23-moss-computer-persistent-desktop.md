@@ -395,3 +395,22 @@ control. The internal policy's closeViewer operation now combines authenticated 
 disconnect cleanup for intentional close. Unexpected loss still calls disconnect; actual
 transport wiring and receiving-side fencing remain unimplemented. Design approval does not waive
 persistence, lifecycle, egress, owner transport or live acceptance gates.
+
+## 26. Viewer repair dispatch: unresolved offline diagnosis
+
+The [viewer-repair dispatch](../handoffs/2026-10-23-moss-computer-viewer-repair.md) required a
+supported repair before another bounded desktop attempt. Its
+[diagnosis](../../evidence/moss-computer/2026-10-23-viewer-diagnosis.md) found identical r11/r12
+connection paths and no browser connection in the retained r12 backend tail after restored access.
+Missing browser/startup-state diagnostics prevent establishing a causal repair. An exact-vendor
+offline scheduling check discriminates against a missed-DOM-event race, without reproducing the
+actual viewer failure or qualifying a desktop.
+
+The unsupported-repair stop condition was applied: zero new desktop attempts or image loads;
+current UI/frame/input, Firefox sandbox/clean flush and replacement persistence remain NOT_RUN.
+No connection fix is claimed. Earlier raw receipts and surviving launch artifacts match their
+recorded final hashes. No new runtime/keys/reservation were created; retained homes/archive and
+healthy Moss were checked. Independent exact evidence/closure review belongs in the review ledger.
+The next proposal is a bounded browser-boundary diagnostic candidate before any new causal patch
+or runtime proof. Approved chat design and internal owner-control acceptance remain unchanged;
+issues #3577/#3578/#3605 stay open. No merge, deployment or new runtime authority follows.
