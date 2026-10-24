@@ -210,3 +210,27 @@ Keep guidance below 150 words, without module branches or forced presentation. R
 the original Sports matrix including reload, the generic matrix and prose controls.
 The clean `d58183e92` gate was stopped with exit 143 before this change; rerun on the
 new final head. Independent review must cover that exact head too.
+
+The `19d09a768` matrix still failed: 0/20 cards and 20/20 useful prose. The
+unchanged generic matrix passed 20/20 visuals, four prose controls and all four
+browser tests. Logging-only diagnostics confirmed successful Sports registration
+and identical 111-tool catalog hashes before/after reload, with the visual-choice,
+matching-read and proposal-data guidance present. No missing-catalog defect was
+established. Selection remained inconsistent, including web tools instead of Sports.
+
+Under Ben's repair-and-retain-gate direction, one bounded temporary-image prompt
+experiment changed the generic default to **prefer a matching source card for a
+result with related identities, values, status or provenance**. It preserved prose
+when a visual adds no structure/context, explicit text-only priority, current-turn
+binding and host validation. Eight original prompts with first-card reload produced
+eight cards; that diagnostic is not acceptance. Adopt this bounded preference for
+one new candidate, then evaluate the original Sports and generic matrices once.
+Do not repeat unchanged evaluations until one passes. If this candidate fails and
+no concrete integration defect emerges, return the measured result for Ben's next
+decision instead of continuing wording variants. Keep the renderer and 19/20 gate.
+
+The `19d09a768` full gate also reported Workshop paging and pattern-worker budget
+failures under concurrent local work. The unchanged Workshop file passed 18/18 in
+isolation. The gate was stopped with exit 143 for the new candidate; it has no
+passing verdict. Run the final full gate after live stacks finish, preserving all
+assertions, budgets and production guards. Review the final exact head afresh.
