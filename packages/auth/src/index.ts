@@ -51,7 +51,8 @@ import { createSessionBindingsService, type SessionBindingsService } from "./ses
 export {
   createSessionBindingsService,
   SessionBindingError,
-  type SessionBindingsService
+  type SessionBindingsService,
+  type BrowserSessionBinding
 } from "./session-bindings.js";
 
 const { Pool } = pg;

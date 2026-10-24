@@ -1,0 +1,638 @@
+{
+  "run": "persistence-r12",
+  "task": 3578,
+  "integration_task": 3605,
+  "parent": 3577,
+  "status": "REJECTED_INCOMPLETE_PROOF",
+  "operator": "Codex /root",
+  "packet_commit": "6006873f4",
+  "manifest_sha256": "ec8ffb245003175a3e83727872e4a807e89cf92a428e81dd367b3094cc057e43",
+  "entry": {
+    "at": "2026-10-23T21:57:23.873393+00:00",
+    "stage": "implementation-entry",
+    "ram": 28956270592,
+    "root": 47273586688,
+    "data": 979600453632,
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "health": {
+      "exit": 0,
+      "stdout": "{\"ok\":true}",
+      "stderr": ""
+    },
+    "pass": true
+  },
+  "pre_launch": {
+    "at": "2026-10-23T22:00:27.762192+00:00",
+    "stage": "pre-launch",
+    "ram": 31988359168,
+    "root": 47015628800,
+    "data": 982792253440,
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "health": {
+      "exit": 0,
+      "stdout": "{\"ok\":true}",
+      "stderr": ""
+    },
+    "pass": true
+  },
+  "image": {
+    "id": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "os": "linux",
+    "architecture": "amd64",
+    "layers": [
+      "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+      "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+      "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+      "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+      "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+      "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+      "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+    ]
+  },
+  "runner_exit": 1,
+  "runner": {
+    "started": "2026-10-23T22:00:27.708079+00:00",
+    "operations": [
+      {
+        "name": "prelaunch-admission",
+        "started": "2026-10-23T22:00:27.727531+00:00",
+        "finished": "2026-10-23T22:00:27.841549+00:00",
+        "exit": 0
+      },
+      {
+        "name": "launch",
+        "started": "2026-10-23T22:00:28.042771+00:00",
+        "finished": "2026-10-23T22:00:28.867305+00:00",
+        "exit": 0
+      },
+      {
+        "name": "isolation-before",
+        "started": "2026-10-23T22:00:28.867616+00:00",
+        "finished": "2026-10-23T22:00:29.543045+00:00",
+        "exit": 0
+      },
+      {
+        "name": "readiness",
+        "started": "2026-10-23T22:00:29.543520+00:00",
+        "finished": "2026-10-23T22:00:30.165734+00:00",
+        "exit": 0
+      },
+      {
+        "name": "access-controls",
+        "started": "2026-10-23T22:00:30.165847+00:00",
+        "finished": "2026-10-23T22:00:34.968772+00:00",
+        "exit": 0
+      },
+      {
+        "name": "persistence",
+        "started": "2026-10-23T22:00:34.968884+00:00",
+        "finished": "2026-10-23T22:01:38.130980+00:00",
+        "exit": 1
+      },
+      {
+        "name": "cgroup-desktop",
+        "started": "2026-10-23T22:01:38.235971+00:00",
+        "finished": "2026-10-23T22:01:38.357276+00:00",
+        "exit": 0
+      },
+      {
+        "name": "cgroup-gateway",
+        "started": "2026-10-23T22:01:38.411848+00:00",
+        "finished": "2026-10-23T22:01:38.527584+00:00",
+        "exit": 0
+      },
+      {
+        "name": "cleanup",
+        "started": "2026-10-23T22:01:40.562056+00:00",
+        "finished": "2026-10-23T22:01:40.826398+00:00",
+        "exit": 0
+      },
+      {
+        "name": "port-release",
+        "started": "2026-10-23T22:01:40.828437+00:00",
+        "finished": "2026-10-23T22:01:40.832110+00:00",
+        "exit": 0
+      }
+    ],
+    "first_healthy_sample": {
+      "elapsed": 0.0,
+      "heartbeat_age": 0.0,
+      "home_bytes": 0,
+      "host_available_bytes": 31930810368,
+      "data_free_bytes": 982792228864,
+      "root_free_bytes": 47015628800,
+      "running": 0
+    },
+    "status": "FAIL",
+    "error": "AssertionError({'name': 'persistence', 'started': '2026-10-23T22:00:34.968884+00:00', 'finished': '2026-10-23T22:01:38.130980+00:00', 'exit': 1})",
+    "final_ids": [
+      "48f374397554ebead6939fa63e9e6d4a79a73b9c86e5e2146a90957c29c2e5dd",
+      "5dd6229304d55482c80c119dd49157e82c9e242db5dbf51e4299fbf2934bcae7"
+    ],
+    "supervisor_exit": 0,
+    "host_browser_closure": {
+      "signals": [],
+      "remaining": []
+    },
+    "closure_containers": "",
+    "closure_networks": "",
+    "listener": "",
+    "moss": "running healthy",
+    "finished": "2026-10-23T22:01:40.895793+00:00"
+  },
+  "readiness": {
+    "status": "PASS",
+    "elapsed_seconds": 0.5191849640000328,
+    "observations": [
+      {
+        "at": "2026-10-23T22:00:29.583615+00:00",
+        "stage": "guest",
+        "kind": "ready",
+        "exit": 0,
+        "observation": {
+          "ready": true,
+          "protocol": "RFB 003.008",
+          "securityTypes": [1],
+          "securityResult": 0,
+          "shared": true,
+          "serverInit": true,
+          "width": 1280,
+          "height": 800,
+          "nameBytes": 20
+        }
+      },
+      {
+        "at": "2026-10-23T22:00:29.808165+00:00",
+        "stage": "unix",
+        "kind": "ready",
+        "exit": 0,
+        "observation": {
+          "ready": true,
+          "status": 101,
+          "protocol": "RFB 003.008",
+          "securityTypes": [1],
+          "securityResult": 0,
+          "shared": true,
+          "serverInit": true,
+          "width": 1280,
+          "height": 800,
+          "nameBytes": 20
+        }
+      },
+      {
+        "at": "2026-10-23T22:00:29.934399+00:00",
+        "stage": "gateway",
+        "kind": "ready",
+        "exit": 0,
+        "observation": {
+          "ready": true,
+          "status": 101,
+          "protocol": "RFB 003.008",
+          "securityTypes": [1],
+          "securityResult": 0,
+          "shared": true,
+          "serverInit": true,
+          "width": 1280,
+          "height": 800,
+          "nameBytes": 20
+        }
+      }
+    ],
+    "error": null
+  },
+  "access_controls": {
+    "results": [
+      {
+        "case": "protected",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "mtls-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "origin-removed",
+        "exit": 1,
+        "expected_exit": 1,
+        "observed_expected_assertion": true
+      },
+      {
+        "case": "restored",
+        "exit": 0,
+        "expected_exit": 0,
+        "observed_expected_assertion": true
+      }
+    ],
+    "restored_sha256": "dc290b02ea1f4bf848c033c73deb3efae12471e4983a9a703846c9d2b3b60a54"
+  },
+  "persistence": {
+    "started": "2026-10-23T22:00:35.485Z",
+    "meta": {
+      "token": "persistence-r12-fbf1a28ae1944d0ddec9",
+      "filename": "persistence-r12-fbf1a28ae1944d0ddec9.txt",
+      "url": "file:///opt/computer/fixture.html#persistence-r12-fbf1a28ae1944d0ddec9",
+      "title": "Moss persistence-r12-fbf1a28ae1944d0ddec9"
+    },
+    "events": [
+      {
+        "kind": "http",
+        "path": "/package.json",
+        "status": 404
+      }
+    ],
+    "frames": [],
+    "operations": [],
+    "identities": [
+      {
+        "phase": "before",
+        "id": "48f374397554ebead6939fa63e9e6d4a79a73b9c86e5e2146a90957c29c2e5dd",
+        "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+        "mounts": [
+          {
+            "destination": "/home/desktop",
+            "source": "../moss-computer-persistence-r12/home",
+            "rw": true
+          },
+          {
+            "destination": "/socket",
+            "source": "../moss-computer-persistence-r12/socket",
+            "rw": true
+          }
+        ],
+        "started": "2026-10-23T22:00:28.37580471Z"
+      },
+      {
+        "phase": "gateway",
+        "id": "5dd6229304d55482c80c119dd49157e82c9e242db5dbf51e4299fbf2934bcae7",
+        "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+        "mounts": [
+          {
+            "destination": "/socket",
+            "source": "../moss-computer-persistence-r12/socket",
+            "rw": false
+          },
+          {
+            "destination": "/gateway",
+            "source": "../moss-computer-persistence-r12/gateway",
+            "rw": false
+          }
+        ],
+        "started": "2026-10-23T22:00:28.372304081Z"
+      }
+    ],
+    "initiallyAbsent": {
+      "profileDatabase": true,
+      "file": true
+    },
+    "status": "FAIL",
+    "error": "page.waitForFunction: Timeout 20000ms exceeded.\n    at connect (../moss-computer-persistence-r12/persistence.mjs:41:13)\n    at async file://../moss-computer-persistence-r12/persistence.mjs:106:2",
+    "failureDiagnostics": {
+      "exit": 0
+    },
+    "finished": "2026-10-23T22:00:58.069Z"
+  },
+  "watchdog_samples": [
+    {
+      "elapsed": 0.0,
+      "heartbeat_age": 0.0,
+      "home_bytes": 0,
+      "host_available_bytes": 31930810368,
+      "data_free_bytes": 982792228864,
+      "root_free_bytes": 47015628800,
+      "running": 0
+    },
+    {
+      "elapsed": 5.1,
+      "heartbeat_age": 1.5,
+      "home_bytes": 51803,
+      "host_available_bytes": 31663026176,
+      "data_free_bytes": 982791507968,
+      "root_free_bytes": 47014789120,
+      "running": 2
+    },
+    {
+      "elapsed": 10.2,
+      "heartbeat_age": 2.6,
+      "home_bytes": 76248,
+      "host_available_bytes": 31918170112,
+      "data_free_bytes": 982791544832,
+      "root_free_bytes": 46998335488,
+      "running": 2
+    },
+    {
+      "elapsed": 15.3,
+      "heartbeat_age": 7.7,
+      "home_bytes": 76248,
+      "host_available_bytes": 31833591808,
+      "data_free_bytes": 982791495680,
+      "root_free_bytes": 47002374144,
+      "running": 2
+    },
+    {
+      "elapsed": 20.4,
+      "heartbeat_age": 12.8,
+      "home_bytes": 76248,
+      "host_available_bytes": 32513335296,
+      "data_free_bytes": 982221623296,
+      "root_free_bytes": 46965628928,
+      "running": 2
+    },
+    {
+      "elapsed": 25.4,
+      "heartbeat_age": 17.8,
+      "home_bytes": 76248,
+      "host_available_bytes": 31781203968,
+      "data_free_bytes": 981732876288,
+      "root_free_bytes": 46973652992,
+      "running": 2
+    },
+    {
+      "elapsed": 31.4,
+      "heartbeat_age": 23.8,
+      "home_bytes": 76248,
+      "host_available_bytes": 31371943936,
+      "data_free_bytes": 981375320064,
+      "root_free_bytes": 46996205568,
+      "running": 2
+    },
+    {
+      "elapsed": 36.5,
+      "heartbeat_age": 28.9,
+      "home_bytes": 76248,
+      "host_available_bytes": 32249352192,
+      "data_free_bytes": 980902846464,
+      "root_free_bytes": 46994145280,
+      "running": 2
+    },
+    {
+      "elapsed": 41.6,
+      "heartbeat_age": 34.0,
+      "home_bytes": 76248,
+      "host_available_bytes": 32135073792,
+      "data_free_bytes": 980032860160,
+      "root_free_bytes": 46982115328,
+      "running": 2
+    },
+    {
+      "elapsed": 46.6,
+      "heartbeat_age": 39.0,
+      "home_bytes": 76248,
+      "host_available_bytes": 30393651200,
+      "data_free_bytes": 979202269184,
+      "root_free_bytes": 46990364672,
+      "running": 2
+    },
+    {
+      "elapsed": 51.7,
+      "heartbeat_age": 44.1,
+      "home_bytes": 76248,
+      "host_available_bytes": 27986468864,
+      "data_free_bytes": 979156164608,
+      "root_free_bytes": 46991806464,
+      "running": 2
+    },
+    {
+      "elapsed": 56.8,
+      "heartbeat_age": 49.2,
+      "home_bytes": 76248,
+      "host_available_bytes": 26988711936,
+      "data_free_bytes": 979113172992,
+      "root_free_bytes": 46991556608,
+      "running": 2
+    },
+    {
+      "elapsed": 62.0,
+      "heartbeat_age": 54.4,
+      "home_bytes": 76248,
+      "host_available_bytes": 25793589248,
+      "data_free_bytes": 979112521728,
+      "root_free_bytes": 46991429632,
+      "running": 2
+    },
+    {
+      "elapsed": 67.2,
+      "heartbeat_age": 59.6,
+      "home_bytes": 76248,
+      "host_available_bytes": 25632088064,
+      "data_free_bytes": 979106873344,
+      "root_free_bytes": 46990626816,
+      "running": 2
+    }
+  ],
+  "watchdog_stop": "operator closure\nNO_RUNNING_PROOF_CONTAINERS",
+  "diagnostic_capture_summary": [
+    {
+      "role": "desktop",
+      "name": "identity",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "desktop",
+      "name": "processes",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "desktop",
+      "name": "socket",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "desktop",
+      "name": "backend-error-log-tail",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "desktop",
+      "name": "window-tree",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "desktop",
+      "name": "active-clients",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "desktop",
+      "name": "terminal-log",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "gateway",
+      "name": "identity",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "gateway",
+      "name": "processes",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "gateway",
+      "name": "socket",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "gateway",
+      "name": "backend-error-log-tail",
+      "exit": 0,
+      "error": null
+    },
+    {
+      "role": "gateway",
+      "name": "actual-config",
+      "exit": 0,
+      "error": null
+    }
+  ],
+  "failure_cause": "UNKNOWN; actual current UI/RFB connected predicate timed out20s; no frame or Firefox checks reached. Diagnostics retained without an established causal explanation.",
+  "operator_after_failure": {
+    "at": "2026-10-23T22:01:47.749658+00:00",
+    "reason": "Read-only check for a remaining failed harness after the retained FAIL and diagnostics; already absent, no signal sent.",
+    "processes": []
+  },
+  "independent_closure": {
+    "reviewer": "/root/implementation_review",
+    "at": "2026-10-23T22:02:25.273172Z",
+    "verdict": "PASS_CLOSURE",
+    "facts": "No exact containers/network/listener5184/reservation/scripts/watchdog/recorded browser identities/keys; pristine gateway; new/prior homes/archive present; Moss/health healthy. Prior contents not comprehensively rehashed."
+  },
+  "not_run": [
+    "current substantive frame acceptance",
+    "fresh viewer input",
+    "active Firefox sandbox",
+    "clean profile flush",
+    "persistence tamper controls",
+    "actual guest replacement",
+    "post-replacement file/profile/bookmark",
+    "owner integration",
+    "idle sleep/wake",
+    "Internet/download",
+    "manual MacBook/platform/release"
+  ],
+  "raw_receipt_sha256": {
+    "receipts/access-controls.json": "3a99a57addf2f59fa9e2eafb1bf0a232963fd36d28af43480ef380aa96171b17",
+    "receipts/access-controls.log": "9d16ecb0bfb646c89394f9b85d65d4047f12680f26bb2bc1eb179b4509854135",
+    "receipts/access-mtls-removed.log": "afc53f042a6cd5ec04ca6af10ae43a99d444f16ee4052d9e341bd7903241064c",
+    "receipts/access-origin-removed.log": "08370fb8c3c8d842199dcffb6ae12be6617196ee434b7ac7d2c55363bad39895",
+    "receipts/access-protected.log": "347efbd5ccadfb070050729d281cc9893e09fa6b0219d329f86c935be6e980c6",
+    "receipts/access-restored.log": "347efbd5ccadfb070050729d281cc9893e09fa6b0219d329f86c935be6e980c6",
+    "receipts/access.json": "8e649cde9da15b273a259913145c823afab207c3402bff2e4ef0418634cd5226",
+    "receipts/cgroup-desktop.log": "4bd8c87a91917bbc79b7f30eb731cf55cbeb3840edc5b194b2b7f53cdc09f55e",
+    "receipts/cgroup-gateway.log": "29ce2d2ffbac4d0bb0cac4aabfb7b512df4fbc44d8c2a922e3b10088dd4e87be",
+    "receipts/cleanup.log": "8208e057f51a44c0bbf38013132d9ea6f374e5eb5ae9deaff0c41425651814d6",
+    "receipts/entry.json": "ec55d2ce505fe04f549c0bb7498a51cdd0f8fb6f1692a27db4af98f0d6bff915",
+    "receipts/failure-diagnostics.json": "a1e903acb5fea8a4011dff7ac44c681a8357f5bb94a295fe7369850432309b76",
+    "receipts/final-desktop-inspect.json": "63cab57feb5bfbe78e07308380e2b964d75bf10ee6f5c58e0254da2a09f41ccb",
+    "receipts/final-gateway-inspect.json": "5af50c8b82a95f6d7951630452e84d5b7ae97896eb742e79428de5fbcc13db7b",
+    "receipts/guest-regression.log": "87770c9b9795ca3690f877fa62b4b6a8443941d359a14f6d402dcfd614deeb4b",
+    "receipts/host-browser-processes.json": "c98dfea39573f7afbebdee1cf94f8fd36914f016567246e1b160b0b9cad90190",
+    "receipts/image.json": "07311f5865282cb91a600fc4525f6a807b5c7ec5960edb9d5187ec5865922b6b",
+    "receipts/isolation-before.json": "2f46f235edf60683f71f3a797d8b200351d7a4fde83174879df45cdff4c3f793",
+    "receipts/isolation-before.log": "95e251bff7a488ee12d33cf634152b43d92f82a1e1458065f8714aecfadb349f",
+    "receipts/isolation.json": "2f46f235edf60683f71f3a797d8b200351d7a4fde83174879df45cdff4c3f793",
+    "receipts/launch.log": "6a9c63cb036479b356706cb2708ad76647faf69a188c7f05459470927e5f313e",
+    "receipts/monitor-stop.txt": "84b3c04b0a7557cd9f6d8e702ab3a861d27d47e8bf0469ebfccf15b9c67cd979",
+    "receipts/monitor.jsonl": "53d3fefbba00295f00f7138bc5ed360474bb3eb743577191151e2ec9e1e8c3b9",
+    "receipts/operator-failed-browser-close.json": "17ac8bdff4f5f332e45e701f83c1ecd3d5fed346f6b557d47ab77e1bde942e40",
+    "receipts/operator-run.log": "2ec57fe087bf07b0a8c32f54096153a38da6025fd185af15bc3d6b0c916bc789",
+    "receipts/persistence.json": "1cbf283b36d6faa1345566c4e82a1cc42cab36d12d3f18a19db02f551e477b4d",
+    "receipts/persistence.log": "c882b2c02556c12f667039e12cdd8dcaf246dc9e6a910dea8e1f1f1e9d6a6ee2",
+    "receipts/port-release.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "receipts/pre-launch.json": "b0aa9f97a0791f9a5bfeff87bfc98f6026c952c4459e3eab9193c6386b4a8792",
+    "receipts/prelaunch-admission.log": "1c6c07cf81dcfa721019f159585f5cb552fd960a7222a183f91ffd6488d09bbb",
+    "receipts/probe-regression-latest.json": "e43bdaa2c56b34acae43311ae6f4e32d019951a459b9f8db78894aff1fc41c44",
+    "receipts/probe-regression.log": "e0d2a51c8e7f39f325f72f3a73ddae2c4f89110b53937a786073ada2d8460e52",
+    "receipts/readiness.json": "23ba6c44f6ad331b51780fb34d5c941f925419fa1ad65297859c64532002238c",
+    "receipts/readiness.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "receipts/resolved-config.json": "8c2f30508e7e631112286b453fb059ae70332f7fe0ea362101d62fdc954845e5",
+    "receipts/rfb-regression.log": "cd041d8820ab4bdff4d637b4c13659610a754f254ae3e81c404641fee2f7ab26",
+    "receipts/run.json": "c52f334811a85794ba1a2c563dec2d07de6b92896542d9798f5c1af8aff35b8f",
+    "receipts/supervisor.log": "31a26f7734701e523a09d4067e7986d71f7210ab5851253dc2ad856e0487c390",
+    "receipts/window-regression.log": "0a5ae1758810abd3be93648b31daa04b8ad1847c830f6331fab694e4e5e2a8df"
+  },
+  "surviving_launch_artifact_hashes": {
+    ".env": "6df635acd9dc138528d5dbf1a4557737e9ca0558be4d6e649f549fe3176db4cb",
+    "__pycache__/guest-rfb.cpython-312.pyc": "bd60a8e85d213c0a7e4d32468bb65fa194fbdfc6d5d0a801cee74291b4e0c80f",
+    "access-check.mjs": "7c3873522958aea929165f5c479455fb970d7018b6236c668204b2dd206d65f9",
+    "access-controls.py": "17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628",
+    "admission.py": "b597f991920207e8b551b6f93e41cce419ceb61ebf15c1ba54bc2c522baa33d3",
+    "check-state.py": "50eb76dccb2ab4af6a6998d6fe0787d4eb606eca0971d0a3dffab34b0d5ae83c",
+    "compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    "controls.py": "c9e56dc2a2502a3fd5bab625e9549a42c767f3a16a91a75a8c484059c44ade18",
+    "diagnostics.py": "809400714554b8aaf2c48bfbc7c6eb353e1dbcc9607987f40e2f8889c9615bef",
+    "gateway/nginx.conf": "dc290b02ea1f4bf848c033c73deb3efae12471e4983a9a703846c9d2b3b60a54",
+    "guest-contract-test.py": "e64ee56724f5b0157ad6ee3a7e055779a0df138291af8c86e2021eef88cb7a53",
+    "guest-rfb.py": "9a4718e3b7cbea89e78b5d8aeca4d08cfdfbe802384c537f293d17b63952e310",
+    "isolation.py": "9377244a2b4be72b247ae72abc80a25738a79033cc700ffa9af9a8a110b892c9",
+    "mutate.py": "e8396dbe945be53f0563f5957d7b3354bb2b8a3b250afa9e2407e4a738d4308e",
+    "persistence.mjs": "c79af72232be15aea06ec340972ae2150f4a8f8f04b3f373bbc6bfc39cdac210",
+    "port": "fb858fca07e78f8be68e88b42bc5101c8b2b4e87e0bcf164247e8920858aa6b7",
+    "probe-regression.mjs": "86c7097b619cf549171cf9558472981ca15abb5f3aca0035d3055d2b74324cb2",
+    "process.py": "2ede92bae11e2fca8ccf611534d27bbfaf08311e63ed13e06732a38d92f9f5c7",
+    "proof.json": "c031297e3ea6ffdbde412dbf88091ee4aea7a5f4b700db8dc3b0861e725bff37",
+    "readiness-gateway.mjs": "3dd6501aed8849f2beef1cdc0c06f49ad1894aad256d14e9e3a5a37e72310a9d",
+    "readiness.py": "ab08ae0040e937f798e4a40364a917b68c8d04694f51ae245f2b41cf5e0d5b13",
+    "rfb-contract-test.mjs": "a72688dfc2989c8caca5866a56594c2a8a31f1d9d211a975c7a96895bb107f8b",
+    "rfb-session.mjs": "688a32142b335dec7a4657f0b48673e4732b2a685e64c0d317d400a4c8be7792",
+    "run.py": "3c3bd5fff2c60d4b1159122e11fb310186b443ff16e7ca69180f42ead1d68b85",
+    "supervise.py": "3310c50ba98898ea1d362baeb66dc679278ac6d3d4342cd958b4c03cd156ff99",
+    "window-test.mjs": "f68328b08caed9c6d3515ee58b8fcd997e5d7e61d99ea1ea191eff2da823f2c5",
+    "window.mjs": "42699e01f2a2764c4ebd035248470c4b4780598b181aa4b8011cd3c59840897c"
+  },
+  "deleted_ephemeral_identity_files": [
+    "client/ca.crt",
+    "client/foreign.crt",
+    "client/foreign.key",
+    "client/owner.crt",
+    "client/owner.key",
+    "gateway/ca.crt",
+    "gateway/server.crt",
+    "gateway/server.key",
+    "pki/ca.crt",
+    "pki/ca.key",
+    "pki/ca.srl",
+    "pki/foreign-ca.crt",
+    "pki/foreign-ca.key",
+    "pki/foreign-ca.srl",
+    "pki/foreign.crt",
+    "pki/foreign.csr",
+    "pki/foreign.ext",
+    "pki/foreign.key",
+    "pki/owner.crt",
+    "pki/owner.csr",
+    "pki/owner.ext",
+    "pki/owner.key",
+    "pki/server.crt",
+    "pki/server.csr",
+    "pki/server.ext",
+    "pki/server.key"
+  ],
+  "limits": [
+    "Fourteen short samples are not sustained resource-fit proof",
+    "Monitoring is not quota",
+    "Synthetic mTLS identities do not establish Moss ownership",
+    "r11 accepted startup/input evidence remains unchanged; this later failure does not establish a regression cause"
+  ]
+}
