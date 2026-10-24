@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readHostJson } from "../../apps/api/src/computer/host-http.js";
 import { isRecord } from "../../apps/api/src/computer/host-contract.js";
 import { ComputerDocker } from "../computer-host/docker.js";
-import { parseState, privateJson } from "../computer-host/state.js";
+import { parseState, privateJson, type HostState } from "../computer-host/state.js";
 import {
   collectComputerLinuxMeasurements,
   computerMonotonicMs,
@@ -65,8 +65,11 @@ export function checkMossReadiness(readyUrl: string): Promise<void> {
 export async function checkComputerLogs(deployment: SupervisorDeployment): Promise<void> {
   const { configuration: config } = deployment;
   const state = parseState(await privateJson(join(config.host.stateDir, "state.json")));
+  await assertFencedComputerState(deployment, state);
   if (state.resources.some((resource) => resource.id === null)) throw supervisorError();
   const inventory = await new ComputerDocker(config.host).inventory(state.resources);
+  if (config.lifetime && (inventory.length !== 2 || inventory.some((entry) => !entry.running)))
+    throw supervisorError();
   for (const entry of inventory) {
     const id = entry.resource.id;
     const directory = join(config.dockerData.path, "containers", id);
@@ -107,6 +110,35 @@ export async function checkComputerLogs(deployment: SupervisorDeployment): Promi
     throw supervisorError();
 }
 
+/** A terminal marker's existence refuses observation, even if malformed or symlinked. */
+export async function assertFencedComputerState(
+  deployment: SupervisorDeployment,
+  state: HostState
+) {
+  const { configuration: config } = deployment;
+  if (!config.lifetime) return;
+  const binding = config.lifetime.binding;
+  if (
+    !state.enabled ||
+    state.generation !== binding.requestGeneration ||
+    state.resources.length !== 2 ||
+    !state.resources.every(
+      (resource) =>
+        resource.id === (resource.role === "desktop" ? binding.desktopId : binding.gatewayId) &&
+        resource.generation ===
+          (resource.role === "desktop" ? binding.desktopGeneration : binding.gatewayGeneration)
+    )
+  )
+    throw supervisorError();
+  const marker = await lstat(join(config.host.stateDir, "stop.json")).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw supervisorError();
+      return null;
+    }
+  );
+  if (marker) throw supervisorError();
+}
+
 /** Read-only sampled proof. No launch authority or lifecycle mutation. */
 export async function observeComputer(
   deployment: SupervisorDeployment,
@@ -123,7 +155,9 @@ export async function observeComputer(
       throw supervisorError();
     await assertNullOutputs(watchdog.pid);
     const statePath = join(config.host.stateDir, "state.json");
-    const beforeState = JSON.stringify(parseState(await privateJson(statePath)));
+    const state = parseState(await privateJson(statePath));
+    await assertFencedComputerState(deployment, state);
+    const beforeState = JSON.stringify(state);
     await checkMossReadiness(config.readyUrl);
     await checkComputerLogs(deployment);
     await inspectJournal(config.monitor);
@@ -142,6 +176,7 @@ export async function observeComputer(
     await readComputerProcess(watchdog);
     if (JSON.stringify(parseState(await privateJson(statePath))) !== beforeState)
       throw supervisorError();
+    await assertFencedComputerState(deployment, state);
     return Object.freeze({
       ...measurements,
       measuredAtMs,

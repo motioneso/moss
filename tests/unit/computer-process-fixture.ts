@@ -1,3 +1,7 @@
+import { ComputerRootLifetime } from "../../scripts/computer-watchdog/lifetime.js";
+import type { ComputerLifetimeConfiguration } from "../../apps/api/src/computer/lifetime-protocol.js";
+import { lifetimeNow, lifetimePath } from "../../apps/api/src/computer/lifetime-protocol.js";
+import { lifetimeConfiguration } from "./computer-lifetime-fixture.js";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { writeFile } from "node:fs/promises";
@@ -12,7 +16,10 @@ import { authFixture, binding, OWNER } from "./computer-auth-fixture.js";
 import { WIDTH, HEIGHT, pixels } from "./computer-gateway-fixture.js";
 import { fencePacket } from "./computer-rfb-fixture.js";
 
-export async function processFixture(executable: boolean | string = false) {
+export async function processFixture(
+  executable: boolean | string = false,
+  options: { autoLifetime?: boolean; lifetime?: ComputerLifetimeConfiguration } = {}
+) {
   const auth = await authFixture();
   const guestSocketPath = join(auth.root, "guest.sock");
   const socketPath = join(auth.root, "gateway.sock");
@@ -62,7 +69,8 @@ export async function processFixture(executable: boolean | string = false) {
     ownerUserId: OWNER,
     guestSocketPath,
     authSocketPath: auth.socketPath,
-    socketPath
+    socketPath,
+    lifetime: options.lifetime ?? lifetimeConfiguration()
   };
   let closeService: () => Promise<void>;
   let childExit: Promise<number | null> | undefined;
@@ -134,11 +142,36 @@ export async function processFixture(executable: boolean | string = false) {
     const service = await serveComputerGateway(config);
     closeService = () => service.close();
   }
+  let active!: () => void;
+  let failActive!: (error: Error) => void;
+  const activation = new Promise<void>((resolve, reject) => {
+    active = resolve;
+    failActive = reject;
+  });
+  void activation.catch(() => {});
+  // Synthetic healthy-policy publisher for gateway-only tests. Supervisor tests supply the real policy.
+  const lifetime = new ComputerRootLifetime({
+    configuration: config.lifetime,
+    socketPath: lifetimePath(socketPath),
+    now: lifetimeNow,
+    healthy: () => true,
+    failed: () => failActive(new Error("Lifetime lost")),
+    activated: active
+  });
+  if (options.autoLifetime !== false) {
+    lifetime.start();
+    await activation;
+  }
   const viewers: Awaited<ReturnType<typeof connectComputerGatewayViewer>>[] = [];
   const clients: RfbClient[] = [];
   return {
     auth,
     config,
+    lifetime,
+    async startLifetime() {
+      lifetime.start();
+      await activation;
+    },
     events,
     get connections() {
       return connections;
@@ -181,12 +214,14 @@ export async function processFixture(executable: boolean | string = false) {
     },
     async stop() {
       await closeService();
+      await lifetime.stop();
       return childExit;
     },
     async close() {
       for (const client of clients) client.destroy();
       for (const viewer of viewers) viewer.disconnect();
       await closeService();
+      await lifetime.stop();
       for (const ws of guests) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
       await new Promise<void>((resolve) => server.close(() => resolve()));

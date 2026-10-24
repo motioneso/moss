@@ -14,9 +14,15 @@ import { assertLinuxProc, assertRoot, snapshotRoot } from "./linux-files.js";
 import { readComputerProcess } from "./linux.js";
 import type { WatchdogProcessIdentity } from "./policy.js";
 
+import {
+  parseComputerLifetime,
+  type ComputerLifetimeConfiguration
+} from "../../apps/api/src/computer/lifetime-protocol.js";
+
 export const supervisorError = () => new Error("Computer supervisor unavailable");
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 export interface SupervisorConfiguration {
+  readonly lifetime?: ComputerLifetimeConfiguration;
   readonly runId: string;
   readonly runner: WatchdogProcessIdentity;
   readonly host: HostConfig;
@@ -58,7 +64,8 @@ export function parseSupervisorConfiguration(value: unknown): SupervisorConfigur
     "readyUrl",
     "artifactSha256",
     "bootId",
-    "namespaces"
+    "namespaces",
+    ...(isRecord(value) && Object.hasOwn(value, "lifetime") ? ["lifetime"] : [])
   ]);
   const runner = exact(record.runner, ["pid", "startTicks", "processGroupId"]);
   const namespaces = exact(record.namespaces, ["pid", "mnt", "user"]);
@@ -93,11 +100,21 @@ export function parseSupervisorConfiguration(value: unknown): SupervisorConfigur
     url.href !== record.readyUrl
   )
     throw supervisorError();
+  const host = parseHostConfig(record.host);
+  const lifetime = Object.hasOwn(record, "lifetime")
+    ? parseComputerLifetime(record.lifetime)
+    : undefined;
+  if (
+    lifetime &&
+    (lifetime.binding.runId !== record.runId || lifetime.binding.instanceId !== host.instanceId)
+  )
+    throw supervisorError();
   return Object.freeze({
+    ...(lifetime ? { lifetime } : {}),
     runId: record.runId,
     bootId: record.bootId,
     runner: Object.freeze({ ...runner }) as unknown as WatchdogProcessIdentity,
-    host: parseHostConfig(record.host),
+    host,
     data: pinnedRoot(record.data),
     dockerData: pinnedRoot(record.dockerData),
     monitor: pinnedRoot(record.monitor),

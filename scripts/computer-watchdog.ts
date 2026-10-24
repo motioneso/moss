@@ -2,6 +2,7 @@ import { isRecord } from "../apps/api/src/computer/host-contract.js";
 import { computerMonotonicMs, readComputerProcess } from "./computer-watchdog/linux.js";
 import { observeComputer } from "./computer-watchdog/observe.js";
 import { superviseDeployment } from "./computer-watchdog/supervisor.js";
+import { manageDeployment } from "./computer-watchdog/managed-host.js";
 import {
   loadSupervisorDeployment,
   processIdentity,
@@ -14,7 +15,7 @@ const startupDeadline = setTimeout(() => process.exit(2), 5000);
 async function main(): Promise<number> {
   const [mode, configPath, ...rest] = process.argv.slice(2);
   if (
-    !["observe", "collect"].includes(mode ?? "") ||
+    !["observe", "fence", "manage", "collect"].includes(mode ?? "") ||
     !configPath ||
     rest.length ||
     !process.argv[1]
@@ -25,6 +26,11 @@ async function main(): Promise<number> {
     process.argv[1],
     mode === "collect"
   );
+  if (
+    ((mode === "fence" || mode === "manage") && !deployment.configuration.lifetime) ||
+    (mode === "observe" && deployment.configuration.lifetime)
+  )
+    throw supervisorError();
   if (mode === "collect") {
     let bytes = 0;
     const chunks: Buffer[] = [];
@@ -65,6 +71,8 @@ async function main(): Promise<number> {
   )
     throw supervisorError();
   // Journal startup is still under the independent bootstrap deadline. Driver owns later deadlines.
+  if (mode === "manage")
+    return manageDeployment(deployment, startedAtMs, watchdog, () => clearTimeout(startupDeadline));
   const result = superviseDeployment(deployment, startedAtMs, watchdog, () =>
     clearTimeout(startupDeadline)
   );

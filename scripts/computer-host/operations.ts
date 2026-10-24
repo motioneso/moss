@@ -4,8 +4,8 @@ import type {
   ComputerHostReason
 } from "../../apps/api/src/computer/host-contract.js";
 import { ROLES } from "./config.js";
-import type { ComputerDocker } from "./docker.js";
-import type { HostStateStore, HostResource } from "./state.js";
+import type { ComputerDocker, ComputerMutationGuard } from "./docker.js";
+import { TerminalStateConflict, type HostStateStore, type HostResource } from "./state.js";
 
 /** Only an independently reviewed runtime operator may implement this launch admission port. */
 export interface ComputerRuntimeAdmission {
@@ -23,11 +23,17 @@ export const unavailableAdmission: ComputerRuntimeAdmission = {
 export class ComputerHostOperations {
   #busy = false;
   #admissionBroken = false;
+  readonly #launchGuard: ComputerMutationGuard;
   constructor(
     private readonly store: HostStateStore,
     private readonly docker: ComputerDocker,
     private readonly admission: ComputerRuntimeAdmission
-  ) {}
+  ) {
+    this.#launchGuard = {
+      check: () => this.store.assertLaunchable(),
+      assertCurrent: () => this.store.assertNotStopped()
+    };
+  }
 
   #result(
     reason: ComputerHostReason,
@@ -49,6 +55,12 @@ export class ComputerHostOperations {
       if (request.operation === "status") return await this.#status();
       if (request.expectedGeneration !== this.store.state.generation)
         return this.#result("stale-generation");
+      try {
+        await this.store.assertLaunchable();
+      } catch {
+        this.#invalidateAdmission();
+        return this.#result("prerequisite-unavailable");
+      }
       if (this.store.state.generation === Number.MAX_SAFE_INTEGER)
         return this.#result("runtime-unavailable");
       await this.store.save({
@@ -61,6 +73,7 @@ export class ComputerHostOperations {
           if (!this.store.config.gatewayImage || this.#admissionBroken)
             throw new Error("Computer runtime prerequisites unavailable");
           await this.admission.assertAdmitted();
+          await this.store.assertLaunchable();
         } catch {
           this.#invalidateAdmission();
           return this.#result("prerequisite-unavailable");
@@ -84,12 +97,12 @@ export class ComputerHostOperations {
         for (const role of ROLES) {
           const intent: HostResource = { role, generation: this.store.state.generation, id: null };
           await this.#remember([...this.store.state.resources, intent]);
-          const id = await this.docker.create(intent);
+          const id = await this.docker.create(intent, this.#launchGuard);
           const resource = { ...intent, id };
           await this.#remember(
             this.store.state.resources.map((entry) => (entry.role === role ? resource : entry))
           );
-          await this.docker.start(resource);
+          await this.docker.start(resource, this.#launchGuard);
         }
         const result = await this.#status();
         if (result.state !== "running") throw new Error("Computer pair failed startup");
@@ -98,6 +111,7 @@ export class ComputerHostOperations {
         this.#invalidateAdmission();
         // Reconcile the persisted exact intents once. An unknown create is never retried.
         try {
+          await this.store.assertLaunchable();
           const inventory = await this.docker.inventory(this.store.state.resources);
           await this.#remember(inventory.map((entry) => entry.resource));
           await this.#removeAll();
@@ -128,7 +142,18 @@ export class ComputerHostOperations {
     return this.#result("prerequisite-unavailable");
   }
   async #remember(resources: readonly HostResource[]): Promise<void> {
-    await this.store.save({ ...this.store.state, resources });
+    try {
+      await this.store.save({
+        ...this.store.state,
+        enabled: this.store.stopRequested ? false : this.store.state.enabled,
+        resources
+      });
+    } catch (error) {
+      if (!(error instanceof TerminalStateConflict)) throw error;
+      // A late create result must survive terminal entry during the save's asynchronous I/O.
+      // The store still rejects erasure/replacement; only a compatible disabled save can commit.
+      await this.store.save({ ...this.store.state, enabled: false, resources });
+    }
   }
   #invalidateAdmission(): void {
     try {
@@ -144,7 +169,7 @@ export class ComputerHostOperations {
       if (!resource) continue;
       try {
         await this.store.assertRoots();
-        await this.docker.remove(resource);
+        await this.docker.remove(resource, this.#launchGuard);
         await this.#remember(this.store.state.resources.filter((entry) => entry.role !== role));
       } catch {
         failed = true;
