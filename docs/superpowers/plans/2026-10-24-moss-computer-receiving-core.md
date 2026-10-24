@@ -25,7 +25,8 @@ watchdog and actual TigerVNC proof must establish the installed boundary. Keep e
 - `apps/api/src/computer/rfb-input.ts:25-58,95-113,205-246`: accepted receiver composes one writer,
   session checks, immutable parsers and normalized key/pointer input. Its RFB connections do not
   publish framebuffer updates. Add an optional synchronous connection hook after its guards are
-  installed; gateway attaches frame-request handlers there, never a second input parser/writer.
+  installed, exposing viewer, connection, raw transport and bounded parser stream together;
+  gateway attaches frame-request handlers there, never a second input parser/writer.
 - `apps/api/src/computer/rfb-input-stream.ts:5-45`: viewer parser lifetime ingress is capped64KiB.
   Preserve it, including watcher isolation; large guest frames never enter this input direction.
 - `apps/api/src/computer/rfb-input-writer.ts:23-58,87-120`: requires Fence, bounds dimensions,
@@ -93,24 +94,32 @@ awaiting auth; duplicates rejected and never automatically retried. Each open co
 active auth channel; after-await terminal checks prevent late opens or transfers from reviving.
 
 Auth invalidation synchronously calls receiver.invalidateSession and destroys every corresponding
-viewer stream before asynchronous cleanup. Closing one channel for ordinary viewer cleanup also
-conservatively invalidates that session grant, including Moss agent authority: no orphan grant
-without liveness supervision. Other sessions remain untouched. Explicit intentional controlling
-close first awaits accepted receiver.closeViewer, then preserves a bounded grant-monitor auth
-channel while that session owns Moss authority; disconnect removes visual access but never grants
-control. Retire monitors on subsequent authority change, denial, expiry or gateway close. Count
-monitors inside the4lifetime cap; a failed close stays paused. No independent auth implementation.
+viewer stream before asynchronous cleanup. Deliberate local auth-channel
+retirement sets an explicit local-retired marker before channel.close and suppresses only that
+local callback, never an unexpected auth loss/push. Closing a watcher must preserve another
+controller, including the same login session. Track exactly which channel supervises the current
+Moss grant. Intentional controlling close first awaits receiver.closeViewer and retains its channel
+as a bounded grant monitor; unexpected visual loss likewise retains a channel only if it already
+supervises the existing Moss grant. After a successful authority transition, transfer monitor
+ownership before intentionally retiring an obsolete monitor. Closing old monitors must not fence
+a newer same-session grant. Actual auth invalidation still retires all affected session viewers
+and grant immediately. Count retained monitors inside the4pending+active lifetime cap. A failed
+close stays paused. No orphan grant without active supervision or independent auth implementation.
 
 Receiver hooks attach exactly one bounded renderer per parser, after policy handlers. Store one
-bgrx framebuffer<=4,096,000bytes. Apply validated Raw rects row-by-row; never retain history,
+bgrx framebuffer<=4,096,000bytes using public rfb2.Framebuffer. Apply only validated Raw rects
+through its bounded put path; never retain history,
 compressed bytes, clipboard or guest HTML. Each viewer update request sets one pending boolean;
 coalesce requests rather than queue them. At most5Hz, send a full current frame only when pending.
-Output is standard RFB Raw through the same RfbServerConnection; only32-bit true-colour bgrx
-viewer format is supported initially (trusted bundled noVNC default). Reject incompatible format.
-Preflight actual Duplex backlog plus packet length against two frame packets, and destroy a slow
+Output is standard RFB Raw through the same RfbServerConnection; only32-bit little-endian depth24 true-colour bgrx
+and rgbx viewer formats are supported initially via vendor conversion. Retained adopted noVNC
+uses rgbx (red0,green8,blue16), whereas native X commonly uses bgrx; reject other formats.
+Preflight the sum of raw Duplex AND bounded parser Duplex writableLength plus packet length
+against two frame packets; the latter can queue while raw write awaits a stalled callback. Destroy a slow
 viewer on overflow. No unbounded send queue; no drain-as-consumption claim. Late frame callbacks
 check core/viewer/connection lifetime. Frame readiness is false until the first actual full frame;
-initially request a complete update. Watchers share that frame without acquiring input authority.
+initially request a complete update and require the first response to contain a single full-screen
+Raw rectangle before reporting frame readiness. Watchers share that frame without acquiring input authority.
 
 All policy transitions retain existing receiving epochs, stale queue guards, pressed releases,
 post-Fence fresh auth and matching acknowledgements. Parser replacement/transfer deliberately
@@ -131,9 +140,10 @@ Expected exit0, unpiped, logs outside `~/Jarv1s`:
 Exercise actual rfb2 wire parsers and real Unix auth IPC with synthetic session lookup, not fake
 transport callbacks. Fixture supplies Fence because rfb2 server does not; no TigerVNC claim.
 Prove exact frame pixels through watcher and controller, no watcher guest input, real owner input,
-takeover/return/intentional close, active push immediately fences delayed input, lost auth/guest,
+takeover/return/intentional close, same-session watcher close preserving another controller,
+old monitor cleanup preserving a new same-session grant, active push immediately fences delayed input, lost auth/guest,
 late open after shutdown, viewer capacity including pending binds, timeout/fragment/flood/geometry/
-encoding/update bounds, unsupported viewer format and real stalled output. Remove protections
+encoding/update bounds, actual noVNC rgbx red/blue-distinct pixels, unsupported viewer format and real stalled output. Remove protections
 separately: raw-encoding whitelist, geometry/pixel cap, idle partial timeout, auth retirement,
 post-await lifetime and output preflight. Each must fail at the intended assertion, not compile or
 harness timeout; restore exact source and rerun green. Retain hashes and all reviewer rulings.
@@ -169,3 +179,16 @@ viewer/approved chat design remain #3618/#3619 gates. Actual login/frame/input/t
 close, hostile active sessions, stale/pressed input and independent evidence/closure must pass
 before #3616/#3577 completion. Idle sleep/wake, confined useful Internet and platform/release
 claims remain separate. Historical private artifacts are read-only; own state stays outside tree.
+
+## Review ledger
+
+Independent read-only `/root/gateway_security_review` R1 on `d52d1918c`: BLOCKED.
+Receipt SHA-256 `e377ef132d9c1ea2c620f5460f4a9236d2edbd96074088ac98383a497fc87c2e`.
+Accepted B1: raw output backlog alone misses queued writes in the receiver adapter; sum both
+queues before output. Accepted B2: deliberate auth close must preserve same-session controllers
+and transfer grant-monitor ownership before closing stale monitors. Accepted B3: retained noVNC
+actually selects rgbx; support both verified32-bit formats through bounded vendor conversion.
+Add intended behavioral regressions for all three. No disputed findings. Process packaging must
+also cap WebSocket payload/queues before its decoder; this core begins at an already connected
+Duplex and cannot qualify that absent transport or total image fit. Exact amended plan requires
+R2 acceptance before implementation.
