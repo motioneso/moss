@@ -188,15 +188,7 @@ export async function reconcileComputerStop(
   assertCurrent();
   await assertStop(store, receipt);
   if (store.state.generation === Number.MAX_SAFE_INTEGER) throw failure();
-  await store.save({ ...store.state, enabled: false, generation: store.state.generation + 1 });
-  const inventory = await docker.inventory(store.state.resources);
-  await assertStop(store, receipt);
-  const resources = store.state.resources.map(
-    (resource) =>
-      inventory.find((entry) => entry.resource.role === resource.role)?.resource ?? resource
-  );
-  await store.save({ ...store.state, resources });
-  const state = JSON.stringify(store.state);
+  let state = JSON.stringify(store.state);
   const guard: ComputerMutationGuard = {
     check: () => assertStop(store, receipt),
     assertCurrent() {
@@ -204,6 +196,19 @@ export async function reconcileComputerStop(
       if (JSON.stringify(store.state) !== state) throw failure();
     }
   };
+  await store.save(
+    { ...store.state, enabled: false, generation: store.state.generation + 1 },
+    guard
+  );
+  state = JSON.stringify(store.state);
+  const inventory = await docker.inventory(store.state.resources);
+  await assertStop(store, receipt);
+  const resources = store.state.resources.map(
+    (resource) =>
+      inventory.find((entry) => entry.resource.role === resource.role)?.resource ?? resource
+  );
+  await store.save({ ...store.state, resources }, guard);
+  state = JSON.stringify(store.state);
   for (const role of ROLES) {
     const entry = inventory.find((resource) => resource.resource.role === role);
     if (entry) await docker.remove(entry.resource, guard);

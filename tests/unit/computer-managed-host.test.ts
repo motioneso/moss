@@ -144,6 +144,9 @@ async function managed() {
 describe("managed terminal host: native Unix/actual root+receiver, disclosed Docker/health fixtures", () => {
   it("owner and CAS denial, enable immutability precede terminal authority", async () => {
     const x = await terminalFixture();
+    x.stopRoot.mockImplementation(() => {
+      void x.terminal.finish(outcome);
+    });
     const before = await fs.readFile(join(x.f.config.stateDir, "state.json"));
     expect(await x.terminal.request(request("enable", 1, FOREIGN))).toMatchObject({
       reason: "owner-denied"
@@ -209,6 +212,70 @@ describe("managed terminal host: native Unix/actual root+receiver, disclosed Doc
     expect(reads).toBeGreaterThanOrEqual(3);
     expect(mutations(x.f)).toEqual([]);
     expect(x.store.state.resources).toEqual(x.resources);
+  });
+
+  it.each(["roots", "file"])(
+    "expiry during state %s I/O refuses CAS publication",
+    async (boundary) => {
+      const x = await terminalFixture();
+      const before = await fs.readFile(join(x.f.config.stateDir, "state.json"));
+      x.terminal.stop();
+      if (boundary === "roots") {
+        let publishing = false;
+        const save = x.store.save.bind(x.store);
+        vi.spyOn(x.store, "save").mockImplementation(async (...args) => {
+          publishing = true;
+          return save(...args);
+        });
+        const original = x.store.assertRoots.bind(x.store);
+        vi.spyOn(x.store, "assertRoots").mockImplementation(async () => {
+          await original();
+          if (publishing) x.setClock(120_000);
+        });
+      } else {
+        const original = fs.open;
+        vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+          const file = await original(...args);
+          if (String(args[0]).includes(".state-")) {
+            const sync = file.sync.bind(file);
+            vi.spyOn(file, "sync").mockImplementation(async () => {
+              await sync();
+              x.setClock(120_000);
+            });
+          }
+          return file;
+        });
+      }
+      await x.terminal.finish(outcome);
+      await expect(x.terminal.completed).rejects.toThrow();
+      expect(await fs.readFile(join(x.f.config.stateDir, "state.json"))).toEqual(before);
+      expect(x.store.state.generation).toBe(1);
+      expect(mutations(x.f)).toEqual([]);
+    }
+  );
+
+  it("same-byte stop marker replacement during state fsync refuses publication", async () => {
+    const x = await terminalFixture();
+    const before = await fs.readFile(join(x.f.config.stateDir, "state.json"));
+    const original = fs.open;
+    vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+      const file = await original(...args);
+      if (String(args[0]).includes(".state-")) {
+        const sync = file.sync.bind(file);
+        vi.spyOn(file, "sync").mockImplementation(async () => {
+          await sync();
+          const marker = join(x.f.config.stateDir, "stop.json");
+          await fs.writeFile(marker + ".replacement", await fs.readFile(marker), { mode: 0o600 });
+          await fs.rename(marker + ".replacement", marker);
+        });
+      }
+      return file;
+    });
+    x.terminal.stop();
+    await x.terminal.finish(outcome);
+    await expect(x.terminal.completed).rejects.toThrow();
+    expect(await fs.readFile(join(x.f.config.stateDir, "state.json"))).toEqual(before);
+    expect(mutations(x.f)).toEqual([]);
   });
 
   it("normal disable fences actual active receiver before gateway-first cleanup and drains its response", async () => {
@@ -337,7 +404,9 @@ describe("managed terminal host: native Unix/actual root+receiver, disclosed Doc
   });
 });
 
-async function nativeManaged(options: { holdRoot?: boolean; holdLifecycle?: boolean } = {}) {
+async function nativeManaged(
+  options: { holdRoot?: boolean; holdLifecycle?: "file" | "directory" } = {}
+) {
   const { f, resources, lifetime } = await seeded();
   const g = await processFixture(false, { autoLifetime: false, lifetime });
   cleanups.push(() => g.close());
@@ -347,13 +416,22 @@ async function nativeManaged(options: { holdRoot?: boolean; holdLifecycle?: bool
     path,
     `
     import {HostStateStore} from ${url("scripts/computer-host/state.ts")};
+    import {open} from "node:fs/promises";
     import {runManagedComputerHost} from ${url("scripts/computer-watchdog/managed-host.ts")};
     import {managedNow,managedSupervisorFixture} from ${url("tests/unit/computer-managed-host-fixture.ts")};
     const config=${JSON.stringify(f.config)};
     const lifetime=${JSON.stringify(lifetime)};
     const store=await HostStateStore.openExisting(config);
-    const original=store.assertRoots.bind(store);
-    if(${!!options.holdLifecycle}) store.assertRoots=()=>store.stopRequested?new Promise(()=>{}):original();
+    if(${!!options.holdLifecycle}) {
+      const probe=await open(config.stateDir,"r");
+      const prototype=Object.getPrototypeOf(probe);
+      const sync=prototype.sync;
+      prototype.sync=async function(){
+        if(store.stopRequested && (await this.stat()).isDirectory()===${options.holdLifecycle === "directory"}) return new Promise(()=>{});
+        return sync.call(this);
+      };
+      await probe.close();
+    }
     try {
       const code=await runManagedComputerHost({store,now:managedNow,signals:process,fatal:()=>process.exit(2),
         supervise:hooks=>managedSupervisorFixture({lifetime,socketPath:${JSON.stringify(lifetimePath(g.config.socketPath))},signals:process,hooks,holdRoot:${!!options.holdRoot}})});
@@ -413,28 +491,38 @@ describe("native managed executable composition with disclosed trust/collection 
     expect(x.output()).toBe("");
     expect(x.f.containers.size).toBe(0);
   });
-  it("failed root finalization exits at5s despite held lifecycle persistence and repeated real TERM", async () => {
-    const x = await nativeManaged({ holdRoot: true, holdLifecycle: true });
-    const started = managedNow();
-    x.child.kill("SIGTERM");
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 40));
-    x.child.kill("SIGTERM");
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const observed = await Promise.race([
-        x.exit,
-        new Promise((resolveBound) => {
-          timer = setTimeout(() => resolveBound(["deadline-expired", null]), 6300);
-        })
-      ]);
-      expect(observed).toEqual([2, null]);
-    } finally {
-      clearTimeout(timer);
-    }
-    expect(managedNow() - started).toBeLessThan(6500);
-    expect(mutations(x.f)).toEqual([]);
-    expect(await fs.lstat(join(x.f.config.stateDir, "daemon.lock"))).toBeDefined();
-    expect(x.f.containers.size).toBe(2);
-    await expect(x.g.open()).rejects.toThrow();
-  }, 10_000);
+  it.each(["file", "directory"] as const)(
+    "failed root finalization exits at5s despite held lifecycle %s fsync and repeated real TERM",
+    async (kind) => {
+      const x = await nativeManaged({ holdRoot: true, holdLifecycle: kind });
+      const started = managedNow();
+      x.child.kill("SIGTERM");
+      await expect
+        .poll(
+          async () =>
+            (await fs.stat(join(x.f.config.stateDir, "stop.json")).catch(() => null))?.size ?? 0
+        )
+        .toBeGreaterThan(0);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 40));
+      x.child.kill("SIGTERM");
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const observed = await Promise.race([
+          x.exit,
+          new Promise((resolveBound) => {
+            timer = setTimeout(() => resolveBound(["deadline-expired", null]), 6300);
+          })
+        ]);
+        expect(observed).toEqual([2, null]);
+      } finally {
+        clearTimeout(timer);
+      }
+      expect(managedNow() - started).toBeLessThan(6500);
+      expect(mutations(x.f)).toEqual([]);
+      expect(await fs.lstat(join(x.f.config.stateDir, "daemon.lock"))).toBeDefined();
+      expect(x.f.containers.size).toBe(2);
+      await expect(x.g.open()).rejects.toThrow();
+    },
+    10_000
+  );
 });

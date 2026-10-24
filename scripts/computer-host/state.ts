@@ -4,6 +4,7 @@ import type { FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { isGeneration, isRecord } from "../../apps/api/src/computer/host-contract.js";
+import type { ComputerMutationGuard } from "./docker.js";
 import {
   inspectRoots,
   ROLES,
@@ -187,21 +188,28 @@ export class HostStateStore {
     )
       throw new TerminalStateConflict("Terminal Computer identities must be retained");
   }
-  async save(state: HostState): Promise<void> {
+  async save(state: HostState, guard?: ComputerMutationGuard): Promise<void> {
     parseState(state);
     this.#assertTerminalState(state);
     await this.assertRoots();
-    await this.#write("state.json", state);
+    guard?.assertCurrent();
+    await this.#write("state.json", state, guard);
   }
-  async #write(name: "state.json" | "identity.json", value: unknown): Promise<void> {
+  async #write(
+    name: "state.json" | "identity.json",
+    value: unknown,
+    guard?: ComputerMutationGuard
+  ): Promise<void> {
     const temporary = join(this.config.stateDir, `.state-${randomUUID()}`);
     const file = await open(temporary, "wx", 0o600);
     try {
       await file.writeFile(JSON.stringify(value));
       await file.sync();
       await file.close();
+      if (guard) await guard.check();
       const state = name === "state.json" ? parseState(value) : null;
       if (state) this.#assertTerminalState(state);
+      guard?.assertCurrent();
       // No await between terminal validation, durable-path publication and local state publication.
       // A terminal latch during the following directory fsync observes this same state.
       renameSync(temporary, join(this.config.stateDir, name));
