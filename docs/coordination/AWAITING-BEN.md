@@ -100,8 +100,10 @@ decision, not an environment blocker. No setting or implementation has shipped.
 Recommendation: an owner-scoped list of spellings in Meetings settings, explicit
 Save/Clear, an explicit matching transcript language, and verified selected-target
 prompt support. Unknown support keeps the setting unavailable. If a later target
-or language becomes incompatible with a saved list, preserve it and pause affected
-Meeting requests until it is cleared or support restored; never silently drop it.
+or language becomes incompatible with a saved list, preserve it and reject affected
+ASR requests; never silently drop it. Existing failure semantics mean live gaps and
+terminal normal-import failures are possible. Clearing/restoring support affects
+subsequent requests and does not repair those failures.
 Alternative: a best-effort standard prompt with no support guarantee, retaining
 transcription when a compatible endpoint silently ignores hints.
 

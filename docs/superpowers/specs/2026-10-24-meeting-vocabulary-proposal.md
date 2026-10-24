@@ -133,9 +133,13 @@ Proposed behavior, pending approval:
   shows “Vocabulary isn't available with this transcription setup”; reject a
   nonempty save. Empty clears remain available even after a provider change.
 - If saved terms exist and the target/language becomes incompatible, preserve
-  them and show the unavailable state. Affected Meeting transcription must report
-  the prerequisite before sending audio; do not silently drop terms or switch
-  providers. Other users and empty-list transcription continue normally.
+  them and show the unavailable state. Reject affected ASR requests before sending
+  audio; do not silently drop terms or switch providers. Use existing failure
+  semantics: live clips can become transcript gaps, and normal import attempts can
+  fail terminally. Clearing the list or restoring support affects subsequent
+  requests; it does not restart failed imports or fill earlier gaps. No resumable
+  blocked state is proposed. Other users and empty-list transcription continue
+  normally.
 - Provider rejection uses the existing transcription failure path, with no retry
   that strips the hint. Show only safe failure codes; no private list/provider
   response in logs or job payloads. This is a proposed requirement, not a verified
@@ -155,8 +159,9 @@ no provider-retention, logging-confinement or recognition-quality guarantee.
 
 Ben's concrete decision is whether to adopt this supported-contract design and
 the proposed one-list/explicit-language/explicit-Save experience, including the
-tradeoff that an incompatible later target pauses affected Meeting requests until
-vocabulary is cleared or supported configuration restored. Alternative: choose
+tradeoff that an incompatible later target rejects affected ASR requests: live
+gaps and terminally failed normal imports are not repaired by clearing vocabulary
+or restoring support. Those changes apply to subsequent requests. Alternative: choose
 best-effort standard prompts, with that limitation explicit throughout the product.
 This document's merge publishes research and a proposal; it does not approve either.
 
