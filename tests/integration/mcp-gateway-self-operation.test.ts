@@ -29,6 +29,12 @@ import { seedCalendarApprovalEvent } from "./fixtures/calendar-approval.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 describe("AssistantToolGateway self-operation", () => {
+  // Resolve built-in trust metadata through the production registry. Raw manifests lack the
+  // marker, so pattern validation would incorrectly use the bounded external-module worker.
+  const sportsManifests = getBuiltInModuleManifests().filter(
+    (manifest) => manifest.id === sportsModuleManifest.id
+  );
+
   let appDb: Kysely<MossDatabase>;
   let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
@@ -365,7 +371,7 @@ describe("AssistantToolGateway self-operation", () => {
     }
 
     const sportsGateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [sportsModuleManifest],
+      resolveActiveModules: async () => sportsManifests,
       repository,
       ...conversations.gatewayDependencies,
       tokens,
@@ -435,7 +441,7 @@ describe("AssistantToolGateway self-operation", () => {
     }
 
     const sportsGateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [sportsModuleManifest],
+      resolveActiveModules: async () => sportsManifests,
       repository,
       ...conversations.gatewayDependencies,
       tokens,

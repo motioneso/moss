@@ -160,7 +160,7 @@ export function buildChatGatewayDependencies(args: {
   appActions?: AppActionsService;
   conversationProvenance?: ConversationProvenancePort;
   platformDiagnostics?: PlatformDiagnosticsService;
-  /** Internal assembly only; production routes omit it until visual integration is ready. */
+  /** Shared with the current-turn lifecycle; the tool cannot create a binding itself. */
   visualPresentation?: VisualPresentationService;
   collaborators: {
     googleConnectionService?: GoogleConnectionService;

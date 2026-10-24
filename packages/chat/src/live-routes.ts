@@ -178,7 +178,8 @@ export function registerChatLiveRoutes(
           reply: assistantReply,
           userMessageId,
           assistantMessageId,
-          sourceFreshness
+          sourceFreshness,
+          visualReply
         } = await runtime.manager.submitTurn(
           access.actorUserId,
           userName,
@@ -191,7 +192,8 @@ export function registerChatLiveRoutes(
           reply: assistantReply,
           userMessageId,
           assistantMessageId,
-          sourceFreshness
+          sourceFreshness,
+          visualReply
         });
       } catch (error) {
         return handleLiveRouteError(error, reply);

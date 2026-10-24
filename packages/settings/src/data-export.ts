@@ -1,4 +1,5 @@
 import { sql, type Kysely } from "kysely";
+import { chatExportText } from "./chat-export-text.js";
 
 import {
   assertQualifiedTableName,
@@ -313,7 +314,7 @@ async function readExportTables(
     aiAssistantActionRequests: await readRows(scopedDb.db, aiAssistantActionRequestsQuery(userId)),
     jarvisActionAuditLog: await readRows(scopedDb.db, jarvisActionAuditLogQuery(userId)),
     chatThreads: await readRows(scopedDb.db, chatThreadsQuery(userId)),
-    chatMessages: await readRows(scopedDb.db, chatMessagesQuery(userId)),
+    chatMessages: (await readRows(scopedDb.db, chatMessagesQuery(userId))).map(chatExportText),
     chatVoiceRequests: await collectModuleExportSection<readonly ExportRow[]>(
       listModuleManifests,
       "chat",

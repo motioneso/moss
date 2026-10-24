@@ -120,6 +120,7 @@ import { GateSpeedRecord } from "./live/classifier-gate-speed.js";
 import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
 import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
+import { VisualPresentationService } from "./visual/presentation-service.js";
 import { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
 
 export { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
@@ -321,6 +322,7 @@ export function registerChatRoutes(
   const resolveActiveModules = dependencies.resolveActiveModules;
   const conversationProvenance = new ConversationProvenanceStore(dependencies.dataContext);
   const mcpServerUrl = dependencies.mcpServerUrl;
+  const visualPresentation = new VisualPresentationService();
   const wiring =
     resolveActiveModules && mcpServerUrl
       ? (() => {
@@ -347,6 +349,7 @@ export function registerChatRoutes(
               notifier: notifierProxy,
               appActions,
               conversationProvenance,
+              visualPresentation,
               collaborators: {
                 googleConnectionService: dependencies.googleConnectionService,
                 googleApiClient: dependencies.googleApiClient,
@@ -472,6 +475,7 @@ export function registerChatRoutes(
         })
       : undefined;
   const runtime = createChatSessionRuntime({
+    visualPresentation: wiring ? visualPresentation : undefined,
     canProposeBoundedAction: wiring
       ? async (actor) =>
           (await wiring.gateway.listToolsForActor(actor)).some(

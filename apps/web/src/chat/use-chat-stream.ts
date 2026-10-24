@@ -1,4 +1,4 @@
-import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, readStoredVisual } from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
@@ -28,6 +28,7 @@ import {
   applyStreamRecord,
   isBackgroundRecord,
   mergeBackgroundRecords,
+  mergeRecoveredReplies,
   mergeHydratedRecords
 } from "./stream-record-identity.js";
 
@@ -183,7 +184,10 @@ export function useChatStream(
           );
           setRecords((current) =>
             isCurrent() && hydratedDrawerThread.current === threadId
-              ? mergeBackgroundRecords(current, missed)
+              ? mergeRecoveredReplies(
+                  mergeBackgroundRecords(current, missed),
+                  recordsFromMessages(messages.filter((message) => message.threadId === threadId))
+                )
               : current
           );
         })
@@ -413,6 +417,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
           kind: "user",
           text: message.body,
           messageId: message.id,
+          turnId: message.turnId,
           meetingContext: message.meetingContext,
           attachments: message.attachments
         }
@@ -435,11 +440,14 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
               text: message.body,
               scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
+              turnId: message.turnId,
               ...(isDeliveredReminder(message)
                 ? { background: true as const, backgroundThreadId: message.threadId }
                 : {}),
               sourceFreshness: message.sourceFreshness,
               meetingContext: message.meetingContext,
+              visualReply: message.visualReply,
+              visualFallbackText: message.visualFallbackText,
               answerProvenance: message.answerProvenance,
               answerProvenanceCitedIds: message.answerProvenanceCitedIds,
               ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
@@ -491,6 +499,19 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
     return {
       kind: parsed.kind,
       text: parsed.text,
+      visualState:
+        parsed.kind === "status" &&
+        (parsed.visualState === "preparing" || parsed.visualState === "clear")
+          ? parsed.visualState
+          : undefined,
+      ...(parsed.kind === "reply"
+        ? readStoredVisual(
+            parsed.visualReply ??
+              (typeof parsed.visualFallbackText === "string"
+                ? { fallbackText: parsed.visualFallbackText }
+                : undefined)
+          )
+        : {}),
       id: typeof parsed.id === "string" ? parsed.id : undefined,
       sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,

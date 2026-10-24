@@ -15,13 +15,19 @@ import {
 
 const identity = { actorUserId: "actor-a", threadId: "thread-a", turnId: "turn-a" };
 const ctx: ToolContext = { ...identity, chatSessionId: "actor-a:chat", requestId: "request-a" };
-const data = { projects: ["garden", "reading", "music"], hours: [2, 1, 3], availableHours: 6 };
+const data = { projects: "garden, reading, music", hours: 6, availableHours: 6 };
 const retrievedAt = "2026-10-23T12:00:00.000Z";
-const program = 'root = Reply([Section("Allocation", [Fact("hours")])])';
-function proposal(ref: string) {
+const program = 'root = Reply([Section("Allocation", [Fact("REF", "hours")])]);';
+function proposal(ref: string, field = "hours") {
   return {
-    catalogVersion: "moss.v1",
-    blocks: [{ kind: "composition", snapshotRefs: [ref], program }]
+    catalogVersion: "moss.user-data.1",
+    blocks: [
+      {
+        kind: "composition",
+        snapshotRefs: [ref],
+        program: program.replace("REF", ref).replace("hours", field)
+      }
+    ]
   };
 }
 function open(service = new VisualPresentationService()) {
@@ -133,7 +139,9 @@ describe("internal chat.present", () => {
     expect(service.present(ctx, proposal(ref)).ok).toBe(false);
     const registered = next.registerUserData({ next: true }, retrievedAt);
     if (!registered.ok) throw new Error(registered.code);
-    expect(service.present({ ...ctx, ...nextIdentity }, proposal(registered.ref)).ok).toBe(true);
+    expect(service.present({ ...ctx, ...nextIdentity }, proposal(registered.ref, "next")).ok).toBe(
+      true
+    );
   });
 
   it("bounds user data and does not silently truncate oversized fallback facts", () => {
@@ -144,7 +152,8 @@ describe("internal chat.present", () => {
     const registered = turn.registerUserData(fields, retrievedAt);
     if (!registered.ok) throw new Error(registered.code);
     const result = service.present(ctx, proposal(registered.ref));
-    expect(result.ok && result.reply.fallbackText).toContain("too long");
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.fallbackText).toContain("too long");
   });
 
   it("returns text only through the actual tool, never its raw program or snapshots", async () => {
@@ -153,7 +162,7 @@ describe("internal chat.present", () => {
       visualPresentation: service
     });
     expect(result.data).toEqual({
-      status: "validated_internally",
+      status: "accepted",
       fallbackText: expect.stringContaining("Your data")
     });
     expect(JSON.stringify(result)).not.toContain(program);
@@ -183,7 +192,7 @@ describe("internal chat.present", () => {
     expect(response).toMatchObject({
       ok: true,
       structuredData: {
-        status: "validated_internally",
+        status: "accepted",
         fallbackText: expect.stringContaining("Your data")
       }
     });
@@ -245,7 +254,7 @@ describe("internal chat.present", () => {
     });
     const call = gw.callTool(token, "chat.present", {
       proposal: {
-        catalogVersion: "moss.v1",
+        catalogVersion: "moss.user-data.1",
         blocks: [{ kind: "composition", snapshotRefs: [], program }]
       }
     });
