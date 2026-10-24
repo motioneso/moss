@@ -6,29 +6,29 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { build } from "esbuild";
+import type * as Esbuild from "esbuild";
+import type * as Fs from "node:fs/promises";
 import { buildComputerGateway } from "../../scripts/computer-gateway/build.js";
 import { processFixture } from "./computer-process-fixture.js";
 import { OWNER, SESSION } from "./computer-auth-fixture.js";
 import { WIDTH, HEIGHT } from "./computer-gateway-fixture.js";
 
 vi.mock("esbuild", async (original) => {
-  const actual = await original<typeof import("esbuild")>();
+  const actual = await original<typeof Esbuild>();
   return { ...actual, build: vi.fn(actual.build) };
 });
 vi.mock("node:fs/promises", async (original) => {
-  const actual = await original<typeof import("node:fs/promises")>();
+  const actual = await original<typeof Fs>();
   return { ...actual, readFile: vi.fn(actual.readFile) };
 });
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   vi.mocked(build).mockReset();
-  vi.mocked(build).mockImplementation(
-    (await vi.importActual<typeof import("esbuild")>("esbuild")).build
-  );
+  vi.mocked(build).mockImplementation((await vi.importActual<typeof Esbuild>("esbuild")).build);
   vi.mocked(readFile).mockReset();
   vi.mocked(readFile).mockImplementation(
-    (await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises")).readFile
+    (await vi.importActual<typeof Fs>("node:fs/promises")).readFile
   );
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
@@ -153,7 +153,7 @@ describe("standalone Computer gateway packaging", () => {
 
   it("rejects a real compiler result with a nonbuiltin external before publishing", async () => {
     const { output } = await context();
-    const actual = await vi.importActual<typeof import("esbuild")>("esbuild");
+    const actual = await vi.importActual<typeof Esbuild>("esbuild");
     vi.mocked(build).mockImplementationOnce((options) =>
       actual.build({
         ...options,
@@ -179,8 +179,8 @@ describe("standalone Computer gateway packaging", () => {
 
   it("rejects an input changed after actual compilation before publishing", async () => {
     const { output } = await context();
-    const actualBuild = await vi.importActual<typeof import("esbuild")>("esbuild");
-    const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    const actualBuild = await vi.importActual<typeof Esbuild>("esbuild");
+    const actualFs = await vi.importActual<typeof Fs>("node:fs/promises");
     vi.mocked(build).mockImplementationOnce(async (options) => {
       const result = await actualBuild.build(options);
       // Simulate a concurrent edit at the final filesystem read; do not mutate tracked files.
