@@ -28,7 +28,8 @@ async function main(): Promise<number> {
   );
   if (
     ((mode === "fence" || mode === "manage") && !deployment.configuration.lifetime) ||
-    (mode === "observe" && deployment.configuration.lifetime)
+    (mode === "observe" && deployment.configuration.lifetime) ||
+    (["observe", "fence"].includes(mode!) && deployment.configuration.capture)
   )
     throw supervisorError();
   if (mode === "collect") {

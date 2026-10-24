@@ -39,7 +39,7 @@ export class ProvisionPublication {
   }
   static async create(
     root: RootIdentity,
-    name: "supervisor.json" | "gateway.json" | "prepared.json",
+    name: "supervisor.json" | "gateway.json" | "prepared.json" | "capture.json",
     value: unknown,
     mode: number,
     gid: number,
@@ -47,7 +47,8 @@ export class ProvisionPublication {
     current: () => void
   ): Promise<ProvisionPublication> {
     const bytes = Buffer.from(JSON.stringify(value));
-    if (bytes.length > (name === "gateway.json" ? 4096 : 16384)) throw supervisorError();
+    if (bytes.length > (name === "capture.json" ? 65536 : name === "gateway.json" ? 4096 : 16384))
+      throw supervisorError();
     const directory = await openRoot(root);
     try {
       await check();

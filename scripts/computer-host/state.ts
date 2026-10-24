@@ -238,6 +238,23 @@ export class HostStateStore {
       });
     }
   }
+  /** Read-only proof of this store's still-open exclusive descriptor and canonical path. */
+  async ownedLock() {
+    const opened = await this.lock.stat();
+    const actual = await lstat(join(this.config.stateDir, "daemon.lock"));
+    const keys = ["dev", "ino", "uid", "gid", "mode", "nlink", "size"] as const;
+    if (
+      !opened.isFile() ||
+      opened.uid !== process.getuid!() ||
+      (opened.mode & 0o7777) !== 0o600 ||
+      opened.nlink !== 1 ||
+      opened.size !== 0 ||
+      !actual.isFile() ||
+      keys.some((key) => actual[key] !== opened[key])
+    )
+      throw new Error("Computer lock changed");
+    return Object.fromEntries(keys.map((key) => [key, opened[key]]));
+  }
   /** Release only the descriptor, retaining the exclusive path for explicit recovery. */
   async retainLock(): Promise<void> {
     await this.lock.close();

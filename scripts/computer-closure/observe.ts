@@ -3,14 +3,9 @@ import { lstat, open, opendir, type FileHandle } from "node:fs/promises";
 import { createConnection } from "node:net";
 import type { RootIdentity } from "../computer-host/config.js";
 import { ComputerDocker } from "../computer-host/docker.js";
-import { assertRoot, descriptorPath, openRoot } from "../computer-watchdog/linux-files.js";
+import { assertRoot, descriptorPath, openRoot, mountId } from "../computer-watchdog/linux-files.js";
 import { checkMossReadiness } from "../computer-watchdog/observe.js";
-import {
-  boundedFile,
-  processIdentity,
-  sha256,
-  supervisorError
-} from "../computer-watchdog/trust.js";
+import { processIdentity, sha256, supervisorError } from "../computer-watchdog/trust.js";
 import type { WatchdogProcessIdentity } from "../computer-watchdog/policy.js";
 import type { ClosureDeployment } from "./config.js";
 import type { ClosureRecords } from "./records.js";
@@ -65,12 +60,6 @@ const directoryFlags = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_
 // Linux O_PATH inspects sockets and regular files without opening their content.
 const pathFlags = 0x200000 | constants.O_NOFOLLOW;
 const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-async function mountId(file: FileHandle): Promise<string> {
-  const text = (await boundedFile(`/proc/self/fdinfo/${file.fd}`, 4096)).toString("utf8");
-  const ids = [...text.matchAll(/^mnt_id:\s+([1-9][0-9]*)$/gm)];
-  if (ids.length !== 1) throw supervisorError();
-  return ids[0]![1]!;
-}
 async function assertEntryMount(
   path: string,
   expected: string,

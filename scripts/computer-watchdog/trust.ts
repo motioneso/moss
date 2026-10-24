@@ -23,6 +23,7 @@ export const supervisorError = () => new Error("Computer supervisor unavailable"
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 export interface SupervisorConfiguration {
   readonly lifetime?: ComputerLifetimeConfiguration;
+  readonly capture?: RootIdentity;
   readonly runId: string;
   readonly runner: WatchdogProcessIdentity;
   readonly host: HostConfig;
@@ -65,7 +66,8 @@ export function parseSupervisorConfiguration(value: unknown): SupervisorConfigur
     "artifactSha256",
     "bootId",
     "namespaces",
-    ...(isRecord(value) && Object.hasOwn(value, "lifetime") ? ["lifetime"] : [])
+    ...(isRecord(value) && Object.hasOwn(value, "lifetime") ? ["lifetime"] : []),
+    ...(isRecord(value) && Object.hasOwn(value, "capture") ? ["capture"] : [])
   ]);
   const runner = exact(record.runner, ["pid", "startTicks", "processGroupId"]);
   const namespaces = exact(record.namespaces, ["pid", "mnt", "user"]);
@@ -111,6 +113,7 @@ export function parseSupervisorConfiguration(value: unknown): SupervisorConfigur
     throw supervisorError();
   return Object.freeze({
     ...(lifetime ? { lifetime } : {}),
+    ...(Object.hasOwn(record, "capture") ? { capture: pinnedRoot(record.capture) } : {}),
     runId: record.runId,
     bootId: record.bootId,
     runner: Object.freeze({ ...runner }) as unknown as WatchdogProcessIdentity,
@@ -265,6 +268,7 @@ export async function loadSupervisorDeployment(
       throw supervisorError();
     const bytes = await boundedFile(configPath, 16384);
     const configuration = parseSupervisorConfiguration(JSON.parse(bytes.toString("utf8")));
+    if (configuration.capture && !configuration.lifetime) throw supervisorError();
     const nodePath = process.execPath;
     await assertTrustedPath(nodePath, false);
     await assertTrustedPath(artifactPath, false);
@@ -305,6 +309,20 @@ export async function loadSupervisorDeployment(
             throw supervisorError();
         }
       }
+    if (configuration.capture) {
+      const capture = configuration.capture;
+      await assertRoot(capture);
+      await assertTrustedPath(capture.path, true);
+      if (
+        capture.uid !== 0 ||
+        (capture.mode & 0o7777) !== 0o700 ||
+        all.some(
+          (root) => contains(root.path, capture.path) || contains(capture.path, root.path)
+        ) ||
+        [configPath, artifactPath, nodePath].some((path) => contains(capture.path, path))
+      )
+        throw supervisorError();
+    }
     const marker = JSON.stringify({ config: configuration.host, roots });
     if (
       JSON.stringify(await privateJson(`${configuration.host.stateDir}/identity.json`)) !== marker

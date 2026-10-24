@@ -1,5 +1,6 @@
 import { constants, type BigIntStats } from "node:fs";
 import { lstat, open, opendir, realpath, statfs, type FileHandle } from "node:fs/promises";
+import { boundedFile } from "./trust.js";
 import { isAbsolute, normalize } from "node:path";
 import type { RootIdentity } from "../computer-host/config.js";
 
@@ -110,4 +111,12 @@ export async function measureComputerTree(value: RootIdentity): Promise<number> 
   } catch {
     throw measurementError();
   }
+}
+
+/** Linux descriptor mount identity also detects same-device bind mounts. */
+export async function mountId(file: FileHandle): Promise<string> {
+  const text = (await boundedFile(`/proc/self/fdinfo/${file.fd}`, 4096)).toString("utf8");
+  const ids = [...text.matchAll(/^mnt_id:\s+([1-9][0-9]*)$/gm)];
+  if (ids.length !== 1) throw measurementError();
+  return ids[0]![1]!;
 }
