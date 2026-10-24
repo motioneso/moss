@@ -35,6 +35,11 @@ function matchesRoot(stat: BigIntStats, root: RootIdentity): boolean {
 }
 
 export async function assertRoot(root: RootIdentity): Promise<void> {
+  // TEMP-DEBUG
+  if (process.env.PUB_DEBUG === "1")
+    process.stderr.write(
+      `ROOT ${JSON.stringify(root)} ${JSON.stringify(await lstat(root.path, { bigint: true }), (_k, v) => (typeof v === "bigint" ? String(v) : v))} ${await realpath(root.path)}\n`
+    );
   if (
     !matchesRoot(await lstat(root.path, { bigint: true }), root) ||
     (await realpath(root.path)) !== root.path
