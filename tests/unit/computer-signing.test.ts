@@ -117,11 +117,9 @@ describe("actual signer publisher to mandatory closure loader; disclosed OS root
     await expect(t.signing.load()).rejects.toThrow();
     await expect(t.load()).rejects.toThrow();
   });
-  it("actual publisher and mandatory loader refuse changed host root identity", async () => {
+  it("signer refuses changed host root before any publication", async () => {
     const t = await fixture();
     const signing = await t.signing.load();
-    expect(await t.signing.install()).toBe(0);
-    const closure = await t.consume();
     const path = t.config.supervisor.host.homeDir;
     await fs.rename(path, path + ".old");
     await fs.mkdir(path, { mode: 0o700 });
@@ -132,6 +130,15 @@ describe("actual signer publisher to mandatory closure loader; disclosed OS root
         interrupted: () => false
       })
     ).toBe(2);
+    expect(await fs.readdir(t.signing.outputPath)).toEqual([]);
+  });
+  it("mandatory actual consumer refuses changed host root after successful load", async () => {
+    const t = await fixture();
+    expect(await t.signing.install()).toBe(0);
+    const closure = await t.consume();
+    const path = t.config.supervisor.host.homeDir;
+    await fs.rename(path, path + ".old");
+    await fs.mkdir(path, { mode: 0o700 });
     await expect(revalidateClosureDeployment(closure)).rejects.toThrow();
   });
   it.each(["symlink", "fifo", "mode", "identity"])(
@@ -364,6 +371,21 @@ describe("actual signer publisher to mandatory closure loader; disclosed OS root
       ).rejects.toThrow();
     }
   );
+  it("canonical publisher bounds private PEM to4096bytes", async () => {
+    const t = await fixture();
+    await expect(
+      ProvisionPublication.create(
+        t.signing.request.output,
+        "closure-key.pem",
+        Buffer.alloc(4097),
+        0o600,
+        t.signing.request.output.gid,
+        async () => {},
+        () => {}
+      )
+    ).rejects.toThrow();
+    expect(await fs.readdir(t.signing.outputPath)).toEqual([]);
+  });
   it("requires closed request and installation schemas", async () => {
     const t = await fixture();
     expect(() => parseSigningConfiguration({ ...t.signing.request, extra: true })).toThrow();
