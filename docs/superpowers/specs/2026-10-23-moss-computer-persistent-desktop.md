@@ -19,13 +19,14 @@ The intended host is the existing server running this work. Other Moss installat
 3. Designated files and the actual browser profile survive container removal and recreation. Website sessions can expire. Running processes and installed system packages have no persistence promise.
 4. New installations select Computer by default, with opt-out and resource disclosure. Existing installations receive an explicit add-on step.
 5. Disable stops Computer and retains its data. Data deletion is a separate explicit decision.
-6. Agent control, watch/stop/takeover, login handoffs and useful jobs follow in separately bounded work.
+6. Agent control, watch/stop/takeover, login handoffs and useful jobs are required product capabilities, implemented in separately bounded work.
 7. Preserve the desktop destination; a browser-only trial cannot redefine it.
+8. The same persistent Computer is accessible inside the Moss app and through a web browser. The owner can watch Moss work and take over mouse/keyboard control; see the integrated-access amendment below.
 
 ## 3. Recommended system
 
 ```text
-Owner's browser
+Owner in the Moss app or a web browser
   -> trusted Moss viewer and authenticated HTTPS/WSS gateway
   -> private persistent desktop companion
   -> dedicated Computer files/profile storage
@@ -253,3 +254,193 @@ and Moss stayed healthy. Startup readiness and all previously missing qualificat
 unqualified. One next proposal is a separately dispatched attempt after host capacity is available,
 with fresh identity/floors and exact independent packet review. No automatic rerun, product/sleep
 implementation, owner integration, merge or issue close is dispatched by this rejection.
+
+## 19. Startup readiness r9: initial resource rejection
+
+After #3596 merged, Ben dispatched one fresh attempt through the
+[r9 handoff](../handoffs/2026-10-23-moss-computer-startup-readiness-r9.md). The initial fresh sample
+recorded available RAM6,813,106,176 bytes, below8GiB by1,776,828,416 bytes; root/data floors passed.
+The [r9 result](../../evidence/moss-computer/2026-10-23-startup-readiness-r9.md) is
+BLOCKED_BEFORE_LAUNCH. No runtime preparation, archive validation/load, launch packet, port
+reservation or startup/access/frame/input proof occurred. The resource gate was not retried.
+
+No owned runtime was started; exact-label/reservation readback was empty, prior homes/archive
+remained present and Moss stayed healthy. Startup readiness and all previously missing gates
+remain unqualified. One next proposal is the same bounded qualification after a separate dispatch
+when host capacity is available, with new identity, fresh floors and independent exact packet review.
+No automatic rerun, product/sleep implementation, owner integration, merge or issue close follows.
+
+## 20. Startup readiness r10: restored backend refusal
+
+Ben explicitly resumed after RAM recovered, authorising one fresh bounded attempt while retaining
+r9's entry rejection. Fresh entry and pre-load/pre-launch gates passed. The actual retained archive,
+config and seven layers were independently verified; one exact load and post-load identity/layer
+inspection passed. The committed [r10 packet](../plans/2026-10-23-moss-computer-startup-readiness-r10.md)
+and exact private artifacts received independent prelaunch acceptance.
+
+The single [r10 run](../../evidence/moss-computer/2026-10-23-startup-readiness-r10.md) passed positive
+guest/socket/gateway RFB probes, initial sampled isolation, protected access and both intended red
+controls. After byte-exact gateway configuration restoration, the driver exited0 but its owner
+payload contained RFB003.003 and “Too many security failures”, failing the required RFB003.008
+signal. Wrapper/runner1 reject the proof; UI/frame/input were NOT_RUN. Live diagnostics establish
+loopback backend blacklisting/refusal, with gateway upstream reset, but not its trigger. Probe
+side effects are a hypothesis; r7's502 cause remains UNKNOWN.
+
+Watchdog/cleanup/port release and operator closure exited0; independent closure found no owned
+runtime or ephemeral identities, retained homes/archive and healthy Moss. Two samples establish
+no sustained resource-fit claim. One next proposal is separately dispatched bounded RFB probe/
+blacklist diagnosis with unchanged image/security/assertions and exact review before another proof.
+No automatic retry, security weakening, product/sleep implementation, owner integration, merge or
+issue close follows. Startup/UI/input and previously missing sandbox/replacement gates remain
+unqualified; r8/r9 and all earlier rejection evidence remains unchanged.
+
+## 21. Integrated app/browser access, watching and takeover
+
+Ben clarified that accessing Moss's Computer must be possible inside the Moss app and through a
+web browser, so the owner can watch Moss work or take over. Both surfaces expose the same
+persistent desktop/session and files; a separate computer for each viewer would not meet this
+requirement. Watching should not take input control away from Moss.
+
+Taking over gives mouse/keyboard input to the owner and pauses Moss's computer input until control
+is explicitly returned. The integrated design must show who has control, prevent simultaneous
+conflicting owner/agent input, and preserve owner authentication/authorisation on viewing, input,
+reconnect and control transitions. Exact UI, handoff/resume and multi-viewer/disconnect behavior
+need their bounded design before product implementation; no new app surface is implemented here.
+
+Integrated acceptance must exercise both the Moss app and browser through the real owner path:
+watch visible work, take over and verify Moss stops issuing input, then explicitly return control
+and verify a safe resumption on the same desktop. Cover unauthorised access, stale agent input,
+reconnect and active-work sleep inhibition. Keep the app map truthful when those product surfaces
+ship. The isolated startup/probe fix continues as groundwork and grants none of this integrated,
+manual-device or platform acceptance.
+
+## 22. Bounded startup and fresh-input qualification: r11
+
+Ben's “yea fix it” authorised the bounded probe correction after r10, preserving its rejection.
+R10's greeting-only probes definitely stopped before initialization; complete bounded RFB3.8
+negotiation now precedes successful closure on guestTCP, UnixWS, gatewayWS and accessWS. Separate
+protocol-contract regressions caught the old false-positive behavior and passed the correction.
+They do not establish TigerVNC's blacklist trigger; r7's prior502 cause remains UNKNOWN.
+
+The single exact-reviewed r11 run passed actual complete readiness, unchanged protected access and
+mTLS/Origin removal/restoration controls0/1/1/0, current connected UI/RFB, attached visible1280x800
+canvas with345 sampled colours and exact fresh viewer-written file readback, plus initial/final
+sampled isolation. Runner/watchdog/cleanup/port release/operator closure all0; independent closure
+accepted absent owned runtime/keys, retained homes/archive/marker and healthy Moss. Two short monitor
+samples grant no sustained-fit claim. Synthetic identities grant no Moss owner-authentication proof.
+
+See the [r11 report](../../evidence/moss-computer/2026-10-23-startup-readiness-r11.md),
+[JSON](../../evidence/moss-computer/2026-10-23-startup-readiness-r11.json) and
+[packet](../plans/2026-10-23-moss-computer-startup-readiness-r11.md). The image's present-to-absent
+preparation observation remains unexplained; one freshly archive-verified/reviewed restore0 matched
+actual identity/platform/all seven layers before this run. No earlier acceptance transferred.
+
+This qualifies bounded startup/protected viewer/fresh input only. Active Firefox sandbox, clean
+profile flush, replacement persistence, idle sleep/wake and §21 app/browser owner watch/takeover
+remain separately bounded work. Propose the next bounded Firefox/sandbox/clean-shutdown/replacement
+qualification; no automatic rerun, merge, task3578/parent3577 closure or product implementation.
+
+## 23. Implementation dispatch and r12 prerequisite rejection
+
+Ben dispatched implementation in a fresh isolated worktree under the
+[implementation handoff](../handoffs/2026-10-23-moss-computer-implementation.md), superseding
+historical integration exclusions without waiving review, UI design, runtime safety or live proof.
+New child #3605 tracks the owner-control foundation; it depends on unmerged draft #3598.
+Neither parent #3577 nor qualification task #3578 is complete.
+
+The single reviewed [r12 attempt](../../evidence/moss-computer/2026-10-23-persistence-r12.md)
+passed complete backend/access controls, then failed the current UI/RFB connected predicate after 20 seconds.
+Frame/input/Firefox/flush/replacement were not reached. No runtime retry; independent closure
+confirmed resources/ephemeral keys absent, retained homes/archive and healthy Moss. Cause UNKNOWN.
+Accepted r11 evidence remains bounded historical acceptance, not owner integration or persistence.
+
+The committed [owner-control plan](../plans/2026-10-23-moss-computer-owner-control.md) permits
+independent internal session-bound/generation-fenced input policy implementation while dependent
+desktop qualification is blocked. It adds no usable Computer route, viewer, lifecycle or egress
+and must not be advertised as delivered desktop integration. Proposed
+[screen mockups](2026-10-23-moss-computer-screens.html) await Ben's approval before product UI;
+a self-contained preview was delivered to his Samsung phone for review, not approved by delivery.
+
+## 24. Chat-integrated design revision (supersedes the separate-page proposal)
+
+Ben rejected the separate-destination mockup and clarified that Computer belongs in the chat
+drawer. In full-screen chat, show a recent screen thumbnail; it need not render live. This changes
+the primary interaction design, not owner/session safety, persistent storage or runtime gates.
+The previous `/computer`-first proposal in the owner-control plan is superseded. No separate module
+or navigation entry is intended. Browser access uses the same owner-authenticated Moss chat.
+
+[Revised interactive mockups](2026-10-23-moss-computer-chat-mockups.html) show five views: full-screen
+chat with a timestamped still, viewer beside the conversation, owner takeover, compact drawer and
+phone. Opening watches without taking over; Return to Moss or intentionally closing the
+controlling viewer resumes Moss input (approved revision below). Sleeping/waking/paused/
+disconnected/off variants retain honest capture-age/status labels. All sample screen content is
+illustrative; no live desktop runs here.
+Production uses shared Button/Badge/BrandMark/Thread and PeekPanel lifecycle, with truthful chat
+feature metadata when wired. Ben approved this layout with the revision below. Exact screenshot
+refresh policy remains an implementation detail. The internal policy and failed-r12 limits remain.
+
+## 25. Approved chat layout and intentional-close handoff
+
+Ben approved the chat-integrated mockups, requesting concise copy and that closing the viewer
+returns control to Moss. Keep age, status and control labels; omit explanatory tutorials and the
+word “screenshot” from visible copy, as Ben subsequently requested.
+This supersedes earlier close-leaves-paused and explicit-return-only UI requirements, including
+§21. Return to Moss remains available while viewing.
+
+Intentional close by the controlling owner uses the same authenticated, generation-fenced return
+action before closing its connection. It invalidates old owner/agent input; only a fresh agent
+lease can proceed. Unexpected disconnect, logout/revocation or a failed return still fails closed;
+a disconnect alone cannot grant input authority. Closing a watcher must not steal another viewer’s
+control. The internal policy's closeViewer operation now combines authenticated return and
+disconnect cleanup for intentional close. Unexpected loss still calls disconnect; actual
+transport wiring and receiving-side fencing remain unimplemented. Design approval does not waive
+persistence, lifecycle, egress, owner transport or live acceptance gates.
+
+## 26. Viewer repair dispatch: unresolved offline diagnosis
+
+The [viewer-repair dispatch](../handoffs/2026-10-23-moss-computer-viewer-repair.md) required a
+supported repair before another bounded desktop attempt. Its
+[diagnosis](../../evidence/moss-computer/2026-10-23-viewer-diagnosis.md) found identical r11/r12
+connection paths and no browser connection in the retained r12 backend tail after restored access.
+Missing browser/startup-state diagnostics prevent establishing a causal repair. An exact-vendor
+offline scheduling check discriminates against a missed-DOM-event race, without reproducing the
+actual viewer failure or qualifying a desktop.
+
+The unsupported-repair stop condition was applied: zero new desktop attempts or image loads;
+current UI/frame/input, Firefox sandbox/clean flush and replacement persistence remain NOT_RUN.
+No connection fix is claimed. Earlier raw receipts and surviving launch artifacts match their
+recorded final hashes. No new runtime/keys/reservation were created; retained homes/archive and
+healthy Moss were checked. Independent exact evidence/closure review belongs in the review ledger.
+The next proposal is a bounded browser-boundary diagnostic candidate before any new causal patch
+or runtime proof. Approved chat design and internal owner-control acceptance remain unchanged;
+issues #3577/#3578/#3605 stay open. No merge, deployment or new runtime authority follows.
+
+## 27. Continued viewer diagnosis and bounded replacement persistence accepted
+
+Ben directly instructed continued repair, superseding section 26's unsupported-repair stopping
+decision. The [continued diagnostic plan](../plans/2026-10-23-moss-computer-viewer-diagnosis.md)
+preserves historical failures and all original runtime protections. Separately committed and
+independently reviewed fresh packets corrected observed watchdog first-sample, Firefox process-title,
+copied SQLite connection-lifetime and bookmark-navigation harness faults. No causal explanation
+or noVNC connection patch is claimed for the original r12 timeout.
+
+The exact [r21 packet](../plans/2026-10-23-moss-computer-viewer-r21.md) completed the full bounded
+offline sequence. The [report](../../evidence/moss-computer/2026-10-23-persistence-r21.md) and
+[JSON](../../evidence/moss-computer/2026-10-23-persistence-r21.json) record complete RFB readiness,
+protected access and removed-protection controls, real current UI/RFB, visible 1280×800 frames
+with 346/338 colours, fresh viewer input, active Firefox sandbox level 6 with actual added tab
+filters, clean shutdown/profile flush, intended file/bookmark negative controls, distinct full
+desktop replacement on the same home/image, unchanged durable hashes before reopening, and actual
+bookmark-only navigation to the exact persisted URL/file readback. Final database bytes may change
+after browser revisit; before-reopen hashes matched the baseline.
+
+Independent runtime/closure review passed all 39 checks. Six short watchdog samples satisfy
+floors/heartbeat/home limits, with explicit operator closure and no running proof containers;
+no sustained resource-fit claim follows. Owned runtime, reservations and ephemeral keys are absent,
+retained homes/archive remain and Moss is healthy. Exact final evidence review is in the review ledger.
+
+This supersedes persistence's earlier NOT_RUN status for the bounded offline amd64 proof only.
+Actual Moss owner HTTPS/WSS/revocation, receiving-side sole writer and queue/key fencing,
+chat/browser UI, installed storage/lifecycle/idle sleep-wake, confined Internet egress and platform
+release cases remain open. Synthetic mTLS does not qualify product ownership. Issues #3577/#3578/
+#3605 stay open; draft #3612 stacks on unmerged #3607 and #3598. No deployment or merge occurred.

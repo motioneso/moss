@@ -1,0 +1,271 @@
+{
+  "status": "UNRESOLVED_NO_SUPPORTED_REPAIR",
+  "task": 3578,
+  "parent": 3577,
+  "integration_task": 3605,
+  "branch": "fix/moss-computer-viewer-persistence",
+  "diagnostic_plan_commit": "776c5931603b98586a6d4bf93cb7173a7203b46a",
+  "runtime_attempts_used": 0,
+  "runtime_launch_ready": false,
+  "entry": {
+    "at": "2026-10-24T01:21:46.408362+00:00",
+    "stage": "entry",
+    "ram": 39025819648,
+    "root": 37538738176,
+    "data": 976592678912,
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "health": {
+      "exit": 0,
+      "stdout": "{\"ok\":true}",
+      "stderr": ""
+    },
+    "pass": true
+  },
+  "image": {
+    "id": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "inspection": "No such image",
+    "loaded": false,
+    "archive_verification": "NOT_RUN_NOT_LOADING"
+  },
+  "comparison": {
+    "at": "2026-10-24T01:24:32.759870+00:00",
+    "retained": {
+      "r11": {
+        "raw_receipt_sha256": {
+          "count": 52,
+          "mismatches": []
+        },
+        "surviving_launch_artifact_hashes": {
+          "count": 34,
+          "mismatches": []
+        },
+        "watchdog_stop": "operator closure\nNO_RUNNING_PROOF_CONTAINERS",
+        "watchdog_sample_count": 2,
+        "source_manifest_matches": {
+          ".env": true,
+          "access-check.mjs": true,
+          "access-controls.py": true,
+          "admission.py": true,
+          "closure.py": true,
+          "compose.yaml": true,
+          "diagnostics.py": true,
+          "gateway/nginx.conf": true,
+          "guest-contract-test.py": true,
+          "guest-rfb.py": true,
+          "isolation.py": true,
+          "mutate.py": true,
+          "port": true,
+          "probe-regression.mjs": true,
+          "proof.json": true,
+          "readiness-gateway.mjs": true,
+          "readiness.py": true,
+          "rfb-contract-test.mjs": true,
+          "rfb-session.mjs": true,
+          "run.py": true,
+          "startup.mjs": true,
+          "supervise.py": true,
+          "window-test.mjs": true,
+          "window.mjs": true
+        }
+      },
+      "r12": {
+        "raw_receipt_sha256": {
+          "count": 39,
+          "mismatches": []
+        },
+        "surviving_launch_artifact_hashes": {
+          "count": 27,
+          "mismatches": []
+        },
+        "watchdog_stop": "operator closure\nNO_RUNNING_PROOF_CONTAINERS",
+        "watchdog_sample_count": 14,
+        "source_manifest_matches": {
+          ".env": true,
+          "__pycache__/guest-rfb.cpython-312.pyc": true,
+          "access-check.mjs": true,
+          "access-controls.py": true,
+          "admission.py": true,
+          "check-state.py": true,
+          "compose.yaml": true,
+          "controls.py": true,
+          "diagnostics.py": true,
+          "gateway/nginx.conf": true,
+          "guest-contract-test.py": true,
+          "guest-rfb.py": true,
+          "isolation.py": true,
+          "mutate.py": true,
+          "persistence.mjs": true,
+          "port": true,
+          "probe-regression.mjs": true,
+          "process.py": true,
+          "proof.json": true,
+          "readiness-gateway.mjs": true,
+          "readiness.py": true,
+          "rfb-contract-test.mjs": true,
+          "rfb-session.mjs": true,
+          "run.py": true,
+          "supervise.py": true,
+          "window-test.mjs": true,
+          "window.mjs": true
+        }
+      }
+    },
+    "connect_function_equal": true,
+    "connect_function_sha256": "c816d3beeac81d0987259917d3283d2f4d7447e7e9a9e972cbd35df4aecee04e",
+    "normalized_equal": {
+      "compose.yaml": true,
+      "gateway/nginx.conf": true,
+      "access-check.mjs": true,
+      "access-controls.py": true,
+      "readiness.py": true,
+      "readiness-gateway.mjs": true,
+      "guest-rfb.py": true,
+      "rfb-session.mjs": true
+    },
+    "missing_diagnostic_channels": [
+      "console",
+      "requestfailed",
+      "websocket",
+      "unhandledrejection",
+      "current UI/RFB/DOM/settings snapshot"
+    ],
+    "initial_checker_error": "Exit 1: compared runtime-mutated r12 receipts/access.json against prelaunch manifest; not a source mismatch. Final access receipt matches tracked final evidence.",
+    "status": "PASS_RETAINED_FINAL_HASHES_AND_SOURCE_COMPARISON"
+  },
+  "offline_prime_check": {
+    "at": "2026-10-24T01:24:56.610Z",
+    "node": "v22.22.2",
+    "vendor_sha256": "70ba76ca86ceaea27dc338bbfee4cebcfef1160812c8d410241f3667dff4864c",
+    "cases": [
+      {
+        "label": "script before DOM; settings before DOM",
+        "start": 1,
+        "listen": 1,
+        "pass": true
+      },
+      {
+        "label": "script before DOM; settings after DOM",
+        "start": 1,
+        "listen": 0,
+        "pass": true
+      },
+      {
+        "label": "dynamic import after DOM",
+        "start": 1,
+        "listen": 0,
+        "pass": true
+      },
+      {
+        "label": "dynamic import after load",
+        "start": 1,
+        "listen": 0,
+        "pass": true
+      }
+    ],
+    "negative": {
+      "label": "negative control: delete readyState fast path",
+      "start": 0,
+      "listen": 1,
+      "pass": false
+    },
+    "status": "PASS_OFFLINE_SCHEDULING_CHECK_ONLY"
+  },
+  "last_retained_backend_connection": {
+    "opened": "2026-10-23T22:00:34.914458148Z",
+    "closed": "2026-10-23T22:00:34.924588103Z",
+    "browser_operation_started": "2026-10-23T22:00:35.485Z",
+    "limit": "No later backend connection in retained bounded tail; does not prove no browser WebSocket attempt."
+  },
+  "not_run": [
+    "new desktop launch",
+    "current viewer UI/RFB connection",
+    "visible frame",
+    "fresh viewer input",
+    "active Firefox sandbox",
+    "clean browser shutdown and profile flush",
+    "file/bookmark negative controls",
+    "desktop replacement",
+    "unchanged durable file/profile hashes",
+    "fresh browser UI/input readback"
+  ],
+  "operator_closure": {
+    "at": "2026-10-24T01:25:24.782992+00:00",
+    "containers": {
+      "viewer-repair-r13": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "persistence-r12": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "readiness-r11": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    },
+    "networks": {
+      "viewer-repair-r13": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "persistence-r12": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "readiness-r11": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    },
+    "runtime_started": false,
+    "browser_started": false,
+    "watchdog_started": false,
+    "port_claimed": null,
+    "ephemeral_keys_created": false,
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "health": {
+      "exit": 0,
+      "stdout": "{\"ok\":true}",
+      "stderr": ""
+    },
+    "retained_paths_present": {
+      "../moss-computer-readiness-r11/home": true,
+      "../moss-computer-persistence-r12/home": true,
+      "../moss-computer-reconstruct-r2/candidate-image.tar": true,
+      "../moss-computer-implementation-private": true
+    },
+    "no_new_runtime_dirs": true,
+    "pass": true
+  },
+  "raw_artifact_sha256": {
+    "admission.py": "b597f991920207e8b551b6f93e41cce419ceb61ebf15c1ba54bc2c522baa33d3",
+    "prime-check.mjs": "61a9311cbe3fe8aa6b2db55ed43d2acf3f146c78271adc78bd3bb106684024ce",
+    "receipts/comparison.json": "92056bb9bba1a19cb7024b06450e537c26845de58a73e8cd8257f9acebb20058",
+    "receipts/entry.json": "10061ed64e43c148e72a314428a19156820c271107e10bc4ddef4857cadf32a3",
+    "receipts/operator-closure.json": "eafd8207b142b23470fd03213bd9145b2c50de565c876a0a6662530ae4e84d02",
+    "receipts/prime-check.json": "3217b0557f34931023c2d54fa11c2c6973ddd3d9a8a1afe35b4b39c4b7c64e84",
+    "receipts/prime-check.log": "d854b33db3d1c291466fa430a6b7e41247872409242ff51c4ff364d00f45426a"
+  },
+  "limits": [
+    "Scheduling test uses explicit DOM/settings doubles and a stub start; does not reproduce or fix r12 viewer failure.",
+    "No current actual UI/RFB/DOM/console/WebSocket failure snapshot exists in old receipts.",
+    "No comprehensive historical-home or archive rehash.",
+    "No supported causal repair or accepted launch packet.",
+    "No production owner auth, receiving input, lifecycle, egress or product integration acceptance."
+  ]
+}
