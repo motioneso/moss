@@ -234,3 +234,29 @@ failures under concurrent local work. The unchanged Workshop file passed 18/18 i
 isolation. The gate was stopped with exit 143 for the new candidate; it has no
 passing verdict. Run the final full gate after live stacks finish, preserving all
 assertions, budgets and production guards. Review the final exact head afresh.
+
+The bounded preference candidate `fabc4133dc4ff9cc2ae96bae838aab98e91d0777`
+failed its original fixed Sports matrix: **14/20 cards and 14/20 useful answers**,
+required at least 19 cards and all useful answers. Zero retries; discovered eligible
+Codex economy `gpt-6-luna`; no intercepted app responses. Saved tool activity for
+the first six turns contains only `web_search`; those replies report unsuccessful
+searches. Turn seven resumes `sports.latestResult` and `chat.present`, followed by
+fourteen correct cards. The independent public read succeeded before the matrix.
+This establishes unreliable tool selection, not an unavailable Sports source.
+It does not establish a new catalog/registration defect or authorize another prompt
+variant. The initial eight-card diagnostic remains supporting evidence only.
+
+The run passed exact source-bound facts, real crests, immutable snapshot/reload and
+390px bounds. Sports prose controls and novel composition were not reached because
+the matrix failed. Sports turn latency: median 4,738 ms, p95 15,310 ms, range
+3,648–24,325 ms; saved visual envelopes were 1,256 bytes, prose 52–255 bytes.
+The separate generic matrix produced 20/20 visuals, four prose controls and useful
+text in all 24 replies; its additional lifecycle verdict is recorded on the PR.
+Both independent code reviews approve the tested exact product head, with zero
+findings; that approval does not pass acceptance. No final full local gate passed.
+
+Recommendation: retain the renderer and 19/20 gate, keep merge and Weather blocked,
+and investigate a bounded source-tool routing repair as a distinct design decision.
+There is no evidence supporting more presentation wording variants or repeated
+unchanged acceptance runs. Obtain Ben's next decision before dependent rollout;
+continue only independent verification and evidence preservation while it is pending.

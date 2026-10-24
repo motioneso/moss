@@ -92,3 +92,23 @@ configuration was removed and EMPTY confirmed. This is partial acceptance. -->
 The latest proof passed physical Verify and Start/hold enrollment, then expired
 waiting for fresh samples. Ben is recording during his meeting; no additional
 user step is requested during it. Delivery of those samples is unverified. -->
+
+
+### Visual chat Sports — retained acceptance gate (#3629 / PR #3633)
+
+Agent: `visual-chat-sports`. The bounded preference candidate `fabc4133d` failed
+its original installed matrix: **14/20 cards, 14/20 useful answers**, required at
+least 19 cards and all useful answers. Six turns used unsuccessful web searches;
+the next fourteen used the Sports read and saved correct cards. The direct Sports
+source read succeeded; real crests, source facts, reload and 390px checks passed.
+The generic matrix produced 20/20 visuals and four prose controls. Independent
+Standards and Spec code reviews approve; acceptance remains failed.
+
+The committed plan limits this experiment to one candidate and requires the next
+measured decision if it fails without a concrete integration defect. Existing
+repair authority does not waive the gate. Merge and Weather remain blocked.
+
+Options: investigate/design a bounded source-tool routing repair while retaining
+the renderer, model choice and 19/20 threshold (**recommended**), or hold the Sports
+rollout. Do not repeat presentation wording variants or unchanged evaluations.
+This is a product acceptance decision, not an environment blocker.
