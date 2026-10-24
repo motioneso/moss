@@ -169,3 +169,31 @@ an initial suspended mount. Hoist the lazy domain loader to module scope so it
 survives suspension and subsequent updates reuse the loaded contribution. The
 regression was observed red before this fix and green afterward. Keep the first
 failed matrix/render run in the evidence; evaluate a new fixed matrix, not retries.
+
+Candidate `dadcb3a5f` then rendered the real card. One run stopped at failed crest
+loads; subsequent app-origin and actual-card diagnostics loaded both real assets.
+A separately identified complete matrix on discovered economy `gpt-6-luna` passed
+crests, saved snapshot/reload and 390px checks but failed selection: **17/20** cards.
+Cases 4, 8 and 13 were prose. This remains failed acceptance, even though a separate
+instrumented diagnostic produced cards for all 20. Diagnostics never replace the
+required matrix or authorize repeating unchanged evaluations until one passes.
+
+Before any further selection repair, inspect per-turn read/presentation activity
+on a missing-card diagnostic. Only a verified omitted current read would support
+fresh-read guidance; a read followed by prose is a different failure. Keep the
+original fixed prompts, order, conversation and 19/20 threshold. Any trusted
+guidance change also repeats generic composition and prose-control acceptance.
+
+The prose harness incorrectly rejected the concise correct answer “Liverpool beat
+Brentford 2–1.” solely on character count. Replace that arbitrary cutoff with bounded
+checks for both team names and an actual score pair, keeping refusal/DSL rejection.
+Negative cases reject unrelated teams, wrong scores and misleading digit substrings.
+Exact home/away alignment is still asserted against the source-bound card; these
+prose checks are not a general language parser. This correction does not turn the
+17/20 visual failure into a pass.
+
+CI also exposed two stale fixture expectations: the explicit route total must include
+the new read, and Finance's exact expected version must match its required artifact
+bump. Preserve exhaustive route rows and recovery assertions. An unchanged pattern
+queue timing test failed under concurrent local work; its isolated 26-test file passed.
+The interrupted full gate has no passing verdict and must be rerun on the final head.

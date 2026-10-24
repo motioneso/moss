@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInUatAdmin, bringUpRealChatModel } from "./real-chat-signin.js";
 import type { VisualReplyV1 } from "@moss/shared";
+import { hasUsefulSportsAnswer } from "../sports-answer.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 const prompts = [
@@ -71,14 +72,7 @@ test("ordinary Sports questions save real sourced results and retain user-data c
     const { saved, elapsedMs } = await turn(page, prompt);
     const envelope: VisualReplyV1 | undefined = saved.visualReply;
     const visual = envelope?.blocks[0]?.kind === "sports.result";
-    const useful =
-      typeof saved.reply === "string" &&
-      saved.reply.trim().length > 30 &&
-      /Liverpool/i.test(saved.reply) &&
-      [read.result.home.score, read.result.away.score].every(
-        (score) => score === null || saved.reply.includes(String(score))
-      ) &&
-      !/root =|cannot answer|unable to|couldn't (?:find|retrieve)/i.test(saved.reply);
+    const useful = hasUsefulSportsAnswer(saved.reply, read.result);
     results.push({ index: index + 1, visual, useful, elapsedMs });
     console.log(
       `[sports-route] ${JSON.stringify({ ...results.at(-1), prompt, reply: saved.reply.slice(0, 1500), providerModel: model.providerModelId, replyBytes: Buffer.byteLength(saved.reply), visualBytes: Buffer.byteLength(JSON.stringify(envelope ?? null)) })}`

@@ -37,9 +37,9 @@ function row(moduleId: string, route: NonNullable<MossModuleManifest["routes"]>[
 }
 
 describe("feed route chat classification", () => {
-  it("classifies all 46 routes explicitly, with no inherited access or content", () => {
+  it("classifies all 47 routes explicitly, with no inherited access or content", () => {
     expect(new Set(manifests.map((manifest) => manifest.id))).toEqual(FEEDS_MODULE_IDS);
-    expect(routes).toHaveLength(46);
+    expect(routes).toHaveLength(47);
     for (const manifest of manifests) {
       expect(manifest.chatDefaults?.access).toBeUndefined();
       for (const route of manifest.routes ?? []) {
