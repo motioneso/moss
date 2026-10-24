@@ -75,6 +75,20 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+### Vocci adapter recovery — phone unlock (#3565)
+
+`vocci-adapter-recovery` has exclusive ownership. Fresh explicit-device preflight
+found the authorized phone online with Bluetooth ON and the exact live foreground
+service, but its lock-screen observation reports locked; native UI comparison and
+the single authorized adapter check cannot proceed. No adapter change was issued.
+Private `adapter-recovery/preflight.json` records the checks. Tested checkout
+contains merged main `7535cfb10`; `HEAD..origin/main` has zero commits.
+
+Please unlock the authorized phone when convenient and tell this agent. Recommended:
+continue the bounded check after a fresh preflight. Alternatively defer physical
+acceptance; offline observer correction/review can proceed independently. No new
+recording, enrollment or reinstallation is requested.
+
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
