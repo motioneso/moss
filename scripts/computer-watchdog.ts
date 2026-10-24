@@ -75,12 +75,11 @@ async function main(): Promise<number> {
     watchdog.processGroupId === deployment.configuration.runner.processGroupId
   )
     throw supervisorError();
-  // Journal startup is still under the independent bootstrap deadline. Driver owns later deadlines.
+  // Bootstrap stays armed through the driver's first complete durable healthy sample.
   if (mode === "manage")
     return manageDeployment(deployment, startedAtMs, watchdog, acknowledgeStartup);
   const result = superviseDeployment(deployment, startedAtMs, watchdog, acknowledgeStartup);
-  // Do not clear until creation has settled: superviseDeployment installs timers after its await.
-  // Its first policy tick includes all startup time.
+  // Driver ticks and all bootstrap work retain the original startup timestamp.
   const outcome = await result;
   return outcome.exitCode;
 }
