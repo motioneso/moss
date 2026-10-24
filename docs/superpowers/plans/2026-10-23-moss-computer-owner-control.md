@@ -91,12 +91,14 @@ No separate Computer module or navigation entry is proposed. The [earlier screen
 are retained as superseded design history. V2 awaits feedback/approval; requesting mockups or
 receiving a Taildrop file is not screen approval. Internal backend policy acceptance is unchanged.
 
-V2 mockup verification: fresh Firefox/Playwright checked all five scenes, six states and three
-themes at 1280/768/414/375/320px (450 combinations). Checks covered horizontal fit, capture-age
-labels, watch/control/return transitions, close-pauses behavior, focus restoration, local-only
-example messages and no outbound HTTP(S) requests. Final cropped desktop/drawer/phone views were
-visually inspected. The self-contained `Moss-Computer-in-Chat-v2.html` was sent to abl10 by Taildrop
-on request (exit 0). These are prototype checks only; no product UI or desktop runtime was tested.
+V2 mockup verification: fresh Firefox/Playwright ran 450 layout/state/theme iterations at
+1280/768/414/375/320px. State selection returns takeover scenes to watching, so those iterations
+include that fallback rather than 450 distinct scene combinations. Direct takeover/return and
+close-pauses behavior were exercised separately at 1280px. Other checks covered horizontal fit,
+capture-age labels, focus restoration, local-only example messages and no outbound HTTP(S)
+requests. Final cropped desktop/drawer/phone views were visually inspected. The self-contained
+`Moss-Computer-in-Chat-v2.html` was sent to the requested device by Taildrop on request (exit 0).
+These are prototype checks only; no product UI or desktop runtime was tested.
 
 ## First integrated vertical slice (after design/runtime prerequisites)
 
