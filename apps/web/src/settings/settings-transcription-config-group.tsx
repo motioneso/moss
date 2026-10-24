@@ -73,10 +73,7 @@ export function TranscriptionConfigGroup() {
   });
   return (
     <>
-      <Group
-        title="Transcription"
-        desc="Choose the provider and model for voice input and Meeting transcripts for everyone. Admin locks still apply."
-      >
+      <Group title="Transcription" desc="For everyone's voice input and Meeting transcripts.">
         {error ? (
           <Note>
             Could not load transcription providers: {readError(error)}{" "}
@@ -99,7 +96,7 @@ export function TranscriptionConfigGroup() {
           label="Provider and model"
           controlId="transcription-model"
           hintId="transcription-model-hint"
-          hint="Add an OpenAI-compatible API provider above, then add a model with the Voice capability. The selected provider receives audio for transcription."
+          hint="Audio is sent to the selected provider."
         >
           <Select
             id="transcription-model"
@@ -132,10 +129,14 @@ export function TranscriptionConfigGroup() {
             {save.isPending ? "Saving…" : "Save transcription provider"}
           </Button>
         </Field>
-        {saved ? (
+        {ready && !error && !saved && !choices.length ? (
           <Note>
-            A selected model that becomes unavailable stops transcription. Choose another model or
-            the existing voice endpoint to recover.
+            Add an OpenAI-compatible provider above, then a model with the Voice capability.
+          </Note>
+        ) : null}
+        {ready && !error && saved && !choices.some((model) => model.id === saved) ? (
+          <Note>
+            Transcription is paused. Choose another model or use the existing voice endpoint.
           </Note>
         ) : null}
       </Group>

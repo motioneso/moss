@@ -353,7 +353,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_language",
       description:
-        "Settings → Meetings sets a spoken-language hint for new live clips and normal import windows. Automatic detection omits the hint. Existing text and hold input stay unchanged. The configured ASR service must support the language parameter.",
+        "Settings → Meetings has brief preference helpers. Language hints apply to upcoming clips and normal imports; automatic detection omits them. Requires ASR language support. Existing text and hold input stay unchanged.",
       errors: [
         {
           code: "transcription_failed",
