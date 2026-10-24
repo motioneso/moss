@@ -160,3 +160,12 @@ and the unchanged user-data matrix on the actual rollout model before acceptance
 The stopped full local gate also exposed missing results-route classification and
 approval fixtures. Add those cases and make the approval fixture check GET query
 fields, matching the route catalog's existing request-schema semantics.
+
+The repaired candidate's first matrix turn saved the source-bound card, then failed
+its real browser render assertion: the slot remained at Preparing visual. A focused
+React regression reproduced that state after resolving the module loader. Creating
+`lazy()` inside the component's `useMemo` gave it a new identity when React retried
+an initial suspended mount. Hoist the lazy domain loader to module scope so it
+survives suspension and subsequent updates reuse the loaded contribution. The
+regression was observed red before this fix and green afterward. Keep the first
+failed matrix/render run in the evidence; evaluate a new fixed matrix, not retries.
