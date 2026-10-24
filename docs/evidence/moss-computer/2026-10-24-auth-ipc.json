@@ -1,0 +1,227 @@
+{
+  "scope": "Internal opt-in Computer auth IPC prerequisite only; no installed gateway or owner/runtime acceptance",
+  "issue": 3618,
+  "pr": 3627,
+  "base": "77c1fe9c23144c9ceb987b714ed9c916c0068135",
+  "source_candidate": "371386564566b44190cc269b1c1845a683899ea1",
+  "source_restored": true,
+  "source_sha256": {
+    "apps/api/src/computer/auth-channel.ts": "4335eefe1746f1a3af5f7ed0a5454a550a21f22cff1a6fd2d0fe779ad5b1f899",
+    "apps/api/src/computer/auth-client.ts": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+    "apps/api/src/computer/auth-server.ts": "66179db7e9dffc534397604016f189353d739761a5750a952d5303bec4d5cda1",
+    "packages/auth/src/__tests__/vendor-memory-auth.ts": "262ad7a289829f89bbf9005f19dca648968fa409149a775b4ed4ee42cb0a7fae",
+    "packages/auth/src/index.ts": "e17c1475c35dc87cb1b1d7b8a0f8299268874a0526487c695827fca4ab27bfa0",
+    "packages/auth/src/session-invalidations.ts": "26633aed084cb33fe5986270c140ec015af58dd1b2141607fde2e2f543db11c5",
+    "packages/auth/src/session-service.ts": "7da59e5432cd1322296e323678d04fd4da41340839d388934d0ca27726984ae1",
+    "tests/unit/auth-runtime-invalidations.test.ts": "838ca11f689f8f9068c6df397a159561be39eb64119ce1774d1b1fd8f9812b34",
+    "tests/unit/auth-session-invalidations.test.ts": "6b8940b2f0c178c50f5521543a7dcb9f231f7c26783b2c8269e706a76c49865f",
+    "tests/unit/computer-auth-endpoint.test.ts": "ae946e1d1562f0674b73103cb9897bd733560794469d1c5f3a54a1f130854343",
+    "tests/unit/computer-auth-fixture.ts": "8aaed2743d6d571f3943d01faf3f2606bfd7380515fccfc66ce0a401fb99feeb",
+    "tests/unit/computer-auth-lifetime.test.ts": "1ca0ce0bfbc197fd3f5f880d9530880cc77e2ae8611081cbd129d8e79c99f878",
+    "tests/unit/computer-auth.test.ts": "9680588bdcc407f981beb631e91b44d1c799f0a2edf28f3b6ed1f21413f1305e"
+  },
+  "tests": {
+    "passed": 134,
+    "files": 10,
+    "transport": "real Unix sockets",
+    "auth_vendor": "real Better Auth signOut with in-memory adapter; no database",
+    "sql": "recording queries; no database"
+  },
+  "checks": [
+    {
+      "name": "behavior",
+      "command": "pnpm exec vitest run tests/unit/{computer-auth,computer-auth-lifetime,computer-auth-endpoint,auth-session-invalidations,auth-runtime-invalidations,auth-secure-cookies,computer-input-control,computer-rfb-input,computer-host,computer-host-client}.test.ts",
+      "exit": 0,
+      "log_sha256": "4cb1d052f2022e36cb92b3c1a1e5301c8ebd8ff4773328202fe57852b1b7e24f"
+    },
+    {
+      "name": "root TypeScript",
+      "command": "pnpm exec tsc --noEmit",
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests TypeScript",
+      "command": "pnpm exec tsc -p tsconfig.tests.json --noEmit",
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "scoped ESLint",
+      "command": "pnpm exec eslint <13 changed TypeScript files> --max-warnings=0",
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "scoped Prettier",
+      "command": "pnpm exec prettier --check <13 changed TypeScript files and plan>",
+      "exit": 0,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file size",
+      "command": "pnpm check:file-size",
+      "exit": 0,
+      "log_sha256": "9f70016a52a0b19c752d062626eb9bac19aee6d9459dcc9e0a1f9aa0cb6dd897"
+    }
+  ],
+  "control_script_sha256": "17e83315d671afdf94ff54af1e1221ccd78bb9e6fcfb97a6381bad87e95e0dc0",
+  "controls": [
+    {
+      "name": "identity",
+      "file": "apps/api/src/computer/auth-client.ts",
+      "test": "rejects hostile identity replies",
+      "exit": 1,
+      "seconds": 1.94,
+      "log_sha256": "aa70586ccf0079baff2f0e9809ded4f7c092b840b6b78d68391ead1a0a28ab51",
+      "original_sha256": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+      "mutant_sha256": "68bb2b0b234a091c49954fe69ff3db5431fa41345980ca3d7aad76d7d31bb0e7",
+      "observed_failure": "foreign binding accepted",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "correlation",
+      "file": "apps/api/src/computer/auth-client.ts",
+      "test": "rejects hostile correlation replies",
+      "exit": 1,
+      "seconds": 2.38,
+      "log_sha256": "a6936bb11bffc24dcf6053a2c1b9da65e5823e499a4549a5f4858e4ad70814bf",
+      "original_sha256": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+      "mutant_sha256": "b2d25e487bc97e2e36c0a41bd9c60ba0a36026d7ebd1081712a4df0ab7031ec4",
+      "observed_failure": "uncorrelated reply accepted",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "absolute-expiry",
+      "file": "apps/api/src/computer/auth-client.ts",
+      "test": "expires idle clients absolutely",
+      "exit": 1,
+      "seconds": 1.37,
+      "log_sha256": "c5620360ef171440ba1d2f917dfa291d0a02dc62a8ca21727b694d326db2ba79",
+      "original_sha256": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+      "mutant_sha256": "aa0832be15498cd6c08c40053a0e7c2bb8e32904abd1a3336d7c98bdd15e00ac",
+      "observed_failure": "idle expiry callback absent",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "post-await-epoch",
+      "file": "apps/api/src/computer/auth-client.ts",
+      "test": "rechecks the lifetime after a correlated success",
+      "exit": 1,
+      "seconds": 1.32,
+      "log_sha256": "7ef0927f20dcef933f696613e72813f3eea05ba213d6a635981820fa4bd8c2c6",
+      "original_sha256": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+      "mutant_sha256": "ca02a05eca4b2ace87c038aced31dba0e6c236a5d291c96f151ae628ed1006bc",
+      "observed_failure": "post-await operation resolved after retirement",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "push-retirement",
+      "file": "apps/api/src/computer/auth-server.ts",
+      "test": "pushes revocation to an idle active policy",
+      "exit": 1,
+      "seconds": 2.91,
+      "log_sha256": "5d431f3eb06b391e02801a95e3a0d400671324c8be4d390426e191f2da44b089",
+      "original_sha256": "66179db7e9dffc534397604016f189353d739761a5750a952d5303bec4d5cda1",
+      "mutant_sha256": "f18f66d891e1d59b5be5b378b22f8d893a1aae66c9611310f7b06247e4ec8c98",
+      "observed_failure": "push retirement callback absent",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "idle-poll",
+      "file": "apps/api/src/computer/auth-client.ts",
+      "test": "polls while idle",
+      "exit": 1,
+      "seconds": 2.92,
+      "log_sha256": "6b8045f5c1802e3e17a09d17d75a95d2df39714e20aeebc03a3be66103274888",
+      "original_sha256": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+      "mutant_sha256": "de92c945c294a257d8226cc8730a15c5a5e02525a28ff5da3446840cec016888",
+      "observed_failure": "idle check absent",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "check-deadline",
+      "file": "apps/api/src/computer/auth-client.ts",
+      "test": "polls while idle",
+      "exit": 1,
+      "seconds": 1.07,
+      "log_sha256": "e7c3f74c5d9a0c6cae755ccdccfaa9791c20a47d6d149630cfc015cfef1cb470",
+      "original_sha256": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+      "mutant_sha256": "68393b7e2e43c06cd42b8f3f10a087f35e0756087b5a6f85d7c628826ab86888",
+      "observed_failure": "outstanding-check timeout callback absent",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "backlog-preflight",
+      "file": "apps/api/src/computer/auth-channel.ts",
+      "test": "bounds real corked writable backlog",
+      "exit": 1,
+      "seconds": 1.07,
+      "log_sha256": "dbaab8f6f9cb77c6a04c9e21f61fa53cb873952588dc2c542218921f01874108",
+      "original_sha256": "4335eefe1746f1a3af5f7ed0a5454a550a21f22cff1a6fd2d0fe779ad5b1f899",
+      "mutant_sha256": "08c8a45f76c225ca85be27669ee6e6f1a51d083e5b992eab8dd4c68f372c9f87",
+      "observed_failure": "actual queued backlog 66330 exceeds65536",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "revoke-completion",
+      "file": "packages/auth/src/session-invalidations.ts",
+      "test": "completion push retires a new binding",
+      "exit": 1,
+      "seconds": 3.92,
+      "log_sha256": "5a160e37406b50b536a307038904b0d497fbaf4020937812aee8d522a384e8ae",
+      "original_sha256": "26633aed084cb33fe5986270c140ec015af58dd1b2141607fde2e2f543db11c5",
+      "mutant_sha256": "a9eff0f8e7e9a92e3a9519662767bd8c04f7f785732d40209899af6f9a6ce775",
+      "observed_failure": "completion notification did not retire raced binding",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "vendor-hooks",
+      "file": "packages/auth/src/session-invalidations.ts",
+      "test": "real Better Auth signOut",
+      "exit": 1,
+      "seconds": 3.07,
+      "log_sha256": "8bf55cf8629666d202fae0acb8372b36fbae622e1d0430cb889f865d14b708a8",
+      "original_sha256": "26633aed084cb33fe5986270c140ec015af58dd1b2141607fde2e2f543db11c5",
+      "mutant_sha256": "d59e98828f96dbdf9b31d180e27da3449d6fd017099a543cc4ec96c6d42d548d",
+      "observed_failure": "vendor signOut produced no invalidation notifications",
+      "mutation": "one protection removed from source candidate; exact script and mutant hashes retained privately"
+    },
+    {
+      "name": "native-endpoint-ownership",
+      "file": "apps/api/src/computer/auth-server.ts",
+      "test": "preserves a replacement listener",
+      "exit": 1,
+      "seconds": 1.02,
+      "log_sha256": "e1e2d5e5cc73f4f139c5adf49ba28cf650578ab4606273302c666e3dc7585e05",
+      "original_sha256": "66179db7e9dffc534397604016f189353d739761a5750a952d5303bec4d5cda1",
+      "mutant_sha256": "cd6fe06137357bd285a81e24004a2f1cbb2bd619af368e3d9a32e71d91865df2",
+      "observed_failure": "old Node listener close removed replacement endpoint (ENOENT at lstat)",
+      "mutation": "source restored to2270d4577 for original cleanup behavior"
+    }
+  ],
+  "source_reviews": [
+    {
+      "name": "Standards R2",
+      "verdict": "PASS",
+      "receipt_sha256": "6d063cd0f2a820edb0d011073ce6d94c41c6d4f83f9daabae9c9b03fdeb61bb9"
+    },
+    {
+      "name": "Spec R2",
+      "verdict": "PASS",
+      "receipt_sha256": "7cbdf67d5fb56489926b8aa308179b6fbf8a5f683026d831a4b0e0ee10f4a3bf"
+    },
+    {
+      "name": "Security source R2",
+      "verdict": "PASS",
+      "receipt_sha256": "6be81d42793d2d3dbdbb4f561d60ab83aff3fc5b2bd361e9fc40ea297bef3507"
+    },
+    {
+      "name": "Security ownership amendment R3",
+      "verdict": "PASS",
+      "receipt_sha256": "d2a6a9ba7bef5a0c5714b796c581842f0e7a760248aa9693b001dde2598d74d1"
+    }
+  ],
+  "no_db_docker_guest_production_mutation": true,
+  "remaining_issues": [3618, 3619, 3616, 3577]
+}
