@@ -141,6 +141,9 @@ sample append; a stuck append can prevent durability but cannot prevent local te
 Finalization has one absolute5s deadline from terminal entry, covering collector exit, journal
 write/fsync and descriptor closure. The CLI exits nonzero at that deadline even with unsettled I/O;
 retain the journal and exact uncertain collector PID/start/group recorded before accepting output.
+If terminal entry precedes identity acquisition, retain the owned raw child PID with explicitly
+unknown full identity in the stop record; unconfirmed exit cannot be successful closure. Keep OS
+TERM/INT handlers installed as terminal no-ops until finalization completes, including repeated signals.
 Late writes cannot create healthy state. If persistence or collector closure fails, report failure
 through exit status; retain journal and uncertain identities. Do
 not claim durable stop or successful closure without both acknowledgements. Keep every record;
@@ -211,3 +214,10 @@ persistence and owned-collector termination, then require both acknowledgements 
 deadline. A stuck prior append or fsync is unresolved failure, never durable-stop success. Retain
 the journal and exact uncertain identity; test held exit and held persistence independently.
 No other blocking security finding or disputed ruling. Exact amendment needs independent R2.
+
+Source R1 (`f04cd45e4`): Standards and Spec accepted; independent security blocked on three
+accepted P2 findings. Keep real OS signal handlers through finalization (EventEmitter removal
+does not model Node's restored default exit); include raw owned child PID even when full identity
+acquisition has not completed; use path-segment ancestry so a legal `..monitor` child cannot
+bypass trusted-root overlap checks. Add real double-signal, held-identity/exit and equal/ordinary/
+double-dot-prefixed-child regressions. No disputed findings; exact correction needs independent R2.

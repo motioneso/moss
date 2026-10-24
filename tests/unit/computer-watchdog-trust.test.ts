@@ -155,6 +155,26 @@ describe("root supervisor trust checks, no installed deployment claim", () => {
     ).resolves.toBeUndefined();
     const deployment = await loadSupervisorDeployment(configPath, artifact, true);
     await expect(revalidateDeployment(deployment)).resolves.toBeUndefined();
+    const controlRoot = roots.find((root) => root.path === host.config.controlDir)!;
+    for (const name of ["child", "..monitor"]) {
+      const path = join(host.config.controlDir, name);
+      await fs.mkdir(path, { mode: 0o700 });
+      const { dev, ino, uid, gid, mode } = await fs.lstat(path);
+      await fs.writeFile(
+        configPath,
+        JSON.stringify({ ...value, monitor: { path, dev, ino, uid, gid, mode } })
+      );
+      await expect(
+        loadSupervisorDeployment(configPath, artifact, true),
+        `overlapping monitor ${name}`
+      ).rejects.toThrow();
+    }
+    await fs.writeFile(configPath, JSON.stringify({ ...value, monitor: controlRoot }));
+    await expect(
+      loadSupervisorDeployment(configPath, artifact, true),
+      "equal roots"
+    ).rejects.toThrow();
+    await fs.writeFile(configPath, bytes);
     await fs.appendFile(configPath, "\n");
     await expect(revalidateDeployment(deployment)).rejects.toThrow();
     await fs.writeFile(configPath, bytes);

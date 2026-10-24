@@ -37,7 +37,7 @@ describe("exclusive durable observation journal, real temporary files under curr
   it("fsyncs header/identity/first stop, retains records and refuses crash reopening", async () => {
     const f = await fixture();
     await f.journal.collector(configuration.watchdog);
-    await f.journal.stop(5000, "measurement-failed", configuration.watchdog);
+    await f.journal.stop(5000, "measurement-failed", null, 303);
     await expect(f.journal.stop(6000, "operator-stop", null)).rejects.toThrow();
     await f.journal.inspect();
     const records = (await fs.readFile(f.file, "utf8"))
@@ -45,7 +45,12 @@ describe("exclusive durable observation journal, real temporary files under curr
       .split("\n")
       .map((line) => JSON.parse(line) as { type: string });
     expect(records.map((record) => record.type)).toEqual(["start", "collector", "stop"]);
-    expect(records[2]).toMatchObject({ reason: "measurement-failed", atMs: 5000 });
+    expect(records[2]).toMatchObject({
+      reason: "measurement-failed",
+      atMs: 5000,
+      collector: null,
+      collectorPid: 303
+    });
     await expect(ObservationJournal.create(f.root, configuration)).rejects.toThrow();
   });
   it("rejects replacement, symlink and unexpected directory content", async () => {

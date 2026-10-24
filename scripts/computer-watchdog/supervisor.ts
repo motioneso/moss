@@ -28,7 +28,8 @@ export interface SupervisorJournal {
   stop(
     atMs: number,
     reason: WatchdogStopReason,
-    collector: WatchdogProcessIdentity | null
+    collector: WatchdogProcessIdentity | null,
+    collectorPid: number | null
   ): Promise<void>;
   close(): Promise<void>;
 }
@@ -163,7 +164,6 @@ export function runComputerSupervisor(input: {
       clearInterval(timer);
       heartbeats.off("data", heartbeat).off("end", operatorStop).off("error", operatorStop);
       heartbeats.pause();
-      input.signals.off("SIGTERM", operatorStop).off("SIGINT", operatorStop);
       const decision =
         policy.decision.status === "stopped" ? policy.decision : policy.stop(input.now());
       if (decision.status !== "stopped") throw supervisorError();
@@ -175,6 +175,7 @@ export function runComputerSupervisor(input: {
         if (settled) return;
         settled = true;
         clearTimeout(deadline);
+        input.signals.off("SIGTERM", operatorStop).off("SIGINT", operatorStop);
         resolve(
           Object.freeze({
             reason,
@@ -206,7 +207,7 @@ export function runComputerSupervisor(input: {
           if (durableStop && descriptorsClosed) finish();
         });
       void journal
-        .stop(input.now(), reason, identity)
+        .stop(input.now(), reason, identity, current?.pid ?? null)
         .then(
           () => {
             durableStop = true;

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EventEmitter } from "node:events";
+import { EventEmitter, once } from "node:events";
+import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { PassThrough } from "node:stream";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -163,7 +165,12 @@ describe("independent Computer supervisor driver, disclosed journal/process port
     await f.advance(0);
     await f.advance(5000);
     expect(f.job.kill).toHaveBeenCalledTimes(1);
-    expect(f.journal.stop).toHaveBeenCalledWith(5000, "measurement-failed", collector);
+    expect(f.journal.stop).toHaveBeenCalledWith(
+      5000,
+      "measurement-failed",
+      collector,
+      collector.pid
+    );
     await f.advance(4999);
     let completed = false;
     void f.result.then(() => {
@@ -200,6 +207,25 @@ describe("independent Computer supervisor driver, disclosed journal/process port
     f.signals.emit("SIGTERM");
     await f.advance(0);
     expect(await f.result).toMatchObject({ exitCode: 2, durableStop: false });
+  });
+  it("persists raw owned PID when identity acquisition and exit acknowledgement are unavailable", async () => {
+    const f = harness({ holdExit: true });
+    const identity = deferred<typeof collector>();
+    Object.defineProperty(f.job, "identity", { value: identity.promise });
+    await f.advance(0);
+    f.signals.emit("SIGTERM");
+    await f.advance(5000);
+    expect(f.journal.stop).toHaveBeenCalledWith(0, "operator-stop", null, collector.pid);
+    expect(await f.result).toMatchObject({
+      exitCode: 2,
+      durableStop: true,
+      collectorExited: false,
+      collectorPid: collector.pid,
+      collectorIdentity: null
+    });
+    identity.resolve(collector);
+    await f.advance(0);
+    expect(f.job.collect).not.toHaveBeenCalled();
   });
   it("does not freshen old sample timestamps", async () => {
     const f = harness();
@@ -258,6 +284,71 @@ describe("independent Computer supervisor driver, disclosed journal/process port
 });
 
 describe("fixed native collector process transport, executable fixtures only", () => {
+  it("keeps real OS TERM handlers active while terminal persistence is pending", async () => {
+    const root = await mkdtemp(join(tmpdir(), "computer-signals-"));
+    cleanups.push(() => rm(root, { recursive: true, force: true }));
+    const file = join(root, "signals.mts");
+    const source = pathToFileURL(
+      join(process.cwd(), "scripts/computer-watchdog/supervisor.ts")
+    ).href;
+    await writeFile(
+      file,
+      `import {runComputerSupervisor} from ${JSON.stringify(source)};
+      import {PassThrough} from 'node:stream';
+      let release; const held=new Promise(resolve=>release=resolve);
+      process.stdin.once('data',()=>release());
+      const now=()=>Number(process.hrtime.bigint()/1000000n);
+      const pending=runComputerSupervisor({configuration:${JSON.stringify({ runId, runner, watchdog })},
+        now,signals:process,heartbeats:new PassThrough(),verifyRunner:async()=>{},
+        journal:{pending:false,inspect:async()=>{},collector:async()=>{},sample:async()=>{},close:async()=>{},stop:async()=>{console.log('stopping');await held}},
+        startCollector:()=>({pid:303,identity:Promise.resolve(${JSON.stringify(collector)}),result:new Promise(()=>{}),exited:Promise.resolve(),collect(){},kill(){}})});
+      console.log('ready');pending.then(result=>{console.log(JSON.stringify(result));process.exit(result.exitCode)});`.replace(
+        `configuration:${JSON.stringify({ runId, runner, watchdog })}`,
+        `configuration:{...${JSON.stringify({ runId, runner, watchdog })},startedAtMs:now()}`
+      )
+    );
+    const child = spawn(process.execPath, ["--import", "tsx", file], {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: process.cwd()
+    });
+    cleanups.push(async () => {
+      if (child.exitCode === null && child.signalCode === null) {
+        const done = once(child, "exit");
+        child.kill("SIGKILL");
+        await done;
+      }
+    });
+    const lines = new Set<string>();
+    const messages = new EventEmitter();
+    let buffer = "";
+    let stderr = "";
+    child.stderr.setEncoding("utf8").on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.stdout.setEncoding("utf8").on("data", (chunk) => {
+      buffer += chunk;
+      while (buffer.includes("\n")) {
+        const end = buffer.indexOf("\n");
+        const line = buffer.slice(0, end);
+        buffer = buffer.slice(end + 1);
+        lines.add(line);
+        messages.emit(line);
+      }
+    });
+    const line = async (name: string) => {
+      if (!lines.has(name)) await once(messages, name);
+    };
+    await line("ready");
+    child.kill("SIGTERM");
+    await line("stopping");
+    child.kill("SIGTERM");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(child.signalCode).toBeNull();
+    const exited = once(child, "exit");
+    child.stdin.end("release");
+    expect(await exited).toEqual([0, null]);
+    expect(stderr).toBe("");
+  });
   async function native(code: string) {
     const root = await mkdtemp(join(tmpdir(), "computer-child-"));
     cleanups.push(() => rm(root, { recursive: true, force: true }));

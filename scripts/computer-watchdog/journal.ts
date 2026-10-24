@@ -23,6 +23,7 @@ type Record =
       atMs: number;
       reason: WatchdogStopReason;
       collector: WatchdogProcessIdentity | null;
+      collectorPid: number | null;
     };
 
 async function entries(directory: FileHandle): Promise<string[]> {
@@ -129,7 +130,8 @@ export class ObservationJournal {
   stop(
     atMs: number,
     reason: WatchdogStopReason,
-    collector: WatchdogProcessIdentity | null
+    collector: WatchdogProcessIdentity | null,
+    collectorPid: number | null = collector?.pid ?? null
   ): Promise<void> {
     if (this.#terminal) return Promise.reject(supervisorError());
     this.#terminal = true;
@@ -137,7 +139,7 @@ export class ObservationJournal {
     const previous = this.#pending ?? Promise.resolve();
     return previous
       .catch(() => {})
-      .then(() => this.#append({ type: "stop", atMs, reason, collector }));
+      .then(() => this.#append({ type: "stop", atMs, reason, collector, collectorPid }));
   }
   #append(record: Record): Promise<void> {
     if (this.#pending) return Promise.reject(supervisorError());

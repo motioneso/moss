@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { lstat, open, opendir, readlink, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { dirname, isAbsolute, normalize, relative } from "node:path";
+import { dirname, isAbsolute, normalize, relative, sep } from "node:path";
 import { isRecord, isUuid } from "../../apps/api/src/computer/host-contract.js";
 import {
   inspectRoots,
@@ -231,7 +231,7 @@ export async function assertNullOutputs(pid: number): Promise<void> {
 }
 const contains = (a: string, b: string) => {
   const rel = relative(a, b);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 };
 
 export async function loadSupervisorDeployment(
