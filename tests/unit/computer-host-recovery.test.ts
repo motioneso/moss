@@ -343,6 +343,24 @@ describe("explicit terminal reconciliation (native files/Unix HTTP; no real Dock
     }
   );
 
+  it("same-byte marker replacement during cleanup inspect blocks every mutation", async () => {
+    const f = await running();
+    const inspect = f.docker.inspect.bind(f.docker);
+    let gatewayInspects = 0;
+    vi.spyOn(f.docker, "inspect").mockImplementation(async (resource) => {
+      const result = await inspect(resource);
+      if (resource.role === "gateway" && ++gatewayInspects === 2) {
+        const bytes = await fs.readFile(marker(f));
+        await fs.rename(marker(f), `${marker(f)}.retained`);
+        await fs.writeFile(marker(f), bytes, { mode: 0o600 });
+      }
+      return result;
+    });
+    await expect(stopComputerRecovery(f.store, f.docker)).rejects.toThrow();
+    expect(mutations(f)).toEqual([]);
+    expect(f.store.state.resources).toHaveLength(2);
+  });
+
   it("generation exhaustion retains terminal record without mutation", async () => {
     const f = await running();
     await f.store.save({ ...f.store.state, generation: Number.MAX_SAFE_INTEGER });
