@@ -57,7 +57,8 @@ its actual output imports any nonbuiltin external dependency. No generic build f
   a sanitized build receipt and writes a new exclusive context directory. Resolve source from
   the module location, never the invocation cwd. Bundle only the existing fixed executable using
   locked esbuild, platform=node, target=node24, format=cjs, write=false, metafile=true,
-  sourcemaps disabled and optional ws native accelerators compiled out. Validate the actual
+  sourcemaps disabled, fixed empty tsconfigRaw (no automatic repository tsconfig read), and
+  optional ws native accelerators compiled out. Validate the actual
   external imports are Node builtins before publishing any output. No network; only locked esbuild's
   native compiler subprocess is permitted, never Docker/host/guest execution.
 - `scripts/build-computer-gateway.ts`: opt-in CLI taking exactly one output directory;
@@ -159,4 +160,7 @@ necessarily starts its native compiler child; permit that fixed compiler only. A
 post-build hashes alone can attest bytes different from compilation; capture actual onLoad
 byte buffers, separate control metadata, and reject changed/missing files before publication,
 with a focused stability-boundary test. No disputed findings. Exact amendment requires R2
-acceptance before code. Immutable report/hash retained with final evidence.
+acceptance before code. R1 receipt SHA-256
+`0c167fed75acb5d8a69d188443670a744746dcb7c900368e4a7ba537ce3f277d`.
+The reviewer also required explicit compiler configuration; fixed tsconfigRaw avoids an unhashed
+automatic tsconfig read. The stability guard needs its own observed removed-protection failure.
