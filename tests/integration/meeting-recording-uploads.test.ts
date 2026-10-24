@@ -144,17 +144,18 @@ describe("resumable recording transport and checkpointed transcription", () => {
       describeFailure: () => ({ retryable: false, unavailable: false })
     });
     const uploaded = await upload(service, recordingUpload(30_500));
-    const accepted = await service.uploads.finalize(actor, uploaded.id);
+    await service.uploads.finalize(actor, uploaded.id);
+    const accepted = await service.status(actor, uploaded.id);
     await service.process(actor, job(uploaded.id));
     expect(await service.status(actor, uploaded.id)).toMatchObject({ state: "queued" });
     expect(summary).not.toHaveBeenCalled();
     await service.process(actor, job(uploaded.id, 30_000));
     expect(await service.status(actor, uploaded.id)).toMatchObject({
       state: "complete",
-      meetingId: accepted.meetingId
+      meetingId: accepted!.meetingId
     });
     const snapshot = await context.withDataContext(actor, (db) =>
-      transcripts.snapshot(db, accepted.meetingId, { maxSegments: 500, maxCharacters: 100000 })
+      transcripts.snapshot(db, accepted!.meetingId, { maxSegments: 500, maxCharacters: 100000 })
     );
     expect(
       snapshot!.segments.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }))
