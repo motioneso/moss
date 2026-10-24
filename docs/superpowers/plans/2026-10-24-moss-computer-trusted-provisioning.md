@@ -79,7 +79,12 @@ The existing gatewayConfigDir must already be root-owned0750/GID1000 with strict
 do not mkdir/chown/migrate it. Dedicated root output starts empty. Source input and executable
 artifacts stay outside output and all mounted/data/docker/monitor roots. No signing key is created.
 
-Acquire only HostStateStore.openExisting. Refuse stop latch/stop.json, disabled or zero-generation
+Acquire only HostStateStore.openExisting with an opt-in `{ retainFailedLock: true }` option.
+Existing callers keep their current failure behavior. For provisioning, any validation failure
+after exclusive acquisition closes its own descriptor but retains daemon.lock, including malformed
+or missing marker/state during open; never initialize or erase those files. Add canonical
+`retainLock()` to close the invocation's descriptor without unlinking on later publisher failure.
+Close failure still retains the path and cannot produce success. Refuse stop latch/stop.json, disabled or zero-generation
 state, pending/missing/duplicate IDs, mismatched roots/marker/state, partial or foreign inventory.
 Require exactly one durable gateway+desktop full ID and exact creation generations. Complete
 exact Docker inventory must contain precisely both resources, each stopped with State.Status
