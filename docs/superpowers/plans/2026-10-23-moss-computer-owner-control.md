@@ -84,8 +84,8 @@ until that receiving path and observed negative controls pass independent review
 Ben rejected the earlier separate-destination treatment: Computer belongs inside the chat drawer.
 The [interactive mockups](../specs/2026-10-23-moss-computer-chat-mockups.html) show full-screen chat
 with a recent still thumbnail, the expanded viewer alongside the ongoing conversation, explicit
-takeover/return, a compact drawer strip and phone behavior. The preview shows screenshot age rather
-than implying a live stream. Opening the viewer does not seize input; intentionally closing it
+takeover/return, a compact drawer strip and phone behavior. The preview shows age only, without a
+“screenshot” label. Opening the viewer does not seize input; intentionally closing it
 while controlling returns control to Moss, as does Return to Moss. Working/sleeping/waking/paused/
 disconnected/off states and light/dark/Teal are selectable. Screen and conversation data are
 illustrative, not desktop proof.
@@ -95,9 +95,10 @@ production uses the corresponding `@moss/ui` components, Thread and the shared P
 No separate Computer module or navigation entry is proposed. The [earlier screens](../specs/2026-10-23-moss-computer-screens.html)
 are retained as superseded design history. Ben approved the chat layout in conversation, with
 concise product copy and intentional close returning control to Moss. This supersedes the earlier
-close-leaves-paused proposal and explicit-return-only wording in older documents. Screenshot age,
-status and control labels suffice; omit tutorials about streaming, watching or handoff. Internal
-backend policy acceptance and runtime qualification limits are unchanged.
+close-leaves-paused proposal and explicit-return-only wording in older documents. Age, status and
+control labels suffice; Ben also requested removing “screenshot” from all visible copy. Omit
+tutorials about streaming, watching or handoff. Internal backend policy acceptance and runtime
+qualification limits are unchanged.
 
 Historical V2 mockup verification (before the approved close behavior revision): fresh
 Firefox/Playwright ran 450 layout/state/theme iterations at

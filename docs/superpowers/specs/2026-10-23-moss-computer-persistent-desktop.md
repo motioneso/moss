@@ -382,7 +382,8 @@ refresh policy remains an implementation detail. The internal policy and failed-
 ## 25. Approved chat layout and intentional-close handoff
 
 Ben approved the chat-integrated mockups, requesting concise copy and that closing the viewer
-returns control to Moss. Keep capture age, status and control labels; omit explanatory tutorials.
+returns control to Moss. Keep age, status and control labels; omit explanatory tutorials and the
+word “screenshot” from visible copy, as Ben subsequently requested.
 This supersedes earlier close-leaves-paused and explicit-return-only UI requirements, including
 §21. Return to Moss remains available while viewing.
 

@@ -39,42 +39,42 @@ const states = {
     "Working",
     "Checking the coastal shortlist.",
     "",
-    "Screenshot · 2 min ago",
+    "2 min ago",
     "Checking routes and nearby walks"
   ],
   sleeping: [
     "Sleeping",
     "Resting until it’s needed.",
     "Wake to continue.",
-    "Last screenshot · 1 hr ago",
+    "1 hr ago",
     "Computer is sleeping"
   ],
   waking: [
     "Waking",
     "Getting the computer ready.",
     "Getting ready…",
-    "Last screenshot · 1 hr ago",
+    "1 hr ago",
     "Waking the computer…"
   ],
   paused: [
     "Paused",
     "Waiting for your next step.",
     "Return control to continue.",
-    "Screenshot · 2 min ago",
+    "2 min ago",
     "Computer input is paused"
   ],
   disconnected: [
     "Disconnected",
     "We’ve lost the connection.",
     "Reconnect to continue.",
-    "Last screenshot · 8 min ago",
+    "8 min ago",
     "Computer connection lost"
   ],
   disabled: [
     "Off",
     "Computer is turned off.",
     "Enable Computer to continue.",
-    "Last screenshot · before disabling",
+    "Before disabling",
     "Computer is turned off"
   ]
 };
