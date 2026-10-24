@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Ring setup matches Hardware settings.** Ring setup now shows a simpler connection summary and returns to Hardware settings when you finish. [PR #3635](https://github.com/motioneso/moss/pull/3635)
 
+#### Added
+
+- **Sourced Sports results in chat.** Moss can show the latest available completed match with team logos, the score, its source and coverage when a visual helps your Sports question. [PR #3633](https://github.com/motioneso/moss/pull/3633)
+
 ### 2026-10-23
 
 #### Added
