@@ -13,6 +13,28 @@ export class PreferenceRevisionConflictError extends Error {
 }
 
 export class PreferencesRepository {
+  /** Serialize related preference writes within the caller's actor-scoped transaction. */
+  async lock(scopedDb: DataContextDb, namespace: string): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await sql`select pg_advisory_xact_lock(hashtextextended(
+      app.current_actor_user_id()::text || ':' || ${namespace}, 0))`.execute(scopedDb.db);
+  }
+
+  /** One statement snapshot for preferences that must be interpreted together. */
+  async getMany(
+    scopedDb: DataContextDb,
+    keys: readonly string[]
+  ): Promise<Record<string, unknown>> {
+    assertDataContextDb(scopedDb);
+    if (!keys.length) return {};
+    const rows = await scopedDb.db
+      .selectFrom("app.preferences")
+      .select(["key", "value_json"])
+      .where("key", "in", keys)
+      .execute();
+    return Object.fromEntries(rows.map((row) => [row.key, row.value_json]));
+  }
+
   async upsert(scopedDb: DataContextDb, key: string, value: unknown): Promise<void> {
     assertDataContextDb(scopedDb);
     await scopedDb.db

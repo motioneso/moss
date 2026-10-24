@@ -11,6 +11,7 @@ export interface MeetingRememberedSource {
 }
 export interface MeetingCapturePreferences {
   readonly transcriptLanguage: string | null;
+  readonly transcriptVocabulary: readonly string[];
   readonly rememberedSource: MeetingRememberedSource | null;
   readonly defaultCaptureMode: MeetingCaptureMode | null;
   readonly summarizeOnStop: boolean;
@@ -18,6 +19,7 @@ export interface MeetingCapturePreferences {
 }
 export interface UpdateMeetingCapturePreferences {
   readonly transcriptLanguage?: string | null;
+  readonly transcriptVocabulary?: readonly string[];
   readonly rememberedSource?: MeetingRememberedSource | null;
   readonly defaultCaptureMode?: MeetingCaptureMode | null;
   readonly summarizeOnStop?: boolean;
@@ -36,6 +38,11 @@ const sourceSchema = {
   }
 } as const;
 const preferenceProperties = {
+  transcriptVocabulary: {
+    type: "array",
+    maxItems: 100,
+    items: { type: "string", maxLength: 1000 }
+  },
   transcriptLanguage: {
     anyOf: [{ const: null }, { type: "string", enum: MEETING_TRANSCRIPT_LANGUAGES }]
   },
@@ -68,7 +75,8 @@ export const meetingCapturePreferencesSchema = {
     "defaultCaptureMode",
     "summarizeOnStop",
     "summaryTemplateId",
-    "transcriptLanguage"
+    "transcriptLanguage",
+    "transcriptVocabulary"
   ],
   properties: {
     ...preferenceProperties

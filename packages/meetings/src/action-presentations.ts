@@ -19,7 +19,11 @@ import type {
   MeetingRecord,
   MeetingTranscriptLedger
 } from "@moss/shared";
-import { isMeetingTranscriptLanguage } from "@moss/shared";
+import {
+  isMeetingTranscriptLanguage,
+  normalizeMeetingVocabulary,
+  meetingTranscriptionOptions
+} from "@moss/shared";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingOutputsRepository } from "./output-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
@@ -222,11 +226,44 @@ export const meetingPreferencesPresentation: RouteApprovalPresentation = async (
     preferences.get(db),
     preferences.getPersistedDefaultCaptureMode(db)
   ]);
+  let nextVocabulary: string[];
+  try {
+    nextVocabulary = normalizeMeetingVocabulary(
+      body.transcriptVocabulary === undefined
+        ? current.transcriptVocabulary
+        : body.transcriptVocabulary
+    );
+    const language =
+      body.transcriptLanguage === undefined ? current.transcriptLanguage : body.transcriptLanguage;
+    if (language !== null && !isMeetingTranscriptLanguage(language)) return null;
+    meetingTranscriptionOptions(language, nextVocabulary);
+  } catch {
+    return null;
+  }
   const effectiveSource =
     body.rememberedSource === undefined
       ? current.rememberedSource
       : (body.rememberedSource as MeetingRememberedSource | null);
   const fields = presentApprovalFields(body, {
+    transcriptVocabulary: {
+      label: "Transcript vocabulary",
+      present: () => [
+        ...(current.transcriptVocabulary.length
+          ? current.transcriptVocabulary.map((value, index) => ({
+              label: `Before spelling ${index + 1}`,
+              value
+            }))
+          : [{ label: "Before", value: "No vocabulary hint" }]),
+        ...(nextVocabulary.length
+          ? nextVocabulary.map((value, index) => ({ label: `After spelling ${index + 1}`, value }))
+          : [{ label: "After", value: "No vocabulary hint" }]),
+        {
+          label: "Applies to",
+          value:
+            "Upcoming meeting transcription and normal imports; selected audio service may ignore hints. Existing text and hold stay unchanged."
+        }
+      ]
+    },
     transcriptLanguage: {
       label: "Transcript language",
       present: (value) =>
@@ -263,6 +300,7 @@ export const meetingPreferencesPresentation: RouteApprovalPresentation = async (
       ? (persistedDefault ?? effectiveSource?.mode ?? "computer-audio")
       : (body.defaultCaptureMode ?? effectiveSource?.mode ?? "computer-audio");
   const changes = [
+    ...(Object.hasOwn(body, "transcriptVocabulary") ? ["Change transcript vocabulary"] : []),
     ...(Object.hasOwn(body, "transcriptLanguage") ? ["Change the transcript language"] : []),
     ...(Object.hasOwn(body, "rememberedSource")
       ? [

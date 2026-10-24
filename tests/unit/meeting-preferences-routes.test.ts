@@ -17,6 +17,12 @@ function setup(stored: unknown = null, authError?: Error) {
   const scoped = {} as DataContextDb;
   const actors: AccessContext[] = [];
   const preferences = {
+    lock: vi.fn(async () => undefined),
+    getMany: vi.fn(async (_db: DataContextDb, keys: readonly string[]) =>
+      Object.fromEntries(
+        keys.map((key) => [key, key === "meetings.transcript-vocabulary" ? [] : stored])
+      )
+    ),
     get: vi.fn(async (_db: DataContextDb, _key: string): Promise<unknown> => stored),
     upsert: vi.fn(async (_db: DataContextDb, _key: string, _value: unknown) => undefined)
   };
@@ -39,7 +45,9 @@ describe("meeting capture defaults", () => {
   it("round-trips language and automatic detection without changing other preferences", async () => {
     const { app, preferences } = setup();
     const values = new Map<string, unknown>([["meetings.summarize-on-stop", false]]);
-    preferences.get.mockImplementation(async (_db, key) => values.get(key) ?? null);
+    preferences.getMany.mockImplementation(async (_db, keys) =>
+      Object.fromEntries(keys.map((key) => [key, values.get(key) ?? null]))
+    );
     preferences.upsert.mockImplementation(async (_db, key, value) => {
       values.set(key, value);
     });
@@ -81,6 +89,7 @@ describe("meeting capture defaults", () => {
         rememberedSource: null,
         summarizeOnStop: true,
         summaryTemplateId: "general",
+        transcriptVocabulary: [],
         transcriptLanguage: null
       });
       expect(preferences.upsert).not.toHaveBeenCalled();
@@ -95,11 +104,18 @@ describe("meeting capture defaults", () => {
         rememberedSource: null,
         summarizeOnStop: true,
         summaryTemplateId: "general",
+        transcriptVocabulary: [],
         transcriptLanguage: null
       });
-      expect(preferences.get).toHaveBeenCalledTimes(5);
-      expect(preferences.get).toHaveBeenCalledWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
-      expect(preferences.get).toHaveBeenCalledWith(scoped, "meetings.capture.remembered-source");
+      expect(preferences.getMany).toHaveBeenCalledExactlyOnceWith(
+        scoped,
+        expect.arrayContaining([
+          MEETING_CAPTURE_DEFAULT_KEY,
+          "meetings.capture.remembered-source",
+          "meetings.transcript-language",
+          "meetings.transcript-vocabulary"
+        ])
+      );
     }
   );
   it.each([null, "microphone-only", "selected-app", "computer-audio"])(

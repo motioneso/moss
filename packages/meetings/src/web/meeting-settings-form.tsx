@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Badge, Button, Divider, Field, FormLabel, SectionHead, Select, Switch } from "@moss/ui";
 import { MEETING_TRANSCRIPT_LANGUAGES } from "@moss/shared";
 import { useMeetingSettings } from "./meeting-settings-state.js";
+import { MeetingVocabularyEditor } from "./meeting-vocabulary-editor.js";
 import { MeetingUnlinkDialog } from "./meeting-unlink-dialog.js";
 import "./meeting-settings.css";
 
@@ -102,7 +103,9 @@ export function MeetingSettingsForm() {
               disabled={state.saving}
               onChange={(event) => void state.saveLanguage(event.target.value || null)}
             >
-              <option value="">Automatic detection</option>
+              <option value="" disabled={!!state.preferences.data?.transcriptVocabulary.length}>
+                Automatic detection
+              </option>
               {languages.map(({ code, name }) => (
                 <option key={code} value={code}>
                   {name} ({code})
@@ -113,6 +116,10 @@ export function MeetingSettingsForm() {
               Used for upcoming transcription, including imports. Existing text stays unchanged.
             </p>
           </Field>
+          {state.preferences.data?.transcriptVocabulary.length ? (
+            <p className="jds-hint">Clear vocabulary before choosing Automatic detection.</p>
+          ) : null}
+          <MeetingVocabularyEditor state={state.vocabulary} disabled={state.saving} />
           <Switch
             ariaLabel="Summarize automatically after Stop"
             label="Summarize automatically after Stop"

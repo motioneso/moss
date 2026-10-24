@@ -182,6 +182,7 @@ const preferenceState = {
   rememberedSource: null,
   summarizeOnStop: true,
   summaryTemplateId: "general" as const,
+  transcriptVocabulary: [],
   transcriptLanguage: null
 };
 const recorder = (): CaptureConnection => ({
@@ -313,6 +314,42 @@ describe("Meetings authored action disclosures", () => {
     expect(get).toHaveBeenCalledWith(db, id);
   });
 
+  it("discloses individual vocabulary before/after spellings and pins the saved state", async () => {
+    readPreferences.mockResolvedValue({
+      ...preferenceState,
+      transcriptLanguage: "en",
+      transcriptVocabulary: ["Old Moss"]
+    });
+    const result = await meetingPreferencesPresentation(
+      db,
+      call({ transcriptVocabulary: [" Moss ", "Vocci", "Moss"] }, false),
+      ctx
+    );
+    expect(result?.fields).toEqual(
+      expect.arrayContaining([
+        { label: "Before spelling 1", value: "Old Moss" },
+        { label: "After spelling 1", value: "Moss" },
+        { label: "After spelling 2", value: "Vocci" }
+      ])
+    );
+    expect(
+      await meetingPreferencesPresentation(db, call({ transcriptLanguage: null }, false), ctx)
+    ).toBeNull();
+    readPreferences.mockResolvedValue({
+      ...preferenceState,
+      transcriptLanguage: "en",
+      transcriptVocabulary: ["Other"]
+    });
+    const changed = await meetingPreferencesPresentation(
+      db,
+      call({ transcriptVocabulary: ["Moss", "Vocci"] }, false),
+      ctx
+    );
+    expect(changed?.version).not.toBe(result?.version);
+    expect(
+      await meetingPreferencesPresentation(db, call({ transcriptVocabulary: [] }, false), ctx)
+    ).not.toBeNull();
+  });
   it.each([
     [null, "Automatic detection"],
     ["es", "Spanish (es)"]
@@ -513,6 +550,10 @@ describe("Meetings authored action disclosures", () => {
       ]);
       vi.spyOn(PreferencesRepository.prototype, "get").mockImplementation(
         async (_db, key) => stored.get(key) ?? null
+      );
+      vi.spyOn(PreferencesRepository.prototype, "lock").mockResolvedValue();
+      vi.spyOn(PreferencesRepository.prototype, "getMany").mockImplementation(async (_db, keys) =>
+        Object.fromEntries(keys.map((key) => [key, stored.get(key)]))
       );
       const write = vi
         .spyOn(PreferencesRepository.prototype, "upsert")

@@ -175,19 +175,21 @@ describe("resumable recording transport and checkpointed transcription", () => {
       const normal = await upload(service, recordingUpload(60_000));
       await service.uploads.finalize(actor, normal.id);
       await context.withDataContext(actor, (db) =>
-        preferences.update(db, { transcriptLanguage: "es" })
+        preferences.update(db, { transcriptLanguage: "es", transcriptVocabulary: ["José", "Moss"] })
       );
       await service.process(actor, job(normal.id));
       expect(vi.mocked(deps.transcribe).mock.calls[0]![1].language).toBe("es");
+      expect(vi.mocked(deps.transcribe).mock.calls[0]![1].prompt).toBe("José, Moss");
       await context.withDataContext(actor, (db) =>
-        preferences.update(db, { transcriptLanguage: null })
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
       );
       await service.process(actor, job(normal.id, 30_000));
       expect(vi.mocked(deps.transcribe).mock.calls[1]![1]).not.toHaveProperty("language");
+      expect(vi.mocked(deps.transcribe).mock.calls[1]![1]).not.toHaveProperty("prompt");
       expect(await service.status(actor, normal.id)).toMatchObject({ state: "complete" });
     } finally {
       await context.withDataContext(actor, (db) =>
-        preferences.update(db, { transcriptLanguage: null })
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
       );
     }
   });

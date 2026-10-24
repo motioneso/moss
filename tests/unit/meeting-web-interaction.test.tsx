@@ -47,6 +47,7 @@ const preferences: MeetingCapturePreferences = {
   rememberedSource: null,
   summarizeOnStop: true,
   summaryTemplateId: "general",
+  transcriptVocabulary: [],
   transcriptLanguage: null
 };
 let renderer: ReactTestRenderer;

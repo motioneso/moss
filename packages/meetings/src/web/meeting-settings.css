@@ -21,3 +21,9 @@
   gap: var(--space-3);
   max-width: 420px;
 }
+
+.meeting-vocabulary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

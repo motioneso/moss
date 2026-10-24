@@ -42,6 +42,7 @@ function fixture() {
     rememberedSource: null,
     summarizeOnStop: true,
     summaryTemplateId: "general",
+    transcriptVocabulary: [],
     transcriptLanguage: null
   });
   const outputs = new MeetingOutputsRepository();
@@ -134,6 +135,7 @@ describe("automatic summary finalization admission", () => {
         rememberedSource: null,
         summarizeOnStop: false,
         summaryTemplateId: "general",
+        transcriptVocabulary: [],
         transcriptLanguage: null
       });
     if (condition === "notes-only")

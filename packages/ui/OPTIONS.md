@@ -223,6 +223,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## textarea
+
+_No enum or boolean props._
+
 ## today-pill
 
 - **variant** (required): `month`, `grid`

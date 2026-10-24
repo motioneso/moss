@@ -146,6 +146,7 @@ function fixture() {
     defaultCaptureMode: "selected-app",
     summarizeOnStop: true,
     summaryTemplateId: "general",
+    transcriptVocabulary: [],
     transcriptLanguage: null
   });
   vi.spyOn(connections, "lockRequest").mockResolvedValue();
@@ -208,6 +209,7 @@ describe("shared connection explicit Start and native claim", () => {
         defaultCaptureMode: "computer-audio",
         summarizeOnStop: true,
         summaryTemplateId: "general",
+        transcriptVocabulary: [],
         transcriptLanguage: null
       });
       f.connection.inventory_json = JSON.stringify({
@@ -244,6 +246,7 @@ describe("shared connection explicit Start and native claim", () => {
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
       summaryTemplateId: "general",
+      transcriptVocabulary: [],
       transcriptLanguage: null
     });
     f.connection.inventory_json = JSON.stringify({
@@ -286,6 +289,7 @@ describe("shared connection explicit Start and native claim", () => {
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
       summaryTemplateId: "general",
+      transcriptVocabulary: [],
       transcriptLanguage: null
     });
     vi.mocked(f.connections.connections).mockResolvedValue(
@@ -306,6 +310,7 @@ describe("shared connection explicit Start and native claim", () => {
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
       summaryTemplateId: "general",
+      transcriptVocabulary: [],
       transcriptLanguage: null
     });
     vi.mocked(f.connections.connections).mockResolvedValue([
@@ -321,6 +326,7 @@ describe("shared connection explicit Start and native claim", () => {
       defaultCaptureMode: "computer-audio",
       summarizeOnStop: true,
       summaryTemplateId: "general",
+      transcriptVocabulary: [],
       transcriptLanguage: null
     });
     vi.mocked(f.deps.processingAvailability).mockImplementation(async () => {
@@ -481,6 +487,7 @@ describe("shared connection explicit Start and native claim", () => {
       defaultCaptureMode: "microphone-only",
       summarizeOnStop: true,
       summaryTemplateId: "general",
+      transcriptVocabulary: [],
       transcriptLanguage: null
     });
     expect(await f.service.start(f.browser, meetingId, f.start)).toEqual(first);

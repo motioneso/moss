@@ -98,6 +98,7 @@ beforeEach(() => {
     defaultCaptureMode: "microphone-only",
     summarizeOnStop: true,
     summaryTemplateId: "general",
+    transcriptVocabulary: [],
     transcriptLanguage: null,
     rememberedSource: {
       deviceId: device.deviceId,

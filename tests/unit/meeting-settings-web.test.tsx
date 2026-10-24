@@ -43,6 +43,7 @@ const device: MeetingCaptureDevice = {
 };
 const newPreferences = (): MeetingCapturePreferences => ({
   transcriptLanguage: null,
+  transcriptVocabulary: [],
   defaultCaptureMode: "computer-audio",
   rememberedSource: null,
   summarizeOnStop: true,
@@ -168,6 +169,7 @@ beforeEach(() => {
             : {}),
           summarizeOnStop: update.summarizeOnStop ?? preferences.summarizeOnStop,
           summaryTemplateId: update.summaryTemplateId ?? preferences.summaryTemplateId,
+          transcriptVocabulary: update.transcriptVocabulary ?? preferences.transcriptVocabulary,
           transcriptLanguage:
             update.transcriptLanguage === undefined
               ? preferences.transcriptLanguage
@@ -235,6 +237,63 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
     expect(preferences.transcriptLanguage).toBe("es");
     expect(writes().at(-1)?.body).toEqual({ transcriptLanguage: "es" });
   });
+  async function typeVocabulary(value: string) {
+    await act(async () => {
+      const element = host.querySelector<HTMLTextAreaElement>("#meeting-settings-vocabulary")!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
+        element,
+        value
+      );
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+  }
+  it("validates, saves normalized vocabulary, reloads and clears with deterministic acknowledgement", async () => {
+    await mount();
+    await typeVocabulary("Moss\nVocci");
+    expect(button("Save vocabulary").disabled).toBe(true);
+    expect(host.textContent).toContain("Choose a transcript language");
+    await select("meeting-settings-transcript-language", "en");
+    await typeVocabulary(" Moss \nVocci\nMoss");
+    await click("Save vocabulary");
+    expect(writes().at(-1)?.body).toEqual({ transcriptVocabulary: ["Moss", "Vocci"] });
+    expect(host.textContent).toContain("Saved vocabulary: Moss, Vocci.");
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount();
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Moss\nVocci");
+    await typeVocabulary("a".repeat(201));
+    expect(button("Save vocabulary").disabled).toBe(true);
+    await click("Clear vocabulary");
+    expect(writes().at(-1)?.body).toEqual({ transcriptVocabulary: [] });
+    expect(host.textContent).toContain("Vocabulary cleared.");
+  });
+  it("retains a failed vocabulary draft through remount and retries the actual save", async () => {
+    preferences = {
+      ...newPreferences(),
+      transcriptLanguage: "en",
+      transcriptVocabulary: ["Saved"]
+    };
+    const original = transport.getMockImplementation()!;
+    let fail = true;
+    transport.mockImplementation(async (path, options) => {
+      if (fail && path === preferencesPath && options?.method === "PUT")
+        return json({ code: "unavailable" }, 503);
+      return original(path, options);
+    });
+    await mount();
+    await typeVocabulary("Draft");
+    await click("Save vocabulary");
+    expect(host.textContent).toContain("Your draft is kept here");
+    expect(preferences.transcriptVocabulary).toEqual(["Saved"]);
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount();
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Draft");
+    fail = false;
+    await click("Save vocabulary");
+    expect(preferences.transcriptVocabulary).toEqual(["Draft"]);
+  });
   it("shows linked status, audio source, automatic summary switch and Unlink Mac", async () => {
     await mount();
     expect(host.textContent).toContain("Studio Mac");
@@ -246,6 +305,8 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
       "Microphone only"
     ]);
     expect([...host.querySelectorAll("button")].map((item) => item.textContent)).toEqual([
+      "Save vocabulary",
+      "Clear vocabulary",
       "Unlink Mac"
     ]);
     expect(host.querySelectorAll("select")).toHaveLength(2);

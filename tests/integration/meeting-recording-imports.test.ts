@@ -113,7 +113,10 @@ describe("completed recording imports through real owner DB/vault paths", () => 
     try {
       for (const transcriptLanguage of ["es", null]) {
         await context.withDataContext(actor, (db) =>
-          preferences.update(db, { transcriptLanguage })
+          preferences.update(db, {
+            transcriptLanguage,
+            transcriptVocabulary: transcriptLanguage ? ["Moss", "José"] : []
+          })
         );
         const { service, deps, input } = setup();
         const accepted = await service.accept(actor, input);
@@ -122,11 +125,14 @@ describe("completed recording imports through real owner DB/vault paths", () => 
         expect(vi.mocked(deps.transcribe).mock.calls[0]![1].language).toBe(
           transcriptLanguage ?? undefined
         );
+        expect(vi.mocked(deps.transcribe).mock.calls[0]![1].prompt).toBe(
+          transcriptLanguage ? "Moss, José" : undefined
+        );
         expect(await service.status(actor, accepted.id)).toMatchObject({ state: "complete" });
       }
     } finally {
       await context.withDataContext(actor, (db) =>
-        preferences.update(db, { transcriptLanguage: null })
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
       );
     }
   });
