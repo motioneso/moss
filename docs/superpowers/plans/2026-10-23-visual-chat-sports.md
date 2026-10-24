@@ -197,3 +197,16 @@ the new read, and Finance's exact expected version must match its required artif
 bump. Preserve exhaustive route rows and recovery assertions. An unchanged pattern
 queue timing test failed under concurrent local work; its isolated 26-test file passed.
 The interrupted full gate has no passing verdict and must be rerun on the final head.
+
+A diagnostic matching the acceptance's first-card phone/reload sequence reproduced
+a prose-only second turn. Its saved activity contains `sports.latestResult` and a
+successful result, but no `chat.present`. By contrast, an uninterrupted diagnostic
+produced 40/40 read/proposal pairs. Neither run is acceptance. The observed miss does
+not justify fresh-read guidance: it already made that read. The generic instruction
+“simple answers stay prose” conflates concise text with the absence of useful visual
+structure. Clarify that related identities, values, status and sources can justify
+a card alongside concise prose, while retaining model choice and text-only priority.
+Keep guidance below 150 words, without module branches or forced presentation. Repeat
+the original Sports matrix including reload, the generic matrix and prose controls.
+The clean `d58183e92` gate was stopped with exit 143 before this change; rerun on the
+new final head. Independent review must cover that exact head too.
