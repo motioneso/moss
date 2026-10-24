@@ -75,16 +75,39 @@ its queue, release pressed keys/buttons on handoff and separate watcher traffic 
 noVNC WS passthrough would bypass this policy and is prohibited. No remote input-exclusion claim
 until that receiving path and observed negative controls pass independent review/live proof.
 
-## Proposed screens awaiting design approval
+## Revised chat mockups awaiting design approval
 
-[Interactive screen mockups](../specs/2026-10-23-moss-computer-screens.html) cover app and browser layouts, watching, owner control, another controlling viewer, disconnect/paused, waking, sleeping, disabled, unavailable, connection failure and settings, at desktop/phone widths and light/dark/Teal themes. They use authored tokens and canonical Button/Badge/EmptyState markup; production uses the corresponding `@moss/ui` components. These are fictional design data, not runtime acceptance. No Computer screen approval was found in the handoff/spec, relevant Hindsight pages or matching Moss/Jarvis vault passages. Backend policy can proceed while Ben reviews the missing UI decision.
+Ben rejected the earlier separate-destination treatment: Computer belongs inside the chat drawer.
+The [v2 interactive mockups](../specs/2026-10-23-moss-computer-chat-mockups.html) show full-screen chat
+with a recent still thumbnail, the expanded viewer alongside the ongoing conversation, explicit
+takeover/return, a compact drawer strip and phone behavior. The preview shows screenshot age rather
+than implying a live stream. Opening the viewer does not seize input; closing while controlling
+pauses input until explicit return. Working/sleeping/waking/paused/disconnected/off states and
+light/dark/Teal are selectable. Screen and conversation data are illustrative, not desktop proof.
+
+The prototype reuses actual chat markup/styles and canonical Button/Badge/BrandMark markup;
+production uses the corresponding `@moss/ui` components, Thread and the shared PeekPanel lifecycle.
+No separate Computer module or navigation entry is proposed. The [earlier screens](../specs/2026-10-23-moss-computer-screens.html)
+are retained as superseded design history. V2 awaits feedback/approval; requesting mockups or
+receiving a Taildrop file is not screen approval. Internal backend policy acceptance is unchanged.
+
+V2 mockup verification: fresh Firefox/Playwright checked all five scenes, six states and three
+themes at 1280/768/414/375/320px (450 combinations). Checks covered horizontal fit, capture-age
+labels, watch/control/return transitions, close-pauses behavior, focus restoration, local-only
+example messages and no outbound HTTP(S) requests. Final cropped desktop/drawer/phone views were
+visually inspected. The self-contained `Moss-Computer-in-Chat-v2.html` was sent to abl10 by Taildrop
+on request (exit 0). These are prototype checks only; no product UI or desktop runtime was tested.
 
 ## First integrated vertical slice (after design/runtime prerequisites)
 
-One core Computer page at `/computer` in Moss, also directly reachable in a browser after ordinary
-owner login. Both connect to the same Computer identity/home; optional standalone viewing changes
-layout only. Use mature noVNC/RFB implementations and trusted packaged viewer assets. Guest pages
-and downloaded content never become Moss-origin viewer assets. No downloads in this slice.
+Computer is owned by the existing chat drawer, with a recent still preview in full-screen chat
+and a compact entry in the small drawer. Expand its viewer beside the conversation; use an inline
+viewer on phones. The normal Moss browser chat experience reaches the same Computer identity/home
+after ordinary owner login. A separate `/computer` page is superseded by Ben's chat-first direction;
+any later direct-view affordance needs its own agreed design. Use mature noVNC/RFB implementations
+and trusted packaged viewer assets. Guest pages and downloaded content never become Moss-origin
+viewer assets. No downloads in this slice. Truthful chat feature/settings/error metadata belongs
+in the app map with actual product wiring, without introducing a fictitious module or route.
 
 Owner-only API: status/view/upgrade/control/lifecycle use cookie-session binding, trusted exact
 Origin and fresh owner checks. Bound active-session revalidation and expiry timers close sockets;

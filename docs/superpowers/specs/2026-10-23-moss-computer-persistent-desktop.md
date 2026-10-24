@@ -360,3 +360,20 @@ desktop qualification is blocked. It adds no usable Computer route, viewer, life
 and must not be advertised as delivered desktop integration. Proposed
 [screen mockups](2026-10-23-moss-computer-screens.html) await Ben's approval before product UI;
 a self-contained preview was delivered to his Samsung phone for review, not approved by delivery.
+
+## 24. Chat-integrated design revision (supersedes the separate-page proposal)
+
+Ben rejected the separate-destination mockup and clarified that Computer belongs in the chat
+drawer. In full-screen chat, show a recent screen thumbnail; it need not render live. This changes
+the primary interaction design, not owner/session safety, persistent storage or runtime gates.
+The previous `/computer`-first proposal in the owner-control plan is superseded. No separate module
+or navigation entry is intended. Browser access uses the same owner-authenticated Moss chat.
+
+[Revised interactive mockups](2026-10-23-moss-computer-chat-mockups.html) show five views: full-screen
+chat with a timestamped still, viewer beside the conversation, owner takeover, compact drawer and
+phone. Opening watches without taking over; explicit return resumes Moss input. Closing while
+controlling leaves input paused. Sleeping/waking/paused/disconnected/off variants retain honest
+capture-age/status labels. All sample screen content is illustrative; no live desktop runs here.
+Production uses shared Button/Badge/BrandMark/Thread and PeekPanel lifecycle, with truthful chat
+feature metadata when wired. Proposed copy/placement and exact refresh policy await design review;
+the request to see mockups does not approve them. The internal policy and failed-r12 limits remain.

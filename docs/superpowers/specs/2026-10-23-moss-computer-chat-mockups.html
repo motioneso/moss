@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moss — Computer in chat</title>
+    <link rel="stylesheet" href="../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../apps/web/src/styles/kit-chat.css" />
+    <link rel="stylesheet" href="moss-computer-chat/preview.css" />
+  </head>
+  <body>
+    <header class="review">
+      <div class="review-head">
+        <div>
+          <h1>A little window into Moss’s work.</h1>
+          <p>
+            Revised proposal · Computer lives inside chat. Every screen and conversation below is
+            illustrative design data.
+          </p>
+        </div>
+        <span class="jds-badge jds-badge--forest">Design review · v2</span>
+      </div>
+      <div class="review-controls">
+        <div class="scenes" role="group" aria-label="Mockup scenes">
+          <button
+            class="jds-btn jds-btn--secondary jds-btn--sm"
+            data-scene="preview"
+            aria-pressed="true"
+          >
+            01 · Chat + preview
+          </button>
+          <button
+            class="jds-btn jds-btn--quiet jds-btn--sm"
+            data-scene="watch"
+            aria-pressed="false"
+          >
+            02 · Watch
+          </button>
+          <button
+            class="jds-btn jds-btn--quiet jds-btn--sm"
+            data-scene="control"
+            aria-pressed="false"
+          >
+            03 · Take over
+          </button>
+          <button
+            class="jds-btn jds-btn--quiet jds-btn--sm"
+            data-scene="drawer"
+            aria-pressed="false"
+          >
+            04 · Small drawer
+          </button>
+          <button
+            class="jds-btn jds-btn--quiet jds-btn--sm"
+            data-scene="phone"
+            aria-pressed="false"
+          >
+            05 · Phone
+          </button>
+        </div>
+        <label
+          >State
+          <select id="state">
+            <option value="working">Working</option>
+            <option value="sleeping">Sleeping</option>
+            <option value="waking">Waking</option>
+            <option value="paused">Paused</option>
+            <option value="disconnected">Disconnected</option>
+            <option value="disabled">Disabled</option>
+          </select></label
+        >
+        <label
+          >Theme
+          <select id="theme">
+            <option value="light">Paper</option>
+            <option value="dark">Dark</option>
+            <option value="teal">Teal</option>
+          </select></label
+        >
+      </div>
+    </header>
+    <div class="scene-note" aria-live="polite">
+      <strong id="scene-title">01 / Full-screen chat</strong
+      ><span id="scene-description">A recent still in the margin. Chat stays the main event.</span>
+    </div>
+    <main class="stage" data-scene="preview" aria-label="Interactive chat mockup">
+      <div class="app">
+        <aside class="app-nav" aria-label="App context">
+          <div class="wordmark"><span data-icon="brand"></span>moss</div>
+          <div class="nav-item"><span data-icon="sun"></span>Today</div>
+          <div class="nav-item selected"><span data-icon="chat"></span>Chat</div>
+          <div class="nav-item"><span data-icon="folder"></span>Projects</div>
+          <div class="nav-item"><span data-icon="calendar"></span>Calendar</div>
+          <div class="nav-bottom">Your workspace<br />Settings & account</div>
+        </aside>
+        <section class="today" aria-label="Page behind the chat drawer">
+          <div class="today-band">
+            <h2>A little room to focus.</h2>
+            <p>Your day, with the useful things brought forward.</p>
+          </div>
+          <div class="today-row">
+            <h3>Your day, laid out</h3>
+            <p>Leave some space for the work you want to get to.</p>
+          </div>
+          <div class="today-row">
+            <h3>On your mind</h3>
+            <p>The weekend shortlist is taking shape in chat.</p>
+          </div>
+        </section>
+        <section class="chat-shell" aria-label="Chat with Moss">
+          <header class="chat-header">
+            <span class="chatd__mark" data-icon="brand"></span>
+            <div class="chatd__id">
+              <div class="chatd__name">Moss</div>
+              <div class="chatd__status">Here when you need me</div>
+            </div>
+            <span class="main-label">Main conversation</span>
+            <div class="head-actions">
+              <button
+                class="icon-button"
+                id="resize-chat"
+                aria-label="Show small drawer"
+                title="Expand or collapse chat"
+              >
+                <span data-icon="resize"></span></button
+              ><button
+                class="icon-button"
+                id="chat-options"
+                aria-label="Show computer preview"
+                title="Computer preview"
+              >
+                <span data-icon="computer"></span>
+              </button>
+            </div>
+          </header>
+          <button class="compact-entry" id="compact-open" aria-label="Open Computer from chat">
+            <span class="mini-screen" data-screen></span
+            ><span
+              ><strong
+                >Computer <span aria-hidden="true">·</span> <span data-status>Working</span></strong
+              ><small data-capture>Screenshot · 2 min ago</small></span
+            ><span data-icon="arrow"></span>
+          </button>
+          <div class="chat-workspace">
+            <section class="conversation" aria-label="Conversation">
+              <div class="messages" id="messages">
+                <div class="dateline">Today</div>
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">
+                    Can you find a few quiet places for a coastal weekend? Keep the shortlist here
+                    so we can decide together.
+                  </div>
+                </div>
+                <div class="chatd-msg">
+                  <span class="chatd-msg__av" data-icon="brand"></span>
+                  <div class="chatd-bubble">
+                    <p>
+                      I’ll look for somewhere quiet, with good walks nearby. I’ll put the useful
+                      details in one place as I go.
+                    </p>
+                    <div class="message-meta">Moss · 10:42</div>
+                  </div>
+                </div>
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">Somewhere we can get to by train would be lovely.</div>
+                </div>
+                <div class="chatd-msg">
+                  <span class="chatd-msg__av" data-icon="brand"></span>
+                  <div class="chatd-bubble">
+                    <p>
+                      Of course. I’m checking the routes as well as the stays, so we don’t end up
+                      spending the weekend travelling.
+                    </p>
+                    <div class="message-attachment">
+                      <span data-icon="document"></span>
+                      <div>Coastal weekend<span>Working notes · I’ll keep this updated</span></div>
+                    </div>
+                    <div class="message-meta">Moss · 10:44</div>
+                  </div>
+                </div>
+              </div>
+              <div class="activity" aria-live="polite">
+                <span class="activity-dot"></span
+                ><span id="activity-text">Checking routes and nearby walks</span>
+              </div>
+              <form class="composer" id="composer">
+                <div class="composer-box">
+                  <textarea aria-label="Message Moss" placeholder="Message Moss…"></textarea>
+                  <div class="composer-actions">
+                    <button
+                      type="button"
+                      class="icon-button"
+                      id="attach"
+                      aria-label="Preview an attachment message"
+                    >
+                      <span data-icon="plus"></span></button
+                    ><span class="jds-badge jds-badge--neutral">Main</span
+                    ><button
+                      class="icon-button send"
+                      type="submit"
+                      aria-label="Send example message"
+                    >
+                      <span data-icon="up"></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="composer-hint" id="composer-hint">Keep talking while Moss works.</div>
+              </form>
+            </section>
+            <aside class="computer-rail" aria-label="Computer preview">
+              <div class="computer-heading">
+                <h2>Computer</h2>
+                <span class="jds-badge jds-badge--forest" id="status-badge" data-status
+                  >Working</span
+                >
+              </div>
+              <button
+                class="preview-button"
+                id="preview-open"
+                aria-label="Open Computer viewer"
+                aria-expanded="false"
+              >
+                <span data-screen></span>
+              </button>
+              <div class="screen-caption">
+                <span data-capture>Screenshot · 2 min ago</span><span data-icon="computer"></span>
+              </div>
+              <div class="computer-copy" id="computer-copy">
+                Checking the coastal shortlist.<span>Moss has control. You’re just looking.</span>
+              </div>
+              <button class="jds-btn jds-btn--secondary jds-btn--sm" id="open-computer">
+                Open computer <span data-icon="arrow"></span>
+              </button>
+              <p class="quiet-note" id="preview-note">
+                A recent screenshot, rather than a stream. Open it when you want a closer look.
+              </p>
+            </aside>
+            <section class="viewer" id="viewer" aria-label="Computer viewer">
+              <header class="viewer-head">
+                <div>
+                  <h2>Computer</h2>
+                  <p id="viewer-subtitle">Watching · example viewer</p>
+                </div>
+                <div class="viewer-actions">
+                  <button
+                    class="icon-button"
+                    id="close-viewer"
+                    aria-label="Close Computer viewer"
+                    title="Back to chat"
+                  >
+                    <span data-icon="close"></span>
+                  </button>
+                </div>
+              </header>
+              <div class="viewer-image">
+                <div id="viewer-screen" data-screen></div>
+                <div class="state-message" id="state-message" hidden>
+                  <h3 id="state-title"></h3>
+                  <p id="state-copy"></p>
+                </div>
+              </div>
+              <div class="sample-tag" id="viewer-sample">
+                Illustrative screen · no remote session is connected
+              </div>
+              <footer class="viewer-foot">
+                <div class="control-line">
+                  <div class="control-identity">
+                    <span class="activity-dot"></span
+                    ><span id="controller-label">Moss has control</span>
+                  </div>
+                  <button class="jds-btn jds-btn--primary jds-btn--sm" id="control-button">
+                    Take over
+                  </button>
+                </div>
+                <p id="control-help">
+                  Watching doesn’t interrupt Moss. Take over when you want to use the mouse and
+                  keyboard.
+                </p>
+              </footer>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+    <footer class="design-foot">
+      <p>
+        <strong>Try it:</strong> open the thumbnail, take over, then close the viewer. Moss only
+        resumes after you explicitly return control.
+      </p>
+      <p>
+        Draft screens for review. Production would use shared Button, Badge, BrandMark, Thread and
+        PeekPanel components. Preview images are illustrative; no desktop is running.
+      </p>
+    </footer>
+    <template id="screen-template">
+      <svg
+        class="screen-image"
+        viewBox="0 0 1280 800"
+        role="img"
+        aria-label="Illustrative screen: coastal weekend research notes"
+      >
+        <rect width="1280" height="800" fill="var(--surface)" />
+        <rect x="0" width="235" height="800" fill="var(--surface-2)" />
+        <path d="M235 0V800" stroke="var(--border)" />
+        <text x="36" y="67" fill="var(--accent-fg)" font-size="23" font-weight="700">
+          Working notes
+        </text>
+        <text x="36" y="132" fill="var(--text-muted)" font-size="19">Weekend ideas</text>
+        <rect x="20" y="159" width="194" height="48" rx="6" fill="var(--accent-soft)" />
+        <text x="36" y="190" fill="var(--accent-fg)" font-size="19" font-weight="600">
+          Coastal weekend
+        </text>
+        <text x="36" y="248" fill="var(--text-muted)" font-size="19">Train routes</text>
+        <text x="36" y="300" fill="var(--text-muted)" font-size="19">Nearby walks</text>
+        <text x="306" y="78" fill="var(--text-muted)" font-size="17" letter-spacing="2">
+          WEEKEND / RESEARCH
+        </text>
+        <text x="306" y="152" fill="var(--text)" font-size="43" font-weight="700">
+          A quieter kind of weekend.
+        </text>
+        <text x="306" y="204" fill="var(--text-muted)" font-size="22">
+          Somewhere by the sea. A good walk. An easy train home.
+        </text>
+        <path d="M306 246H1204" stroke="var(--border)" />
+        <text x="306" y="300" fill="var(--accent-fg)" font-size="18" font-weight="600">
+          WHAT WE’RE LOOKING FOR
+        </text>
+        <text x="306" y="350" fill="var(--text)" font-size="23">
+          Quiet stays, close to the coast
+        </text>
+        <text x="306" y="394" fill="var(--text-muted)" font-size="21">
+          Reachable by train, without a long onward drive
+        </text>
+        <text x="306" y="438" fill="var(--text-muted)" font-size="21">
+          Walking routes straight from the doorstep
+        </text>
+        <path d="M306 482H1204" stroke="var(--border)" />
+        <text x="306" y="538" fill="var(--accent-fg)" font-size="18" font-weight="600">
+          STILL CHECKING
+        </text>
+        <rect x="306" y="568" width="898" height="107" rx="7" fill="var(--accent-soft)" />
+        <text x="330" y="610" fill="var(--accent-fg)" font-size="22" font-weight="600">
+          Train connections and places to stay
+        </text>
+        <text x="330" y="648" fill="var(--accent-fg)" font-size="20">
+          Keeping the shortlist small, with the trade-offs clear.
+        </text>
+        <text x="306" y="737" fill="var(--text-muted)" font-size="18">
+          Research in progress · Nothing has been booked
+        </text>
+      </svg>
+    </template>
+    <script src="moss-computer-chat/preview.js"></script>
+  </body>
+</html>
