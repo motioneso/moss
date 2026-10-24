@@ -86,3 +86,36 @@ No reboot, new recording, unlock request, permission/timeout/production-choice
 change, completed-source replay, deletion, rebind, firmware or server deployment.
 No production uninstall/clear-data or blind reinstall. Any future release must
 freshly verify provenance/signing/availability/choices and exceed actual version.
+
+## Amendment: prioritize available physical phone
+
+After disposable comparisons, Ben requested completing what is possible on the
+actual phone and deferring a virtual Android device. Ben explicitly confirmed
+availability to unlock after one reboot. This supersedes this plan's no-reboot
+boundary for that single arranged check; all data and production-update boundaries
+remain. The virtual-device request is deferred work, not this slice's successor
+priority.
+
+- Reidentify the authorized phone and capture installed version, boot identity,
+  enabled daily foreground service with matching live PID, original timeout and
+  official-app permission state. Preserve native identity/choices/queue observations.
+- Reboot once. Rediscover only the authorized paired device and verify physical
+  identity. After the user's unlock, capture boot-receiver evidence and matching
+  service/live PID before any companion activity, manual Start or instrumentation.
+  The replacement-only parser does not parse BOOT_COMPLETED: inspect the exact
+  boot action and receiver section separately, excluding unrelated records.
+- Require changed boot identity, completed boot/user unlock and automatic matching
+  foreground service. Retain failure before manual recovery if any criterion fails.
+  Compare actual native saved identity/choices/visible queue afterward. No new
+  recording is necessary for this empty-pending-work lifecycle check.
+- If additional reversible adapter-outage checks are useful, first retain the
+  observed Bluetooth state, allow one bounded off/on interval with guaranteed
+  restoration, and require actual observed reconnection without manual Start.
+  An adapter outage is not physical out-of-range or offline-upload proof.
+- Keep physical recording transfer, interrupted upload and production hold separate.
+  Do not disable network transport while relying on wireless ADB for restoration.
+  Stop after the bounded checks and retain exact tested inputs and limitations.
+
+Physical observer commands, expected results and actual exits will be retained
+privately with the receipts and summarized in committed evidence. No product
+change or speculative recovery mitigation is authorized by this amendment.
