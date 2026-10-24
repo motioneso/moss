@@ -31,7 +31,7 @@ image, sandbox relaxation or Internet egress. Synthetic mTLS does not qualify pr
 1. Verify all immutable manifest bytes, then fresh prelaunch floors RAM/root >=8GiB,data>=30GiB
    and healthy Moss. Independent alive watchdog before launch: exact fresh label, 1800s maximum,
    90s heartbeat, nominal 5s sampling, fail closed on measurement/log/floor failure or home+socket
-   > =10GiB; preserve lifecycle lock, stop intent, zombie rejection and exact emergency kill.
+   `>=10GiB`; preserve lifecycle lock, stop intent, zombie rejection and exact emergency kill.
 2. Existing isolation and complete guestTCP/UnixWS/gateway RFB3.8 readiness (120s), then unchanged
    protected access/removal/restoration drivers (90s), expected 0/1/1/0 and intended negative-control
    messages. Restore pristine gateway bytes exactly before browser acceptance.
@@ -42,12 +42,12 @@ image, sandbox relaxation or Internet egress. Synthetic mTLS does not qualify pr
    logs. A real full-UI synthetic-mTLS upstream-502 control already verified the diagnostic module;
    that is initialization/diagnostics evidence only, not desktop acceptance.
 4. Original current connected UI/RFB assertion (20s), attached intersecting nonblank frame with
-   > =10 sampled colours (12s), and fresh viewer-keyboard file/readback. Actual Firefox URL/bookmark
-   > through viewer input, active about:support and actual content-process sandbox filters, clean UI
-   > shutdown/profile flush, file/bookmark negative controls, exact distinct desktop replacement on
-   > the same home/image, unchanged durable hashes before reopening, fresh connected UI/frame/input,
-   > bookmark-only search and reopened exact persisted URL/file, sandbox and clean close again.
-   > Existing persistence runner bound remains 240s. No stubs/interception replace real acceptance.
+   at least 10 sampled colours (12s), and fresh viewer-keyboard file/readback. Actual Firefox URL/bookmark
+   through viewer input, active about:support and actual content-process sandbox filters, clean UI
+   shutdown/profile flush, file/bookmark negative controls, exact distinct desktop replacement on
+   the same home/image, unchanged durable hashes before reopening, fresh connected UI/frame/input,
+   bookmark-only search and reopened exact persisted URL/file, sandbox and clean close again.
+   Existing persistence runner bound remains 240s. No stubs/interception replace real acceptance.
 5. Failed hard predicates stop this attempt; retain browser/backend observations and close resources.
    No assertion retry, deadline increase or admission resampling in this packet. A causal correction
    needs separately identified artifacts and review under Ben's continued-diagnosis instruction.
