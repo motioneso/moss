@@ -1,3 +1,4 @@
+import { sha256 } from "./trust.js";
 import { constants, type Stats } from "node:fs";
 import { lstat, open, opendir, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
@@ -85,7 +86,7 @@ export class ObservationJournal {
       if ((await entries(directory)).length) throw supervisorError();
       file = await open(
         `${descriptorPath(directory)}/${NAME}`,
-        constants.O_WRONLY |
+        constants.O_RDWR |
           constants.O_CREAT |
           constants.O_EXCL |
           constants.O_NOFOLLOW |
@@ -118,6 +119,25 @@ export class ObservationJournal {
       !safeMetadata(opened, this.root)
     )
       throw supervisorError();
+  }
+  /** Start-only snapshot from this invocation's actual open descriptor, never a path reopen. */
+  async startSnapshot(configuration: WatchdogConfiguration) {
+    const current = () => {
+      if (this.#pending || this.#terminal || this.#samples || this.#collectors)
+        throw supervisorError();
+    };
+    current();
+    await this.inspect();
+    const expected = Buffer.from(`${JSON.stringify({ type: "start", configuration })}\n`);
+    if (this.#bytes !== expected.length || expected.length > 4096) throw supervisorError();
+    const buffer = Buffer.alloc(expected.length + 1);
+    const { bytesRead } = await this.file.read(buffer, 0, buffer.length, 0);
+    const stat = await this.file.stat();
+    await this.inspect();
+    current();
+    if (bytesRead !== expected.length || !buffer.subarray(0, bytesRead).equals(expected))
+      throw supervisorError();
+    return { dev: stat.dev, ino: stat.ino, size: stat.size, hash: sha256(expected) };
   }
   collector(identity: WatchdogProcessIdentity): Promise<void> {
     if (this.#terminal || ++this.#collectors > 400) return Promise.reject(supervisorError());

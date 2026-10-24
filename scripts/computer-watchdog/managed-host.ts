@@ -63,13 +63,16 @@ export async function manageDeployment(
   started: () => void
 ): Promise<number> {
   if (!deployment.configuration.lifetime) throw supervisorError();
-  const store = await HostStateStore.openExisting(deployment.configuration.host);
+  const store = await HostStateStore.openExisting(deployment.configuration.host, {
+    retainFailedLock: true
+  });
   await assertFencedComputerState(deployment, store.state);
   return runManagedComputerHost({
     store,
     now: computerMonotonicMs,
     signals: process,
     fatal: () => process.exit(2),
-    supervise: (hooks) => superviseDeployment(deployment, startedAtMs, watchdog, started, hooks)
+    supervise: (hooks) =>
+      superviseDeployment(deployment, startedAtMs, watchdog, started, hooks, store)
   });
 }

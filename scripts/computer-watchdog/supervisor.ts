@@ -1,3 +1,5 @@
+import { captureManagedProcesses } from "../computer-capture/run.js";
+import type { HostStateStore } from "../computer-host/state.js";
 import { join } from "node:path";
 import { ComputerRootLifetime } from "./lifetime.js";
 import type { ComputerLifetimeConfiguration } from "../../apps/api/src/computer/lifetime-protocol.js";
@@ -424,7 +426,8 @@ export async function superviseDeployment(
   startedAtMs: number,
   watchdog: WatchdogProcessIdentity,
   started: () => void,
-  terminalHooks?: SupervisorTerminalHooks
+  terminalHooks?: SupervisorTerminalHooks,
+  store?: HostStateStore
 ): Promise<SupervisorOutcome> {
   const configuration = {
     runId: deployment.configuration.runId,
@@ -432,24 +435,59 @@ export async function superviseDeployment(
     runner: deployment.configuration.runner,
     watchdog
   };
-  const journal = await ObservationJournal.create(deployment.configuration.monitor, configuration);
-  started();
-  return runComputerSupervisor({
-    configuration,
-    ...(deployment.configuration.lifetime
-      ? {
-          lifetime: {
-            configuration: deployment.configuration.lifetime,
-            socketPath: join(deployment.configuration.host.gatewayDir, "lifetime.sock")
+  let interrupted = false;
+  const stop = () => {
+    interrupted = true;
+  };
+  process.on("SIGTERM", stop).on("SIGINT", stop);
+  try {
+    const journal = await ObservationJournal.create(
+      deployment.configuration.monitor,
+      configuration
+    );
+    if (deployment.configuration.capture) {
+      await captureManagedProcesses(
+        deployment,
+        store,
+        watchdog,
+        startedAtMs,
+        journal,
+        () => interrupted || terminalHooks?.signal.aborted === true
+      );
+    }
+    const assertStartup = () => {
+      if (
+        interrupted ||
+        terminalHooks?.signal.aborted ||
+        (deployment.configuration.capture && computerMonotonicMs() - startedAtMs >= 5000)
+      )
+        throw supervisorError();
+    };
+    // Capture's last guard precedes an awaited continuation. Do not clear a now-expired timer.
+    assertStartup();
+    const result = runComputerSupervisor({
+      configuration,
+      ...(deployment.configuration.lifetime
+        ? {
+            lifetime: {
+              configuration: deployment.configuration.lifetime,
+              socketPath: join(deployment.configuration.host.gatewayDir, "lifetime.sock")
+            }
           }
-        }
-      : {}),
-    heartbeats: process.stdin,
-    journal,
-    startCollector: () => spawnComputerCollector(deployment, watchdog),
-    verifyRunner: () => readComputerProcess(configuration.runner),
-    now: computerMonotonicMs,
-    signals: process,
-    terminalHooks
-  });
+        : {}),
+      heartbeats: process.stdin,
+      journal,
+      startCollector: () => spawnComputerCollector(deployment, watchdog),
+      verifyRunner: () => readComputerProcess(configuration.runner),
+      now: computerMonotonicMs,
+      signals: process,
+      terminalHooks
+    });
+    assertStartup();
+    started();
+    return result;
+  } finally {
+    // Driver installed its handlers synchronously above: no asynchronous signal-handoff gap.
+    process.off("SIGTERM", stop).off("SIGINT", stop);
+  }
 }
