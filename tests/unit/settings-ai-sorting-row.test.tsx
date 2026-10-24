@@ -266,22 +266,22 @@ describe("SortingModelRow (Classifier)", () => {
   it("reads the saved gate record and keeps the gate unusable until a classifier is chosen", async () => {
     const renderer = await render();
     expect(getAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode");
-    const on = gateButton(renderer, "On");
-    expect(on.props.disabled).toBe(true);
-    expect(on.props.title).toBe("Available after shadow results are reviewed");
     expect(gateButton(renderer, "Off").props["aria-pressed"]).toBe(true);
     // The mockup keeps the whole gate disabled while no classifier is chosen.
     expect(gateButton(renderer, "Off").props.disabled).toBe(true);
     expect(gateButton(renderer, "Shadow").props.disabled).toBe(true);
-    expect(text(renderer)).not.toContain("On opens after shadow review.");
+    expect(gateButton(renderer, "On").props.disabled).toBe(true);
+    expect(gateButton(renderer, "On").props.title).toBeUndefined();
   });
 
-  it("enables the gate once a classifier is chosen but keeps On blocked", async () => {
+  it("enables all three gate choices once a classifier is chosen, with no review step", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
-    expect(gateButton(renderer, "Off").props.disabled).toBe(false);
-    expect(gateButton(renderer, "Shadow").props.disabled).toBe(false);
-    expect(gateButton(renderer, "On").props.disabled).toBe(true);
-    expect(text(renderer)).toContain("On opens after shadow review.");
+    for (const label of ["Off", "Shadow", "On"]) {
+      expect(gateButton(renderer, label).props.disabled).toBe(false);
+    }
+    expect(gateButton(renderer, "On").props.title).toBeUndefined();
+    expect(text(renderer)).not.toContain("On opens after shadow review.");
+    expect(text(renderer)).not.toContain("Available after shadow results are reviewed");
   });
 
   it("states the admin-wide reach of the gate", () => {
@@ -296,7 +296,48 @@ describe("SortingModelRow (Classifier)", () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
     expect(gateButton(renderer, "On").props.disabled).toBe(false);
     expect(gateButton(renderer, "On").props["aria-pressed"]).toBe(true);
-    expect(text(renderer)).not.toContain("On opens after shadow review.");
+  });
+
+  it("turns the gate on from off in one click", async () => {
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await act(async () => {
+      gateButton(renderer, "On").props.onClick();
+    });
+    expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "on");
+  });
+
+  it("turns the gate on from shadow in one click", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({
+      config: { value: "shadow", source: "instance" }
+    } as never);
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await act(async () => {
+      gateButton(renderer, "On").props.onClick();
+    });
+    expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "on");
+  });
+
+  it("locks every gate choice while a change is saving", async () => {
+    putAdminRuntimeConfig.mockImplementationOnce(() => new Promise<never>(() => undefined));
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await act(async () => {
+      gateButton(renderer, "On").props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    for (const label of ["Off", "Shadow", "On"]) {
+      expect(gateButton(renderer, label).props.disabled).toBe(true);
+    }
+  });
+
+  it("shows a saved On as pressed but locked once the classifier is cleared", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({
+      config: { value: "on", source: "instance" }
+    } as never);
+    const renderer = await render();
+    expect(gateButton(renderer, "On").props["aria-pressed"]).toBe(true);
+    for (const label of ["Off", "Shadow", "On"]) {
+      expect(gateButton(renderer, label).props.disabled).toBe(true);
+    }
   });
 
   it("saves an allowed gate choice and reads feedback from the saved record", async () => {
@@ -329,13 +370,13 @@ describe("SortingModelRow (Classifier)", () => {
     expect(text(renderer)).not.toContain(CLASSIFIER_API_DISCLOSURE);
   });
 
-  it("links the Shadow badge and note to the shadow report while the gate is shadow", async () => {
+  it("links the Shadow badge to the shadow report while the gate is shadow", async () => {
     getAdminRuntimeConfig.mockResolvedValue({
       config: { value: "shadow", source: "instance" }
     } as never);
     const renderer = await render({ kind: "model", modelId: "small-json" });
     const hrefs = renderer.root.findAllByType("a").map((anchor) => anchor.props.href);
-    expect(hrefs.filter((href) => href === "/settings?section=shadowreport")).toHaveLength(2);
+    expect(hrefs.filter((href) => href === "/settings?section=shadowreport")).toHaveLength(1);
     expect(text(renderer)).toContain("See shadow results");
   });
 

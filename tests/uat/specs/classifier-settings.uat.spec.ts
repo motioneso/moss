@@ -1,11 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
-// Classifier gate plan 1.3 (#2892). Proves the shipped Classifier settings row on the real
-// Settings > AI providers screen: pick and clear a classifier, change the allowed gate state,
-// confirm `on` is refused before the release gate, and that the row reads in light, dark and one
-// park theme. The "default chat is unchanged" half needs a real chat turn; the UAT harness has no
-// chat-capable AI provider at any seed level (#1121), so it is test.fixme'd with that citation.
+// Classifier gate plan 1.3 (#2892), updated for Moss extensions phase 0. Proves the shipped
+// Classifier settings row on the real Settings > AI providers screen: pick and clear a classifier,
+// move the gate to Shadow and then straight to On with no review step, and that the row reads in
+// light, dark and one park theme. The "default chat is unchanged" half needs a real chat turn; the
+// UAT harness has no chat-capable AI provider at any seed level (#1121), so it is test.fixme'd with
+// that citation.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 function requireBaseURL(): string {
@@ -65,7 +66,7 @@ async function selectClassifier(page: Page): Promise<void> {
   await expect(classifierSelect(page)).toHaveValue(/^model:/);
 }
 
-test("the Classifier settings row picks and clears a classifier and gates `on` (#2892)", async ({
+test("the Classifier settings row picks and clears a classifier and turns `on` straight away (#2892)", async ({
   page
 }) => {
   test.setTimeout(240_000);
@@ -109,33 +110,37 @@ test("the Classifier settings row picks and clears a classifier and gates `on` (
   await openAssistantAndAiSettings(page);
   await expect(classifierSelect(page)).toHaveValue("");
 
-  // Re-pick, then the allowed gate state: Shadow. `On` stays unusable before the release gate.
+  // Re-pick, then Shadow. On is open straight away, with no review step.
   await selectClassifier(page);
   await gateButton(page, "Shadow").click();
   await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");
-  await expect(gateButton(page, "On")).toBeDisabled();
-  await expect(gateButton(page, "On")).toHaveAttribute(
-    "title",
-    "Available after shadow results are reviewed"
-  );
+  await expect(gateButton(page, "On")).toBeEnabled();
+  await expect(page.getByText("On opens after shadow review.")).toHaveCount(0);
   // Ruling 1: the row states the admin-wide reach of the gate.
   await expect(page.getByText(/every user's eligible messages/)).toBeVisible();
   await page.reload();
   await openAssistantAndAiSettings(page);
   await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");
 
-  // A forged `on` write is refused (409) and does not change the stored record.
-  const refused = await json(page, "/api/admin/runtime-config/chat.classifier_gate_mode", {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value: "on" })
-  });
-  expect(refused.status).toBe(409);
+  // Shadow to On through the row. The save lands and survives a reload.
+  const onSaved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(
+        "/api/admin/runtime-config/chat.classifier_gate_mode"
+      ) && response.request().method() === "PUT",
+    { timeout: 30_000 }
+  );
+  await gateButton(page, "On").click();
+  expect((await onSaved).status()).toBe(200);
+  await expect(gateButton(page, "On")).toHaveAttribute("aria-pressed", "true");
   const stored = await json(page, "/api/admin/runtime-config/chat.classifier_gate_mode");
   expect(stored.status).toBe(200);
-  expect((stored.body.config as { value: string }).value).toBe("shadow");
+  expect((stored.body.config as { value: string }).value).toBe("on");
+  await page.reload();
+  await openAssistantAndAiSettings(page);
+  await expect(gateButton(page, "On")).toHaveAttribute("aria-pressed", "true");
 
-  // The row reads in light, dark and one park theme; screenshots are bounded evidence.
+  // The row reads in light, dark and one park theme.
   for (const theme of [
     { name: "light", mode: "light", park: null },
     { name: "dark", mode: "dark", park: null },
@@ -148,10 +153,12 @@ test("the Classifier settings row picks and clears a classifier and gates `on` (
     }, theme);
     await expect(classifierHeading(page)).toBeVisible();
     await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
-    await page.screenshot({
-      path: test.info().outputPath(`classifier-row-${theme.name}.png`),
-      fullPage: true
-    });
+    if (process.env.MOSS_UAT_CAPTURE_OFF !== "1") {
+      await page.screenshot({
+        path: test.info().outputPath(`classifier-row-${theme.name}.png`),
+        fullPage: true
+      });
+    }
   }
 });
 
