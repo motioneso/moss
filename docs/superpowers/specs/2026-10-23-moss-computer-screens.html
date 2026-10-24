@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moss Computer — proposed screens</title>
+    <link rel="stylesheet" href="../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../packages/ui/src/styles.css" />
+    <style>
+      @font-face {
+        font-family: Archivo;
+        font-weight: 900;
+        src: url("../../../apps/web/public/fonts/archivo/archivo-latin-900-normal.woff2");
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: var(--text-md)/var(--leading-normal) var(--font-sans);
+      }
+      h1,
+      h2 {
+        font-family: var(--font-display);
+        letter-spacing: var(--tracking-tight);
+        margin: 0;
+      }
+      h1 {
+        font-size: var(--text-4xl);
+        font-weight: var(--weight-black);
+      }
+      h2 {
+        font-size: var(--text-xl);
+      }
+      p {
+        margin: var(--space-3) 0;
+      }
+      .review {
+        padding: var(--space-3) var(--space-6);
+        border-bottom: var(--border-w) solid var(--border);
+        background: var(--surface);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+      }
+      .review label {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: var(--text-xs);
+      }
+      select {
+        font: inherit;
+        color: var(--text);
+        background: var(--surface);
+        border: var(--border-w) solid var(--border);
+        padding: var(--space-2);
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: var(--nav-w) minmax(0, 1fr);
+        min-height: 85vh;
+      }
+      nav {
+        padding: var(--space-6);
+        border-right: var(--border-w) solid var(--border);
+      }
+      nav strong {
+        display: block;
+        font-family: var(--font-display);
+        font-size: var(--text-2xl);
+        margin-bottom: var(--space-8);
+      }
+      nav p {
+        color: var(--text-muted);
+        font-size: var(--text-sm);
+      }
+      nav .selected {
+        color: var(--accent-fg);
+        font-weight: var(--weight-bold);
+      }
+      main {
+        padding: var(--space-7);
+        min-width: 0;
+      }
+      .mast {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        flex-wrap: wrap;
+      }
+      .eyebrow {
+        color: var(--accent-fg);
+        font-size: var(--text-2xs);
+        font-weight: var(--weight-bold);
+        letter-spacing: var(--tracking-caps);
+        text-transform: uppercase;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+        border-top: var(--border-w) solid var(--border);
+        margin-top: var(--space-6);
+        padding: var(--space-4) 0;
+      }
+      .viewer {
+        min-height: 52vh;
+        border: var(--border-w) solid var(--border-strong);
+        background: var(--surface-2);
+        display: grid;
+        place-items: center;
+        padding: var(--space-6);
+      }
+      .desktop {
+        width: min(100%, 760px);
+        min-height: 34vh;
+        background: var(--surface);
+        border: var(--border-w) solid var(--border);
+      }
+      .desktop header {
+        padding: var(--space-3);
+        border-bottom: var(--border-w) solid var(--border);
+        font-size: var(--text-xs);
+      }
+      .desktop section {
+        padding: var(--space-6);
+      }
+      .hint {
+        color: var(--text-muted);
+        font-size: var(--text-sm);
+      }
+      .state-copy {
+        max-width: var(--measure-narrow);
+        text-align: center;
+      }
+      .settings {
+        border-top: var(--border-w) solid var(--border);
+        margin-top: var(--space-6);
+        padding: var(--space-5) 0;
+        max-width: var(--measure);
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body.standalone .shell {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      body.standalone nav {
+        display: none;
+      }
+      button {
+        min-height: 44px;
+      }
+      @media (max-width: 720px) {
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        nav {
+          display: none;
+        }
+        main {
+          padding: var(--space-4);
+        }
+        .viewer {
+          padding: var(--space-3);
+        }
+        h1 {
+          font-size: var(--text-3xl);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review">
+      <p>
+        Superseded: Ben requested Computer inside the chat drawer.
+        <a href="2026-10-23-moss-computer-chat-mockups.html">Open the revised chat mockups</a>.
+      </p>
+      <div class="row">
+        <strong>Proposed design · fictional desktop · no Computer connection</strong>
+        <label
+          >State
+          <select id="state">
+            <option value="watch">Watching Moss</option>
+            <option value="owner">You control</option>
+            <option value="other">Another window controls</option>
+            <option value="paused">Disconnected / paused</option>
+            <option value="waking">Waking</option>
+            <option value="sleeping">Sleeping</option>
+            <option value="disabled">Not enabled</option>
+            <option value="blocked">Resources unavailable</option>
+            <option value="error">Connection lost</option>
+            <option value="settings">Settings</option>
+          </select></label
+        >
+        <label
+          >Layout
+          <select id="layout">
+            <option value="app">Inside Moss</option>
+            <option value="browser">Browser standalone</option>
+          </select></label
+        >
+        <label
+          >Theme
+          <select id="theme">
+            <option>forest</option>
+            <option>teal</option>
+            <option>dark</option>
+          </select></label
+        >
+      </div>
+    </div>
+    <div class="shell">
+      <nav aria-label="Example Moss navigation">
+        <strong>Moss</strong>
+        <p>Today</p>
+        <p>Tasks</p>
+        <p>Calendar</p>
+        <p class="selected">Computer</p>
+        <p>Settings</p>
+      </nav>
+      <main>
+        <div class="mast">
+          <div>
+            <div class="eyebrow">Your workspace</div>
+            <h1>Computer</h1>
+          </div>
+          <button id="settings" class="jds-btn jds-btn--quiet">Computer settings</button>
+        </div>
+        <p class="hint">The same desktop and saved files, here or in your browser.</p>
+        <div class="toolbar">
+          <span id="controller" class="jds-badge jds-badge--forest" role="status"
+            >Moss controls · You are watching</span
+          >
+          <div class="row">
+            <button id="primary" class="jds-btn jds-btn--primary">Take over</button
+            ><button id="return" class="jds-btn jds-btn--secondary" hidden>
+              Return control to Moss
+            </button>
+          </div>
+        </div>
+        <div class="viewer" id="viewer" aria-label="Example desktop">
+          <div class="desktop" id="desktop">
+            <header>Files — Computer / Documents</header>
+            <section>
+              <h2>Trip notes</h2>
+              <p>Moss is organizing the files you asked for.</p>
+              <p class="hint">Example desktop content for design review.</p>
+            </section>
+          </div>
+          <div class="state-copy" id="empty" hidden>
+            <h2 id="empty-title"></h2>
+            <p id="empty-copy"></p>
+          </div>
+        </div>
+        <p id="footnote" class="hint">
+          Watching leaves Moss in control. Take over to use the mouse and keyboard.
+        </p>
+        <section class="settings" id="settings-panel" hidden>
+          <h2>Availability and saved data</h2>
+          <p>
+            Computer sleeps when unused to free memory. Opening it wakes it. Saved files and browser
+            data stay; apps reopen, and unsaved work may not survive a stop.
+          </p>
+          <p>
+            Connected viewers and active tasks keep it awake. If it cannot safely save and stop, it
+            stays awake and tells you why.
+          </p>
+          <p>
+            Disabling stops Computer and keeps its saved data. Deleting data is a separate action.
+          </p>
+          <button id="disable" class="jds-btn jds-btn--secondary">Disable Computer</button>
+        </section>
+      </main>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const states = {
+        watch: [
+          "Moss controls · You are watching",
+          "Take over",
+          "",
+          "",
+          "Watching leaves Moss in control. Take over to use the mouse and keyboard."
+        ],
+        owner: [
+          "You control · Moss input is paused",
+          "",
+          "",
+          "",
+          "Only this window can use the mouse and keyboard. Moss waits until you return control."
+        ],
+        other: [
+          "You are watching · Another window controls",
+          "",
+          "",
+          "",
+          "Use the controlling window, or reconnect after it closes. Watching does not interrupt it."
+        ],
+        paused: [
+          "Input paused",
+          "Take over",
+          "Choose who controls",
+          "The controlling window disconnected. Input stays paused until you choose.",
+          "Reconnecting never automatically returns control to Moss."
+        ],
+        waking: [
+          "Waking",
+          "",
+          "Getting your desktop ready",
+          "Your saved files and browser data will be available when it is ready.",
+          ""
+        ],
+        sleeping: [
+          "Sleeping",
+          "Wake Computer",
+          "Your saved work is here",
+          "Computer is asleep to free memory. Apps reopen when it wakes.",
+          "Opening Computer normally wakes it automatically. This is the sleeping state preview."
+        ],
+        disabled: [
+          "Not enabled",
+          "Enable Computer",
+          "Your own desktop alongside Moss",
+          "Computer uses host memory while awake. Saved files and browser data stay when it sleeps or is disabled.",
+          "Existing installations opt in. New installations disclose resources and allow opt-out."
+        ],
+        blocked: [
+          "Unavailable",
+          "Check availability",
+          "There is not enough room to wake",
+          "Your saved data is retained. Computer will not compete with other work when the host is low on resources.",
+          "No automatic retry loop. Check again when other work has finished."
+        ],
+        error: [
+          "Connection lost · Input paused",
+          "Reconnect",
+          "Reconnect to your desktop",
+          "Your saved data has not been deleted. Reconnecting opens the same Computer as a watcher.",
+          "An active task may still be running. A lost viewer does not cancel it."
+        ],
+        settings: ["Settings", "", "", "", ""]
+      };
+      function render() {
+        const state = $("state").value,
+          [status, action, title, copy, note] = states[state];
+        $("controller").textContent = status;
+        $("primary").textContent = action;
+        $("primary").hidden = !action;
+        $("return").hidden = !["owner", "paused"].includes(state);
+        $("desktop").hidden = !["watch", "owner", "other"].includes(state);
+        $("empty").hidden = !title;
+        $("empty-title").textContent = title;
+        $("empty-copy").textContent = copy;
+        $("footnote").textContent = note;
+        $("viewer").hidden = state === "settings";
+        $("settings-panel").hidden = state !== "settings";
+      }
+      $("state").onchange = render;
+      $("settings").onclick = () => {
+        $("state").value = "settings";
+        render();
+      };
+      $("primary").onclick = () => {
+        const state = $("state").value;
+        $("state").value = ["watch", "paused"].includes(state)
+          ? "owner"
+          : state === "error"
+            ? "paused"
+            : "waking";
+        render();
+      };
+      $("return").onclick = () => {
+        $("state").value = "watch";
+        render();
+      };
+      $("disable").onclick = () => {
+        $("state").value = "disabled";
+        render();
+      };
+      $("layout").onchange = () =>
+        document.body.classList.toggle("standalone", $("layout").value === "browser");
+      $("theme").onchange = () => {
+        document.documentElement.dataset.theme =
+          $("theme").value === "dark" ? "forest" : $("theme").value;
+        document.documentElement.dataset.colorMode = $("theme").value === "dark" ? "dark" : "light";
+      };
+      render();
+    </script>
+  </body>
+</html>

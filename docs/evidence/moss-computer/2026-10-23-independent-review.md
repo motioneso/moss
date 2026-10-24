@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** startup-readiness-r10 passed positive backend probes but rejected restored access on an explicit RFB security-failure response; UI/input and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
+- **Current status:** r11 accepted bounded startup/protected viewer/fresh input. The single r12 prerequisite attempt was rejected at current UI/RFB connection and independently closed; sandbox/flush/replacement remain unqualified. The viewer-repair dispatch ended with independently accepted unresolved evidence and closure, zero new desktop attempts and no supported repair. Internal owner-control policy at `d9159bab7` passed exact independent review and scoped verification; no app/browser integration acceptance or screen approval follows. Historical rulings remain below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -499,3 +499,181 @@ remain unqualified. #3578/#3577 remain open; no rerun, merge or product expansio
 | [r11 report](2026-10-23-startup-readiness-r11.md)                                                 | `e469a8160d5d4fb5f354876462e7ffb0bab7a09ae39373375621a67920504317` |
 | [r11 JSON](2026-10-23-startup-readiness-r11.json)                                                 | `71fbe6c59dcf4571169011ba6f238492b36bcf3bc3d863995717c16b1a954e0e` |
 | [Spec with sections21–22](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `35169fa4a1deaed1e357330428b3f2af1631319b0bc122a77ab22a986321c115` |
+
+## Implementation dispatch: r12 launch, rejection and closure
+
+Independent read-only reviewer `/root/implementation_review` accepted exact committed packet
+`6006873f4` and all 62 actual artifacts, manifest
+`ec8ffb245003175a3e83727872e4a807e89cf92a428e81dd367b3094cc057e43`.
+**PASS_READY** remained conditional on fresh admission and an alive healthy first watchdog sample.
+This accepted one attempt, not runtime suitability or a retry. The prelaunch fixture invocation
+initially named an absent startup file; the actual persistence call site was corrected and checked
+before launch. No runtime assertion retry occurred.
+
+The single r12 run passed fresh admission, complete RFB readiness and access drivers 0/1/1/0,
+then timed out at the current UI/RFB connected predicate. Frame/input/Firefox sandbox/clean flush/
+replacement were NOT_RUN. Runner 1 correctly rejected incomplete proof. Cause remains UNKNOWN;
+the `/package.json` 404 also occurred in passing r11 and does not establish causation.
+
+**PASS_CLOSURE**, 2026-10-23 22:02:25.273172 UTC, independently verified exact containers/network,
+listener/reservation, script processes/watchdog, six recorded browser PID/start identities and
+ephemeral keys absent; pristine gateway restored; retained homes/archive and healthy Moss/health.
+An operator process check found the failed harness already absent, so no signal was sent. The
+receipt wording was corrected to remove a speculative hang diagnosis. Watchdog/cleanup/port release
+were 0; 14 short samples grant no sustained-fit claim. No second attempt followed.
+
+## Owner-control plan and code: exact final acceptance
+
+The same independent reviewer did not author fixes. **PASS_PLAN** accepted `b0d69d5ea` for
+internal policy work while the UI/runtime gates remain blocked. The plan's agent authority was
+explicitly bound to the session returning control, with fresh liveness checks on every dispatch;
+viewer disconnect alone preserves authorized active work, session revocation/expiry does not.
+**PASS_CODE_REVIEW** accepted `a038dbf5b` within that local boundary scope.
+
+The subsequent root TypeScript check exposed an unexported auth type and widened frozen capability
+brands. Publicly exporting the existing `BrowserSessionBinding` type and supplying explicit
+`Object.freeze` generics corrected those errors without changing runtime behavior. Root tsc,
+17 unit tests, scoped lint and file-size checks then exited 0. Removing the generation comparison
+had produced an observed old-lease failure; restoring it returned all 17 tests to green.
+
+Final verdict: **PASS_EXACT_FINAL for `d9159bab7`; no blocking findings.** The reviewer compared
+all public r12 receipt fields against sanitized raw sources, all 39 raw receipt hashes and all
+27 surviving source hashes, deleted identities and diagnostic summaries. Final code/test/auth and
+plan/spec/report bytes matched that commit. Four exit receipts were 0; 60 mockup assertions and
+successful Taildrop receipt were checked. Phone delivery is not design approval.
+
+| Exact accepted artifact                                                                 | SHA-256                                                            |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [r12 report](2026-10-23-persistence-r12.md)                                             | `ba05bdba832a17d61177ae97b2a50d1a4f301ee9185fe17aff01e5a8c338e602` |
+| [r12 JSON](2026-10-23-persistence-r12.json)                                             | `43ef0b5ea948cb64dbaef744a62143b4b34eea980ee0e6af9f63c0091912a012` |
+| [Foundation evidence](2026-10-23-owner-control-foundation.md)                           | `441a0e3a4e5d884cbebb11c48ad4eda4968768f39ed43f30ef0d6217ac142195` |
+| [Owner-control plan](../../superpowers/plans/2026-10-23-moss-computer-owner-control.md) | `e74e487dbc4635a657603f1d0e7ea112945f9a6fe41c024a85aa4a0dfb93645f` |
+| Spec with section 23                                                                    | `3b21d5b09a36fb00bd7157801973851102e6aa53917601061ad320948a703b53` |
+| Input-control implementation                                                            | `6d3ce7f2f6441c9e397c8d4520c99996152f51f9beca8f836a43cc7355316641` |
+| Boundary tests                                                                          | `4d790afb49de806c1d873040fe6d361a9c20e587f788b081bbc89a8183c2f847` |
+| Auth public export                                                                      | `2d66ea3165b4551e3d0209da541d47c558d96f3249a3b64a963c8b79082e8dee` |
+
+Acceptance covers internal policy, accurate r12 rejection and closure only. The boundary cannot
+retract already-sent bytes; the future receiving gateway must be the sole writer and fence/drain
+queued input with key/button release. No raw noVNC passthrough or owner transport security is
+qualified. Persistence, actual owner HTTPS/WSS and active revocation, app/browser UI, trusted
+lifecycle/idle sleep/wake, installed storage, confined egress and release/platform proof remain
+open. Draft #3598 is unmerged; #3605/#3577/#3578 remain open. No runtime retry, automatic merge,
+deployment or issue closure follows this review.
+
+## Authenticated intentional-close follow-on
+
+Ben approved the chat-integrated layout with concise copy and intentional close returning control
+to Moss. The separate destination and close-leaves-paused UI proposals are superseded. Copy-only
+revision `4f0441121` removed visible screenshot labels; that exact revision passed independent
+review. Earlier transfer/mockup receipts remain historical design evidence, not desktop acceptance.
+
+Independent **PASS_PLAN** accepted `d49f58c27` before the close operation was implemented;
+plan SHA-256 `196e3093b59517dc7fc4963faa5ea3a006b9fb6d7393faf1338a84fa24c1710c`.
+**PASS_CODE_REVIEW** and then **PASS_EXACT_FINAL** accepted
+`f7a26e6f3802160c018ec45030ce8fe2c4e809b5`; no blocking findings. Review covered fresh
+authorization, generation fencing, ownership-only return, guaranteed disconnect cleanup and
+watcher/lease preservation. Reviewers made no edits and launched no runtime.
+
+Removing only the close generation guard produced two expected failures/26 passes: a stale close
+resumed a later takeover and concurrent closes both reported success. Restoring the guard returned
+28 passing tests. Root TypeScript, scoped ESLint, file-size, formatting and whitespace exited 0.
+The reviewer checked explicit tool-exit receipts and all four candidate source/test/evidence/spec
+hashes against committed bytes. Private receipt SHA-256:
+`71a369940a87d29aa08c0a44f32f66a03f5b140964ec39a705f4cf42a5ac2dc6`.
+Accepted input-control source SHA-256:
+`a695b1f08121aec42da9520cff4dcc4ca42f09a3770cde597df66b2d9850f624`.
+
+Acceptance is internal policy only. There is no transport caller, UI wiring or receiving protocol
+writer. Unexpected disconnect remains separate from authenticated intentional close. Persistence,
+real owner HTTPS/WSS/active revocation, receiving-side queue fencing and key/button release,
+installed storage/lifecycle/idle and confined egress remain open. No runtime retry, merge,
+deployment or issue closure is authorized.
+
+## Viewer-repair dispatch: unresolved evidence accepted, no runtime
+
+Independent read-only reviewer `/root/viewer_review` accepted exact candidate
+`1310ab9d00d1cf8153acfa13df2fa4062f20a981` at 2026-10-24 01:27:58.596165 UTC:
+**ACCEPT_UNRESOLVED_NO_RUNTIME; closure PASS. No blocking findings.** The reviewer authored no
+fixes and launched no runtime.
+
+All seven new raw-artifact hashes, all 52/39 historical final-receipt hashes and all 34/27
+surviving launch-artifact hashes matched independently. The connection functions match; the
+reported method hash includes its terminating newline. The four-ordering Node VM check and
+failing removed-ready-state control exercise scheduling with DOM/settings doubles and a stub
+start only. They do not reproduce or repair the desktop failure. Missing browser-boundary
+observations leave the cause UNKNOWN. The documents correctly apply the unsupported-repair
+kill gate: zero new attempts, no image load, no accepted launch packet, and current UI/frame/
+input, Firefox sandbox/flush and replacement persistence NOT_RUN.
+
+Independent closure found no exact proposed-r13/r12/r11 containers or networks under either
+proof or Compose labels, no owned script/watchdog or recorded browser PID/start identities,
+no Computer reservation/listener and no ephemeral keys. Existing listeners on old proof ports
+belong to other services. The new private root contains receipts only; historical homes/archive
+and implementation receipts exist, without a comprehensive home/archive rehash. Moss was running
+healthy with health `ok:true`. No admission resampling or desktop attempt occurred.
+
+Both historical watchdog stop files record `operator closure` and
+`NO_RUNNING_PROOF_CONTAINERS`. All 2/14 recorded samples satisfy RAM/root 8 GiB, data 30 GiB
+and home/socket below 10 GiB; no sustained resource-fit claim follows.
+
+| Exact accepted artifact                                                                        | SHA-256                                                            |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Viewer diagnosis](2026-10-23-viewer-diagnosis.md)                                             | `25695b82d2ada1b4854a44f2de130dbbd4d1e4cdc73563e447162fa8fb3d789a` |
+| [Diagnosis JSON](2026-10-23-viewer-diagnosis.json)                                             | `3902e9a49a0e6d124bd77b1753ba29870389d4c383c1cb7d965a5a1053594c1d` |
+| [Diagnostic plan](../../superpowers/plans/2026-10-23-moss-computer-viewer-diagnosis.md)        | `4bb3cd77716df1f73972f3a5c391b4ff5b0400263a1630457bcb64b9be0efe40` |
+| [Spec with section 26](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `9d007de7e1b00ef5ad050ec3582d3340b6277533972bd52380bcf2ca8b11e678` |
+
+Acceptance covers evidence accuracy and closure only. Viewer repair and persistence remain open.
+Draft #3612 stacks on unmerged draft #3607, itself on unmerged #3598. No runtime retry, merge,
+deployment or issue closure follows this review.
+
+## Continued diagnosis: complete bounded offline persistence accepted
+
+Ben directly instructed continued repair, superseding the preceding unsupported-repair stopping
+decision. That earlier exact review remains historical. Operator `/root` retained failures and
+corrected observed qualification harness faults in separately committed fresh packets, with
+independent read-only review before each launch. Reviewer `/root/viewer_review` authored no fixes.
+Original admission, isolation, deadlines, real acceptance assertions and closure remained binding.
+
+**PASS_EXACT_R21_LAUNCH_READINESS** accepted exact packet
+`fd34c7ba78b95b3b7ad690ae8211a275f1cbcef7`, all 56 actual immutable inputs and manifest
+`9aec7a404c9951a6afbc3f296059fe98cf9cc749905139827195eb2c738db6ea`.
+The actual bookmark caller sends one Arrow Down then one Enter, retaining the original query,
+wait, exact-target assertion and distinct initial-control URL. Fresh prelaunch admission and the
+first healthy watchdog sample were then independently verified before accepting runtime results.
+
+**PASS_BOUNDED_OFFLINE_PERSISTENCE_AND_CLOSURE** independently passed all 39 checks at
+2026-10-24 02:07:49 UTC. Complete RFB/access controls, actual connected UI/RFB and visible frames
+with 346/338 colours, fresh viewer input before/after, active Firefox level 6 and 5/4 actual tabs
+with added filters, clean close twice, intended data-negative controls, distinct replacement on
+the same home/image, unchanged durable hashes before reopening and actual persisted bookmark/file
+readback all passed. Final database hash changes after browser revisit are explicitly distinguished
+from unchanged before-reopen bytes.
+
+Independent current closure found exact proof/Compose containers/networks absent, browser/watchdog
+PID/start identities and owned scripts absent, no listener/reservation on the claimed port,
+ephemeral keys/certificates absent and Moss running healthy with `ok:true`. All six watchdog
+samples satisfy floors/heartbeat/home limits; actual stop is `operator closure` and
+`NO_RUNNING_PROOF_CONTAINERS`. Private independent runtime/closure receipt SHA-256:
+`6c65d682c89a44b3821366e41da9d884d10d0ba64a885a3570f0fa0c0b8e6e2e`.
+
+**PASS_EXACT_FINAL** accepted evidence candidate
+`776a85cc89b8cf43071829dfe30e22e329b7ba45`; no blocking findings. Reviewer independently
+matched all 274 raw-artifact hashes, all 223 surviving immutable-input hashes, all 147 deleted
+ephemeral identity inputs (21 for each r15–r21), manifest counts/hashes and every committed packet
+manifest row. Report/spec/JSON predicates were checked semantically against actual receipts.
+
+| Exact accepted artifact                                                                        | SHA-256                                                            |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [r21 report](2026-10-23-persistence-r21.md)                                                    | `2dd8d76569558a22974946f27efcb0cd0d0797a83e9bfab93fe0e08e3efa1e0c` |
+| [r21 JSON](2026-10-23-persistence-r21.json)                                                    | `8447db6e135c3038881f2252e23e66290dacd13fc7501f783ab7fd87ab50fa77` |
+| [Raw-artifact manifest](2026-10-23-viewer-repair-artifacts.json)                               | `2498d1743d98d2b967dedb7a369b557225665b3d9b6828017bb8810b7c431ede` |
+| [Spec with section 27](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `5d80dd3af4643136a9efb970356b5d40b7fc123a5f2cb9716beb142a7dcb776e` |
+
+Acceptance covers bounded offline amd64 persistence, actual viewer/input, sandbox/flush and closure.
+Original r12 connection and r18 initial clipboard timeout causes remain UNKNOWN; no causal noVNC
+patch is claimed. Synthetic mTLS does not qualify Moss owner authentication. Real owner transport/
+revocation, sole receiving input writer/queue/key fencing, chat/browser UI, installed storage/
+lifecycle/idle sleep-wake, confined Internet egress, platform release and sustained fit remain open.
+No deployment, merge or issue closure occurred. Draft #3612 remains on unmerged #3607/#3598.
