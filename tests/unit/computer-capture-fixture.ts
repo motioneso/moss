@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import type { PathLike } from "node:fs";
 import type * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { vi } from "vitest";
@@ -77,7 +78,7 @@ export async function captureFixture(register: (close: () => Promise<void>) => v
     await fs.mkdir(cgRoot + path, { recursive: true, mode: 0o755 });
     await fs.writeFile(cgRoot + path + "/cgroup.procs", pids.join("\n") + "\n", { mode: 0o644 });
   }
-  const mapPath = (path: fs.PathLike) =>
+  const mapPath = (path: PathLike) =>
     String(path).startsWith("/sys/fs/cgroup") ? cgRoot + String(path).slice(14) : path;
   const ownInfo = join(f.root, "input/own-info");
   await fs.writeFile(ownInfo, "flags:\t00\n");

@@ -192,10 +192,10 @@ describe("capture trust and native managed composition; disclosed OS projections
       const exited = once(child, "exit");
       let stdout = "",
         stderr = "";
-      child.stdout.on("data", (b) => {
+      child.stdout!.on("data", (b) => {
         stdout += b;
       });
-      child.stderr.on("data", (b) => {
+      child.stderr!.on("data", (b) => {
         stderr += b;
       });
       cleanups.push(async () => {

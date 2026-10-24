@@ -20,7 +20,7 @@ export async function prepareNativeCapture(configPath: string, held: string) {
       gid: typeof s.gid === "bigint" ? 1000n : 1000,
       mode: typeof s.mode === "bigint" ? s.mode & ~0o022n : s.mode & ~0o022
     });
-  const map = (path: fs.PathLike) =>
+  const map = (path: nativeFs.PathLike) =>
     String(path).startsWith("/sys/fs/cgroup") ? fixture.cgRoot + String(path).slice(14) : path;
   const chownPath = io.chown;
   io.chown = (path, uid, gid) =>
@@ -77,8 +77,8 @@ export async function prepareNativeCapture(configPath: string, held: string) {
       handle === bootstrap &&
       (new Error().stack ?? "").includes("acknowledgeStartup")
     ) {
-      const nativeFs = createRequire(configPath)("node:fs") as typeof nativeFs;
-      if (nativeFs.existsSync(join(config.capture.path, "capture.json")))
+      const nativeFileSystem = createRequire(configPath)("node:fs") as typeof nativeFs;
+      if (nativeFileSystem.existsSync(join(config.capture.path, "capture.json")))
         process.send!({
           type: "continued",
           timerStartedAtNs,
