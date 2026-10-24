@@ -419,6 +419,12 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
         });
       }
       if (mode === "group") {
+        const lstat = vi.mocked(f.io.lstat).getMockImplementation()!;
+        vi.spyOn(f.io, "lstat").mockImplementation(async (...args: Parameters<typeof fs.lstat>) => {
+          const value = await lstat(...args);
+          if (String(args[0]) === path) value.gid = 123;
+          return value;
+        });
         const open = vi.mocked(f.io.open).getMockImplementation()!;
         vi.spyOn(f.io, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
           const file = await open(...args);

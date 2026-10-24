@@ -27,15 +27,15 @@ export async function provisionFixture(
   const host = await isolatedConfig();
   const root = dirname(host.config.stateDir);
   const handles: fs.FileHandle[] = [];
-  let node: ReturnType<typeof spawn> | undefined;
-  let docker: ReturnType<typeof createServer> | undefined;
+  const owned: { node?: ReturnType<typeof spawn>; docker?: ReturnType<typeof createServer> } = {};
   const execArgv = process.execArgv;
   const close = async () => {
     process.execArgv = execArgv;
     vi.unstubAllEnvs();
     const stopped = await Promise.allSettled([
-      ...handles.map((file) => file.close()),
+      ...handles.map(async (file) => file.close()),
       (async () => {
+        const node = owned.node;
         if (node?.pid && node.exitCode === null && node.signalCode === null) {
           const exited = once(node, "exit");
           node.kill("SIGKILL");
@@ -43,6 +43,7 @@ export async function provisionFixture(
         }
       })(),
       (async () => {
+        const docker = owned.docker;
         if (docker?.listening) {
           docker.closeAllConnections();
           await new Promise<void>((resolve, reject) =>
@@ -61,10 +62,11 @@ export async function provisionFixture(
   await fs.chmod(host.config.gatewayConfigDir, 0o750);
   if (nativeGatewayGid !== undefined)
     await fs.chown(host.config.gatewayConfigDir, nativeUid, nativeGatewayGid);
-  node = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+  const node = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
     stdio: "ignore",
     detached: true
   });
+  owned.node = node;
   await once(node, "spawn");
   const runner = await trust.processIdentity(node.pid!);
   const project = <T extends { uid: number | bigint; gid: number | bigint; mode: number | bigint }>(
@@ -158,7 +160,7 @@ export async function provisionFixture(
     };
   });
   const calls: { method: string; path: string }[] = [];
-  docker = createServer((request, response) => {
+  const docker = createServer((request, response) => {
     const url = new URL(request.url!, "http://fixture.invalid");
     calls.push({ method: request.method!, path: url.pathname });
     const send = (status: number, body: unknown) =>
@@ -184,6 +186,7 @@ export async function provisionFixture(
     const item = containers.find((c) => url.pathname === `/v1.47/containers/${c.Id}/json`);
     send(item ? 200 : 404, item ?? {});
   });
+  owned.docker = docker;
   await new Promise<void>((resolve) => docker.listen(host.config.dockerSocket, resolve));
   const store = await HostStateStore.open(host.config);
   await store.save({ generation: 1, enabled: true, resources });
