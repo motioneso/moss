@@ -251,7 +251,10 @@ The run passed exact source-bound facts, real crests, immutable snapshot/reload 
 the matrix failed. Sports turn latency: median 4,738 ms, p95 15,310 ms, range
 3,648–24,325 ms; saved visual envelopes were 1,256 bytes, prose 52–255 bytes.
 The separate generic matrix produced 20/20 visuals, four prose controls and useful
-text in all 24 replies; its additional lifecycle verdict is recorded on the PR.
+text in all 24 replies. Its full browser suite exited 1: three of four tests passed,
+including copy/reload, missed-completion recovery and private End/reload. The
+Stop/switch/engine-failure test failed before those checks when its warm-up reply
+contained no visual. That lifecycle acceptance is unverified on this candidate.
 Both independent code reviews approve the tested exact product head, with zero
 findings; that approval does not pass acceptance. No final full local gate passed.
 

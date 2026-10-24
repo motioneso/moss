@@ -101,7 +101,8 @@ its original installed matrix: **14/20 cards, 14/20 useful answers**, required a
 least 19 cards and all useful answers. Six turns used unsuccessful web searches;
 the next fourteen used the Sports read and saved correct cards. The direct Sports
 source read succeeded; real crests, source facts, reload and 390px checks passed.
-The generic matrix produced 20/20 visuals and four prose controls. Independent
+The generic matrix produced 20/20 visuals and four prose controls; the separate
+Stop/switch/failure case stopped at a missing warm-up visual (suite 3/4, exit 1). Independent
 Standards and Spec code reviews approve; acceptance remains failed.
 
 The committed plan limits this experiment to one candidate and requires the next
