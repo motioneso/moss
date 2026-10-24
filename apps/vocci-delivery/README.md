@@ -33,12 +33,15 @@ still pending in #3565. Use a development build for this pre-release flow.
    open its app settings → Permissions and remove Nearby devices access. Return
    and choose **Verify ring**. Cloud lookup alone does not complete verification.
 4. After setup is saved, review Bluetooth, notifications and background battery
-   settings in **Ready to connect**, then explicitly **Start delivery**. Enable
+   settings in **Delivery**, then explicitly **Start delivery**. Enable
    **Hold-to-talk in Main chat** only when you want it. Enrollment waits for two
    stable ring inventories; review each new hold transcript in Moss and press
    **Send** for a text reply. Setup itself starts neither delivery nor hold input.
-   **Continue to companion** opens recent deliveries; **Ring setup and delivery
-   options** reopens the saved setup summary without changing the current choices.
+   **Continue to Hardware** returns to the settings list. **Ring setup and delivery
+   options** reopens a compact **Ring connection** summary with the saved account,
+   ring and current choices; it hides completed sign-in forms. **Connection &
+   permissions** opens the matching Hardware detail page. Recent deliveries remain
+   under **Hardware → Vocci ring → Delivery details**. Back keeps saved setup.
 
 Cancel setup confirms remote cleanup when online. If offline, reconnect and retry;
 unconfirmed cleanup remains pending. Reopening resumes staged Moss/ring selection.

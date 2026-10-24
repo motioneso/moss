@@ -1,0 +1,330 @@
+{
+  "scope": "internal terminating receiving library; no runtime or owner acceptance",
+  "pr": 3632,
+  "base": "46a12cf1e8ea9dcc237d830b4db01315dec3fb5b",
+  "production_source": "3fa1ba6f2d2c2d71d305ac522767bf274ff46e0a",
+  "test_candidate": "5e6f044f64ecba6f244f9523b4c729d44a24d0a1",
+  "source_restored": true,
+  "source_sha256": {
+    "apps/api/src/computer/guest-envelope.ts": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+    "apps/api/src/computer/receiving-frames.ts": "dabfd0dc9309628bd011ffe8c624f860435c664461742632ec3d77f887955593",
+    "apps/api/src/computer/receiving-gateway.ts": "04f004c0c27ab0bc6336680bb91fcc831d8bf4de5b2e8c9c9f4a0fae03d719ed",
+    "apps/api/src/computer/rfb-input.ts": "f9de904e2def4ad6805e6557c5f2824709dbb7f9ea50ed88c9408234936b970b",
+    "tests/unit/computer-gateway-fixture.ts": "4a69b93c22faf92dafc1a39074b8da37e694fc174ca035243a1d1b959c218b28",
+    "tests/unit/computer-guest-envelope.test.ts": "d8ffe15665c9f419081671695200893f157ac8b91fa1fd3dc467a869c3b90954",
+    "tests/unit/computer-receiving-gateway.test.ts": "d356642cb78363a6079911f6fd706f921aad7da1f60ed9cdde4c2c0bb7e27739"
+  },
+  "tests": {
+    "passed": 111,
+    "files": 6,
+    "transport": "actual rfb2 wire parsers and real Unix auth IPC",
+    "stand_ins": "synthetic fresh session lookup and library Fence extension; no live TigerVNC",
+    "scheduling": "one late-completion test delays the real receiver connect result after real auth/receiver execution"
+  },
+  "checks": [
+    {
+      "name": "lint",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "apps/api/src/computer/guest-envelope.ts",
+        "apps/api/src/computer/receiving-frames.ts",
+        "apps/api/src/computer/receiving-gateway.ts",
+        "apps/api/src/computer/rfb-input.ts",
+        "tests/unit/computer-gateway-fixture.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 2.48,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "apps/api/src/computer/guest-envelope.ts",
+        "apps/api/src/computer/receiving-frames.ts",
+        "apps/api/src/computer/receiving-gateway.ts",
+        "apps/api/src/computer/rfb-input.ts",
+        "tests/unit/computer-gateway-fixture.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "docs/superpowers/plans/2026-10-24-moss-computer-receiving-core.md",
+        "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-process.md"
+      ],
+      "exit": 0,
+      "seconds": 1.54,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 8.66,
+      "log_sha256": "32cb8dbe870c83b8bdaa348799cb74c540e3079ea9f3f1784e3df2f471d2b4f7"
+    },
+    {
+      "name": "whitespace",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "seconds": 0.04,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "behavior",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 19.19,
+      "log_sha256": "b14edf687b88b8340a60379ea4372dd8f96e6d17f45a8cd3d8b5e964a418b7d3"
+    },
+    {
+      "name": "tests-typescript",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 73.06,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "root-typescript",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 101.87,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "controls": [
+    {
+      "name": "raw-whitelist",
+      "file": "apps/api/src/computer/guest-envelope.ts",
+      "test": "unrequested encoding",
+      "exit": 1,
+      "seconds": 4.32,
+      "original_sha256": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+      "mutant_sha256": "65cf1be583d3935ec86d6552cafbc1b9b67e12494b02e4a8cafabee4eb6515c1",
+      "log_sha256": "3db8a6b1fdbc36b91e3dc39aee5771a0f45605bbbc2535f7646e5dd573412826",
+      "observed_assertion": "AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "name": "geometry",
+      "file": "apps/api/src/computer/guest-envelope.ts",
+      "test": "out-of-frame geometry",
+      "exit": 1,
+      "seconds": 2.27,
+      "original_sha256": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+      "mutant_sha256": "2ca499ab1552ba1e3392b05b3a6fe30c0b8844b053a655eb4b2c4fff058840b7",
+      "log_sha256": "54019784a523a4cf6f864a34e051d947bd9dbe8f3ee16eb6c7b6c0dffe3319f1",
+      "observed_assertion": "AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "name": "pixel-budget",
+      "file": "apps/api/src/computer/guest-envelope.ts",
+      "test": "aggregate pixels",
+      "exit": 1,
+      "seconds": 2.27,
+      "original_sha256": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+      "mutant_sha256": "2c7fbc454fe7fbf86ef13c4c43493f3435a9180db0e76ef6e9dcd24effb56a75",
+      "log_sha256": "972ea6bb1ac9acf3e7f88236683c1929bc98f38151cc7366d2efade4ef611f94",
+      "observed_assertion": "AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "name": "partial-timeout",
+      "file": "apps/api/src/computer/guest-envelope.ts",
+      "test": "trickled partial record",
+      "exit": 1,
+      "seconds": 1.22,
+      "original_sha256": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+      "mutant_sha256": "a1fff4a40e41445ad2dd172021ffc06d3ee91aee917249c0da760d4a593561e2",
+      "log_sha256": "36106a82c59e8a3a81bbe30c6d48c527980c291b5b720c09d54a18841912e79e",
+      "observed_assertion": "AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "name": "auth-retirement",
+      "file": "apps/api/src/computer/receiving-gateway.ts",
+      "test": "push retirement destroys",
+      "exit": 1,
+      "seconds": 2.27,
+      "original_sha256": "04f004c0c27ab0bc6336680bb91fcc831d8bf4de5b2e8c9c9f4a0fae03d719ed",
+      "mutant_sha256": "e9b5784bb2371db42c230eed25d45c6d528996e06d87cc37d70b058d2258128a",
+      "log_sha256": "1f497aadc5c92969f501005b57e2a5f894a28580e685b0f2577eca87e1baa7d9",
+      "observed_assertion": "AssertionError: expected true to be false // Object.is equality"
+    },
+    {
+      "name": "post-await-lifetime",
+      "file": "apps/api/src/computer/receiving-gateway.ts",
+      "test": "viewer completed after",
+      "exit": 1,
+      "seconds": 1.17,
+      "original_sha256": "04f004c0c27ab0bc6336680bb91fcc831d8bf4de5b2e8c9c9f4a0fae03d719ed",
+      "mutant_sha256": "a1d8965677ea0afb5c0fb507de8e7acb5f1d24d9c08f0f2a040218608e8671d3",
+      "log_sha256": "b7833e82219abf5ac1b629f0f21f40442fb48ae144994de3a5dd1b455eeb9735",
+      "observed_assertion": "AssertionError: promise resolved \"{ [Symbol(Computer viewer)]: true }\" instead of rejecting"
+    },
+    {
+      "name": "orphan-return",
+      "file": "apps/api/src/computer/receiving-gateway.ts",
+      "test": "fences a grant when",
+      "exit": 1,
+      "seconds": 1.27,
+      "original_sha256": "04f004c0c27ab0bc6336680bb91fcc831d8bf4de5b2e8c9c9f4a0fae03d719ed",
+      "mutant_sha256": "3d18185022cc929329279b300ca47ae028b23ae02b186f593ce815d772264101",
+      "log_sha256": "e59864b7b0a3f59ff86c805afcae1214d1fa86efcbee12f456f97ce099af85ad",
+      "observed_assertion": "AssertionError: expected 'moss' to be 'paused' // Object.is equality"
+    },
+    {
+      "name": "upstream-write-entry",
+      "file": "apps/api/src/computer/guest-envelope.ts",
+      "test": "automatic vendor Fence replies",
+      "exit": 1,
+      "seconds": 2.27,
+      "original_sha256": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+      "mutant_sha256": "ef99f381e1918b8189410e762ca056dbc0cad1cb883863bb74674e6d3f5f0921",
+      "log_sha256": "6921ed42e82c0c4a4214cdbf0b3f4441a0885f496b9a0ea51fa85c5800d9095e",
+      "observed_assertion": "AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "name": "queued-raw-reserve",
+      "file": "apps/api/src/computer/guest-envelope.ts",
+      "test": "larger queued write",
+      "exit": 1,
+      "seconds": 1.27,
+      "original_sha256": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+      "mutant_sha256": "8d6eab4b73dd0a25253112b0f18299c50d7adfa6fbc5f74e2a6ab5e998d0cae6",
+      "log_sha256": "c191e317a43d40401e21dd5a3e278d6ce87661176df7e1bcbd19626b4fa0c386",
+      "observed_assertion": "AssertionError: expected 65576 to be less than or equal to 65536"
+    },
+    {
+      "name": "local-retirement",
+      "file": "apps/api/src/computer/receiving-gateway.ts",
+      "test": "closing a watcher preserves",
+      "exit": 1,
+      "seconds": 1.17,
+      "original_sha256": "04f004c0c27ab0bc6336680bb91fcc831d8bf4de5b2e8c9c9f4a0fae03d719ed",
+      "mutant_sha256": "9a14b423750d7802f4fdfce4de4a8443013549dea532448745aef34b260cb091",
+      "log_sha256": "bebdf9d9fcad37a751618e84006231caa7c32c76c68fd4ab2e2bea25321e7097",
+      "observed_assertion": "AssertionError: expected 'paused' to be 'owner' // Object.is equality"
+    },
+    {
+      "name": "output-preflight",
+      "file": "apps/api/src/computer/receiving-frames.ts",
+      "test": "stalled viewer",
+      "exit": 1,
+      "seconds": 2.27,
+      "original_sha256": "dabfd0dc9309628bd011ffe8c624f860435c664461742632ec3d77f887955593",
+      "mutant_sha256": "5c75dfbd0b859ab52b7233eac7365a9d2bb2a4f772374e134e9c54e34e07b4d2",
+      "log_sha256": "3e72c364858c9e1bcbc9901c8f5167a4cedc938f6391f2bb8fb46b3105600fb2",
+      "observed_assertion": "AssertionError: expected true to be false // Object.is equality"
+    }
+  ],
+  "control_script_sha256": "fd3cf485c99d63a0f3dbf8456bb7a8f0c810ae8b469e44304b722234d1edf316",
+  "reviews": [
+    {
+      "receipt": "review-plan-r1.md",
+      "sha256": "e377ef132d9c1ea2c620f5460f4a9236d2edbd96074088ac98383a497fc87c2e"
+    },
+    {
+      "receipt": "review-plan-r2.md",
+      "sha256": "7ac89a8859d9ea7339f3debcd9ce18e41882922efde387e2045054a06c4081a8"
+    },
+    {
+      "receipt": "review-standards-r1.md",
+      "sha256": "dec18487328e26ef420a6025711017ccf1d73e8cf91377f5bfdb31e13f2dd91d"
+    },
+    {
+      "receipt": "review-standards-r2.md",
+      "sha256": "c6b56583f535bf9a7f086e09437f0e61438e5839abea6f07a54d1a179d71f9fe"
+    },
+    {
+      "receipt": "review-standards-r3.md",
+      "sha256": "a2bf30af957899ec2e761683c41a86fa118adef100cce56a5893df828724e4f4"
+    },
+    {
+      "receipt": "review-spec-r1.md",
+      "sha256": "6086f7aa472e91d0c87ba013081ac2f4b1850137d3bdcf7aee4a2be378774f6a"
+    },
+    {
+      "receipt": "review-spec-r2.md",
+      "sha256": "df1137e38d8d8685bb4502d5ae9816deb99cdbe17d4a37a4d6ce74c481bab08a"
+    },
+    {
+      "receipt": "review-spec-r3.md",
+      "sha256": "e9a1801e19ddc4de79d7ec4cb7a77ffbfd6bbf443d72e7dd4ff4cc008c6bb1b4"
+    },
+    {
+      "receipt": "review-security-source-r1.md",
+      "sha256": "ad4a0ff8bb9501170b8c796f4aba35bab08cebb679e4596c851f296b09d43271"
+    },
+    {
+      "receipt": "review-security-source-r2.md",
+      "sha256": "a10ef02cabb7f08b51dc4b26a022a4e9a5ac1a0412f4c4079bea3291a79a2f11"
+    },
+    {
+      "receipt": "review-security-source-r3.md",
+      "sha256": "853e5bcb162d64147b2f6991e87f067687d6ed1eccd6473e7ab967bf3d79136a"
+    }
+  ],
+  "rejected_control": {
+    "name": "upstream-write-entry initial harness",
+    "exit": 0,
+    "reason": "frame-request precheck masked removed write guard; amended test waits for outstanding withheld response before flood",
+    "log_sha256": "576aad48fb06f798fd1c16647e00cb10950317f2edc72ab532a7f6190cd32def"
+  },
+  "no_db_docker_guest_browser_image_production_mutation": true,
+  "resources": "only transient in-memory streams and temporary auth Unix sockets; fixtures closed; no TCP listener/devport",
+  "remaining_issues": [3618, 3619, 3616, 3577],
+  "handoff": "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-process.md",
+  "final_reviews": [
+    {
+      "axis": "standards",
+      "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+      "verdict": "PASS",
+      "receipt": "review-standards-final-r1.md",
+      "sha256": "d2126fd8f5b97dd2f75a80ee41d1dc3e67385fda45de3c83c434117907ed37a2"
+    },
+    {
+      "axis": "spec",
+      "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+      "verdict": "PASS",
+      "receipt": "review-spec-final-r1.md",
+      "sha256": "e3fb49639d76ef62933a2f42178879be69cc060c7d63f71b482474e5f68e68d8"
+    },
+    {
+      "axis": "security_evidence",
+      "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+      "verdict": "PASS",
+      "receipt": "review-security-evidence-r1.md",
+      "sha256": "3f2f8bdaef4229032142140f78598f43c847f69c0bbaf5cb309a00f7cead3bc4"
+    }
+  ],
+  "independent_focused_run": {
+    "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+    "command": [
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "tests/unit/computer-guest-envelope.test.ts",
+      "tests/unit/computer-receiving-gateway.test.ts"
+    ],
+    "exit": 0,
+    "passed": 32,
+    "files": 2,
+    "log_sha256": "b232706e74be7ad1751b2e8ed88c1943d870af7401fb6031b946b39337887076"
+  }
+}
