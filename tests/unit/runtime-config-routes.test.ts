@@ -40,11 +40,6 @@ function makeServer(options?: {
   readonly initialSettings?: readonly [string, Record<string, unknown>][];
   readonly env?: NodeJS.ProcessEnv;
   readonly isAdmin?: boolean;
-  readonly hasShadowReview?: boolean;
-  /** When false, no activation port is wired (exercises the fail-closed default). */
-  readonly wireActivationPort?: boolean;
-  /** When true, the activation port's database read throws (exercises fail-closed on error). */
-  readonly activationPortThrows?: boolean;
 }): {
   readonly server: FastifyInstance;
   readonly upserts: unknown[];
@@ -93,17 +88,7 @@ function makeServer(options?: {
       SettingsRepository,
       "getUserById" | "upsertInstanceSetting" | "deleteInstanceSetting"
     > as unknown as SettingsRepository,
-    env: options?.env ?? {},
-    ...(options?.wireActivationPort === false
-      ? {}
-      : {
-          classifierActivation: {
-            hasShadowReviewForCurrentClassifier: async () => {
-              if (options?.activationPortThrows) throw new Error("shadow review read failed");
-              return options?.hasShadowReview ?? false;
-            }
-          }
-        })
+    env: options?.env ?? {}
   });
 
   return { server, upserts };
@@ -278,26 +263,8 @@ describe("runtime config admin routes", () => {
     expect(shadowRes.json()).toEqual({ config: { value: "shadow", source: "instance" } });
   });
 
-  it("rejects a forged admin PUT of on without a shadow review for the current classifier (#2984)", async () => {
-    const made = makeServer({ hasShadowReview: false });
-    server = made.server;
-
-    const res = await server.inject({
-      method: "PUT",
-      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
-      payload: { value: "on" }
-    });
-
-    expect(res.statusCode).toBe(409);
-    expect(res.json().error).toBe(
-      "The classifier gate cannot be turned on: no shadow review is recorded for the current classifier."
-    );
-    // No write and no audit row may happen on the rejection path.
-    expect(made.upserts).toEqual([]);
-  });
-
-  it("accepts the classifier gate on when the current classifier has a shadow review (#2984)", async () => {
-    const made = makeServer({ hasShadowReview: true });
+  it("accepts the classifier gate on with no shadow review recorded", async () => {
+    const made = makeServer();
     server = made.server;
 
     const res = await server.inject({
@@ -311,54 +278,40 @@ describe("runtime config admin routes", () => {
     expect(made.upserts).toHaveLength(1);
   });
 
-  it("fails closed when no activation port is wired (#2881)", async () => {
-    const made = makeServer({ wireActivationPort: false });
+  it("moves the classifier gate from shadow to on and back to off", async () => {
+    const made = makeServer();
+    server = made.server;
+    const put = (value: string) =>
+      made.server.inject({
+        method: "PUT",
+        url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
+        payload: { value }
+      });
+
+    expect((await put("shadow")).statusCode).toBe(200);
+
+    const on = await put("on");
+    expect(on.statusCode).toBe(200);
+    expect(on.json()).toEqual({ config: { value: "on", source: "instance" } });
+
+    const off = await put("off");
+    expect(off.statusCode).toBe(200);
+    expect(off.json()).toEqual({ config: { value: "off", source: "instance" } });
+    expect(made.upserts).toHaveLength(3);
+  });
+
+  // Admin-only writes are the one guard left on turning the gate on.
+  it("rejects a non-admin turning the classifier gate on", async () => {
+    const made = makeServer({ isAdmin: false });
     server = made.server;
 
     const res = await server.inject({
       method: "PUT",
       url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
       payload: { value: "on" }
-    });
-
-    expect(res.statusCode).toBe(409);
-    expect(made.upserts).toEqual([]);
-  });
-
-  it("rejects a non-admin writing the classifier gate (#2881)", async () => {
-    const made = makeServer({ isAdmin: false, hasShadowReview: true });
-    server = made.server;
-
-    const res = await server.inject({
-      method: "PUT",
-      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
-      payload: { value: "shadow" }
     });
 
     expect(res.statusCode).toBe(403);
     expect(made.upserts).toEqual([]);
-  });
-
-  // #2881: if the shadow review read fails, the activation check must fail closed — the `on` write is
-  // never stored. This is the "database read errors" path the security review asked to cover.
-  it("fails closed when the shadow review database read throws (#2881)", async () => {
-    const made = makeServer({ activationPortThrows: true });
-    server = made.server;
-
-    const res = await server.inject({
-      method: "PUT",
-      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`,
-      payload: { value: "on" }
-    });
-
-    expect(res.statusCode).toBeGreaterThanOrEqual(500);
-    expect(made.upserts).toEqual([]);
-
-    // The read status stays at the default; nothing was turned on.
-    const getRes = await server.inject({
-      method: "GET",
-      url: `/api/admin/runtime-config/${CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY}`
-    });
-    expect(getRes.json()).toEqual({ config: { value: "off", source: "default" } });
   });
 });

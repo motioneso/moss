@@ -180,7 +180,6 @@ import {
   buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
-  isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createConstrainedCliStructuredAdapterFactory,
@@ -1891,15 +1890,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerRuntimeConfigRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
-        repository: new SettingsRepository(),
-        // Classifier gate activation (#2984 R2.4): the settings boundary stays module-isolated
-        // and calls this injected port; the chat-owned check supplies the answer.
-        classifierActivation: {
-          hasShadowReviewForCurrentClassifier: (scopedDb) =>
-            isCurrentClassifierReviewed(scopedDb, {
-              classifierDeps: { repository: new AiRepository() }
-            })
-        }
+        repository: new SettingsRepository()
       });
       installWebSearchResolvers({
         webSearchCipher,
