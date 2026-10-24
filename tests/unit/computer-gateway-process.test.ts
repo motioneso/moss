@@ -125,7 +125,9 @@ describe("separate Computer gateway executable and private IPC", () => {
     cleanups.unshift(async () => {
       for (const socket of sockets) socket.destroy();
     });
-    await once(sockets[12]!, "close");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(sockets[12]!.destroyed).toBe(true);
+    expect(sockets[0]!.destroyed).toBe(false);
     expect(f.auth.assertLive).not.toHaveBeenCalled();
     const closed = once(sockets[0]!, "close");
     sockets[0]!.write(Buffer.alloc(1025, 65));
@@ -246,7 +248,15 @@ describe("separate Computer gateway executable and private IPC", () => {
     await accepted;
     expect((await lstat(endpoint)).isSocket()).toBe(true);
     child.kill("SIGTERM");
-    expect((await exited)[0]).toBe(1);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const result = await Promise.race([
+      exited.then(([code]) => code),
+      new Promise<string>((resolve) => {
+        timer = setTimeout(() => resolve("still running"), 4000);
+      })
+    ]);
+    clearTimeout(timer);
+    expect(result).toBe(1);
     await expect(lstat(endpoint)).rejects.toMatchObject({ code: "ENOENT" });
     expect((await readdir(auth.root)).filter((name) => name.startsWith(".gateway-"))).toEqual([]);
   });

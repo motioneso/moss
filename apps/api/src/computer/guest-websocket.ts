@@ -81,6 +81,8 @@ export function connectComputerGuestWebSocket(socketPath: string): Promise<Duple
       clearTimeout(deadline);
       deadline = setTimeout(fail, 2000);
     };
+    // Bound the custom Unix connection too; vendor HTTP timeout is not an absolute deadline.
+    refreshDeadline();
     ws.on("error", fail);
     ws.on("close", fail);
     ws.on("open", () => {

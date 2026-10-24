@@ -1,4 +1,5 @@
 import { once } from "node:events";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createServer, createConnection, type Socket } from "node:net";
 import { mkdtemp, rm, writeFile, symlink, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -105,5 +106,26 @@ describe("private Computer gateway framing and configuration", () => {
     await expect(readComputerGatewayConfig(alias)).rejects.toThrow();
     await chmod(path, 0o644);
     await expect(readComputerGatewayConfig(path)).rejects.toThrow();
+  });
+  it("rejects a private FIFO config promptly before reading", async () => {
+    const f = await fixture((socket) => socket.destroy());
+    const path = join(f.root, "config.fifo");
+    execFileSync("mkfifo", ["-m", "600", path]);
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `import { readComputerGatewayConfig } from './scripts/computer-gateway/config.ts';
+       try { await readComputerGatewayConfig(process.argv[1]); process.exitCode = 1; }
+       catch { console.log('rejected'); }`,
+        path
+      ],
+      { encoding: "utf8", timeout: 2000, killSignal: "SIGKILL" }
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("rejected\n");
   });
 });

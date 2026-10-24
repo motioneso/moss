@@ -8,7 +8,7 @@ import { assertComputerPrivateParent } from "../../apps/api/src/computer/private
 
 export async function readComputerGatewayConfig(path: string): Promise<ComputerGatewayConfig> {
   await assertComputerPrivateParent(path);
-  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = await file.stat();
     if (

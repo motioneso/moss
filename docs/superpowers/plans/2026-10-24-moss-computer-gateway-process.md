@@ -66,7 +66,8 @@ owned endpoint; shutdown racing publication cannot leave a late published listen
 redirect, cookie, password, bearer token or request-derived upstream. Trusted local configuration
 fixes all paths and owner UUID; paths absolute, normalized and distinct. The operator config is
 regular nonsymlink0600 owned by effective UID in canonical0700 parent with trusted ancestors;
-maximum4096bytes, exact keys, no environment/browser overrides. Only owner UUID/path metadata.
+maximum4096bytes, exact keys, no environment/browser overrides. Open with NOFOLLOW and NONBLOCK
+before fstat so nonregular FIFO paths reject without blocking startup/shutdown. Only owner UUID/path metadata.
 Runner accepts one config path, umask077, handles TERM/INT and exits on upstream/core failure.
 Errors/logs are fixed sanitized strings. Missing prerequisites exit unavailable, no retry.
 No import-time side effects, normal API listener or production registration.
@@ -122,7 +123,7 @@ Later API must validate real cookie/exact trusted Origin before issuing the auth
 
 `connectComputerGuestWebSocket(socketPath): Promise<Duplex>` uses one ws client with fixed
 `ws://localhost/` URL and a public createConnection callback that always opens only the configured
-Unix socket; binary subprotocol only, no redirects/compression/automatic pong; handshake2s,
+Unix socket; binary subprotocol only, no redirects/compression/automatic pong; vendor handshakeTimeout2s plus an adapter-owned absolute2s handshake deadline,
 maxPayload=1280*800*4+4096, maxFragments=1024, maxBufferedChunks=1024,
 allowSynchronousEvents=false. Validate exact binary protocol/no extensions. Only binary messages
 reach the core envelope. Readable queue plus next payload capped to two max messages; pause WS
@@ -200,3 +201,12 @@ R3 accepted startup-order amendment bc2143f1ccfbd7c2a2f57c61f6c0b5874b84db5e, re
 72f20deb99a9fa5a139dbb63a6a40a40f5f4cd2d7807da90669489ff14a3c18f.
 Runner signal handlers precede configuration/startup. Its fixed listening line indicates IPC/core
 composition has completed, not frame readiness, qualified image fit or owner usability.
+
+Source review R1 on17dea5475: Standards and Spec passed; security blocked FIFO configuration
+open before regular-file validation. Accepted: add NONBLOCK alongside NOFOLLOW, then fstat.
+A real private FIFO subprocess assertion failed before correction (status null instead of0) and
+passes after correction. Broad verification also exposed stalled Unix WebSocket startup after
+TERM: configured vendor handshakeTimeout alone did not close the custom Unix connection. Added
+adapter-owned absolute2s startup deadline; bounded actual executable TERM/endpoint closure passes.
+Connection-budget regression now asserts immediate rejection before header expiry can mask it.
+All three axes review the corrected exact source again; retain original immutable receipts.
