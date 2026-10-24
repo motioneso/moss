@@ -1,3 +1,6 @@
+import { join } from "node:path";
+import { ComputerRootLifetime } from "./lifetime.js";
+import type { ComputerLifetimeConfiguration } from "../../apps/api/src/computer/lifetime-protocol.js";
 import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import {
@@ -36,6 +39,7 @@ export interface SupervisorJournal {
 export interface SupervisorOutcome {
   readonly reason: WatchdogStopReason;
   readonly exitCode: number;
+  readonly receiverFenced: boolean;
   readonly durableStop: boolean;
   readonly collectorExited: boolean;
   readonly collectorPid: number | null;
@@ -142,10 +146,13 @@ export function runComputerSupervisor(input: {
   verifyRunner(): Promise<unknown>;
   now(): number;
   signals: NodeJS.EventEmitter;
+  lifetime?: { configuration: ComputerLifetimeConfiguration; socketPath: string };
 }): Promise<SupervisorOutcome> {
   const { configuration, journal, heartbeats } = input;
   const policy = new ComputerWatchdogPolicy(configuration);
   return new Promise((resolve) => {
+    let lifetime: ComputerRootLifetime | undefined;
+    let lifetimeStarted = false;
     let current: CollectorJob | null = null;
     let identity: WatchdogProcessIdentity | null = null;
     let collectorExited = true;
@@ -168,7 +175,10 @@ export function runComputerSupervisor(input: {
         policy.decision.status === "stopped" ? policy.decision : policy.stop(input.now());
       if (decision.status !== "stopped") throw supervisorError();
       const reason = decision.reason;
+      const finalizationExpires = input.now() + 5000;
       let durableStop = false;
+      let receiverFenced = false;
+      let lifetimeSettled = !lifetime;
       let descriptorsClosed = false;
       let settled = false;
       const finish = () => {
@@ -180,11 +190,17 @@ export function runComputerSupervisor(input: {
           Object.freeze({
             reason,
             exitCode:
-              durableStop && collectorExited && descriptorsClosed && !persistenceFailed
+              input.now() < finalizationExpires &&
+              durableStop &&
+              collectorExited &&
+              descriptorsClosed &&
+              (!lifetime || receiverFenced) &&
+              !persistenceFailed
                 ? reason === "operator-stop"
                   ? 0
                   : 1
                 : 2,
+            receiverFenced,
             durableStop,
             collectorExited,
             collectorPid: current?.pid ?? null,
@@ -194,6 +210,12 @@ export function runComputerSupervisor(input: {
       };
       // This timer stays referenced. The CLI exits even when kernel I/O never settles.
       const deadline = setTimeout(finish, 5000);
+      // Initiate delivery independently of collector termination and journal I/O.
+      void lifetime?.stop().then((fenced) => {
+        receiverFenced = fenced;
+        lifetimeSettled = true;
+        if (durableStop && collectorExited && descriptorsClosed) finish();
+      });
       current?.kill();
       const exit = current?.exited ?? Promise.resolve();
       void exit
@@ -204,7 +226,7 @@ export function runComputerSupervisor(input: {
           () => {}
         )
         .then(() => {
-          if (durableStop && descriptorsClosed) finish();
+          if (durableStop && descriptorsClosed && lifetimeSettled) finish();
         });
       void journal
         .stop(input.now(), reason, identity, current?.pid ?? null)
@@ -220,11 +242,11 @@ export function runComputerSupervisor(input: {
         .then(
           () => {
             descriptorsClosed = true;
-            if (collectorExited) finish();
+            if (collectorExited && lifetimeSettled) finish();
           },
           () => {
             persistenceFailed = true;
-            if (collectorExited) finish();
+            if (collectorExited && lifetimeSettled) finish();
           }
         );
     };
@@ -325,7 +347,19 @@ export function runComputerSupervisor(input: {
             return;
           }
           // The policy validated/snapshotted the closed JSON result. Persist before another sample.
+          const measuredAtMs = (value as WatchdogSample).measuredAtMs;
           await journal.sample(value as WatchdogSample);
+          if (
+            !terminal &&
+            (policy.tick(input.now()).status === "stopped" || input.now() - measuredAtMs >= 5000)
+          ) {
+            failed();
+            return;
+          }
+          if (!terminal && lifetime && !lifetimeStarted) {
+            lifetimeStarted = true;
+            lifetime.start();
+          }
           if (!terminal) {
             active = false;
             current = null;
@@ -357,6 +391,13 @@ export function runComputerSupervisor(input: {
         }, failed);
       }
     };
+    if (input.lifetime)
+      lifetime = new ComputerRootLifetime({
+        ...input.lifetime,
+        now: input.now,
+        failed,
+        healthy: () => !terminal && policy.tick(input.now()).status === "healthy"
+      });
     heartbeats.on("data", heartbeat).once("end", operatorStop).once("error", operatorStop);
     input.signals.on("SIGTERM", operatorStop).on("SIGINT", operatorStop);
     const timer = setInterval(tick, 1000);
@@ -380,6 +421,14 @@ export async function superviseDeployment(
   started();
   return runComputerSupervisor({
     configuration,
+    ...(deployment.configuration.lifetime
+      ? {
+          lifetime: {
+            configuration: deployment.configuration.lifetime,
+            socketPath: join(deployment.configuration.host.gatewayDir, "lifetime.sock")
+          }
+        }
+      : {}),
     heartbeats: process.stdin,
     journal,
     startCollector: () => spawnComputerCollector(deployment, watchdog),
