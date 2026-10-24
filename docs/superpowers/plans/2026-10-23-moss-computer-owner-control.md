@@ -170,8 +170,8 @@ disconnect pauses rather than resumes; unrelated watchers do not interrupt; send
 Observe a failing test with a fence removed, restore it and record green. Policy tests establish
 only local boundary behavior, not remote transport security.
 
-Required integrated e2e: real owner signup/login → navigation and direct browser `/computer` →
-watch actual visible work → takeover blocks agent writer → explicit return requires a fresh lease;
+Required integrated e2e: real owner signup/login → chat drawer in app/browser →
+watch actual visible work → takeover blocks agent writer → return or intentional close requires a fresh lease;
 same home/profile after replacement; foreign/unauthenticated/expired/revoked endpoints and active
 WS denied; reconnect/multiple viewers, idle inhibition/flush/reclaimed memory/wake and failed
 admission. No response stubs or screenshots. Record executable DOM/network/input assertions on
@@ -182,3 +182,39 @@ remote protocol, or trusted lifecycle/egress cannot fit a bounded reviewed candi
 that integration candidate and records the specific blocker. Evaluate this foundation before
 detailing later installer/download/platform work. Independent review never authors fixes; preserve
 its rulings in the evidence ledger. The full Computer outcome remains open after policy-only work.
+
+## Next bounded implementation: authenticated viewer close
+
+Part of #3605. Ben requested proceeding after approving close-to-return and concise chat copy.
+Implement `ComputerInputControl.closeViewer(viewer: ComputerViewer): Promise<void>` in
+`apps/api/src/computer/input-control.ts`; add behavioral coverage in the existing unit test file.
+This makes the approved handoff one controller operation instead of requiring future transports
+to coordinate authorization, ownership, return and cleanup themselves. No route or UI is added.
+
+Current seams: `input-control.ts:76–83` authenticates return and advances the generation;
+`:121–126` disconnects and pauses only the controlling viewer; `:142–180` validates the retained
+session/expiry/handle and generation after asynchronous checks. These are process-local checks,
+not a receiving protocol writer. Installed Vitest/TypeScript/ESLint suffice; no install or DB gate.
+
+The close operation captures the generation, freshly authorizes the viewer, and checks for an
+intervening transition before returning control only if this viewer currently controls it.
+It always disconnects that handle, including on failure. Watcher close preserves paused/Moss/
+another-owner state and active leases. Unrelated control changes may reject a delayed close, but
+its cleanup cannot alter another viewer's control. A failed close by the current controller
+leaves it disconnected and paused. Unexpected transport loss still calls `disconnect`, never
+`closeViewer`. The future gateway must await this operation before acknowledging intentional close;
+ordinary socket-close events cannot prove user intent. Transport and active socket revocation
+remain separate acceptance work.
+
+Tests must prove successful close admits a fresh agent lease, rejects stale owner/agent input,
+continues to revalidate the grant's session after viewer removal, and cannot resume a later
+takeover after delayed authorization. Cover watcher close in all control modes, failed/expired
+authorization, disconnect/reconnect, concurrent close and shutdown. Remove the close generation
+guard temporarily and observe the stale-close assertion fail, then restore it before final checks.
+
+Expected exit 0: scoped Vitest, root `pnpm exec tsc --noEmit`, scoped ESLint, Prettier and file-size
+checks. Retain exact outputs outside the repo and obtain independent read-only plan/code review.
+No model calls, app-map entry or new runtime attempt; this is internal behavior only. The real
+chat/browser e2e above remains blocked by receiving transport/lifecycle/egress and persistence
+qualification. Kill this candidate if it requires changing unexpected-disconnect safety or
+granting authority from an unauthenticated close event; Codex owns that decision.
