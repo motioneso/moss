@@ -1,3 +1,4 @@
+/* global document, getComputedStyle */
 const icons = {
   brand:
     '<rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" stroke="none"/><rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" stroke="none"/>',
