@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-24
+
+#### Fixed
+
+- **Ring setup matches Hardware settings.** Ring setup now shows a simpler connection summary and returns to Hardware settings when you finish. [PR #3635](https://github.com/motioneso/moss/pull/3635)
+
 ### 2026-10-23
 
 #### Added
