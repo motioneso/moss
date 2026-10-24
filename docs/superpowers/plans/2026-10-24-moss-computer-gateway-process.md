@@ -59,8 +59,10 @@ Files: `apps/api/src/computer/private-endpoint.ts`, existing auth-server extract
 Add pinned ws8.21.1 to API runtime dependencies (already root tooling/locked transitively);
 frozen installation after the intentional lock update. No unrelated dependency update.
 
-`serveComputerGateway({ownerUserId, authSocketPath, guestSocketPath, socketPath})` opens exactly
-one upstream UnixWS connection then the core, then the private API endpoint. No TCP fallback,
+`serveComputerGateway({ownerUserId, authSocketPath, guestSocketPath, socketPath})` first reserves/publishes its exclusive private IPC endpoint with a rejecting startup handler, then
+opens exactly one upstream UnixWS connection and core, then admits private API connections.
+Publication conflicts fail before opening a second guest connection. Startup failure closes the
+owned endpoint; shutdown racing publication cannot leave a late published listener/alias. No TCP fallback,
 redirect, cookie, password, bearer token or request-derived upstream. Trusted local configuration
 fixes all paths and owner UUID; paths absolute, normalized and distinct. The operator config is
 regular nonsymlink0600 owned by effective UID in canonical0700 parent with trusted ancestors;
@@ -184,3 +186,9 @@ stream-loss cascading could disconnect during expected parser retirement and fen
 Only control-channel/protocol failure cascades; raw stream close retires that local stream and core
 owns visual-loss policy. No disputed findings. Use fixed URL with public Unix createConnection to
 avoid ws+unix path encoding ambiguity. Exact amended plan requires acceptance before code.
+
+Implementation seam correction before source acceptance: reserve the exclusive IPC endpoint before
+opening guest transport. Publishing only after core startup could let a duplicate process connect
+a second guest upstream before detecting an existing listener. Accept no client while starting;
+failed startup and concurrent shutdown must remove the owned endpoint. Independent R3 contract
+review required before this ordering amendment is implemented. Existing R1/R2 rulings stand.
