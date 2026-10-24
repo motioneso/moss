@@ -48,6 +48,49 @@ Keep private receipts outside the repository. Record exact source/APK inputs,
 passed assertions and limits on the PR; never turn an earlier failed observer
 into a passing receipt.
 
+## Enabled replacement diagnosis
+
+`recovery.py` separately observes actual OS package-replacement dispatch and the
+real production foreground service under this disposable identity. Build the
+same current production sources twice using the commands above, with versions
+1 and 2 and the same disposable key. The fixture's optional `enabled` argument
+sets only generated local choices; the existing persistence runner still defaults
+to disabled delivery.
+
+Claim a devport, create no listener or reverse, and run one case at a time:
+
+```sh
+python3 apps/vocci-delivery/upgrade-proof/recovery.py \
+  --serial "$AUTHORIZED_PHONE_SERIAL" \
+  --baseline "$PROOF_OUTPUT/baseline/upgrade-proof.apk" \
+  --candidate "$PROOF_OUTPUT/candidate/upgrade-proof.apk" \
+  --port "$CLAIMED_DEV_PORT" --case enabled \
+  --out "$PROOF_OUTPUT/run-enabled"
+```
+
+Repeat with `--case disabled` and `--case permission-denied`, using a fresh output
+directory each time. Each command must exit 0. The runner refuses an existing
+disposable installation, verifies APK hashes/identity/signatures and increasing
+versions, checks that the phone loopback port has no listener, and removes only
+its owned disposable package with absence confirmation. It does not change screen
+timeout, Bluetooth state, official-app grants or the production companion.
+
+Between initialization and observation it sends no force-stop, shell broadcast,
+manual Start or instrumentation command. Only new replacement broadcast records
+count. Enabled delivery must reach the real service's stored closed-network
+failure; disabled delivery must stay stopped; missing Nearby devices permission
+must save the actual recovery advice without starting the service. Every case
+must retain the source identity, queue, voice state, encrypted configuration and
+audio/evidence hashes. Receipts include exact inputs and bounded dispatch details.
+
+For a negative control, remove only `MY_PACKAGE_REPLACED` from a private copy of
+the candidate manifest, build it with the same disposable key and a higher version,
+and run the enabled command against it. Expect exit 1; retain that failed receipt.
+Release the devport after all owned work stops. This generated-data diagnostic
+proves neither physical transfer nor production update, reboot/unlock recovery,
+interrupted-chunk resume or endurance. A passing unmodified receiver does not
+explain a historical skipped broadcast.
+
 ## Recorded checks, 2026-10-23
 
 Baseline source: `7acb4b6b052e06f1b0162f6a1c0bc8b3d8136a7e`.

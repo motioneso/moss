@@ -99,3 +99,12 @@ real-path acceptance before merge.
   Then pass the remaining recovery queue to a verified fresh isolated session
   under the committed continuation mandate. Preserve production release 20261025;
   the exclusion correction is merged but not installed there.
+
+## Recorded decision
+
+The unchanged receiver passed the installed enabled replacement diagnostic, along
+with disabled and missing-permission controls. Removing the replacement action
+from a private candidate made the same observer fail its dispatch assertion.
+The product-fix kill gate therefore fired: this slice ships diagnostic tooling
+and bounded evidence, with no production recovery implementation change. See
+`docs/evidence/vocci/2026-10-24-enabled-replacement-proof.md` for inputs and limits.
