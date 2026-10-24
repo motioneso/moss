@@ -1,4 +1,4 @@
-import { duplexPair } from "node:stream";
+import { Duplex, duplexPair } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   boundedComputerGuest,
@@ -118,5 +118,17 @@ describe("Computer guest predecoder envelope", () => {
       f.writer.write(bad);
       await vi.waitFor(() => expect(f.bounded.destroyed).toBe(true));
     }
+  });
+
+  it("caps raw plus wrapper queues before a stalled write can enqueue another reply", async () => {
+    const source = new Duplex({ read() {}, write() {} });
+    const bounded = boundedComputerGuest(source);
+    bounded.on("error", () => {});
+    cleanups.push(() => bounded.destroy());
+    for (let index = 0; index < 1200 && !bounded.destroyed; index++) {
+      bounded.write(Buffer.alloc(73));
+      expect(source.writableLength + bounded.writableLength).toBeLessThanOrEqual(65_536);
+    }
+    expect(bounded.destroyed).toBe(true);
   });
 });

@@ -20,12 +20,15 @@ export async function gatewayFixture(options: { partialFirstFrame?: boolean } = 
   const events: unknown[][] = [];
   let reply = true;
   let holdFence = false;
+  let heldFenceStart = 0;
+  let stalledOutput = false;
   const fences: Buffer[] = [];
   const upstream = new Duplex({
     read() {
       transport.resume();
     },
     write(chunk: Buffer, _encoding, callback) {
+      if (stalledOutput) return;
       if (chunk[0] === 248) {
         const payload = Buffer.from(chunk.subarray(9));
         fences.push(payload);
@@ -87,6 +90,14 @@ export async function gatewayFixture(options: { partialFirstFrame?: boolean } = 
     },
     holdFences() {
       holdFence = true;
+      heldFenceStart = fences.length;
+    },
+    releaseFences() {
+      holdFence = false;
+      for (const payload of fences.slice(heldFenceStart)) guest.write(fencePacket(1, payload));
+    },
+    stallUpstreamOutput() {
+      stalledOutput = true;
     },
     stallOutput(client: RfbClient) {
       outputs.get(client)!.blocked = true;

@@ -197,23 +197,19 @@ export class ComputerReceivingGateway {
   }
 
   returnToMoss(viewer: ComputerViewer): Promise<void> {
-    return this.#change(viewer, async (entry) => {
-      await this.#receiver.returnToMoss(viewer);
-      this.#current(entry);
-      this.#owner = undefined;
-      this.#setGrant(entry);
-    });
+    return this.#change(viewer, (entry) =>
+      this.#resumeMoss(entry, () => this.#receiver.returnToMoss(viewer))
+    );
   }
 
   closeViewer(viewer: ComputerViewer): Promise<void> {
     return this.#change(viewer, async (entry) => {
       const controlling = this.#owner === entry && this.#receiver.snapshot().mode === "owner";
       try {
-        await this.#receiver.closeViewer(viewer);
-        this.#current(entry);
-        if (controlling) {
-          this.#owner = undefined;
-          this.#setGrant(entry);
+        if (controlling) await this.#resumeMoss(entry, () => this.#receiver.closeViewer(viewer));
+        else {
+          await this.#receiver.closeViewer(viewer);
+          this.#current(entry);
         }
       } finally {
         this.#detach(entry);
@@ -265,6 +261,21 @@ export class ComputerReceivingGateway {
       return;
     }
     this.upstream.requestUpdate(this.#frames.ready);
+  }
+
+  async #resumeMoss(entry: ViewerEntry, work: () => Promise<void>): Promise<void> {
+    try {
+      await work();
+      this.#current(entry);
+      this.#owner = undefined;
+      this.#setGrant(entry);
+    } catch (error) {
+      // The receiver may already have granted Moss before its Fence/auth wait finished.
+      // disconnect() preserves grants; a lost returning lifetime must explicitly fence it.
+      if ((entry.retired || !entry.visual) && entry.auth)
+        this.#receiver.invalidateSession(entry.auth.binding.sessionId);
+      throw error;
+    }
   }
 
   #entry(viewer: ComputerViewer): ViewerEntry {

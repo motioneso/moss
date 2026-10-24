@@ -1,9 +1,42 @@
-import { Duplex } from "node:stream";
+import { Duplex, type DuplexOptions } from "node:stream";
 import { ComputerRfbUnavailable } from "./rfb-input-writer.js";
 
 export const COMPUTER_PIXEL_BYTES = 1280 * 800 * 4;
 const RECORD_BYTES = COMPUTER_PIXEL_BYTES + 4096;
 const DEADLINE_MS = 2000;
+
+/** Guard every write before Node can enqueue it, including vendor-generated Fence replies. */
+class GuestDuplex extends Duplex {
+  constructor(
+    private readonly source: Duplex,
+    options: DuplexOptions
+  ) {
+    super(options);
+  }
+
+  override write(
+    chunk: Uint8Array | string,
+    encoding?: BufferEncoding | ((error?: Error | null) => void),
+    callback?: (error?: Error | null) => void
+  ): boolean {
+    // Both wrappers account the in-flight write until its callback completes.
+    if (
+      !Buffer.isBuffer(chunk) ||
+      this.destroyed ||
+      this.source.destroyed ||
+      this.writableLength + this.source.writableLength + 2 * chunk.length > 65_536
+    ) {
+      const error = new ComputerRfbUnavailable();
+      this.destroy(error);
+      const done = typeof encoding === "function" ? encoding : callback;
+      if (done) queueMicrotask(() => done(error));
+      return false;
+    }
+    return typeof encoding === "string"
+      ? super.write(chunk, encoding, callback)
+      : super.write(chunk, encoding);
+  }
+}
 
 /** Rejecting RFB envelope only. The vendor still owns decoding and protocol responses. */
 class GuestRecords {
@@ -120,7 +153,7 @@ export function boundedComputerGuest(stream: Duplex): Duplex {
   let scheduled: ReturnType<typeof setImmediate> | undefined;
   let partial: ReturnType<typeof setTimeout> | undefined;
   const handshake = setTimeout(() => fail(), DEADLINE_MS);
-  const bounded = new Duplex({
+  const bounded = new GuestDuplex(stream, {
     read() {
       readable = true;
       schedule();

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { gatewayFixture, pixels, tick } from "./computer-gateway-fixture.js";
 import { binding, deferred, SESSION } from "./computer-auth-fixture.js";
 import { ComputerRfbInput } from "../../apps/api/src/computer/rfb-input.js";
+import { fencePacket } from "./computer-rfb-fixture.js";
 
 let fixture: Awaited<ReturnType<typeof gatewayFixture>> | undefined;
 afterEach(async () => {
@@ -31,6 +32,7 @@ describe("Computer terminating receiving core", () => {
     const viewer = await f.open();
     await f.gateway.takeOver(viewer);
     const client = await f.attach(viewer, true);
+    expect((await f.frame(client)).rects[0].data).toEqual(pixels);
     client.keyEvent(65, true);
     await vi.waitFor(() => expect(f.events).toContainEqual(["key", 65, true]));
     await f.gateway.returnToMoss(viewer);
@@ -148,7 +150,10 @@ describe("Computer terminating receiving core", () => {
     const entered = deferred();
     const release = deferred();
     const connect = ComputerRfbInput.prototype.connect;
-    vi.spyOn(ComputerRfbInput.prototype, "connect").mockImplementation(async function (binding) {
+    vi.spyOn(ComputerRfbInput.prototype, "connect").mockImplementation(async function (
+      this: ComputerRfbInput,
+      binding
+    ) {
       const viewer = await connect.call(this, binding);
       entered.resolve();
       await release.promise; // Delay completion only; real receiver and Unix auth still run.
@@ -239,6 +244,42 @@ describe("Computer terminating receiving core", () => {
     f.noFrames();
     f.sendFrame();
     await vi.waitFor(() => expect(f.gateway.snapshot().closed).toBe(true));
+  });
+
+  it.each(["return", "close"])(
+    "fences a grant when %s loses its lifetime during the Fence wait",
+    async (operation) => {
+      const f = (fixture = await gatewayFixture());
+      const owner = await f.open();
+      const watcher = await f.open();
+      await f.gateway.takeOver(owner);
+      await f.attach(owner, true);
+      await f.attach(watcher);
+      f.holdFences();
+      const count = f.fences.length;
+      const returning =
+        operation === "return" ? f.gateway.returnToMoss(owner) : f.gateway.closeViewer(owner);
+      const rejected = expect(returning).rejects.toThrow();
+      await vi.waitFor(() => expect(f.fences.length).toBeGreaterThan(count));
+      expect(f.gateway.snapshot().mode).toBe("moss");
+      f.gateway.disconnect(owner);
+      f.releaseFences();
+      await rejected;
+      expect(f.gateway.snapshot().mode).toBe("paused");
+      f.gateway.disconnect(watcher);
+      expect(() => f.gateway.acquireAgentLease()).toThrow();
+    }
+  );
+
+  it("bounds automatic vendor Fence replies before the raw write callback completes", async () => {
+    const f = (fixture = await gatewayFixture());
+    await vi.waitFor(() => expect(f.gateway.snapshot().frameReady).toBe(true));
+    f.noFrames();
+    f.stallUpstreamOutput();
+    const request = fencePacket(0x80000000, Buffer.alloc(64));
+    f.guest.write(Buffer.concat(Array.from({ length: 1200 }, () => request)));
+    // This must close from queue admission, well before the two-second frame-response deadline.
+    await vi.waitFor(() => expect(f.gateway.snapshot().closed).toBe(true), { timeout: 750 });
   });
 
   it("rejects unsupported viewer formats and closes on guest loss", async () => {

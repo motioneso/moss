@@ -73,7 +73,10 @@ The client issues one update request at a time, nominal maximum5Hz; no per-viewe
 Enforce one outstanding frame response and2second response deadline. Unsolicited frame updates
 retire the core. The wire envelope may buffer a bounded record before this core check, but cannot
 invoke arbitrary compressed decoders. No accumulation of multiple updates in vendor ByteReader.
-On bounds, malformed input, partial timeout, guest close/error or output backlog failure, retire
+The upstream adapter guards every public write before Node can enqueue, including automatic
+peer-request Fence replies. Bound the aggregate raw and wrapper queues to64KiB, reserving the
+new write in both layers while its callback is pending. On bounds, malformed input, partial
+timeout, guest close/error or output backlog failure, retire
 permanently and close the source; no reconnect or late continuation.
 
 ## Gateway and viewer contracts
@@ -197,3 +200,15 @@ R2 on `d071911c2451e3a412d58150a333dc3652931ca4`: PASS_BOUNDED_RECEIVING_CORE_PL
 No remaining plan blockers within the internal no-launch scope. Reviewer independently checked
 public Framebuffer allocation/put paths and the amended backlog, local-retirement and rgbx
 contracts. Source, evidence, actual TigerVNC, image/runtime and owner acceptance remain separate.
+
+Source R1 at `03a4f3575`: Standards PASS; Spec REQUEST_CHANGES; security BLOCKED.
+Accepted Spec P1: policy grants Moss before its Fence/auth wait completes, so disconnect during
+return/controlling close could leave a grant without its explicit monitor. The shared return
+completion now invalidates the initiating fixed session on a lost lifetime before rejecting;
+ordinary watcher close remains independent. Add held-Fence regressions for both operations.
+Accepted Spec P2: add actual controller frame pixels, not just watcher frames/input assertions.
+Accepted security B1: automatic peer Fence replies bypassed the upstream adapter's `_write`
+check once a raw callback stalled. Guard public write entry before queuing and check actual
+aggregate raw/wrapper bytes; add real-vendor reply-flood and removed-guard controls.
+No disputed findings. R1 receipts remain private and immutable; exact amended source/evidence
+requires re-review. No runtime/owner gate is waived.
