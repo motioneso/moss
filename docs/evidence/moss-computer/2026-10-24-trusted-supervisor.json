@@ -1,0 +1,974 @@
+{
+  "schemaVersion": 1,
+  "base": "81e2d112bb129eb146e6e80c18c9ad39861a45c2",
+  "source": "071391eb209e2058c541ce7644bf2da747fff391",
+  "plan": "8b4cd25bad46359769f5b0084e9f0426bb8cbe52",
+  "scope": "Opt-in read-only independent observation; unavailableAdmission unchanged",
+  "files": {
+    "docs/superpowers/plans/2026-10-24-moss-computer-trusted-supervisor.md": "4e2299ab8d30e0a9aad56751855c690485cce28de834be75acd99c0af2ae3271",
+    "scripts/computer-host/docker.ts": "acbc15982a11d335216084fa22f7e38844659bc0a1efa96c5f45eab4816dcda4",
+    "scripts/computer-host/state.ts": "437e160118f724bcdec3720e80ea9ccf74ff8cf00e070e602e721f99d9dbc341",
+    "scripts/computer-watchdog.ts": "a4121bfde0abba5b9f7a92d6f85d9508e9cdf1013a62aa14fd940d6cc2d3a0c8",
+    "scripts/computer-watchdog/journal.ts": "6459ca80be7c8d6b2e9113d0ab40f7aea637d049ab53c6fcf73204ba6b026c22",
+    "scripts/computer-watchdog/observe.ts": "4fe7554891544c7f5eff2be9b8315cb09bac5384db51cb08c6c23623bd698f14",
+    "scripts/computer-watchdog/supervisor.ts": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+    "scripts/computer-watchdog/trust.ts": "491e65d805d5cf73d0f291d84237e527fb0b474ad0b94154a8847323ff711081",
+    "tests/unit/computer-watchdog-journal.test.ts": "2db79c957cf64db3768497ef3e9f08d011df5c110c04c3cd77bcf4a845fd5bb0",
+    "tests/unit/computer-watchdog-observe.test.ts": "a6ec0c507aa46a1a8252d5ad32773ce8e7716bccc52b6b641985718bdb561b9d",
+    "tests/unit/computer-watchdog-supervisor.test.ts": "2f8874d1c7e75d45af88c81635b7eb99c1689e31e28433d00419c0f4524d3884",
+    "tests/unit/computer-watchdog-trust.test.ts": "5ce844085a986b3ffea2bcb86fffa3956041ec159a14522e80c24dd29e4afa25"
+  },
+  "finalChecks": [
+    {
+      "name": "typecheck-final2",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 129.53,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-typecheck-final2",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 89.536,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "behavior-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-host-client.test.ts"
+      ],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 32.628,
+      "logSha256": "b9b93a45b2e0d420682ec15ec167054c76b50bc7f82a741989da6925193b9f48"
+    },
+    {
+      "name": "lint-final2",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/journal.ts",
+        "scripts/computer-watchdog/observe.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "scripts/computer-watchdog/trust.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "--max-warnings=0"
+      ],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 2.657,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-final2",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/superpowers/plans/2026-10-24-moss-computer-trusted-supervisor.md",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/journal.ts",
+        "scripts/computer-watchdog/observe.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "scripts/computer-watchdog/trust.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts"
+      ],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 2.034,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-final2",
+      "command": ["pnpm", "check:file-size"],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 2.535,
+      "logSha256": "781a92a072436cfc27ecb2cc60f80b733b35b496776e9f7ac012982b951fe573"
+    },
+    {
+      "name": "diff-final2",
+      "command": ["git", "diff", "--check"],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 0.01,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "build-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-watchdog.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=../moss-computer-supervisor-private/supervisor-final.cjs",
+        "--metafile=../moss-computer-supervisor-private/build-meta-final.json"
+      ],
+      "expectedExit": 0,
+      "exit": 0,
+      "elapsedSeconds": 0.513,
+      "logSha256": "16bb35445d296899849d6a5e73d95f58acdd5ad00c087c96e73db9db16b3d548"
+    }
+  ],
+  "behavior": {
+    "files": 9,
+    "tests": 253,
+    "standIns": [
+      "Root ownership and namespace anchors",
+      "Full Linux resources/process composition",
+      "Docker HTTP and readiness fixtures"
+    ],
+    "native": [
+      "Temporary files and Unix HTTP fixtures",
+      "Actual collector subprocesses and native repeated signals"
+    ],
+    "notEstablished": [
+      "Installed root deployment",
+      "Live Moss/Docker health and resource fit",
+      "Node24 image qualification",
+      "Admission or receiving lifetime fencing",
+      "Lifecycle recovery and independent Computer closure",
+      "Owner delivery"
+    ]
+  },
+  "controls": [
+    {
+      "name": "namespace",
+      "file": "scripts/computer-watchdog/trust.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "-t",
+        "compares explicit namespace"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.522,
+      "sourceSha256": "491e65d805d5cf73d0f291d84237e527fb0b474ad0b94154a8847323ff711081",
+      "restoredSha256": "491e65d805d5cf73d0f291d84237e527fb0b474ad0b94154a8847323ff711081",
+      "logSha256": "705b5867ad1a1c34607e2b4bf30facf82f584039ee60d3d9cd64ace5904a937c",
+      "expectedExit": 1,
+      "observedAssertion": "Changed namespace accepted",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "config-bytes",
+      "file": "scripts/computer-watchdog/trust.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "-t",
+        "revalidates actual"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.723,
+      "sourceSha256": "491e65d805d5cf73d0f291d84237e527fb0b474ad0b94154a8847323ff711081",
+      "restoredSha256": "491e65d805d5cf73d0f291d84237e527fb0b474ad0b94154a8847323ff711081",
+      "logSha256": "e4369508cebbd9bf9cd4ffa8457b7358b866a194a5a92585a990d231ad8d763a",
+      "expectedExit": 1,
+      "observedAssertion": "Changed configuration bytes accepted",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "overlap-segments",
+      "file": "scripts/computer-watchdog/trust.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "-t",
+        "revalidates actual"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.568,
+      "sourceSha256": "491e65d805d5cf73d0f291d84237e527fb0b474ad0b94154a8847323ff711081",
+      "restoredSha256": "491e65d805d5cf73d0f291d84237e527fb0b474ad0b94154a8847323ff711081",
+      "logSha256": "2c472e00aca889458ba1a83a311e39ee6339ed00b8d2ee733a28ed61f968fdbc",
+      "expectedExit": 1,
+      "observedAssertion": "Forbidden ..monitor descendant accepted",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "initial-time",
+      "file": "scripts/computer-watchdog/observe.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "-t",
+        "composes health/log/run/stop"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.719,
+      "sourceSha256": "4fe7554891544c7f5eff2be9b8315cb09bac5384db51cb08c6c23623bd698f14",
+      "restoredSha256": "4fe7554891544c7f5eff2be9b8315cb09bac5384db51cb08c6c23623bd698f14",
+      "logSha256": "6584c2b3944d8a531e8704c2a8ba55aa810e9c13dbf63ed9e899cb0e536d1a00",
+      "expectedExit": 1,
+      "observedAssertion": "Returned measuredAtMs3000 instead of1000",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "independent-tick",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "ticks and initiates durable stop"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.468,
+      "sourceSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "restoredSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "logSha256": "842b297e8e4f6294b2758fcd515d5ba74c324209bff27a0b8c3af30a5416265a",
+      "expectedExit": 1,
+      "observedAssertion": "Zero durable stop calls while collector hangs",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "terminal-reentry-guards",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "persists first terminal reason once"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.319,
+      "sourceSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "restoredSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "logSha256": "cf0e456dc41f475c94546a062ca818792b2ca73b0d355a677f09b6988c174769",
+      "expectedExit": 1,
+      "observedAssertion": "Two stop calls instead of one",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "terminal-signals",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "keeps real OS TERM"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.77,
+      "sourceSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "restoredSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "logSha256": "e016474a1502b3853b5488de2e0f6a57b8c7d35c0de05fa8921affd01c4b5042",
+      "expectedExit": 1,
+      "observedAssertion": "Native child exited by SIGTERM",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "early-pid",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "persists raw owned PID"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.318,
+      "sourceSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "restoredSha256": "637f0f7495fd3702bb480525ec81f5b6793c0e89ff263584073fe19dcc625b4f",
+      "logSha256": "a76bdd174f524b5869b15ad754dbdc225a17bd6d985c5a6f489fab416eca8d52",
+      "expectedExit": 1,
+      "observedAssertion": "Stop call lost owned PID303",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "log-size",
+      "file": "scripts/computer-watchdog/observe.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "-t",
+        "accounts real current"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.618,
+      "sourceSha256": "4fe7554891544c7f5eff2be9b8315cb09bac5384db51cb08c6c23623bd698f14",
+      "restoredSha256": "4fe7554891544c7f5eff2be9b8315cb09bac5384db51cb08c6c23623bd698f14",
+      "logSha256": "219d2aa783f252abcb94ffc909976a6682cc0aa01f655380ee9ce5e5aae20e76",
+      "expectedExit": 1,
+      "observedAssertion": "Exact-limit log accepted",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "receipt-size",
+      "file": "scripts/computer-watchdog/journal.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "-t",
+        "rejects permissions"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.267,
+      "sourceSha256": "6459ca80be7c8d6b2e9113d0ab40f7aea637d049ab53c6fcf73204ba6b026c22",
+      "restoredSha256": "6459ca80be7c8d6b2e9113d0ab40f7aea637d049ab53c6fcf73204ba6b026c22",
+      "logSha256": "9e2e9a75c37e243b39ea32da4371dd7421345f428255429f8b0e41e45131bca9",
+      "expectedExit": 1,
+      "observedAssertion": "Exact-limit journal accepted",
+      "intendedAssertionInspected": true
+    },
+    {
+      "name": "durable-sync",
+      "file": "scripts/computer-watchdog/journal.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "-t",
+        "orders stop behind the pending append"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.469,
+      "sourceSha256": "6459ca80be7c8d6b2e9113d0ab40f7aea637d049ab53c6fcf73204ba6b026c22",
+      "restoredSha256": "6459ca80be7c8d6b2e9113d0ab40f7aea637d049ab53c6fcf73204ba6b026c22",
+      "logSha256": "5e3fc2c3617be10d59af52b826a6bf702c50814811178c16e45b78485c93138c",
+      "expectedExit": 1,
+      "observedAssertion": "Failed fsync resolved instead of rejecting",
+      "intendedAssertionInspected": true
+    }
+  ],
+  "reviews": [
+    {
+      "report": "plan-security-r1.md",
+      "sha256": "ebf0a094d9e8efcf5f76cd877aeb1663724f38c0195ad09492f4e0ffe725beda",
+      "summary": "BLOCKED; resolved by next round"
+    },
+    {
+      "report": "plan-security-r2.md",
+      "sha256": "5d7b1315f82e1d06d8dd29e621684f514b9e3a5877b048ca86c82de009602be0",
+      "summary": "Accepted within report scope; source acceptance does not certify execution"
+    },
+    {
+      "report": "plan-spec-r1.md",
+      "sha256": "d174f8bf3fab12d3685c345d5b384f69f95bd5a8d6bc3e11025f259a1347a847",
+      "summary": "PASS_BOUNDED_PLAN; no blocking Spec finding. Security blocked this round independently."
+    },
+    {
+      "report": "plan-spec-r2.md",
+      "sha256": "1c2b8478fef2393de293e687e19ab9a21a6cf527754b1e8613ea70b31c93abf5",
+      "summary": "Accepted within report scope; source acceptance does not certify execution"
+    },
+    {
+      "report": "source-security-r1.md",
+      "sha256": "d393c819e1d2de850841de8d91c3331c6dfe28b49e7b4a0e24b243aa1a259207",
+      "summary": "BLOCKED; resolved by next round"
+    },
+    {
+      "report": "source-security-r2.md",
+      "sha256": "28b4a585bf40b033ce9e9138db9f263c7f5ffbf8d40bc8238df58310a6070c47",
+      "summary": "Accepted within report scope; source acceptance does not certify execution"
+    },
+    {
+      "report": "source-spec-r1.md",
+      "sha256": "5e3e038ef83a41c940a8e98f60464e2b54b76160721b84b73e29dfedb4fde9c7",
+      "summary": "Accepted within report scope; source acceptance does not certify execution"
+    },
+    {
+      "report": "source-spec-r2.md",
+      "sha256": "e170577cc82374c38ed704a6229b9ceaeabf021340def9cbcd9bfae76adc639a",
+      "summary": "Accepted within report scope; source acceptance does not certify execution"
+    },
+    {
+      "report": "source-standards-r1.md",
+      "sha256": "7d384f3fedf9a427c16b76787ebe0b894cfc043ecbc95db0247b15a2ebf9fd45",
+      "summary": "Accepted within report scope; source acceptance does not certify execution"
+    },
+    {
+      "report": "source-standards-r2.md",
+      "sha256": "ee637dcd4be40987fb20185ad56815326ad3052a5d05db6c044216e26b409190",
+      "summary": "Accepted within report scope; source acceptance does not certify execution"
+    }
+  ],
+  "retainedAttempts": [
+    {
+      "names": ["driver-r1.log"],
+      "outcome": "Failed fake-clock timing; corrected harness"
+    },
+    {
+      "names": ["trust-debug-r1.log", "trust-debug-r2.log", "trust-journal-r2.log"],
+      "outcome": "Trust fixture rejected inherited test-loader environment; fixture explicitly removed it; trust-debug-r3 passed"
+    },
+    {
+      "names": ["typecheck-r1.log", "typecheck-r2.log", "typecheck-r3.log", "typecheck-r4.log"],
+      "outcome": "Same TS2365 Stats/BigIntStats signature failure retained across four attempts; signature narrowed to Stats before final checks"
+    },
+    {
+      "names": ["lint-r1.log", "lint-final1.log"],
+      "outcome": "prefer-const failure; corrected before final source"
+    },
+    {
+      "names": ["control-terminal-once.log"],
+      "outcome": "Exit0 after removing one redundant guard; unsuccessful control retained, superseded by intended failing paired-guard reentry control"
+    },
+    {
+      "names": ["behavior-r2.log", "behavior-r3.log", "security-fixes-r1.log"],
+      "outcome": "Passed74,251,41 tests respectively; final253 supersedes them"
+    }
+  ],
+  "retainedLogHashes": [
+    {
+      "name": "behavior-final.log",
+      "sha256": "b9b93a45b2e0d420682ec15ec167054c76b50bc7f82a741989da6925193b9f48"
+    },
+    {
+      "name": "behavior-r2.log",
+      "sha256": "f31123f0658dc589a6563c883c3c6fe6487d35df0a966482f8a860c664d5231f"
+    },
+    {
+      "name": "behavior-r3.log",
+      "sha256": "a97ad98dd9d0795e24372c5e4524f78284c1ada7ffdd5349bffb83d15cf95fd5"
+    },
+    {
+      "name": "build-final.log",
+      "sha256": "16bb35445d296899849d6a5e73d95f58acdd5ad00c087c96e73db9db16b3d548"
+    },
+    {
+      "name": "build-r1.log",
+      "sha256": "999d3af5e3123b7e559cc1fae6b0a82eba603157affee03e6cdae8de3d7208d5"
+    },
+    {
+      "name": "bundle-refusal-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bundle-refusal-r1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "control-config-bytes.log",
+      "sha256": "5838604c2c6813ef0fcded60be5a008e2a7e8052a0bb9074e9bdf2be6da35e6f"
+    },
+    {
+      "name": "control-independent-tick.log",
+      "sha256": "b7fc480b09fb265e03ec838737ff7450a3bcea4b781c436ddde834e4430f9e06"
+    },
+    {
+      "name": "control-initial-time.log",
+      "sha256": "e027ecf14ab3cddcb72626eaf07df0f84b76c2be3b4ad7f4b2c0d33edeae6b2b"
+    },
+    {
+      "name": "control-namespace.log",
+      "sha256": "878c4dbe3987d53622a451e9d8f0536ec487121c7d47fad62952fa8e4cbdd2e0"
+    },
+    {
+      "name": "control-summary-r2.log",
+      "sha256": "530afba503169296d59bf676430f0f0fcfd2f7395bc155bd94df17ea42dfc9f0"
+    },
+    {
+      "name": "control-summary.log",
+      "sha256": "074ba8f1184ab6453e93ea2e1a850a43b64dcd7cf578d8766b6aca6b4f194aa2"
+    },
+    {
+      "name": "control-terminal-once.log",
+      "sha256": "2faffdd5f9d826f9359cf41bca56f6c75074d77094efc1244e8882b04f85ae44"
+    },
+    {
+      "name": "diff-final1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-final2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "driver-r1.log",
+      "sha256": "ec68e5111d66b23fe72eae903c574d8da110c1f31a16050b657329bd8a505ac8"
+    },
+    {
+      "name": "file-size-final1.log",
+      "sha256": "781a92a072436cfc27ecb2cc60f80b733b35b496776e9f7ac012982b951fe573"
+    },
+    {
+      "name": "file-size-final2.log",
+      "sha256": "781a92a072436cfc27ecb2cc60f80b733b35b496776e9f7ac012982b951fe573"
+    },
+    {
+      "name": "format-final1.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "format-final2.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "install.log",
+      "sha256": "fc04bef0720c666c6ea76710d8aaa08de0900bdd3609cbb3b33e00a43290604e"
+    },
+    {
+      "name": "lint-final1.log",
+      "sha256": "a220e4641c8dd87122ca9fd4c70a6443d3a5f8668df8d40c188405d3c1f5db74"
+    },
+    {
+      "name": "lint-final2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-r1.log",
+      "sha256": "a220e4641c8dd87122ca9fd4c70a6443d3a5f8668df8d40c188405d3c1f5db74"
+    },
+    {
+      "name": "security-fixes-r1.log",
+      "sha256": "d62339c01e9334b904b812e85f86968cd69cc445b651451ef58a07a911cff344"
+    },
+    {
+      "name": "tests-typecheck-final1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-typecheck-final2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "trust-debug-r1.log",
+      "sha256": "6f4e993f7f6e111140331a17b556761191fe8f1784951e77d46c518617b486ed"
+    },
+    {
+      "name": "trust-debug-r2.log",
+      "sha256": "8feb0371f2cb6ee963f35ebfeae0bedfa46a5323205b5a8a0494b5047b17bb9a"
+    },
+    {
+      "name": "trust-debug-r3.log",
+      "sha256": "b89e28e62245c02d97819f3ec130fca9882592c58e156c77f7971716e56e4182"
+    },
+    {
+      "name": "trust-journal-r1.log",
+      "sha256": "174bb88b1321f5646ba27d353fe176f02382fce810c82e792bfe43071193ade9"
+    },
+    {
+      "name": "trust-journal-r2.log",
+      "sha256": "d392dd084e5754a323b4957110f735a90530fc43bc7581772b55f7daea073cbc"
+    },
+    {
+      "name": "typecheck-final1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "typecheck-final2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "typecheck-r1.log",
+      "sha256": "6b7b172d0d6edc58f196e9eafc872a23dcd918a9dc44e2673b543e3aa3cb8116"
+    },
+    {
+      "name": "typecheck-r2.log",
+      "sha256": "6b7b172d0d6edc58f196e9eafc872a23dcd918a9dc44e2673b543e3aa3cb8116"
+    },
+    {
+      "name": "typecheck-r3.log",
+      "sha256": "6b7b172d0d6edc58f196e9eafc872a23dcd918a9dc44e2673b543e3aa3cb8116"
+    },
+    {
+      "name": "typecheck-r4.log",
+      "sha256": "6b7b172d0d6edc58f196e9eafc872a23dcd918a9dc44e2673b543e3aa3cb8116"
+    }
+  ],
+  "earlierCheckBatch": [
+    {
+      "name": "typecheck-final1",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 108.38,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-typecheck-final1",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 74.836,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-final1",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/trust.ts",
+        "scripts/computer-watchdog/journal.ts",
+        "scripts/computer-watchdog/observe.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-host/docker.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 2.664,
+      "logSha256": "a220e4641c8dd87122ca9fd4c70a6443d3a5f8668df8d40c188405d3c1f5db74"
+    },
+    {
+      "name": "format-final1",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/trust.ts",
+        "scripts/computer-watchdog/journal.ts",
+        "scripts/computer-watchdog/observe.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-host/docker.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 1.835,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-final1",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "elapsedSeconds": 2.849,
+      "logSha256": "781a92a072436cfc27ecb2cc60f80b733b35b496776e9f7ac012982b951fe573"
+    },
+    {
+      "name": "diff-final1",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "elapsedSeconds": 0.016,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "earlierControls": [
+    {
+      "name": "namespace",
+      "file": "scripts/computer-watchdog/trust.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "-t",
+        "compares explicit namespace"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.57,
+      "sourceSha256": "8f96495e4b60a6e9c8720ab5cee3f244f8631f2df2529606af30db5c554d4af5",
+      "logSha256": "878c4dbe3987d53622a451e9d8f0536ec487121c7d47fad62952fa8e4cbdd2e0",
+      "restoredSha256": "8f96495e4b60a6e9c8720ab5cee3f244f8631f2df2529606af30db5c554d4af5"
+    },
+    {
+      "name": "config-bytes",
+      "file": "scripts/computer-watchdog/trust.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "-t",
+        "revalidates actual"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.518,
+      "sourceSha256": "8f96495e4b60a6e9c8720ab5cee3f244f8631f2df2529606af30db5c554d4af5",
+      "logSha256": "5838604c2c6813ef0fcded60be5a008e2a7e8052a0bb9074e9bdf2be6da35e6f",
+      "restoredSha256": "8f96495e4b60a6e9c8720ab5cee3f244f8631f2df2529606af30db5c554d4af5"
+    },
+    {
+      "name": "initial-time",
+      "file": "scripts/computer-watchdog/observe.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "-t",
+        "composes health/log/run/stop"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.925,
+      "sourceSha256": "4fe7554891544c7f5eff2be9b8315cb09bac5384db51cb08c6c23623bd698f14",
+      "logSha256": "e027ecf14ab3cddcb72626eaf07df0f84b76c2be3b4ad7f4b2c0d33edeae6b2b",
+      "restoredSha256": "4fe7554891544c7f5eff2be9b8315cb09bac5384db51cb08c6c23623bd698f14"
+    },
+    {
+      "name": "independent-tick",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "ticks and initiates durable stop"
+      ],
+      "exit": 1,
+      "elapsedSeconds": 1.418,
+      "sourceSha256": "a16b8962d81e22293cf765e7f8bd602ec2b444b3732cd3866c73b9fd538b51da",
+      "logSha256": "b7fc480b09fb265e03ec838737ff7450a3bcea4b781c436ddde834e4430f9e06",
+      "restoredSha256": "a16b8962d81e22293cf765e7f8bd602ec2b444b3732cd3866c73b9fd538b51da"
+    },
+    {
+      "name": "terminal-once",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "persists first terminal reason once"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 1.719,
+      "sourceSha256": "a16b8962d81e22293cf765e7f8bd602ec2b444b3732cd3866c73b9fd538b51da",
+      "logSha256": "2faffdd5f9d826f9359cf41bca56f6c75074d77094efc1244e8882b04f85ae44",
+      "restoredSha256": "a16b8962d81e22293cf765e7f8bd602ec2b444b3732cd3866c73b9fd538b51da"
+    }
+  ],
+  "artifact": {
+    "source": "071391eb209e2058c541ce7644bf2da747fff391",
+    "artifactSha256": "f615e927986eaefbdd121b15525bd04f3fdda64535d36c2a194d02c5d3cf43e5",
+    "artifactBytes": 60136,
+    "metadataSha256": "abb22425f46f51342b227db55a0e6ef4943d0f7126cd570b15122b6f696d2f06",
+    "externalImports": [
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:http",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:https",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:http",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:crypto",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:child_process",
+        "kind": "require-call",
+        "external": true
+      }
+    ],
+    "target": "node24",
+    "executedNodeVersion": "v22.22.2",
+    "nonRootRefusal": {
+      "command": [
+        "node",
+        "<private-final-artifact>",
+        "observe",
+        "/nonexistent-computer-supervisor-config"
+      ],
+      "exit": 2,
+      "outputBytes": 0,
+      "elapsedSeconds": 0.074,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "qualifiedImage": false,
+    "installedDeployment": false
+  },
+  "earlierArtifact": {
+    "source": "f04cd45e4f333ac18a3a73aafd6a1c731979ecc3",
+    "command": [
+      "pnpm",
+      "exec",
+      "esbuild",
+      "scripts/computer-watchdog.ts",
+      "--bundle",
+      "--platform=node",
+      "--target=node24",
+      "--format=cjs",
+      "--outfile=<private>/supervisor.cjs",
+      "--metafile=<private>/build-meta.json"
+    ],
+    "exit": 0,
+    "artifactSha256": "512dd35a0a51eee0ba9c0a5900c4ce3750cb8bfac80dbdad8dce3c86c0c0da3e",
+    "artifactBytes": 60019,
+    "node": "v22.22.2",
+    "externals": [
+      "node:child_process",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:http",
+      "node:https",
+      "node:path"
+    ],
+    "refusal": {
+      "exit": 2,
+      "elapsedSeconds": 0.07,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "premergeGates": "Independent exact final evidence acceptance and required exact final HEAD green CI recorded on PR3645 before actual protected merge",
+  "successor": "docs/superpowers/handoffs/2026-10-24-moss-computer-lifetime-fencing.md",
+  "productionDeployment": false,
+  "imageRuntimeOperation": false
+}
