@@ -49,6 +49,9 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
   await writeFile(signingKeyPath, privateKey.export({ type: "pkcs8", format: "pem" }), {
     mode: 0o600
   });
+  // Lower-level observation fixture only: this does not exercise the mandatory installed loader.
+  const installationPath = join(root, "lower-level-installation.json");
+  await writeFile(installationPath, "{}", { mode: 0o600 });
   const [runner, watchdog, desktop, gateway, collector] = identities;
   const runId = "50000000-0000-4000-8000-000000000005";
   const binding = {
@@ -83,6 +86,8 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
     netNamespace: await readlink("/proc/self/ns/net"),
     receipt: await pinned("receipt"),
     signingKeyPath,
+    installationPath,
+    installationSha256: sha256(Buffer.from("{}")),
     publicKeySha256: sha256(createPublicKey(privateKey).export({ type: "spki", format: "der" }))
   };
   const configPath = join(root, "config.json");
@@ -128,6 +133,7 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
     configuration,
     config: await closureFile(configPath, 16384),
     keyFile: await closureFile(signingKeyPath, 4096),
+    installationFile: await closureFile(installationPath, 16384),
     signingKey: createPrivateKey(await readFile(signingKeyPath)),
     artifactPath: join(root, "fixture.cjs"),
     nodePath: process.execPath,
@@ -168,6 +174,7 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
 export async function fixtureRevalidate(deployment: ClosureDeployment): Promise<void> {
   await recheckClosureFile(deployment.config);
   await recheckClosureFile(deployment.keyFile);
+  await recheckClosureFile(deployment.installationFile);
   for (const root of [
     ...deployment.roots,
     deployment.configuration.receipt,

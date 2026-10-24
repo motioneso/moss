@@ -29,6 +29,7 @@ async function main() {
     configuration,
     config: await closureFile(configPath, 16384),
     keyFile: await closureFile(configuration.signingKeyPath, 4096),
+    installationFile: await closureFile(configuration.installationPath, 16384),
     signingKey: createPrivateKey(await readFile(configuration.signingKeyPath)),
     artifactPath: process.argv[1]!,
     nodePath: process.execPath,
@@ -45,6 +46,7 @@ async function main() {
     revalidate: async (d) => {
       await recheckClosureFile(d.config);
       await recheckClosureFile(d.keyFile);
+      await recheckClosureFile(d.installationFile);
       for (const root of [...d.roots, d.configuration.receipt, d.configuration.supervisor.monitor])
         await assertRoot(root);
     },

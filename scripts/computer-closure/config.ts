@@ -1,6 +1,6 @@
 import { createPrivateKey, createPublicKey, type KeyObject } from "node:crypto";
 import { lstat, readlink, realpath } from "node:fs/promises";
-import { dirname, isAbsolute, normalize, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { gatewayFields } from "../../apps/api/src/computer/gateway-channel.js";
 import { inspectRoots, type RootIdentity } from "../computer-host/config.js";
 import { assertRoot, snapshotRoot } from "../computer-watchdog/linux-files.js";
@@ -17,6 +17,12 @@ import {
   type SupervisorConfiguration
 } from "../computer-watchdog/trust.js";
 import { closureFile, recheckClosureFile, type ClosureFile } from "./files.js";
+import {
+  parseSigningInstallation,
+  signingTemplateHash,
+  signingHash,
+  signingPath
+} from "../computer-signing/installation.js";
 
 export interface ClosureConfiguration {
   readonly supervisor: SupervisorConfiguration;
@@ -26,11 +32,14 @@ export interface ClosureConfiguration {
   readonly receipt: RootIdentity;
   readonly signingKeyPath: string;
   readonly publicKeySha256: string;
+  readonly installationPath: string;
+  readonly installationSha256: string;
 }
 export interface ClosureDeployment {
   readonly configuration: ClosureConfiguration;
   readonly config: ClosureFile;
   readonly keyFile: ClosureFile;
+  readonly installationFile: ClosureFile;
   readonly signingKey: KeyObject;
   readonly artifactPath: string;
   readonly nodePath: string;
@@ -41,7 +50,6 @@ export async function closureMetadata(path: string): Promise<string> {
   const { dev, ino, uid, gid, mode, size, mtimeMs, ctimeMs } = await lstat(path);
   return JSON.stringify({ dev, ino, uid, gid, mode, size, mtimeMs, ctimeMs });
 }
-const hash = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
 export const overlaps = (a: string, b: string): boolean => {
   const r = relative(a, b);
   return r === "" || (r !== ".." && !r.startsWith(`..${sep}`) && !isAbsolute(r));
@@ -50,12 +58,14 @@ export function parseClosureConfiguration(value: unknown): ClosureConfiguration 
   if (
     !gatewayFields(
       value,
-      "artifactSha256,netNamespace,processes,publicKeySha256,receipt,signingKeyPath,supervisor"
+      "artifactSha256,installationPath,installationSha256,netNamespace,processes,publicKeySha256,receipt,signingKeyPath,supervisor"
     ) ||
     !gatewayFields(value.processes, "desktop,gateway,watchdog") ||
     !gatewayFields(value.receipt, "dev,gid,ino,mode,path,uid") ||
-    !hash(value.artifactSha256) ||
-    !hash(value.publicKeySha256) ||
+    !signingHash(value.artifactSha256) ||
+    !signingHash(value.publicKeySha256) ||
+    !signingPath(value.installationPath) ||
+    !signingHash(value.installationSha256) ||
     typeof value.netNamespace !== "string" ||
     !/^net:\[[0-9]+\]$/.test(value.netNamespace) ||
     typeof value.signingKeyPath !== "string" ||
@@ -88,7 +98,9 @@ export function parseClosureConfiguration(value: unknown): ClosureConfiguration 
     netNamespace: value.netNamespace,
     receipt,
     signingKeyPath: value.signingKeyPath,
-    publicKeySha256: value.publicKeySha256
+    publicKeySha256: value.publicKeySha256,
+    installationPath: value.installationPath,
+    installationSha256: value.installationSha256
   });
 }
 
@@ -103,7 +115,12 @@ export async function loadClosureDeployment(
   const config = await closureFile(configPath, 16384);
   const configuration = parseClosureConfiguration(JSON.parse(config.bytes.toString("utf8")));
   const nodePath = process.execPath;
-  for (const path of [nodePath, artifactPath, configuration.signingKeyPath])
+  for (const path of [
+    nodePath,
+    artifactPath,
+    configuration.signingKeyPath,
+    configuration.installationPath
+  ])
     await assertTrustedPath(path, false);
   if (sha256(await boundedFile(artifactPath, 2 * 1024 ** 2)) !== configuration.artifactSha256)
     throw supervisorError();
@@ -112,12 +129,15 @@ export async function loadClosureDeployment(
     if ((await readlink(`/proc/${pid}/ns/net`)) !== configuration.netNamespace)
       throw supervisorError();
   const roots = await inspectRoots(configuration.supervisor.host);
-  for (const root of [
+  const trustedRoots = [
+    configuration.supervisor.monitor,
     configuration.supervisor.data,
     configuration.supervisor.dockerData,
-    configuration.supervisor.monitor,
-    configuration.receipt
-  ]) {
+    configuration.receipt,
+    ...(configuration.supervisor.capture ? [configuration.supervisor.capture] : [])
+  ];
+  for (const root of roots) await assertRoot(root);
+  for (const root of trustedRoots) {
     await assertRoot(root);
     await assertTrustedPath(root.path, true);
   }
@@ -127,6 +147,7 @@ export async function loadClosureDeployment(
     configuration.supervisor.data,
     configuration.supervisor.dockerData
   ];
+  const privateRoots = [...roots, ...trustedRoots];
   if ((configuration.supervisor.monitor.mode & 0o7777) !== 0o700) throw supervisorError();
   for (const ancestor of all)
     for (const child of all) {
@@ -147,10 +168,42 @@ export async function loadClosureDeployment(
     throw supervisorError();
   // No mounted directory may expose the private signing key or trusted closure input.
   if (
-    all.some((root) =>
-      [configPath, configuration.signingKeyPath, artifactPath].some((path) =>
-        overlaps(root.path, path)
-      )
+    privateRoots.some((root) =>
+      [
+        configPath,
+        configuration.signingKeyPath,
+        configuration.installationPath,
+        artifactPath,
+        nodePath
+      ].some((path) => overlaps(root.path, path))
+    )
+  )
+    throw supervisorError();
+  const installationFile = await closureFile(configuration.installationPath, 16384);
+  if (installationFile.hash !== configuration.installationSha256) throw supervisorError();
+  const installation = parseSigningInstallation(
+    JSON.parse(installationFile.bytes.toString("utf8"))
+  );
+  await assertRoot(installation.output);
+  await assertTrustedPath(installation.output.path, true);
+  if (
+    configuration.installationPath !== join(installation.output.path, "installation.json") ||
+    installation.supervisorSha256 !== signingTemplateHash(configuration.supervisor) ||
+    installation.artifactPath !== artifactPath ||
+    installation.artifactSha256 !== configuration.artifactSha256 ||
+    installation.nodePath !== nodePath ||
+    installation.nodeSha256 !== sha256(await boundedFile(nodePath, 128 * 1024 ** 2)) ||
+    installation.bootId !== configuration.supervisor.bootId ||
+    !(["pid", "mnt", "user"] as const).every(
+      (key) => installation.namespaces[key] === configuration.supervisor.namespaces[key]
+    ) ||
+    installation.namespaces.net !== configuration.netNamespace ||
+    installation.signingKeyPath !== configuration.signingKeyPath ||
+    installation.publicKeySha256 !== configuration.publicKeySha256 ||
+    privateRoots.some(
+      (root) =>
+        overlaps(root.path, installation.output.path) ||
+        overlaps(installation.output.path, root.path)
     )
   )
     throw supervisorError();
@@ -177,6 +230,7 @@ export async function loadClosureDeployment(
     configuration,
     config,
     keyFile,
+    installationFile,
     signingKey,
     artifactPath,
     nodePath,
@@ -192,12 +246,16 @@ export async function loadClosureDeployment(
 export async function revalidateClosureDeployment(deployment: ClosureDeployment): Promise<void> {
   await recheckClosureFile(deployment.config);
   await recheckClosureFile(deployment.keyFile);
+  await recheckClosureFile(deployment.installationFile);
   const current = await loadClosureDeployment(deployment.config.path, deployment.artifactPath);
   if (
     current.config.dev !== deployment.config.dev ||
     current.config.ino !== deployment.config.ino ||
     current.keyFile.dev !== deployment.keyFile.dev ||
     current.keyFile.ino !== deployment.keyFile.ino ||
+    current.installationFile.dev !== deployment.installationFile.dev ||
+    current.installationFile.ino !== deployment.installationFile.ino ||
+    current.installationFile.hash !== deployment.installationFile.hash ||
     current.config.hash !== deployment.config.hash ||
     current.keyFile.hash !== deployment.keyFile.hash ||
     JSON.stringify(current.roots) !== JSON.stringify(deployment.roots) ||
