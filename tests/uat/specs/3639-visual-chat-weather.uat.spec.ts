@@ -78,6 +78,21 @@ test("ordinary evening questions use actual place-local intervals and immutable 
   expect(source.forecast.timeZone).toBe("America/Los_Angeles");
   expect(source.forecast.coverage).toBe("complete");
   expect(source.forecast.intervals).toHaveLength(4);
+  // The model may omit place or reuse the qualified place from conversation context.
+  // Establish both independently authorized DTOs, preserving exact provenance assertions.
+  const conversationResponse = await page.request.get(
+    `/api/weather/forecast?dayOffset=0&startHour=18&endHour=22&place=${encodeURIComponent(source.forecast.place)}`
+  );
+  expect(conversationResponse.ok()).toBe(true);
+  const conversationSource: WeatherForecastRead = await conversationResponse.json();
+  expect(conversationSource.status).toBe("forecast");
+  if (conversationSource.status !== "forecast") throw new Error("Qualified place unavailable");
+  expect(conversationSource.forecast).toEqual({
+    ...source.forecast,
+    locationSource: "conversation"
+  });
+  console.log(`[weather-conversation-source] ${JSON.stringify(conversationSource)}`);
+  const authorizedForecasts = [source.forecast, conversationSource.forecast];
   const results: {
     index: number;
     visual: boolean;
@@ -108,7 +123,7 @@ test("ordinary evening questions use actual place-local intervals and immutable 
       `[weather-route] ${JSON.stringify({ ...results.at(-1), prompt, reply: saved.reply.slice(0, 1500), providerModel: model.providerModelId })}`
     );
     if (!visual) continue;
-    expect(envelope!.snapshots[0]!.fields).toEqual(source.forecast);
+    expect(authorizedForecasts).toContainEqual(envelope!.snapshots[0]!.fields);
     const slot = (await drawer(page)).getByLabel("Visual reply").last();
     await expect(
       slot.getByRole("heading", { name: "Local weather forecast", exact: true })

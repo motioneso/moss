@@ -164,3 +164,10 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   71 to 66.1°F, 1% rain, light winds in San Diego's local evening. Added clock/rain
   regressions and supported rain bounds without changing prompts or thresholds.
   This failed harness run remains supplemental, not exact-final-head acceptance.
+- 2026-10-24: exact-head installed run on `d97d43c77` stopped after two valid
+  cards/useful answers: the second read reused the qualified saved place in conversation,
+  so its truthful location source was `conversation` rather than `stored-preference`.
+  Every other field matched the independent source. The harness now independently
+  reads both authorized location-resolution paths before the matrix and requires exact
+  equality to one complete DTO, including provenance; it never ignores that field.
+  This stopped run is retained and does not establish the twenty-case acceptance gate.
