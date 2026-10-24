@@ -138,3 +138,14 @@ then exact persisted-target URL readback. This retains the not-already-on-target
 durability/security/UI assertions; it changes the unobservable blank-URL implementation. Verify
 distinctness and actual caller ordering offline, then require the full live sequence and independent
 review of the exact fresh packet. Historical r18's initial read failure remains unexplained.
+
+### R20 bookmark-only search: explicitly select the actual result
+
+R20 passed exact distinct initial-control URL readback after replacement. The next address copy
+returned only the search token; its cropped toolbar shows bookmark-search mode and the single
+persisted bookmark's correct title/URL, without navigation to it. Correct the actual query call
+site to send Arrow Down once to select that result, then Enter once, through the viewer keyboard.
+Preserve the bookmark-only restriction, unique query, original suggestion wait, exact target URL
+readback and every later sandbox/clean-close check. Test actual caller key ordering and require the
+complete live sequence in independently reviewed fresh r21. Do not substitute the visible result
+for opened-target acceptance or retry the failed r20 assertion.
