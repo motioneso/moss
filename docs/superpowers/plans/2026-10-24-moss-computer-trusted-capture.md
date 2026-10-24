@@ -189,3 +189,8 @@ Spec requested positive native continuation evidence; corrected native tests ack
 actual driver's bootstrap-timer retirement after capture, then deliberately fail without an
 installed receiver. That acknowledgement is not native run success or closure qualification.
 Both R1 reports and all failed fixture runs remain private.
+
+Spec source R2 at7e6ffb2 found the native continuation fixture could also observe final error
+cleanup clearing the bootstrap handle. Restrict that observation to the actual native
+acknowledgeStartup call stack; an error-settlement clear cannot count as driver continuation.
+Production source remains unchanged. Retain the rejected R2 and require exact R3 acceptance.

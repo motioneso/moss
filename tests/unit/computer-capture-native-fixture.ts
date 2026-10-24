@@ -72,7 +72,11 @@ export async function prepareNativeCapture(configPath: string, held: string) {
   }) as typeof setTimeout;
   const clear = global.clearTimeout;
   global.clearTimeout = ((handle: ReturnType<typeof setTimeout>) => {
-    if (["continue", "boundary"].includes(held) && handle === bootstrap) {
+    if (
+      ["continue", "boundary"].includes(held) &&
+      handle === bootstrap &&
+      (new Error().stack ?? "").includes("acknowledgeStartup")
+    ) {
       const nativeFs = createRequire(configPath)("node:fs") as typeof nativeFs;
       if (nativeFs.existsSync(join(config.capture.path, "capture.json")))
         process.send!({
