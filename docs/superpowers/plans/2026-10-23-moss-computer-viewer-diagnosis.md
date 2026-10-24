@@ -39,3 +39,38 @@ Actual desktop, sandbox, clean flush and replacement remain separate live predic
 
 The [result](../../evidence/moss-computer/2026-10-23-viewer-diagnosis.md) records the stopping decision
 and exact receipts. This document is a diagnostic plan, not an accepted runtime launch packet.
+
+## Resumed diagnosis: direct user instruction supersedes the stopping decision
+
+Ben subsequently instructed: “The kill gate wasn't my decision. This needs to be repaired so
+keep going.” The previous unsupported-repair stop is historical and superseded. Continue the
+diagnostic feedback loop through an instrumented browser and, when needed, the isolated desktop.
+The image, isolation, host-resource, credential, independent-review and cleanup protections remain.
+
+1. Exercise the complete installed noVNC UI in the same Chromium/browser viewport as r12. Use a
+   claimed loopback port and fresh private TLS/client identities. Capture bounded console, page
+   errors, startup rejections, request/WebSocket failures and actual UI/DOM/settings state before
+   teardown. A static-server diagnostic may establish initialization behavior only; it cannot
+   qualify a connected desktop. Preserve historical artifacts. Keep scripts/logs outside git.
+2. If initialization succeeds, prepare an exact instrumented r13 desktop packet using the retained
+   r12 scripts, fresh home/socket/keys and claimed port. Check archive/config/seven payload layers
+   if the adopted image is absent, obtain independent restoration acceptance, then load that exact
+   image once. Commit packet and actual-artifact manifest; obtain independent readiness review.
+3. Run fresh admission and the existing independent watchdog before launch. Keep existing current
+   UI/RFB, frame, fresh-input, sandbox and persistence assertions and deadlines. Diagnose captured
+   failures and make targeted corrections supported by the observed boundary; user authorization
+   permits continuing diagnosis rather than ending solely because a repair is not yet known.
+   Stop each failed operation, preserve its evidence and close resources before a separately
+   identified corrected attempt; never resample failed admission or weaken protections.
+4. Verify the real repaired viewer and finish active sandbox, clean shutdown/profile flush,
+   file/bookmark negative controls, replacement on the same home, unchanged durable hashes and
+   fresh UI/input readback. Report only observed results, independently review final evidence and
+   closure, commit/push the draft stack and leave a clean tree. No deployment, merge or issue close.
+
+Existing seams: r12 `persistence.mjs` lines 42–53 contain the real UI/RFB/frame predicates;
+lines 128–163 contain the persistence sequence and browser setup. `run.py` lines 58–82 binds
+manifest/admission/watchdog/readiness/access/persistence; `supervise.py` lines 17–46 samples
+resource floors and stops exact owned resources. Reconfirm line ranges when preparing the packet.
+No model calls or product UI feedback are introduced; all evidence is generated from observed state.
+Expected diagnostic exit 0 means its explicitly named browser boundary was observed, never desktop
+acceptance. Real proof requires the original full predicate sequence and independent closure.
