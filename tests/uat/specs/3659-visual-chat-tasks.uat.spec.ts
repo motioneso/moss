@@ -16,6 +16,20 @@ import {
 
 export const uatLevel = { level: "bare", without: [] } as const;
 test.use({ trace: "off", screenshot: "off", video: "off" });
+test.beforeEach(async ({ page }) => {
+  page.on("requestfailed", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (["/api/chat/turn", "/api/chat/stream"].includes(path))
+      console.log(
+        `[tasks-network-failure] ${JSON.stringify({
+          time: new Date().toISOString(),
+          path,
+          method: request.method(),
+          error: request.failure()?.errorText.slice(0, 512)
+        })}`
+      );
+  });
+});
 // Frozen before installed acceptance. No visual instructions or retries in this matrix.
 const prompts = [
   "What needs doing today?",
@@ -54,9 +68,41 @@ async function turn(page: Page, prompt: string) {
   await chat.getByLabel("Message Moss").fill(prompt);
   const started = Date.now();
   await chat.getByLabel("Message Moss").press("Enter");
-  const saved = await response;
-  expect(saved.ok()).toBe(true);
-  return { saved: await saved.json(), elapsedMs: Date.now() - started };
+  try {
+    const saved = await response;
+    expect(saved.ok()).toBe(true);
+    return { saved: await saved.json(), elapsedMs: Date.now() - started };
+  } catch (error) {
+    // Diagnostic only: history cannot substitute for the required successful POST response.
+    try {
+      const privacy = await (
+        await page.request.get("/api/chat/privacy?surface=drawer", { timeout: 10_000 })
+      ).json();
+      const history: { messages: ChatMessageDto[] } = await (
+        await page.request.get(`/api/chat/threads/${privacy.threadId}/messages?surface=drawer`, {
+          timeout: 10_000
+        })
+      ).json();
+      console.log(
+        `[tasks-failed-turn-history] ${JSON.stringify({
+          prompt,
+          elapsedMs: Date.now() - started,
+          messages: history.messages.slice(-4).map((message) => ({
+            id: message.id,
+            role: message.role,
+            body: message.body,
+            visualReply: message.visualReply,
+            activity: message.activity
+              .filter((entry) => entry.kind === "tool")
+              .map((entry) => ({ toolName: entry.toolName, outcome: entry.outcome }))
+          }))
+        })}`
+      );
+    } catch {
+      console.log("[tasks-failed-turn-history] unavailable; original failure retained");
+    }
+    throw error;
+  }
 }
 async function captureTask(page: Page, title: string, due: string | null, done = false) {
   const capture = page.getByRole("textbox", { name: "Task title", exact: true });
