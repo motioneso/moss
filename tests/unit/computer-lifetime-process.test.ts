@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createConnection } from "node:net";
 import { ComputerReceivingGateway } from "../../apps/api/src/computer/receiving-gateway.js";
+import { LifetimeChannel } from "../../apps/api/src/computer/lifetime-channel.js";
 import { lifetimePath } from "../../apps/api/src/computer/lifetime-protocol.js";
 import { processFixture } from "./computer-process-fixture.js";
 
@@ -148,9 +149,21 @@ describe("real supervisor to receiving core lifetime, disclosed native executabl
         void original.call(this);
         return held;
       });
+    let retiredAtAck: boolean | undefined;
+    const send = LifetimeChannel.prototype.send;
+    vi.spyOn(LifetimeChannel.prototype, "send").mockImplementation(function (
+      this: LifetimeChannel,
+      value: unknown,
+      flushed?: () => void
+    ) {
+      if (value && typeof value === "object" && "type" in value && value.type === "fenced")
+        retiredAtAck = retired?.snapshot().closed === true;
+      return send.call(this, value, flushed);
+    });
     const controllerClosed = once(controller, "close");
     const watcherClosed = once(watcher, "close");
     expect(await f.lifetime.stop()).toBe(true);
+    expect(retiredAtAck).toBe(true);
     expect(close).toHaveBeenCalled();
     expect(retired?.snapshot().closed).toBe(true);
     await Promise.all([controllerClosed, watcherClosed]);
