@@ -34,9 +34,11 @@ total cost between added fixtures and runner throughput. Keep both failed receip
 Add optional `shard?: string` to `resolveVitestArgs(cliArgs, shard)` in
 `scripts/test-unit.ts`. Keep its current noargs/default and explicit CLI path
 semantics; append a single `--shard=<value>` only when shard is supplied. Main
-passes `process.env.MOSS_UNIT_TEST_SHARD`. Vitest owns shard grammar/range
-validation and must exit nonzero for invalid input. Do not build a general CLI
-parser or duplicate the default paths. The normal local command stays unsharded.
+passes `process.env.MOSS_UNIT_TEST_SHARD`. When present, require exactly two
+positive decimal integers separated by one slash, both safe integers and
+index<=count. Empty, signed, fractional, suffixed, zero, unsafe, out-of-range
+or extra-component input throws before spawn. Undefined stays unsharded.
+Do not build a general CLI parser or duplicate the default paths.
 
 Change only the unit job in `.github/workflows/ci.yml` to matrix shard `[1,2]`,
 display the shard, disable fail-fast so one failure cannot hide the sibling,
@@ -50,11 +52,13 @@ timeout extension, test exclusion, retry-until-green or successful skip is added
 
 Before implementation commit this exact plan and obtain independent read-only
 Security and Standards/Spec acceptance. Extend the existing resolver tests with
-default-filter and explicit-path sharding regressions. Observe the new default
+default-filter, explicit-path and invalid-input sharding regressions. Extend
+`tests/unit/ci-phase-deadlines.test.ts` with unit matrix/env/15m/aggregate assertions
+without weakening any prior assertion. Observe the new default
 shard case fail with shard forwarding removed, retain patch/log, restore bytes.
 Use a private child-process Vitest stub to check real wrapper env forwarding,
-unchanged defaults and child failure propagation; malformed shard must also
-refuse through actual Vitest validation. Audit workflow YAML and replay actual
+unchanged defaults and child failure propagation; malformed dedicated shard must
+refuse before that child starts. Audit workflow YAML and replay actual
 aggregate shell with unit success/failure/cancelled and docs-only skipped values.
 Compare actual Vitest selection for unsharded and both shards: disjoint union
 must equal every original selected file, including package-local/UAT fixtures.
@@ -72,3 +76,13 @@ Kill owner computer-closure-delivery: if the partition drops/duplicates a file,
 the aggregate permits a failed/cancelled matrix, or either complete shard still
 exceeds15m, stop this correction and diagnose the evidence before choosing a
 different bounded fix. Do not relax the budget or silently accept partial tests.
+
+## Review ledger
+
+Security exact-plan R1 rejected delegation of strict grammar to Vitest4.1.8.
+Its `coverage.DM_a_rWm.js:208–218` uses truthiness, parseInt and Math.abs;
+negative, fractional, suffixed and extra-component values can normalize rather
+than refuse. Standards/Spec independently found the same normalization while
+considering delegated vendor semantics acceptable only with narrower claims.
+Retain both R1 reports. The corrected contract above validates only the new
+dedicated input before spawn; existing ordinary CLI forwarding is unchanged.
