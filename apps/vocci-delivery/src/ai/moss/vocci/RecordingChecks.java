@@ -99,6 +99,21 @@ final class RecordingChecks {
         try { ResumableUpload.deliver(server, store, queued); throw new AssertionError("restart uploaded exclusion"); }
         catch (DeliveryStore.Excluded expected) { }
         check(server.reserves == 1 && server.chunks == 1);
+        // A retry dispatched after exclusion is also a later status operation: exclusion wins at dispatch time.
+        String retryExcluded = "amsg_1700000404_excluded";
+        JSONObject failedVoice = new JSONObject().put("id", "66666666-6666-4666-8666-666666666666").put("intent", "voice-request")
+            .put("voiceRequestId", "77777777-7777-4777-8777-777777777777").put("state", "failed").put("retryable", true);
+        store.discover(retryExcluded, new JSONObject().put("enablementId", "saved")); store.accepted(retryExcluded, failedVoice);
+        store.recordings.inventory(inventory(retryExcluded), 1240); exclude(store.recordings, retryExcluded);
+        int[] retries = {0}; String beforeRetry = store.entries.getJSONObject(retryExcluded).toString();
+        check(!DeliveryService.retryTranscription(store, retryExcluded, statusId -> { retries[0]++; return new JSONObject(failedVoice.toString()).put("state", "queued"); }));
+        check(retries[0] == 0 && store.entries.getJSONObject(retryExcluded).toString().equals(beforeRetry));
+        check(!DeliveryService.retryTranscriptionAllowed(store.entries.getJSONObject(retryExcluded), true));
+        String retryAllowed = "amsg_1700000405_allowed";
+        store.discover(retryAllowed, new JSONObject().put("enablementId", "saved")); store.accepted(retryAllowed, failedVoice);
+        check(DeliveryService.retryTranscriptionAllowed(store.entries.getJSONObject(retryAllowed), false));
+        check(DeliveryService.retryTranscription(store, retryAllowed, statusId -> { retries[0]++; return new JSONObject(failedVoice.toString()).put("state", "queued"); }));
+        check(retries[0] == 1 && store.entries.getJSONObject(retryAllowed).getJSONObject("status").getString("state").equals("queued"));
         // Completed, failed and interrupted evidence is not removed or reassigned by exclusion.
         for (String stage : new String[]{"complete", "failed", "interrupted"}) {
             String retained = "1700000410_" + stage;

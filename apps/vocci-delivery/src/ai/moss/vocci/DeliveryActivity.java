@@ -201,6 +201,8 @@ public final class DeliveryActivity extends Activity {
             ids.sort(Collections.reverseOrder());
             if (ids.isEmpty()) text("empty", "No recordings yet. Start delivery and finish a recording on the ring.", 15, false);
             final JSONObject destination = config;
+            JSONObject recordings = config == null ? new JSONObject() : RingRecordings.read(this, config, state.optString("sourceDeviceId"));
+            JSONObject exclusions = recordings.optJSONObject("exclusions");
             for (String id : ids.subList(0, Math.min(30, ids.size()))) {
                 JSONObject entry = entries.getJSONObject(id), status = entry.optJSONObject("status"), chat = entry.optJSONObject("chatStatus");
                 String stage = chat == null ? entry.getString("stage") : chat.getString("state");
@@ -218,7 +220,7 @@ public final class DeliveryActivity extends Activity {
                         String meetingId = MossClient.uuid(status.getString("meetingId"));
                         button(id + "/open", "Open meeting", () -> open(destination.optString("origin"), "/meetings?id=" + meetingId));
                     }
-                    if (entry.has("voiceIntent") && status.optString("state").equals("failed") && status.optBoolean("retryable"))
+                    if (DeliveryService.retryTranscriptionAllowed(entry, exclusions != null && exclusions.has(id)))
                         button(id + "/retry", "Retry transcription", () -> startForegroundService(new Intent(this, DeliveryService.class).setAction("retry-transcription").putExtra("recordingId", id)));
                 }
             }
