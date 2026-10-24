@@ -40,6 +40,10 @@ feature that is not present in the image you are running.
 - **Meeting transcript vocabulary.** Save spellings for names and terms to guide future meeting transcripts, with best-effort results from your audio service. [PR #3653](https://github.com/motioneso/moss/pull/3653)
 - **Sourced Sports results in chat.** Moss can show the latest available completed match with team logos, the score, its source and coverage when a visual helps your Sports question. [PR #3633](https://github.com/motioneso/moss/pull/3633)
 
+#### Changed
+
+- **Ring messages flow straight into chat.** New ring messages send automatically and appear alongside normal chat messages while preserving your unsent drafts. [PR #3656](https://github.com/motioneso/moss/pull/3656)
+
 ### 2026-10-23
 
 #### Added
