@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { duplexPair } from "node:stream";
 import { spawn } from "node:child_process";
 import { WebSocket, WebSocketServer } from "ws";
@@ -12,7 +12,7 @@ import { authFixture, binding, OWNER } from "./computer-auth-fixture.js";
 import { WIDTH, HEIGHT, pixels } from "./computer-gateway-fixture.js";
 import { fencePacket } from "./computer-rfb-fixture.js";
 
-export async function processFixture(executable = false) {
+export async function processFixture(executable: boolean | string = false) {
   const auth = await authFixture();
   const guestSocketPath = join(auth.root, "guest.sock");
   const socketPath = join(auth.root, "gateway.sock");
@@ -71,10 +71,19 @@ export async function processFixture(executable = false) {
   if (executable) {
     const configPath = join(auth.root, "config.json");
     await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
+    const env = { ...process.env };
+    delete env.NODE_OPTIONS;
+    delete env.NODE_PATH;
     child = spawn(
       process.execPath,
-      ["--import", "tsx", "scripts/computer-gateway.ts", configPath],
-      { stdio: ["ignore", "pipe", "pipe"] }
+      typeof executable === "string"
+        ? [executable, configPath]
+        : ["--import", "tsx", "scripts/computer-gateway.ts", configPath],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+        env,
+        cwd: typeof executable === "string" ? dirname(executable) : undefined
+      }
     );
     childExit = new Promise((resolve) => child!.once("exit", resolve));
     const output = (chunk: Buffer) => {
