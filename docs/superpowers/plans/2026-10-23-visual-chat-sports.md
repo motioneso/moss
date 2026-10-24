@@ -263,3 +263,10 @@ and investigate a bounded source-tool routing repair as a distinct design decisi
 There is no evidence supporting more presentation wording variants or repeated
 unchanged acceptance runs. Obtain Ben's next decision before dependent rollout;
 continue only independent verification and evidence preservation while it is pending.
+
+Ben's next decision on 2026-10-24: **Investigate and repair routing**, retaining
+model choice, the renderer and the 19/20 gate. This authorizes a bounded source-tool
+routing investigation/repair, not repeated presentation-wording variants or a
+threshold waiver. First inspect the trusted routing contract and actual first-turn
+tool availability. Preserve the failed candidate and generic lifecycle limitation.
+Commit the evidence-backed routing repair plan before changing production code.
