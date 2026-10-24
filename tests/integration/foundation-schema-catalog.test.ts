@@ -577,7 +577,7 @@ describe("MVP foundation schema catalog", () => {
           version: "0270",
           name: "0270_integration_classifier_sort_worker.sql"
         },
-        // #2984 R2.4 — one admin shadow review per classifier selection unlocks the gate's `on`.
+        // #2984 R2.4 — one admin shadow review per classifier selection, kept as a record only.
         {
           version: "0271",
           name: "0271_chat_classifier_shadow_reviews.sql"

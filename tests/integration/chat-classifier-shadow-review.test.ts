@@ -1,15 +1,14 @@
 import { sql, type Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { AiRepository } from "@moss/ai";
-import { hasReviewForSelection, isCurrentClassifierReviewed } from "@moss/chat";
+import { hasReviewForSelection } from "@moss/chat";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
-// #2984 R2.4: one shadow review per classifier selection unlocks the gate's `on` state. The table is
-// empty by default. Instance-global admin data under RLS: every authed actor may read it, only an
-// admin may write it.
+// #2984 R2.4: one shadow review per classifier selection, kept as a record only. The gate runs in
+// whatever mode the admin stores, so these rows gate nothing. The table is empty by default.
+// Instance-global admin data under RLS: every authed actor may read it, only an admin may write it.
 
 let appDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
@@ -65,17 +64,11 @@ describe("app.chat_classifier_shadow_reviews", () => {
     });
   });
 
-  it("is empty by default, and no classifier selected reads as not reviewed", async () => {
+  it("is empty by default", async () => {
     const count = await sql<{ n: string }>`
       SELECT count(*)::text AS n FROM app.chat_classifier_shadow_reviews
     `.execute(appDb);
     expect(count.rows[0]?.n).toBe("0");
-
-    expect(
-      await asActor(ids.adminUser, (db) =>
-        isCurrentClassifierReviewed(db, { classifierDeps: { repository: new AiRepository() } })
-      )
-    ).toBe(false);
   });
 
   it("lets an admin record a review that matches only its exact selection", async () => {
