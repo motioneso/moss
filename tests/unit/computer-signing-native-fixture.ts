@@ -11,10 +11,14 @@ export async function prepareSigningNative(
 ) {
   const request = JSON.parse(await fs.readFile(configPath, "utf8"));
   const nativeUid = process.getuid!();
+  const nativeGid = process.getgid!();
   const io = createRequire(configPath)("node:fs/promises") as typeof fs;
-  const project = <T extends { uid: number | bigint; mode: number | bigint }>(stat: T): T =>
+  const project = <T extends { uid: number | bigint; gid: number | bigint; mode: number | bigint }>(
+    stat: T
+  ): T =>
     Object.assign(stat, {
       uid: typeof stat.uid === "bigint" ? 0n : 0,
+      gid: typeof stat.gid === "bigint" ? 1000n : 1000,
       mode: typeof stat.mode === "bigint" ? stat.mode & ~0o022n : stat.mode & ~0o022
     });
   const lstat = io.lstat;
@@ -34,7 +38,7 @@ export async function prepareSigningNative(
     file.stat = (async (...args: Parameters<typeof file.stat>) =>
       project(await stat(...args))) as typeof file.stat;
     const chown = file.chown.bind(file);
-    file.chown = (uid, gid) => chown(uid === 0 ? nativeUid : uid, gid);
+    file.chown = (uid, gid) => chown(uid === 0 ? nativeUid : uid, gid === 1000 ? nativeGid : gid);
     const writingKey = path.endsWith(`/${publicationName}`) && Boolean(Number(args[1]) & 0o100);
     if (writingKey) keyWritten = true;
     if (
@@ -70,16 +74,6 @@ export async function prepareSigningNative(
   process.getuid = () => 0;
   process.geteuid = () => 0;
   process.execArgv = [];
-  // TEMP-DEBUG
-  if (process.env.PUB_DEBUG === "1") {
-    const E = Error;
-    (globalThis as any).Error = class extends E {
-      constructor(...a: any[]) {
-        super(...a);
-        process.stderr.write("ERR " + this.stack + "\n");
-      }
-    };
-  }
   for (const key of [
     "NODE_OPTIONS",
     "NODE_PATH",

@@ -60,7 +60,6 @@ describe("actual staged publisher CJS and native final continuation under disclo
       await fs.writeFile(join(t.f.root, "input/node-bytes"), "disclosed native Node hash fixture", {
         mode: 0o600
       });
-      process.env.PUB_DEBUG = "1"; // TEMP-DEBUG
       const code = `require(${JSON.stringify(preload)}).prepareSigningNative(process.argv[2],${JSON.stringify(kind)},"closure.json").then(()=>require(process.argv[1]));`;
       const child = spawn(process.execPath, ["-e", code, t.publisher, t.path, await t.hash()], {
         stdio: ["ignore", "pipe", "pipe", "ipc"]
@@ -131,10 +130,7 @@ describe("actual staged publisher CJS and native final continuation under disclo
             })
           );
         }
-        expect({ exit, stderr: stderr.slice(0, 3000) }).toEqual({
-          exit: kind === "success" ? 0 : 2,
-          stderr: ""
-        }); // TEMP-DEBUG
+        expect(exit).toBe(kind === "success" ? 0 : 2);
         expect(signal).toBeNull();
         expect(stdout).toBe("");
         expect(stderr).toBe("");
