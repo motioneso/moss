@@ -142,14 +142,14 @@ export class ComputerWatchdogPolicy {
     let runner: WatchdogProcessIdentity | null;
     let watchdog: WatchdogProcessIdentity | null;
     try {
-      runner = identity(configuration.runner);
-      watchdog = identity(configuration.watchdog);
+      const record = fields(configuration, ["runId", "startedAtMs", "runner", "watchdog"]);
+      if (!record) throw new Error("Invalid Computer watchdog configuration");
+      runner = identity(record.runner);
+      watchdog = identity(record.watchdog);
       if (
-        typeof configuration.runId !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          configuration.runId
-        ) ||
-        !nonnegativeInteger(configuration.startedAtMs) ||
+        typeof record.runId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(record.runId) ||
+        !nonnegativeInteger(record.startedAtMs) ||
         !runner ||
         !watchdog ||
         runner.pid === watchdog.pid ||
@@ -157,8 +157,8 @@ export class ComputerWatchdogPolicy {
       ) {
         throw new Error("Invalid Computer watchdog configuration");
       }
-      this.#runId = configuration.runId;
-      this.#startedAtMs = configuration.startedAtMs;
+      this.#runId = record.runId;
+      this.#startedAtMs = record.startedAtMs;
       this.#runner = runner;
       this.#watchdog = watchdog;
     } catch {
@@ -205,6 +205,14 @@ export class ComputerWatchdogPolicy {
     if (this.tick(nowMs).status === "stopped") return this.#decision;
     try {
       const record = fields(value, sampleKeys);
+      const identitiesMatch =
+        record !== null &&
+        record.runId === this.#runId &&
+        sameProcess(record.runner, this.#runner) &&
+        sameProcess(record.watchdog, this.#watchdog);
+      // Proxy inspection can reenter methods. Recheck state after the last external read,
+      // before using the current clock/sample history or publishing a healthy decision.
+      if (this.tick(nowMs).status === "stopped") return this.#decision;
       if (
         !record ||
         !nonnegativeInteger(record.measuredAtMs) ||
@@ -223,11 +231,7 @@ export class ComputerWatchdogPolicy {
       ) {
         return this.#halt("measurement-failed");
       }
-      if (
-        record.runId !== this.#runId ||
-        !sameProcess(record.runner, this.#runner) ||
-        !sameProcess(record.watchdog, this.#watchdog)
-      ) {
+      if (!identitiesMatch) {
         return this.#halt("identity-changed");
       }
       if (record.stopRequested) return this.#halt("operator-stop");

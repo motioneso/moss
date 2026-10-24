@@ -151,3 +151,15 @@ independent exact evidence and resource closure are required. Keep parent issues
 Idle sleep/wake, confined useful Internet egress and platform/release remain bounded work.
 After merge, herdr-handoff a fresh isolated successor with this continuing chain; verify durable
 routing name plus actual session UUID and handoff-read execution, not pane creation alone.
+
+## Review rulings
+
+Plan security/spec R1 accepted the no-runtime contract with one nonblocking discovery-account
+correction; R2 accepted exact `1e0ddde4c` before code. Source R1 on `6d85512d5`: Standards passed;
+Spec/security blocked reentrant sample inspection overwriting a terminal decision, and security
+also blocked constructor accessors changing validated start time before storage. Both findings
+were accepted. Snapshot constructor own data properties and reject accessors; inspect all supplied
+process objects before rechecking current clock/terminal state and validating measurement order.
+Regressions cover stop reentry at top-level and both process objects, newer nested clock/sample
+history, and constructor getter rejection without invocation. Exact source R2 and final evidence
+acceptance remain separate gates. All immutable review rounds and control attempts are retained.

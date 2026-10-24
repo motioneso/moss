@@ -194,6 +194,54 @@ describe("Computer watchdog decision policy (supplied metadata only)", () => {
     );
   });
 
+  it("rejects changing constructor accessors without invoking them", () => {
+    let reads = 0;
+    const config = Object.defineProperty(configuration(), "startedAtMs", {
+      get() {
+        return reads++ === 0 ? startedAtMs : NaN;
+      }
+    });
+    expect(() => new ComputerWatchdogPolicy(config)).toThrow(
+      "Invalid Computer watchdog configuration"
+    );
+    expect(reads).toBe(0);
+  });
+
+  it.each(["sample", "runner", "watchdog"] as const)(
+    "preserves a terminal stop reentered during %s inspection",
+    (location) => {
+      const policy = new ComputerWatchdogPolicy(configuration());
+      const value = sample();
+      const handler = {
+        ownKeys(target: object) {
+          policy.stop(startedAtMs);
+          return Reflect.ownKeys(target);
+        }
+      };
+      const reentrant =
+        location === "sample"
+          ? new Proxy(value, handler)
+          : { ...value, [location]: new Proxy(value[location], handler) };
+      expect(policy.sample(startedAtMs, reentrant)).toEqual(stopped("operator-stop"));
+      expect(policy.decision).toEqual(stopped("operator-stop"));
+    }
+  );
+
+  it("preserves newer clock and measurement state established by reentrant inspection", () => {
+    for (const advanceClock of [false, true]) {
+      const policy = new ComputerWatchdogPolicy(configuration());
+      const value = new Proxy(sample(), {
+        ownKeys(target) {
+          policy.sample(startedAtMs + (advanceClock ? 1 : 0), sample());
+          return Reflect.ownKeys(target);
+        }
+      });
+      expect(policy.sample(startedAtMs, value)).toEqual(
+        stopped(advanceClock ? "clock-invalid" : "measurement-failed")
+      );
+    }
+  });
+
   it.each([
     { received: startedAtMs, measured: startedAtMs - 1 },
     { received: startedAtMs, measured: startedAtMs + 1 },
