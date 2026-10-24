@@ -1,0 +1,533 @@
+{
+  "version": 1,
+  "scope": "Existing-resource durable first-health bootstrap only; no runtime admission or installed owner acceptance",
+  "base": "8786e0a3cd802f9a5e1395628248be5cddc0ad31",
+  "acceptedPlan": "e53706ddf253bf3a472690864334634a6ba604ce",
+  "checkedSource": "d146ac16014b3b79ec967bc2483924e3168301f0",
+  "productionBytesEqual": "bf545f326811f0297225f3178577d2e5f0d2ae94",
+  "files": {
+    "docs/superpowers/handoffs/2026-10-24-moss-computer-closure-provenance.md": "ac2446aad02af151143c6c132b6dcf1f4be181775db8fdd2edc0523ce5ac3b5c",
+    "docs/superpowers/plans/2026-10-24-moss-computer-bootstrap-health.md": "146a9fb62e87197eb25f9dda659276e0d95d8a572a5ec57d236c5d9922cd5aba",
+    "scripts/computer-watchdog.ts": "8b7fa0146f2d5ac1dfba9119800b72ec02178bc3f6e5af6f51e89e657687fd62",
+    "scripts/computer-watchdog/supervisor.ts": "c0af11c5c8dcee34be862f53d69c30b34097923f9ae14cbda32407073c9b3d0c",
+    "tests/unit/computer-bootstrap-native-fixture.ts": "c9ca2f948acdde98bd20aab5bc1d4512d8197a810b362cbe7ffd426652990c0e",
+    "tests/unit/computer-capture-trust.test.ts": "5cddd20ee0bd74a920a208c93d36f56d1a34b3c7fb201c870a163ea05e11017b",
+    "tests/unit/computer-watchdog-supervisor.test.ts": "10ce94e8467df0010ffb70d2d0871fe3cbcd532c1282a8f33925f9f88bf792d7"
+  },
+  "checks": [
+    {
+      "name": "behavior",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-auth-endpoint.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-capture-trust.test.ts",
+        "tests/unit/computer-capture.test.ts",
+        "tests/unit/computer-closure-trust.test.ts",
+        "tests/unit/computer-closure.test.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-recovery.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-managed-host.test.ts",
+        "tests/unit/computer-provision.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "--reporter=dot",
+        "--maxWorkers=2",
+        "--fileParallelism"
+      ],
+      "exit": 0,
+      "seconds": 129.974,
+      "logSha256": "cba478199ced0efcec9c307e25ba1be20f31995365bfde18c9c57568ecabd95f"
+    },
+    {
+      "name": "types",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 130.603,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "test-types",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 91.576,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "tests/unit/computer-bootstrap-native-fixture.ts",
+        "tests/unit/computer-capture-trust.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 2.378,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/superpowers/handoffs/2026-10-24-moss-computer-closure-provenance.md",
+        "docs/superpowers/plans/2026-10-24-moss-computer-bootstrap-health.md",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "tests/unit/computer-bootstrap-native-fixture.ts",
+        "tests/unit/computer-capture-trust.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 1.735,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 2.829,
+      "logSha256": "86597bb7abbcab9c3dc06050da302ec49b57d12808f6c1b0ae678c3e7bf36c12"
+    },
+    {
+      "name": "diff",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "seconds": 0.009,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "gateway-context",
+      "command": ["pnpm", "build:computer-gateway", "<private-output>/gateway-final-r1"],
+      "exit": 0,
+      "seconds": 1.223,
+      "logSha256": "acf57ce5b9c9cb7d0300fb74ee3d7d7129bc305772a040c4bf8481dad16a89f9"
+    },
+    {
+      "name": "bundle-watchdog",
+      "command": ["node", "<private-output>/build-final.mjs", "watchdog"],
+      "exit": 0,
+      "seconds": 0.116,
+      "logSha256": "76e0083f36be3cbce11b5beaf0dbbd3073822779d79b80d4e0de4c0dc8717a44"
+    },
+    {
+      "name": "bundle-host",
+      "command": ["node", "<private-output>/build-final.mjs", "host"],
+      "exit": 0,
+      "seconds": 0.119,
+      "logSha256": "76e0083f36be3cbce11b5beaf0dbbd3073822779d79b80d4e0de4c0dc8717a44"
+    },
+    {
+      "name": "bundle-provision",
+      "command": ["node", "<private-output>/build-final.mjs", "provision"],
+      "exit": 0,
+      "seconds": 0.115,
+      "logSha256": "76e0083f36be3cbce11b5beaf0dbbd3073822779d79b80d4e0de4c0dc8717a44"
+    },
+    {
+      "name": "bundle-closure",
+      "command": ["node", "<private-output>/build-final.mjs", "closure"],
+      "exit": 0,
+      "seconds": 0.115,
+      "logSha256": "76e0083f36be3cbce11b5beaf0dbbd3073822779d79b80d4e0de4c0dc8717a44"
+    }
+  ],
+  "behavior": {
+    "tests": 671,
+    "suites": 30,
+    "driverTests": 41,
+    "captureTests": 58
+  },
+  "native": [
+    {
+      "mode": "file",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "e36bd944b6253c40c579839341ccfca28bfa7cea327853edade801f203ed2302",
+      "elapsedMs": 5008.602937,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap", "held"]
+    },
+    {
+      "mode": "directory",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "4dc45628d20055bd961ddb11d1ca0f9d6b23b82227d6b97f4331ba588a627dd5",
+      "elapsedMs": 5013.826363,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap", "held"]
+    },
+    {
+      "mode": "continue",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "5f63062fd6e314233e387581fd31c964b1db14451e4598598ba6d0f3047ad802",
+      "elapsedMs": 1508.185089,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap", "durable", "continued"]
+    },
+    {
+      "mode": "boundary",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "a24d3e6ecaeb57a228c575e9e72114e583b48add8a54c584aef3cab1a3df8d47",
+      "elapsedMs": 1011.125837,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap", "boundary"]
+    },
+    {
+      "mode": "sample-file",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "c41e9779e46921402b8e0eee1b4cdb610516ccaf4911d463063e2fda241c13c8",
+      "elapsedMs": 5009.970467,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap", "held"]
+    },
+    {
+      "mode": "sample-directory",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "c7c2ae3871f08c939d633aa28b131b009d32a19964a67e36cd3b6c22fade1d42",
+      "elapsedMs": 5034.705995,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap", "held"]
+    },
+    {
+      "mode": "collection",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "cfa328cd721be339a243483e399f13ed20d8f201b0aac3d4860bbc7b4a0cd861",
+      "elapsedMs": 5017.804817,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap"]
+    },
+    {
+      "mode": "collection-signal",
+      "artifactSha256": "a55beeab0fee56b61fe6de6d5b633c67b87d013dfc4bcc39a070958ef7caabb2",
+      "receiptSha256": "8a1d94d30263b3762562825348867d83f2defb85c067391cbbe7d417293f3352",
+      "elapsedMs": 483.377351,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "nativeGid": 1000,
+      "observations": ["bootstrap"]
+    }
+  ],
+  "controls": [
+    {
+      "name": "sample-durability",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "held sample persistence alone cannot acknowledge",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.473,
+      "patchSha256": "910dc49835876cd84ba4d4b0e400df1d449c048717247eef2ecf9d9e8afcb1bf",
+      "logSha256": "0cd0f43195a95189e9cd29e13ca28a3653caa53de959feb64aa887d848d0d6e5",
+      "sourceRestored": true
+    },
+    {
+      "name": "owned-inspection",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "acknowledges exactly once only after",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.324,
+      "patchSha256": "fd512e4790c4bf7c6ecedc21d2580ff863300ee2b7941241ef3877c6ea443390",
+      "logSha256": "bbf4c6828651b4be1863322707a26df53344a9e9faaf8a832955dd5ab5dfe4e2",
+      "sourceRestored": true
+    },
+    {
+      "name": "bootstrap-equality",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "refuses bootstrap equality after held",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.323,
+      "patchSha256": "1a30f6260f62366c307de6f250f2e36e92d62174643da09ea51fbf657c31c64d",
+      "logSha256": "bd52f96e16b4566c18585105aac37db55d869c46583e7bed94c7ba7dbda4a785",
+      "sourceRestored": true
+    },
+    {
+      "name": "terminal-continuation",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "during pending inspection cannot acknowledge",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.473,
+      "patchSha256": "dba52678772668997527c997569023cad079551db092a2f071504884b01be146",
+      "logSha256": "bb26d1ab462366a86f6b1011694549199c31d77fd0dd63c87fefc0d52249204a",
+      "sourceRestored": true
+    },
+    {
+      "name": "post-lifetime-recheck",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "rechecks .* after lifetime startup",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.528,
+      "patchSha256": "f35a325703d323fe643ad725cc329f0f60a9c66269bc383bb732cbfafa854218",
+      "logSha256": "b6d2e192358ded9ca72a597e2d38658053a8b5ed07a999f3b03137b5ca2ee7c9",
+      "sourceRestored": true
+    },
+    {
+      "name": "one-shot-latch",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "acknowledges exactly once only after",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.428,
+      "patchSha256": "f52a24ef8c8f40fafba82c74ec25b0476eb38833552963ee2408ea39cb572aa0",
+      "logSha256": "140bd9bbe0120a3607a40db9948441b65273e10abe2391f6a114679f9adb6ac7",
+      "sourceRestored": true
+    },
+    {
+      "name": "immediate-composition-ack",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-capture-trust.test.ts",
+        "-t",
+        "with sample-file bootstrap fixture$",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 9.037,
+      "patchSha256": "dbd2dbb8c7d1cedf4766301c487e6581936bafd22ad27499e2be9a2dcce1fbf2",
+      "logSha256": "df46a7326578d30b702bb3d1594f501ffaf9fc40ee11f32e246a2da7cdddc32a",
+      "sourceRestored": true
+    },
+    {
+      "name": "native-ack-equality",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-capture-trust.test.ts",
+        "-t",
+        "with boundary bootstrap fixture$",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.376,
+      "patchSha256": "ead1aa8020ea6d75546b00c32b4a97017d0734928e3daa6d6964f00629754773",
+      "logSha256": "422f34f91a2476c52f02c40d33a8e138def19100e8aab5063a0784f669e7ddb9",
+      "sourceRestored": true
+    },
+    {
+      "name": "native-original-timer",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-capture-trust.test.ts",
+        "-t",
+        "with sample-file bootstrap fixture$",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 10.896,
+      "patchSha256": "418e35216c4f3a174090a9382411cd305aac2c3ffdedf63e704f85736af9b546",
+      "logSha256": "569b5bbcaf6f51a9d3c1abef687524c29d0a5207f9c050366f257405666e15c2",
+      "sourceRestored": true
+    }
+  ],
+  "reviewHistory": [
+    {
+      "report": "security-plan-r1.md",
+      "sha256": "64f88ecd47c4299d9b786426b593be96967898be5b2f4b6dbdcda3a1264691e4"
+    },
+    {
+      "report": "security-plan-r2.md",
+      "sha256": "4185cfc6e2d9dae597233903a2ef002c996dcd3b8b49217199fe9bc2a38ba1ca"
+    },
+    {
+      "report": "security-source-r1.md",
+      "sha256": "e35e6b5ba2a11ef9a2fa8fcf3dbfc8ed173bc64bf06204c0859ebc962a815bc8"
+    },
+    {
+      "report": "security-source-r2.md",
+      "sha256": "0171ddbb425f690a2eb6c4ce3cf8ae8cd2cb137283ff91335f1e48a135a3504d"
+    },
+    {
+      "report": "spec-plan-r1.md",
+      "sha256": "592b3e25257781eda1eb4c16a29eb3dd339d383ee18e28c179e18c99f74ffcb6"
+    },
+    {
+      "report": "spec-plan-r2.md",
+      "sha256": "2e266be7ea11ae554daaa5fff3385a3f9271457a5c8e3b78e746f184128473e1"
+    },
+    {
+      "report": "spec-source-r1.md",
+      "sha256": "9a55e2eefe84e4c34e9104dbdcb37e09afc4dd48695b08cf9400b09aac0c55e0"
+    },
+    {
+      "report": "spec-source-r2.md",
+      "sha256": "ab5d5b5de5d08abbe6ff774c0ebb48f9c8a354f0c282006bd40c277d6255ef3e"
+    }
+  ],
+  "retainedAttempts": [
+    {
+      "file": "native-r1.log",
+      "sha256": "1aaf553d891527021a26e812e2202232faea12cbf09d1087886d48c7dc50322c"
+    },
+    {
+      "file": "native-positive-r2.log",
+      "sha256": "f6ea01aeaccad626a8c6540612d2152e0b6b32d4623c798663c1e65884b1427c"
+    },
+    {
+      "file": "focused-r3.log",
+      "sha256": "62ad2ec93f03265c7091f4320c1aba8c76a34a225ef5929eede0937c476f84c7"
+    },
+    {
+      "file": "native-r4.log",
+      "sha256": "577ac5c49c1078859b6f5e8e9deeab754b161a3c409633b1abfa59edb38dece9"
+    },
+    {
+      "file": "controls-r1.json",
+      "sha256": "ed454b16b9e8cbc0a6f33b4686dddb906d9d15ac64ba02aee1d909fb1fa97f6b"
+    },
+    {
+      "file": "control-r1-sample-durability.log",
+      "sha256": "838a16b06f097841e4f8ea91da26daf3412a2e1f83be4a22ab8297fe12316ebc"
+    },
+    {
+      "file": "control-r1-sample-durability.patch",
+      "sha256": "910dc49835876cd84ba4d4b0e400df1d449c048717247eef2ecf9d9e8afcb1bf"
+    },
+    {
+      "file": "controls-r2-binding.json",
+      "sha256": "31414ca1444102e9098bdf90a4ad8a4d1d66737db4358c528fce5fb320c9bab1"
+    }
+  ],
+  "limitations": [
+    "OS root/group/runtime/namespace/cgroup/heartbeat/Node/resource projections; private Unix Docker/readiness fixtures and disclosed collector OS preload wrapper, not installed root trust",
+    "Actual production CJS collector/observeComputer/policy/journal/native acknowledgement execute; positive fixture deliberately exits2 without installed receiver",
+    "Native Node22 and Node24-target builtin CJS builds do not qualify actual Node24/image/128MiB fit",
+    "Existing-resource healthy sample does not satisfy independently alive watchdog and first healthy sample BEFORE-launch ordering",
+    "Repeated capture is neither continuous nor final pre-stop descendant closure; closure remains init-tuple based",
+    "No Computer image/runtime/Docker mutation/DB/browser/TCP-server operation, installation or deployment; unavailableAdmission and owner parents3577/3616/3617/3618/3619 remain unchanged/open",
+    "Signing/closure installation provenance, final descendant reconciliation, new-run/reset/uncertain-create, real API leases/dispatch/owner HTTPS/WSS/chat and independent live acceptance remain gated"
+  ]
+}
