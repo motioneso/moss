@@ -14,8 +14,8 @@ This is a no-runtime prerequisite, not an independently running watchdog or laun
 It issues no capability and cannot replace unavailableAdmission. No product behavior/app-map or
 deployment requirement changes. No accepted r21 persistence rerun; r12/r18 causes remain unknown.
 
-Current tree checked before planning (graph has no scripts/computer-host coverage; bounded source
-reads used for that gap):
+Current tree checked before planning (initial graph path-filter queries were insufficient;
+bounded source reads verified these seams):
 
 - `scripts/computer-host/operations.ts:11-21` defines the launch admission port and deliberately
   unavailable implementation. `:74-92,133-162` invalidate before disable/failure and retain failed
