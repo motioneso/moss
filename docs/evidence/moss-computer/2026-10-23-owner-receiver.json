@@ -1,8 +1,8 @@
 {
   "status": "INTERNAL_RECEIVER_VERIFIED_OWNER_INTEGRATION_NOT_DELIVERED",
-  "candidate": "bf5b21bd313734598434a6331b406e3b168b0f85",
+  "candidate": "59c50b636a8935b984b4f47829ab56ca8d5f3848",
   "acceptedPlan": "a679246322c08f94bf55e90251a8bec9085d785a",
-  "testCount": 57,
+  "testCount": 59,
   "negativeControls": [
     {
       "control": "epoch",
@@ -45,6 +45,36 @@
       "test": "bounds normalized key/pointer values and pressed-key count",
       "exit": 1,
       "logSha256": "874215be5616dbd32e6428082b57d5f0fad34f1b62fda3202382e224d43abd61"
+    },
+    {
+      "control": "fence-flags",
+      "test": "fails closed on invalid Fence flags",
+      "exit": 1,
+      "logSha256": "ed5ab891abb0c1d8fc0a13fe750338716f4ba8a02f96b4bfd4e5ead1640fc0dd"
+    },
+    {
+      "control": "fence-payload",
+      "test": "fails closed on invalid Fence payload",
+      "exit": 1,
+      "logSha256": "9533954db00bd21ff45d5935407d0841f3d4f9ab5190d63ca7b4dcc7b561dd60"
+    },
+    {
+      "control": "post-fence-auth",
+      "test": "rejects a fresh post-Fence session denial before opening admission",
+      "exit": 1,
+      "logSha256": "da71ff0ff4244d0d1f8f98dda7f9d939bef0603ec2c9ec9a103fd799f987d7ce"
+    },
+    {
+      "control": "completion",
+      "test": "keeps an old completion closed across receiver-only parser replacement",
+      "exit": 1,
+      "logSha256": "e959ce1ce4f9cfe3df4b30a6bbc5eb72dd4b5a723d32257beec3ea2ae986395a"
+    },
+    {
+      "control": "pointer-release",
+      "test": "never upgrades a watcher parser",
+      "exit": 1,
+      "logSha256": "5e7d70c7c75310ef9b9afd81b9f2c3751e25e713937440e5b8f9b68cf00a6fa5"
     }
   ],
   "runtimeStarted": false,
@@ -62,7 +92,7 @@
       "check": "test",
       "command": "pnpm exec vitest run tests/unit/computer-input-control.test.ts tests/unit/computer-rfb-input.test.ts",
       "exit": 0,
-      "logSha256": "5bab33b159974a49f607a25132a9d529938ccd00d203fc773952eda963f596c1"
+      "logSha256": "3b87fbfcc5bf61a05acdca1b6d21cc63ec4252353514ac3b0be6e6b88e4c8817"
     },
     {
       "check": "root-tsc",
@@ -94,5 +124,6 @@
       "exit": 0,
       "logSha256": "f62e1bfc908e616209f429b5b6e8679534382e421db216240c685c6916fd6c67"
     }
-  ]
+  ],
+  "sourceCandidate": "bf5b21bd313734598434a6331b406e3b168b0f85"
 }

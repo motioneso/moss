@@ -1,7 +1,8 @@
 # Computer owner integration: bounded receiving dependency
 
 Part of #3617 / #3616 / #3577. **Internal receiver verified; owner integration is not delivered.**
-Code candidate `bf5b21bd313734598434a6331b406e3b168b0f85` follows the
+Source candidate `bf5b21bd313734598434a6331b406e3b168b0f85`, with test amendment
+`59c50b636a8935b984b4f47829ab56ca8d5f3848`, follows the
 [reviewed plan](../../superpowers/plans/2026-10-23-moss-computer-owner-integration.md).
 The [receipt](2026-10-23-owner-receiver.json) records checks and private log hashes.
 
@@ -48,7 +49,7 @@ gateway contract, rather than putting that unqualified workload into ordinary Mo
 All final commands exited zero:
 
 - `pnpm exec vitest run tests/unit/computer-input-control.test.ts tests/unit/computer-rfb-input.test.ts`:
-  **57 passed**, including the original 28 controller tests.
+  **59 passed**, including the original 28 controller tests.
 - `pnpm exec tsc --noEmit` and `pnpm exec tsc -p tsconfig.tests.json --noEmit`.
 - `pnpm exec eslint` on the seven changed source/test TypeScript files with `--max-warnings=0`.
 - `pnpm exec prettier --check` on those files, both manifests and the lockfile.
@@ -67,6 +68,16 @@ the source in `finally`. The restored final suite passed. Receipt hashes retain 
 | Normalized-input queue bound          | Receiver stayed open at the 33rd queued input                               |
 | Pressed-key count bound               | 65th distinct pressed key was accepted                                      |
 
+Five additional removed-protection controls address the first exact-code review:
+
+| Protection removed                           | Observed failure                                                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Matching Fence flags                         | Wrong-flags reply completed takeover instead of rejecting                                                           |
+| Matching Fence payload                       | Unrelated-payload reply completed takeover instead of rejecting                                                     |
+| Fresh post-Fence authorization               | Revoked session completed takeover instead of rejecting                                                             |
+| Post-authorization receiver completion check | Old completion reopened readiness while a newer parser-replacement Fence was held, with unchanged policy generation |
+| Pointer button release                       | Wire sequence retained pressed pointer buttons before Fence                                                         |
+
 ## Independent review ledger
 
 Reviewer `/root/owner_plan_review` is read-only and did not author fixes.
@@ -79,7 +90,16 @@ Reviewer `/root/owner_plan_review` is read-only and did not author fixes.
   **PASS_BOUNDED_RECEIVER_IMPLEMENTATION** after explicit epoch/barrier rechecks and pre/post
   backlog bounds. Receipt SHA-256
   `60644ac8722fae9d99ede5eda8586e2c0333bfa9da9e83cb62a17fbfcb679739`.
-- Exact code/dependency/evidence review is pending. Plan acceptance is not implementation acceptance.
+- Code R1, `b09b19f582c01ad919db8082d8396c536bb17f00`: **BLOCKED_EVIDENCE_CONTROLS**.
+  Seven initial mutations did not cover Fence payload/flags, fresh post-barrier authorization or
+  receiver-specific completion fencing. The first overlapping-handoff test also advanced policy
+  generation, so it could pass independently of the receiving guard. Reviewer established no
+  unauthorized-write defect. Receipt SHA-256
+  `7d39905c26853b939c878ec612876cbc560da04017a6f1f348294b08e7394220`.
+  The test amendment isolates a receiver-only parser replacement and fresh post-Fence denial;
+  five added removed-protection controls fail at their intended assertions, followed by restored
+  green. Initial receipts remain retained privately.
+- Exact amended code/dependency/evidence re-review is pending. Plan acceptance is not implementation acceptance.
 
 ## Remaining delivery gates and closure
 
