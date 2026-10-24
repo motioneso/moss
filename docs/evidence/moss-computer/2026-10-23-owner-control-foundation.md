@@ -16,6 +16,13 @@ takeover, explicit return, controller loss, session invalidation or shutdown, in
 authorization races. A reconnect starts as a watcher. Viewer disconnect alone preserves an active
 agent grant; session expiry/revocation invalidates it. Capabilities cannot cross controller instances.
 
+The follow-on `closeViewer` operation implements the approved intentional-close handoff in this
+local controller. Fresh authorization and a generation check precede return to Moss, and only the
+controlling viewer can return control by closing. Cleanup disconnects the handle on success or
+failure. Watcher close preserves existing authority/leases; an authorization failure or stale
+close cannot create a grant. Unexpected disconnect still pauses the controlling owner. This API
+has no transport caller yet; it does not establish real UI or receiving-side input exclusion.
+
 The trusted sender is synchronous after the final fence. Future integration must make its gateway
 the sole input writer, fence/drain queued input and release pressed keys/buttons on handoff.
 Already-sent bytes cannot be retracted by this policy. Raw noVNC input passthrough bypasses it and
@@ -47,16 +54,28 @@ properties; both were corrected before the green root check. No DB/foundation or
 gate ran for this internal slice. Independent exact-candidate rulings are preserved in the
 [review ledger](2026-10-23-independent-review.md).
 
+### Intentional-close follow-on
+
+The next [committed plan](../../superpowers/plans/2026-10-23-moss-computer-owner-control.md)
+was independently accepted at `d49f58c27` before implementation. The focused suite now has 28
+passing tests. Added cases cover controller close with a fresh lease, stale owner/agent input,
+grant-session revocation after viewer removal, watcher close in all authority modes, revoked/
+expired and delayed authorization, replacement-viewer and same-viewer takeover races, concurrent
+closes and shutdown. Removing only the close generation guard caused 2 failures/26 passes: stale
+close resumed a newer takeover, and both concurrent closes reported success. Restoring the guard
+returned all 28 tests to green. Raw logs: `close-fence-red.log` and `close-unit-final.log` in the
+same private sibling. This is local policy evidence, not protocol or live desktop acceptance.
+
 ## Open gates
 
 The [single r12 prerequisite attempt](2026-10-23-persistence-r12.md) was rejected at UI/RFB connection;
 Firefox sandbox/clean flush/replacement were not reached. Resources were independently closed.
 No runtime retry follows this dispatch; r11's bounded startup/input acceptance remains historical.
 
-[Proposed screens](../../superpowers/specs/2026-10-23-moss-computer-screens.html) await Ben's design
-approval. On request, the self-contained `Moss-Computer-preview.html` was Taildropped to his Samsung
-phone; the transfer succeeded. Delivery is not approval. The open design decision remains in
-`docs/coordination/AWAITING-BEN.md` and was sent through `needs-ben`.
+Ben approved the [chat-integrated design](../../superpowers/specs/2026-10-23-moss-computer-chat-mockups.html)
+with concise copy and intentional close returning control to Moss; visible screenshot labels
+were subsequently removed. The separate Computer destination is superseded, and the design entry
+has been removed from `AWAITING-BEN.md`. Mockup approval does not qualify the real desktop path.
 
 Actual owner HTTPS/WSS and active revocation, receiving-side input exclusion, persistent installed
 storage, trusted lifecycle/idle sleep/wake, confined Internet egress and real app/browser acceptance

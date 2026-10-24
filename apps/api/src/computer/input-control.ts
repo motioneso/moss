@@ -82,6 +82,19 @@ export class ComputerInputControl {
     this.#transition({ mode: "moss", grant });
   }
 
+  /** Intentional UI close only; unexpected transport loss must call disconnect instead. */
+  async closeViewer(viewer: ComputerViewer): Promise<void> {
+    const generation = this.#generation;
+    try {
+      const grant = await this.#authorizeViewer(viewer);
+      this.#requireGeneration(generation);
+      if (this.#control.mode === "owner" && this.#control.viewer === viewer)
+        this.#transition({ mode: "moss", grant });
+    } finally {
+      this.disconnect(viewer);
+    }
+  }
+
   async dispatchOwner(viewer: ComputerViewer, send: () => undefined): Promise<void> {
     const generation = this.#generation;
     await this.#authorizeViewer(viewer);

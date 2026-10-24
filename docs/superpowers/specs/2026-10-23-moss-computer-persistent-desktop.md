@@ -391,6 +391,7 @@ Intentional close by the controlling owner uses the same authenticated, generati
 action before closing its connection. It invalidates old owner/agent input; only a fresh agent
 lease can proceed. Unexpected disconnect, logout/revocation or a failed return still fails closed;
 a disconnect alone cannot grant input authority. Closing a watcher must not steal another viewer’s
-control. The current internal policy already separates returnToMoss from disconnect; actual
+control. The internal policy's closeViewer operation now combines authenticated return and
+disconnect cleanup for intentional close. Unexpected loss still calls disconnect; actual
 transport wiring and receiving-side fencing remain unimplemented. Design approval does not waive
 persistence, lifecycle, egress, owner transport or live acceptance gates.
