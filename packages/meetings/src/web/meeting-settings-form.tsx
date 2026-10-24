@@ -110,12 +110,7 @@ export function MeetingSettingsForm() {
               ))}
             </Select>
             <p id="meeting-settings-language-hint" className="jds-hint">
-              Choose the spoken language for new meeting transcription requests, including imported
-              recordings. This also applies to the next part of a recording already processing. Your
-              transcription service must support the chosen language and language hints. If it
-              rejects the choice, choose a supported language or Automatic detection for subsequent
-              requests. Failed normal imports cannot be restarted; their evidence stays retained.
-              Existing transcript text and hold-to-talk stay unchanged.
+              Used for upcoming transcription, including imports. Existing text stays unchanged.
             </p>
           </Field>
           <Switch
@@ -126,9 +121,7 @@ export function MeetingSettingsForm() {
             onChange={(enabled) => void state.saveSummary(enabled)}
           />
           <p className="jds-hint">
-            Send the finalized transcript and notes to your default model after Stop or when an
-            imported recording finishes transcription. Turn this off to use Rewrite summary only
-            when you choose.
+            Uses your default model after recording or import. You can also use Rewrite summary.
           </p>
           {state.data.requestKey ? (
             <p role="status" className="jds-hint">
