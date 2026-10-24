@@ -99,3 +99,15 @@ all parent/profile/executable, tab-type/name, environment and extra-filter requi
 exact old classifier failing on these retained actual rows, corrected classification passing, and
 helper-only or removed-added-filter controls rejecting. Review a fresh r17 packet before runtime;
 do not call r16 a persistence or complete sandbox pass, and preserve its failure/closure receipts.
+
+### Observed negative-control connection lifetime: close copied SQLite before checking
+
+R17 passed the real viewer/input, active sandbox and clean Firefox shutdown, then the bookmark
+negative control failed to reach its intended assertion. Its `with sqlite3.connect(...)` committed
+the deletion but retained an open connection/WAL while invoking the read-only checker. Close that
+copied database connection after its transaction and before checking the missing bookmark, without
+removing the WAL-flush guard or changing the real profile. Replay the actual old/corrected scripts
+on separate fresh copies of the retained clean r17 file/database: observe the original wrong WAL
+failure and the corrected intended file-tamper/bookmark-removal rejections, including exact row
+mutation evidence. Check original durable hashes unchanged. Review a fresh r18 packet before live
+replacement; preserve r17 as incomplete proof with independent closure.
