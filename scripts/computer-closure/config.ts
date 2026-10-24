@@ -49,6 +49,7 @@ export interface ClosureDeployment {
   readonly roots: readonly RootIdentity[];
   readonly anchors: Readonly<Record<"artifact" | "node" | "dockerSocket", string>>;
 }
+export type ClosureInputs = Omit<ClosureDeployment, "config">;
 export async function closureMetadata(path: string): Promise<string> {
   const { dev, ino, uid, gid, mode, size, mtimeMs, ctimeMs } = await lstat(path);
   return JSON.stringify({ dev, ino, uid, gid, mode, size, mtimeMs, ctimeMs });
@@ -119,6 +120,17 @@ export async function loadClosureDeployment(
   if (((await lstat(dirname(configPath))).mode & 0o7777) !== 0o700) throw supervisorError();
   const config = await closureFile(configPath, 16384);
   const configuration = parseClosureConfiguration(JSON.parse(config.bytes.toString("utf8")));
+  const inputs = await loadClosureInputs(configuration, configPath, artifactPath);
+  return Object.freeze({ ...inputs, config });
+}
+
+/** Same post-stop preflight for a parsed config and its fixed, not-yet-created destination. */
+export async function loadClosureInputs(
+  configuration: ClosureConfiguration,
+  configPath: string,
+  artifactPath: string
+): Promise<ClosureInputs> {
+  assertSupervisorRuntime(true);
   const nodePath = process.execPath;
   for (const path of [
     nodePath,
@@ -245,7 +257,6 @@ export async function loadClosureDeployment(
   const capture = await loadClosureCapture(configuration, roots);
   return Object.freeze({
     configuration,
-    config,
     keyFile,
     installationFile,
     capture,

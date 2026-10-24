@@ -5,7 +5,11 @@ import { captureNamespaceAnchors } from "../computer-capture/cgroups.js";
 import { snapshotRoot } from "../computer-watchdog/linux-files.js";
 import { snapshotProcess } from "../computer-watchdog/linux.js";
 import type { WatchdogProcessIdentity } from "../computer-watchdog/policy.js";
-import { sha256, supervisorError } from "../computer-watchdog/trust.js";
+import {
+  sha256,
+  supervisorError,
+  type SupervisorConfiguration
+} from "../computer-watchdog/trust.js";
 import type { RootIdentity } from "../computer-host/config.js";
 import type { ClosureConfiguration } from "./config.js";
 import { closureFile, type ClosureFile } from "./files.js";
@@ -16,6 +20,9 @@ export interface ClosureCapture {
   readonly measuredAtMs: number;
   readonly finishedAtMs: number;
   readonly journal: Readonly<{ dev: number; ino: number; size: number; hash: string }>;
+}
+export interface PinnedClosureCapture extends ClosureCapture {
+  readonly processes: ClosureConfiguration["processes"];
 }
 const integer = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -42,6 +49,22 @@ export async function loadClosureCapture(
   configuration: ClosureConfiguration,
   deploymentRoots: readonly RootIdentity[]
 ): Promise<ClosureCapture> {
+  const capture = await loadPinnedClosureCapture(configuration, deploymentRoots);
+  for (const role of ["watchdog", "desktop", "gateway"] as const)
+    if (!sameIdentity(capture.processes[role], configuration.processes[role]))
+      throw supervisorError();
+  return capture;
+}
+
+/** Derives sampled tuples only from externally pinned bytes; not independent producer approval. */
+export async function loadPinnedClosureCapture(
+  configuration: Readonly<{
+    supervisor: SupervisorConfiguration;
+    captureSha256: string;
+    netNamespace: string;
+  }>,
+  deploymentRoots: readonly RootIdentity[]
+): Promise<PinnedClosureCapture> {
   const { supervisor } = configuration;
   if (!supervisor.capture || !supervisor.lifetime) throw supervisorError();
   const file = await closureFile(join(supervisor.capture.path, "capture.json"), 64 * 1024);
@@ -59,8 +82,7 @@ export async function loadClosureCapture(
     !integer(value.measuredAtMs) ||
     !integer(value.finishedAtMs) ||
     value.finishedAtMs < value.measuredAtMs ||
-    !sameIdentity(value.runner, supervisor.runner) ||
-    !sameIdentity(value.watchdog, configuration.processes.watchdog)
+    !sameIdentity(value.runner, supervisor.runner)
   )
     throw supervisorError();
   const binding = parseComputerLifetime({
@@ -71,6 +93,7 @@ export async function loadClosureCapture(
     throw supervisorError();
   if (!Array.isArray(value.inits) || value.inits.length !== 2) throw supervisorError();
   const roles = new Set<string>();
+  const inits = new Map<"desktop" | "gateway", WatchdogProcessIdentity>();
   for (const init of value.inits as unknown[]) {
     if (
       !gatewayFields(init, "id,identity,pid,role,startedAt") ||
@@ -80,11 +103,11 @@ export async function loadClosureCapture(
       typeof init.startedAt !== "string" ||
       !init.startedAt.trim() ||
       !Number.isFinite(Date.parse(init.startedAt)) ||
-      !sameIdentity(init.identity, configuration.processes[init.role]) ||
       init.pid !== identity(init.identity).pid
     )
       throw supervisorError();
     roles.add(init.role);
+    inits.set(init.role, identity(init.identity));
   }
   const p = value.provenance;
   const g = value.groups;
@@ -126,6 +149,11 @@ export async function loadClosureCapture(
     throw supervisorError();
   return Object.freeze({
     file,
+    processes: Object.freeze({
+      watchdog: identity(value.watchdog),
+      desktop: inits.get("desktop")!,
+      gateway: inits.get("gateway")!
+    }),
     measuredAtMs: value.measuredAtMs,
     finishedAtMs: value.finishedAtMs,
     journal: Object.freeze({ dev: j.dev, ino: j.ino, size: j.size, hash: j.hash })
