@@ -14,6 +14,8 @@ export interface ChatVoiceRequestStatus {
   readonly sourceDeviceId: string;
   readonly recordingId: string;
   readonly threadId: string;
+  readonly turnId: string;
+  readonly createdAt: string;
   readonly transcript: string;
   readonly state: (typeof CHAT_VOICE_REQUEST_STATES)[number];
   readonly capturedAt: string | null;
@@ -30,6 +32,8 @@ export const chatVoiceRequestStatusSchema = {
     "sourceDeviceId",
     "recordingId",
     "threadId",
+    "turnId",
+    "createdAt",
     "transcript",
     "state",
     "capturedAt",
@@ -42,6 +46,8 @@ export const chatVoiceRequestStatusSchema = {
     sourceDeviceId: { type: "string" },
     recordingId: { type: "string" },
     threadId: { type: "string", format: "uuid" },
+    turnId: { type: "string", format: "uuid" },
+    createdAt: { type: "string", format: "date-time" },
     transcript: { type: "string" },
     state: { type: "string", enum: CHAT_VOICE_REQUEST_STATES },
     capturedAt: { type: ["string", "null"] },
@@ -51,16 +57,51 @@ export const chatVoiceRequestStatusSchema = {
   }
 } as const;
 
+export interface ChatVoiceRequestCursor {
+  readonly createdAt: string;
+  readonly id: string;
+}
+export interface ListChatVoiceRequestsResponse {
+  readonly requests: readonly ChatVoiceRequestStatus[];
+  readonly nextCursor: ChatVoiceRequestCursor | null;
+}
+
 export const listChatVoiceRequestsResponseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["requests"],
-  properties: { requests: { type: "array", maxItems: 100, items: chatVoiceRequestStatusSchema } }
+  required: ["requests", "nextCursor"],
+  properties: {
+    requests: { type: "array", maxItems: 100, items: chatVoiceRequestStatusSchema },
+    nextCursor: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["createdAt", "id"],
+          properties: {
+            createdAt: { type: "string", format: "date-time" },
+            id: { type: "string", format: "uuid" }
+          }
+        }
+      ]
+    }
+  }
 } as const;
 
 export const listChatVoiceRequestsRouteSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    dependencies: { beforeCreatedAt: ["beforeId"], beforeId: ["beforeCreatedAt"] },
+    properties: {
+      beforeCreatedAt: { type: "string", format: "date-time" },
+      beforeId: { type: "string", format: "uuid" }
+    }
+  },
   response: {
     200: listChatVoiceRequestsResponseSchema,
+    400: errorResponseSchema,
     401: errorResponseSchema,
     403: errorResponseSchema
   }

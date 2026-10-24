@@ -1,3 +1,4 @@
+import type { ChatVoiceRequestCursor } from "@moss/shared";
 import {
   readScopedActorUserId,
   type AccessContext,
@@ -59,9 +60,9 @@ export class VoiceRequestService {
     return admission;
   }
 
-  async list(actor: AccessContext) {
+  async list(actor: AccessContext, before?: ChatVoiceRequestCursor) {
     await this.deps.assertAvailable(actor);
-    return this.deps.dataContext.withDataContext(actor, (db) => this.requests.list(db));
+    return this.deps.dataContext.withDataContext(actor, (db) => this.requests.list(db, before));
   }
 
   async status(actor: AccessContext, id: string) {

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
@@ -78,6 +78,38 @@ function setup(overrides: Partial<VoiceRequestDependencies> = {}) {
     ...overrides
   };
   return { service: new VoiceRequestService(deps), deps };
+}
+
+/** Pre-upgrade persisted row: default false policy, same canonical source fingerprint. */
+async function legacy(value = input(), state: "ready-to-send" | "queued" = "ready-to-send") {
+  return context.withDataContext(actor, async (ctx) => {
+    const main = await chat.ensureMainThread(ctx, actor.actorUserId);
+    return ctx.db
+      .insertInto("app.chat_voice_requests")
+      .values({
+        id: randomUUID(),
+        owner_user_id: actor.actorUserId,
+        thread_id: main.id,
+        source_device_id: value.sourceDeviceId,
+        recording_id: value.recordingId,
+        fingerprint: createHash("sha256").update(JSON.stringify(value)).digest("hex"),
+        transcript_revision: value.transcriptRevision,
+        transcript: value.transcript,
+        captured_at: value.capturedAt ? new Date(value.capturedAt) : null,
+        automatic: value.automatic,
+        turn_id: randomUUID(),
+        user_message_id: randomUUID(),
+        assistant_message_id: randomUUID(),
+        state,
+        confirmed_at: null,
+        dispatch_boot_id: null,
+        dispatched_at: null,
+        created_at: now,
+        updated_at: now
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  });
 }
 
 describe("durable Main voice admission", () => {
@@ -231,29 +263,67 @@ describe("durable Main voice admission", () => {
     { capturedAt: new Date(now.getTime() - 900_001).toISOString() },
     { capturedAt: new Date(now.getTime() + 1).toISOString() },
     { automatic: false }
-  ])("requires explicit Send for delayed/uncertain or baseline input: %j", async (override) => {
-    const { service, deps } = setup();
+  ])("automatically queues new opted-in input regardless of timing: %j", async (override) => {
+    const { service } = setup();
     const { request } = await service.admit(actor, input(override));
-    expect(request.state).toBe("ready-to-send");
+    expect(request).toMatchObject({ state: "queued", auto_send: true, confirmed_at: null });
+    await service.process(actor, request.id);
+    expect((await service.status(actor, request.id))?.state).toBe("replied");
+  });
+  it("preserves legacy policy, replay and one-request confirmation", async () => {
+    const { service, deps } = setup();
+    const value = input({ capturedAt: null, automatic: false });
+    const request = await legacy(value);
+    expect(request.auto_send).toBe(false);
+    const replay = await service.admit(actor, value);
+    expect(replay).toEqual({ created: false, request });
+    expect(deps.schedule).not.toHaveBeenCalled();
     await service.process(actor, request.id);
     expect(deps.submit).not.toHaveBeenCalled();
     await service.send(actor, request.id);
     await service.process(actor, request.id);
     expect((await service.status(actor, request.id))?.state).toBe("replied");
+    await expect(
+      context.withDataContext(actor, (ctx) =>
+        ctx.db
+          .updateTable("app.chat_voice_requests")
+          .set({ auto_send: true })
+          .where("id", "=", request.id)
+          .execute()
+      )
+    ).rejects.toThrow("immutable");
   });
-  it("rechecks the age while busy rather than automatically sending stale work", async () => {
+  it("keeps new busy work automatic while legacy queued work still ages into review", async () => {
     let time = now;
     const { service, deps } = setup({
       now: () => time,
       submit: vi.fn(async () => "deferred" as const)
     });
     const { request } = await service.admit(actor, input());
+    const old = await legacy(input(), "queued");
     await service.process(actor, request.id);
-    expect((await service.status(actor, request.id))?.state).toBe("queued");
     time = new Date(now.getTime() + 900_001);
     await service.process(actor, request.id);
-    expect((await service.status(actor, request.id))?.state).toBe("ready-to-send");
-    expect(deps.submit).toHaveBeenCalledTimes(1);
+    await service.process(actor, old.id);
+    expect((await service.status(actor, request.id))?.state).toBe("queued");
+    expect((await service.status(actor, old.id))?.state).toBe("ready-to-send");
+    expect(deps.submit).toHaveBeenCalledTimes(2);
+  });
+  it("pages beyond100 retained pending rows with equal timestamps without losing any", async () => {
+    const { service } = setup();
+    const retained = await Promise.all(Array.from({ length: 101 }, () => legacy()));
+    let before: { id: string; createdAt: string } | undefined;
+    const found: string[] = [];
+    for (let page = 0; page < 10; page++) {
+      const rows = await service.list(actor, before);
+      expect(rows.length).toBeLessThanOrEqual(100);
+      found.push(...rows.map((row) => row.id));
+      if (rows.length < 100) break;
+      const last = rows.at(-1)!;
+      before = { id: last.id, createdAt: last.created_at.toISOString() };
+    }
+    expect(new Set(found).size).toBe(found.length);
+    for (const row of retained) expect(found).toContain(row.id);
   });
   it("saves the fixed message pair and receipt atomically, then never executes a replay", async () => {
     const { service, deps } = setup();

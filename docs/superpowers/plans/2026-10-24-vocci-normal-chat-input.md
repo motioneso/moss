@@ -30,7 +30,7 @@ mounts and risk changing legacy consent. Persist policy at admission instead.
 
 1. Commit this plan, the controlling spec and corrected handoff before product edits;
    independent Standards/Spec review of this immutable plan, resolve findings.
-2. Add module migration `packages/chat/sql/0332_chat_automatic_voice_inputs.sql`:
+2. Add module migration `packages/chat/sql/0333_chat_automatic_voice_inputs.sql`:
    `ALTER TABLE app.chat_voice_requests ADD COLUMN auto_send boolean NOT NULL DEFAULT false;`
    grant worker SELECT of that nonsecret column; register migration in manifest.
    Add the typed column and export projection. Existing records retain false;
@@ -45,7 +45,7 @@ mounts and risk changing legacy consent. Persist policy at admission instead.
    per page and nextCursor in the response. The normal transcript offers Load older
    voice inputs; pending recovery remains accessible beyond100 rows. Test101 legacy
    pending rows across page boundaries, including equal timestamps. Completed
-   history remains independently bounded by the existing message API.
+   history continues through the existing owner-scoped message API unchanged.
    Query under owner/Main/privacy/selection fences, with an owner-specific key.
    Replace disclosure/list with canonical Thread inputs and recorded status rows.
    Deduplicate pending bubbles against live/saved turn IDs, never transcript text.
@@ -67,8 +67,9 @@ mounts and risk changing legacy consent. Persist policy at admission instead.
    owner cache change and no POST on mount/remount/links.
 6. Real dev UI/data proof: commit `scripts/proofs/vocci-normal-chat-input.py`
    as the executable acceptance harness, invoked by package script
-   `test:normal-chat-live` (build:web then the existing isolated
-   `scripts/verify-recording-import-live.ts` with VOCCI_LIVE_BROWSER_SCRIPT set).
+   `test:normal-chat-live` (build:app-map, build:web, then
+   `scripts/verify-normal-chat-live.ts`, which starts a disposable ACP runner
+   and invokes `scripts/verify-recording-import-live.ts` with the browser script).
    Run `scripts/run-gate.sh start --gate test:normal-chat-live`, then
    `scripts/run-gate.sh wait --follow`, expected exit0. Record run/fingerprint,
    assertions and raw private artifact paths in
@@ -111,3 +112,6 @@ production data or phone operations. Report the concrete blocker; preserve queue
 - Plan review r1: Standards P2 requires named executable UI harness and gate;
   Spec P2 requires access beyond100 receipts. Added exact harness/command/artifact
   and keyset pagination with101-row coverage before implementation.
+
+- Static registry check found0332 reserved by open PR#3571; use0333, verified
+  against current open migration claims. No applied migration was edited.

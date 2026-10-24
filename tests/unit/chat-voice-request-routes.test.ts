@@ -25,7 +25,8 @@ function fixture(android = false) {
     owner_user_id: actor.actorUserId,
     transcript_revision: 1,
     automatic: false,
-    turn_id: "reserved-turn",
+    auto_send: false,
+    turn_id: "44444444-4444-4444-8444-444444444444",
     confirmed_at: null,
     dispatched_at: null,
     created_at: new Date("2026-10-20T20:00:00.000Z"),
@@ -98,6 +99,8 @@ describe("voice request status and explicit Send", () => {
       expect(response.json().requests[0]).toEqual({
         id,
         threadId,
+        turnId: "44444444-4444-4444-8444-444444444444",
+        createdAt: "2026-10-20T20:00:00.000Z",
         sourceDeviceId: "ring",
         recordingId: "recording",
         transcript: "Review my next meeting",
@@ -112,6 +115,24 @@ describe("voice request status and explicit Send", () => {
     }
   });
 
+  it("validates cursor pairs and forwards a bounded keyset cursor", async () => {
+    const { server, service } = fixture();
+    try {
+      const headers = { cookie: "session=owner" };
+      expect(
+        (await server.inject({ url: `/api/chat/voice-requests?beforeId=${id}`, headers }))
+          .statusCode
+      ).toBe(400);
+      const createdAt = "2026-10-20T20:00:00.000Z";
+      const query = new URLSearchParams({ beforeId: id, beforeCreatedAt: createdAt });
+      expect(
+        (await server.inject({ url: `/api/chat/voice-requests?${query}`, headers })).statusCode
+      ).toBe(200);
+      expect(service.list).toHaveBeenCalledWith(actor, { id, createdAt });
+    } finally {
+      await server.close();
+    }
+  });
   it("sends the authenticated owner's retained request without accepting replacement text", async () => {
     const { server, service } = fixture();
     try {

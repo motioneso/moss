@@ -1161,6 +1161,7 @@ export interface ChatVoiceRequestsTable {
   transcript: string;
   captured_at: TimestampColumn | null;
   automatic: boolean;
+  auto_send: ColumnType<boolean, boolean | undefined, boolean>;
   turn_id: string;
   user_message_id: string;
   assistant_message_id: string;
