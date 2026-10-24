@@ -12,7 +12,10 @@ import {
 } from "./recording-import-repository.js";
 import { RecordingUploadRepository } from "./recording-upload-repository.js";
 import { parseRecordingUpload } from "./recording-upload-manifest.js";
-import { readRecordingWindow, validateWindowTranscript } from "./recording-transcription-window.js";
+import {
+  readRecordingWindow,
+  normalizeWindowTranscript
+} from "./recording-transcription-window.js";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { MeetingPreferencesRepository } from "./preferences.js";
@@ -92,12 +95,12 @@ export class RecordingWindowService {
           return dispatch.request;
         }
       });
-      validateWindowTranscript(result.segments, window.endMs - window.startMs);
+      const segments = normalizeWindowTranscript(result.segments, window.endMs - window.startMs);
       await this.deps.dataContext.withDataContext(actor, async (db) => {
         if (!(await this.current(db, row, attemptId))) return;
         await this.deps.assertAvailable(actor);
         if (!row.meeting_id) {
-          const text = [row.voice_transcript, ...result.segments.map((segment) => segment.text)]
+          const text = [row.voice_transcript, ...segments.map((segment) => segment.text)]
             .filter(Boolean)
             .join("\n");
           await this.uploads.voiceTranscript(db, row.id, text);
@@ -125,7 +128,7 @@ export class RecordingWindowService {
         if (!state) return;
         let version = state.receipt.version,
           cursor = state.receipt.cursor;
-        const events = result.segments.map((segment, i) => ({
+        const events = segments.map((segment, i) => ({
           cursor: ++cursor,
           segment: {
             ...segment,
