@@ -39,8 +39,9 @@ under the [implementation handoff](2026-10-23-moss-computer-implementation.md).
    and fresh browser UI/input readback. Follow the r12 packet's precise acceptance sequence.
    Record PASS only for observed predicates; use NOT_RUN for unreached checks.
 6. Independently verify exact-label/process/listener/port/key closure and healthy Moss, then review
-   exact final evidence. Commit/push scoped work and a draft PR stacked on the actual unmerged
-   dependency. Update the qualification ledger with honest limits. Leave the tree clean. Continue
+   exact final evidence. Inspect watchdog stop reason and samples: exit 0 alone can accompany an
+   abnormal safety stop and does not establish PASS. Commit/push scoped work and a draft PR stacked
+   on the actual unmerged dependency. Update the qualification ledger with honest limits. Leave the tree clean. Continue
    independent implementation under the original handoff where prerequisites permit, with a
    committed bounded plan before code. No production deployment, merge or premature issue closure.
 
