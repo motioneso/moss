@@ -109,16 +109,14 @@ import {
 import { registerChatSkillsRoutes } from "./skills/routes.js";
 import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
-import { RuntimeConfigResolver } from "@moss/settings";
-import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/settings";
 import { buildClassifierGateRunner, GATE_TOKEN_TTL_MS } from "./live/classifier-gate-runner.js";
 import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
 import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter.js";
 import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
 import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
 import { GateSpeedRecord } from "./live/classifier-gate-speed.js";
-import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
-import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
+import { THRESHOLD_VERSION } from "./live/classifier-gate.js";
+import { createGateModeReader } from "./live/classifier-gate-mode.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
 import { VisualPresentationService } from "./visual/presentation-service.js";
 import { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
@@ -397,28 +395,13 @@ export function registerChatRoutes(
       })
     : undefined;
 
-  /**
-   * #2984 R2.4 — the admin mode as the gate runs it: a stored `on` reads as `shadow` until the
-   * current classifier selection has a shadow review. Shared by both runners.
-   */
-  const readGateMode = wiring
-    ? (actorUserId: string) =>
-        dependencies.dataContext.withDataContext({ actorUserId }, async (scopedDb) =>
-          resolveEffectiveGateMode(
-            scopedDb,
-            await new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
-              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
-            ),
-            { classifierDeps: { repository: wiring.aiRepository } }
-          )
-        )
-    : undefined;
+  /** The admin gate mode, read fresh for each turn. Shared by both runners. */
+  const readGateMode = wiring ? createGateModeReader(dependencies.dataContext) : undefined;
 
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
    * `buildClassifierGateRunner` owns the session-id shape, the token lifetime and the admin mode
-   * read. `on` runs only while the current classifier selection has a shadow review. #3365: both
-   * runners share one speed record, so each routing model's time limit survives a mode change.
+   * read.
    */
   const classifierGateSpeed = new GateSpeedRecord();
   const classifierGate =
