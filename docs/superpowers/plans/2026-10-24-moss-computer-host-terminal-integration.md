@@ -105,6 +105,11 @@ At equality, refuse further mutations and fail. The CLI exits nonzero at that bo
 or cleanup remains unsettled, retaining daemon.lock, stop intent and exact identities for separately
 accepted recovery. Do not release the lock while an operation/save is unsettled. This bound is
 not the observer's five-second bound or a claim of real-time behavior during host suspension.
+An actual root outcome with exitCode2 instead makes the managed CLI exit2 immediately when that
+outcome arrives, at or before the root's absolute5s finalization bound. Do not await lifecycle
+persistence, service drain or the120s timer on this failure. Retain the lock, existing/partial stop
+marker and pending identities. The longer bound applies only to lifecycle work after a successful
+root finalization0/1; it never extends incomplete observer finalization.
 Settled cleanup success drains active host responses, closes only owned service resources and
 releases the canonical lock. Settled failure retains stop evidence/identities and the lock.
 
@@ -131,6 +136,8 @@ trust, TigerVNC, actual image/Node24/128MiB, live owner access or independent cl
 autonomous terminal, signal/EOF, owner/CAS denial, enable immutability, recreate no restart,
 held/failed lifecycle fsync versus prompt fencing, missing/failed/late ack, malformed marker,
 gateway failure, retained IDs/intents, lock contention and bounded response/descriptor/child cleanup.
+An actual native managed process with held root journal/collector finalization must exit2 at the
+root bound even while lifecycle fsync is held; its lock remains and no Docker mutation occurs.
 Observe intended assertion failures with each claimed new security protection removed, retain
 failed rounds/patch/log hashes, restore source byte-for-byte and run the final green batch.
 
@@ -162,3 +169,11 @@ Real owner cookie/exact Origin/HTTPS/WSS/trusted assets/approved concise chat/fr
 actual positive/hostile/expired/revoked/watcher/stale/pressed-input paths and independent live
 acceptance precede owner completion. App-map and affected dev/prod config accompany product
 wiring. Servers require devports claim5180–5299 and release. Keep all parent owner issues open.
+
+## Review ledger
+
+SecurityR1 on95fccada4 blocked ambiguous managed-process lifetime after root exitCode2. Accepted
+correction: exit2 promptly on that actual outcome, without waiting for lifecycle persistence/drain;
+retain lock/partial marker/identities. The120s bound cannot extend failed root finalization. Native
+held-root/held-lifecycle regression is required. Retain the failed round; exact amendment needs
+independent acceptance before code.
