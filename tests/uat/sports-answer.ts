@@ -1,4 +1,4 @@
-import type { CompletedResult } from "@moss/shared";
+import type { SportsCompletedResult as CompletedResult } from "@moss/shared";
 
 type Side = Pick<CompletedResult["home"], "name" | "score">;
 
