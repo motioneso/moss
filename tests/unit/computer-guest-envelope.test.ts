@@ -131,4 +131,28 @@ describe("Computer guest predecoder envelope", () => {
     }
     expect(bounded.destroyed).toBe(true);
   });
+
+  it("reserves raw duplication when a larger queued write starts after a smaller one", async () => {
+    const callbacks: (() => void)[] = [];
+    const source = new Duplex({
+      read() {},
+      write(_chunk, _encoding, callback) {
+        callbacks.push(callback);
+      }
+    });
+    const bounded = boundedComputerGuest(source);
+    bounded.on("error", () => {});
+    cleanups.push(() => bounded.destroy());
+    bounded.write(Buffer.alloc(9));
+    bounded.write(Buffer.alloc(73));
+    for (let index = 0; index < 7270 && !bounded.destroyed; index++) bounded.write(Buffer.alloc(9));
+    if (!bounded.destroyed) callbacks[0]!();
+    await tick();
+    expect(source.writableLength + bounded.writableLength).toBeLessThanOrEqual(65_536);
+    // Any further queued writes must reserve their future raw copies as well.
+    for (let index = 0; index < 1000 && !bounded.destroyed; index++)
+      bounded.write(Buffer.alloc(73));
+    expect(bounded.destroyed).toBe(true);
+    expect(source.writableLength + bounded.writableLength).toBeLessThanOrEqual(65_536);
+  });
 });

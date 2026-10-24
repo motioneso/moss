@@ -75,7 +75,7 @@ retire the core. The wire envelope may buffer a bounded record before this core 
 invoke arbitrary compressed decoders. No accumulation of multiple updates in vendor ByteReader.
 The upstream adapter guards every public write before Node can enqueue, including automatic
 peer-request Fence replies. Bound the aggregate raw and wrapper queues to64KiB, reserving the
-new write in both layers while its callback is pending. On bounds, malformed input, partial
+raw copy of every queued adapter chunk as well as the new write. On bounds, malformed input, partial
 timeout, guest close/error or output backlog failure, retire
 permanently and close the source; no reconnect or late continuation.
 
@@ -212,3 +212,12 @@ check once a raw callback stalled. Guard public write entry before queuing and c
 aggregate raw/wrapper bytes; add real-vendor reply-flood and removed-guard controls.
 No disputed findings. R1 receipts remain private and immutable; exact amended source/evidence
 requires re-review. No runtime/owner gate is waived.
+
+Source R2 at `97f6778ac`: Standards PASS with a nonblocking callback-forwarding note; Spec PASS;
+security BLOCKED on the strict aggregate queue invariant. Accepted follow-up: the next larger
+queued write can enter the raw stream after a smaller callback completes, adding an unreserved
+raw copy. Reserve twice the complete adapter queue plus actual raw bytes before every write.
+A9/73-byte variable-Fence-size handover regression covers the exact arithmetic counterexample.
+Normalize the optional callback for both overload branches as suggested by Standards. R1's
+unbounded automatic reply growth and orphan-grant findings were accepted as resolved in R2.
+All old receipts remain immutable; exact source and evidence re-review still precede merge.

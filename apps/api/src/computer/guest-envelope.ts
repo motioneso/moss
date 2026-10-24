@@ -19,22 +19,22 @@ class GuestDuplex extends Duplex {
     encoding?: BufferEncoding | ((error?: Error | null) => void),
     callback?: (error?: Error | null) => void
   ): boolean {
-    // Both wrappers account the in-flight write until its callback completes.
+    const done = typeof encoding === "function" ? encoding : callback;
+    // Reserve raw duplication for every queued adapter chunk, including the next _write.
     if (
       !Buffer.isBuffer(chunk) ||
       this.destroyed ||
       this.source.destroyed ||
-      this.writableLength + this.source.writableLength + 2 * chunk.length > 65_536
+      2 * (this.writableLength + chunk.length) + this.source.writableLength > 65_536
     ) {
       const error = new ComputerRfbUnavailable();
       this.destroy(error);
-      const done = typeof encoding === "function" ? encoding : callback;
       if (done) queueMicrotask(() => done(error));
       return false;
     }
     return typeof encoding === "string"
       ? super.write(chunk, encoding, callback)
-      : super.write(chunk, encoding);
+      : super.write(chunk, done);
   }
 }
 
