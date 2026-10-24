@@ -80,7 +80,6 @@
   "runtimeStarted": false,
   "dbCommandsRun": false,
   "openGates": [
-    "independent exact-candidate review",
     "fixed lifecycle/storage and separate gateway #3618",
     "owner session HTTPS/WSS and chat UI #3619",
     "live TigerVNC Fence receive ordering",
@@ -125,5 +124,12 @@
       "logSha256": "f62e1bfc908e616209f429b5b6e8679534382e421db216240c685c6916fd6c67"
     }
   ],
-  "sourceCandidate": "bf5b21bd313734598434a6331b406e3b168b0f85"
+  "sourceCandidate": "bf5b21bd313734598434a6331b406e3b168b0f85",
+  "independentReview": {
+    "reviewer": "/root/owner_plan_review",
+    "candidate": "a9cfba203e8f3a64b434daa5577d62fca04c1d3c",
+    "verdict": "PASS_BOUNDED_RECEIVER_DEPENDENCY",
+    "receiptSha256": "b6d9a47bf5037e1e79515edf8cea1f3783fe0fd6f45f789e5f8b889301a9bcd1",
+    "liveAcceptance": false
+  }
 }

@@ -99,7 +99,13 @@ Reviewer `/root/owner_plan_review` is read-only and did not author fixes.
   The test amendment isolates a receiver-only parser replacement and fresh post-Fence denial;
   five added removed-protection controls fail at their intended assertions, followed by restored
   green. Initial receipts remain retained privately.
-- Exact amended code/dependency/evidence re-review is pending. Plan acceptance is not implementation acceptance.
+- Code R2, `a9cfba203e8f3a64b434daa5577d62fca04c1d3c`:
+  **PASS_BOUNDED_RECEIVER_DEPENDENCY**, no remaining blockers within the internal #3617 scope.
+  Reviewer independently passed 59/59 tests, matched all 12 negative-control and six final-check
+  hashes, and verified source/manifests/lock unchanged from the source candidate. Both R1 findings
+  are resolved. Receipt SHA-256
+  `b6d9a47bf5037e1e79515edf8cea1f3783fe0fd6f45f789e5f8b889301a9bcd1`.
+  Acceptance excludes live TigerVNC ordering, owner delivery, merge, deployment and task closure.
 
 ## Remaining delivery gates and closure
 
@@ -110,6 +116,10 @@ owner sessions, exact Origin, active expiry/logout/revocation, trusted assets, H
 chat UI and truthful app-map/configuration changes. Real TigerVNC Fence ordering, stale-input
 and hostile-session controls, runtime readiness and independent closure remain hard gates for
 #3616. These issues remain open; no merge/deployment/parent closure is authorized.
+
+Dependency evaluation: retain this bounded receiver for the next integration step. Plan and
+independently review #3618's fixed host/gateway/auth/storage/network contract before wiring a live
+caller. The existing raw websockify passthrough bypasses this receiver and cannot satisfy that step.
 
 Accepted r21 offline persistence is reused without another standalone qualification. Original
 r12 connection and r18 clipboard causes remain unknown. No DB command, runtime, browser, listener,
