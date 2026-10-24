@@ -21,6 +21,8 @@ execFileSync('npm', ['install', '--prefix', release, '--ignore-scripts', '--no-a
 const binary = path.join(release, 'node_modules', '.bin', 'codex');
 const version = execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim();
 if (version !== 'codex-cli 0.159.3') throw new Error('Unexpected CLI fixture version');
+// Match InstallService.stageNpmRelease: published roots must be traversable by isolated UIDs.
+fs.chmodSync(release, 0o755);
 const next = path.join(provider, 'meeting-uat-current');
 fs.symlinkSync(release, next);
 fs.renameSync(next, path.join(provider, 'current'));
