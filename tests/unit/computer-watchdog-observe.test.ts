@@ -1,3 +1,4 @@
+import { lifetimeConfiguration } from "./computer-lifetime-fixture.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs/promises";
 import * as http from "node:http";
@@ -6,6 +7,7 @@ import { tmpdir } from "node:os";
 import * as trust from "../../scripts/computer-watchdog/trust.js";
 import * as linux from "../../scripts/computer-watchdog/linux.js";
 import {
+  assertFencedComputerState,
   checkComputerLogs,
   checkMossReadiness,
   observeComputer
@@ -178,6 +180,48 @@ describe("complete observation with explicit trust/Linux fixtures, native files 
     const boundary = f.host.calls.length;
     await checkComputerLogs(f.deployment);
     expect(f.host.calls.slice(boundary).every((call) => call.method === "GET")).toBe(true);
+  });
+  it("fenced mode binds enabled request and creation generations and refuses every stop marker", async () => {
+    const f = await fixture();
+    const state = f.host.store.state;
+    const desktop = state.resources.find((r) => r.role === "desktop")!;
+    const gateway = state.resources.find((r) => r.role === "gateway")!;
+    const lifetime = {
+      ...lifetimeConfiguration(),
+      binding: {
+        runId,
+        instanceId: f.host.config.instanceId,
+        requestGeneration: state.generation,
+        desktopId: desktop.id!,
+        desktopGeneration: desktop.generation,
+        gatewayId: gateway.id!,
+        gatewayGeneration: gateway.generation
+      }
+    };
+    const deployment = {
+      ...f.deployment,
+      configuration: { ...f.deployment.configuration, lifetime }
+    };
+    await assertFencedComputerState(deployment, state);
+    await checkComputerLogs(deployment);
+    for (const changed of [
+      { ...state, enabled: false },
+      { ...state, generation: state.generation + 1 },
+      { ...state, resources: state.resources.map((r) => ({ ...r, generation: r.generation + 1 })) },
+      { ...state, resources: state.resources.map((r) => ({ ...r, id: "a".repeat(64) })) }
+    ]) {
+      await expect(assertFencedComputerState(deployment, changed)).rejects.toThrow();
+    }
+    const container = [...f.host.containers.values()][0]!;
+    container.State.Running = false;
+    await expect(checkComputerLogs(deployment)).rejects.toThrow();
+    container.State.Running = true;
+    const marker = join(f.host.config.stateDir, "stop.json");
+    await fs.writeFile(marker, "malformed", { mode: 0o600 });
+    await expect(assertFencedComputerState(deployment, state)).rejects.toThrow();
+    await fs.unlink(marker);
+    await fs.symlink("missing", marker);
+    await expect(assertFencedComputerState(deployment, state)).rejects.toThrow();
   });
   it("accounts real current and one rotation, rejects equality and unexpected rotations", async () => {
     const f = await fixture();

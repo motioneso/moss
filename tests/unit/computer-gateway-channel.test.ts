@@ -1,3 +1,4 @@
+import { lifetimeConfiguration } from "./computer-lifetime-fixture.js";
 import { once } from "node:events";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createServer, createConnection, type Socket } from "node:net";
@@ -91,7 +92,8 @@ describe("private Computer gateway framing and configuration", () => {
       ownerUserId: OWNER,
       guestSocketPath: join(f.root, "guest"),
       authSocketPath: join(f.root, "auth"),
-      socketPath: join(f.root, "gateway")
+      socketPath: join(f.root, "gateway"),
+      lifetime: lifetimeConfiguration()
     };
     const path = join(f.root, "config.json");
     await writeFile(path, JSON.stringify(config), { mode: 0o600 });

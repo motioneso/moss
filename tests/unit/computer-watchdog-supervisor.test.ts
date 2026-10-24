@@ -1,3 +1,5 @@
+import { ComputerRootLifetime } from "../../scripts/computer-watchdog/lifetime.js";
+import { lifetimeConfiguration } from "./computer-lifetime-fixture.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter, once } from "node:events";
 import { spawn } from "node:child_process";
@@ -56,6 +58,7 @@ function harness(
     holdClose?: boolean;
     failStop?: boolean;
     holdSample?: boolean;
+    lifetime?: boolean;
   } = {}
 ) {
   vi.useFakeTimers();
@@ -95,6 +98,14 @@ function harness(
   const verifyRunner = vi.fn(async () => {});
   const result = runComputerSupervisor({
     configuration: { runId, startedAtMs: 0, runner, watchdog },
+    ...(options.lifetime
+      ? {
+          lifetime: {
+            configuration: lifetimeConfiguration(),
+            socketPath: "/unavailable-lifetime.sock"
+          }
+        }
+      : {}),
     heartbeats,
     signals,
     journal,
@@ -201,6 +212,15 @@ describe("independent Computer supervisor driver, disclosed journal/process port
       expect(f.journal.stop).toHaveBeenCalledTimes(1);
     }
   );
+  it("does not report success when finalization settles at the absolute deadline before its timer", async () => {
+    const f = harness({ holdStop: true });
+    await f.advance(0);
+    f.signals.emit("SIGTERM");
+    f.jump(5000);
+    f.stop.resolve();
+    await f.advance(0);
+    expect(await f.result).toMatchObject({ exitCode: 2, durableStop: true, collectorExited: true });
+  });
   it("reports failed fsync despite acknowledged child exit", async () => {
     const f = harness({ failStop: true });
     await f.advance(0);
@@ -234,6 +254,33 @@ describe("independent Computer supervisor driver, disclosed journal/process port
     f.sample.resolve(healthy(0));
     await f.advance(0);
     expect(await f.result).toMatchObject({ reason: "measurement-failed", exitCode: 1 });
+  });
+  it("never publishes a lifetime until its first healthy sample is durable", async () => {
+    // Driver ordering observation only; separate-process suites exercise the real IPC publisher.
+    const start = vi.spyOn(ComputerRootLifetime.prototype, "start").mockImplementation(() => {});
+    const f = harness({ holdSample: true, lifetime: true });
+    await f.advance(0);
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(start).not.toHaveBeenCalled();
+    f.sampleWrite.resolve();
+    await f.advance(0);
+    expect(start).toHaveBeenCalledTimes(1);
+    f.signals.emit("SIGTERM");
+    await f.advance(0);
+    expect(await f.result).toMatchObject({ exitCode: 2, receiverFenced: false });
+  });
+  it("sample persistence completing at age equality cannot publish a lifetime", async () => {
+    const start = vi.spyOn(ComputerRootLifetime.prototype, "start");
+    const f = harness({ holdSample: true, lifetime: true });
+    await f.advance(0);
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    f.jump(5000);
+    f.sampleWrite.resolve();
+    await f.advance(0);
+    expect(start).not.toHaveBeenCalled();
+    expect(await f.result).toMatchObject({ exitCode: 2, receiverFenced: false });
   });
   it("bounds sample persistence without suspending ticks", async () => {
     const f = harness({ holdSample: true });

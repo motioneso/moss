@@ -1,5 +1,9 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
+import {
+  lifetimePath,
+  parseComputerLifetime
+} from "../../apps/api/src/computer/lifetime-protocol.js";
 import { isAbsolute, normalize } from "node:path";
 import { isUuid } from "../../apps/api/src/computer/host-contract.js";
 import { gatewayFields } from "../../apps/api/src/computer/gateway-channel.js";
@@ -29,7 +33,7 @@ export async function readComputerGatewayConfig(path: string): Promise<ComputerG
 }
 export function parseComputerGatewayConfig(value: unknown): ComputerGatewayConfig {
   if (
-    !gatewayFields(value, "authSocketPath,guestSocketPath,ownerUserId,socketPath") ||
+    !gatewayFields(value, "authSocketPath,guestSocketPath,lifetime,ownerUserId,socketPath") ||
     !isUuid(value.ownerUserId)
   )
     throw new Error("Computer gateway unavailable");
@@ -48,9 +52,17 @@ export function parseComputerGatewayConfig(value: unknown): ComputerGatewayConfi
     ownerUserId: value.ownerUserId,
     authSocketPath: path("authSocketPath"),
     guestSocketPath: path("guestSocketPath"),
-    socketPath: path("socketPath")
+    socketPath: path("socketPath"),
+    lifetime: parseComputerLifetime(value.lifetime)
   };
-  if (new Set([result.authSocketPath, result.guestSocketPath, result.socketPath]).size !== 3)
+  if (
+    new Set([
+      result.authSocketPath,
+      result.guestSocketPath,
+      result.socketPath,
+      lifetimePath(result.socketPath)
+    ]).size !== 4
+  )
     throw new Error("Computer gateway unavailable");
   return Object.freeze(result);
 }

@@ -14,7 +14,7 @@ const startupDeadline = setTimeout(() => process.exit(2), 5000);
 async function main(): Promise<number> {
   const [mode, configPath, ...rest] = process.argv.slice(2);
   if (
-    !["observe", "collect"].includes(mode ?? "") ||
+    !["observe", "fence", "collect"].includes(mode ?? "") ||
     !configPath ||
     rest.length ||
     !process.argv[1]
@@ -25,6 +25,11 @@ async function main(): Promise<number> {
     process.argv[1],
     mode === "collect"
   );
+  if (
+    (mode === "fence" && !deployment.configuration.lifetime) ||
+    (mode === "observe" && deployment.configuration.lifetime)
+  )
+    throw supervisorError();
   if (mode === "collect") {
     let bytes = 0;
     const chunks: Buffer[] = [];

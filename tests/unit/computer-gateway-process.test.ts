@@ -1,3 +1,4 @@
+import { lifetimeConfiguration } from "./computer-lifetime-fixture.js";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { once } from "node:events";
@@ -226,6 +227,7 @@ describe("separate Computer gateway executable and private IPC", () => {
       configPath,
       JSON.stringify({
         ownerUserId: OWNER,
+        lifetime: lifetimeConfiguration(),
         guestSocketPath: guestPath,
         authSocketPath: auth.socketPath,
         socketPath: endpoint

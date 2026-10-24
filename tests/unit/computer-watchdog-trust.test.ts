@@ -1,3 +1,4 @@
+import { lifetimeConfiguration } from "./computer-lifetime-fixture.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs/promises";
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
@@ -180,6 +181,37 @@ describe("root supervisor trust checks, no installed deployment claim", () => {
     await fs.writeFile(configPath, bytes);
     await fs.writeFile(artifact, "changed bytes");
     await expect(revalidateDeployment(deployment)).rejects.toThrow();
+  });
+  it("accepts only exact run/instance-bound optional lifetime configuration", () => {
+    const value = config();
+    const lifetime = {
+      ...lifetimeConfiguration(),
+      binding: {
+        ...lifetimeConfiguration().binding,
+        runId: value.runId,
+        instanceId: value.host.instanceId
+      }
+    };
+    expect(parseSupervisorConfiguration({ ...value, lifetime }).lifetime).toEqual(lifetime);
+    expect(() => parseSupervisorConfiguration({ ...value, lifetime: undefined })).toThrow();
+    expect(() =>
+      parseSupervisorConfiguration({
+        ...value,
+        lifetime: {
+          ...lifetime,
+          binding: { ...lifetime.binding, instanceId: value.runId }
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      parseSupervisorConfiguration({
+        ...value,
+        lifetime: {
+          ...lifetime,
+          binding: { ...lifetime.binding, runId: value.host.instanceId }
+        }
+      })
+    ).toThrow();
   });
   it("parses exact independently provisioned anchors and snapshots configuration", () => {
     const value = config();

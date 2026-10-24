@@ -25,6 +25,7 @@ export async function connectComputerReceivingGateway(deps: {
   ownerUserId: string;
   authSocketPath: string;
   upstream: Duplex;
+  assertLifetime?: () => void;
 }): Promise<ComputerReceivingGateway> {
   const stream = boundedComputerGuest(deps.upstream);
   const upstream = new RfbClient({
@@ -84,11 +85,16 @@ export class ComputerReceivingGateway {
   #closing?: Promise<void>;
 
   constructor(
-    private readonly deps: { ownerUserId: string; authSocketPath: string },
+    private readonly deps: {
+      ownerUserId: string;
+      authSocketPath: string;
+      assertLifetime?: () => void;
+    },
     private readonly upstream: RfbClient
   ) {
     this.#frames = new ComputerReceivingFrames(upstream.width, upstream.height);
     this.#receiver = new ComputerRfbInput({
+      assertLifetime: deps.assertLifetime,
       ownerUserId: deps.ownerUserId,
       upstream,
       now: () => new Date(),
@@ -115,6 +121,7 @@ export class ComputerReceivingGateway {
     upstream.on("update", (update) => {
       if (this.#closed) return;
       try {
+        if (this.#entries.size) this.deps.assertLifetime?.();
         if (!this.#outstanding) throw new ComputerRfbUnavailable();
         this.#outstanding = false;
         clearTimeout(this.#frameDeadline);
@@ -124,7 +131,14 @@ export class ComputerReceivingGateway {
         void this.close();
       }
     });
-    this.#renderTimer = setInterval(() => this.#frames.render(), 200);
+    this.#renderTimer = setInterval(() => {
+      try {
+        if (this.#entries.size) this.deps.assertLifetime?.();
+        this.#frames.render();
+      } catch {
+        void this.close();
+      }
+    }, 200);
     this.#renderTimer.unref();
     this.#requestFrame();
   }
@@ -134,6 +148,7 @@ export class ComputerReceivingGateway {
   }
 
   async openViewer(viewerId: string): Promise<ComputerViewer> {
+    this.deps.assertLifetime?.();
     if (
       this.#closed ||
       this.#entries.size >= 4 ||
@@ -248,6 +263,12 @@ export class ComputerReceivingGateway {
 
   #requestFrame(): void {
     if (this.#closed) return;
+    try {
+      if (this.#entries.size) this.deps.assertLifetime?.();
+    } catch {
+      void this.close();
+      return;
+    }
     this.#outstanding = true;
     this.#frameDeadline = setTimeout(() => {
       void this.close();
@@ -286,6 +307,7 @@ export class ComputerReceivingGateway {
   }
 
   #current(entry: ViewerEntry): void {
+    this.deps.assertLifetime?.();
     if (this.#closed || entry.retired || !entry.visual || !this.#entries.has(entry))
       throw new ComputerInputDenied();
   }
