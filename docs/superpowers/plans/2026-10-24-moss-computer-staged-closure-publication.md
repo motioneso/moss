@@ -11,7 +11,10 @@ hashes and live supplemental/actual-merge acceptance remain separate evidence.
 
 ## Source and scope
 
-Graph coverage explicitly excludes scripts/, so bounded current source reads establish:
+Initial graph queries supplied insufficient script symbols; bounded current source reads establish
+the seams below. Fresh graph search now returns loadClosureDeployment; use graph-first and fall back
+only for actual coverage gaps. This factual correction preserves the contract independently accepted
+at447af6424 (plan SHA256611c97db65df4ceb445e5bcdc4dd36771aa48b6acb9f9db0ec62a2841a17a3d9).
 
 - `computer-capture/run.ts:19–128` publishes actual capture under the SAME managed
   store/sole lifecycle lock, but returns no retained product to its caller.

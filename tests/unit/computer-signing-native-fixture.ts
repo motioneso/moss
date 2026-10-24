@@ -4,7 +4,11 @@ import { createRequire } from "node:module";
 import * as fs from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-export async function prepareSigningNative(configPath: string, kind: string) {
+export async function prepareSigningNative(
+  configPath: string,
+  kind: string,
+  publicationName: "closure-key.pem" | "closure.json" = "closure-key.pem"
+) {
   const request = JSON.parse(await fs.readFile(configPath, "utf8"));
   const nativeUid = process.getuid!();
   const io = createRequire(configPath)("node:fs/promises") as typeof fs;
@@ -31,13 +35,13 @@ export async function prepareSigningNative(configPath: string, kind: string) {
       project(await stat(...args))) as typeof file.stat;
     const chown = file.chown.bind(file);
     file.chown = (uid, gid) => chown(uid === 0 ? nativeUid : uid, gid);
-    const writingKey = path.endsWith("/closure-key.pem") && Boolean(Number(args[1]) & 0o100);
+    const writingKey = path.endsWith(`/${publicationName}`) && Boolean(Number(args[1]) & 0o100);
     if (writingKey) keyWritten = true;
     if (
-      (kind === "file" && writingKey) ||
-      (kind === "directory" && keyWritten && path === request.output.path)
+      ((kind === "file" || kind === "file-close") && writingKey) ||
+      ((kind === "directory" || kind === "directory-close") && path === request.output.path)
     ) {
-      file.sync = () => {
+      const hold = () => {
         process.send!({
           type: "held",
           timerStartedAtNs,
@@ -45,6 +49,13 @@ export async function prepareSigningNative(configPath: string, kind: string) {
         });
         return new Promise(() => {});
       };
+      if (kind.endsWith("-close")) {
+        const close = file.close.bind(file);
+        file.close = () => (keyWritten ? hold() : close());
+      } else {
+        const sync = file.sync.bind(file);
+        file.sync = () => (keyWritten ? hold() : sync());
+      }
     }
     return file;
   };
@@ -69,19 +80,19 @@ export async function prepareSigningNative(configPath: string, kind: string) {
     "SSL_CERT_DIR"
   ])
     delete process.env[key];
-  const held = kind === "file" || kind === "directory";
+  const held = ["file", "directory", "file-close", "directory-close"].includes(kind);
   const timer = global.setTimeout;
   global.setTimeout = ((fn: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => {
     if (ms === 60000) timerStartedAtNs = process.hrtime.bigint().toString();
     return timer(fn, held && ms === 60000 ? 2000 : ms, ...args);
   }) as typeof setTimeout;
-  if (kind === "equality" || kind === "signal") {
+  if (kind === "equality" || kind === "signal" || kind === "rollback") {
     const hrtime = process.hrtime.bigint;
     let startedAt: bigint | undefined;
     let expired = false;
     process.hrtime.bigint = () => {
       startedAt ??= hrtime();
-      return expired ? startedAt + 60_000_000_000n : hrtime();
+      return expired ? startedAt + (kind === "rollback" ? 0n : 60_000_000_000n) : hrtime();
     };
     const then = Promise.prototype.then;
     Promise.prototype.then = function (this: Promise<unknown>, fulfilled, rejected) {
@@ -89,7 +100,7 @@ export async function prepareSigningNative(configPath: string, kind: string) {
         const callback = fulfilled;
         fulfilled = (value) => {
           process.send!({ type: "final-callback", value, kind });
-          if (kind === "equality") expired = true;
+          if (kind === "equality" || kind === "rollback") expired = true;
           else process.emit("SIGTERM");
           return callback(value);
         };
