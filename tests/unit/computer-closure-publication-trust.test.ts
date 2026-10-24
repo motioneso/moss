@@ -125,12 +125,17 @@ describe("isolated staged publisher trust and persistence controls", () => {
       expect(await fs.readdir(t.request.output.path)).toEqual([]);
     }
   );
-  it.each(["publisher", "node", "root", "journal-inode", "journal-prefix"])(
+  it.each(["publisher", "publisher-inode", "node", "root", "journal-inode", "journal-prefix"])(
     "revalidates original %s after load",
     async (kind) => {
       const t = await fixture();
       const loaded = await t.load();
       if (kind === "publisher") await fs.appendFile(t.publisher, "changed");
+      if (kind === "publisher-inode") {
+        const bytes = await fs.readFile(t.publisher);
+        await fs.rename(t.publisher, t.publisher + ".retained");
+        await fs.writeFile(t.publisher, bytes, { mode: 0o600 });
+      }
       if (kind === "node") {
         const trust = await import("../../scripts/computer-watchdog/trust.js");
         const read = vi.mocked(trust.boundedFile).getMockImplementation()!;
@@ -157,8 +162,8 @@ describe("isolated staged publisher trust and persistence controls", () => {
   it("retains exclusive partial output when file sync fails and refuses retry", async () => {
     const t = await fixture();
     const loaded = await t.load();
-    const open = vi.mocked(fs.open).getMockImplementation()!;
-    vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+    const open = vi.mocked(t.f.io.open).getMockImplementation()!;
+    vi.spyOn(t.f.io, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
       const file = await open(...args);
       if (String(args[0]).endsWith("/closure.json") && Number(args[1]) & 0o100)
         vi.spyOn(file, "sync").mockRejectedValue(new Error("disclosed sync fault"));
@@ -176,6 +181,14 @@ describe("isolated staged publisher trust and persistence controls", () => {
     expect(sha256(before)).toBe(sha256(Buffer.from(JSON.stringify(loaded.closure.configuration))));
     expect(await publishClosureConfiguration(loaded, clock())).toBe(2);
     expect(await fs.readFile(path)).toEqual(before);
+  });
+  it("refuses unrelated existing output without creating or erasing files", async () => {
+    const t = await fixture();
+    const path = join(t.request.output.path, "retained-failure");
+    await fs.writeFile(path, "retained", { mode: 0o600 });
+    expect(await t.publish()).toBe(2);
+    expect(await fs.readdir(t.request.output.path)).toEqual(["retained-failure"]);
+    expect(await fs.readFile(path, "utf8")).toBe("retained");
   });
   it("preserves last observed time across the actual final continuation's check", () => {
     let at = 10;
