@@ -293,7 +293,7 @@ Sports app-map declarations in this PR still describe the same public read/card.
 
 A four-prompt real installed diagnostic captures saved tool activity before/after
 this single routing change, using the same module/follow/public-read setup and
-first-card reload. It is a hypothesis test, not acceptance. Do not add lexical
+first-reply reload. It is a hypothesis test, not acceptance. Do not add lexical
 prompt-substring tests: the existing composed-persona tests verify both surfaces;
 installed first-attempt reads/cards are the behavioral signal. Run the existing
 persona/host/prose suites and root static checks. If the bounded diagnostic supports
@@ -302,3 +302,16 @@ candidate, then complete exact-head independent review, isolated full gate and C
 Preserve any failed diagnostics/runs. If reliability still fails without a concrete
 remaining defect, record the measured recommendation and actual decision rather
 than start further prompt variants. Renderer and 19/20 gate remain unchanged.
+
+The bounded before/after diagnostic completed: baseline four turns gave one Sports
+read without presentation, followed by three unsuccessful web-read/search routes;
+zero cards. With only the source-routing change, all four turns called the Sports
+read plus `chat.present` and saved cards, including after reload. The diagnostic
+reload was after the first reply even in the cardless baseline; it is not the
+acceptance harness's conditional first-card reload. No retry or passing acceptance
+claim follows. Adopt the bounded routing repair and evaluate the original Sports
+and generic suites once. Routing guidance is 136 words; presentation guidance and
+all source/presentation guards remain unchanged. Persona/prose tests passed 37/37
+and host/reference/proposal/lifecycle tests passed 87/87. The UAT literal-parsing
+check also confirmed the lifecycle/novel-composition fixtures provide their actual
+structured fields; no harness-format change is justified or made.
