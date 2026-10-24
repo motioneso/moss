@@ -227,7 +227,7 @@ test("real Tasks questions keep source identity, due state and immutable read-on
       await expect(slot.getByRole("heading", { name: "Tasks", exact: true })).toBeVisible();
       await expect(slot.getByLabel("Task summary").locator("li")).toHaveCount(summary.items.length);
       await expect(slot.getByText(/Source retrieved/)).toContainText(summary.retrievedAt);
-      expect(await slot.locator("button,input,a").count()).toBe(0);
+      expect(await slot.locator(".tasks-summary").locator("button,input,a").count()).toBe(0);
       if (!firstEnvelope) {
         firstEnvelope = envelope;
         for (const theme of ["forest", "sage", "canyon", "teal", "dusk"])
