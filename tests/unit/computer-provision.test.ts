@@ -18,8 +18,8 @@ vi.mock("node:fs", async (original) => ({ ...(await original<typeof syncFs>()) }
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
-  for (const close of cleanups.splice(0).reverse()) await close();
   vi.restoreAllMocks();
+  for (const close of cleanups.splice(0).reverse()) await close();
 });
 async function fixture() {
   const f = await provisionFixture();
@@ -146,7 +146,11 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
       vi.spyOn(f.io, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
         const file = await open(...args);
         const path = String(args[0]);
-        if (path.endsWith("/supervisor.json") && mode !== "directory") {
+        if (
+          path.endsWith("/supervisor.json") &&
+          mode !== "directory" &&
+          (Number(args[1]) & 0o100) !== 0
+        ) {
           if (mode === "file")
             vi.spyOn(file, "sync").mockRejectedValue(new Error("fixture fsync failure"));
           else {
