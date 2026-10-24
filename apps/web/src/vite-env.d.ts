@@ -10,6 +10,9 @@ declare module "virtual:moss-module-settings" {
 }
 
 declare module "virtual:moss-module-web" {
+  import type { ModuleVisualTemplate } from "@moss/module-sdk/visual-template";
+  import type { ComponentType } from "react";
+  import type { VisualSnapshotV1 } from "@moss/shared";
   import type {
     ModulePersistentControlsContribution,
     ModuleWebContribution
@@ -36,6 +39,10 @@ declare module "virtual:moss-module-web" {
     readonly load: () => Promise<{ readonly default: ModulePersistentControlsContribution }>;
   }
 
+  export const MODULE_VISUAL_CONTRACTS: readonly ModuleVisualTemplate[];
+  export const MODULE_VISUAL_RENDERERS: readonly (() => Promise<{
+    default: Readonly<Record<string, ComponentType<{ snapshot: VisualSnapshotV1 }>>>;
+  }>)[];
   export const MODULE_PERSISTENT_CONTROLS: readonly ModulePersistentControlsEntry[];
   export const MODULE_WEB_ROUTES: readonly GeneratedWebRoute[];
   export const MODULE_WEB_CONTRIBUTIONS: readonly ModuleWebContributionEntry[];

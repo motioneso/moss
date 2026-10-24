@@ -1,0 +1,10 @@
+.sports-result {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.sports-result__teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}

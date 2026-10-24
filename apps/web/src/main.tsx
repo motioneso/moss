@@ -1,3 +1,5 @@
+import { installBuiltInVisualTemplates } from "@moss/shared";
+import { MODULE_VISUAL_CONTRACTS } from "virtual:moss-module-web";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -12,6 +14,7 @@ import "./styles/index.css";
 // createRoot so a boot-time crash (before React mounts) is still reported to
 // /api/errors. The reporter is fire-and-forget and never throws.
 registerGlobalErrorHandlers();
+installBuiltInVisualTemplates(MODULE_VISUAL_CONTRACTS);
 
 const queryClient = new QueryClient({
   defaultOptions: {

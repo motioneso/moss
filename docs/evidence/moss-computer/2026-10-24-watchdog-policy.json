@@ -1,0 +1,501 @@
+{
+  "scope": "internal supplied-metadata watchdog decision policy; no running supervision or admission",
+  "base": "5b10880d016b61f280140c3359c8aad1ad54c0db",
+  "accepted_source": "708d6a585ed4e920c26f16d19bc4e6cf33c64763",
+  "source_restored": true,
+  "source_test_plan_sha256": {
+    "scripts/computer-watchdog/policy.ts": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+    "tests/unit/computer-watchdog-policy.test.ts": "b4125dc29fa85612c5a84878c3cd6a9d3b2b532cb7c2db0cd12822ed263d19ab",
+    "docs/superpowers/plans/2026-10-24-moss-computer-watchdog-policy.md": "089ddd7f4c7fe8961786326bfec21ecb3da9ef3f9d8275426ec22d0292073671"
+  },
+  "checks": [
+    {
+      "name": "behavior-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-host-client.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 8.53,
+      "log_sha256": "c7a54f841b6246e793fe3194214076a82d6f407d2ac89ec8c314c53a1ea7e518"
+    },
+    {
+      "name": "root-tsc-final",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 89.94,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc-final",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 63.1,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-watchdog/policy.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 3.3,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "scripts/computer-watchdog/policy.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "docs/superpowers/plans/2026-10-24-moss-computer-watchdog-policy.md"
+      ],
+      "exit": 0,
+      "seconds": 1.38,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-final",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 3.9,
+      "log_sha256": "57e11120a7698f8bb14bded927a929e499db21c8393c09f72967ffd159b8fa87"
+    },
+    {
+      "name": "whitespace-final",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "seconds": 0.03,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "initial_attempts": [
+    {
+      "name": "install",
+      "exit": 0,
+      "log_sha256": "f038a7fd53f28af6a9af4e7526a782c57ea497cba962f4cb540852526a5ecc78"
+    },
+    {
+      "name": "behavior-r1",
+      "exit": 0,
+      "log_sha256": "eca29632a8764df5d777587bf6d8d6df1e84e6f5410ab300947dd224309a9014"
+    },
+    {
+      "name": "root-tsc-r1",
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc-r1",
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-r1",
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-r1",
+      "exit": 0,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-r1",
+      "exit": 0,
+      "log_sha256": "57e11120a7698f8bb14bded927a929e499db21c8393c09f72967ffd159b8fa87"
+    },
+    {
+      "name": "behavior-restored-r1",
+      "exit": 0,
+      "log_sha256": "20246d35fd21fc89d88db0227e6ecd9ecc20389f48c10efb75129ed1de1fac7e"
+    },
+    {
+      "name": "policy-r2",
+      "exit": 0,
+      "log_sha256": "ddef6f705a040757a85637940afda990fb62e0216709794540770dc4cb785a0e"
+    }
+  ],
+  "installation_command": [
+    "pnpm",
+    "install",
+    "--filter",
+    ".",
+    "--filter",
+    "@moss/api...",
+    "--filter",
+    "@moss/worker...",
+    "--filter",
+    "@moss/web",
+    "--filter",
+    "@moss/visual-chat-runtime-spike",
+    "--frozen-lockfile",
+    "--offline",
+    "--ignore-scripts"
+  ],
+  "initial_check_boundary": "Initial TypeScript completion collected after first controls; final stable restored R2 checks are authoritative.",
+  "controls": [
+    {
+      "name": "resource-floor",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "stops below the"
+      ],
+      "exit": 1,
+      "seconds": 1.12,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "mutant_sha256": "c994cd330855cca7dfc92ae2a3249b54353254a9309db44ef8d1c56f68d82619",
+      "log_sha256": "d7257ec0d1e99a88fc5db163f45464db647e4298a26b35485bd0c9989fdcf5ac",
+      "restored_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "round": "r1",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "terminal-retention",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "retains the first terminal reason across all later activity"
+      ],
+      "exit": 1,
+      "seconds": 1.02,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "mutant_sha256": "ff345619134bbac24feb41f82e38db37846c4a7f60aac17f2e0d09e143e2cf85",
+      "log_sha256": "86aad6114ebc3336bddcf994677fe975dc4c1544b61f61598dc36d9c9538db04",
+      "restored_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "round": "r1",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "process-identity",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "stops on a changed, missing or nonrunning process/run identity"
+      ],
+      "exit": 1,
+      "seconds": 1.12,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "mutant_sha256": "bf2ad62a1059742e788b9b2f94785fab7acdd403ec50c996e0af9e594b426bc8",
+      "log_sha256": "fd4acb27e66fccb41c840b6a6377540766a6154b92c9659234e2a1a0fa38b8f3",
+      "restored_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "round": "r1",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "heartbeat-independence",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "samples do not refresh the independent heartbeat"
+      ],
+      "exit": 1,
+      "seconds": 1.07,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "mutant_sha256": "59144be5aa307e4aa5efa305a5253d24d1130e67f92c422db025f5d089ad4728",
+      "log_sha256": "922ae1c094da491dc5cb7c97bf295d9db57d3f535f6458eb5f7451913f400f90",
+      "restored_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "round": "r1",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "pre-update-expiration",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "checks expiration before accepting late samples or heartbeats"
+      ],
+      "exit": 1,
+      "seconds": 1.02,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "mutant_sha256": "50933d3701de6ea39b039c1ed47d44c60251b0fbd7043eadf531596ad2ea71b7",
+      "log_sha256": "bdf3ad48854779ce274042b737ad815489a61e16fd43cf5cba68131c3dd22189",
+      "restored_sha256": "acdb78eea04a40ffc973319716c03ac48bade4ff4e0f3943eaf63accfa6f50de",
+      "round": "r1",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "resource-floor",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "stops below the"
+      ],
+      "exit": 1,
+      "seconds": 1.22,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "mutant_sha256": "c6a02878870085e36a3d59ad9fe891b7f0e8a14ea18a60cb8e7ad908f70d3da1",
+      "log_sha256": "230ec0f03918ad2f60fb1e081eb7f4f259b48fb0548463fb655f63652756afa3",
+      "restored_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "round": "r2",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "terminal-retention",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "retains the first terminal reason across all later activity"
+      ],
+      "exit": 1,
+      "seconds": 1.22,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "mutant_sha256": "eacb4a86e073e186a4d458677b3b14d7a2d3ab1cf0a7438095e9e6d312dbd153",
+      "log_sha256": "1f9b3fb6c0e180abd75808f55e8bfc123541a6afe0af4c10768e2a673ec51a83",
+      "restored_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "round": "r2",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "process-identity",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "stops on a changed, missing or nonrunning process/run identity"
+      ],
+      "exit": 1,
+      "seconds": 1.32,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "mutant_sha256": "0e0b4dfd90ffd7eabcd740f74cc1a6da8374a6c0c28f2ccdc464bec541822694",
+      "log_sha256": "35185aa8fff37321a0438de9553d31bdada90f927d09213023bd8c0c8461ee36",
+      "restored_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "round": "r2",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "heartbeat-independence",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "samples do not refresh the independent heartbeat"
+      ],
+      "exit": 1,
+      "seconds": 1.17,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "mutant_sha256": "0fca911de9da97db5341e55fd18c98c4ab15296eabb53ed0d6249b9e23e9a81c",
+      "log_sha256": "5e8e7ad989aa74314e8ead1cd04825664f3756b62f24dde7d96ddfaac0ca3262",
+      "restored_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "round": "r2",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "pre-update-expiration",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "checks expiration before accepting late samples or heartbeats"
+      ],
+      "exit": 1,
+      "seconds": 1.12,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "mutant_sha256": "51fb5827880dd77f81e357469c3a0b1e48ec668013d32994220a2adeb14b22a5",
+      "log_sha256": "2f25105c7229ab0e2d77f392d18fc324fe46e528aab84f7458d1c7011d73dc7a",
+      "restored_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "round": "r2",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "reentrant-terminal",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "preserves a terminal stop reentered during"
+      ],
+      "exit": 1,
+      "seconds": 1.12,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "mutant_sha256": "48e21970478727ad59fdf3687a583995cef2a8d35e76fbc5c32d1ed9f54b978c",
+      "log_sha256": "ae5c57438c4b971b77b40266f6953cf793ca4c215033e9624de5b6769612bb57",
+      "restored_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "round": "r2",
+      "expected_failure": "healthy accepted where selected assertion requires stopped",
+      "intended_assertion_observed": true
+    },
+    {
+      "name": "constructor-snapshot",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "-t",
+        "rejects changing constructor accessors without invoking them"
+      ],
+      "exit": 1,
+      "seconds": 1.12,
+      "source_path": "scripts/computer-watchdog/policy.ts",
+      "original_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "mutant_sha256": "b7d2355c7b8a18d69adb3c4c3b669fb2a5d8f13821a4446a7dcb599941fc3ea3",
+      "log_sha256": "17d30fa47144b6786463ce929f1a508cf97ae6071e0db8c5f64fa88da5f6a187",
+      "restored_sha256": "6bc0922ccc47246046193b27be8cc4fac86bf68025fccbbf0fbf62a13f56899d",
+      "round": "r2",
+      "expected_failure": "changing accessor configuration unexpectedly accepted",
+      "intended_assertion_observed": true
+    }
+  ],
+  "control_definitions": {
+    "resource-floor": "remove resource-floor halt return",
+    "process-identity": "remove identity-changed halt return",
+    "heartbeat-independence": "renew heartbeat on sample acceptance",
+    "r1-terminal-retention": "remove sample entry tick/terminal check",
+    "r2-terminal-retention": "remove both sample tick/terminal checks",
+    "r1-pre-update-expiration": "replace sample entry tick with terminal-only check",
+    "r2-pre-update-expiration": "replace both sample ticks with terminal-only checks",
+    "reentrant-terminal": "remove post-inspection second tick only",
+    "constructor-snapshot": "restore exact original6d85512d5 constructor body"
+  },
+  "reviews": [
+    {
+      "round": "plan-security-r1",
+      "candidate": "2772c4d014b576686386b650ecd93bddd03fb391",
+      "verdict": "PASS_BOUNDED_POLICY_PLAN",
+      "sha256": "7e84b4afbca9a176ed3ae801c8c8f573a2af112b0b25b1482f57ac2b60f74dc7"
+    },
+    {
+      "round": "plan-security-r2",
+      "candidate": "1e0ddde4c6445a9b99b9eaa82734bd5c89ef167b",
+      "verdict": "PASS_BOUNDED_POLICY_PLAN",
+      "sha256": "8d438d643c1db0cf39e39fc49ecf6674f4ce7bbe74a2ac346ed1ebad86af275a"
+    },
+    {
+      "round": "standards-r1",
+      "candidate": "6d85512d54f664c6c616757e5c95aeeb0eb6fe3c",
+      "verdict": "SOURCE_ACCEPTED",
+      "sha256": "0963c364a083d11c2b1ba418fcff8614f2f27c8ce6d1073cc526520a834066c6"
+    },
+    {
+      "round": "spec-r1",
+      "candidate": "6d85512d54f664c6c616757e5c95aeeb0eb6fe3c",
+      "verdict": "BLOCKED",
+      "sha256": "c338573d8838135c312884c3aab4b7c47dae8a3c06d16d9670d09f7de4071cb4"
+    },
+    {
+      "round": "security-source-r1",
+      "candidate": "6d85512d54f664c6c616757e5c95aeeb0eb6fe3c",
+      "verdict": "BLOCKED",
+      "sha256": "566ae76389fcc4f879f4034f84aee89e51f0df44349e843d8c9e4e942e91cb60"
+    },
+    {
+      "round": "standards-r2",
+      "candidate": "708d6a585ed4e920c26f16d19bc4e6cf33c64763",
+      "verdict": "SOURCE_ACCEPTED",
+      "sha256": "272960edd52711cf1956475114c49727a820f457a85107b5754408e936a9c647"
+    },
+    {
+      "round": "spec-r2",
+      "candidate": "708d6a585ed4e920c26f16d19bc4e6cf33c64763",
+      "verdict": "PASS_BOUNDED_POLICY_SOURCE",
+      "sha256": "a82d95ba1d4e969467b50c27ead791e8f29d695201fb0f93d9ec011d304bf414"
+    },
+    {
+      "round": "security-source-r2",
+      "candidate": "708d6a585ed4e920c26f16d19bc4e6cf33c64763",
+      "verdict": "PASS_BOUNDED_POLICY_SOURCE",
+      "sha256": "b3157223094bdc2bb0fea2eaf7a2d6592cb68d1b53f9b4feb379c633e5504306"
+    }
+  ],
+  "supplemental_security_replay": {
+    "report_sha256": "6916839488d7e85decc700a75413d31108e976c6b891665bfb7985277a983722",
+    "outcome": "20 corrected direct-blob replay vectors passed; initial overly specific harness expectation and correction retained"
+  },
+  "evidence_assembly_attempts": "Two draft assembly assertions failed because the constructor control has a throw assertion, not a healthy-state diff; the exact retained log wording was then checked. Missing JSON caused first draft format exit2. These are evidence harness failures, not candidate source/test failures.",
+  "unchanged_paths_sha256": {
+    "package.json": "7e7e05989abf0519c761238adea9991695c3103fa62808aacd94305ab80c7199",
+    "pnpm-lock.yaml": "c1aeb9ba0c811c1a43a78e9148edf2cc79f19876ff77c482adba8e25d81e009b",
+    "scripts/computer-host.ts": "73af27f13ea5f9f5fda0a78f0c42c5c88994d1974e5e7ebc698da3a37846cade",
+    "scripts/computer-host/operations.ts": "f92d53fe1f952ed9370c73e0bb9d6bb09e6279757732888476bf17d26333e662"
+  },
+  "resources": {
+    "docker_image_guest_db_browser_tcp_production_mutations": false,
+    "runtime_admission_changed": false,
+    "os_collector_scheduler_supervisor_implemented": false,
+    "receiving_invalidation_cleanup_implemented": false,
+    "fixture_scope": "existing Unix host/client tests with recording Docker HTTP stand-in",
+    "persistence": "accepted r21 reused without requalification; original r12/r18 causes unknown"
+  },
+  "required_pending": [
+    "independent exact final evidence acceptance",
+    "required exact PR CI",
+    "actual merge and verified fresh isolated successor"
+  ]
+}

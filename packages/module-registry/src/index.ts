@@ -1,3 +1,4 @@
+import { installBuiltInVisualTemplates } from "@moss/shared";
 import { createRecordingImportRuntime } from "./recording-import-runtime.js";
 export { createRecordingImportWorkerRuntime } from "./recording-import-runtime.js";
 export { createVoiceRequestWorkerRuntime } from "./voice-request-worker-runtime.js";
@@ -3349,6 +3350,9 @@ function assertAppMapDeclarations(manifest: MossModuleManifest): void {
 // incompatible or not defaultEnabled, naming the offender.
 assertModulesCompatible(BUILT_IN_MODULES.map((module) => module.manifest));
 assertModuleRegistryConsistency(BUILT_IN_MODULES);
+installBuiltInVisualTemplates(
+  BUILT_IN_MODULES.flatMap((module) => module.manifest.visualTemplates ?? [])
+);
 
 // LOADER-SEAM(sports) 7: the web CSP img-src allowlist is derived from every built-in module's
 // manifest-declared `externalSources[].imageHosts` (dataset-connector SDK), not from a single

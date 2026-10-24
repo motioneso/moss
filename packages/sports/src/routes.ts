@@ -1,3 +1,5 @@
+import { SportsResultReader, type ResultQuery } from "./results/reader.js";
+import { sportsResultResponseSchema } from "@moss/shared";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { DatasetClient } from "@moss/datasets";
@@ -206,6 +208,25 @@ export function registerSportsRoutes(
     ...(dependencies.storyRelevance ? { storyRelevance: dependencies.storyRelevance } : {}),
     storyFeedback: dependencies.storyFeedback
   });
+  const resultReader = new SportsResultReader(
+    dependencies.datasetClient,
+    repository,
+    dependencies.now
+  );
+  server.get(
+    "/api/sports/results/latest",
+    { schema: sportsResultResponseSchema },
+    async (request, reply) => {
+      try {
+        const access = await dependencies.resolveAccessContext(request);
+        return await dependencies.dataContext.withDataContext(access, (db) =>
+          resultReader.read(db, request.query as ResultQuery)
+        );
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
   const previews = dependencies.previews ?? createSportsPreviewStore();
   const sourceService =
     dependencies.sourceService ??

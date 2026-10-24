@@ -27,7 +27,7 @@ export const fullDockerId = (value: unknown): value is string =>
   typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 
 export async function privateJson(path: string): Promise<unknown> {
-  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = await file.stat();
     if (
@@ -55,7 +55,7 @@ async function exists(path: string): Promise<boolean> {
     throw error;
   }
 }
-function parseState(value: unknown): HostState {
+export function parseState(value: unknown): HostState {
   if (
     !isRecord(value) ||
     Object.keys(value).sort().join(",") !== "enabled,generation,resources" ||

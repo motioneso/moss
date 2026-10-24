@@ -382,6 +382,15 @@
       "flags": [{ "prop": "active", "optional": true }]
     },
     {
+      "name": "identity-metric",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/identity-metric.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["IdentityMetric"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "indicator",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/indicator.tsx", "type": "registry:ui" }],

@@ -41,6 +41,8 @@ export interface WebScanResult {
   readonly routes: readonly GeneratedWebRoute[];
   readonly contributions: Readonly<Record<string, string>>;
   readonly persistentControls: Readonly<Record<string, string>>;
+  readonly visualContracts?: Readonly<Record<string, string>>;
+  readonly visualRenderers?: Readonly<Record<string, string>>;
   readonly manifestFiles: readonly string[];
   readonly packageFiles: readonly string[];
 }
@@ -155,6 +157,8 @@ export function scanModuleWeb(options: ScanOptions): WebScanResult {
   const routes: GeneratedWebRoute[] = [];
   const contributions: Record<string, string> = {};
   const persistentControls: Record<string, string> = {};
+  const visualContracts: Record<string, string> = {};
+  const visualRenderers: Record<string, string> = {};
   const manifestFiles: string[] = [];
   const packageFiles: string[] = [];
   const seenPaths = new Map<string, string>();
@@ -163,7 +167,12 @@ export function scanModuleWeb(options: ScanOptions): WebScanResult {
   for (const pkg of listModulePackages(options.rootDir)) {
     const hasWeb = pkg.exports && "./web" in pkg.exports;
     const hasControls = pkg.exports && "./web/persistent-controls" in pkg.exports;
-    if (!hasWeb && !hasControls) continue;
+    const hasVisual =
+      pkg.dir.startsWith(join(options.rootDir, "packages") + "/") &&
+      pkg.exports &&
+      "./visual" in pkg.exports &&
+      "./web/visual" in pkg.exports;
+    if (!hasWeb && !hasControls && !hasVisual) continue;
     const entry = hasWeb ? "./web" : "./web/persistent-controls";
     packageFiles.push(join(pkg.dir, "package.json"));
 
@@ -208,6 +217,10 @@ export function scanModuleWeb(options: ScanOptions): WebScanResult {
       });
     }
 
+    if (hasVisual) {
+      visualContracts[manifest.id] = `${pkg.name}/visual`;
+      visualRenderers[manifest.id] = `() => import(${JSON.stringify(`${pkg.name}/web/visual`)})`;
+    }
     if (hasWeb) contributions[manifest.id] = `() => import(${JSON.stringify(`${pkg.name}/web`)})`;
     if (hasControls)
       persistentControls[manifest.id] =
@@ -218,6 +231,8 @@ export function scanModuleWeb(options: ScanOptions): WebScanResult {
     routes: routes.sort((a, b) => a.moduleId.localeCompare(b.moduleId)),
     contributions,
     persistentControls,
+    visualContracts,
+    visualRenderers,
     manifestFiles,
     packageFiles
   };
@@ -234,7 +249,16 @@ export function emitWebVirtualModule(result: WebScanResult): string {
     .map(([moduleId, loader]) => `  { moduleId: ${JSON.stringify(moduleId)}, load: ${loader} }`)
     .join(",\n");
 
+  const contracts = Object.entries(result.visualContracts ?? {}).sort(([a], [b]) =>
+    a.localeCompare(b)
+  );
+  const renderers = Object.entries(result.visualRenderers ?? {}).sort(([a], [b]) =>
+    a.localeCompare(b)
+  );
   return [
+    ...contracts.map(([, path], index) => `import visual${index} from ${JSON.stringify(path)};`),
+    `export const MODULE_VISUAL_CONTRACTS = [${contracts.map((_, index) => `...visual${index}`).join(",")}];`,
+    `export const MODULE_VISUAL_RENDERERS = [${renderers.map(([, load]) => load).join(",")}];`,
     `export const MODULE_WEB_ROUTES = ${JSON.stringify(result.routes, null, 2)};`,
     `export const MODULE_WEB_CONTRIBUTIONS = [`,
     contributionEntries,

@@ -1,3 +1,4 @@
+import type { ModuleVisualTemplate } from "@moss/module-sdk/visual-template";
 import {
   validateVisualReply,
   VISUAL_LIMITS,
@@ -8,6 +9,52 @@ import {
 } from "./visual-chat.js";
 
 export const VISUAL_CATALOG_VERSION = "moss.user-data.1";
+export const BUILT_IN_VISUAL_CATALOG_VERSION = "moss.builtins.1";
+const templates = new Map<string, ModuleVisualTemplate>();
+let catalogInstalled = false;
+
+/** Boot-time composition of reviewed built-ins, shared by save/history and browser boundaries. */
+export function installBuiltInVisualTemplates(
+  registrations: readonly ModuleVisualTemplate[]
+): void {
+  if (catalogInstalled) {
+    if (
+      registrations.length === templates.size &&
+      registrations.every((t) => templates.get(t.kind) === t)
+    )
+      return;
+    throw new Error("Built-in visual catalog is already installed");
+  }
+  const seen = new Set<string>();
+  const snapshotKinds = new Set<string>();
+  for (const template of registrations) {
+    if (
+      !/^[a-z][a-z0-9.:-]{1,63}$/.test(template.kind) ||
+      seen.has(template.kind) ||
+      template.kind === "composition" ||
+      !template.snapshotKind ||
+      snapshotKinds.has(template.snapshotKind) ||
+      (templates.has(template.kind) && templates.get(template.kind) !== template)
+    )
+      throw new Error(`Duplicate or invalid visual template: ${template.kind}`);
+    seen.add(template.kind);
+    snapshotKinds.add(template.snapshotKind);
+  }
+  for (const template of registrations) templates.set(template.kind, Object.freeze(template));
+  catalogInstalled = true;
+}
+
+export function builtInVisualTemplate(kind: string): ModuleVisualTemplate | undefined {
+  return templates.get(kind);
+}
+
+export function snapshotVisualTemplate(
+  snapshot: VisualSnapshotV1
+): ModuleVisualTemplate | undefined {
+  return [...templates.values()].find(
+    (template) => template.snapshotKind === snapshot.kind && template.validate(snapshot)
+  );
+}
 export interface VisualFactBinding {
   ref: string;
   field: string;
@@ -108,6 +155,23 @@ export function validateVisualCatalogReply(value: unknown): VisualReplyValidatio
     code,
     fallbackText: reply.fallbackText
   });
+  if (reply.catalogVersion === BUILT_IN_VISUAL_CATALOG_VERSION) {
+    if (reply.interactions.length || reply.blocks.length !== 1 || reply.snapshots.length !== 1)
+      return reject("unsupported_catalog");
+    const block = reply.blocks[0]!;
+    const snapshot = reply.snapshots[0]!;
+    const template = builtInVisualTemplate(block.kind);
+    if (
+      !template ||
+      block.program !== undefined ||
+      block.snapshotRefs.length !== 1 ||
+      block.snapshotRefs[0] !== snapshot.ref ||
+      snapshot.kind !== template.snapshotKind ||
+      !template.validate(snapshot)
+    )
+      return reject("invalid_program");
+    return shape;
+  }
   if (
     reply.catalogVersion !== VISUAL_CATALOG_VERSION ||
     reply.interactions.length ||

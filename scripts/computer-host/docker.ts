@@ -27,6 +27,7 @@ function equal(actual: unknown, expected: unknown): boolean {
 export interface InspectedResource {
   readonly resource: HostResource & { id: string };
   readonly running: boolean;
+  readonly logPath: string | null;
 }
 
 class KnownContainerAbsent extends Error {}
@@ -114,7 +115,11 @@ export class ComputerDocker {
       if (!equal(reply.Config[key], defaults[key]))
         throw new Error("Computer image defaults changed");
     }
-    return { resource: { ...resource, id: reply.Id }, running: reply.State.Running };
+    return {
+      resource: { ...resource, id: reply.Id },
+      running: reply.State.Running,
+      logPath: typeof reply.LogPath === "string" ? reply.LogPath : null
+    };
   }
   async inventory(resources: readonly HostResource[]): Promise<InspectedResource[]> {
     const filters = encodeURIComponent(
