@@ -4,9 +4,8 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // Classifier gate plan 1.3 (#2892), updated for Moss extensions phase 0. Proves the shipped
 // Classifier settings row on the real Settings > AI providers screen: pick and clear a classifier,
 // move the gate to Shadow and then straight to On with no review step, and that the row reads in
-// light, dark and one park theme. The "default chat is unchanged" half needs a real chat turn; the
-// UAT harness has no chat-capable AI provider at any seed level (#1121), so it is test.fixme'd with
-// that citation.
+// light, dark and one park theme. The gate-Off chat control needs a real chat turn; this
+// solo-admin seed has no chat-capable AI provider (#1121), so it is test.fixme'd with that citation.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 function requireBaseURL(): string {
@@ -162,7 +161,6 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
   }
 });
 
-test.fixme("an ordinary chat message is still answered by the main model while the gate is unreleased", async () => {
-  // #1121: no UAT seed level can drive a real chat turn to a model reply, so this cannot execute
-  // yet. The gate's live chat proof lands with slice 4.3.
+test.fixme("an ordinary chat message is still answered by the main model while the gate is Off", async () => {
+  // #1121: this solo-admin seed has no chat-capable AI provider to answer a chat turn.
 });
