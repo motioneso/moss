@@ -236,6 +236,7 @@ describe("authenticated native Unix Computer lifetime", () => {
       cleanups.push(() => root.stop());
       root.start();
       await expect.poll(() => failed.mock.calls.length, { timeout: 3000 }).toBe(1);
+      expect(seen).toHaveLength(1); // No alive proof may answer a replayed root challenge.
       expect(JSON.stringify(seen)).not.toContain(config.secret);
       expect(await root.stop()).toBe(false);
     }
@@ -266,8 +267,10 @@ describe("authenticated native Unix Computer lifetime", () => {
     await once(socket, "connect");
     const closed = once(socket, "close");
     socket.write("{}\n".repeat(5));
-    await closed;
+    await expect.poll(() => receive.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(receive).toHaveBeenCalledTimes(4);
+    socket.destroy();
+    await closed;
   });
   it("partial-line equality expiry does not renew on trickled bytes", async () => {
     let clock = 0;
@@ -294,8 +297,10 @@ describe("authenticated native Unix Computer lifetime", () => {
     clock = 2000;
     const closed = once(socket, "close");
     socket.write("}\n");
-    await closed;
+    await expect.poll(() => socket.destroyed || dispatch.mock.calls.length > 0).toBe(true);
     expect(dispatch).not.toHaveBeenCalled();
+    socket.destroy();
+    await closed;
     channel.close();
   });
   it.each(["ack", "idle"])(
