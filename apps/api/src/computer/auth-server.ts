@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { chmod, link, lstat, mkdtemp, realpath, rmdir, unlink } from "node:fs/promises";
 import { createServer, type Socket } from "node:net";
-import { dirname, isAbsolute, join } from "node:path";
 import type {
   BrowserSessionBinding,
   SessionBindingsService,
   SessionInvalidations
 } from "@moss/auth";
 import { isUuid } from "./host-contract.js";
+import { assertComputerPrivateParent, publishComputerSocket } from "./private-endpoint.js";
 import {
   AUTH_DEADLINE_MS,
   AUTH_PENDING_LIMIT,
@@ -34,7 +33,7 @@ export async function serveComputerAuth(deps: {
   sessions: Pick<SessionBindingsService, "assertLive">;
   invalidations: SessionInvalidations;
 }) {
-  await assertPrivateParent(deps.socketPath);
+  await assertComputerPrivateParent(deps.socketPath);
   if (!isUuid(deps.ownerUserId)) throw new ComputerAuthUnavailable();
   const issued = new Map<string, IssuedBinding>();
   const sockets = new Set<Socket>();
@@ -173,39 +172,11 @@ export async function serveComputerAuth(deps: {
       stop
     );
   });
-  let bindDirectory: string | undefined;
-  let published = false;
-  let identity: Awaited<ReturnType<typeof lstat>> | undefined;
-  const removeEndpoint = async () => {
-    // Node owns only its private bind path; the published alias is ours to remove.
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    if (published) {
-      const remaining = await lstat(deps.socketPath).catch((error: NodeJS.ErrnoException) => {
-        if (error.code !== "ENOENT") throw error;
-        return null;
-      });
-      if (remaining && remaining.dev === identity?.dev && remaining.ino === identity.ino)
-        await unlink(deps.socketPath);
-    }
-    if (bindDirectory) await rmdir(bindDirectory);
-  };
+  let endpoint: Awaited<ReturnType<typeof publishComputerSocket>>;
   try {
-    bindDirectory = await mkdtemp(join(dirname(deps.socketPath), ".auth-"));
-    const bindPath = join(bindDirectory, "s");
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(bindPath, () => {
-        server.removeListener("error", reject);
-        resolve();
-      });
-    });
-    await chmod(bindPath, 0o600);
-    identity = await lstat(bindPath);
-    await link(bindPath, deps.socketPath);
-    published = true;
+    endpoint = await publishComputerSocket(server, deps.socketPath, ".auth-");
   } catch (error) {
     unsubscribe();
-    await removeEndpoint();
     throw error;
   }
   let closing: Promise<void> | undefined;
@@ -235,27 +206,8 @@ export async function serveComputerAuth(deps: {
       unsubscribe();
       for (const [id, entry] of issued) retire(id, entry);
       for (const socket of sockets) socket.destroy();
-      closing = removeEndpoint();
+      closing = endpoint.close();
       return closing;
     }
   };
-}
-
-async function assertPrivateParent(path: string): Promise<void> {
-  const uid = process.getuid!();
-  const parent = dirname(path);
-  if (!isAbsolute(path) || parent === path || (await realpath(parent)) !== parent)
-    throw new ComputerAuthUnavailable();
-  const stat = await lstat(parent);
-  if (!stat.isDirectory() || stat.uid !== uid || (stat.mode & 0o777) !== 0o700)
-    throw new ComputerAuthUnavailable();
-  for (let ancestor = dirname(parent); ; ancestor = dirname(ancestor)) {
-    const s = await lstat(ancestor);
-    if (
-      ![0, uid].includes(s.uid) ||
-      ((s.mode & 0o022) !== 0 && !(s.uid === 0 && (s.mode & 0o1000) !== 0))
-    )
-      throw new ComputerAuthUnavailable();
-    if (dirname(ancestor) === ancestor) break;
-  }
 }
