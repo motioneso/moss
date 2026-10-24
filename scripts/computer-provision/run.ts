@@ -159,7 +159,10 @@ export async function provisionCreatedComputerRun(
         try {
           lstatSync(join(supervisor.host.stateDir, "stop.json"));
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            current();
+            return;
+          }
           throw error;
         }
         throw supervisorError();

@@ -16,6 +16,7 @@ export async function prepareNativeFixture(configPath: string, held?: string) {
   const originalStat = io.lstat;
   io.lstat = (async (...args: Parameters<typeof fs.lstat>) =>
     project(await originalStat(...args))) as typeof fs.lstat;
+  let timerStartedAtNs = "";
   const originalOpen = io.open;
   io.open = async (...args: Parameters<typeof fs.open>) => {
     const path = String(args[0]);
@@ -38,7 +39,11 @@ export async function prepareNativeFixture(configPath: string, held?: string) {
       (held === "directory" && path === config.output.path)
     ) {
       file.sync = () => {
-        process.send!("held");
+        process.send!({
+          type: "held",
+          timerStartedAtNs,
+          heldAtNs: process.hrtime.bigint().toString()
+        });
         return new Promise(() => {});
       };
     }
@@ -65,7 +70,9 @@ export async function prepareNativeFixture(configPath: string, held?: string) {
     delete process.env[key];
   if (held) {
     const timer = global.setTimeout;
-    global.setTimeout = ((fn: (...args: unknown[]) => void, ms: number, ...args: unknown[]) =>
-      timer(fn, ms === 60000 ? 1000 : ms, ...args)) as typeof setTimeout;
+    global.setTimeout = ((fn: (...args: unknown[]) => void, ms: number, ...args: unknown[]) => {
+      if (ms === 60000) timerStartedAtNs = process.hrtime.bigint().toString();
+      return timer(fn, ms === 60000 ? 2000 : ms, ...args);
+    }) as typeof setTimeout;
   }
 }

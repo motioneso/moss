@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as syncFs from "node:fs";
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -12,6 +13,8 @@ import {
 } from "../../scripts/computer-provision/config.js";
 import { loadSupervisorDeployment } from "../../scripts/computer-watchdog/trust.js";
 import { HostStateStore } from "../../scripts/computer-host/state.js";
+
+vi.mock("node:fs", async (original) => ({ ...(await original<typeof syncFs>()) }));
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -336,6 +339,27 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
     expect(injected).toBe(true);
     expect(await exists(join(f.host.stateDir, "daemon.lock"))).toBe(true);
   });
+  it("rechecks equality after the actual synchronous final stop probe", async () => {
+    const f = await fixture();
+    const stat = syncFs.lstatSync;
+    let injected = false;
+    vi.spyOn(syncFs, "lstatSync").mockImplementation(
+      (...args: Parameters<typeof syncFs.lstatSync>) => {
+        try {
+          return stat(...args);
+        } finally {
+          if (String(args[0]) === join(f.host.stateDir, "stop.json")) {
+            injected = true;
+            f.setNow(60000);
+          }
+        }
+      }
+    );
+    expect(await f.run()).toBe(2);
+    expect(injected).toBe(true);
+    expect(await exists(join(f.host.stateDir, "daemon.lock"))).toBe(true);
+    expect(await exists(join(f.configuration.output.path, "prepared.json"))).toBe(true);
+  });
   it("failed canonical lock descriptor close cannot authorize release", async () => {
     const f = await fixture();
     const open = vi.mocked(f.io.open).getMockImplementation()!;
@@ -410,23 +434,37 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
         if (child.exitCode === null) child.kill("SIGKILL");
       });
       let output = "";
+      let stdout = "";
+      let stderr = "";
       child.stdout!.on("data", (data) => {
         output += String(data);
+        stdout += String(data);
       });
       child.stderr!.on("data", (data) => {
         output += String(data);
+        stderr += String(data);
       });
       const exited = once(child, "exit");
-      const safety = setTimeout(() => child.kill("SIGKILL"), kind === "success" ? 10000 : 3000);
+      const safety = setTimeout(() => child.kill("SIGKILL"), kind === "success" ? 10000 : 5000);
       void exited.finally(() => clearTimeout(safety));
+      let held: { type: string; timerStartedAtNs: string; heldAtNs: string } | undefined;
+      const signalTimers: ReturnType<typeof setTimeout>[] = [];
       if (kind !== "success") {
         const message = await Promise.race([once(child, "message"), exited]);
-        expect(message[0]).toBe("held");
+        held = message[0];
+        expect(held?.type).toBe("held");
         child.kill("SIGTERM");
-        child.kill("SIGINT");
-        child.kill("SIGTERM");
+        signalTimers.push(setTimeout(() => child.kill("SIGINT"), 700));
+        signalTimers.push(setTimeout(() => child.kill("SIGTERM"), 1400));
       }
       const [exit, signal] = await exited;
+      const finishedAtNs = process.hrtime.bigint();
+      for (const timer of signalTimers) clearTimeout(timer);
+      const elapsedMs = held ? Number(finishedAtNs - BigInt(held.timerStartedAtNs)) / 1e6 : null;
+      if (elapsedMs !== null) {
+        expect(elapsedMs).toBeGreaterThanOrEqual(1995);
+        expect(elapsedMs).toBeLessThan(2700);
+      }
       expect(exit).toBe(kind === "success" ? 0 : 2);
       expect(signal).toBeNull();
       expect(output).toBe("");
@@ -454,14 +492,20 @@ describe("actual stopped-pair config publisher; disclosed root/runtime/namespace
             fixture:
               "OS ownership/runtime/namespace/Node hash and Unix Docker fixtures; no installed trust",
             startedAtNs: startedAtNs.toString(),
-            finishedAtNs: process.hrtime.bigint().toString(),
+            finishedAtNs: finishedAtNs.toString(),
+            held,
+            elapsedMs,
+            argv: [process.execPath, "-e", code, bundle, f.path],
+            nativeUid: f.nativeUid,
             pid: child.pid,
             exit,
             signal,
             output,
+            stdout,
+            stderr,
             node: process.version,
             artifactSha256: f.configuration.artifactSha256,
-            scaledDeadlineMs: kind === "success" ? null : 1000
+            scaledDeadlineMs: kind === "success" ? null : 2000
           })
         );
         await fs.copyFile(bundle, join(capture, "provision.cjs"));

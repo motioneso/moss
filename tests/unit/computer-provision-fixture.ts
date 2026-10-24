@@ -183,6 +183,7 @@ export async function provisionFixture() {
   let interrupted = false;
   const deployment = await loadProvisionDeployment(path, artifact);
   return {
+    nativeUid,
     io: fs,
     root,
     host: host.config,
