@@ -1,0 +1,389 @@
+import { spawn } from "node:child_process";
+import type { Readable } from "node:stream";
+import {
+  ComputerWatchdogPolicy,
+  type WatchdogConfiguration,
+  type WatchdogProcessIdentity,
+  type WatchdogSample,
+  type WatchdogStopReason
+} from "./policy.js";
+import { computerMonotonicMs, readComputerProcess } from "./linux.js";
+import { ObservationJournal } from "./journal.js";
+import { isRecord } from "../../apps/api/src/computer/host-contract.js";
+import { processIdentity, supervisorError, type SupervisorDeployment } from "./trust.js";
+
+export interface CollectorJob {
+  readonly pid: number;
+  readonly identity: Promise<WatchdogProcessIdentity>;
+  readonly result: Promise<unknown>;
+  readonly exited: Promise<void>;
+  collect(identity: WatchdogProcessIdentity): void;
+  kill(): void;
+}
+export interface SupervisorJournal {
+  readonly pending: boolean;
+  inspect(): Promise<void>;
+  collector(identity: WatchdogProcessIdentity): Promise<void>;
+  sample(sample: WatchdogSample): Promise<void>;
+  stop(
+    atMs: number,
+    reason: WatchdogStopReason,
+    collector: WatchdogProcessIdentity | null
+  ): Promise<void>;
+  close(): Promise<void>;
+}
+export interface SupervisorOutcome {
+  readonly reason: WatchdogStopReason;
+  readonly exitCode: number;
+  readonly durableStop: boolean;
+  readonly collectorExited: boolean;
+  readonly collectorPid: number | null;
+  readonly collectorIdentity: WatchdogProcessIdentity | null;
+}
+
+/** Fixed native child. No shell, executable override, inherited environment or extra descriptors. */
+export function spawnComputerCollector(
+  deployment: SupervisorDeployment,
+  watchdog: WatchdogProcessIdentity
+): CollectorJob {
+  const child = spawn(
+    deployment.nodePath,
+    [deployment.artifactPath, "collect", deployment.configPath],
+    {
+      detached: true,
+      env: {},
+      stdio: ["pipe", "pipe", "ignore"]
+    }
+  );
+  let resolveExit!: () => void;
+  let rejectResult!: (error: Error) => void;
+  let resolveResult!: (result: unknown) => void;
+  const exited = new Promise<void>((resolve) => {
+    resolveExit = resolve;
+  });
+  const result = new Promise<unknown>((resolve, reject) => {
+    resolveResult = resolve;
+    rejectResult = reject;
+  });
+  let bytes = 0;
+  const chunks: Buffer[] = [];
+  const fail = () => {
+    rejectResult(supervisorError());
+    child.kill("SIGKILL");
+  };
+  child.once("error", fail);
+  child.stdin.on("error", fail);
+  child.stdout.on("error", fail);
+  child.stdout.on("data", (chunk: Buffer) => {
+    bytes += chunk.length;
+    if (bytes > 16384) {
+      fail();
+      return;
+    }
+    chunks.push(chunk);
+  });
+  child.once("exit", resolveExit);
+  child.once("close", (code) => {
+    resolveExit();
+    try {
+      const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (
+        code !== 0 ||
+        !isRecord(value) ||
+        Object.keys(value).sort().join(",") !== "runId,sample" ||
+        value.runId !== deployment.configuration.runId
+      )
+        throw supervisorError();
+      resolveResult(value.sample);
+    } catch {
+      rejectResult(supervisorError());
+    }
+  });
+  // The child waits for the parent's durable identity record before collecting or replying.
+  const identity = child.pid
+    ? processIdentity(child.pid)
+    : Promise.reject<WatchdogProcessIdentity>(supervisorError());
+  return {
+    pid: child.pid ?? 0,
+    identity,
+    result,
+    exited,
+    collect(identity) {
+      if (identity.pid !== child.pid || identity.processGroupId !== child.pid) {
+        fail();
+        return;
+      }
+      const message = JSON.stringify({
+        runId: deployment.configuration.runId,
+        configSha256: deployment.configSha256,
+        watchdog
+      });
+      if (Buffer.byteLength(message) > 16384) {
+        fail();
+        return;
+      }
+      child.stdin.end(message);
+    },
+    kill() {
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.kill("SIGKILL");
+    }
+  };
+}
+
+/** Ports allow deterministic driver tests; executable composition supplies only fixed native machinery. */
+export function runComputerSupervisor(input: {
+  configuration: WatchdogConfiguration;
+  heartbeats: Readable;
+  journal: SupervisorJournal;
+  startCollector(): CollectorJob;
+  verifyRunner(): Promise<unknown>;
+  now(): number;
+  signals: NodeJS.EventEmitter;
+}): Promise<SupervisorOutcome> {
+  const { configuration, journal, heartbeats } = input;
+  const policy = new ComputerWatchdogPolicy(configuration);
+  return new Promise((resolve) => {
+    let current: CollectorJob | null = null;
+    let identity: WatchdogProcessIdentity | null = null;
+    let collectorExited = true;
+    let active = false;
+    let terminal = false;
+    let persistenceFailed = false;
+    let nextCollection = configuration.startedAtMs;
+    let collectionAt = configuration.startedAtMs;
+    let heartbeatBuffer = Buffer.alloc(0);
+    let counter = 0;
+    let checkingHeartbeat = false;
+
+    const stop = () => {
+      if (terminal) return;
+      terminal = true;
+      clearInterval(timer);
+      heartbeats.off("data", heartbeat).off("end", operatorStop).off("error", operatorStop);
+      heartbeats.pause();
+      input.signals.off("SIGTERM", operatorStop).off("SIGINT", operatorStop);
+      const decision =
+        policy.decision.status === "stopped" ? policy.decision : policy.stop(input.now());
+      if (decision.status !== "stopped") throw supervisorError();
+      const reason = decision.reason;
+      let durableStop = false;
+      let descriptorsClosed = false;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(deadline);
+        resolve(
+          Object.freeze({
+            reason,
+            exitCode:
+              durableStop && collectorExited && descriptorsClosed && !persistenceFailed
+                ? reason === "operator-stop"
+                  ? 0
+                  : 1
+                : 2,
+            durableStop,
+            collectorExited,
+            collectorPid: current?.pid ?? null,
+            collectorIdentity: identity
+          })
+        );
+      };
+      // This timer stays referenced. The CLI exits even when kernel I/O never settles.
+      const deadline = setTimeout(finish, 5000);
+      current?.kill();
+      const exit = current?.exited ?? Promise.resolve();
+      void exit
+        .then(
+          () => {
+            collectorExited = true;
+          },
+          () => {}
+        )
+        .then(() => {
+          if (durableStop && descriptorsClosed) finish();
+        });
+      void journal
+        .stop(input.now(), reason, identity)
+        .then(
+          () => {
+            durableStop = true;
+          },
+          () => {
+            persistenceFailed = true;
+          }
+        )
+        .then(() => journal.close())
+        .then(
+          () => {
+            descriptorsClosed = true;
+            if (collectorExited) finish();
+          },
+          () => {
+            persistenceFailed = true;
+            if (collectorExited) finish();
+          }
+        );
+    };
+    const failed = () => {
+      if (terminal) return;
+      policy.sample(input.now(), null);
+      stop();
+    };
+    const operatorStop = () => {
+      if (terminal) return;
+      policy.stop(input.now());
+      stop();
+    };
+    const heartbeat = (chunk: Buffer) => {
+      if (terminal) return;
+      if (!Buffer.isBuffer(chunk) || chunk.length > 4096 || checkingHeartbeat) {
+        operatorStop();
+        return;
+      }
+      heartbeatBuffer = Buffer.concat([heartbeatBuffer, chunk]);
+      let frames = 0;
+      for (;;) {
+        const end = heartbeatBuffer.indexOf(10);
+        if (end < 0) {
+          if (heartbeatBuffer.length > 512) operatorStop();
+          return;
+        }
+        if (end > 512 || ++frames > 1) {
+          operatorStop();
+          return;
+        }
+        let record: unknown;
+        try {
+          record = JSON.parse(heartbeatBuffer.subarray(0, end).toString("utf8"));
+        } catch {
+          operatorStop();
+          return;
+        }
+        heartbeatBuffer = heartbeatBuffer.subarray(end + 1);
+        if (
+          !isRecord(record) ||
+          Object.keys(record).sort().join(",") !== "counter,runId" ||
+          record.runId !== configuration.runId ||
+          record.counter !== counter + 1
+        ) {
+          operatorStop();
+          return;
+        }
+        if (policy.tick(input.now()).status === "stopped") {
+          stop();
+          return;
+        }
+        counter++;
+        checkingHeartbeat = true;
+        void input.verifyRunner().then(() => {
+          checkingHeartbeat = false;
+          if (!terminal && policy.heartbeat(input.now()).status === "stopped") stop();
+        }, failed);
+      }
+    };
+    const collect = () => {
+      active = true;
+      collectionAt = input.now();
+      nextCollection = collectionAt + 5000;
+      identity = null;
+      collectorExited = false;
+      try {
+        current = input.startCollector();
+      } catch {
+        collectorExited = true;
+        failed();
+        return;
+      }
+      const job = current;
+      // Attach both handlers before any async identity/persistence work can fail.
+      const sample = job.result;
+      void sample.catch(failed);
+      void job.exited.then(() => {
+        if (current === job) collectorExited = true;
+      }, failed);
+      void job.identity
+        .then(async (observed) => {
+          if (terminal) return;
+          identity = Object.freeze({ ...observed });
+          await journal.collector(identity);
+          if (!terminal) job.collect(identity);
+        })
+        .catch(failed);
+      void sample
+        .then(async (value) => {
+          if (terminal || current !== job) return;
+          if (!identity) {
+            failed();
+            return;
+          }
+          if (policy.sample(input.now(), value).status === "stopped") {
+            stop();
+            return;
+          }
+          // The policy validated/snapshotted the closed JSON result. Persist before another sample.
+          await journal.sample(value as WatchdogSample);
+          if (!terminal) {
+            active = false;
+            current = null;
+            identity = null;
+            collectorExited = true;
+          }
+        })
+        .catch(failed);
+    };
+    const tick = () => {
+      if (terminal) return;
+      if (policy.tick(input.now()).status === "stopped") {
+        stop();
+        return;
+      }
+      if (active && input.now() - collectionAt >= 5000) {
+        failed();
+        return;
+      }
+      if (input.now() >= nextCollection) {
+        if (active || journal.pending) {
+          failed();
+          return;
+        }
+        active = true;
+        collectionAt = input.now();
+        void journal.inspect().then(() => {
+          if (!terminal) collect();
+        }, failed);
+      }
+    };
+    heartbeats.on("data", heartbeat).once("end", operatorStop).once("error", operatorStop);
+    input.signals.on("SIGTERM", operatorStop).on("SIGINT", operatorStop);
+    const timer = setInterval(tick, 1000);
+    tick();
+  });
+}
+
+export async function superviseDeployment(
+  deployment: SupervisorDeployment,
+  startedAtMs: number,
+  watchdog: WatchdogProcessIdentity,
+  started: () => void
+): Promise<SupervisorOutcome> {
+  const configuration = {
+    runId: deployment.configuration.runId,
+    startedAtMs,
+    runner: deployment.configuration.runner,
+    watchdog
+  };
+  const journal = await ObservationJournal.create(deployment.configuration.monitor, configuration);
+  started();
+  return runComputerSupervisor({
+    configuration,
+    heartbeats: process.stdin,
+    journal,
+    startCollector: () => spawnComputerCollector(deployment, watchdog),
+    verifyRunner: () => readComputerProcess(configuration.runner),
+    now: computerMonotonicMs,
+    signals: process
+  });
+}
