@@ -71,12 +71,18 @@ these with the actual auth runtime and separately qualified gateway.
 
 Server factory takes configured owner UUID, sessions.assertLive, invalidation source and one
 operator-selected absolute Unix socket path in an existing canonical directory owned by the
-current effective UID, mode0700, with trusted nonsymlink ancestors. Socket mode0600; no unlink
-of an existing endpoint, no TCP fallback, no credentials in paths/logs. This private parent is
+current effective UID, mode0700, with trusted nonsymlink ancestors. Bind inside one exclusive mode0700 temporary child of that parent. Chmod the internal socket0600
+before publishing the configured path via exclusive fs.link. Existing configured endpoints make
+publication fail without alteration; Node only owns/unlinks the internal bind pathname. No TCP
+fallback or credentials in paths/logs. This private parent is
 accessible only to trusted API/gateway identities via the later fixed container UID/mount contract.
 Client takes the trusted socket path; filesystem access is the IPC trust boundary, not browser auth.
 No guest mount contains this channel. The API remains without Docker/device/guest socket access.
-Server close destroys owned connections, removes only its own endpoint and unsubscribes.
+Server close destroys owned connections and closes Node
+on its internal path; dev/ino-match the published alias before explicitly unlinking it. Remove
+only the owned empty temporary child (rmdir, never recursive cleanup), including on failed
+publication/startup. A replacement published endpoint survives closing the original service.
+Server close unsubscribes and is idempotent.
 
 API `issue(binding: BrowserSessionBinding): string` accepts only the configured owner, valid
 UUIDs, a bounded requestId and finite future absolute expiry. It copies/fixes metadata and returns
@@ -160,7 +166,7 @@ existing computer receiver/host suites; `pnpm exec tsc --noEmit`;
 Tests assert actual serialized Unix traffic, initial/per-event fresh checks, no owner/session
 substitution, ordinary real-vendor signOut and raw-SQL revoke paths notifying the same source,
 registration racing a held DELETE retired at completion, unrelated-session preservation, active idle polling, absolute expiry, denial/timeout/disconnect,
-delayed auth/reply resurrection, correlation, frame/connection/pending/backlog limits and closure.
+delayed auth/reply resurrection, correlation, frame/connection/pending/backlog limits and closure, including replacement alias survival and failed exclusive publication.
 Observe removed identity, epoch, expiry, correlation, push and liveness protections fail at their
 intended assertions, restore source, run full scoped green and preserve exact hashes/receipts.
 
@@ -181,3 +187,13 @@ and SQL finally notifications with a held-deletion race test. Accepted B2: issue
 do not cap unbound sockets or abandoned auth promises; add global accepted socket bound, server
 bind/check deadlines and actual global auth-work accounting until underlying settlement.
 No disputed findings. Amend/review exact plan before implementation.
+
+R2 at `7c41e5f25`: PASS_BOUNDED_AUTH_PLAN, receipt SHA-256
+`24266ff39ec2f6278027a3610df64e56e7c6a4a89f42c132c1d34b28c9356944`.
+Implementation review at `2270d4577` found Node automatically unlinks a replaced listener pathname
+before the post-close inode check. Independently reproduced: different inode, replacement removed.
+Accepted correction: exclusive private bind directory plus exclusive hard-linked published alias;
+Node closes only internal pathname, explicit inode-checked alias cleanup preserves replacement.
+Amendment requires independent contract acceptance before implementation. Standards R1 also
+suggested removing redundant per-socket pending accounting (global authWork already bounds it);
+accept that simplification. No runtime or owner acceptance follows.
