@@ -65,7 +65,12 @@ and source fingerprints are in the [sanitized JSON receipt](2026-10-24-host-cont
   (4 passed,35 skipped, exit0; test-log hash in its review receipt). No remaining bounded security
   implementation blockers.
 - Historical blocked rulings remain preserved; none claims actual runtime or owner acceptance.
-  Exact evidence acceptance is pending a separate committed-artifact review.
+  Independent exact evidence review accepted `4971a885885276b5857ec104ec7fd216ef5a26bb` as
+  PASS_BOUNDED_HOST_EVIDENCE; source remains the accepted checkpoint above. Receipt SHA-256
+  `5afe8d6a827d07166b1981e90395e7c2939019f5c148deb714715af471f9a336`.
+- Final documentation Standards and Spec reviews accepted the same evidence/handoff checkpoint.
+  Their exact hashes are in JSON. A supplemental formatter run also covers all newly tracked docs.
+  This ledger amendment does not alter implementation, runtime scope or remaining owner gates.
 
 ## Verification
 
