@@ -47,24 +47,21 @@ afterEach(() => {
 
 describe("chatAcpModel", () => {
   it("prefixes an API-key OpenAI-compatible model with the Moss provider id", () => {
-    expect(chatAcpModel(apiKeyRow, "muse-spark-1.3-free")).toBe("moss/org/model:tag@v2");
+    expect(chatAcpModel(apiKeyRow)).toBe("moss/org/model:tag@v2");
   });
 
   it("leaves Anthropic API-key rows to the row model", () => {
-    expect(chatAcpModel({ ...apiKeyRow, provider_kind: "anthropic" }, undefined)).toBeUndefined();
+    expect(chatAcpModel({ ...apiKeyRow, provider_kind: "anthropic" })).toBeUndefined();
   });
 
-  it("keeps the saved choice for CLI OpenCode rows only", () => {
+  it("leaves CLI rows, including OpenCode, to the row model", () => {
     const cliOpencode = {
       ...apiKeyRow,
       provider_auth_method: "cli",
       provider_acp_agent_id: "opencode"
     } as const;
-    expect(chatAcpModel(cliOpencode, "muse-spark-1.3-free")).toBe("muse-spark-1.3-free");
-    expect(chatAcpModel(cliOpencode, undefined)).toBeUndefined();
-    expect(
-      chatAcpModel({ ...cliOpencode, provider_acp_agent_id: "codex-acp" }, "default")
-    ).toBeUndefined();
+    expect(chatAcpModel(cliOpencode)).toBeUndefined();
+    expect(chatAcpModel({ ...cliOpencode, provider_acp_agent_id: "codex-acp" })).toBeUndefined();
   });
 });
 

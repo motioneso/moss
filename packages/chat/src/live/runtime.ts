@@ -645,7 +645,6 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     aiRepository: new AiRepository(),
     boss: deps.boss,
     connectorSyncAt: deps.connectorSyncAt,
-    chatPreferences: deps.chatPreferences,
     localePreferences: deps.localePreferences,
     editCliAdapter: createCliStructuredAdapterFactory((...args) => engineFactory(...args))
   });

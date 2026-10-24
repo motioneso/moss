@@ -52,17 +52,11 @@ export function providerLaunchRevision(
 }
 
 /** The ACP model value for a live launch; `undefined` lets the engine use the row model. */
-export function chatAcpModel(
-  row: ChatModelRow,
-  savedOpenCodeModel: string | null | undefined
-): string | undefined {
-  if (row.provider_auth_method === "api_key") {
-    return row.provider_kind === "openai-compatible"
-      ? `${MOSS_OPENCODE_PROVIDER_ID}/${row.provider_model_id}`
-      : undefined;
-  }
-  if (row.provider_acp_agent_id !== "opencode") return undefined;
-  return savedOpenCodeModel || undefined;
+export function chatAcpModel(row: ChatModelRow): string | undefined {
+  if (row.provider_auth_method !== "api_key") return undefined;
+  return row.provider_kind === "openai-compatible"
+    ? `${MOSS_OPENCODE_PROVIDER_ID}/${row.provider_model_id}`
+    : undefined;
 }
 
 export function openChatCredential(

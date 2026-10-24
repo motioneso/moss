@@ -7,7 +7,7 @@ import {
   listAiProviderConfigsRouteSchema
 } from "@moss/shared";
 
-import { cliToolsDto, readCliToolVersions } from "./cli-tool-versions.js";
+import { readCliToolVersions } from "./cli-tool-versions.js";
 import type { AiSecretCipher } from "./crypto.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import type { ModelDiscoveryService } from "./model-discovery.js";
@@ -76,8 +76,7 @@ export function registerProviderVisibilityRoutes(
         return {
           providers: await Promise.all(
             providers.map((provider) => serializeProvider(provider, versions))
-          ),
-          ...(versions ? { openCodeCli: cliToolsDto(versions.opencode) } : {})
+          )
         };
       } catch (error) {
         return handleRouteError(error, reply);

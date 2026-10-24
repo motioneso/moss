@@ -289,10 +289,7 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.chat.threads(moduleSurface) });
   });
 
-  it("clears the saved OpenCode choice before selecting a Codex model", async () => {
-    vi.mocked(getChatSettings).mockResolvedValueOnce({
-      chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
-    });
+  it("selects a Codex model without touching chat settings", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const renderer = await renderPill(client, moduleSurface);
 
@@ -305,13 +302,12 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
       await Promise.resolve();
     });
 
-    expect(putChatSettings).toHaveBeenCalledExactlyOnceWith({
-      chat: { responseStyle: "balanced" }
-    });
+    expect(putChatSettings).not.toHaveBeenCalled();
+    expect(getChatSettings).not.toHaveBeenCalled();
     expect(putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "cross-provider" });
   });
 
-  it("clears a stale OpenCode choice when the selected Codex pill is clicked", async () => {
+  it("does nothing when the already selected model is clicked again", async () => {
     vi.mocked(getChatModelOverrideSettings).mockResolvedValueOnce({
       settings: {
         ...settingsFixture(),
@@ -320,9 +316,6 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
         selectedModel: crossProviderModel
       }
     });
-    vi.mocked(getChatSettings).mockResolvedValueOnce({
-      chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
-    });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const renderer = await renderPill(client, moduleSurface);
 
@@ -335,10 +328,8 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
       await Promise.resolve();
     });
 
-    expect(putChatSettings).toHaveBeenCalledExactlyOnceWith({
-      chat: { responseStyle: "balanced" }
-    });
-    expect(putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "cross-provider" });
+    expect(putChatSettings).not.toHaveBeenCalled();
+    expect(putChatModelOverride).not.toHaveBeenCalled();
   });
 
   it("does not invalidate/clear the newly rendered surface's threads key when a same-provider mutation resolves after a surface flip", async () => {

@@ -65,7 +65,7 @@ describe("chat.setResponseStyle tool", () => {
     expect(otherStored).toBeNull();
   });
 
-  it("preserves the saved OpenCode model when changing response style", async () => {
+  it("drops a legacy OpenCode model value when changing response style", async () => {
     await dataContext.withDataContext(
       { actorUserId: ids.userB, requestId: "req:response-style-opencode-seed" },
       (scopedDb) =>
@@ -83,10 +83,7 @@ describe("chat.setResponseStyle tool", () => {
       { actorUserId: ids.userB, requestId: "req:response-style-opencode-read" },
       (scopedDb) => preferences.getWithRevision(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
     );
-    expect(stored?.value).toEqual({
-      responseStyle: "detailed",
-      openCodeModel: "muse-spark-1.3-free"
-    });
+    expect(stored?.value).toEqual({ responseStyle: "detailed" });
   });
 
   it("declares the style enum on inputSchema so the gateway rejects anything outside it", () => {
