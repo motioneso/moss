@@ -270,3 +270,35 @@ routing investigation/repair, not repeated presentation-wording variants or a
 threshold waiver. First inspect the trusted routing contract and actual first-turn
 tool availability. Preserve the failed candidate and generic lifecycle limitation.
 Commit the evidence-backed routing repair plan before changing production code.
+
+## Bounded source-routing repair plan
+
+Current seams: `packages/chat/src/live/runtime.ts:98` supplies trusted tool routing
+on every surface through `composeMossPersona` at line 137. It prefers domain tools
+for Moss data/actions but separately directs public-web lookups to `web.search`.
+`packages/sports/src/results/tool.ts:58` already describes the available completed-
+result domain read. The failed installed activity shows web-only selections despite
+a successful public Sports read; prior menu diagnostics include both tools with
+unchanged catalog hashes. This is a gap in routing precedence for public facts,
+not evidence for missing registration or a reason to force a visual.
+
+Change only `MOSS_PERSONA_TOOL_GUIDANCE` in `packages/chat/src/live/runtime.ts`:
+honor an explicitly requested source; otherwise prefer an available matching domain
+read, including public facts, before general web research. Keep the web-search-only
+native-tool restriction, descriptive queries, search-before-page-read, ToolSearch
+recovery and outside-content defenses. Keep the whole routing block below 150 words.
+Do not change Sports facts, source policy, presentation guidance, renderer, tool
+availability, provider/model selection or acceptance prompts/threshold. Existing
+Sports app-map declarations in this PR still describe the same public read/card.
+
+A four-prompt real installed diagnostic captures saved tool activity before/after
+this single routing change, using the same module/follow/public-read setup and
+first-card reload. It is a hypothesis test, not acceptance. Do not add lexical
+prompt-substring tests: the existing composed-persona tests verify both surfaces;
+installed first-attempt reads/cards are the behavioral signal. Run the existing
+persona/host/prose suites and root static checks. If the bounded diagnostic supports
+the change, commit/push it, run the original Sports/generic matrices once on that
+candidate, then complete exact-head independent review, isolated full gate and CI.
+Preserve any failed diagnostics/runs. If reliability still fails without a concrete
+remaining defect, record the measured recommendation and actual decision rather
+than start further prompt variants. Renderer and 19/20 gate remain unchanged.
