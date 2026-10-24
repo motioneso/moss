@@ -1,3 +1,5 @@
+import { resultCrest } from "../source/espn-assets.js";
+export { resultCrest } from "../source/espn-assets.js";
 import { catalogEntry } from "../source/catalog.js";
 
 import type {
@@ -35,24 +37,6 @@ function score(value: unknown): number | null {
   const number =
     typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() ? Number(raw) : NaN;
   return Number.isInteger(number) && number >= 0 && number <= 1000 ? number : null;
-}
-
-/** Reuse the reviewed ESPN image origins; no credentials, fragments or arbitrary resources. */
-export function resultCrest(value: unknown, imageHosts: readonly string[]): string | null {
-  if (typeof value !== "string" || value.length > 500) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      !url.hash &&
-      imageHosts.includes(url.hostname)
-      ? url.href
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function side(value: unknown, imageHosts: readonly string[]): ResultSide | null {

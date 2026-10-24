@@ -105,7 +105,8 @@ export class SportsResultReader {
           .map((f) => f.competitionKey)
       ])
     ].slice(0, 8);
-    const now = this.now();
+    // Match the results cache TTL so repeated turns reuse the same bounded provider read.
+    const now = new Date(Math.floor(this.now().getTime() / 30_000) * 30_000);
     const from = new Date(now.getTime() - 90 * 86400000).toISOString();
     const to = now.toISOString();
     const reads = await Promise.all(
@@ -126,6 +127,12 @@ export class SportsResultReader {
     const failedCompetitions = reads
       .filter((r) => r.envelope.degraded)
       .map((r) => r.competitionKey);
+    if (failedCompetitions.length === competitions.length)
+      return {
+        status: "unavailable",
+        candidates: [team],
+        message: `Results could not be read for ${competitions.join(", ")} from ${from} to ${to}. Try again later.`
+      };
     const byId = new Map<string, CompletedResult>();
     for (const { envelope } of reads) {
       if (envelope.degraded) continue;
@@ -142,7 +149,7 @@ export class SportsResultReader {
       retrievedAt: reads.map((r) => r.envelope.fetchedAt).sort()[0] ?? to,
       competitions,
       failedCompetitions,
-      coverage: `Latest available result. Checked ${competitions.join(", ")} over the last 90 days; other competitions may be missing.${failedCompetitions.length ? ` Failed: ${failedCompetitions.join(", ")}.` : ""}`
+      coverage: `Latest available result. Checked ${competitions.join(", ")} from ${from} to ${to}; other competitions may be missing.${failedCompetitions.length ? ` Failed: ${failedCompetitions.join(", ")}.` : ""}`
     };
   }
 }

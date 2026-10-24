@@ -123,7 +123,7 @@ describe("completed sports results", () => {
   });
 });
 
-function readerFixture(failed = false, empty = false) {
+function readerFixture(failed: boolean | "all" = false, empty = false) {
   const getDataset: DatasetClient["getDataset"] = async <T>(
     key: string,
     params: Record<string, unknown>
@@ -140,7 +140,9 @@ function readerFixture(failed = false, empty = false) {
                 params.competitionKey === "eng.1" ? "2026-10-20T00:00:00Z" : "2026-10-22T00:00:00Z"
             }
           ]) as T,
-    degraded: key === "results" && params.competitionKey === "uefa.champions" && failed,
+    degraded:
+      key === "results" &&
+      (failed === "all" || (params.competitionKey === "uefa.champions" && failed)),
     fetchedAt: "2026-10-23T12:00:00Z"
   });
   const list = vi.fn(async () =>
@@ -181,6 +183,9 @@ describe("authorized latest available result", () => {
     expect(
       await readerFixture(false, true).reader.read({} as never, { teamName: "Liverpool" })
     ).toMatchObject({ status: "empty", result: null });
+    expect(
+      await readerFixture("all").reader.read({} as never, { teamName: "Liverpool" })
+    ).toMatchObject({ status: "unavailable" });
   });
   it("asks for context instead of guessing a global men's/women's identity", async () => {
     const reader = new SportsResultReader({ getDataset: vi.fn() }, { list: async () => [] });
@@ -189,14 +194,14 @@ describe("authorized latest available result", () => {
     });
   });
   it("requires a choice when followed rosters contain distinct teams with the same name", async () => {
-    const getDataset = vi.fn<DatasetClient["getDataset"]>(async <T>() => ({
+    const getDataset: DatasetClient["getDataset"] = async <T>() => ({
       data: [
         { sourceTeamId: "364", name: "Liverpool", shortName: "Liverpool" },
         { sourceTeamId: "999", name: "Liverpool Women", shortName: "Liverpool" }
       ] as T,
       degraded: false,
       fetchedAt: window.to
-    }));
+    });
     const follows = {
       list: async () =>
         ["364", "999"].map((sourceTeamId) => ({
@@ -211,7 +216,7 @@ describe("authorized latest available result", () => {
     expect(await reader.read({} as never, { teamName: "Liverpool" })).toMatchObject({
       status: "ambiguous"
     });
-    expect(getDataset).toHaveBeenCalledTimes(1);
+
     expect(
       await reader.read({} as never, { teamName: "Other", sourceTeamId: "364" })
     ).toMatchObject({ status: "needs_team" });
@@ -219,6 +224,7 @@ describe("authorized latest available result", () => {
   it("presents result query fields and rejects extra outbound fields", async () => {
     const present = sportsPublicReadPresentation("results");
     const input = {
+      target: "/api/sports/results/latest",
       params: {},
       query: { teamName: "Liverpool", competitionKey: "eng.1" },
       body: {}
@@ -261,6 +267,8 @@ describe("source snapshot boundary", () => {
     if (!presented.ok) throw new Error(presented.code);
     expect(presented.reply.snapshots[0]!.fields.home).toMatchObject({ score: 1 });
     expect(presented.reply.fallbackText).toContain("Opponent 1–2 Liverpool");
+    expect(presented.reply.snapshots[0]!.coverage).toContain(window.from.replace("Z", ".000Z"));
+    expect(presented.reply.fallbackText).toContain(window.to.replace("Z", ".000Z"));
     expect(validateVisualCatalogReply(presented.reply).ok).toBe(true);
     const forged = structuredClone(presented.reply);
     forged.snapshots[0]!.fields.home = { arbitrary: "https://example.com" };

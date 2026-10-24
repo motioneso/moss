@@ -57,7 +57,9 @@ export const sportsLatestResultExecute: ToolExecute = async (db, input, ctx, ser
   };
 };
 
-export const sportsLatestResultTool = {
+export const sportsLatestResultTool: ModuleAssistantToolManifest & {
+  readonly name: "sports.latestResult";
+} = {
   name: "sports.latestResult",
   permissionId: "sports.view",
   risk: "read",
@@ -66,4 +68,4 @@ export const sportsLatestResultTool = {
     "Read the latest available completed match for a team over 90 days, across covered competitions. Uses follows or explicit competition/team context; returns clarification when ambiguous. Read-only: does not follow teams, change settings or sync sources. A source-bound visual is available when useful.",
   inputSchema: sportsResultQuerySchema,
   execute: sportsLatestResultExecute
-} as const satisfies ModuleAssistantToolManifest;
+};

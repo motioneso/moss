@@ -4,7 +4,7 @@ import type {
   SportsCompletedResult as CompletedResult,
   SportsResultSide as ResultSide
 } from "@moss/shared";
-import { ESPN_IMAGE_HOSTS } from "../source/espn-assets.js";
+import { resultCrest } from "../source/espn-assets.js";
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -16,21 +16,7 @@ const id = (v: unknown): v is string => typeof v === "string" && /^\d{1,20}$/.te
 const number = (v: unknown): v is number | null =>
   v === null || (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 1000);
 function crest(v: unknown): v is string | null {
-  if (v === null) return true;
-  if (typeof v !== "string" || v.length > 500) return false;
-  try {
-    const u = new URL(v);
-    return (
-      u.protocol === "https:" &&
-      !u.username &&
-      !u.password &&
-      !u.port &&
-      !u.hash &&
-      ESPN_IMAGE_HOSTS.includes(u.hostname)
-    );
-  } catch {
-    return false;
-  }
+  return v === null || (typeof v === "string" && resultCrest(v) === v);
 }
 function side(value: unknown): value is ResultSide {
   const v = record(value);

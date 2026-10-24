@@ -53,7 +53,7 @@ test("ordinary Sports questions save real sourced results and retain user-data c
   const model = await bringUpRealChatModel(page);
   // Real module/settings paths, then a synthetic actor's follow through the normal public API.
   await page.goto("/sports");
-  await expect(page.getByRole("heading", { name: "Sports", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("banner").getByText("Sports", { exact: true })).toBeVisible();
   await page.goto("/settings?section=modules&module=sports");
   await expect(page.getByText("Following", { exact: true }).first()).toBeVisible();
   const follow = await page.request.post("/api/sports/follows", {
@@ -73,11 +73,15 @@ test("ordinary Sports questions save real sourced results and retain user-data c
     const visual = envelope?.blocks[0]?.kind === "sports.result";
     const useful =
       typeof saved.reply === "string" &&
-      saved.reply.trim().length > 0 &&
-      !saved.reply.includes("root =");
+      saved.reply.trim().length > 30 &&
+      /Liverpool/i.test(saved.reply) &&
+      [read.result.home.score, read.result.away.score].every(
+        (score) => score === null || saved.reply.includes(String(score))
+      ) &&
+      !/root =|cannot answer|unable to|couldn't (?:find|retrieve)/i.test(saved.reply);
     results.push({ index: index + 1, visual, useful, elapsedMs });
     console.log(
-      `[sports-route] ${JSON.stringify({ ...results.at(-1), prompt, providerModel: model.providerModelId })}`
+      `[sports-route] ${JSON.stringify({ ...results.at(-1), prompt, reply: saved.reply.slice(0, 1500), providerModel: model.providerModelId, replyBytes: Buffer.byteLength(saved.reply), visualBytes: Buffer.byteLength(JSON.stringify(envelope ?? null)) })}`
     );
     if (!visual) continue;
     expect(envelope!.snapshots[0]!.fields).toEqual(read.result);
