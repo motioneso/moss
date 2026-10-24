@@ -78,13 +78,15 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 ### Vocci adapter recovery — phone unlock (#3565)
 
 The existing unlock request is routed to `vocci-adapter-recovery`; exclusive
-runtime/phone/production ownership transferred to `vocci-vocabulary-feasibility`.
+runtime/phone/production ownership transferred to `vocci-copy-rollout`.
 The predecessor's explicit-device preflight
 found the authorized phone online with Bluetooth ON and the exact live foreground
 service, but its lock-screen observation reports locked; native UI comparison and
 the single authorized adapter check cannot proceed. No adapter change was issued.
 Private `adapter-recovery/preflight.json` records the checks. Tested checkout
-contains merged main `7535cfb10`; `HEAD..origin/main` has zero commits.
+was the adapter-recovery slice; later documentation and copy-rollout work does
+not provide a fresh unlocked/native preflight. The existing notification remains
+routed to its originating agent; do not send another unlock request.
 
 Please unlock the authorized phone when convenient and tell this agent. Recommended:
 continue the bounded check after a fresh preflight. Alternatively defer physical
