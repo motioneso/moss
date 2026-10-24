@@ -47,6 +47,7 @@ export async function fetchIntervalForecast(
   )
     throw new WeatherUnavailableError("Forecast units unavailable");
   const windUnit = unit === "imperial" ? "mph" : "km/h";
+  const providerWindUnit = unit === "imperial" ? "mp/h" : "km/h";
   const hourly = data.hourly ?? {};
   const values = (key: string): unknown[] => (Array.isArray(hourly[key]) ? hourly[key] : []);
   const times = values("time");
@@ -55,7 +56,8 @@ export async function fetchIntervalForecast(
   const codes = values("weather_code");
   const rains =
     data.hourly_units?.precipitation_probability === "%" ? values("precipitation_probability") : [];
-  const winds = data.hourly_units?.wind_speed_10m === windUnit ? values("wind_speed_10m") : [];
+  const winds =
+    data.hourly_units?.wind_speed_10m === providerWindUnit ? values("wind_speed_10m") : [];
   const duplicates = new Set(times.filter((v, index) => times.indexOf(v) !== index));
   const intervals = times.flatMap((time, index) => {
     const temperature = temperatures[index];

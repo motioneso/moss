@@ -55,7 +55,7 @@ export function hourlyPayload() {
       time: "unixtime",
       temperature_2m: "°F",
       precipitation_probability: "%",
-      wind_speed_10m: "mph"
+      wind_speed_10m: "mp/h"
     },
     hourly: {
       time: intervals.map((v) => Date.parse(v.startsAt) / 1000),

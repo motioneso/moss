@@ -40,8 +40,11 @@ export class WeatherForecastReader {
         status: "unavailable",
         reason: "Choose a local window of 1–12 hours within the next five days."
       };
+    // Preference failures remain data-context failures; do not fetch a guessed-unit fallback.
+    const unit = weatherUnit(await this.preferences.get(db, "weather-unit"));
+    const raw = query.place ? null : await this.preferences.get(db, "weather-location");
+    const savedZone = query.place ? null : await readSavedWeatherZone(db, this.preferences);
     let resolved: ResolvedWeatherLocation | null = null;
-    let unit: WeatherUnit = "imperial";
     try {
       if (query.place) {
         const [city = "", ...qualifiers] = query.place
@@ -67,12 +70,7 @@ export class WeatherForecastReader {
           };
         resolved = { location: candidates[0], source: "conversation" };
       } else {
-        const raw = await this.preferences.get(db, "weather-location");
-        resolved = await this.locations.resolve(
-          raw,
-          requestIp,
-          await readSavedWeatherZone(db, this.preferences)
-        );
+        resolved = await this.locations.resolve(raw, requestIp, savedZone);
       }
       if (!resolved)
         return {
@@ -80,7 +78,6 @@ export class WeatherForecastReader {
           reason:
             "No weather location is available. Set a place in Settings → Profile or name a city and region in this conversation."
         };
-      unit = weatherUnit(await this.preferences.get(db, "weather-unit"));
       const key = JSON.stringify([actorUserId, resolved.location.lat, resolved.location.lon, unit]);
       let source = query.refresh ? undefined : this.cache.get(key);
       if (!source) {

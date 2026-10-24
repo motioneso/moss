@@ -135,3 +135,19 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   Gateway tests exercise registered built-in declarations, session allowlist denial,
   absent-module denial and an allowed scoped read. These are deterministic evidence,
   not installed-model acceptance.
+- 2026-10-24: independent review of `75633d2a2` requested changes: Standards found
+  preference exceptions swallowed by source fallback; Spec found the real provider's
+  imperial `mp/h` label discarded and an insufficient useful-prose predicate.
+  Moved preferences outside the source catch, normalized `mp/h` to public `mph`,
+  and added source-temperature/units and nonanswer checks plus full-answer assessment
+  to the acceptance procedure. Regression suites cover each finding.
+- 2026-10-24: installed run on `75633d2a2` signed in the owner, configured the
+  discovered Codex economy `gpt-5.6-luna` and saved San Diego through Profile.
+  It stopped before the source/matrix on a test assertion expecting required Weather
+  in optional Modules. Removed that incorrect assertion; Profile is its actual settings
+  path. This is a failed setup run, not acceptance. No prompt cases were attempted.
+- 2026-10-24: paired production builds of the same source/toolchain, omitting only
+  Weather's generated visual contract/renderer imports in the baseline, measured
+  +5,990 JavaScript bytes (+1,911 gzip) and +487 CSS bytes. No token-savings claim.
+- 2026-10-24: removing the session allowlist guard made the Weather denial test fail
+  (exit 1); restored the guard. This supplements the source-ID negative control.

@@ -55,6 +55,12 @@ function harness() {
   };
 }
 describe("Weather provider and local windows", () => {
+  it("normalizes Open-Meteo's real imperial mp/h label without discarding supported wind", async () => {
+    const fetchFn = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(hourlyPayload())));
+    const source = await fetchIntervalForecast(1, 2, "imperial", fetchFn, () => weatherNow);
+    expect(source.windUnit).toBe("mph");
+    expect(source.intervals.map((item) => item.windSpeed)).toEqual([8, 7, 6, 5]);
+  });
   it("uses the forecast place's date at the UTC boundary rather than the actor or server zone", () => {
     const now = new Date("2026-10-24T01:00:00Z");
     const forecast = selectForecastWindow(
@@ -171,6 +177,19 @@ describe("Weather provider and local windows", () => {
   });
 });
 describe("authorized Weather reads and snapshots", () => {
+  it.each(["weather-unit", "weather-location", "locale"])(
+    "propagates %s preference failures before attempting any source read",
+    async (failedKey) => {
+      const h = harness();
+      const failure = new Error("Preference access failed");
+      vi.mocked(h.preferences.get).mockImplementation(async (_db, key) => {
+        if (key === failedKey) throw failure;
+        return h.values.get(key) ?? null;
+      });
+      await expect(h.reader.read(scoped, "actor", {})).rejects.toBe(failure);
+      expect(h.fetchFn).not.toHaveBeenCalled();
+    }
+  );
   it("does not read preferences or fetch when the session denies Weather or the module is absent", async () => {
     const h = harness();
     configureWeatherForecastRead(h.reader);

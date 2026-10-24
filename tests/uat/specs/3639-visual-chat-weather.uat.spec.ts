@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInUatAdmin, bringUpRealChatModel } from "./real-chat-signin.js";
 import type { VisualReplyV1, WeatherForecastRead } from "@moss/shared";
+import { hasUsefulWeatherAnswer } from "../weather-answer.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 const prompts = [
@@ -64,8 +65,7 @@ test("ordinary evening questions use actual place-local intervals and immutable 
     page.getByText("Weather location saved: San Diego, California, United States.")
   ).toBeVisible();
   await expect(page.getByRole("group", { name: "Unit", exact: true })).toBeVisible();
-  await page.goto("/settings?section=modules");
-  await expect(page.getByText("Weather", { exact: true }).first()).toBeVisible();
+  // Weather is a required built-in; its actual settings live in Profile, not optional Modules.
   const savedLocation = await (await page.request.get("/api/me/weather-location")).json();
   const response = await page.request.get(
     "/api/weather/forecast?dayOffset=0&startHour=18&endHour=22"
@@ -91,12 +91,7 @@ test("ordinary evening questions use actual place-local intervals and immutable 
     const { saved, elapsedMs } = await turn(page, prompt);
     const envelope: VisualReplyV1 | undefined = saved.visualReply;
     const visual = envelope?.blocks[0]?.kind === "weather.forecast";
-    const useful =
-      saved.reply.trim().length >= 30 &&
-      /jacket|layer|rain|wind|cool|warm|temperature|°[FC]|\d+\s*(?:degrees|°)/i.test(saved.reply) &&
-      !/unable to (?:get|fetch|access)|couldn.t (?:get|fetch)|no (?:weather|forecast) data/i.test(
-        saved.reply
-      );
+    const useful = hasUsefulWeatherAnswer(saved.reply, source.forecast);
     results.push({
       index: index + 1,
       visual,
@@ -176,7 +171,18 @@ test("ordinary evening questions use actual place-local intervals and immutable 
   );
   expect(composed.saved.visualReply.blocks[0].kind).toBe("composition");
   expect(await (await page.request.get("/api/me/weather-location")).json()).toEqual(savedLocation);
+  const follow = await page.request.post("/api/sports/follows", {
+    data: { competitionKey: "eng.1", teamKey: "liv" }
+  });
+  expect(follow.ok()).toBe(true);
+  const sportsSource = await (
+    await page.request.get("/api/sports/results/latest?teamName=Liverpool")
+  ).json();
+  expect(sportsSource.status).toBe("result");
+  const sports = await turn(page, "How did Liverpool do in their last match?");
+  expect(sports.saved.visualReply.blocks[0].kind).toBe("sports.result");
+  expect(sports.saved.visualReply.snapshots[0].fields).toEqual(sportsSource.result);
   console.log(
-    "[weather-controls] four prose controls, novel user-data composition and unchanged saved location passed"
+    "[weather-controls] four prose controls, novel user-data composition, unchanged saved location and sourced Sports preservation passed"
   );
 });
