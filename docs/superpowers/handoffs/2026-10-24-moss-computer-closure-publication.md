@@ -43,6 +43,22 @@ Disclosed OS/root/runtime/namespace/cgroup/heartbeat/Node projections and constr
 capture/deployment fixtures do not qualify installed trust, actual Node24/image/128MiB fit or owner
 delivery. Keep failed executions, corrections and removed-protection controls with exact restoration.
 
+## CI phase-budget correction
+
+The original final candidate2e80e5269 and earlier4ccf3801 reached the15m unit limit;
+neither is accepted complete CI. Follow the [correction plan](../plans/2026-10-24-unit-ci-shards.md)
+and [separate exact evidence](../../evidence/moss-computer/2026-10-24-unit-ci-shards.md)
+plus matching JSON. CI source82637b1e adds two required complete unit shards using
+MOSS_UNIT_TEST_SHARD, preserving the canonical eight filters,15m/shard,two workers
+and mandatory aggregate. Security's R1 rejection of delegated Vitest grammar is
+retained and corrected by strict dedicated-input validation before spawn.
+Vitest list --filesOnly ignores shard: native-sequencer fixture partitions are
+local evidence only. The private boot must supply final exact-HEAD successful
+CI with both complete actual shard executions/combined population, not an old
+timeout, a superseded cancelled plan run or fixture-only selection receipt.
+Earlier Computer evidence remains bound to6db03b5c; no Computer source changes
+occur in this correction. All release/runtime/owner gates below still apply.
+
 ## Start and next bounded contract
 
 Stay in the assigned fresh isolated worktree/branch. Verify initial HEAD against the actual accepted
