@@ -43,12 +43,19 @@ the open lifecycle descriptor without a new authenticated protocol. Co-location 
 existing authority/lock and avoids a second root service. No injectable successful admission or
 caller-supplied process tuples. Test trust substitutions are explicit fixtures.
 
+New production modules: `scripts/computer-capture/cgroups.ts` for bounded native membership,
+`provenance.ts` for pinned managed files/artifacts/namespaces, and `run.ts` for capture/publication.
+Focused fixtures/tests: `tests/unit/computer-capture-fixture.ts`, `computer-capture-native-fixture.ts`,
+`computer-capture.test.ts` and `computer-capture-trust.test.ts`. Move the existing descriptor mount-ID
+helper from closure/observe to watchdog/linux-files for canonical reuse; preserve closure behavior.
+
 ## Configuration and actual caller
 
 Add optional `capture` RootIdentity to SupervisorConfiguration. Exact private root-owned0700,
 canonical trusted nonwritable ancestry, outside every host/data/docker/monitor root with no overlap
-in either direction. Config, Node and artifact must be outside capture. Require lifetime whenever
-capture exists. Only CLI manage mode may consume capture; observe/fence refuse it, collector may
+in either direction. Config, Node and artifact must be outside capture. The pure parser accepts a
+lifetime-absent capture template for PREPARE; the live supervisor loader and manage require lifetime
+whenever capture exists. Only CLI manage mode may consume capture; observe/fence refuse it, collector may
 validate the same config but never capture or acquire the lock. Absent capture retains behavior.
 The preparation publisher may carry this trusted template field but cannot perform capture.
 No dependency, UI, app-map capability, deployment default or required existing setting changes.
@@ -72,6 +79,10 @@ no pending intents/stop marker, canonical roots/marker/state and owned lock. Pin
 bytes+inode, Node/artifact metadata+hash, Docker socket metadata and namespace anchors throughout.
 Read the actual start-only journal through its open descriptor and correlate exact run/runner/
 watchdog/start time, path inode and hash; do not accept caller-supplied journal provenance.
+The controlled exclusive journal open becomes O_RDWR so the start-only snapshot reads the SAME
+open descriptor; exact bytes/size/inode and pending/record counts must agree before and after.
+Capture checks the existing terminal abort/latch too: the host service may already be listening,
+and a disable arriving during bootstrap must refuse capture rather than complete its snapshot.
 
 Read complete exact inventory and repeat full-ID running inspect for gateway and desktop. Require
 State.Status=running, Running=true, positive safe host State.Pid, no Restarting/Paused/Dead and a
@@ -79,7 +90,11 @@ nonzero parseable StartedAt. Repeated full-ID observations must equal, including
 Observe each init's actual host PID/start/group via canonical /proc helpers.
 
 Container-init tuples alone do not cover descendants. Require native host cgroup v2 at fixed
-/sys/fs/cgroup (actual statfs magic), canonical root-owned nonwritable ancestry. Each init's bounded
+/sys/fs/cgroup (actual statfs magic), canonical root-owned nonwritable ancestry. Require actual
+self/PID1 cgroup namespace links equal and stable before/after: cgroup namespace changes reinterpret
+the proc paths. Record that anchor alongside net. Pin the fixed cgroup mount descriptor identity and
+its Linux fdinfo mnt_id; require every traversed directory AND opened cgroup.procs file to have that
+same mount ID. Device/statfs equality alone cannot exclude same-device bind mounts. Each init's bounded
 /proc/PID/cgroup has exactly one unified0:: absolute canonical nonroot path whose final component
 is the exact full ID or docker-FULLID.scope. Refuse same/overlapping groups and host runner/watchdog
 membership in either container subtree. Enumerate each subtree's actual cgroup.procs recursively,
@@ -102,7 +117,7 @@ receipt as descendant-complete proof. No continuous absence, quota or installed 
 Require empty capture root, then exclusive root0600 capture.json (<=64KiB). Closed schema contains
 version1, kind=managed-process-snapshot, coverage=sampled-cgroup-v2, run/binding (NO secret), initial
 and finished monotonic sample times, actual watchdog/runner/init/descendant identities, cgroup
-directory identities, host boot/pid/mnt/user/net anchors, owned-lock identity, config/artifact/Node/
+directory identities, host boot/pid/mnt/user/net/cgroup anchors, owned-lock identity, config/artifact/Node/
 state/marker/journal hashes and metadata. Net anchors of self/PID1 must agree before/after.
 No raw config bodies, secret, key, environment, process command line or private error string.
 Paths and raw snapshot stay private; public evidence contains hashes/sanitized summaries.
@@ -155,3 +170,12 @@ installation/provenance, new-run/reset/uncertain-create quiescence, API leases/d
 owner cookie/Origin/HTTPS/WSS/approved chat/hostile live acceptance remain. Preserve sole writer,
 predecoder bounds/epochs/pressed releases/Fence/fresh post-Fence auth. No production deployment.
 A merged prerequisite never finishes actual owner delivery.
+
+## Plan review ledger
+
+R1 at ccddc93aa: Security and Spec identified a PREPARE-template/live-lifetime contradiction,
+missing cgroup namespace interpretation anchor and insufficiently explicit same-device mount
+identity. Correction distinguishes pure parser from live loader, adds cgroup namespace equality
+and descriptor mount-ID checks, and identifies the exact new modules. Security also identified
+that the actual journal descriptor was write-only; controlled O_RDWR enables same-FD readback.
+All failed review reports remain private. Exact amended-commit acceptance is required before code.
