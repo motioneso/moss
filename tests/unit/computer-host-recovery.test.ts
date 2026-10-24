@@ -410,6 +410,112 @@ describe("explicit terminal reconciliation (native files/Unix HTTP; no real Dock
     expect(mutations(f)).toEqual([]);
   });
 
+  it.each(["roots", "file-sync"])(
+    "terminal entry during state save %s prevents enabled or identity-erasing publication",
+    async (point) => {
+      const f = await running();
+      const before = structuredClone(f.store.state);
+      if (point === "roots") {
+        const roots = f.store.assertRoots.bind(f.store);
+        vi.spyOn(f.store, "assertRoots").mockImplementationOnce(async () => {
+          await roots();
+          f.store.latchStop();
+        });
+      } else {
+        const original = fs.open;
+        vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+          const handle = await original(...args);
+          if (String(args[0]).includes(".state-")) {
+            const sync = handle.sync.bind(handle);
+            vi.spyOn(handle, "sync").mockImplementationOnce(async () => {
+              await sync();
+              f.store.latchStop();
+            });
+          }
+          return handle;
+        });
+      }
+      await expect(f.store.save({ ...before, resources: [] })).rejects.toThrow();
+      expect(f.store.state).toEqual(before);
+      expect(await privateJson(join(f.config.stateDir, "state.json"))).toEqual(before);
+      expect(mutations(f)).toEqual([]);
+    }
+  );
+
+  it("late create identity survives terminal entry during its state-file fsync", async () => {
+    const f = await fixture();
+    const original = fs.open;
+    let stopped = false;
+    vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+      const handle = await original(...args);
+      const path = String(args[0]);
+      if (path.includes(".state-")) {
+        const sync = handle.sync.bind(handle);
+        vi.spyOn(handle, "sync").mockImplementationOnce(async () => {
+          await sync();
+          const pending = JSON.parse(await fs.readFile(path, "utf8"));
+          if (!stopped && pending.resources.some((r: { id: string | null }) => r.id !== null)) {
+            stopped = true;
+            await persistComputerStop(f.store);
+          }
+        });
+      }
+      return handle;
+    });
+    expect((await f.client.request(binding(), "enable", 0)).reason).toBe("runtime-unavailable");
+    expect(stopped).toBe(true);
+    expect(f.store.state.enabled).toBe(false);
+    expect(f.store.state.resources).toEqual([
+      { role: "gateway", generation: 1, id: [...f.containers.keys()][0] }
+    ]);
+    expect(await privateJson(join(f.config.stateDir, "state.json"))).toEqual(f.store.state);
+    expect(mutations(f)).toHaveLength(1);
+    expect(mutations(f)[0]!.path).toContain("/containers/create");
+  });
+
+  it("terminal snapshot during directory fsync observes the already published state", async () => {
+    const f = await running();
+    const original = fs.open;
+    let stopped = false;
+    vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
+      const handle = await original(...args);
+      if (String(args[0]) === f.config.stateDir) {
+        const sync = handle.sync.bind(handle);
+        vi.spyOn(handle, "sync").mockImplementationOnce(async () => {
+          if (!stopped) {
+            stopped = true;
+            await persistComputerStop(f.store);
+          }
+          await sync();
+        });
+      }
+      return handle;
+    });
+    const state = { ...f.store.state, enabled: false, generation: 2 };
+    await f.store.save(state);
+    expect(((await privateJson(marker(f))) as { state: unknown }).state).toEqual(state);
+    expect(f.store.state).toEqual(state);
+    expect(mutations(f)).toEqual([]);
+  });
+
+  it("terminal entry during normal disable inspect prevents every actual mutation", async () => {
+    const f = await running();
+    const before = structuredClone(f.store.state.resources);
+    const inspect = ComputerDocker.prototype.inspect;
+    let gatewayInspects = 0;
+    vi.spyOn(ComputerDocker.prototype, "inspect").mockImplementation(async function (
+      this: ComputerDocker,
+      resource
+    ) {
+      const result = await inspect.call(this, resource);
+      if (resource.role === "gateway" && ++gatewayInspects === 2) f.store.latchStop();
+      return result;
+    });
+    expect((await f.client.request(binding(), "disable", 1)).reason).toBe("runtime-unavailable");
+    expect(mutations(f)).toEqual([]);
+    expect(f.store.state.resources).toEqual(before);
+  });
+
   it("actual CLI inspects/stops only the fixture after clean lock release and leaves no owned lock", async () => {
     const f = await running();
     expect((await invoke(f, "inspect")).exit).toBe(1); // Live daemon lock is not stolen.

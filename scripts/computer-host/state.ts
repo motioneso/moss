@@ -1,5 +1,5 @@
-import { constants } from "node:fs";
-import { lstat, open, rename, unlink } from "node:fs/promises";
+import { constants, renameSync } from "node:fs";
+import { lstat, open, unlink } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -81,6 +81,8 @@ export function parseState(value: unknown): HostState {
   }
   return value as unknown as HostState;
 }
+
+export class TerminalStateConflict extends Error {}
 
 /** Owns the one daemon lock, canonical storage identity and fsynced operation/resource state. */
 export class HostStateStore {
@@ -167,11 +169,11 @@ export class HostStateStore {
     )
       throw new Error("Computer state changed");
   }
-  async save(state: HostState): Promise<void> {
-    parseState(state);
+  #assertTerminalState(state: HostState): void {
     if (
       this.#stopRequested &&
       (state.enabled ||
+        state.generation < this.#state.generation ||
         state.resources.length !== this.#state.resources.length ||
         this.#state.resources.some(
           (before) =>
@@ -183,10 +185,13 @@ export class HostStateStore {
             )
         ))
     )
-      throw new Error("Terminal Computer identities must be retained");
+      throw new TerminalStateConflict("Terminal Computer identities must be retained");
+  }
+  async save(state: HostState): Promise<void> {
+    parseState(state);
+    this.#assertTerminalState(state);
     await this.assertRoots();
     await this.#write("state.json", state);
-    this.#state = state;
   }
   async #write(name: "state.json" | "identity.json", value: unknown): Promise<void> {
     const temporary = join(this.config.stateDir, `.state-${randomUUID()}`);
@@ -195,7 +200,12 @@ export class HostStateStore {
       await file.writeFile(JSON.stringify(value));
       await file.sync();
       await file.close();
-      await rename(temporary, join(this.config.stateDir, name));
+      const state = name === "state.json" ? parseState(value) : null;
+      if (state) this.#assertTerminalState(state);
+      // No await between terminal validation, durable-path publication and local state publication.
+      // A terminal latch during the following directory fsync observes this same state.
+      renameSync(temporary, join(this.config.stateDir, name));
+      if (state) this.#state = state;
       const directory = await open(
         this.config.stateDir,
         constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW
