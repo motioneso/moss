@@ -3,13 +3,14 @@
 Part of #3618/#3617/#3616/#3577; #3619 remains open too. This is opt-in PREPARE tooling only.
 The actual owner integration, installed runtime and launch admission remain unfinished.
 
-Checked source `c53d88263e0d1cdd94c493b810769c103b371f86` descends from accepted plan
+Final checked source `24a3de6dbf7b47b3c36a8cefe04c238b8f7138ad` descends from accepted plan
 `7e933ce9d8314aeac3cceb0894eea2a96f4338c7` and base `1a79c74b4cf4800740340617c67496f70fa762e1`.
-Production bytes equal `5df491e4f0a8d69e368a111854a68cf9a6bf0c08`; the final source commit only
-isolates publication-close fault injection from consumers and teardown. Both independent reviewers
-accepted exact source c53d88263e for Security and Spec/Standards. The
+Production bytes equal `5df491e4f0a8d69e368a111854a68cf9a6bf0c08`; the later test-only commits
+isolate publication-close injection, project disclosed fixture group metadata and register cleanup
+before setup can fail. Both independent reviewers accepted exact source24a3de6db for Security
+and Spec/Standards. The
 [JSON manifest](2026-10-24-trusted-provisioning.json) records all ten source/test hashes, exact
-commands/exits, bundle hashes, 19 sensitivity controls, native summaries and private report/log hashes.
+commands/exits, bundle hashes, 21 sensitivity controls, native summaries and private report/log hashes.
 Raw configuration bodies and generated lifetime secrets are excluded.
 
 ## Result and trust boundary
@@ -32,18 +33,19 @@ capability, dependency, deployment configuration or default.
 
 ## Executed checks
 
-All twelve final checks exit0 at checked source: **592 tests in28 suites**, including46 provisioning
+All twelve final checks exit0 at checked source: **595 tests in28 suites**, including49 provisioning
 tests; root and tests TypeScript; scoped ESLint zero warnings and Prettier; file-size and whitespace;
 provision/host/watchdog/closure builtin-only CJS bundles targeting Node24; gateway context build.
 The context build invokes no Docker. An additional actual production CJS nativeUID1000 invocation
 silently exits2 with empty stdout/stderr. Native timing and exact hashes are in the JSON manifest.
 No foundation or database checks were run.
 
-The 19 final protection-removal runs each exit1 at an intended assertion: strict created State,
+The 21 final protection-removal runs each exit1 at an intended assertion: strict created State,
 complete pair, state inode, failed-open lock retention, publication readback, late stop, equality,
 signal latch, artifact revalidation, root-delivered gateway mode, file/directory fsync, file close,
 lock descriptor close, native timer, post-sync equality, premature signal exit, reset timer and
-namespace anchoring. Every patched source restores byte-for-byte before the final green batch.
+namespace anchoring, provisioning directory group and gateway consumer file group. Every patched
+source restores byte-for-byte before the final green batch.
 Private patches/logs and restored hashes are retained. Earlier rounds are retained: R1 patch driver
 stopped at an ambiguous close anchor; R2 close removal failed through consumer/teardown injection,
 which was corrected before the final intended-assertion R3 run. Source review R1 findings were
@@ -55,6 +57,25 @@ measured1995–2700ms bounds from child timer creation. Signals spread across th
 absolute expiry from reset timers; the premature-exit and reset-removal controls fail these bounds.
 External SIGKILL is test safety only and cannot satisfy exit2/no-signal assertions. Raw native argv,
 UID, Node version, timestamps, streams, artifact hashes and completion status remain private.
+
+## Fixture portability correction and retained CI history
+
+Prior source c53d88263e and local evidence at7ea2a1f2 remain historical (local acceptance6386038724).
+The prior CI40107039054 at7ea2 was cancelled; its retained partial unit log shows45 fixture-setup
+failures and a passing bare native nonroot refusal. That partial log does not establish the setup
+exception cause. No acceptance or successful CI from that head is transferred to the new final HEAD.
+
+The fixtures now disclose UID0/GID1000 metadata projections and map requested chown0/1000 to the
+actual native UID/primary GID. Physical metadata assertions use the original unprojected lstat.
+The new hostile directory/file group tests override observations after projection and each fails
+at its intended assertion when the respective group check is removed. Early cleanup registration
+retains child/server/descriptor handles across failed setup and attempts every retirement/removal.
+A source/hash-bound actual UID1000/GID4 run passes all49 provisioning tests, including three native
+CJS invocations with actual GID4. These fixtures do not establish installed root or group trust.
+
+All21 controls restore source byte-for-byte before the final twelve-check green batch. The initial
+refresh build refused an existing gateway output directory; a fresh-directory build succeeded,
+and the final restored batch uses another fresh directory. Earlier logs and review rounds remain.
 
 ## Limits and continuation
 

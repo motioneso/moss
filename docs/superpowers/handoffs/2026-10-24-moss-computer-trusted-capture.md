@@ -10,9 +10,14 @@ JSON in full, then follow its inherited closure/lifetime/terminal dispatches and
 spec24–27. Verify exact live PR merge, source/local-evidence and supplemental CI acceptance,
 required CI at accepted final HEAD, every changed file and actual concurrent merge deltas.
 Do not claim full merge-tree equality unless it is actually true. Parent issues remain open.
-The provisioning source checked/reviewed here is `c53d88263e0d1cdd94c493b810769c103b371f86`;
-production bytes equal `5df491e4f0a8d69e368a111854a68cf9a6bf0c08`, while the final test-only
-commit isolates publication-close fault injection. Source and final PR HEAD are different roles.
+The provisioning source checked/reviewed here is `24a3de6dbf7b47b3c36a8cefe04c238b8f7138ad`;
+production bytes equal `5df491e4f0a8d69e368a111854a68cf9a6bf0c08`, while later test-only
+commits isolate publication-close fault injection, fix disclosed group projections and register
+cleanup before setup failure. Final local checks cover595tests/28suites,49provisioning and21
+intended removed-protection failures with exact restoration. Source-bound actualUID1000/GID4
+fixtures pass; these do not qualify installed group/root trust. Prior local acceptance6386038724
+and cancelled CI40107039054 at7ea2 remain historical and authorize no merge. Source and final
+PR HEAD are different roles.
 Resolve the provisioning PR by branch `feat/moss-computer-trusted-provisioning`; the predecessor's
 private boot supplies exact merge/final-HEAD/CI/acceptance receipts after protected merge.
 
