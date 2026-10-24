@@ -26,8 +26,21 @@ public final class DeliveryService extends Service {
     private int reconnectAttempts;
     private final RecordingReminder reminder = new RecordingReminder();
     private int latestStartId;
+    interface RetryVoice { JSONObject retry(String statusId) throws Exception; }
     private static final class OwnerMismatch extends Exception { }
     static boolean recordingCommand(String action) { return "inspect-ring".equals(action) || "exclude-recording".equals(action); }
+    static boolean retryTranscriptionAllowed(JSONObject entry, boolean excluded) {
+        JSONObject status = entry == null ? null : entry.optJSONObject("status");
+        return !excluded && entry != null && entry.has("voiceIntent") && status != null &&
+            status.optString("state").equals("failed") && status.optBoolean("retryable");
+    }
+    static boolean retryTranscription(DeliveryStore store, String recordingId, RetryVoice retry) throws Exception {
+        String id = recordingId == null ? "" : recordingId;
+        JSONObject entry = store.entries.optJSONObject(id);
+        if (!retryTranscriptionAllowed(entry, store.excluded(id))) return false;
+        store.accepted(id, retry.retry(entry.getJSONObject("status").getString("id")));
+        return true;
+    }
     @Override public void onCreate() {
         super.onCreate();
         NotificationManager manager = getSystemService(NotificationManager.class);
@@ -267,13 +280,7 @@ public final class DeliveryService extends Service {
             }
             else if (action.equals("voice-on") || action.equals("voice-off")) voice.desired(action.equals("voice-on"));
             else if (action.equals("clear-completed")) store.clearCompleted();
-            else if (action.equals("retry-transcription")) {
-                String id = command.getStringExtra("recordingId");
-                JSONObject entry = store.entries.optJSONObject(id == null ? "" : id);
-                if (entry != null && entry.has("voiceIntent") && entry.has("status") &&
-                    entry.getJSONObject("status").getString("state").equals("failed") && entry.getJSONObject("status").optBoolean("retryable"))
-                    store.accepted(id, client.retryVoice(entry.getJSONObject("status").getString("id")));
-            }
+            else if (action.equals("retry-transcription")) retryTranscription(store, command.getStringExtra("recordingId"), client::retryVoice);
         }
     }
     @Override public synchronized void onDestroy() {
