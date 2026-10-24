@@ -86,3 +86,16 @@ deadline. The regression must observe the original code rejecting an empty newly
 then verify delayed/partial sample completion succeeds and dead/stopped/malformed/unhealthy or
 timed-out monitors fail closed. No desktop or viewer assertions change. Independently review a
 fresh r16 identity and actual helper/call-site inputs before the next launch.
+
+### Observed Firefox process-title encoding: bounded diagnostic correction
+
+R16 connected the real UI/RFB, rendered 346 colours and accepted fresh viewer keyboard input.
+Firefox about:support reported active level 6, but the process classifier rejected its real tab
+processes: Gecko had rewritten each content process's NUL-delimited argv into one flattened title.
+The retained rows show actual `file:// Content`, `Isolated Web Co` and `Web Content` tab processes
+with seccomp mode 2, no-new-privileges 1 and two filters versus the parent's one. Normalize only
+the exact known Firefox single-argument content-process prefix, retaining original argv. Preserve
+all parent/profile/executable, tab-type/name, environment and extra-filter requirements. Test the
+exact old classifier failing on these retained actual rows, corrected classification passing, and
+helper-only or removed-added-filter controls rejecting. Review a fresh r17 packet before runtime;
+do not call r16 a persistence or complete sandbox pass, and preserve its failure/closure receipts.
