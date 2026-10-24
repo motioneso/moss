@@ -4,6 +4,7 @@ import * as syncFs from "node:fs";
 import { join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
+import { createServer } from "node:http";
 import { build } from "esbuild";
 import { captureFixture } from "./computer-capture-fixture.js";
 import {
@@ -127,8 +128,17 @@ describe("capture trust and native managed composition; disclosed OS projections
     expect(started).not.toHaveBeenCalled();
     expect(await f.store.ownedLock()).toBeDefined();
   });
-  it.each(["file", "directory", "continue", "boundary"])(
-    "native manage retains lock/output at absolute original5s bootstrap bound with %s persistence and repeated signals",
+  it.each([
+    "file",
+    "directory",
+    "continue",
+    "boundary",
+    "sample-file",
+    "sample-directory",
+    "collection",
+    "collection-signal"
+  ])(
+    "native manage retains lock/output with %s bootstrap fixture",
     async (held) => {
       const f = await fixture();
       await f.journal.close();
@@ -145,6 +155,26 @@ describe("capture trust and native managed composition; disclosed OS projections
       });
       f.config.artifactSha256 = sha256(await fs.readFile(artifact));
       await fs.writeFile(f.configPath, JSON.stringify(f.config));
+      for (const container of f.containers) {
+        const directory = join(f.config.dockerData.path, "containers", container.Id);
+        await fs.mkdir(directory, { recursive: true });
+        const LogPath = join(directory, `${container.Id}-json.log`);
+        await fs.writeFile(LogPath, "", { mode: 0o600 });
+        Object.assign(container, { LogPath });
+      }
+      const readySocket = join(f.root, "input/ready.sock");
+      const ready = createServer((_request, response) => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true, db: "ok", pgboss: "ok" }));
+      });
+      cleanups.push(async () => {
+        ready.closeAllConnections();
+        await new Promise<void>((resolve) => ready.close(() => resolve()));
+      });
+      await new Promise<void>((resolve) => ready.listen(readySocket, resolve));
+      const meminfo = join(f.root, "input/meminfo");
+      const collectionMarker = join(f.root, "input/collection-held");
+      await fs.writeFile(meminfo, "MemAvailable: 16777216 kB\n");
       const membershipFiles: Record<string, string> = {};
       for (const [pid, path] of f.membership) {
         const file = join(f.root, `input/cgroup-${pid}`);
@@ -156,6 +186,9 @@ describe("capture trust and native managed composition; disclosed OS projections
       await fs.writeFile(
         join(f.configuration.output.path, "capture-os.json"),
         JSON.stringify({
+          readySocket,
+          meminfo,
+          collectionMarker,
           cgRoot: f.cgRoot,
           membershipFiles,
           hostGroup,
@@ -171,7 +204,7 @@ describe("capture trust and native managed composition; disclosed OS projections
       );
       const wrapper = join(f.root, "input/capture-preload.cjs");
       await build({
-        entryPoints: ["tests/unit/computer-capture-native-fixture.ts"],
+        entryPoints: ["tests/unit/computer-bootstrap-native-fixture.ts"],
         bundle: true,
         platform: "node",
         format: "cjs",
@@ -181,7 +214,7 @@ describe("capture trust and native managed composition; disclosed OS projections
         process.execPath,
         [
           "-e",
-          "require(process.argv[1]).prepareNativeCapture(process.argv[2],process.argv[3]).then(()=>{const artifact=process.argv[4];process.argv=[process.execPath,artifact, 'manage',process.argv[2]];require(artifact)})",
+          "require(process.argv[1]).prepareNativeBootstrap(process.argv[2],process.argv[3],process.argv[1]).then(()=>{const artifact=process.argv[4];process.argv=[process.execPath,artifact, 'manage',process.argv[2]];require(artifact)})",
           wrapper,
           f.configPath,
           held,
@@ -205,7 +238,14 @@ describe("capture trust and native managed composition; disclosed OS projections
           await exited;
         }
       });
-      const messages: { type: string; timerStartedAtNs: string; heldAtNs: string }[] = [];
+      const messages: {
+        type: string;
+        timerStartedAtNs?: string;
+        heldAtNs?: string;
+        sampleWritten?: boolean;
+        fileSynced?: boolean;
+        directorySynced?: boolean;
+      }[] = [];
       child.on("message", (m) => messages.push(m as (typeof messages)[number]));
       const safety = setTimeout(() => child.kill("SIGKILL"), 8000);
       const startedAtNs = process.hrtime.bigint();
@@ -213,7 +253,11 @@ describe("capture trust and native managed composition; disclosed OS projections
         await expect
           .poll(
             () =>
-              messages.length
+              (
+                held.startsWith("collection")
+                  ? syncFs.existsSync(collectionMarker)
+                  : messages.some((m) => ["held", "continued", "boundary"].includes(m.type))
+              )
                 ? "held"
                 : child.exitCode !== null
                   ? `exit${child.exitCode}:${stderr}`
@@ -221,24 +265,54 @@ describe("capture trust and native managed composition; disclosed OS projections
             { timeout: 4500 }
           )
           .toBe("held");
-        if (held !== "boundary") child.kill("SIGTERM");
-        const signal =
-          held !== "boundary" ? setInterval(() => child.kill("SIGINT"), 300) : undefined;
+        // Separate bootstrap expiry from a later terminal-finalization timer in sensitivity runs.
+        if (["file", "directory", "sample-file", "sample-directory"].includes(held))
+          await new Promise<void>((resolve) => setTimeout(resolve, 1800));
+        if (!["boundary", "collection"].includes(held)) child.kill("SIGTERM");
+        const signal = !["boundary", "collection"].includes(held)
+          ? setInterval(() => child.kill("SIGINT"), 300)
+          : undefined;
         const [code, nativeSignal] = await exited;
         clearInterval(signal);
         const finishedAtNs = process.hrtime.bigint();
         const elapsedMs =
-          Number(finishedAtNs - BigInt(messages[0]!.timerStartedAtNs ?? startedAtNs)) / 1e6;
+          Number(
+            finishedAtNs -
+              BigInt(messages.find((m) => m.timerStartedAtNs)?.timerStartedAtNs ?? startedAtNs)
+          ) / 1e6;
         expect(code).toBe(2);
         expect(nativeSignal).toBe(null);
         expect(stdout).toBe("");
         expect(stderr).toBe("");
-        if (["file", "directory"].includes(held)) expect(elapsedMs).toBeGreaterThanOrEqual(4900);
-        expect(messages[0]!.type).toBe(
-          held === "continue" ? "continued" : held === "boundary" ? "boundary" : "held"
-        );
+        if (["file", "directory", "sample-file", "sample-directory", "collection"].includes(held))
+          expect(elapsedMs).toBeGreaterThanOrEqual(4900);
+        if (!held.startsWith("collection"))
+          expect(messages.find((m) => !["durable", "bootstrap"].includes(m.type))?.type).toBe(
+            held === "continue" ? "continued" : held === "boundary" ? "boundary" : "held"
+          );
+        if (held !== "continue") {
+          expect(messages.some((m) => m.type === "continued")).toBe(false);
+          expect(messages.some((m) => m.type === "durable")).toBe(false);
+        }
         if (held === "boundary") expect(messages.some((m) => m.type === "continued")).toBe(false);
         if (held === "continue") {
+          expect(messages.find((m) => m.type === "durable")).toMatchObject({
+            sampleWritten: true,
+            fileSynced: true,
+            directorySynced: true
+          });
+          const records = (
+            await fs.readFile(join(f.config.monitor.path, "observation.jsonl"), "utf8")
+          )
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line));
+          expect(records.map((r) => r.type)).toEqual(["start", "collector", "sample", "stop"]);
+          expect(records[2].sample).toMatchObject({
+            mossHealthy: true,
+            logsBounded: true,
+            stopRequested: false
+          });
           const receipt = JSON.parse(await fs.readFile(join(f.capture, "capture.json"), "utf8"));
           expect(receipt.watchdog.pid).toBe(child.pid);
           expect(receipt.coverage).toBe("sampled-cgroup-v2");
@@ -258,6 +332,7 @@ describe("capture trust and native managed composition; disclosed OS projections
               startedAtNs: startedAtNs.toString(),
               finishedAtNs: finishedAtNs.toString(),
               held: messages[0],
+              messages,
               elapsedMs,
               code,
               signal: nativeSignal,

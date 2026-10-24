@@ -154,6 +154,8 @@ export function runComputerSupervisor(input: {
   verifyRunner(): Promise<unknown>;
   now(): number;
   signals: NodeJS.EventEmitter;
+  /** Output notification after the first complete durable healthy sample. Never health authority. */
+  started?: () => void;
   lifetime?: { configuration: ComputerLifetimeConfiguration; socketPath: string };
   terminalHooks?: SupervisorTerminalHooks;
 }): Promise<SupervisorOutcome> {
@@ -162,6 +164,7 @@ export function runComputerSupervisor(input: {
   return new Promise((resolve) => {
     let lifetime: ComputerRootLifetime | undefined;
     let lifetimeStarted = false;
+    let startupPending = input.started !== undefined;
     let current: CollectorJob | null = null;
     let identity: WatchdogProcessIdentity | null = null;
     let collectorExited = true;
@@ -274,6 +277,23 @@ export function runComputerSupervisor(input: {
       policy.stop(input.now());
       stop();
     };
+    const healthyContinuation = (measuredAtMs: number) => {
+      if (terminal) return false;
+      if (input.terminalHooks?.signal.aborted) {
+        operatorStop();
+        return false;
+      }
+      const now = input.now();
+      if (
+        policy.tick(now).status !== "healthy" ||
+        now - measuredAtMs >= 5000 ||
+        (startupPending && now - configuration.startedAtMs >= 5000)
+      ) {
+        failed();
+        return false;
+      }
+      return true;
+    };
     const heartbeat = (chunk: Buffer) => {
       if (terminal) return;
       if (!Buffer.isBuffer(chunk) || chunk.length > 4096 || checkingHeartbeat) {
@@ -362,17 +382,20 @@ export function runComputerSupervisor(input: {
           }
           // The policy validated/snapshotted the closed JSON result. Persist before another sample.
           const measuredAtMs = (value as WatchdogSample).measuredAtMs;
+          if (!healthyContinuation(measuredAtMs)) return;
           await journal.sample(value as WatchdogSample);
-          if (
-            !terminal &&
-            (policy.tick(input.now()).status === "stopped" || input.now() - measuredAtMs >= 5000)
-          ) {
-            failed();
-            return;
-          }
+          if (!healthyContinuation(measuredAtMs)) return;
+          await journal.inspect();
+          if (!healthyContinuation(measuredAtMs)) return;
           if (!terminal && lifetime && !lifetimeStarted) {
             lifetimeStarted = true;
             lifetime.start();
+          }
+          if (!healthyContinuation(measuredAtMs)) return;
+          if (startupPending) {
+            // Latch before invoking: a throwing notification cannot be retried by a later sample.
+            startupPending = false;
+            input.started!();
           }
           if (!terminal) {
             active = false;
@@ -459,11 +482,11 @@ export async function superviseDeployment(
       if (
         interrupted ||
         terminalHooks?.signal.aborted ||
-        (deployment.configuration.capture && computerMonotonicMs() - startedAtMs >= 5000)
+        computerMonotonicMs() - startedAtMs >= 5000
       )
         throw supervisorError();
     };
-    // Capture's last guard precedes an awaited continuation. Do not clear a now-expired timer.
+    // Journal/capture work precedes an awaited continuation. Preserve the original bootstrap bound.
     assertStartup();
     const result = runComputerSupervisor({
       configuration,
@@ -481,10 +504,9 @@ export async function superviseDeployment(
       verifyRunner: () => readComputerProcess(configuration.runner),
       now: computerMonotonicMs,
       signals: process,
+      started,
       terminalHooks
     });
-    assertStartup();
-    started();
     return result;
   } finally {
     // Driver installed its handlers synchronously above: no asynchronous signal-handoff gap.
