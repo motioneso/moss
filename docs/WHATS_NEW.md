@@ -43,6 +43,10 @@ feature that is not present in the image you are running.
 - **Meeting summaries after a chat tool update.** Meeting summaries work with the verified newer chat tool while keeping your chosen default model. [PR #3608](https://github.com/motioneso/moss/pull/3608)
 - **Meeting summaries use your default model.** Meeting summaries now support your configured Codex model alongside existing supported providers, without switching to another model. [PR #3576](https://github.com/motioneso/moss/pull/3576)
 
+#### Changed
+
+- **Shorter meeting settings.** Meeting and transcription settings now show shorter explanations and relevant setup help. [PR #3613](https://github.com/motioneso/moss/pull/3613)
+
 ### 2026-10-22
 
 #### Fixed
