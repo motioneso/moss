@@ -58,6 +58,23 @@ Reject reusing tasks.list: its recurrence side effects violate this slice's purp
 records then truncating in memory would preserve existing filtering but is unbounded; use SQL
 filters plus lookahead instead. Keep public browser contract independent from database imports.
 
+### Focus coverage repair after installed run 8
+
+Run 8 returned twenty useful answers but only eighteen intended visuals; prompts 10 and 17
+invoked only the existing Focus tool. Preserve its items, tags, order and recurrence behavior.
+When a visual registrar exists, supplement it with a separately labeled `todayContext` from
+the same bounded SELECT-only summary reader, never from Focus's differently filtered rows.
+This does not make the whole Focus invocation SELECT-only: existing reconciliation remains.
+Use the shared snapshot/proposal builder. The model still chooses presentation; no automatic
+presentation, prompt/model changes or threshold changes. Isolate supplemental reads with the
+canonical savepoint helper; an unavailable supplement leaves the Focus result useful and
+explicitly reports the gap. No registrar means the exact legacy result and no additional read.
+Declare every supplemental output field in a Focus-specific gateway schema, placing context
+and its proposal before the potentially long legacy list. Verify actual sanitized/capped
+gateway output for empty, nonempty and oversized Focus lists, plus read/registration failures.
+Independent reviews and unchanged installed acceptance must assess the frozen candidate.
+Retain runs 6–8; merge and successor launch still require Ben's actual combined decision.
+
 ## Tests and acceptance
 
 1. Deterministic contract tests: due today/overdue/future/undated, completed/archived/suggested,

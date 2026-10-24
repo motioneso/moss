@@ -75,7 +75,7 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Visual chat Tasks: installed second-turn timeout (#3659 / #3583)
+### Visual chat Tasks: installed runtime and coverage failures (#3659 / #3583)
 
 Draft PR #3661 candidate `ef5d1b008` passed both independent review axes. Installed
 run 6 returned a correct sourced Tasks card and useful first answer in 27,029 ms;
@@ -89,7 +89,11 @@ visible 18:15:17.599Z versus saved 18:15:26.289Z. A deterministic actual-drawer
 reproduction separately proved that an older HTTP-only fallback can render after
 a newer streamed reply. A generic message-anchor merge repair is being verified;
 its role in run 7 remains unproven, and run 6's network cause is still unknown.
-[Combined evidence](https://github.com/motioneso/moss/issues/3583#issuecomment-6387829099).
+Run 8 completed all twenty useful, source-grounded answers but returned only 18/20
+intended visuals, below the unchanged 19/20 threshold. Both missing visuals used
+only the existing Focus tool. A bounded supplemental summary/proposal integration
+is being verified; no private model reasoning or engine root cause is established.
+[Combined evidence](https://github.com/motioneso/moss/issues/3583#issuecomment-6388039506).
 
 Decision: continue bounded diagnosis/repair and rerun the unchanged frozen matrix,
 requiring every review/local/CI/installed gate before merge and successor launch

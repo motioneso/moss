@@ -18,6 +18,29 @@ export function taskSummarySnapshot(summary: TaskSummary) {
     fields: { ...summary, items: summary.items.map((item) => ({ ...item })) }
   };
 }
+export function taskSummaryData(
+  summary: TaskSummary,
+  ctx: Parameters<ToolExecute>[2],
+  services?: Parameters<ToolExecute>[3]
+) {
+  const registrar = services?.visualPresentation as VisualSnapshotRegistrationService | undefined;
+  const registered = registrar?.registerSnapshot(ctx, taskSummarySnapshot(summary));
+  return {
+    summary,
+    coverage: taskSummaryCoverage(summary),
+    ...(registered?.ok
+      ? {
+          presentation: {
+            proposal: {
+              catalogVersion: registered.catalogVersion,
+              blocks: [{ kind: registered.templateKind, snapshotRefs: [registered.ref] }],
+              interactions: []
+            }
+          }
+        }
+      : {})
+  };
+}
 export const taskSummaryExecute: ToolExecute = async (db, input, ctx, services) => {
   assertDataContextDb(db);
   if (
@@ -26,25 +49,7 @@ export const taskSummaryExecute: ToolExecute = async (db, input, ctx, services) 
   )
     throw new Error("Invalid task summary scope");
   const summary = await readTaskSummary(db, input.scope as TaskSummaryScope | undefined);
-  const registrar = services?.visualPresentation as VisualSnapshotRegistrationService | undefined;
-  const registered = registrar?.registerSnapshot(ctx, taskSummarySnapshot(summary));
-  return {
-    data: {
-      summary,
-      coverage: taskSummaryCoverage(summary),
-      ...(registered?.ok
-        ? {
-            presentation: {
-              proposal: {
-                catalogVersion: registered.catalogVersion,
-                blocks: [{ kind: registered.templateKind, snapshotRefs: [registered.ref] }],
-                interactions: []
-              }
-            }
-          }
-        : {})
-    }
-  };
+  return { data: taskSummaryData(summary, ctx, services) };
 };
 export const taskSummaryTool: ModuleAssistantToolManifest = {
   name: "tasks.summary",

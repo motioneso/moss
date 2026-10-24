@@ -7,6 +7,16 @@ import {
   breakdownTaskRequestSchema,
   addTaskActivityRequestSchema
 } from "@moss/shared";
+import { taskSummaryDataSchema } from "./summary/output-schema.js";
+
+export const taskFocusToolOutputSchema = {
+  type: "object",
+  required: ["items"],
+  properties: {
+    todayContext: taskSummaryDataSchema,
+    items: { type: "array", items: taskDtoSchema }
+  }
+} as const;
 
 export const taskItemsToolOutputSchema = {
   type: "object",

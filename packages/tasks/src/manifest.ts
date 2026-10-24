@@ -1,5 +1,6 @@
 import {
   taskItemsToolOutputSchema,
+  taskFocusToolOutputSchema,
   taskListItemsToolOutputSchema,
   taskTagItemsToolOutputSchema,
   taskMutationToolOutputSchema,
@@ -532,12 +533,12 @@ export const tasksModuleManifest = {
     {
       name: "tasks.focus",
       description:
-        "Get the focus list — the highest-priority tasks to work on today: overdue tasks plus at-risk tasks (Medium+ priority, due within 48 h or do-date past), ranked by priority, urgency, and effort.",
+        "Get ranked overdue and at-risk tasks (Medium+ priority, due within 48 h or do-date past). Existing recurrence reconciliation applies. Optional todayContext independently reads open tasks due today/earlier plus undated work; it is not the Focus ranking. Its source-bound visual proposal can accompany concise grounded prose: use the returned proposal unchanged when useful.",
       permissionId: "tasks.view",
       risk: "read",
       content: "outside",
       inputSchema: { type: "object", properties: {} },
-      outputSchema: taskItemsToolOutputSchema,
+      outputSchema: taskFocusToolOutputSchema,
       execute: taskFocusExecute
     },
     {
@@ -816,13 +817,13 @@ export const tasksModuleManifest = {
     {
       id: "tasks.visual_summary",
       description:
-        "Chat shows up to twelve owned/shared tasks with status, priority, local due days, source time and coverage. Recurrence is not advanced; reminders are excluded. Saved cards never refetch or change tasks.",
+        "Chat summarizes up to twelve owned/shared tasks with source time and coverage; no recurrence advance or reminders. Focus adds separate today context but keeps its ranking/reconciliation. Saved cards never refetch.",
       errors: [
         {
           code: "tasks_summary_unavailable",
           class: "transient",
           description:
-            "A failed read or invalid visual retains readable text; no task change is performed."
+            "An unavailable summary or visual retains readable text. Focus retains its items if supplemental context fails; its existing recurrence behavior still applies."
         }
       ],
       remediations: [
