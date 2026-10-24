@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.*;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.*;
 import android.view.*;
@@ -38,11 +37,7 @@ public final class DeliveryActivity extends Activity {
         if (!new SecretStore(this).exists()) {
             startActivity(new Intent(this, SetupActivity.class)); finish(); return;
         }
-        theme = new NativeTheme(this); getWindow().setBackgroundDrawable(new ColorDrawable(theme.paper));
-        getWindow().setDecorFitsSystemWindows(false);
-        getWindow().getDecorView().getWindowInsetsController().setSystemBarsAppearance(theme.dark ? 0 :
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+        theme = new NativeTheme(this); theme.window();
         scroll = new ScrollView(this); scroll.setBackgroundColor(theme.paper); scroll.setFillViewport(true);
         scroll.setOnApplyWindowInsetsListener((view, insets) -> {
             android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
@@ -104,10 +99,9 @@ public final class DeliveryActivity extends Activity {
     private void text(String key, String value, int size, boolean heading) {
         NativeTheme.update(place(key, TextView.class, () -> theme.text(size, heading), 12), value);
     }
-    private void section(String key, String number, String title) {
+    private void section(String key, String title) {
         View rule = place(key + "/rule", View.class, () -> new View(this), 24); rule.setBackgroundColor(theme.line);
         rule.getLayoutParams().height = theme.dp(1);
-        TextView eyebrow = place(key + "/number", TextView.class, () -> theme.eyebrow(), 16); NativeTheme.update(eyebrow, number + " / " + title.toUpperCase(Locale.ROOT));
         text(key + "/title", title, 24, true);
     }
     private void button(String key, String label, Runnable action) {
@@ -132,12 +126,12 @@ public final class DeliveryActivity extends Activity {
     }
     private void render() {
         position = 0; used.clear();
-        NativeTheme.update(place("masthead", TextView.class, () -> theme.eyebrow(), 0), "MOSS / RING COMPANION");
-        text("title", "Vocci → Moss", 32, true);
-        button("hardware", "Hardware settings", () -> startActivity(new Intent(this, HardwareActivity.class)));
+        NativeTheme.update(place("masthead", TextView.class, () -> theme.eyebrow(), 0), "HARDWARE / VOCCI RING");
+        text("title", "Delivery details", 30, true);
+        button("hardware", "‹ Hardware", this::finish);
         TextView intro = place("intro", TextView.class, () -> theme.text(15, false), 12); intro.setTextColor(theme.text);
-        NativeTheme.update(intro, "Normal recordings become meetings. Hold-to-talk goes to Main chat, with text replies.");
-        section("connection", "01", "Connection");
+        NativeTheme.update(intro, "Recent recordings and connection help.");
+        section("connection", "Connection");
         button("start", "Start delivery", () -> command("start"));
         button("stop", "Stop delivery", this::stopDelivery);
         DeliveryPreferences choices = new DeliveryPreferences(this);
@@ -174,7 +168,7 @@ public final class DeliveryActivity extends Activity {
         try {
             JSONObject state = PrivateFiles.json(new File(getNoBackupFilesDir(), "delivery/state.json")); // Never construct DeliveryStore: it writes.
             text("activity", "Status: " + state.optString("activity", "stopped").replace('_', ' '), 17, false);
-            section("voice", "02", "Voice messages");
+            section("voice", "Voice messages");
             JSONObject voice = state.optJSONObject("voice");
             Switch enabled = place("voice-switch", Switch.class, () -> {
                 Switch view = new Switch(this); theme.toggle(view); view.setText("Hold-to-talk in Main chat");
@@ -186,7 +180,7 @@ public final class DeliveryActivity extends Activity {
             enabled.setEnabled(config != null);
             text("voice-help", "Enable after the ring inventory is checked twice. Existing recordings keep their destination. Until capture timing is observed, review the transcript and press Send in Moss.", 13, false);
             text("enrollment", voice == null ? "Voice input off" : voice.has("disableId") ? "Voice disable pending" : voice.has("snapshot") ? "Saving voice enrollment" : voice.has("enablement") ? "Voice enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Voice input off", 15, false);
-            section("storage", "03", "Local audio");
+            section("storage", "Local audio");
             text("storage-usage", DeliveryStatus.storage(new File(getNoBackupFilesDir(), "delivery"), state.getJSONObject("entries")), 13, false);
             Switch cleanup = place("cleanup-switch", Switch.class, () -> {
                 Switch view = new Switch(this); theme.toggle(view); view.setText("Clear delivered audio after 7 days");
@@ -196,7 +190,7 @@ public final class DeliveryActivity extends Activity {
             try { cleanup.setChecked(choices.autoCleanup()); } finally { updatingSwitch = false; }
             text("cleanup-help", "Optional cleanup runs while delivery is active. Pending, failed and interrupted recordings stay here. Moss copies and recordings on the ring are kept.", 13, false);
             button("clear", "Clear completed local audio", () -> command("clear-completed"));
-            section("recent", "04", "Recent deliveries");
+            section("recent", "Recent deliveries");
             JSONObject entries = state.getJSONObject("entries"); List<String> ids = new ArrayList<>(); entries.keys().forEachRemaining(ids::add);
             ids.sort(Collections.reverseOrder());
             if (ids.isEmpty()) text("empty", "No recordings yet. Start delivery and finish a recording on the ring.", 15, false);

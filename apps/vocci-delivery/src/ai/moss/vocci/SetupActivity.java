@@ -25,11 +25,14 @@ public final class SetupActivity extends Activity {
     private SetupLink.Status snapshot;
     private VocciAccount account;
     private ScrollView scroll;
-    private LinearLayout body, vocciSection, ringSection, readySection;
+    private LinearLayout body, mossSection, vocciSection, ringSection, readySection;
+    private TextView title, intro;
+    private SettingsRow savedRing;
     private EditText address, email, code;
     private TextView mossSummary, status, codeLabel, ringSummary, permissionSummary;
-    private TextView readyPermissions, deliverySummary, voiceSummary;
-    private Button startDelivery, stopDelivery, readySettings, readyPermissionsButton, readyHandoff;
+    private TextView deliverySummary, voiceSummary;
+    private SettingsRow connection;
+    private Button startDelivery, stopDelivery;
     private Switch hold;
     private boolean updatingHold;
     private Button connect, check, cancel, send, verifyCode, resend, changeEmail, resumeLookup, select, changeRing, verifyRing, nearby, appSettings, handoff;
@@ -46,18 +49,23 @@ public final class SetupActivity extends Activity {
         setTheme(NativeTheme.isDark(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(saved);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        theme = new NativeTheme(this);
+        theme = new NativeTheme(this); theme.window();
         scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(theme.paper);
         scroll.setOnApplyWindowInsetsListener((view, insets) -> {
             android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets;
         });
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(theme.dp(24), theme.dp(32), theme.dp(24), theme.dp(32)); scroll.addView(body); setContentView(scroll);
-        TextView brand = theme.eyebrow(); brand.setText("MOSS / RING COMPANION"); add(body, brand);
-        text(body, "Set up your ring", 30, true);
-        text(body, "Connect an existing Vocci ring to Moss. Normal recordings become Meetings. Opted-in hold-to-talk goes to Main chat, with text replies.", 15, false);
-        LinearLayout moss = section("01", "Moss account");
+        body.setPadding(theme.dp(24), theme.dp(12), theme.dp(24), theme.dp(32)); scroll.addView(body); setContentView(scroll); scroll.requestApplyInsets();
+        button(body, "‹ Back", this::finish, false);
+        TextView brand = theme.eyebrow(); brand.setText("HARDWARE / VOCCI RING"); add(body, brand);
+        title = text(body, "Set up your ring", 30, true);
+        intro = text(body, "Connect the Vocci ring you already own. Finished recordings go to Meetings.", 15, false);
+        status = text(body, "Opening saved setup…", 15, false); status.setId(3104);
+        status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        savedRing = new SettingsRow(theme); add(body, savedRing); savedRing.setVisibility(View.GONE);
+        mossSection = section("Moss account");
+        LinearLayout moss = mossSection;
         address = field(moss, "Moss address", 3101, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setHint("https://your-moss-server");
         connect = button(moss, "Connect Moss in browser", () -> {
@@ -72,8 +80,8 @@ public final class SetupActivity extends Activity {
             "Moss account connected. Continue with the Vocci account that owns your ring." : "Waiting for browser approval."), false);
         mossSummary = text(moss, "Opening saved setup…", 15, false);
 
-        vocciSection = section("02", "Vocci account");
-        text(vocciSection, "Use the existing Vocci account that owns your ring. This separate sign-in retrieves its ring connection details. Vocci sends the email code only when you choose Send code.", 15, false);
+        vocciSection = section("Vocci account");
+        text(vocciSection, "Use the account that owns your ring. Vocci sends an email code when you choose Send code.", 15, false);
         email = field(vocciSection, "Vocci email", 3102, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         send = button(vocciSection, "Send code", () -> {
             String value = email.getText().toString().trim();
@@ -91,13 +99,13 @@ public final class SetupActivity extends Activity {
         }, true);
         resend = button(vocciSection, "Resend code", () -> perform(() -> { account.resend(); return "New code sent. Use the latest email."; }), false);
         resumeLookup = button(vocciSection, "Finish ring lookup", () -> perform(() -> { account.resumeLookup(); return lookup(); }), true);
-        changeEmail = button(vocciSection, "Clean up sign-in / use another email", () -> perform(() -> {
+        changeEmail = button(vocciSection, "Use another email", () -> perform(() -> {
             account.cleanup(); inventory = Collections.emptyList(); lookedUp = false;
             return "Vocci confirmed sign-in cleanup. You can enter another email.";
         }), false);
 
-        ringSection = section("03", "Your ring");
-        text(ringSection, "Rings on your Vocci account, not a nearby-device scan. Choose your ring, keep it nearby and turn on Bluetooth.", 15, false);
+        ringSection = section("Your ring");
+        text(ringSection, "Rings on your Vocci account. Choose yours, then verify it nearby with Bluetooth on.", 15, false);
         ringSummary = text(ringSection, "Sign into Vocci to list your existing rings.", 15, false);
         rings = new RadioGroup(this); add(ringSection, rings);
         select = button(ringSection, "Select ring", () -> {
@@ -113,7 +121,7 @@ public final class SetupActivity extends Activity {
         }), false);
         nearby = button(ringSection, "Allow Nearby devices", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 31), false);
         appSettings = button(ringSection, "Open companion app settings", () -> settings(getPackageName()), false);
-        text(ringSection, "If Vocci is installed, open its Permissions and remove Nearby devices access, then return here. Your existing ownership and recordings are kept.", 15, false);
+        text(ringSection, "If you use the Vocci app, remove its Nearby devices permission before verifying here. Your ring and recordings are kept.", 15, false);
         handoff = button(ringSection, "Open Vocci app settings", () -> settings(DeliveryService.OFFICIAL), false);
         permissionSummary = text(ringSection, "", 15, false);
         verifyRing = button(ringSection, "Verify ring", () -> perform(() -> {
@@ -123,14 +131,9 @@ public final class SetupActivity extends Activity {
             link.verifyAndCommit(); return "Ring verified and setup saved. Delivery and hold-to-talk are still off.";
         }), true);
 
-        readySection = section("04", "Ready to connect");
-        text(readySection, "Setup is saved. Completed normal recordings become Meetings in Moss. Choose Start delivery to connect and allow recovery after phone restart. Hold-to-talk is a separate choice below.", 15, false);
-        readyPermissions = text(readySection, "", 15, false);
-        readyPermissionsButton = button(readySection, "Bluetooth and notification permissions", () -> requestPermissions(
-            new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 31), false);
-        readySettings = button(readySection, "Permissions and background settings", () -> settings(getPackageName()), false);
-        readyHandoff = button(readySection, "Open Vocci app settings", () -> settings(DeliveryService.OFFICIAL), false);
-        text(readySection, "In Android App settings → Battery, choose Unrestricted; also remove Moss from Samsung Sleeping apps. After Force stop, reopen this app and Start delivery.", 15, false);
+        readySection = section("Delivery");
+        text(readySection, "Finished recordings go to Meetings. Start delivery when you’re ready; hold-to-talk is a separate choice.", 15, false);
+        connection = new SettingsRow(theme); add(readySection, connection);
         startDelivery = button(readySection, "Start delivery", () -> status.setText(DeliveryActions.command(this, "start")), true);
         stopDelivery = button(readySection, "Stop delivery", () -> { DeliveryActions.stop(this); render(); }, false);
         deliverySummary = text(readySection, "", 15, false);
@@ -138,17 +141,15 @@ public final class SetupActivity extends Activity {
         hold.setOnCheckedChangeListener((view, checked) -> {
             if (!updatingHold) { status.setText(DeliveryActions.command(this, checked ? "voice-on" : "voice-off")); render(); }
         });
-        text(readySection, "Start delivery before enabling hold-to-talk. Moss checks the ring inventory twice before enrollment. Existing recordings keep their destination. Review each new hold transcript in Main and press Send for a text reply.", 15, false);
+        text(readySection, "Start delivery before enabling hold-to-talk. Existing recordings keep their destination. Review new transcripts in Main and press Send for a text reply.", 15, false);
         voiceSummary = text(readySection, "", 15, false);
-        button(readySection, "Continue to companion", () -> {
-            startActivity(new Intent(this, DeliveryActivity.class)); finish();
+        button(readySection, "Continue to Hardware", () -> {
+            startActivity(new Intent(this, HardwareActivity.class)); finish();
         }, true);
         cancel = button(body, "Cancel setup", () -> perform(() -> {
             account.cleanup(); link.cancel(); inventory = Collections.emptyList(); lookedUp = false;
             return "Setup cancelled. Remote cleanup was confirmed. No delivery has started.";
         }), false);
-        status = text(body, "Opening saved setup…", 15, false); status.setId(3104);
-        status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         if (saved != null) {
             email.setText(saved.getString("email", "")); address.setText(saved.getString("address", ""));
             restoreScroll = saved.getInt("scrollY");
@@ -160,7 +161,7 @@ public final class SetupActivity extends Activity {
                 link = new SetupLink(this); account = new VocciAccount(this); snapshot = link.status();
                 message = account.canResumeLookup() ? "Verified Vocci sign-in is saved. Finish ring lookup or clean up the sign-in." :
                     account.step() == VocciAccount.Step.CLEANUP ? "An interrupted Vocci sign-in needs cleanup before another email code." :
-                    "Continue from the saved setup below. Sending a code is always your choice.";
+                    snapshot.phase == SetupLink.Phase.COMMITTED ? "Setup saved. Your delivery choices are kept." : "Connect Moss to get started. Sending a code is your choice.";
             } catch (Exception error) { message = "Existing setup or recordings need recovery. No account or ring was replaced. Return to the companion to review recovery."; }
             publish(message);
         });
@@ -171,11 +172,10 @@ public final class SetupActivity extends Activity {
         inventory = found; lookedUp = true;
         return found.isEmpty() ? "No rings on this Vocci account. Establish ownership in Vocci first, then retry." : "Vocci sign-in cleaned up. Choose a ring from your account.";
     }
-    private LinearLayout section(String number, String title) {
+    private LinearLayout section(String title) {
         LinearLayout result = new LinearLayout(this); result.setOrientation(LinearLayout.VERTICAL); add(body, result);
         View rule = new View(this); rule.setBackgroundColor(theme.line); result.addView(rule, new LinearLayout.LayoutParams(-1, theme.dp(1)));
-        TextView eyebrow = theme.eyebrow(); eyebrow.setText(number + " / " + title.toUpperCase(Locale.ROOT)); add(result, eyebrow);
-        text(result, title, 24, true); return result;
+        text(result, title, 20, true); return result;
     }
     private void add(LinearLayout parent, View view) {
         LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(-1, -2); layout.topMargin = theme.dp(12); parent.addView(view, layout);
@@ -227,10 +227,18 @@ public final class SetupActivity extends Activity {
         SetupLink.Phase phase = snapshot == null ? SetupLink.Phase.RECOVERY : snapshot.phase;
         boolean linked = phase == SetupLink.Phase.LINKED, committed = phase == SetupLink.Phase.COMMITTED;
         boolean selected = snapshot != null && snapshot.ringSelected;
+        NativeTheme.update(title, committed ? "Ring connection" : "Set up your ring");
+        intro.setVisibility(committed ? View.GONE : View.VISIBLE);
+        mossSection.setVisibility(committed ? View.GONE : View.VISIBLE);
+        savedRing.setVisibility(committed ? View.VISIBLE : View.GONE);
+        if (committed) savedRing.update("Vocci ring · …" + snapshot.ringSuffix,
+            "Connected to " + snapshot.accountName, () -> startActivity(new Intent(this, HardwareActivity.class)));
+
         boolean enabled = !busy && account != null && snapshot != null;
         address.setEnabled(enabled && phase == SetupLink.Phase.EMPTY);
         connect.setEnabled(enabled && (phase == SetupLink.Phase.EMPTY || phase == SetupLink.Phase.APPROVAL));
         NativeTheme.update(connect, phase == SetupLink.Phase.APPROVAL ? "Reopen browser approval" : "Connect Moss in browser");
+        check.setVisibility(phase == SetupLink.Phase.APPROVAL || phase == SetupLink.Phase.CONFIRMING ? View.VISIBLE : View.GONE);
         check.setEnabled(enabled && (phase == SetupLink.Phase.APPROVAL || phase == SetupLink.Phase.CONFIRMING));
         NativeTheme.update(mossSummary, linked || committed ? "Account connected: " + snapshot.accountName + (committed ? "\nRing …" + snapshot.ringSuffix + " verified. Setup saved." : "") :
             phase == SetupLink.Phase.CLEANUP ? "Interrupted setup: cancellation needs network access to finish cleanup." :
@@ -245,6 +253,12 @@ public final class SetupActivity extends Activity {
         email.setEnabled(authEnabled && step == VocciAccount.Step.EMAIL);
         send.setEnabled(authEnabled && step == VocciAccount.Step.EMAIL);
         boolean entering = step == VocciAccount.Step.CODE || step == VocciAccount.Step.TOTP;
+        codeLabel.setVisibility(entering ? View.VISIBLE : View.GONE); code.setVisibility(entering ? View.VISIBLE : View.GONE);
+        verifyCode.setVisibility(entering ? View.VISIBLE : View.GONE);
+        resend.setVisibility(step == VocciAccount.Step.CODE ? View.VISIBLE : View.GONE);
+        changeEmail.setVisibility(step != VocciAccount.Step.EMAIL || lookedUp ? View.VISIBLE : View.GONE);
+        send.setVisibility(step == VocciAccount.Step.EMAIL ? View.VISIBLE : View.GONE);
+
         code.setEnabled(authEnabled && entering); verifyCode.setEnabled(authEnabled && entering);
         NativeTheme.update(codeLabel, step == VocciAccount.Step.TOTP ? "Authenticator code" : "Email code");
         long seconds = account == null ? 0 : Math.max(0, (account.resendAfter() - System.currentTimeMillis() + 999) / 1000);
@@ -258,7 +272,7 @@ public final class SetupActivity extends Activity {
         changeRing.setVisibility(linked && selected ? View.VISIBLE : View.GONE);
         changeRing.setEnabled(enabled && linked && selected);
         for (int i = 0; i < rings.getChildCount(); i++) rings.getChildAt(i).setEnabled(enabled);
-        NativeTheme.update(ringSummary, selected ? "Selected ring …" + snapshot.ringSuffix + ". Verify its physical identity and connection key." :
+        NativeTheme.update(ringSummary, selected ? "Ring …" + snapshot.ringSuffix + " selected. Keep it nearby, then verify." :
             !inventory.isEmpty() ? "Choose a ring listed on your Vocci account." : lookedUp ? "No rings are listed. Establish ownership in Vocci first, then retry." : "Sign into Vocci to list your existing rings.");
         NativeTheme.update(permissionSummary, "Nearby devices: " + (bluetoothAllowed() ? "allowed" : "needed") + " · Bluetooth: " + (bluetoothOn() ? "on" : "off or unavailable") +
             "\nVocci Nearby devices: " + (officialAllowed() ? "remove access in Vocci app settings" : "handoff ready"));
@@ -276,22 +290,26 @@ public final class SetupActivity extends Activity {
             if (journal.exists()) state = PrivateFiles.json(journal);
         } catch (Exception unavailable) { readable = false; }
         android.os.PowerManager power = getSystemService(android.os.PowerManager.class);
-        NativeTheme.update(readyPermissions, "Nearby devices: " + (bluetoothAllowed() ? "allowed" : "needed") + " · Bluetooth: " + (bluetoothOn() ? "on" : "off or unavailable") +
+        connection.update("Connection & permissions", "Nearby devices: " + (bluetoothAllowed() ? "allowed" : "needed") +
+            " · Bluetooth: " + (bluetoothOn() ? "on" : "off") +
             "\nNotifications: " + (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed") +
-            "\nBattery: " + (power != null && power.isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "optimization active") +
-            (officialAllowed() ? "\nRemove Vocci's Nearby devices permission before starting delivery." : "\nVocci Nearby devices: handoff ready"));
-        NativeTheme.update(deliverySummary, (choices.enabled() ? "Delivery enabled · " + state.optString("activity", "starting").replace('_', ' ') : "Delivery stopped · automatic restart is off.") +
+            " · Battery: " + (power != null && power.isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "restricted") +
+            (officialAllowed() ? "\nRemove Vocci’s Nearby devices access before delivery." : ""),
+            () -> startActivity(new Intent(this, HardwareActivity.class).putExtra("page", "connection")));
+        NativeTheme.update(deliverySummary, (choices.enabled() ? "Delivery enabled · " + state.optString("activity", "starting").replace('_', ' ') : "Delivery stopped. Start when you’re ready.") +
             (choices.recovery().isEmpty() ? "" : "\n" + choices.recovery()));
         JSONObject voice = state.optJSONObject("voice");
         updatingHold = true;
         try { hold.setChecked(voice != null && voice.optBoolean("desired")); } finally { updatingHold = false; }
         hold.setEnabled(enabled && readable && choices.enabled());
         NativeTheme.update(voiceSummary, !readable ? "Saved delivery status could not be read. Open the companion for recovery; your recordings are kept." :
-            voice == null ? "Voice input off" : voice.has("disableId") ? "Voice disable pending" : voice.has("snapshot") ? "Saving voice enrollment" :
-            voice.has("enablement") ? "Voice enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Voice input off");
-        startDelivery.setEnabled(enabled && readable); stopDelivery.setEnabled(enabled && choices.enabled());
-        readySettings.setEnabled(enabled); readyPermissionsButton.setEnabled(enabled);
-        readyHandoff.setVisibility(officialAllowed() ? View.VISIBLE : View.GONE); readyHandoff.setEnabled(enabled);
+            voice == null ? "Hold-to-talk off" : voice.has("disableId") ? "Turning hold-to-talk off" : voice.has("snapshot") ? "Saving voice enrollment" :
+            voice.has("enablement") ? "Voice enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Hold-to-talk off");
+        startDelivery.setEnabled(enabled && readable);
+        startDelivery.setVisibility(choices.enabled() ? View.GONE : View.VISIBLE);
+        stopDelivery.setEnabled(enabled && choices.enabled());
+        stopDelivery.setVisibility(choices.enabled() ? View.VISIBLE : View.GONE);
+        connection.setEnabled(enabled);
     }
     private boolean bluetoothAllowed() { return checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED; }
     private boolean bluetoothOn() {
