@@ -55,7 +55,7 @@ controls. No product Java/manifest, app behavior or app-map declaration changed.
 ## Installed preflight and physical limit
 
 Fresh explicit-endpoint reads reidentified only the authorized physical phone.
-Nine of ten checks passed: online, physical identity, API 37, version 20261027,
+Eight of nine checks passed: online, physical identity, API 37, version 20261027,
 Bluetooth ON, exact live foreground service with matching PID, timeout 120000
 and official-app CONNECT/SCAN revocation. The phone was locked. Preflight exited
 1 and stopped before native UI traversal or any adapter setting change.
