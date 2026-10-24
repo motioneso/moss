@@ -85,7 +85,8 @@ describe("managed process snapshot: actual files/Unix Docker/child groups; discl
     const f = await fixture();
     let injected = false;
     afterCaptureOpen(f, (file, path) => {
-      if (!path.endsWith("/capture.json")) return;
+      // Readback must detect equal-length tampering after creation metadata was recorded.
+      if (key === "output-bytes" ? path !== f.capture : !path.endsWith("/capture.json")) return;
       const sync = file.sync.bind(file);
       vi.spyOn(file, "sync").mockImplementation(async () => {
         await sync();
@@ -110,7 +111,14 @@ describe("managed process snapshot: actual files/Unix Docker/child groups; discl
           await fs.rename(path, path + ".retained");
           await fs.writeFile(path, bytes, { mode: 0o600 });
         }
-        if (key === "output-bytes") await fs.writeFile(join(f.capture, "capture.json"), "{}");
+        if (key === "output-bytes") {
+          const output = join(f.capture, "capture.json");
+          const bytes = await fs.readFile(output, "utf8");
+          const altered = bytes.replace('"version":1', '"version":2');
+          expect(altered).not.toBe(bytes);
+          expect(Buffer.byteLength(altered)).toBe(Buffer.byteLength(bytes));
+          await fs.writeFile(output, altered);
+        }
         if (key === "artifact") await fs.writeFile(f.deployment.artifactPath, "changed");
         if (key === "journal")
           await fs.appendFile(join(f.config.monitor.path, "observation.jsonl"), "{}\n");
