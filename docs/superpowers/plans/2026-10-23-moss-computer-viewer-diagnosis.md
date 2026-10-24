@@ -111,3 +111,16 @@ on separate fresh copies of the retained clean r17 file/database: observe the or
 failure and the corrected intended file-tamper/bookmark-removal rejections, including exact row
 mutation evidence. Check original durable hashes unchanged. Review a fresh r18 packet before live
 replacement; preserve r17 as incomplete proof with independent closure.
+
+### R18 address-read timeout: observe and enforce the keyboard-focus boundary
+
+R18 again passed current connected UI/frame/fresh input, then timed out on Firefox address-bar
+clipboard readback. Its retained active-window property identifies Firefox; keyboard focus and
+the actual clipboard values were not recorded, so cause is unproven. For r19, retain bounded
+distinct clipboard observations and actual active/focus identities before/after the read, plus a
+cropped viewer toolbar on failure. After rediscovering and activating the current verified Firefox
+window, await its actual keyboard focus before sending viewer shortcuts. Preserve the existing
+address poll/deadline and exact URL predicate, send each shortcut once, and keep every persistence
+assertion. Test the activation/focus ordering at the actual call site with delayed-focus and
+wrong-focus controls. This enforces an input precondition; it is not a proven explanation of r18.
+Independently review fresh r19 artifacts and closure; do not blindly replay the unchanged packet.
