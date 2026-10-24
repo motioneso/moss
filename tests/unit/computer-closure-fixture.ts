@@ -16,6 +16,7 @@ import { assertRoot } from "../../scripts/computer-watchdog/linux-files.js";
 import { computerMonotonicMs } from "../../scripts/computer-watchdog/linux.js";
 import type { WatchdogProcessIdentity } from "../../scripts/computer-watchdog/policy.js";
 import { processIdentity, sha256 } from "../../scripts/computer-watchdog/trust.js";
+import { constructedClosureCapture } from "./computer-closure-capture-fixture.js";
 
 export async function deadClosureProcess(): Promise<WatchdogProcessIdentity> {
   const child = spawn(process.execPath, ["-e", "process.send('ready');setInterval(()=>{},1000)"], {
@@ -63,7 +64,7 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
     gatewayId: "e".repeat(64),
     gatewayGeneration: 1
   };
-  const configuration: ClosureConfiguration = {
+  let configuration: ClosureConfiguration = {
     supervisor: {
       runId,
       runner: runner!,
@@ -78,6 +79,7 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
       data: await pinned("data"),
       dockerData: await pinned("docker"),
       monitor: await pinned("monitor"),
+      capture: await pinned("capture"),
       readyUrl: "http://127.0.0.1:5180/health/ready",
       artifactSha256: "f".repeat(64)
     },
@@ -88,6 +90,7 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
     signingKeyPath,
     installationPath,
     installationSha256: sha256(Buffer.from("{}")),
+    captureSha256: "0".repeat(64),
     publicKeySha256: sha256(createPublicKey(privateKey).export({ type: "spki", format: "der" }))
   };
   const configPath = join(root, "config.json");
@@ -129,11 +132,15 @@ export async function closureFixture(identities: readonly WatchdogProcessIdentit
   await writeFile(journalPath, records.map((r) => JSON.stringify(r) + "\n").join(""), {
     mode: 0o600
   });
+  const capture = await constructedClosureCapture(configuration, roots, journalPath);
+  configuration = { ...configuration, captureSha256: capture.file.hash };
+  await writeFile(configPath, JSON.stringify(configuration), { mode: 0o600 });
   const deployment: ClosureDeployment = {
     configuration,
     config: await closureFile(configPath, 16384),
     keyFile: await closureFile(signingKeyPath, 4096),
     installationFile: await closureFile(installationPath, 16384),
+    capture,
     signingKey: createPrivateKey(await readFile(signingKeyPath)),
     artifactPath: join(root, "fixture.cjs"),
     nodePath: process.execPath,
@@ -175,6 +182,7 @@ export async function fixtureRevalidate(deployment: ClosureDeployment): Promise<
   await recheckClosureFile(deployment.config);
   await recheckClosureFile(deployment.keyFile);
   await recheckClosureFile(deployment.installationFile);
+  await recheckClosureFile(deployment.capture.file);
   for (const root of [
     ...deployment.roots,
     deployment.configuration.receipt,

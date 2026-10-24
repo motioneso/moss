@@ -133,7 +133,7 @@ export async function captureFixture(register: (close: () => Promise<void>) => v
       return Promise.resolve(ns[value.split("/").at(-1) as keyof typeof ns]);
     return link(path, ...args);
   });
-  const bounded = trust.boundedFile;
+  const bounded = vi.mocked(trust.boundedFile).getMockImplementation()!;
   vi.spyOn(trust, "boundedFile").mockImplementation((path, limit) => {
     if (path === "/proc/self/fdinfo/0") return Promise.resolve(Buffer.from("flags:\t00\n"));
     if (path === `/proc/${config.runner.pid}/fdinfo/0`)

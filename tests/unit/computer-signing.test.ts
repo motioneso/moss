@@ -17,6 +17,8 @@ import { parseSigningInstallation } from "../../scripts/computer-signing/install
 import { closureFixture, deadClosureProcess } from "./computer-closure-fixture.js";
 import { projectSigningTrust, signingFixture } from "./computer-signing-fixture.js";
 import type { WatchdogProcessIdentity } from "../../scripts/computer-watchdog/policy.js";
+import { inspectRoots } from "../../scripts/computer-host/config.js";
+import { constructedClosureCapture } from "./computer-closure-capture-fixture.js";
 
 vi.mock("node:fs/promises", async (original) => ({ ...(await original<typeof fs>()) }));
 vi.mock("../../scripts/computer-watchdog/trust.js", async (original) => ({
@@ -43,9 +45,17 @@ async function fixture() {
     config.supervisor.data,
     config.supervisor.dockerData,
     config.supervisor.monitor,
+    config.supervisor.capture!,
     config.receipt
   ])
     root.uid = 0;
+  config.captureSha256 = (
+    await constructedClosureCapture(
+      config,
+      await inspectRoots(config.supervisor.host),
+      base.journalPath
+    )
+  ).file.hash;
   const artifact = join(base.root, "verifier.cjs");
   await fs.writeFile(artifact, "/* disclosed verifier code fixture */", { mode: 0o600 });
   config.artifactSha256 = trust.sha256(await fs.readFile(artifact));
@@ -96,6 +106,13 @@ describe("actual signer publisher to mandatory closure loader; disclosed OS root
       if (guest.includes(String(args[0]))) value.uid = typeof value.uid === "bigint" ? 1000n : 1000;
       return value;
     });
+    t.config.captureSha256 = (
+      await constructedClosureCapture(
+        t.config,
+        await inspectRoots(t.config.supervisor.host),
+        t.base.journalPath
+      )
+    ).file.hash;
     expect(await t.signing.install()).toBe(0);
     const deployment = await t.consume();
     expect(
