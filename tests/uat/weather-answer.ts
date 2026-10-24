@@ -19,21 +19,33 @@ export function hasUsefulWeatherAnswer(reply: unknown, forecast: WeatherWindowDt
   const degree = forecast.unit === "imperial" ? "F" : "C";
   const measurements = [
     ...reply.matchAll(
-      /(-?\d+(?:\.\d+)?)\s*(?:(?:[–—−-]|to|and)\s*(-?\d+(?:\.\d+)?))?\s*(?:°\s*(F(?:ahrenheit)?|C(?:elsius)?)?|degrees?(?:\s*(F(?:ahrenheit)?|C(?:elsius)?))?|\b(Fahrenheit|Celsius|[FC])\b)/gi
+      /(?<![\d:])(-?\d+(?:\.\d+)?)\s*(?:(?:[–—−-]|to|and)\s*(-?\d+(?:\.\d+)?))?\s*(?:°\s*(F(?:ahrenheit)?|C(?:elsius)?)?|degrees?(?:\s*(F(?:ahrenheit)?|C(?:elsius)?))?|\b(Fahrenheit|Celsius|[FC])\b)/gi
     )
   ];
-  // A sourced temperature makes the short interpretation useful without relying on the card.
-  if (!measurements.length) return false;
-  return measurements.every(
-    (match) =>
-      (!(match[3] || match[4] || match[5]) ||
-        (match[3] || match[4] || match[5])!.charAt(0).toUpperCase() === degree) &&
-      [match[1], match[2]]
-        .filter((value) => value !== undefined)
-        .every(
-          (value) =>
-            Number(value) >= Math.min(...temperatures) - 0.6 &&
-            Number(value) <= Math.max(...temperatures) + 0.6
-        )
+  const rain = [...reply.matchAll(/(\d+(?:\.\d+)?)\s*%/g)];
+  const rainProbabilities = forecast.intervals.flatMap((item) =>
+    item.rainProbability === null ? [] : [item.rainProbability]
+  );
+  // Source-grounded rain advice can be useful without repeating temperatures from the card.
+  if (!measurements.length && (!rain.length || !/rain|umbrella/i.test(reply))) return false;
+  return (
+    rain.every(
+      (match) =>
+        rainProbabilities.length > 0 &&
+        Number(match[1]) >= Math.min(...rainProbabilities) - 0.6 &&
+        Number(match[1]) <= Math.max(...rainProbabilities) + 0.6
+    ) &&
+    measurements.every(
+      (match) =>
+        (!(match[3] || match[4] || match[5]) ||
+          (match[3] || match[4] || match[5])!.charAt(0).toUpperCase() === degree) &&
+        [match[1], match[2]]
+          .filter((value) => value !== undefined)
+          .every(
+            (value) =>
+              Number(value) >= Math.min(...temperatures) - 0.6 &&
+              Number(value) <= Math.max(...temperatures) + 0.6
+          )
+    )
   );
 }

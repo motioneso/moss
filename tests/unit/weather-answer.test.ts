@@ -46,13 +46,31 @@ describe("installed Weather prose assessment", () => {
       )
     ).toBe(false);
   });
+  it("does not interpret clock minutes before a temperature as a temperature range", () => {
+    expect(
+      hasUsefulWeatherAnswer(
+        "It will cool from about 60°F at 18:00 to 57°F by 22:00; bring a light layer.",
+        forecast
+      )
+    ).toBe(true);
+  });
+  it("accepts source-grounded rain advice without requiring a temperature", () => {
+    expect(
+      hasUsefulWeatherAnswer(
+        "You can leave the umbrella at home, with only a 10% rain chance this evening.",
+        forecast
+      )
+    ).toBe(true);
+  });
   it.each([
     "I don't know whether you need a jacket; perhaps check another forecast.",
     "Bring a jacket: this evening will be around 90°F at your saved location.",
     "Bring a jacket: this evening will be around 90 degrees Fahrenheit at your saved location.",
     "Bring a jacket: this evening will be around 57–60°C at your saved location.",
     "A jacket could be nice. Perhaps check another forecast for your weather.",
-    "The jacket is blue and the weather exists somewhere outside tonight."
+    "The jacket is blue and the weather exists somewhere outside tonight.",
+    "Bring an umbrella: the rain chance is 90% this evening.",
+    "Bring a light jacket in the 57–60°F weather, but expect a 90% rain chance."
   ])("rejects nonanswers and unsupported source claims: %s", (reply) => {
     expect(hasUsefulWeatherAnswer(reply, forecast)).toBe(false);
   });

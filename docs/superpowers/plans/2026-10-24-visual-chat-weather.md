@@ -156,3 +156,11 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   Celsius/degrees wording while retaining source bounds, unit and nonanswer checks;
   all 12 prose-evaluator cases passed. Installed receipts also collect available
   per-message token usage; those totals do not measure marginal visual token cost.
+- 2026-10-24: supplemental installed run using product source at `a991e4e52`
+  produced 20/20 exact-source Weather cards. The compiled older acceptance harness
+  rejected eight useful answers: seven parsed clock minutes in `18:00 to 66°F` as
+  temperatures; one required temperature despite source-grounded 1% rain advice.
+  Manually assessed all 20 complete recorded answers against the real source:
+  71 to 66.1°F, 1% rain, light winds in San Diego's local evening. Added clock/rain
+  regressions and supported rain bounds without changing prompts or thresholds.
+  This failed harness run remains supplemental, not exact-final-head acceptance.
