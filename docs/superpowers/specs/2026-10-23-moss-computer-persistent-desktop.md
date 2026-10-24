@@ -19,13 +19,14 @@ The intended host is the existing server running this work. Other Moss installat
 3. Designated files and the actual browser profile survive container removal and recreation. Website sessions can expire. Running processes and installed system packages have no persistence promise.
 4. New installations select Computer by default, with opt-out and resource disclosure. Existing installations receive an explicit add-on step.
 5. Disable stops Computer and retains its data. Data deletion is a separate explicit decision.
-6. Agent control, watch/stop/takeover, login handoffs and useful jobs follow in separately bounded work.
+6. Agent control, watch/stop/takeover, login handoffs and useful jobs are required product capabilities, implemented in separately bounded work.
 7. Preserve the desktop destination; a browser-only trial cannot redefine it.
+8. The same persistent Computer is accessible inside the Moss app and through a web browser. The owner can watch Moss work and take over mouse/keyboard control; see the integrated-access amendment below.
 
 ## 3. Recommended system
 
 ```text
-Owner's browser
+Owner in the Moss app or a web browser
   -> trusted Moss viewer and authenticated HTTPS/WSS gateway
   -> private persistent desktop companion
   -> dedicated Computer files/profile storage
@@ -253,3 +254,88 @@ and Moss stayed healthy. Startup readiness and all previously missing qualificat
 unqualified. One next proposal is a separately dispatched attempt after host capacity is available,
 with fresh identity/floors and exact independent packet review. No automatic rerun, product/sleep
 implementation, owner integration, merge or issue close is dispatched by this rejection.
+
+## 19. Startup readiness r9: initial resource rejection
+
+After #3596 merged, Ben dispatched one fresh attempt through the
+[r9 handoff](../handoffs/2026-10-23-moss-computer-startup-readiness-r9.md). The initial fresh sample
+recorded available RAM6,813,106,176 bytes, below8GiB by1,776,828,416 bytes; root/data floors passed.
+The [r9 result](../../evidence/moss-computer/2026-10-23-startup-readiness-r9.md) is
+BLOCKED_BEFORE_LAUNCH. No runtime preparation, archive validation/load, launch packet, port
+reservation or startup/access/frame/input proof occurred. The resource gate was not retried.
+
+No owned runtime was started; exact-label/reservation readback was empty, prior homes/archive
+remained present and Moss stayed healthy. Startup readiness and all previously missing gates
+remain unqualified. One next proposal is the same bounded qualification after a separate dispatch
+when host capacity is available, with new identity, fresh floors and independent exact packet review.
+No automatic rerun, product/sleep implementation, owner integration, merge or issue close follows.
+
+## 20. Startup readiness r10: restored backend refusal
+
+Ben explicitly resumed after RAM recovered, authorising one fresh bounded attempt while retaining
+r9's entry rejection. Fresh entry and pre-load/pre-launch gates passed. The actual retained archive,
+config and seven layers were independently verified; one exact load and post-load identity/layer
+inspection passed. The committed [r10 packet](../plans/2026-10-23-moss-computer-startup-readiness-r10.md)
+and exact private artifacts received independent prelaunch acceptance.
+
+The single [r10 run](../../evidence/moss-computer/2026-10-23-startup-readiness-r10.md) passed positive
+guest/socket/gateway RFB probes, initial sampled isolation, protected access and both intended red
+controls. After byte-exact gateway configuration restoration, the driver exited0 but its owner
+payload contained RFB003.003 and “Too many security failures”, failing the required RFB003.008
+signal. Wrapper/runner1 reject the proof; UI/frame/input were NOT_RUN. Live diagnostics establish
+loopback backend blacklisting/refusal, with gateway upstream reset, but not its trigger. Probe
+side effects are a hypothesis; r7's502 cause remains UNKNOWN.
+
+Watchdog/cleanup/port release and operator closure exited0; independent closure found no owned
+runtime or ephemeral identities, retained homes/archive and healthy Moss. Two samples establish
+no sustained resource-fit claim. One next proposal is separately dispatched bounded RFB probe/
+blacklist diagnosis with unchanged image/security/assertions and exact review before another proof.
+No automatic retry, security weakening, product/sleep implementation, owner integration, merge or
+issue close follows. Startup/UI/input and previously missing sandbox/replacement gates remain
+unqualified; r8/r9 and all earlier rejection evidence remains unchanged.
+
+## 21. Integrated app/browser access, watching and takeover
+
+Ben clarified that accessing Moss's Computer must be possible inside the Moss app and through a
+web browser, so the owner can watch Moss work or take over. Both surfaces expose the same
+persistent desktop/session and files; a separate computer for each viewer would not meet this
+requirement. Watching should not take input control away from Moss.
+
+Taking over gives mouse/keyboard input to the owner and pauses Moss's computer input until control
+is explicitly returned. The integrated design must show who has control, prevent simultaneous
+conflicting owner/agent input, and preserve owner authentication/authorisation on viewing, input,
+reconnect and control transitions. Exact UI, handoff/resume and multi-viewer/disconnect behavior
+need their bounded design before product implementation; no new app surface is implemented here.
+
+Integrated acceptance must exercise both the Moss app and browser through the real owner path:
+watch visible work, take over and verify Moss stops issuing input, then explicitly return control
+and verify a safe resumption on the same desktop. Cover unauthorised access, stale agent input,
+reconnect and active-work sleep inhibition. Keep the app map truthful when those product surfaces
+ship. The isolated startup/probe fix continues as groundwork and grants none of this integrated,
+manual-device or platform acceptance.
+
+## 22. Bounded startup and fresh-input qualification: r11
+
+Ben's “yea fix it” authorised the bounded probe correction after r10, preserving its rejection.
+R10's greeting-only probes definitely stopped before initialization; complete bounded RFB3.8
+negotiation now precedes successful closure on guestTCP, UnixWS, gatewayWS and accessWS. Separate
+protocol-contract regressions caught the old false-positive behavior and passed the correction.
+They do not establish TigerVNC's blacklist trigger; r7's prior502 cause remains UNKNOWN.
+
+The single exact-reviewed r11 run passed actual complete readiness, unchanged protected access and
+mTLS/Origin removal/restoration controls0/1/1/0, current connected UI/RFB, attached visible1280x800
+canvas with345 sampled colours and exact fresh viewer-written file readback, plus initial/final
+sampled isolation. Runner/watchdog/cleanup/port release/operator closure all0; independent closure
+accepted absent owned runtime/keys, retained homes/archive/marker and healthy Moss. Two short monitor
+samples grant no sustained-fit claim. Synthetic identities grant no Moss owner-authentication proof.
+
+See the [r11 report](../../evidence/moss-computer/2026-10-23-startup-readiness-r11.md),
+[JSON](../../evidence/moss-computer/2026-10-23-startup-readiness-r11.json) and
+[packet](../plans/2026-10-23-moss-computer-startup-readiness-r11.md). The image's present-to-absent
+preparation observation remains unexplained; one freshly archive-verified/reviewed restore0 matched
+actual identity/platform/all seven layers before this run. No earlier acceptance transferred.
+
+This qualifies bounded startup/protected viewer/fresh input only. Active Firefox sandbox, clean
+profile flush, replacement persistence, idle sleep/wake and §21 app/browser owner watch/takeover
+remain separately bounded work. Propose the next bounded Firefox/sandbox/clean-shutdown/replacement
+qualification; no automatic rerun, merge, task3578/parent3577 closure or product implementation.

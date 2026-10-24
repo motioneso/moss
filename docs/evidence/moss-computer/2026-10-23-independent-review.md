@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** startup-readiness-r8 stopped before image load at the required fresh RAM floor; startup readiness and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
+- **Current status:** startup-readiness-r10 passed positive backend probes but rejected restored access on an explicit RFB security-failure response; UI/input and replacement persistence remain unqualified. Earlier scoped recovery acceptances and historical failures remain recorded below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -366,3 +366,136 @@ This accepts **BLOCKED_BEFORE_LAUNCH** accuracy and preparation closure only. St
 UI/frame/input/runtime supervision, active Firefox sandbox and replacement persistence remain
 NOT_RUN or unqualified. One next proposal is the same bounded qualification after separately
 dispatched fresh capacity/identity/packet gates. No automatic retry, merge or issue close.
+
+## Startup readiness r9: initial entry rejection evidence accepted
+
+Reviewer `/root/r9_evidence_review`, independent of author/operator Codex `/root`, returned
+**PASS — exact final r9 rejection evidence and verified no-preparation closure accepted; no blocking
+findings.** No reviewer edits, resource resampling or runtime mutations occurred.
+
+At19:15:05 UTC, available RAM6,813,106,176 bytes was below the8,589,934,592-byte floor by
+1,776,828,416 bytes. Root/data floors passed. Initial resource values are transcript copies,
+not a second sample or separately retained raw command output. The exact image was absent;
+archive verification/restoration review/load and all runtime preparation remained NOT_RUN.
+
+| Exact accepted artifact                         | SHA-256                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| [r9 report](2026-10-23-startup-readiness-r9.md) | `b160a608ae2faba9da16c075843632c8ea86c0cadea3112dd3667952ec92b201` |
+| [r9 JSON](2026-10-23-startup-readiness-r9.json) | `4396a8d800558bd6a5d3a2e2a23d52e597449c06bba1f6b607d030827e78f14f` |
+| Spec with section19                             | `03e54a968aca644c5c651fce213ad9eb878f45d3a64f354599f0b19df7655e3e` |
+
+All three private receipt hashes and raw/sanitised values matched; arithmetic, null unrun exits,
+NOT_RUN classifications and retained-data limits agreed with the transcript and dispatch. Scoped
+Prettier, whitespace, privacy and relative links passed. A generic privacy pattern initially matched
+prose `root/home/socket`; an absolute-path boundary corrected the check without document changes.
+
+Independent closure at19:17:01 UTC confirmed empty exact r9 container/network labels and no owned
+reservation or runtime processes; the runtime sibling remained absent. No port/listener, browser,
+watchdog, keys or runtime was created. The initial process substring scan falsely matched the review
+shell and exited1; a path-argument scan excluding shell command text exited0. This review
+instrumentation correction was not a resource-gate retry. Prior homes including r7/r8 and the
+archive remained present without comprehensive content rehash; Moss was `running healthy` and
+health returned `{"ok":true}`. Read-only Docker/devports/health checks exited0.
+
+Acceptance covers **BLOCKED_BEFORE_LAUNCH** accuracy and no-preparation closure only. Startup,
+protected access/controls, actual UI/RFB/frame/input and runtime isolation/supervision remain NOT_RUN.
+Active Firefox sandbox, clean flush, replacement persistence, idle sleep/wake and owner integration
+remain unqualified. One next proposal is a separately dispatched attempt when host capacity is
+available with new identity, fresh floors and exact independent packet review. No automatic rerun,
+merge or issue close follows.
+
+## Startup readiness r10: exact readiness and final rejection accepted
+
+After Ben explicitly resumed, reviewer `/root/r9_evidence_review` independently repeated actual
+archive size/checksum/config/seven-layer verification and returned PASS_RESTORE_READY conditional
+on fresh floors before one exact load and actual identity/layer inspection. Load0 and post-load
+identity/layers matched. The reviewer then accepted committed packet
+`346ca8ff9e11005b359e497bc9d4a0f87b00da25` and all46 exact private artifacts as PASS_READY,
+conditional on fresh floors and an alive/healthy first watchdog sample. No reviewer authored fixes,
+changed artifacts, sampled admission resources or launched runtime.
+
+Packet SHA256 `adae12f5e1b0e4b19dee15f15519ec9c74d423c70d48e20fe27533851277c71c`;
+manifest SHA256 `27decaf07e7fbcd7f4f299e1144f57fbdca57fe2dc81a5f40ac58fea54ac03b4`.
+Actual positive guest RFB/Unix101+RFB/gateway owner-Origin101+RFB, unchanged access assertions/
+controls, synchronous current frame/input assertions, live dual-container diagnostics, supervision/
+lock/emergency-stop and process/timeout/cleanup design were independently checked. Syntax,
+regressions, resolved config, synthetic certificate chains/key pairs/EKU/foreign rejection,
+exact hashes/table, formatting/privacy/links passed. Readiness granted no runtime acceptance.
+
+The single run failed the final restored RFB signal after positive probes, initial isolation,
+baseline access and both intended red controls passed. Numeric driver exits0/1/1/0 matched, but the
+restored owner payload was46 bytes: RFB003.003, failure header and “Too many security failures”,
+not the required RFB003.008. Access wrapper1/runner1 preserve rejection. Actual gateway bytes
+were restored exactly. Raw controls JSON contains only three cases because it was written before
+the fourth check; the failed fourth row is explicitly reconstructed from its retained assertion
+trace and driver output. No retry or relaxed assertion occurred; UI/browser/frame/input NOT_RUN.
+
+Final verdict: **PASS — exact final r10 rejection evidence and verified closure accepted; no
+blocking findings.** Acceptance covers REJECTED_INCOMPLETE_PROOF and closure only.
+
+| Exact accepted artifact                           | SHA-256                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| [r10 report](2026-10-23-startup-readiness-r10.md) | `33d65cfe762fbdc165cd453ddadb3b5b42a8bd768c1e00a9967f23c6b145005f` |
+| [r10 JSON](2026-10-23-startup-readiness-r10.json) | `0567e9723b396c1f491546da03a7fd39bb37635df410178ae75fe7c2c0606595` |
+| Spec with section20                               | `a60894ed5d819bd6da8f6588f32ab46ae780ad6a10e6061ee14d12c386d37447` |
+
+All45 raw receipt hashes and two support hashes matched;20 surviving launch files remained exact
+and26 ephemeral credential files were deleted as required. Raw/sanitised keys/values, exits,
+resources/times/inspects, two monitor samples, byte-exact gateway restoration and exact refusal
+payload agreed. Live guest logs establish localhost blacklisting/refusal; live gateway logs show
+upstream reset104. The trigger remains unproven; greeting-only/aborted probe effects are a
+hypothesis, and r7's502 cause remains UNKNOWN. R9's report/JSON remain unchanged.
+
+Independent closure21:22:18.829250 UTC confirmed absent exact r10 containers/network/listener5184/
+reservation/runtime processes/host-browser identity/keys, retained new/prior homes/archive and
+healthy Moss/health. Closure read-only commands exited0; watchdog/cleanup/port release and operator
+closure also0. No comprehensive earlier-data rehash or sustained resource-fit claim follows.
+Scoped Prettier, privacy, links and whitespace passed. Review-only schema-comparison KeyError and
+validation-input SyntaxError were corrected without artifact edits, restore mutation or rerun.
+
+The one next proposal is separately dispatched bounded RFB probe/blacklist diagnosis preserving
+exact image/security/access assertions, then exact review before another startup/UI/input proof.
+Active Firefox sandbox, clean flush, replacement persistence, idle sleep/wake and owner integration
+remain unqualified. No automatic retry, security weakening, product expansion, merge or issue close.
+
+## Startup readiness r11: complete probes, narrow live pass and closure
+
+Reviewer `/root/r9_evidence_review` independently accepted the actual archive size/checksum/config/
+seven payload layers at21:37:26.232074 UTC, conditional on fresh pre-load floors, one exact load
+and actual image/layer inspection. It treated explicit image absence after entry presence as the
+handoff's permitted restoration branch; the disappearance cause remains UNKNOWN. Load0 and actual
+identity/platform/seven layers matched. Earlier rejections/acceptance remain unchanged.
+
+PASS_LAUNCH_READY21:41:29 UTC covered committed packet
+`be5359b437b4f3b2df5a74028797aa29c82d60a1` and all60 actual private artifacts,
+manifest `5537c3c2570856d4a7016068173ccfe2d1eca5349d788d3b8ef49329e06de8c6`.
+Actual complete RFB3.8 guestTCP/UnixWS/gatewayWS/accessWS probes, unchanged access assertions/red
+controls, separate protocol-contract fixtures/red-green receipts, limits/mounts/synthetic identities,
+watchdog/mutation/diagnostics/cleanup and actual UI/input assertions were checked. No reviewer
+mutation/runtime/fixture execution occurred. Readiness remained conditional on fresh runner admission
+and a healthy first live watchdog sample.
+
+The single run passed all bounded live gates. Drivers0/1/1/0 produced intended signals, pristine
+configuration was restored exactly, current UI/RFB connected and attached visible1280x800 canvas
+had345 sampled colours. A fresh unique initially absent file received exact viewer keyboard bytes
+and exact readback. Initial/final sampled isolation passed; runner/watchdog/cleanup/port release/
+operator closure0. Only two short watchdog samples; no sustained-fit claim. One package.json404
+startup event did not prevent the predicates. No failure diagnostics were needed or run.
+
+Independent PASS_CLOSURE21:43:53.971326 UTC verified current absence of owned containers/network/
+listener5187/reservation/scripts/watchdog/recorded browser PID-start identities/keys, restored pristine
+gateway configuration, retained new/prior homes/archive and exact marker bytes, and healthy Moss/health.
+The supplemental r9-root assumption/check correction was retained and accepted as an operator
+read-only check error without a runtime retry. Earlier home contents were not comprehensively rehashed.
+
+Exact final review21:46:47.365216 UTC: **PASS — exact final r11 evidence accepted; no blocking findings**. Acceptance covers bounded startup/protected viewer/fresh input
+and closure only. The blacklist trigger remains a supported hypothesis without an actual-backend
+differential reproducer; r7's prior502 cause remains UNKNOWN. Active Firefox sandbox, clean profile
+flush, replacement persistence, idle sleep/wake and spec§21 app/browser watch/takeover owner integration
+remain unqualified. #3578/#3577 remain open; no rerun, merge or product expansion follows.
+
+| Exact final artifact                                                                              | SHA-256                                                            |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [r11 report](2026-10-23-startup-readiness-r11.md)                                                 | `e469a8160d5d4fb5f354876462e7ffb0bab7a09ae39373375621a67920504317` |
+| [r11 JSON](2026-10-23-startup-readiness-r11.json)                                                 | `71fbe6c59dcf4571169011ba6f238492b36bcf3bc3d863995717c16b1a954e0e` |
+| [Spec with sections21–22](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `35169fa4a1deaed1e357330428b3f2af1631319b0bc122a77ab22a986321c115` |
