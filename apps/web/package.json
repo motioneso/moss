@@ -25,6 +25,7 @@
     "@moss/sports": "workspace:*",
     "@moss/tasks": "workspace:*",
     "@moss/ui": "workspace:*",
+    "@moss/weather": "workspace:*",
     "@moss/wellness": "workspace:*",
     "@moss/workshop": "workspace:*",
     "@openuidev/react-lang": "1.0.1",

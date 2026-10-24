@@ -189,6 +189,12 @@ export const chatModuleManifest = {
   },
   features: [
     {
+      id: "chat.domain_read_resolution",
+      description:
+        "Moss tries authorized reads before clarifying saved names. Replies honor resolved units and actual sample times; comparisons may convert. Explicit sources are honored. Ambiguity needs clarification; unavailable reads keep truthful text.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.voice_requests",
       description:
         "New ring text sends automatically in Main as normal messages/replies. Legacy pending inputs keep inline Send; Load older pages retained inputs. Private/other chats hide evidence and defer dispatch; interrupted turns never auto-replay.",

@@ -228,6 +228,9 @@ importers:
       '@moss/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@moss/weather':
+        specifier: workspace:*
+        version: link:../../packages/weather
       '@moss/wellness':
         specifier: workspace:*
         version: link:../../packages/wellness
@@ -1584,15 +1587,24 @@ importers:
       '@moss/db':
         specifier: workspace:*
         version: link:../db
+      '@moss/host-fetch':
+        specifier: workspace:*
+        version: link:../host-fetch
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@moss/ui':
+        specifier: workspace:*
+        version: link:../ui
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
 
   packages/web-research:
     dependencies:

@@ -72,7 +72,7 @@ const weatherForecastDaySchema = {
   }
 } as const;
 
-const weatherTodaySchema = {
+export const weatherTodaySchema = {
   type: "object",
   additionalProperties: false,
   required: [
