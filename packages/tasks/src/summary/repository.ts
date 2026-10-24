@@ -3,7 +3,7 @@ import { localDay } from "@moss/shared";
 import { localDayRange } from "@moss/module-sdk";
 import { readActorTimezone } from "../drift.js";
 import { TASK_SUMMARY_LIMIT, type TaskSummary, type TaskSummaryScope } from "./types.js";
-import { taskDueState } from "./contract.js";
+import { boundTaskSummary, taskDueState } from "./contract.js";
 
 /** SELECT-only: unlike the task-list consumer, never reconciles recurring series. */
 export async function readTaskSummary(
@@ -44,7 +44,7 @@ export async function readTaskSummary(
     .execute();
   const iso = (v: Date | string | null): string | null =>
     v === null ? null : new Date(v).toISOString();
-  return {
+  return boundTaskSummary({
     scope,
     timeZone,
     localDate,
@@ -61,5 +61,5 @@ export async function readTaskSummary(
       updatedAt: new Date(row.updated_at).toISOString(),
       recurring: row.recurrence !== null
     }))
-  };
+  });
 }

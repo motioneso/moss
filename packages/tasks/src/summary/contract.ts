@@ -1,5 +1,5 @@
 import type { ModuleVisualTemplate } from "@moss/module-sdk/visual-template";
-import { isValidTimeZone, localDay, tryCopyVisualSnapshot } from "@moss/shared";
+import { isValidTimeZone, localDay, tryCopyVisualSnapshot, VISUAL_LIMITS } from "@moss/shared";
 import {
   TASK_SUMMARY_LIMIT,
   TASK_SUMMARY_SCOPES,
@@ -36,7 +36,7 @@ export function taskMatchesScope(item: TaskSummaryItem, scope: TaskSummaryScope)
   return scope === "today" ? item.dueState !== "upcoming" : item.dueState === scope;
 }
 export function taskSummaryCoverage(v: TaskSummary): string {
-  return `${summaryScopeLabels[v.scope]}. ${v.truncated ? `Partial: first ${TASK_SUMMARY_LIMIT} matching tasks; more exist.` : `${v.items.length} matching persisted tasks in this scope.`} Includes owned and explicitly shared tasks visible to you. Recurring tasks show persisted occurrences only; future occurrences are not generated. Reminders are not included. Due labels use local calendar days; original date-only intent is not retained in task storage.`;
+  return `${summaryScopeLabels[v.scope]}. ${v.truncated ? `Partial: first ${v.items.length} matching tasks; more exist.` : `${v.items.length} matching persisted tasks in this scope.`} Includes owned and explicitly shared tasks visible to you. Recurring tasks show persisted occurrences only; future occurrences are not generated. Reminders are not included. Due labels use local calendar days; original date-only intent is not retained in task storage.`;
 }
 const text = (v: unknown, max = 500): v is string =>
   typeof v === "string" && v.length > 0 && v.length <= max;
@@ -64,7 +64,7 @@ export function readTaskSummarySnapshot(value: unknown): TaskSummary | null {
     typeof v.truncated !== "boolean" ||
     !Array.isArray(v.items) ||
     v.items.length > TASK_SUMMARY_LIMIT ||
-    (v.truncated && v.items.length !== TASK_SUMMARY_LIMIT)
+    (v.truncated && v.items.length === 0)
   )
     return null;
   const ids = new Set<string>();
@@ -77,7 +77,8 @@ export function readTaskSummarySnapshot(value: unknown): TaskSummary | null {
       !uuid(item.id) ||
       ids.has(item.id) ||
       !text(item.title) ||
-      !["todo", "suggested", "done", "archived"].includes(String(item.status)) ||
+      typeof item.status !== "string" ||
+      !["todo", "suggested", "done", "archived"].includes(item.status) ||
       !(
         item.priority === null ||
         (typeof item.priority === "number" &&
@@ -117,7 +118,21 @@ export function taskSummaryItemText(item: TaskSummaryItem, timeZone: string): st
 export function formatTaskSummarySnapshot(value: unknown): string {
   const v = readTaskSummarySnapshot(value);
   if (!v) return "";
+  return formatTaskSummary(v);
+}
+function formatTaskSummary(v: TaskSummary): string {
   return `${summaryScopeLabels[v.scope]} · ${v.localDate} · ${v.timeZone}. ${v.items.map((item) => `${item.title} [${item.id}]: ${taskSummaryItemText(item, v.timeZone)}; stored due timestamp ${item.dueAt ?? "none"}; updated ${item.updatedAt}`).join(". ")}${v.items.length ? ". " : ""}Tasks; retrieved ${v.retrievedAt}. ${taskSummaryCoverage(v)}`;
+}
+/** Keep the same ordered source prefix in both card and complete readable fallback. */
+export function boundTaskSummary(summary: TaskSummary): TaskSummary {
+  let bounded = summary;
+  while (
+    bounded.items.length > 1 &&
+    formatTaskSummary(bounded).length > VISUAL_LIMITS.fallbackTextLength
+  ) {
+    bounded = { ...bounded, items: bounded.items.slice(0, -1), truncated: true };
+  }
+  return bounded;
 }
 export const taskSummaryTemplate: ModuleVisualTemplate = Object.freeze({
   kind: "tasks.summary",

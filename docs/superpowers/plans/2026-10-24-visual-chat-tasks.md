@@ -34,7 +34,9 @@ Public tool `tasks.summary({scope?})` supports today (default: open due today/ov
 overdue, upcoming, undated, completed and all persisted states. Return at most twelve rows with
 stable identity/title, status, supported numeric priority, due instant/local-day status,
 completion/update time and recurring flag. Read one lookahead row for truncation, ordered by due
-then stable id (nulls last); never claim an account total from this bounded result. No list join
+then stable id (nulls last). If complete source text exceeds the shared fallback budget, return
+a shorter ordered prefix with its actual count and partial coverage; never clip titles or claim
+an account total from this bounded result. No list join
 that would hide authorized shared tasks. Empty results describe only the selected scope.
 
 The snapshot includes scope, actor time zone, local date, source time, truncation and explicit

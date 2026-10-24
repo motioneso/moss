@@ -5,6 +5,7 @@ import { localDayRange } from "@moss/module-sdk";
 import { readTaskSummary } from "../../packages/tasks/src/summary/repository.js";
 import {
   readTaskSummarySnapshot,
+  boundTaskSummary,
   formatTaskSummarySnapshot,
   taskDueState,
   taskSummaryCoverage
@@ -15,6 +16,50 @@ import { summaryFixture, summarySnapshot, summaryNow } from "../fixtures/task-su
 import { makeRecordingDb } from "./helpers/recording-db.js";
 
 describe("read-only Tasks summary", () => {
+  it("keeps maximum-length source titles intact while bounding a partial visual and fallback", () => {
+    const row = summaryFixture().items[0]!;
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      ...row,
+      id: `30000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      title: "x".repeat(500),
+      status: "done" as const,
+      dueState: "inactive" as const,
+      completedAt: summaryNow,
+      recurring: true
+    }));
+    const summary = boundTaskSummary(summaryFixture({ scope: "completed", items }));
+    expect(summary.truncated).toBe(true);
+    expect(summary.items.length).toBeGreaterThan(0);
+    expect(summary.items.length).toBeLessThan(12);
+    expect(summary.items).toEqual(items.slice(0, summary.items.length));
+    const service = new VisualPresentationService();
+    const identity = { actorUserId: "actor", threadId: "thread", turnId: "turn" };
+    const ctx = { ...identity, requestId: "test", chatSessionId: "session" };
+    const turn = service.begin("session", identity);
+    const registered = service.registerSnapshot(ctx, summarySnapshot(summary));
+    expect(registered.ok).toBe(true);
+    if (!registered.ok) throw new Error("Bounded source registration failed");
+    const presented = service.present(ctx, {
+      catalogVersion: registered.catalogVersion,
+      blocks: [{ kind: registered.templateKind, snapshotRefs: [registered.ref] }],
+      interactions: []
+    });
+    expect(presented.ok).toBe(true);
+    if (presented.ok) {
+      expect(presented.reply.fallbackText.length).toBeLessThanOrEqual(4000);
+      expect(presented.reply.fallbackText).toContain(
+        `Partial: first ${summary.items.length} matching tasks`
+      );
+      expect(presented.reply.fallbackText).toContain("x".repeat(500));
+      expect(readTaskSummarySnapshot(presented.reply.snapshots[0])?.items).toEqual(summary.items);
+    }
+    turn.close();
+  });
+  it.each([["done"], { toString: () => "done" }])("rejects non-string task states", (status) => {
+    const snapshot = summarySnapshot({ scope: "all" });
+    Object.assign(snapshot.fields.items[0]!, { status, dueState: "inactive" });
+    expect(readTaskSummarySnapshot(snapshot)).toBeNull();
+  });
   it("binds source references to actor, thread and turn, rejects forgery and discards on cancellation", () => {
     const service = new VisualPresentationService();
     const identity = { actorUserId: "actor", threadId: "thread", turnId: "turn" };
@@ -135,7 +180,7 @@ describe("read-only Tasks summary", () => {
     "duplicate",
     "extra",
     "scope",
-    "truncated"
+    "emptyPartial"
   ])("rejects forged %s rather than promoting model facts", (field) => {
     const s = summarySnapshot();
     const v = s.fields;
@@ -151,7 +196,10 @@ describe("read-only Tasks summary", () => {
     if (field === "duplicate") v.items.push({ ...v.items[0]! });
     if (field === "extra") Object.assign(v.items[0]!, { secret: "unknown" });
     if (field === "scope") v.scope = "upcoming";
-    if (field === "truncated") v.truncated = true;
+    if (field === "emptyPartial") {
+      v.truncated = true;
+      v.items = [];
+    }
     expect(readTaskSummarySnapshot(s)).toBeNull();
     expect(formatTaskSummarySnapshot(s)).toBe("");
   });
