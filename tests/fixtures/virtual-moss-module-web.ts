@@ -72,3 +72,6 @@ export const MODULE_PERSISTENT_CONTROLS: ReadonlyArray<{
   readonly moduleId: string;
   readonly load: () => Promise<{ readonly default: ModulePersistentControlsContribution }>;
 }> = [{ moduleId: "meetings", load: () => import("@moss/meetings/web/persistent-controls") }];
+
+export const MODULE_VISUAL_CONTRACTS = [];
+export const MODULE_VISUAL_RENDERERS = [() => import("../../packages/sports/src/results/card.js")];

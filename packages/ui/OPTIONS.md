@@ -132,6 +132,10 @@ _No enum or boolean props._
 - **size** (optional, default `md`): `sm`, `md`, `lg`
 - **active** (optional boolean flag)
 
+## identity-metric
+
+_No enum or boolean props._
+
 ## indicator
 
 - **status** (required): `ready`, `drift`, `error`, `idle`
