@@ -74,6 +74,9 @@ export class ComputerDocker {
     await this.#image(this.config.gatewayImage);
   }
   async inspect(resource: HostResource): Promise<InspectedResource> {
+    return this.#inspect(resource, false);
+  }
+  async #inspect(resource: HostResource, created: boolean): Promise<InspectedResource> {
     const identity = resource.id ?? resourceName(this.config, resource);
     const reply = await this.#call("GET", `/containers/${identity}/json`).catch(
       (error: unknown) => {
@@ -100,6 +103,15 @@ export class ComputerDocker {
       reply.Config.OpenStdin !== false
     )
       throw new Error("Computer container identity mismatch");
+    if (
+      created &&
+      (reply.State.Running ||
+        reply.State.Status !== "created" ||
+        reply.State.Pid !== 0 ||
+        typeof reply.State.StartedAt !== "string" ||
+        !/^0001-01-01T00:00:00(?:\.0{1,9})?Z$/.test(reply.State.StartedAt))
+    )
+      throw new Error("Computer container was already started");
     for (const [key, value] of Object.entries(expected.HostConfig)) {
       if (!equal(reply.HostConfig[key], value))
         throw new Error("Computer runtime configuration mismatch");
@@ -165,6 +177,18 @@ export class ComputerDocker {
     if (ids.size !== reply.length || reply.some((row) => !ids.has(row.Id)))
       throw new Error("Untracked Computer container");
     return inspected;
+  }
+  /** Read-only exact pair check; running=false alone cannot qualify a new configuration. */
+  async createdPair(resources: readonly HostResource[]): Promise<void> {
+    if (
+      resources.length !== 2 ||
+      new Set(resources.map((r) => r.role)).size !== 2 ||
+      resources.some((r) => !fullDockerId(r.id)) ||
+      new Set(resources.map((r) => r.id)).size !== 2 ||
+      (await this.inventory(resources)).length !== 2
+    )
+      throw new Error("Exact created Computer pair required");
+    for (const resource of resources) await this.#inspect(resource, true);
   }
   async create(resource: HostResource, guard: ComputerMutationGuard): Promise<string> {
     if (!guard) throw new Error("Computer launch guard required");

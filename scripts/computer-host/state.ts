@@ -1,4 +1,4 @@
-import { constants, renameSync } from "node:fs";
+import { constants, renameSync, unlinkSync } from "node:fs";
 import { lstat, open, unlink } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { join } from "node:path";
@@ -101,10 +101,17 @@ export class HostStateStore {
   static async open(config: HostConfig): Promise<HostStateStore> {
     return this.#open(config, true);
   }
-  static async openExisting(config: HostConfig): Promise<HostStateStore> {
-    return this.#open(config, false);
+  static async openExisting(
+    config: HostConfig,
+    options?: { readonly retainFailedLock: true }
+  ): Promise<HostStateStore> {
+    return this.#open(config, false, options?.retainFailedLock ?? false);
   }
-  static async #open(config: HostConfig, initialize: boolean): Promise<HostStateStore> {
+  static async #open(
+    config: HostConfig,
+    initialize: boolean,
+    retainFailedLock = false
+  ): Promise<HostStateStore> {
     const roots = await inspectRoots(config);
     const lockPath = join(config.stateDir, "daemon.lock");
     const lock = await open(
@@ -137,7 +144,8 @@ export class HostStateStore {
       }
       return store;
     } catch (error) {
-      await store.close();
+      if (retainFailedLock) await store.retainLock();
+      else await store.close();
       throw error;
     }
   }
@@ -230,13 +238,21 @@ export class HostStateStore {
       });
     }
   }
-  async close(): Promise<void> {
+  /** Release only the descriptor, retaining the exclusive path for explicit recovery. */
+  async retainLock(): Promise<void> {
+    await this.lock.close();
+  }
+  async close(guard?: ComputerMutationGuard): Promise<void> {
     const expected = await this.lock.stat();
     const path = join(this.config.stateDir, "daemon.lock");
+    // O_EXCL path ownership is the lock. Close failure must leave that path retained.
+    await this.lock.close();
+    if (guard) await guard.check();
     const actual = await lstat(path);
     if (expected.dev !== actual.dev || expected.ino !== actual.ino)
       throw new Error("Computer lock replaced");
-    await unlink(path);
-    await this.lock.close();
+    guard?.assertCurrent();
+    // No fallible async work after this guarded final release.
+    unlinkSync(path);
   }
 }
