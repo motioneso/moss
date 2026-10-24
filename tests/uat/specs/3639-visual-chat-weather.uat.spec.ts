@@ -229,7 +229,8 @@ test("ordinary evening questions use actual place-local intervals and immutable 
   ).json();
   expect(sportsSource.status).toBe("result");
   const sports = await turn(page, "How did Liverpool do in their last match?");
-  expect(sports.saved.visualReply.blocks[0].kind).toBe("sports.result");
+  console.log(`[weather-sports-preservation] ${JSON.stringify(sports.saved)}`);
+  expect(sports.saved.visualReply?.blocks[0]?.kind).toBe("sports.result");
   expect(sports.saved.visualReply.snapshots[0].fields).toEqual(sportsSource.result);
   console.log(
     "[weather-controls] four prose controls, novel user-data composition, unchanged saved location and sourced Sports preservation passed"

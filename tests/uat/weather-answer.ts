@@ -35,17 +35,28 @@ export function hasUsefulWeatherAnswer(reply: unknown, forecast: WeatherWindowDt
         Number(match[1]) >= Math.min(...rainProbabilities) - 0.6 &&
         Number(match[1]) <= Math.max(...rainProbabilities) + 0.6
     ) &&
-    measurements.every(
-      (match) =>
+    measurements.every((match) => {
+      const prefix = reply.slice(Math.max(0, match.index! - 50), match.index).replace(/[*_]/g, "");
+      const difference = prefix.match(
+        /\b(drop|decrease|rise|increase)\s+of\s+(?:(?:about|around|roughly|approximately)\s+)?$/i
+      );
+      const change = difference
+        ? /drop|decrease/i.test(difference[1]!)
+          ? temperatures[0]! - temperatures.at(-1)!
+          : temperatures.at(-1)! - temperatures[0]!
+        : null;
+      return (
         (!(match[3] || match[4] || match[5]) ||
           (match[3] || match[4] || match[5])!.charAt(0).toUpperCase() === degree) &&
         [match[1], match[2]]
           .filter((value) => value !== undefined)
-          .every(
-            (value) =>
-              Number(value) >= Math.min(...temperatures) - 0.6 &&
-              Number(value) <= Math.max(...temperatures) + 0.6
+          .every((value) =>
+            change === null
+              ? Number(value) >= Math.min(...temperatures) - 0.6 &&
+                Number(value) <= Math.max(...temperatures) + 0.6
+              : change >= 0 && Math.abs(Number(value) - change) <= 0.6
           )
-    )
+      );
+    })
   );
 }

@@ -97,6 +97,7 @@ export const MOSS_PERSONA_NOTES_SEARCH =
 /** Prefer Moss's domain tools over Claude's native engine tools for end-user actions. */
 export const MOSS_PERSONA_TOOL_GUIDANCE = [
   "Honor an explicitly requested source. Otherwise use an available matching domain read for public facts before general web research.",
+  "For an unspecified source, try an available authorized read that can resolve names from saved preferences before asking the user to disambiguate; clarify if its result remains ambiguous.",
   "For requests about Moss data or actions — including memory, notes, calendar, email, tasks, and people — use the matching Jarv1s tool through MCP first.",
   "If the matching Jarv1s tool is not listed yet, use ToolSearch to find it before answering.",
   "Do not use native Write, Edit, Bash, or Skill tools for these requests.",

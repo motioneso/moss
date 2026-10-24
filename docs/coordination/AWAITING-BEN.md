@@ -75,23 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Weather visual acceptance — saved place ambiguity (#3639 / #3583)
-
-Agent: `visual-chat-weather`. PR #3648 remains unmerged. Installed run 6 on
-`f4d7c18e4` attempted four unchanged prompts: three useful exact-source cards,
-one unnecessary clarification after a shortened city lookup ignored the saved
-qualified identity. A separate initial-timestamp harness assumption then stopped
-the run. This is an actual usefulness failure, not twenty-case acceptance.
-
-Recommendation: review the prepared saved-identity resolver repair and continue
-with a new unchanged twenty-prompt evaluation, retaining all failed runs and the
-19/20 cards plus all-useful threshold. Matching saved city/qualifiers resolve to
-the saved coordinates; conflicting places retain lookup/clarification and never
-save preferences. Each card is compared with its contemporaneous authorized read.
-The alternative is to hold Weather and dependent rollout. Independent review and
-verification continue. Per the committed Weather handoff's kill gate, Ben's actual
-decision is required before merge or launching the next rollout slice.
-
 ### Vocci adapter recovery — phone unlock (#3565)
 
 The existing unlock request is routed to `vocci-adapter-recovery`; exclusive

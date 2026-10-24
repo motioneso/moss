@@ -188,6 +188,12 @@ export const chatModuleManifest = {
   },
   features: [
     {
+      id: "chat.domain_read_resolution",
+      description:
+        "Moss tries authorized module reads before clarifying names that saved preferences may resolve. Explicit sources are honored. Ambiguous results still need clarification; unavailable reads keep truthful text.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.voice_requests",
       description:
         "Review ring transcripts in Main with Send and Open reply. Private/module/other chats hide review. Links open owned receipts without sending. Busy chats defer; runner outages keep requests queued. Interrupted turns never auto-replay.",

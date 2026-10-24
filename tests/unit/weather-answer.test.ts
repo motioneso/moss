@@ -62,6 +62,21 @@ describe("installed Weather prose assessment", () => {
       )
     ).toBe(true);
   });
+  it("accepts a temperature drop calculated from the actual interval endpoints", () => {
+    expect(
+      hasUsefulWeatherAnswer(
+        "It will cool from **60°F** to **57°F**—a drop of roughly **3°F**. Bring a light layer.",
+        forecast
+      )
+    ).toBe(true);
+  });
+  it.each([
+    "It will cool from 60°F to 57°F—a drop of roughly 30°F. Bring a light layer.",
+    "It will cool from 60°F to 57°F—a drop of roughly 3°C. Bring a light layer.",
+    "Bring a light layer: it will be 3°F this evening."
+  ])("rejects an unsupported difference or absolute temperature: %s", (reply) => {
+    expect(hasUsefulWeatherAnswer(reply, forecast)).toBe(false);
+  });
   it.each([
     "I don't know whether you need a jacket; perhaps check another forecast.",
     "Bring a jacket: this evening will be around 90°F at your saved location.",

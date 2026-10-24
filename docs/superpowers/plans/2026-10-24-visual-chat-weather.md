@@ -185,3 +185,26 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   matrix assertion failures so an early mismatch does not hide later cases.
   Ben's actual decision is required before dependent rollout; neither this repair
   nor a later retry silently waives or erases the failed configured-engine run.
+- 2026-10-24: Ben replied “Yes” to the queued saved-place repair recommendation,
+  then “resume please” in the session. Continue the unchanged gated chain; this
+  is no renderer, threshold or scope waiver. Removed the resolved Awaiting-Ben entry.
+- 2026-10-24: exact clean `087e30d` passed the full isolated local gate:
+  1,562 unit files / 18,507 tests / three skips; 14 seed files / 35 tests;
+  394 integration files / 4,093 tests / one skipped file and three skipped tests.
+  Detached authoritative waiter exited 0. Fresh CI and both reviews were green.
+- 2026-10-24: installed run 7 on `087e30d` discovered Codex economy
+  `gpt-5.6-luna` and produced 20/20 exact-source Weather cards. All full answers
+  were recorded. The evaluator falsely rejected the correct rounded 5°F drop
+  from the source's 71 to 65.9°F endpoints. Added an observed-red regression
+  distinguishing source-calculated differences from absolute temperatures and
+  rejecting incorrect differences/units. Prompts and acceptance thresholds stay fixed.
+  Reload, drawer/390px/themes, four prose controls, novel composition and unchanged
+  location passed. Sports preservation failed: the model asked whether Liverpool
+  meant the men's first team despite the saved follow. This is a real configured-
+  engine preservation failure, separate from the evaluator false negative; run 7
+  remains failed. The current generic routing guidance only orders domain reads
+  before web research. Extend it to try an authorized preference-resolving read
+  before disambiguation, preserving genuine ambiguous-result clarification. Log
+  the complete preservation reply before asserting its visual/source. Re-review,
+  fresh exact-head gate/CI and installed evaluation are required. Retain the kill
+  gate for this actual failure; no complete acceptance or merge claim yet.
