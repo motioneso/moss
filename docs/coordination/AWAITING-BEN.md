@@ -92,10 +92,3 @@ configuration was removed and EMPTY confirmed. This is partial acceptance. -->
 The latest proof passed physical Verify and Start/hold enrollment, then expired
 waiting for fresh samples. Ben is recording during his meeting; no additional
 user step is requested during it. Delivery of those samples is unverified. -->
-
-### Vocci pending recording — phone unlock (2026-10-24)
-
-The real phone screen locked before native Start could resume the retained recording.
-Please unlock it once; no new recording is needed. Recommended: resume the retained
-queue through the companion, then verify its production transcript and summary.
-Production is healthy on the reviewed timestamp fix; the shorter settings copy passed live verification.
