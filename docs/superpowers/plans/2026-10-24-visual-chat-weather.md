@@ -240,3 +240,10 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   to actual place-local source times/values and reject invented endpoints/wrong
   hours. Keep whole-answer manual review because this bounded checker does not
   cover every possible natural-language claim. No complete acceptance claim.
+- 2026-10-24: fresh-main candidate `d2baaf72b` failed CI static checks because
+  `runtime.ts` reached 1,002 lines. Stopped its full local gate with the official
+  stop command (143). Extracted the existing static persona declarations and
+  composer verbatim into `live/persona-guidance.ts`, retaining runtime exports and
+  all composed text. The file-size check passes and all 51 targeted prose/persona
+  tests pass. This structural repair requires renewed exact-head review and gates;
+  the earlier CI failure and superseded local run remain disclosed.
