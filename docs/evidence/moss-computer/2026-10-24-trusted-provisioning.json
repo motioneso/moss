@@ -1,0 +1,522 @@
+{
+  "scope": "PREPARE only; no installed or owner runtime qualification",
+  "base": "1a79c74b4cf4800740340617c67496f70fa762e1",
+  "acceptedPlan": "7e933ce9d8314aeac3cceb0894eea2a96f4338c7",
+  "checkedSource": "c53d88263e0d1cdd94c493b810769c103b371f86",
+  "productionEquivalentTo": "5df491e4f0a8d69e368a111854a68cf9a6bf0c08",
+  "behavior": {
+    "suites": 28,
+    "tests": 592,
+    "provisioningTests": 46,
+    "exit": 0
+  },
+  "checks": [
+    {
+      "name": "behavior",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-auth-endpoint.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-closure-trust.test.ts",
+        "tests/unit/computer-closure.test.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-recovery.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-managed-host.test.ts",
+        "tests/unit/computer-provision.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "--reporter=dot"
+      ],
+      "exit": 0,
+      "seconds": 140.406
+    },
+    {
+      "name": "root-tsc",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 144.766
+    },
+    {
+      "name": "tests-tsc",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 90.505
+    },
+    {
+      "name": "lint",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-gateway/config.ts",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-provision.ts",
+        "scripts/computer-provision/config.ts",
+        "scripts/computer-provision/publication.ts",
+        "scripts/computer-provision/run.ts",
+        "tests/unit/computer-provision-fixture.ts",
+        "tests/unit/computer-provision-native-fixture.ts",
+        "tests/unit/computer-provision.test.ts",
+        "--max-warnings",
+        "0"
+      ],
+      "exit": 0,
+      "seconds": 4.379
+    },
+    {
+      "name": "format",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/superpowers/plans/2026-10-24-moss-computer-trusted-provisioning.md",
+        "scripts/computer-gateway/config.ts",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-provision.ts",
+        "scripts/computer-provision/config.ts",
+        "scripts/computer-provision/publication.ts",
+        "scripts/computer-provision/run.ts",
+        "tests/unit/computer-provision-fixture.ts",
+        "tests/unit/computer-provision-native-fixture.ts",
+        "tests/unit/computer-provision.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 2.062
+    },
+    {
+      "name": "file-size",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 5.673
+    },
+    {
+      "name": "whitespace",
+      "command": ["git", "diff", "--check", "1a79c74b4cf4800740340617c67496f70fa762e1"],
+      "exit": 0,
+      "seconds": 0.017
+    },
+    {
+      "name": "cjs-provision",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-provision.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=${PRIVATE}/provision.cjs",
+        "--metafile=${PRIVATE}/provision-meta.json"
+      ],
+      "exit": 0,
+      "seconds": 0.672
+    },
+    {
+      "name": "cjs-host",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-host.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=${PRIVATE}/host.cjs",
+        "--metafile=${PRIVATE}/host-meta.json"
+      ],
+      "exit": 0,
+      "seconds": 0.566
+    },
+    {
+      "name": "cjs-watchdog",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-watchdog.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=${PRIVATE}/watchdog.cjs",
+        "--metafile=${PRIVATE}/watchdog-meta.json"
+      ],
+      "exit": 0,
+      "seconds": 0.618
+    },
+    {
+      "name": "cjs-closure",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-closure.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=${PRIVATE}/closure.cjs",
+        "--metafile=${PRIVATE}/closure-meta.json"
+      ],
+      "exit": 0,
+      "seconds": 0.672
+    },
+    {
+      "name": "gateway-build",
+      "command": ["pnpm", "build:computer-gateway", "${PRIVATE}/gateway-context"],
+      "exit": 0,
+      "seconds": 1.588
+    }
+  ],
+  "bundles": {
+    "provision": {
+      "builtinOnly": true,
+      "sha256": "a70aa9b666d4b33e5566a2a28eae15eadb85107b89d89fa50743949704c40a7a",
+      "bytes": 57092
+    },
+    "host": {
+      "builtinOnly": true,
+      "sha256": "e03dc3ba4ed8a2dd92d2a377b9321eee9ca757ffe467c4ed5271a8603f088769",
+      "bytes": 35533
+    },
+    "watchdog": {
+      "builtinOnly": true,
+      "sha256": "b0dd078c9035016a512d953aae3d65cd414944f0b046c5656ffa052f976ccf60",
+      "bytes": 94768
+    },
+    "closure": {
+      "builtinOnly": true,
+      "sha256": "b4e84d9672b165f9d03bea68c4006d13a7d2f70fd3dda6bd600f2d1d314e5330",
+      "bytes": 54790
+    }
+  },
+  "sourceHashes": {
+    "scripts/computer-gateway/config.ts": "90b3edd680f8a064135c6f84babf55f4adfedbed8726270ce628a6b44b4ae300",
+    "scripts/computer-host/docker.ts": "e86a2f596273370e55c25be364d132bee7ef88face7ba9c1f6cff98bffc08c65",
+    "scripts/computer-host/state.ts": "0c0cdbe94ac434245176a8644680fb409e570d68e4e4d856613d0ac80253cd93",
+    "scripts/computer-provision.ts": "d2d8daf16e72dd59bbf54cb157576a638b4c16c3a97f08b604c2f57c6bc478b2",
+    "scripts/computer-provision/config.ts": "66580994608489ae0b9c01946235da5ae4e2154becd6a9db1a85cc52af6f5924",
+    "scripts/computer-provision/publication.ts": "84fb8661d1b33312c08db98bcea5ffd33499befb4c44adcfc9b02e4202c4d505",
+    "scripts/computer-provision/run.ts": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42",
+    "tests/unit/computer-provision-fixture.ts": "92d242da0b28db4405d00381ec64e230db4930e03a7e7182fed285b8ddac8c51",
+    "tests/unit/computer-provision-native-fixture.ts": "644fa2fd667a3647b152a7da294c9095bef064ccc6c2dfc7315dfef0dad6410a",
+    "tests/unit/computer-provision.test.ts": "bf138d12251caf715d70e9f334bd0fbd2be8ee607160aaf0c8acbae133f360a9"
+  },
+  "protectionRemovalControls": [
+    {
+      "name": "created-observation",
+      "path": "scripts/computer-host/docker.ts",
+      "test": "refuses (running|stopped-prior|pid|started) pair",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 3.384,
+      "patchSha256": "ab6127cfa64656137e801f77a053d72ba7a00704f61667466570027600d3e6dc",
+      "restoredSha256": "e86a2f596273370e55c25be364d132bee7ef88face7ba9c1f6cff98bffc08c65"
+    },
+    {
+      "name": "exact-pair",
+      "path": "scripts/computer-host/docker.ts",
+      "test": "refuses partial pair",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.377,
+      "patchSha256": "47dffa87858ebf928dd91ae2b32e4d25452a2de244ea8665d75756b05db33166",
+      "restoredSha256": "e86a2f596273370e55c25be364d132bee7ef88face7ba9c1f6cff98bffc08c65"
+    },
+    {
+      "name": "state-inode",
+      "path": "scripts/computer-provision/run.ts",
+      "test": "same-byte state replacement",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.127,
+      "patchSha256": "5dd060398feb08d66bd99ca87ba3b934288241da442b521aafc091d2acec5d89",
+      "restoredSha256": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42"
+    },
+    {
+      "name": "failed-open-lock",
+      "path": "scripts/computer-provision/run.ts",
+      "test": "retains failed-open lock",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.974,
+      "patchSha256": "000d56b5f0dd6753b8db67875fefe1aa165f235f49591eb0943850569094ee89",
+      "restoredSha256": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42"
+    },
+    {
+      "name": "publication-readback",
+      "path": "scripts/computer-provision/run.ts",
+      "test": "after gateway-bytes changes",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.072,
+      "patchSha256": "d0c490be0fee5924eae9b361aaa4f99d3cd89ec464110aee2453f59720a170ed",
+      "restoredSha256": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42"
+    },
+    {
+      "name": "late-stop",
+      "path": "scripts/computer-provision/run.ts",
+      "test": "stop arriving in final lock lstat",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.873,
+      "patchSha256": "0d5b00def451c88e9a76d83eb5755f64ee3281a95c683ac7d84d73e686e84265",
+      "restoredSha256": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42"
+    },
+    {
+      "name": "deadline-equality",
+      "path": "scripts/computer-provision/run.ts",
+      "test": "equality arriving in final lock lstat",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.225,
+      "patchSha256": "1c5d64b6a15d44d33b592b449e48d4921c7a10b819e33e6b834d42bf2f168688",
+      "restoredSha256": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42"
+    },
+    {
+      "name": "signal-latch",
+      "path": "scripts/computer-provision/run.ts",
+      "test": "signal after actual final directory fsync",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.073,
+      "patchSha256": "af0bec028664f1634960e9ddb0a89b69a25f0558a727626d9245b449a2e2a7e8",
+      "restoredSha256": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42"
+    },
+    {
+      "name": "artifact-revalidation",
+      "path": "scripts/computer-provision/config.ts",
+      "test": "after artifact changes",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.87,
+      "patchSha256": "1ac3b781c4101ead9e57455bdbadfb907e854824622ce3920bb076b542526f53",
+      "restoredSha256": "66580994608489ae0b9c01946235da5ae4e2154becd6a9db1a85cc52af6f5924"
+    },
+    {
+      "name": "gateway-layout",
+      "path": "scripts/computer-gateway/config.ts",
+      "test": "consumer rejects unsafe mode",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.819,
+      "patchSha256": "d0a74ba3409ac006b882650d745d2da31c746b9a926c1118234c91fff18f7124",
+      "restoredSha256": "90b3edd680f8a064135c6f84babf55f4adfedbed8726270ce628a6b44b4ae300"
+    },
+    {
+      "name": "file-fsync",
+      "path": "scripts/computer-provision/publication.ts",
+      "test": "failed publication file",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.821,
+      "patchSha256": "defac5cbf4bf5f2c864c5bacf9f1a3617e43c3df96b29c3bd3e0299ba7625efd",
+      "restoredSha256": "84fb8661d1b33312c08db98bcea5ffd33499befb4c44adcfc9b02e4202c4d505"
+    },
+    {
+      "name": "directory-fsync",
+      "path": "scripts/computer-provision/publication.ts",
+      "test": "failed publication directory",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.073,
+      "patchSha256": "714b0492a6d19d377176c0c0d7cbfe2029575483a8e4b195eab4bc23ecc04509",
+      "restoredSha256": "84fb8661d1b33312c08db98bcea5ffd33499befb4c44adcfc9b02e4202c4d505"
+    },
+    {
+      "name": "file-close",
+      "path": "scripts/computer-provision/publication.ts",
+      "test": "failed publication close",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.922,
+      "patchSha256": "df64b04e18ee640369de6f09f69f7b36c379f95492af3f7653d64ab53be4139f",
+      "restoredSha256": "84fb8661d1b33312c08db98bcea5ffd33499befb4c44adcfc9b02e4202c4d505"
+    },
+    {
+      "name": "lock-close",
+      "path": "scripts/computer-host/state.ts",
+      "test": "failed canonical lock descriptor close",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.126,
+      "patchSha256": "8bc4110c0af672324616850a641bb82080a4b92e14170a5219d033a1716beafd",
+      "restoredSha256": "0c0cdbe94ac434245176a8644680fb409e570d68e4e4d856613d0ac80253cd93"
+    },
+    {
+      "name": "native-timer",
+      "path": "scripts/computer-provision.ts",
+      "test": "native production CJS with disclosed OS trust fixtures: file",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 3.874,
+      "patchSha256": "8d259d529c6c19b8e0e880a7c3ff34aab8d7acd81ef8ac4bf7d0a2082244fd39",
+      "restoredSha256": "d2d8daf16e72dd59bbf54cb157576a638b4c16c3a97f08b604c2f57c6bc478b2"
+    },
+    {
+      "name": "post-sync-equality",
+      "path": "scripts/computer-provision/run.ts",
+      "test": "rechecks equality after the actual synchronous",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.972,
+      "patchSha256": "ce9ea3ae21e7e4a847fa5217da8e9ae261f09c34d92b2f7a6b8fd2923c1f85a6",
+      "restoredSha256": "eaccd2f5c9aee47b2f2b9bd0cf631338353bc9f06cd39c7694f16d4060901f42"
+    },
+    {
+      "name": "native-immediate-signal",
+      "path": "scripts/computer-provision.ts",
+      "test": "native production CJS with disclosed OS trust fixtures: file",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 2.021,
+      "patchSha256": "c4d48a78cb93eca4026423070d201720e4d79a29af9fd3ed793440a9cd28b003",
+      "restoredSha256": "d2d8daf16e72dd59bbf54cb157576a638b4c16c3a97f08b604c2f57c6bc478b2"
+    },
+    {
+      "name": "native-reset-timer",
+      "path": "scripts/computer-provision.ts",
+      "test": "native production CJS with disclosed OS trust fixtures: file",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 5.75,
+      "patchSha256": "77798b6410c1ee40e01ad79211dd525290c50cbe94e65ebfe2ab67a213064f19",
+      "restoredSha256": "d2d8daf16e72dd59bbf54cb157576a638b4c16c3a97f08b604c2f57c6bc478b2"
+    },
+    {
+      "name": "namespace-anchor",
+      "path": "scripts/computer-provision/config.ts",
+      "test": "rejects changed deployment namespace",
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "seconds": 1.729,
+      "patchSha256": "cf183283817b464d76283f12c40aa3f934cc5d725d1f11da100be2a107bca105",
+      "restoredSha256": "66580994608489ae0b9c01946235da5ae4e2154becd6a9db1a85cc52af6f5924"
+    }
+  ],
+  "nativeFixtureReceipts": [
+    {
+      "fixture": "OS ownership/runtime/namespace/Node hash and Unix Docker fixtures; no installed trust",
+      "startedAtNs": "66428383313005",
+      "finishedAtNs": "66430463947703",
+      "pid": 30262,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "artifactSha256": "a70aa9b666d4b33e5566a2a28eae15eadb85107b89d89fa50743949704c40a7a",
+      "scaledDeadlineMs": 2000,
+      "held": {
+        "type": "held",
+        "timerStartedAtNs": "66428454620308",
+        "heldAtNs": "66428652355040"
+      },
+      "elapsedMs": 2009.327395
+    },
+    {
+      "fixture": "OS ownership/runtime/namespace/Node hash and Unix Docker fixtures; no installed trust",
+      "startedAtNs": "66426139653396",
+      "finishedAtNs": "66428221626041",
+      "pid": 29833,
+      "exit": 2,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "artifactSha256": "a70aa9b666d4b33e5566a2a28eae15eadb85107b89d89fa50743949704c40a7a",
+      "scaledDeadlineMs": 2000,
+      "held": {
+        "type": "held",
+        "timerStartedAtNs": "66426212375819",
+        "heldAtNs": "66426400332283"
+      },
+      "elapsedMs": 2009.250222
+    },
+    {
+      "fixture": "OS ownership/runtime/namespace/Node hash and Unix Docker fixtures; no installed trust",
+      "startedAtNs": "66425396283890",
+      "finishedAtNs": "66425957870804",
+      "pid": 29581,
+      "exit": 0,
+      "signal": null,
+      "stdout": "",
+      "stderr": "",
+      "node": "v22.22.2",
+      "nativeUid": 1000,
+      "artifactSha256": "a70aa9b666d4b33e5566a2a28eae15eadb85107b89d89fa50743949704c40a7a",
+      "scaledDeadlineMs": null,
+      "held": null,
+      "elapsedMs": null
+    }
+  ],
+  "nativeNonrootRefusal": {
+    "nativeUid": 1000,
+    "node": "v22.22.2",
+    "startedAtNs": "66623759334787",
+    "finishedAtNs": "66623796267297",
+    "exit": 2,
+    "stdout": "",
+    "stderr": "",
+    "artifactSha256": "a70aa9b666d4b33e5566a2a28eae15eadb85107b89d89fa50743949704c40a7a"
+  },
+  "independentSourceReports": {
+    "plan-security-r3.md": "f7472f61d0c3c666d88f8cb50583e4c1a6b7715c379c9d3ac19ebe997e53057b",
+    "plan-spec-r3.md": "88ca1d7ae15e11f139a2bb7115598adb597a0d9893bc1888261d623ff7ee64ea",
+    "source-security-r3.md": "e1898d9eed16c3303ac376ba7a369dad464e10933de4299abb93e200ea5cc158",
+    "source-spec-r3.md": "ea4d0dacb18998a2d82e7aa4ec1fdbbe907098fe2124948b40264ff3f147e216"
+  },
+  "logs": {
+    "final-cjs-provision.log": "5d832a965ef696fa7d49d64b158f1c5d0661831cdc37da6d6e96a89ae26f13d6",
+    "final-behavior.log": "2eb8024742b672005c7369232622e8008adbd2a2b9903b62fa1d3048c0465f04",
+    "final-format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "final-cjs-watchdog.log": "38c116619d77ac86eedc17b74264ec3f6309921c4080497581faabd325dcf163",
+    "final-cjs-closure.log": "c47b2b6448a06e0f364b05a012a46854115326ba86193018306c71c300a17a1c",
+    "final-gateway-build.log": "229197fc4b1db903ee61aa7439266de6757f241bcad4bfb52992e3333c15c40f",
+    "final-whitespace.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "final-root-tsc.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "final-cjs-host.log": "3cd0cd313e9dcb60a491476d3e85f4f246432d473e1ed93ddba6b461e5981a98",
+    "final-tests-tsc.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "final-file-size.log": "34507f2d95d6aa19bb3667739a0655ec0e8fa627b67534cf723305aa32ae7956",
+    "final-driver.log": "f0f7295cff2829b197b61490de6f33c36d7c3936a4e5f9671165455872b63277",
+    "final-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "priorRounds": [
+    "R1/R2 publisher fixture failures and corrected source reviews retained privately",
+    "Control driver R1 refused ambiguous close patch; R2 close-removal produced incidental fixture failure; R3 intended assertion failures19/19 with exact restoration"
+  ],
+  "limits": [
+    "Root ownership, runtime, namespaces, Node hashing and Unix Docker are disclosed fixtures",
+    "Native CJS executed Node22; node24 target metadata is not Node24 runtime or 128MiB qualification",
+    "No Computer Docker/image/runtime/DB/browser/TCP-server operation, installation or deployment",
+    "unavailableAdmission unchanged; owner parent issues remain open"
+  ]
+}
