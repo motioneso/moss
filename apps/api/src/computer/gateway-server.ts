@@ -137,6 +137,10 @@ export async function serveComputerGateway(config: ComputerGatewayConfig) {
     lifetime?.close();
     return initializing ? done : (closing ??= cleanup());
   }
+  function assertLifetime() {
+    if (closed || !lifetimeActive || !lifetime) throw new ComputerRfbUnavailable();
+    lifetime.assertActive();
+  }
   server.on("error", () => {
     void close();
   });
@@ -151,11 +155,18 @@ export async function serveComputerGateway(config: ComputerGatewayConfig) {
     upstream = await connectComputerGuestWebSocket(config.guestSocketPath);
     if (closed || (lifetimeNow() >= startupAt + 5000 && !lifetimeActive))
       throw new ComputerRfbUnavailable();
-    core = await connectComputerReceivingGateway({ ...config, upstream });
+    if (lifetimeActive) lifetime?.assertActive();
+    core = await connectComputerReceivingGateway({
+      ownerUserId: config.ownerUserId,
+      authSocketPath: config.authSocketPath,
+      upstream,
+      assertLifetime
+    });
     if (closed || (lifetimeNow() >= startupAt + 5000 && !lifetimeActive)) {
       await core.close();
       throw new ComputerRfbUnavailable();
     }
+    if (lifetimeActive) lifetime?.assertActive();
     upstream.once("close", () => {
       if (!closed) void close();
     });
@@ -173,6 +184,12 @@ export async function serveComputerGateway(config: ComputerGatewayConfig) {
       socket.destroy();
       return;
     }
+    try {
+      assertLifetime();
+    } catch {
+      socket.destroy();
+      return;
+    }
     sockets.add(socket);
     socket.once("close", () => sockets.delete(socket));
     let entry: Entry | undefined;
@@ -181,7 +198,9 @@ export async function serveComputerGateway(config: ComputerGatewayConfig) {
     const channel = new GatewayChannel(
       socket,
       (value) => {
-        if (closed) {
+        try {
+          assertLifetime();
+        } catch {
           channel.close();
           return;
         }
@@ -254,7 +273,7 @@ export async function serveComputerGateway(config: ComputerGatewayConfig) {
             const timer = setTimeout(() => {
               void close();
             }, GATEWAY_OPERATION_MS);
-            void core
+            void readyCore
               .attachController(viewer, socket)
               .catch(() => socket.destroy())
               .finally(() => {
@@ -314,6 +333,7 @@ export async function serveComputerGateway(config: ComputerGatewayConfig) {
     }, GATEWAY_OPERATION_MS);
     try {
       const result = await work();
+      assertLifetime();
       if (closed || entry.channel.ended || entries.get(entry.id) !== entry)
         throw new ComputerRfbUnavailable();
       entry.channel.send(

@@ -1,3 +1,4 @@
+import * as protocol from "../../apps/api/src/computer/lifetime-protocol.js";
 import { connectComputerGatewayViewer } from "../../apps/api/src/computer/gateway-client.js";
 import { binding } from "./computer-auth-fixture.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +11,10 @@ import { createConnection } from "node:net";
 import { ComputerReceivingGateway } from "../../apps/api/src/computer/receiving-gateway.js";
 import { lifetimePath } from "../../apps/api/src/computer/lifetime-protocol.js";
 import { processFixture } from "./computer-process-fixture.js";
+
+vi.mock("../../apps/api/src/computer/lifetime-protocol.js", async (original) => ({
+  ...(await original<typeof protocol>())
+}));
 
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
@@ -198,6 +203,55 @@ describe("real supervisor to receiving core lifetime, disclosed native executabl
       }
     }
   );
+  it.each(["input", "frame"])(
+    "actual %s dispatch expires at equality before the retirement timer runs",
+    async (kind) => {
+      let clock = 0;
+      vi.spyOn(protocol, "lifetimeNow").mockImplementation(() => clock);
+      const f = await fixture();
+      const { viewer } = await f.open();
+      await viewer.takeOver();
+      const controller = await f.rfb(viewer, true);
+      const watcher = await f.rfb(viewer);
+      controller.keyEvent(65, true);
+      await expect.poll(() => f.events).toContainEqual(["key", 65, true]);
+      const closed = once(watcher, "close");
+      let frames = 0;
+      watcher.on("update", () => frames++);
+      clock = 2000; // Initial acknowledged challenge's absolute idle expiry; native timer has not fired.
+      if (kind === "input") controller.keyEvent(66, true);
+      else watcher.requestUpdate(false);
+      await closed;
+      expect(f.events).not.toContainEqual(["key", 66, true]);
+      expect(frames).toBe(0);
+      await expect.poll(() => f.events).toContainEqual(["key", 65, false]);
+      expect(await f.lifetime.stop()).toBe(false);
+    }
+  );
+  it("authorization completing at lifetime expiry cannot send queued raw input", async () => {
+    let clock = 0;
+    vi.spyOn(protocol, "lifetimeNow").mockImplementation(() => clock);
+    const f = await fixture();
+    const { viewer } = await f.open();
+    await viewer.takeOver();
+    const controller = await f.rfb(viewer, true);
+    const watcher = await f.rfb(viewer);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    cleanups.push(async () => release());
+    const calls = f.auth.assertLive.mock.calls.length;
+    f.auth.assertLive.mockImplementation(async () => held);
+    controller.keyEvent(66, true);
+    await expect.poll(() => f.auth.assertLive.mock.calls.length).toBeGreaterThan(calls);
+    const closed = once(watcher, "close");
+    clock = 2000;
+    release();
+    await closed;
+    expect(f.events).not.toContainEqual(["key", 66, true]);
+    expect(await f.lifetime.stop()).toBe(false);
+  });
   it("a replacement connection permanently retires the active core", async () => {
     const f = await fixture();
     const { viewer } = await f.open();

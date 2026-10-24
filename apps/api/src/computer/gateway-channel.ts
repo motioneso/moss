@@ -1,5 +1,5 @@
 import { createConnection, type Socket } from "node:net";
-import { isRecord } from "./host-contract.js";
+export { gatewayFields } from "./host-contract.js";
 import { ComputerRfbUnavailable } from "./rfb-input-writer.js";
 
 export const GATEWAY_LINE_LIMIT = 1024;
@@ -11,10 +11,6 @@ export const gatewayOperations: readonly string[] = [
   "closeViewer",
   "snapshot"
 ];
-export function gatewayFields(value: unknown, keys: string): value is Record<string, unknown> {
-  return isRecord(value) && Object.keys(value).sort().join(",") === keys;
-}
-
 /** One bounded JSON command at a time. Raw RFB handoff removes this parser permanently. */
 export class GatewayChannel {
   #partial = Buffer.alloc(0);

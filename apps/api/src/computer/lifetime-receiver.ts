@@ -105,6 +105,16 @@ export class ComputerLifetimeReceiver {
     this.#timer = setTimeout(() => this.close(), 1000);
     this.#channel.send(signLifetime(this.#config, this.#challenge));
   }
+  assertActive() {
+    if (
+      (this.#phase !== "idle" && this.#phase !== "response") ||
+      this.#counter === 0 ||
+      this.now() >= this.#deadline
+    ) {
+      this.close();
+      throw lifetimeError();
+    }
+  }
   close() {
     if (this.#phase === "closed") return;
     this.#phase = "closed";

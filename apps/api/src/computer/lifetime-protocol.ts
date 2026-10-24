@@ -1,10 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
-import { isRecord, isUuid } from "./host-contract.js";
-
-function gatewayFields(value: unknown, keys: string): value is Record<string, unknown> {
-  return isRecord(value) && Object.keys(value).sort().join(",") === keys;
-}
+import { gatewayFields, isUuid } from "./host-contract.js";
 
 export const lifetimeError = () => new Error("Computer lifetime unavailable");
 export const lifetimeNow = () => Number(process.hrtime.bigint() / 1_000_000n);

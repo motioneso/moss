@@ -340,6 +340,46 @@ describe("authenticated native Unix Computer lifetime", () => {
       expect(await root.stop()).toBe(false);
     }
   );
+  it("root rejects challenge equality expiry before responding, without comparing peer clocks", async () => {
+    const config = lifetimeConfiguration();
+    let clock = 0;
+    const failed = vi.fn();
+    const replies: unknown[] = [];
+    const path = await sockets((socket) => {
+      const channel = new LifetimeChannel(
+        socket,
+        (value) => {
+          replies.push(value);
+          if (lifetimeHeader(value)) {
+            clock = 2000;
+            channel.send(
+              signLifetime(config, {
+                type: "challenge",
+                version: 1,
+                rootNonce: value.rootNonce,
+                sessionNonce: lifetimeNonce(),
+                challengeNonce: lifetimeNonce(),
+                counter: 1
+              })
+            );
+          }
+        },
+        () => {}
+      );
+    });
+    const root = new ComputerRootLifetime({
+      configuration: config,
+      socketPath: path,
+      now: () => clock,
+      healthy: () => true,
+      failed
+    });
+    cleanups.push(() => root.stop());
+    root.start();
+    await expect.poll(() => failed.mock.calls.length, { timeout: 3000 }).toBe(1);
+    expect(replies).toHaveLength(1);
+    expect(await root.stop()).toBe(false);
+  });
   it.each(["nonce", "mac"])(
     "a replaced endpoint cannot forge a %s fencing acknowledgement",
     async (kind) => {
