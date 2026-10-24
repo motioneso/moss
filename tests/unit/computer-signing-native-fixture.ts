@@ -70,6 +70,16 @@ export async function prepareSigningNative(
   process.getuid = () => 0;
   process.geteuid = () => 0;
   process.execArgv = [];
+  // TEMP-DEBUG
+  if (process.env.PUB_DEBUG === "1") {
+    const E = Error;
+    (globalThis as any).Error = class extends E {
+      constructor(...a: any[]) {
+        super(...a);
+        process.stderr.write("ERR " + this.stack + "\n");
+      }
+    };
+  }
   for (const key of [
     "NODE_OPTIONS",
     "NODE_PATH",
