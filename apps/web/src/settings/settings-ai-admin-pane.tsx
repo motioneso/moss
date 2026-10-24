@@ -32,8 +32,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
-import { CliUpdateStatus } from "./cli-update-status";
-import { OpenCodeAcpCard, cliVersionLine } from "./settings-ai-opencode-card";
+import { CliUpdateStatus, cliVersionLine } from "./cli-update-status";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
@@ -567,9 +566,6 @@ export function AiProvidersPane() {
   });
   const providers = (providersQuery.data?.providers ?? []).filter((p) => p.status !== "revoked");
   const models = modelsQuery.data?.models ?? [];
-  const hasOpenCodeProvider = providers.some(
-    (provider) => provider.authMethod === "cli" && provider.acpAgentId === "opencode"
-  );
 
   const invalidate = () =>
     Promise.all([
@@ -690,28 +686,20 @@ export function AiProvidersPane() {
         }
       >
         {providers.length === 0 ? (
-          <>
-            <div className="ai-empty">
-              <div className="ai-empty__ic">
-                <GitCommitHorizontal size={20} aria-hidden="true" />
-              </div>
-              <div className="ai-empty__main">
-                <div className="ai-empty__t">No providers yet</div>
-                <div className="ai-empty__d">
-                  {assistantName} can't chat until at least one provider is added. Connect one to
-                  bring its models online for everyone on this instance.
-                </div>
+          <div className="ai-empty">
+            <div className="ai-empty__ic">
+              <GitCommitHorizontal size={20} aria-hidden="true" />
+            </div>
+            <div className="ai-empty__main">
+              <div className="ai-empty__t">No providers yet</div>
+              <div className="ai-empty__d">
+                {assistantName} can't chat until at least one provider is added. Connect one to
+                bring its models online for everyone on this instance.
               </div>
             </div>
-            {hasOpenCodeProvider ? (
-              <OpenCodeAcpCard cli={providersQuery.data?.openCodeCli} />
-            ) : null}
-          </>
+          </div>
         ) : (
           <div className="prov-list">
-            {hasOpenCodeProvider ? (
-              <OpenCodeAcpCard cli={providersQuery.data?.openCodeCli} />
-            ) : null}
             {providers.map((provider) => (
               <ProviderCard
                 key={provider.id}
@@ -831,12 +819,6 @@ export function AiProvidersPane() {
             providers={providers}
           />
         </Group>
-      ) : null}
-      {hasOpenCodeProvider ? (
-        <Note icon={<Terminal size={13} aria-hidden="true" />}>
-          OpenCode uses the ACP chat path. Its agent reports the available model choice when the
-          session initializes, and the saved choice is passed into the next ACP launch.
-        </Note>
       ) : null}
       <TranscriptionConfigGroup />
       <ChatLockGroup />

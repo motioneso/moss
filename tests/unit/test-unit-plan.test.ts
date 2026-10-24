@@ -34,4 +34,36 @@ describe("resolveVitestArgs", () => {
     const args = ["tests/unit/job-search-crawl-stage.test.ts", "tests/unit/test-unit-plan.test.ts"];
     expect(resolveVitestArgs(args)).toEqual(["--fileParallelism", "--maxWorkers=2", ...args]);
   });
+
+  it.each(["1/2", "2/2"])("shards every canonical default filter with %s", (shard) => {
+    expect(resolveVitestArgs([], shard)).toEqual([...resolveVitestArgs([]), `--shard=${shard}`]);
+  });
+
+  it("keeps explicit path selection when a dedicated shard is supplied", () => {
+    const paths = ["tests/unit/test-unit-plan.test.ts", "tests/unit/ci-phase-deadlines.test.ts"];
+    expect(resolveVitestArgs(paths, "2/2")).toEqual([
+      "--fileParallelism",
+      "--maxWorkers=2",
+      ...paths,
+      "--shard=2/2"
+    ]);
+  });
+
+  it.each([
+    "",
+    "-1/2",
+    "1junk/2",
+    "1.5/2",
+    "1/2/3",
+    "0/2",
+    "1/0",
+    "3/2",
+    "01/2",
+    " 1/2",
+    "1/2\n",
+    "1/9007199254740992",
+    "9007199254740992/9007199254740992"
+  ])("refuses malformed or unsafe dedicated shard %j", (shard) => {
+    expect(() => resolveVitestArgs([], shard)).toThrow("MOSS_UNIT_TEST_SHARD");
+  });
 });

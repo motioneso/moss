@@ -7,6 +7,7 @@ import { supervisorError } from "../computer-watchdog/trust.js";
 import type { WatchdogProcessIdentity } from "../computer-watchdog/policy.js";
 import type { ClosureDeployment } from "./config.js";
 import { closureFile, recheckClosureFile, type ClosureFile } from "./files.js";
+import { assertCaptureJournal } from "./capture.js";
 
 export interface ClosureRecords {
   readonly files: readonly ClosureFile[];
@@ -164,6 +165,7 @@ export async function readClosureRecords(deployment: ClosureDeployment): Promise
   )
     throw supervisorError();
   const journal = await closureFile(join(supervisor.monitor.path, "observation.jsonl"), 512 * 1024);
+  assertCaptureJournal(deployment.capture, journal);
   const collectors = closureCollectors(journal.bytes, deployment);
   let lockPresent = false;
   try {

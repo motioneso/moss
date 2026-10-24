@@ -59,6 +59,10 @@ function harness(
     failStop?: boolean;
     holdSample?: boolean;
     lifetime?: boolean;
+    started?: () => void;
+    holdInspect?: boolean;
+    holdCollectorWrite?: boolean;
+    abort?: AbortController;
   } = {}
 ) {
   vi.useFakeTimers();
@@ -68,6 +72,9 @@ function harness(
   const stop = deferred<void>();
   const close = deferred<void>();
   const sampleWrite = deferred<void>();
+  const inspection = deferred<void>();
+  const collectorWrite = deferred<void>();
+  let inspections = 0;
   const heartbeats = new PassThrough();
   const signals = new EventEmitter();
   const job: CollectorJob = {
@@ -82,8 +89,12 @@ function harness(
   };
   const journal: SupervisorJournal = {
     pending: false,
-    inspect: vi.fn(async () => {}),
-    collector: vi.fn(async () => {}),
+    inspect: vi.fn(() =>
+      options.holdInspect && ++inspections === 2 ? inspection.promise : Promise.resolve()
+    ),
+    collector: vi.fn(() =>
+      options.holdCollectorWrite ? collectorWrite.promise : Promise.resolve()
+    ),
     sample: vi.fn(() => (options.holdSample ? sampleWrite.promise : Promise.resolve())),
     stop: vi.fn(() =>
       options.failStop
@@ -106,6 +117,8 @@ function harness(
           }
         }
       : {}),
+    started: options.started,
+    ...(options.abort ? { terminalHooks: { signal: options.abort.signal, terminal() {} } } : {}),
     heartbeats,
     signals,
     journal,
@@ -119,6 +132,8 @@ function harness(
     stop.resolve();
     close.resolve();
     sampleWrite.resolve();
+    inspection.resolve();
+    collectorWrite.resolve();
     heartbeats.destroy();
   });
   const advance = async (ms: number) => {
@@ -139,6 +154,8 @@ function harness(
     stop,
     close,
     sampleWrite,
+    inspection,
+    collectorWrite,
     signals,
     heartbeats,
     advance,
@@ -328,6 +345,199 @@ describe("independent Computer supervisor driver, disclosed journal/process port
     expect(await f.result).toMatchObject({ reason: "heartbeat-expired" });
     expect(f.journal.sample).not.toHaveBeenCalled();
   });
+});
+
+describe("first complete durable healthy bootstrap; disclosed driver ports", () => {
+  it("acknowledges exactly once only after sample persistence and owned inspection", async () => {
+    const started = vi.fn();
+    const f = harness({ started, holdSample: true, holdInspect: true });
+    await f.advance(0);
+    expect(started).not.toHaveBeenCalled();
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(f.journal.sample).toHaveBeenCalledTimes(1);
+    expect(started).not.toHaveBeenCalled();
+    f.sampleWrite.resolve();
+    await f.advance(0);
+    expect(f.journal.inspect).toHaveBeenCalledTimes(2);
+    expect(started).not.toHaveBeenCalled();
+    f.inspection.resolve();
+    await f.advance(0);
+    expect(started).toHaveBeenCalledTimes(1);
+    Object.defineProperty(f.job, "result", { value: Promise.resolve(healthy(5000)) });
+    await f.advance(5000);
+    expect(f.journal.sample).toHaveBeenCalledTimes(2);
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(f.journal.stop).not.toHaveBeenCalled();
+  });
+  it("held sample persistence alone cannot acknowledge", async () => {
+    const started = vi.fn();
+    const f = harness({ started, holdSample: true });
+    await f.advance(0);
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(started).not.toHaveBeenCalled();
+    expect(f.journal.inspect).toHaveBeenCalledTimes(1);
+    f.sampleWrite.resolve();
+    await f.advance(0);
+    expect(started).toHaveBeenCalledTimes(1);
+  });
+  it("collector identity persistence must settle before actual collection is released", async () => {
+    const started = vi.fn();
+    const f = harness({ started, holdCollectorWrite: true });
+    await f.advance(0);
+    expect(f.journal.collector).toHaveBeenCalledTimes(1);
+    expect(f.job.collect).not.toHaveBeenCalled();
+    expect(started).not.toHaveBeenCalled();
+    f.collectorWrite.resolve();
+    await f.advance(0);
+    expect(f.job.collect).toHaveBeenCalledTimes(1);
+    expect(started).not.toHaveBeenCalled();
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(started).toHaveBeenCalledTimes(1);
+  });
+  it.each(["sample", "inspection"])(
+    "refuses bootstrap equality after held %s even with fresh measurement",
+    async (stage) => {
+      const started = vi.fn();
+      const f = harness({
+        started,
+        holdSample: stage === "sample",
+        holdInspect: stage === "inspection"
+      });
+      await f.advance(0);
+      f.jump(4000);
+      f.sample.resolve(healthy(4000));
+      await f.advance(0);
+      f.jump(1000);
+      f.sampleWrite.resolve();
+      f.inspection.resolve();
+      await f.advance(0);
+      expect(started).not.toHaveBeenCalled();
+      expect(await f.result).toMatchObject({ reason: "measurement-failed" });
+    }
+  );
+  it("refuses bootstrap equality before sample persistence", async () => {
+    const started = vi.fn();
+    const f = harness({ started });
+    await f.advance(0);
+    f.jump(5000);
+    f.sample.resolve(healthy(5000));
+    await f.advance(0);
+    expect(f.journal.sample).not.toHaveBeenCalled();
+    expect(started).not.toHaveBeenCalled();
+    expect(await f.result).toMatchObject({ reason: "measurement-failed" });
+  });
+  it.each(["sample", "inspection"])(
+    "refuses stale sample at age equality after %s",
+    async (stage) => {
+      const started = vi.fn();
+      const f = harness({
+        started,
+        holdSample: stage === "sample",
+        holdInspect: stage === "inspection"
+      });
+      await f.advance(0);
+      f.sample.resolve(healthy());
+      await f.advance(0);
+      f.jump(5000);
+      f.sampleWrite.resolve();
+      f.inspection.resolve();
+      await f.advance(0);
+      expect(started).not.toHaveBeenCalled();
+      expect(await f.result).toMatchObject({ reason: "measurement-failed" });
+    }
+  );
+  it.each(["signal", "abort"])(
+    "%s during pending inspection cannot acknowledge on late completion",
+    async (mode) => {
+      const started = vi.fn();
+      const abort = new AbortController();
+      const f = harness({ started, holdInspect: true, abort });
+      await f.advance(0);
+      f.sample.resolve(healthy());
+      await f.advance(0);
+      if (mode === "abort") abort.abort();
+      else {
+        f.signals.emit("SIGTERM");
+        f.signals.emit("SIGINT");
+      }
+      f.inspection.resolve();
+      await f.advance(0);
+      expect(started).not.toHaveBeenCalled();
+      expect(await f.result).toMatchObject({ reason: "operator-stop" });
+    }
+  );
+  it.each(["deadline", "signal"])(
+    "rechecks %s after lifetime startup before notification",
+    async (mode) => {
+      const started = vi.fn();
+      const start = vi.spyOn(ComputerRootLifetime.prototype, "start").mockImplementation(() => {
+        if (mode === "deadline") f.jump(5000);
+        else f.signals.emit("SIGTERM");
+      });
+      const f = harness({ started, lifetime: true });
+      await f.advance(0);
+      f.sample.resolve(healthy());
+      await f.advance(0);
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(started).not.toHaveBeenCalled();
+      expect(await f.result).toHaveProperty("exitCode", 2);
+    }
+  );
+  it("held native identity cannot acknowledge initial driver installation", async () => {
+    const started = vi.fn();
+    const f = harness({ started });
+    const identity = deferred<typeof collector>();
+    Object.defineProperty(f.job, "identity", { value: identity.promise });
+    await f.advance(0);
+    expect(f.job.collect).not.toHaveBeenCalled();
+    expect(started).not.toHaveBeenCalled();
+    f.signals.emit("SIGTERM");
+    identity.resolve(collector);
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(started).not.toHaveBeenCalled();
+    expect(f.journal.sample).not.toHaveBeenCalled();
+    expect(await f.result).toHaveProperty("reason", "operator-stop");
+  });
+  it("throwing notification is terminal and cannot be retried", async () => {
+    const started = vi.fn(() => {
+      throw new Error("notification failed");
+    });
+    const f = harness({ started });
+    await f.advance(0);
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(await f.result).toMatchObject({ reason: "measurement-failed" });
+    await f.advance(10000);
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(f.startCollector).toHaveBeenCalledTimes(1);
+  });
+  it.each(["sample", "inspect"] as const)("failed %s cannot acknowledge", async (method) => {
+    const started = vi.fn();
+    const f = harness({ started });
+    await f.advance(0);
+    vi.mocked(f.journal[method]).mockRejectedValueOnce(new Error("disk failure"));
+    f.sample.resolve(healthy());
+    await f.advance(0);
+    expect(started).not.toHaveBeenCalled();
+    expect(await f.result).toMatchObject({ reason: "measurement-failed" });
+  });
+  it.each([null, { ...healthy(), mossHealthy: false }])(
+    "malformed or unhealthy result cannot acknowledge",
+    async (value) => {
+      const started = vi.fn();
+      const f = harness({ started });
+      await f.advance(0);
+      f.sample.resolve(value);
+      await f.advance(0);
+      expect(started).not.toHaveBeenCalled();
+      expect(f.journal.sample).not.toHaveBeenCalled();
+      expect(await f.result).toHaveProperty("exitCode", 1);
+    }
+  );
 });
 
 describe("fixed native collector process transport, executable fixtures only", () => {

@@ -12,6 +12,10 @@ import {
 const startedAtMs = computerMonotonicMs();
 // Bootstrap cannot wait indefinitely for untrusted/missing configuration or a stuck mount.
 const startupDeadline = setTimeout(() => process.exit(2), 5000);
+function acknowledgeStartup(): void {
+  if (computerMonotonicMs() - startedAtMs >= 5000) throw supervisorError();
+  clearTimeout(startupDeadline);
+}
 async function main(): Promise<number> {
   const [mode, configPath, ...rest] = process.argv.slice(2);
   if (
@@ -28,7 +32,8 @@ async function main(): Promise<number> {
   );
   if (
     ((mode === "fence" || mode === "manage") && !deployment.configuration.lifetime) ||
-    (mode === "observe" && deployment.configuration.lifetime)
+    (mode === "observe" && deployment.configuration.lifetime) ||
+    (["observe", "fence"].includes(mode!) && deployment.configuration.capture)
   )
     throw supervisorError();
   if (mode === "collect") {
@@ -70,14 +75,11 @@ async function main(): Promise<number> {
     watchdog.processGroupId === deployment.configuration.runner.processGroupId
   )
     throw supervisorError();
-  // Journal startup is still under the independent bootstrap deadline. Driver owns later deadlines.
+  // Bootstrap stays armed through the driver's first complete durable healthy sample.
   if (mode === "manage")
-    return manageDeployment(deployment, startedAtMs, watchdog, () => clearTimeout(startupDeadline));
-  const result = superviseDeployment(deployment, startedAtMs, watchdog, () =>
-    clearTimeout(startupDeadline)
-  );
-  // Do not clear until creation has settled: superviseDeployment installs timers after its await.
-  // Its first policy tick includes all startup time.
+    return manageDeployment(deployment, startedAtMs, watchdog, acknowledgeStartup);
+  const result = superviseDeployment(deployment, startedAtMs, watchdog, acknowledgeStartup);
+  // Driver ticks and all bootstrap work retain the original startup timestamp.
   const outcome = await result;
   return outcome.exitCode;
 }

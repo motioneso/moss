@@ -28,6 +28,7 @@ export interface InspectedResource {
   readonly resource: HostResource & { id: string };
   readonly running: boolean;
   readonly logPath: string | null;
+  readonly process?: { readonly pid: number; readonly startedAt: string };
 }
 
 class KnownContainerAbsent extends Error {}
@@ -76,7 +77,11 @@ export class ComputerDocker {
   async inspect(resource: HostResource): Promise<InspectedResource> {
     return this.#inspect(resource, false);
   }
-  async #inspect(resource: HostResource, created: boolean): Promise<InspectedResource> {
+  async #inspect(
+    resource: HostResource,
+    created: boolean,
+    running = false
+  ): Promise<InspectedResource> {
     const identity = resource.id ?? resourceName(this.config, resource);
     const reply = await this.#call("GET", `/containers/${identity}/json`).catch(
       (error: unknown) => {
@@ -112,6 +117,22 @@ export class ComputerDocker {
         !/^0001-01-01T00:00:00(?:\.0{1,9})?Z$/.test(reply.State.StartedAt))
     )
       throw new Error("Computer container was already started");
+    if (
+      running &&
+      (!fullDockerId(resource.id) ||
+        reply.State.Running !== true ||
+        reply.State.Status !== "running" ||
+        reply.State.Restarting !== false ||
+        reply.State.Paused !== false ||
+        reply.State.Dead !== false ||
+        !Number.isSafeInteger(reply.State.Pid) ||
+        Number(reply.State.Pid) <= 0 ||
+        typeof reply.State.StartedAt !== "string" ||
+        !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?Z$/.test(reply.State.StartedAt) ||
+        !Number.isFinite(Date.parse(reply.State.StartedAt)) ||
+        Date.parse(reply.State.StartedAt) <= 0)
+    )
+      throw new Error("Exact running Computer process required");
     for (const [key, value] of Object.entries(expected.HostConfig)) {
       if (!equal(reply.HostConfig[key], value))
         throw new Error("Computer runtime configuration mismatch");
@@ -147,6 +168,9 @@ export class ComputerDocker {
     return {
       resource: { ...resource, id: reply.Id },
       running: reply.State.Running,
+      ...(running
+        ? { process: { pid: Number(reply.State.Pid), startedAt: String(reply.State.StartedAt) } }
+        : {}),
       logPath: typeof reply.LogPath === "string" ? reply.LogPath : null
     };
   }
@@ -189,6 +213,20 @@ export class ComputerDocker {
     )
       throw new Error("Exact created Computer pair required");
     for (const resource of resources) await this.#inspect(resource, true);
+  }
+  /** Complete inventory followed by exact full-ID running State.Pid observations. */
+  async runningPair(resources: readonly HostResource[]): Promise<InspectedResource[]> {
+    if (
+      resources.length !== 2 ||
+      new Set(resources.map((r) => r.role)).size !== 2 ||
+      resources.some((r) => !fullDockerId(r.id)) ||
+      new Set(resources.map((r) => r.id)).size !== 2 ||
+      (await this.inventory(resources)).length !== 2
+    )
+      throw new Error("Exact running Computer pair required");
+    const pair = [];
+    for (const resource of resources) pair.push(await this.#inspect(resource, false, true));
+    return pair;
   }
   async create(resource: HostResource, guard: ComputerMutationGuard): Promise<string> {
     if (!guard) throw new Error("Computer launch guard required");

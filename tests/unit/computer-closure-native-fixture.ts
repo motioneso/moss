@@ -1,5 +1,7 @@
 import { createPrivateKey } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { ClosureCapture } from "../../scripts/computer-closure/capture.js";
 import { hostJsonRequest } from "../../apps/api/src/computer/host-http.js";
 import { closureFile, recheckClosureFile } from "../../scripts/computer-closure/files.js";
 import type {
@@ -25,10 +27,17 @@ process.on("SIGINT", () => {
 async function main() {
   const configPath = process.argv[2]!;
   const configuration = JSON.parse(await readFile(configPath, "utf8")) as ClosureConfiguration;
+  const file = await closureFile(
+    join(configuration.supervisor.capture!.path, "capture.json"),
+    65536
+  );
+  const historical = JSON.parse(file.bytes.toString("utf8")) as Omit<ClosureCapture, "file">;
   const deployment: ClosureDeployment = {
     configuration,
     config: await closureFile(configPath, 16384),
     keyFile: await closureFile(configuration.signingKeyPath, 4096),
+    installationFile: await closureFile(configuration.installationPath, 16384),
+    capture: { ...historical, file },
     signingKey: createPrivateKey(await readFile(configuration.signingKeyPath)),
     artifactPath: process.argv[1]!,
     nodePath: process.execPath,
@@ -45,6 +54,8 @@ async function main() {
     revalidate: async (d) => {
       await recheckClosureFile(d.config);
       await recheckClosureFile(d.keyFile);
+      await recheckClosureFile(d.installationFile);
+      await recheckClosureFile(d.capture.file);
       for (const root of [...d.roots, d.configuration.receipt, d.configuration.supervisor.monitor])
         await assertRoot(root);
     },

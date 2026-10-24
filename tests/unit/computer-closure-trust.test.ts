@@ -8,6 +8,9 @@ import {
 } from "../../scripts/computer-closure/config.js";
 import { closureFixture, deadClosureProcess } from "./computer-closure-fixture.js";
 import type { WatchdogProcessIdentity } from "../../scripts/computer-watchdog/policy.js";
+import { signingFixture, projectSigningNode } from "./computer-signing-fixture.js";
+import { inspectRoots } from "../../scripts/computer-host/config.js";
+import { constructedClosureCapture } from "./computer-closure-capture-fixture.js";
 
 vi.mock("node:fs/promises", async (original) => ({ ...(await original<typeof fs>()) }));
 vi.mock("../../scripts/computer-watchdog/trust.js", async (original) => ({
@@ -27,10 +30,12 @@ afterEach(async () => {
 /** Real parser/path/key/file logic; disclosed root ownership, runtime and inherited namespace fixtures. */
 async function trustedFixture() {
   const f = await closureFixture(identities);
+  const nativeUid = process.getuid!();
   cleanups.push(() => f.close());
   vi.spyOn(trust, "assertSupervisorRuntime").mockImplementation(() => {});
   vi.spyOn(trust, "assertNamespaceAnchors").mockResolvedValue();
   vi.spyOn(process, "getuid").mockReturnValue(0);
+  projectSigningNode();
   const metadata = <T extends { uid: number | bigint; mode: number | bigint }>(stat: T): T =>
     Object.assign(stat, {
       uid: typeof stat.uid === "bigint" ? 0n : 0,
@@ -47,12 +52,16 @@ async function trustedFixture() {
     vi.spyOn(file, "stat").mockImplementation(async (...args: Parameters<typeof file.stat>) =>
       metadata(await stat(...args))
     );
+    const chown = file.chown.bind(file);
+    vi.spyOn(file, "chown").mockImplementation((uid, gid) =>
+      chown(uid === 0 ? nativeUid : uid, gid)
+    );
     return file;
   });
   const originalLink = fs.readlink;
   vi.spyOn(fs, "readlink").mockImplementation(async (path, ...args) =>
-    String(path) === "/proc/1/ns/net"
-      ? f.deployment.configuration.netNamespace
+    String(path).startsWith("/proc/1/ns/")
+      ? originalLink(String(path).replace("/proc/1/", "/proc/self/"), ...args)
       : originalLink(path, ...args)
   );
   const cloned = structuredClone(f.deployment.configuration);
@@ -61,12 +70,27 @@ async function trustedFixture() {
     config.supervisor.data,
     config.supervisor.dockerData,
     config.supervisor.monitor,
+    config.supervisor.capture!,
     config.receipt
   ])
     root.uid = 0;
+  config.captureSha256 = (
+    await constructedClosureCapture(
+      config,
+      await inspectRoots(config.supervisor.host),
+      f.journalPath
+    )
+  ).file.hash;
   const artifact = join(f.root, "verifier.cjs");
   await fs.writeFile(artifact, "/* disclosed artifact fixture */", { mode: 0o600 });
   config.artifactSha256 = trust.sha256(await fs.readFile(artifact));
+  const signing = await signingFixture(f.root, config.supervisor, config.netNamespace, artifact);
+  expect(await signing.install()).toBe(0);
+  const { installationPath, installationSha256, installation } = await signing.read();
+  config.installationPath = installationPath;
+  config.installationSha256 = installationSha256;
+  config.signingKeyPath = installation.signingKeyPath;
+  config.publicKeySha256 = installation.publicKeySha256;
   const save = () => fs.writeFile(f.deployment.config.path, JSON.stringify(config));
   await save();
   return {
@@ -74,6 +98,7 @@ async function trustedFixture() {
     config,
     save,
     artifact,
+    signing,
     load: () => loadClosureDeployment(f.deployment.config.path, artifact)
   };
 }

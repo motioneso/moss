@@ -1,0 +1,220 @@
+{
+  "task": 3668,
+  "pr": 3669,
+  "baseline": "2e80e5269f9368069857e6586162099993fe3773",
+  "planCommit": "7d0f529ac8a423cdbfec5295fd02d73f8f4f2347",
+  "checkedSource": "82637b1e890a9651f1864e8cbab7c6a31745a069",
+  "sourceSha256": {
+    ".github/workflows/ci.yml": "257745c8152f47a7ee6c159db990a9a818919e593091d8ae3309acbc50dae3d1",
+    "scripts/test-unit.ts": "db06b25bcdcad3323eff955d422142fc7bcb5353c465932215ddd6b6cdbcda62",
+    "tests/unit/test-unit-plan.test.ts": "08888e2e2678af3858b4b3b5a6dab84d8b5aa575a5e68df9db14163ce40eb0f7",
+    "tests/unit/ci-phase-deadlines.test.ts": "171d36b33863aa4ce7456d7a034fe0bc18f136b4cbfbf775c515d6e47e4ff856"
+  },
+  "priorTimeouts": [
+    {
+      "run": 40129465819,
+      "job": 120977890529,
+      "passingFiles": 1453,
+      "bindingCases": 50,
+      "bindingMilliseconds": 119971
+    },
+    {
+      "run": 40130553399,
+      "job": 120981187176,
+      "passingFiles": 1450,
+      "bindingCases": 54,
+      "bindingMilliseconds": 125328
+    }
+  ],
+  "checks": [
+    {
+      "name": "ci-focused-final-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/test-unit-plan.test.ts",
+        "tests/unit/ci-phase-deadlines.test.ts",
+        "--maxWorkers=2"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "ci-lint-final-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/test-unit.ts",
+        "tests/unit/test-unit-plan.test.ts",
+        "tests/unit/ci-phase-deadlines.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "ci-format-final-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "scripts/test-unit.ts",
+        "tests/unit/test-unit-plan.test.ts",
+        "tests/unit/ci-phase-deadlines.test.ts",
+        ".github/workflows/ci.yml",
+        "docs/superpowers/plans/2026-10-24-unit-ci-shards.md"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "ci-file-size-final-r1",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0
+    },
+    {
+      "name": "ci-diff-final-r1",
+      "command": ["git", "diff", "--check"],
+      "exit": 0
+    },
+    {
+      "name": "ci-native-audit-final-r1",
+      "command": ["python3", "<private>/check-ci-shards-r2.py"],
+      "exit": 0
+    },
+    {
+      "name": "root TypeScript",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0
+    },
+    {
+      "name": "test TypeScript",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0
+    }
+  ],
+  "focusedTests": 36,
+  "coverage": {
+    "baselineCount": 1576,
+    "allCount": 1576,
+    "shardCounts": [788, 788],
+    "disjoint": true,
+    "completeUnion": true,
+    "baselineEqual": true
+  },
+  "coverageLimit": "Vitest list --filesOnly ignores shard. The partition receipt executes exported native BaseSequencer.shard against actual discovered files; full actual CI execution and union remain mandatory.",
+  "nativeWrapper": "Actual wrapper with a private Vitest argv/exit stub checks unsharded,1/2,2/2 defaults, invalid-before-spawn and nonzero propagation; it is not a full unit execution.",
+  "controls": {
+    "controls": [
+      {
+        "name": "forward-shard",
+        "exit": 1,
+        "intendedFailure": "shards every canonical default filter",
+        "mutatedSha256": "b40fbf991b846450bed39e5420a3d799a87c5f367a0fc610b8bbe38222e8fb69"
+      },
+      {
+        "name": "strict-input",
+        "exit": 1,
+        "intendedFailure": "refuses malformed or unsafe dedicated shard",
+        "mutatedSha256": "34cb4973318b03c82da6b353d66e4b07e32910aea72bf68fd6f2ccd1d95a82cd"
+      },
+      {
+        "name": "native-env",
+        "exit": 1,
+        "intendedFailure": "AssertionError",
+        "mutatedSha256": "075df461bb5c153cfea2cfdcefd2c6e015efb3f7b2e27969b1d0cd617f473483"
+      },
+      {
+        "name": "both-shards",
+        "exit": 1,
+        "intendedFailure": "requires both complete unit shards",
+        "mutatedSha256": "b1d09594bc7a4a69eecec278937073c5a4332fb6256e6a21e54df491e086b848"
+      },
+      {
+        "name": "phase-budget",
+        "exit": 1,
+        "intendedFailure": "requires both complete unit shards",
+        "mutatedSha256": "a9ff4211cbf67e083a9081b1fa83f80ed5f95b0f8677f9eccb5b63f15ed2c7c0"
+      },
+      {
+        "name": "aggregate-needs",
+        "exit": 1,
+        "intendedFailure": "retains exactly one production Service Worker run",
+        "mutatedSha256": "cae97728cba0a26ee1e981c46bc7135ab0d4f0e845780096f0f2b65019f74f8d"
+      },
+      {
+        "name": "aggregate-failure",
+        "exit": 1,
+        "intendedFailure": "ci-actual-gate-failure",
+        "mutatedSha256": "22c0ad5e32874d809296c5742000eb5b961669003966f2827c4aed9c6b3a739e"
+      }
+    ],
+    "restoration": {
+      "scripts/test-unit.ts": {
+        "sha256": "db06b25bcdcad3323eff955d422142fc7bcb5353c465932215ddd6b6cdbcda62",
+        "restored": true
+      },
+      ".github/workflows/ci.yml": {
+        "sha256": "257745c8152f47a7ee6c159db990a9a818919e593091d8ae3309acbc50dae3d1",
+        "restored": true
+      }
+    }
+  },
+  "privateArtifactSha256": {
+    "ci-unit-r1.log": "39e7a734862cf3673d17d6e3ad6b274ca7b6ccaef511a4ba37c0488f6d09087d",
+    "ci-unit-r2.log": "e4ce177fd639d789315bfd25347b626592ec598018550a94d88b94ad42c13ff9",
+    "security-ci-plan-r1.md": "1a1a7566ac7f92d32bcb4a23fe1e35e7bed975062b027900d908451b7d690088",
+    "spec-ci-plan-r1.md": "585d1687d4f12392bce7b5e96060dffb2799acf50397d504542ff517b68eac9e",
+    "security-ci-plan-r2.md": "42dffb17dffc425797fcadcdd6f0b4583e1fe08d1184cc105e14f7bdb2f2a314",
+    "spec-ci-plan-r2.md": "b9ac7196509cc7d6ef6c16834ef8923d12709ed930395073e55f67032b792d00",
+    "ci-focused-final-r1.log": "ef71e40e0f9fba3bfa64cc6ad2d456c5aa2eca7c84f296b82c697b3ad9d32bed",
+    "ci-types-root-r1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ci-types-tests-r1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ci-lint-final-r1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ci-format-final-r1.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "ci-file-size-final-r1.log": "ad6fc421a3337de424a89fd8e6a6dca5e8e307e7607e3628ad9a6cb9e41d843e",
+    "ci-final-checks-r1.json": "e9fba74cf0d975aa1277798b7da61ce20038fd3e1b764d219fe14af99a40c6dc",
+    "ci-local-receipts-r2.json": "264dbea21ebee4bf08d9ad8f691e0c8d5ac065cfcb841cc424f75d844202f28b",
+    "ci-local-audit-r1.log": "b0eff1255ff687809cc9d5f9fa7f2688afbc1cc3419be0c149ac3188d6d4ca97",
+    "check-ci-shards-r1.py": "fae9098210d1f9bc88ee4f7eafe3447e135f88c11efe3bfbc6f88bf087744aa7",
+    "check-ci-shards-r2.py": "a039874c9c11a0cee3bb859bbe9e76c92a984a3585609e680f99e80e71a61b92",
+    "ci-controls-r1.py": "a5979707949f43e88a4bee17d29fc04d511f95a7ceb4ec985ff4552a6ca90965",
+    "ci-controls-r1/results.json": "d88fc8b661c0baca5e55d72310c6d67f1d39c051691e56146505e787774ac77c",
+    "ci-types-completion-r1.json": "9f1259f380c4f6ce2540b30575947bbdfdbb06cdbc6e06dd786fe5daa6759d8e",
+    "security-ci-source-local-r1.md": "6009ca051c023ee0e6afe6a16f7ab7723e50bfee2f4d32a39f9594e18045c6f5",
+    "spec-ci-source-local-r1.md": "3e295a0489856bfb7fa2657b8f95851c69c6c225bcc57931bcb81a0a8dc5d9b7",
+    "security-ci-final-docs-r1.md": "8a40565890105b3b5ad61383bbb78354127f1252a246d3fcab5b6ed2a5ee179f",
+    "spec-ci-final-docs-r1.md": "b0dc03a6cf370ae78bd2f3a97bca6b53fdd53902f7aa2fb7677af33ec3c81d24"
+  },
+  "computerEvidence": {
+    "checkedSource": "6db03b5cb07ecb243a825178bc7ed0c73660d757",
+    "manifest": "2026-10-24-capture-binding.json",
+    "sha256": "97754de684207b879bdf4de3665893d75a1b2f5aa08a32ae3809ab8b10e81edf",
+    "limit": "Prior checks remain bound to their original source; CI correction changes no Computer production/test source."
+  },
+  "pending": [
+    "independent exact final public evidence acceptance",
+    "exact final-HEAD green CI with both complete shards and executed union",
+    "independent supplemental acceptance",
+    "protected actual merge and tree verification",
+    "verified fresh native successor"
+  ],
+  "noComputerRuntimeOrDatabaseOrDeployment": true,
+  "sourceLocalAcceptance": {
+    "source": "82637b1e890a9651f1864e8cbab7c6a31745a069",
+    "security": "ACCEPT_EXACT_CI_SOURCE_LOCAL_R1",
+    "standardsSpec": "ACCEPT_EXACT_CI_SOURCE_AND_BOUNDED_LOCAL_R1",
+    "limits": "Full actual CI executions/union/deadline/aggregate and final exact public docs remain separate gates."
+  },
+  "acceptedImplementationPlanSha256": "fe402a74ed8a49fd9f5e4ebe6e4cee53b3eef17caaf039d163ec722f853461f3",
+  "correctedPlan": {
+    "path": "docs/superpowers/plans/2026-10-24-unit-ci-shards.md",
+    "sha256": "4ced0306b26b94bd33d278a34d10c9bc3b869256a37a5724d02a0943e0b4c5b9",
+    "change": "Historical case-count correction only; operational implementation contract unchanged from accepted planCommit."
+  },
+  "rejectedFinalDocsRound": {
+    "head": "78222a8e88925ef495ff81ac981692c5115af5b8",
+    "finding": "Prior runs had50/54capture-binding cases, not54in both; corrected in plan and MD; both rejection reports retained."
+  }
+}

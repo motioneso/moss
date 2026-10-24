@@ -131,11 +131,15 @@ jobs:
         run: pnpm verify:static
 
   unit:
-    name: Verify unit tests
+    name: Verify unit tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
       - name: Check out repository
@@ -180,11 +184,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends acl
 
       - name: Run unit tests
+        env:
+          MOSS_UNIT_TEST_SHARD: ${{ matrix.shard }}/2
         run: |
           status=0
           timeout --verbose --signal=TERM 15m pnpm test:unit || status=$?
           if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit budget=15m issue=#1534"
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit-${{ matrix.shard }}-of-2 budget=15m issue=#1534"
           fi
           exit "$status"
 

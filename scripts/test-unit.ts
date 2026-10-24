@@ -26,8 +26,24 @@ const DEFAULT_VITEST_ARGS: readonly string[] = [
   "tests/uat/provisioner.test.ts"
 ];
 
-export function resolveVitestArgs(cliArgs: readonly string[]): string[] {
-  return [...UNIT_VITEST_ARGS, ...(cliArgs.length > 0 ? cliArgs : DEFAULT_VITEST_ARGS)];
+export function resolveVitestArgs(cliArgs: readonly string[], shard?: string): string[] {
+  // CI sharding must not become a positional argument that replaces the default filters.
+  // Vitest normalizes malformed shard values; reject those at this dedicated input boundary.
+  if (shard !== undefined) {
+    const parts = /^([1-9]\d*)\/([1-9]\d*)$/.exec(shard);
+    const index = Number(parts?.[1]);
+    const count = Number(parts?.[2]);
+    if (!parts || !Number.isSafeInteger(index) || !Number.isSafeInteger(count) || index > count) {
+      throw new Error(
+        "MOSS_UNIT_TEST_SHARD must be positive safe integers index/count, index<=count"
+      );
+    }
+  }
+  return [
+    ...UNIT_VITEST_ARGS,
+    ...(cliArgs.length > 0 ? cliArgs : DEFAULT_VITEST_ARGS),
+    ...(shard === undefined ? [] : [`--shard=${shard}`])
+  ];
 }
 
 function runVitest(args: readonly string[]): Promise<void> {
@@ -49,7 +65,7 @@ function runVitest(args: readonly string[]): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  await runVitest(resolveVitestArgs(process.argv.slice(2)));
+  await runVitest(resolveVitestArgs(process.argv.slice(2), process.env.MOSS_UNIT_TEST_SHARD));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

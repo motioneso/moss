@@ -17,7 +17,6 @@ import { EncryptionKeysPane } from "../../apps/web/src/settings/settings-encrypt
 import type * as ClientModule from "../../apps/web/src/api/client.js";
 import { rotateFamilyKey, deleteCustomTheme } from "../../apps/web/src/api/client.js";
 import { ProfilePane } from "../../apps/web/src/settings/settings-personal-panes.js";
-import { OpenCodeAcpCard } from "../../apps/web/src/settings/settings-ai-opencode-card.js";
 import { SettingsSkillsPane } from "../../apps/web/src/settings/settings-skills-pane.js";
 import { AuditPane } from "../../apps/web/src/settings/settings-audit-pane.js";
 
@@ -359,21 +358,6 @@ describe("settings Field consumer semantics", () => {
     expect(html).toContain(`role="group" aria-labelledby="${labelId}"`);
     expect(html.match(/aria-label="Search for a weather location"/g)).toHaveLength(1);
     expect(html).toContain("Use my location");
-  });
-
-  it("connects the OpenCode model label and hint directly to the select", () => {
-    const queryClient = client();
-    queryClient.setQueryData(queryKeys.chat.settings, {
-      chat: { responseStyle: "balanced", openCodeModel: "default" }
-    });
-    const html = render(<OpenCodeAcpCard cli={undefined} />, queryClient);
-    const controlId = /<label[^>]*for="([^"]+)"[^>]*>Chat model<\/label>/.exec(html)?.[1];
-    expect(controlId).toBeTruthy();
-    expect(html).toContain(`id="${controlId}"`);
-    expect(html).toContain(`aria-describedby="${controlId}-hint"`);
-    expect(html).toContain(`id="${controlId}-hint"`);
-    expect(html.match(/>Chat model<\/label>/g)).toHaveLength(1);
-    expect(html).not.toContain('role="group"');
   });
 
   it("explicitly names the Skills action group without relabeling its buttons", () => {

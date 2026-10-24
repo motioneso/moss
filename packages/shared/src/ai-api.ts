@@ -429,8 +429,7 @@ export const listAiProviderConfigsResponseSchema = {
   additionalProperties: false,
   required: ["providers"],
   properties: {
-    providers: { type: "array", items: aiProviderConfigSchema },
-    openCodeCli: aiCliToolsSchema
+    providers: { type: "array", items: aiProviderConfigSchema }
   }
 } as const;
 

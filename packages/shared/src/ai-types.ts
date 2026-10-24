@@ -341,8 +341,6 @@ export interface AiAssistantActionDto {
 
 export interface ListAiProviderConfigsResponse {
   readonly providers: readonly AiProviderConfigDto[];
-  // #2689: the OpenCode chat tool, which has no provider row of its own.
-  readonly openCodeCli?: AiCliToolsDto;
 }
 
 export interface CreateAiProviderConfigRequest {
