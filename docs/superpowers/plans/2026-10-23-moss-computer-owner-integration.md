@@ -102,6 +102,11 @@ do not retain arbitrary buffered input. Queue entries capture the admission epoc
 check it before authorization and immediately before writing, and cannot become valid after a
 later takeover. Bound every auth wait and barrier; a timeout closes the receiver rather than
 letting an unresolved auth promise keep the queue alive. No automatic retry after a hard failure.
+Bound the upstream writer too: at most 64 KiB of Node stream writable backlog. Check connected,
+writable and backlog before and after every input/release/Fence write; close on destroyed,
+unwritable or excessive backlog. rfb2's void input methods discard the stream's backpressure
+return, so the adapter must inspect the actual stream, not assume a successful call sent bytes.
+No retry queue or drain-as-consumption shortcut. A stalled upstream is a required negative case.
 
 Require upstream Fence support before admitting input. On transition, stop admission, invalidate
 queued/parser capabilities, release tracked keys and all pointer buttons through the sole writer,
@@ -110,6 +115,10 @@ only after matching response/payload/flags and fresh post-barrier session author
 backend lacks/ignores fences, disconnects or times out, remain unavailable/paused and close the
 upstream; do not treat local write/drain as remote consumption. Verify exact TigerVNC support and
 ordering during #3619 live proof; fixture replies are not that proof. Never claim byte retraction.
+Each completion captures both the transition epoch and barrier identity; recheck both after the
+Fence response and again after asynchronous post-barrier authorization. An older completion must
+never reopen admission while a newer transition's barrier is pending, even for the same viewer.
+The authority observer stops admission synchronously; a Fence callback alone never reopens it.
 
 Intentional close returns control only after fresh authorization and the receiving barrier.
 Unexpected parser/stream loss disconnects the controlling viewer, invalidates its epoch and
@@ -156,7 +165,9 @@ and use an isolated target. All commands unpiped; expected exit 0 unless a named
   does; old watcher/owner streams and queued delayed-auth events remain invalid across transfer;
   releases precede successful Fence acknowledgement; unrelated watcher close preserves authority;
   auth expiry/revocation, unsupported/mismatched/timed-out Fence, disconnect and queue/byte/key
-  bounds fail closed. Assert actual received wire events, not just send mocks. Remove epoch guard
+  bounds fail closed. Hold a newer barrier while resolving an older post-barrier auth; admission
+  must stay closed. Stall upstream consumption and prove the egress bound closes the writer.
+  Assert actual received wire events, not just send mocks. Remove epoch guard
   and release protection separately, observe intended assertions fail, restore and record green.
 
 Independent read-only security/spec review of exact committed plan precedes code. Reviewers never
