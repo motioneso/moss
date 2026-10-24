@@ -338,6 +338,7 @@ describe("managed terminal host: native Unix/actual root+receiver, disclosed Doc
       await expect(x.result).rejects.toThrow();
       await expect(x.g.open()).rejects.toThrow();
       expect(mutations(x.f)).toEqual([]);
+      expect(x.store.state.generation).toBe(1);
       expect(x.store.state.resources).toEqual(x.resources);
       expect(await fs.lstat(join(x.f.config.stateDir, "daemon.lock"))).toBeDefined();
     }
@@ -417,6 +418,7 @@ async function nativeManaged(
     `
     import {HostStateStore} from ${url("scripts/computer-host/state.ts")};
     import {open} from "node:fs/promises";
+    import {PassThrough} from "node:stream";
     import {runManagedComputerHost} from ${url("scripts/computer-watchdog/managed-host.ts")};
     import {managedNow,managedSupervisorFixture} from ${url("tests/unit/computer-managed-host-fixture.ts")};
     const config=${JSON.stringify(f.config)};
@@ -427,14 +429,19 @@ async function nativeManaged(
       const prototype=Object.getPrototypeOf(probe);
       const sync=prototype.sync;
       prototype.sync=async function(){
-        if(store.stopRequested && (await this.stat()).isDirectory()===${options.holdLifecycle === "directory"}) return new Promise(()=>{});
+        if(store.stopRequested && (await this.stat()).isDirectory()===${options.holdLifecycle === "directory"}) {
+          process.stdout.write("lifecycle-sync-held\\n");
+          return new Promise(()=>{});
+        }
         return sync.call(this);
       };
       await probe.close();
     }
+    const heartbeats=new PassThrough();
+    process.on("SIGUSR1",()=>heartbeats.end());
     try {
       const code=await runManagedComputerHost({store,now:managedNow,signals:process,fatal:()=>process.exit(2),
-        supervise:hooks=>managedSupervisorFixture({lifetime,socketPath:${JSON.stringify(lifetimePath(g.config.socketPath))},signals:process,hooks,holdRoot:${!!options.holdRoot}})});
+        supervise:hooks=>managedSupervisorFixture({lifetime,socketPath:${JSON.stringify(lifetimePath(g.config.socketPath))},signals:process,hooks,heartbeats,holdRoot:${!!options.holdRoot}})});
       process.exit(code);
     }catch{process.exit(2)}
   `
@@ -496,7 +503,8 @@ describe("native managed executable composition with disclosed trust/collection 
     async (kind) => {
       const x = await nativeManaged({ holdRoot: true, holdLifecycle: kind });
       const started = managedNow();
-      x.child.kill("SIGTERM");
+      x.child.kill(kind === "file" ? "SIGUSR1" : "SIGTERM");
+      await expect.poll(() => x.output()).toContain("lifecycle-sync-held\n");
       await expect
         .poll(
           async () =>
@@ -518,6 +526,7 @@ describe("native managed executable composition with disclosed trust/collection 
         clearTimeout(timer);
       }
       expect(managedNow() - started).toBeLessThan(6500);
+      expect(managedNow() - started).toBeGreaterThanOrEqual(4500);
       expect(mutations(x.f)).toEqual([]);
       expect(await fs.lstat(join(x.f.config.stateDir, "daemon.lock"))).toBeDefined();
       expect(x.f.containers.size).toBe(2);
