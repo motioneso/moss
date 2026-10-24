@@ -54,6 +54,7 @@
     "build:app-map": "tsx scripts/build-app-map.ts",
     "build:api": "tsx scripts/build-app.ts api",
     "build:worker": "tsx scripts/build-app.ts worker",
+    "build:computer-gateway": "tsx scripts/build-computer-gateway.ts",
     "smoke:compose:prod": "tsx scripts/smoke-compose.ts --compose-file infra/docker-compose.prod.yml --build",
     "uat:provision:smoke": "tsx tests/uat/provisioner.ts",
     "test:uat": "tsx tests/uat/run-uat.ts",
