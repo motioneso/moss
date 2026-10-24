@@ -37,6 +37,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Meeting transcript vocabulary.** Save spellings for names and terms to guide future meeting transcripts, with best-effort results from your audio service. [PR #3653](https://github.com/motioneso/moss/pull/3653)
 - **Sourced Sports results in chat.** Moss can show the latest available completed match with team logos, the score, its source and coverage when a visual helps your Sports question. [PR #3633](https://github.com/motioneso/moss/pull/3633)
 
 ### 2026-10-23
