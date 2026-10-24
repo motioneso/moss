@@ -26,7 +26,7 @@ lock/output/state/journal; no Docker mutation, lock reacquisition or launch admi
 ## Executed checks
 
 All12 final unpiped commands exit0 at the checked source: 649 tests across30 Computer suites
-(including52 capture tests across2 suites), root and test TypeScript, scoped ESLint/Prettier,
+(including54 capture tests across2 suites), root and test TypeScript, scoped ESLint/Prettier,
 file-size and diff checks, four builtin-only Node24-target CJS bundles (watchdog/host/provision/
 closure), and gateway context build. These are tooling/context builds, not image builds or runtime
 qualification. Original final-r1 passed649tests but failed root fixture typing and lint; corrected
