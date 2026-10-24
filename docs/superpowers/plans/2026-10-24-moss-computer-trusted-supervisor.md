@@ -16,8 +16,8 @@ stop or remove Computer containers. No launch capability, product route, listene
 default or app-map capability is added. Host unavailableAdmission remains unchanged.
 Actual deployment on the host is not established by fixture tests or root ownership predicates.
 
-Current seams were checked before this plan; graph coverage omits scripts, so bounded source
-reads supplied those citations:
+Current seams were checked before this plan; initial graph results lacked scripts, so bounded
+source reads supplied these citations. The refreshed graph now includes the host script symbols:
 
 - `scripts/computer-watchdog/policy.ts:130-275`: canonical fixed monotonic decision policy.
 - `scripts/computer-watchdog/linux.ts:118-162`: real partial measurements, initial timestamp,
@@ -121,8 +121,9 @@ Supervisor ticks every1s without awaiting collection or journal writes. At most 
 child and one outstanding journal write. Spawn only the same verified Node/artifact with a fixed
 internal collection mode and fixed config; no shell, plugin path or caller-selected executable.
 Child input/output are bounded<=16KiB, exactly one correlated result, no stderr accumulation.
-Kill a collector at5s or terminal state and await its exact exit; a late result cannot overwrite
-the first stop. A blocked/dead collector or slow persistence never suspends policy ticks. Host or
+Kill a collector at5s or terminal state; require its exact exit acknowledgement for successful
+closure, without delaying the stop append behind that acknowledgement. A late result cannot
+overwrite the first stop. A blocked/dead collector or slow persistence never suspends policy ticks. Host or
 supervisor event-loop suspension provides no hard real-time guarantee.
 
 The configured runner alone supplies metadata heartbeat records over the inherited private stdin
@@ -134,9 +135,14 @@ No listener, automatic retry/restart or launch acknowledgement. stdout/stderr re
 Journal creation is exclusive in an empty dedicated monitor root and fsyncs file plus directory
 before observation. Its existence prevents reopening the run after crash; never steal/delete an
 old marker or overwrite a terminal run. Stop first irreversibly latches the local terminal state,
-rejects further activity and terminates the owned collector, then appends/fsyncs exactly one first
-stop record and directory. Late writes cannot create healthy state. If persistence or collector
-closure fails, report failure through exit status; retain journal and uncertain identities. Do
+rejects further activity, initiates termination of the owned collector and independently schedules
+exactly one first stop append/fsync plus directory fsync. Appends remain ordered behind any pending
+sample append; a stuck append can prevent durability but cannot prevent local terminal state.
+Finalization has one absolute5s deadline from terminal entry, covering collector exit, journal
+write/fsync and descriptor closure. The CLI exits nonzero at that deadline even with unsettled I/O;
+retain the journal and exact uncertain collector PID/start/group recorded before accepting output.
+Late writes cannot create healthy state. If persistence or collector closure fails, report failure
+through exit status; retain journal and uncertain identities. Do
 not claim durable stop or successful closure without both acknowledgements. Keep every record;
 never truncate logs to pretend a failed run was clean. This journal is observation stop intent,
 not yet the lifecycle daemon's stop intent or proof of Computer container closure.
@@ -175,7 +181,8 @@ existing Linux/policy/host suites; root and tests TypeScript; scoped ESLint max-
 file-size; diff--check. Build the builtin-only artifact and run its real non-root refusal. Execute
 a fixture driver with real collector children, including synchronous infinite block, truncated/
 oversized/late output, dead runner, heartbeat expiry, old sample timestamp, terminal reentry,
-bounded journaling, fsync failure, replacement/symlink/FIFO/ancestor/namespace refusal and crash
+bounded journaling, held collector exit and held/failed fsync with bounded nonzero finalization,
+replacement/symlink/FIFO/ancestor/namespace refusal and crash
 reopen refusal. Verify all owned children/FDs/fixtures close; no TCP port/server is started.
 Observe intended removed-guard failures for namespace/config trust, initial timestamps, independent
 ticks during hung collection, terminal nonresurrection, log/receipt bounds and durable stop.
@@ -195,3 +202,12 @@ API gets no Docker/devices/guest socket, gateway gets no home. No unrestricted b
 restart/data substitution. Real owner cookie/exact Origin, trusted assets/approved concise chat,
 sole writer/epochs/pressed releases/matching Fence/fresh agent leases and independent live proof
 still gate owner completion. App-map/dev+prod config accompany product wiring. Keep parents open.
+
+## Review rulings
+
+Independent security/spec R1 on `434a2c316`: BLOCKED on collector-dependent persistence and
+unbounded finalization. Accepted correction: latch terminal, independently initiate ordered stop
+persistence and owned-collector termination, then require both acknowledgements within one5s
+deadline. A stuck prior append or fsync is unresolved failure, never durable-stop success. Retain
+the journal and exact uncertain identity; test held exit and held persistence independently.
+No other blocking security finding or disputed ruling. Exact amendment needs independent R2.
