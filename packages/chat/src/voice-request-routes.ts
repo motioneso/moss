@@ -17,7 +17,7 @@ export function registerVoiceRequestRoutes(
     readonly service: Pick<VoiceRequestService, "list" | "status" | "send">;
   }
 ) {
-  server.get(
+  server.get<{ Querystring: { beforeCreatedAt?: string; beforeId?: string } }>(
     "/api/chat/voice-requests",
     { schema: listChatVoiceRequestsRouteSchema },
     async (request, reply) => {
@@ -25,7 +25,19 @@ export function registerVoiceRequestRoutes(
         const actor = await deps.resolveAccessContext(request);
         if (request.headers[ACT_AS_GRANT_HEADER] !== undefined)
           throw new HttpError(403, "Open your voice requests in Moss.");
-        return { requests: (await deps.service.list(actor)).map(voiceRequestStatus) };
+        const { beforeCreatedAt, beforeId } = request.query;
+        const rows = await deps.service.list(
+          actor,
+          beforeCreatedAt && beforeId ? { createdAt: beforeCreatedAt, id: beforeId } : undefined
+        );
+        const last = rows.at(-1);
+        return {
+          requests: rows.map(voiceRequestStatus),
+          nextCursor:
+            rows.length === 100 && last
+              ? { createdAt: last.created_at.toISOString(), id: last.id }
+              : null
+        };
       } catch (error) {
         return handleRouteError(error, reply);
       }

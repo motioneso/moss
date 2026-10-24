@@ -9,7 +9,7 @@ import {
   normalizeChatSurface,
   type ChatVoiceRequestStatus
 } from "@moss/shared";
-import { VoiceRequests } from "../../apps/web/src/chat/voice-requests.js";
+import { VoiceInputThread } from "../../apps/web/src/chat/voice-requests.js";
 import { VoiceRequestLink } from "../../apps/web/src/chat/voice-request-link.js";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
 import { HomeRedirect } from "../../apps/web/src/home-redirect.js";
@@ -28,6 +28,8 @@ const receipt: ChatVoiceRequestStatus = {
   transcript: "Remind me tomorrow.",
   state: "ready-to-send",
   capturedAt: null,
+  turnId: "33333333-3333-4333-8333-333333333333",
+  createdAt: "2026-10-20T20:00:00.000Z",
   userMessageId: null,
   assistantMessageId: null,
   statusMessage: "Review before sending."
@@ -41,7 +43,7 @@ const props = {
   privateMode: false,
   selectionPending: false,
   privacyConfirmed: true,
-  onOpenThread: open
+  records: []
 };
 let root: Root | undefined;
 let container: HTMLDivElement;
@@ -108,13 +110,12 @@ describe("Main voice request review", () => {
     );
     expect(request.mock.calls.every((call) => call[1]?.method !== "POST")).toBe(true);
   });
-  it("loads and discloses evidence without sending; only the explicit button dispatches", async () => {
+  it("renders retained text as a normal bubble without a disclosure; only legacy recovery sends", async () => {
     request.mockImplementation(async (_path: string, options?: { method: string }) =>
       options?.method === "POST" ? receipt : { requests: [receipt] }
     );
-    await mount(<VoiceRequests {...props} />);
-    await see("(1)");
-    await click("Ring voice requests");
+    await mount(<VoiceInputThread {...props} />);
+    await see(receipt.transcript);
     await see(receipt.transcript);
     expect(request.mock.calls.every((call) => call[1]?.method !== "POST")).toBe(true);
     await click("Send to Main");
@@ -140,21 +141,52 @@ describe("Main voice request review", () => {
         ]
       };
     });
-    await mount(<VoiceRequests {...props} />);
-    await see("(1)");
-    await click("Ring voice requests");
+    await mount(<VoiceInputThread {...props} />);
+    await see(receipt.transcript);
     await click("Send to Main");
     await see("Waiting for Main");
     expect(container.textContent).not.toContain("Send to Main");
     expect(request.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
   });
-  it("opens a persisted reply through the existing thread selection", async () => {
-    request.mockResolvedValue({ requests: [{ ...receipt, state: "replied" }] });
-    await mount(<VoiceRequests {...props} />);
-    await see("(1)");
-    await click("Ring voice requests");
-    await click("Open reply");
-    expect(open).toHaveBeenCalledWith(receipt.threadId);
+  it("loads older pending pages without sending", async () => {
+    request.mockImplementation(async (path: string) =>
+      path.includes("beforeCreatedAt")
+        ? {
+            requests: [
+              { ...receipt, id: "older", turnId: "older-turn", transcript: "Older pending input" }
+            ],
+            nextCursor: null
+          }
+        : { requests: [receipt], nextCursor: { id: receipt.id, createdAt: receipt.createdAt } }
+    );
+    await mount(<VoiceInputThread {...props} />);
+    await see(receipt.transcript);
+    expect(container.querySelectorAll(".chatd-msg--me .chatd-bubble")).toHaveLength(1);
+    expect(container.textContent).not.toContain("Ring voice requests");
+    await click("Load older voice inputs");
+    await see("Older pending input");
+    expect(container.querySelectorAll(".chatd-msg--me .chatd-bubble")).toHaveLength(2);
+    expect(request.mock.calls.every((call) => call[1]?.method !== "POST")).toBe(true);
+  });
+  it("shows new automatic pending input immediately and hides it at every transition", async () => {
+    request.mockResolvedValue({
+      requests: [{ ...receipt, state: "queued", statusMessage: "Waiting for Main" }],
+      nextCursor: null
+    });
+    await mount(<VoiceInputThread {...props} />);
+    await see(receipt.transcript);
+    expect(container.textContent).not.toContain("Send to Main");
+    for (const fence of [
+      { privateMode: true },
+      { selectionPending: true },
+      { privacyConfirmed: false },
+      { selectedThreadId: "other" }
+    ]) {
+      await render(<VoiceInputThread {...props} {...fence} />);
+      expect(container.textContent).not.toContain(receipt.transcript);
+      await render(<VoiceInputThread {...props} />);
+      await see(receipt.transcript);
+    }
     expect(request.mock.calls.every((call) => call[1]?.method !== "POST")).toBe(true);
   });
   it.each([
@@ -165,7 +197,7 @@ describe("Main voice request review", () => {
     { ownerId: undefined },
     { surface: normalizeChatSurface(moduleChatSurface("people", "person")) }
   ])("does not fetch or render voice evidence in an ineligible selection %j", async (override) => {
-    await mount(<VoiceRequests {...props} {...override} />);
+    await mount(<VoiceInputThread {...props} {...override} />);
     expect(container.textContent).toBe("");
     expect(request).not.toHaveBeenCalled();
   });
@@ -173,11 +205,10 @@ describe("Main voice request review", () => {
     request
       .mockResolvedValueOnce({ requests: [receipt] })
       .mockImplementation(() => new Promise(() => {}));
-    await mount(<VoiceRequests {...props} />);
-    await see("(1)");
-    await click("Ring voice requests");
+    await mount(<VoiceInputThread {...props} />);
     await see(receipt.transcript);
-    await render(<VoiceRequests {...props} ownerId="new-owner" />);
+    await see(receipt.transcript);
+    await render(<VoiceInputThread {...props} ownerId="new-owner" />);
     expect(container.textContent).not.toContain(receipt.transcript);
     expect(
       client

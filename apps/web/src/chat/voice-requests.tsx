@@ -1,11 +1,20 @@
-import { useId, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ComponentProps, ReactNode } from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { requestJson } from "@moss/module-web-sdk";
-import { DEFAULT_CHAT_SURFACE, type ChatSurface, type ChatVoiceRequestStatus } from "@moss/shared";
-import { Button, DisclosureToggle, EmptyState, Note } from "@moss/ui";
-import "../styles/chat-voice-requests.css";
+import {
+  DEFAULT_CHAT_SURFACE,
+  type ChatSurface,
+  type ChatVoiceRequestCursor,
+  type ChatVoiceRequestStatus,
+  type ListChatVoiceRequestsResponse
+} from "@moss/shared";
+import { Button, Note, Thread } from "@moss/ui";
+import { listChatThreadMessages } from "../api/client";
+import { recordsFromMessages } from "./use-chat-stream";
+import { RecordRow } from "./message-row";
+import { mergeVoiceInputRecords } from "./voice-input-records";
 
-interface VoiceRequestsProps {
+interface VoiceScope {
   readonly ownerId?: string;
   readonly surface: ChatSurface;
   readonly mainThreadId?: string;
@@ -13,9 +22,11 @@ interface VoiceRequestsProps {
   readonly privateMode: boolean;
   readonly selectionPending: boolean;
   readonly privacyConfirmed: boolean;
-  readonly onOpenThread: (id: string) => void;
 }
-export function canReviewVoiceRequests(props: VoiceRequestsProps): boolean {
+type VoiceThreadProps = ComponentProps<typeof Thread> &
+  VoiceScope & { readonly children?: ReactNode };
+
+export function canReviewVoiceRequests(props: VoiceScope): boolean {
   return Boolean(
     props.ownerId &&
     props.surface === DEFAULT_CHAT_SURFACE &&
@@ -26,87 +37,148 @@ export function canReviewVoiceRequests(props: VoiceRequestsProps): boolean {
     props.privacyConfirmed
   );
 }
-export function VoiceRequests(props: VoiceRequestsProps) {
-  return canReviewVoiceRequests(props) ? (
-    <VoiceRequestList
-      key={props.ownerId}
-      ownerId={props.ownerId!}
-      onOpenThread={props.onOpenThread}
-    />
-  ) : null;
+
+/** Lives inside the drawer's scrolling transcript; ineligible selections never mount receipt queries. */
+export function VoiceInputThread(props: VoiceThreadProps) {
+  if (!canReviewVoiceRequests(props))
+    return props.records.length ? <Thread {...props} /> : props.children;
+  return <OwnerVoiceThread key={`${props.ownerId}:${props.mainThreadId}`} {...props} />;
 }
-function VoiceRequestList(props: {
-  readonly ownerId: string;
-  readonly onOpenThread: (id: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const region = useId();
+
+function OwnerVoiceThread(props: VoiceThreadProps) {
   const client = useQueryClient();
   const key = ["chat", "voice-requests", props.ownerId];
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: key,
-    queryFn: () =>
-      requestJson<{ requests: readonly ChatVoiceRequestStatus[] }>("/api/chat/voice-requests"),
+    initialPageParam: null as ChatVoiceRequestCursor | null,
+    queryFn: ({ pageParam }) => {
+      const params = pageParam
+        ? `?${new URLSearchParams({ beforeCreatedAt: pageParam.createdAt, beforeId: pageParam.id })}`
+        : "";
+      return requestJson<ListChatVoiceRequestsResponse>(`/api/chat/voice-requests${params}`);
+    },
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
     refetchInterval: 5000
   });
+  const requests =
+    query.data?.pages
+      .flatMap((page) => page.requests)
+      .filter((request) => request.threadId === props.mainThreadId) ?? [];
+  const completed = requests.filter((request) => request.state === "replied");
+  const history = useQuery({
+    queryKey: [
+      "chat",
+      "voice-history",
+      props.ownerId,
+      props.mainThreadId,
+      completed.map((r) => r.id).sort()
+    ],
+    queryFn: () => listChatThreadMessages(props.mainThreadId!, props.surface),
+    enabled: completed.length > 0
+  });
+  const recovered = new Map(
+    completed.map((request) => [
+      request.turnId,
+      recordsFromMessages(
+        history.data?.messages.filter((message) => message.turnId === request.turnId) ?? []
+      )
+    ])
+  );
+  const records = mergeVoiceInputRecords(
+    props.records,
+    requests,
+    recovered,
+    recordsFromMessages(history.data?.messages ?? [])
+  );
   const send = useMutation({
     mutationFn: (id: string) =>
       requestJson<ChatVoiceRequestStatus>(
         `/api/chat/voice-requests/${encodeURIComponent(id)}/send`,
         { method: "POST" }
       ),
-    // Always re-read after an uncertain response; the server owns admission and replay protection.
+    // Keep retry disabled until this authoritative refresh settles after an uncertain response.
     onSettled: () => client.invalidateQueries({ queryKey: key })
   });
   return (
-    <section className="chat-voice-requests" aria-label="Ring voice requests">
-      <DisclosureToggle
-        expanded={expanded}
-        controls={region}
-        onClick={() => setExpanded(!expanded)}
-      >
-        Ring voice requests{query.data ? ` (${query.data.requests.length})` : ""}
-      </DisclosureToggle>
-      {expanded ? (
-        <div id={region} className="chat-voice-requests__list">
-          {query.isPending ? <Note variant="practical">Loading voice requests…</Note> : null}
-          {query.isError ? (
-            <Note variant="practical">
-              Could not load voice requests.{" "}
-              <Button variant="link" onClick={() => void query.refetch()}>
-                Retry
-              </Button>
-            </Note>
-          ) : null}
-          {query.data?.requests.length === 0 ? (
-            <EmptyState
-              title="No voice requests"
-              description="Finish a hold-to-talk recording with voice input enabled in the companion."
-            />
-          ) : null}
-          {query.data?.requests.map((request) => (
-            <article key={request.id} className="chat-voice-requests__item">
-              <p>{request.transcript || "No speech detected."}</p>
-              <Note variant="practical">{request.statusMessage}</Note>
-              {request.state === "ready-to-send" ? (
-                <Button size="sm" disabled={send.isPending} onClick={() => send.mutate(request.id)}>
-                  Send to Main
-                </Button>
-              ) : null}
-              {request.state === "replied" ? (
-                <Button variant="link" onClick={() => props.onOpenThread(request.threadId)}>
-                  Open reply
-                </Button>
-              ) : null}
-            </article>
-          ))}
-          {send.isError ? (
-            <Note variant="practical">
-              Send could not be confirmed. Status will refresh; review it before trying again.
-            </Note>
-          ) : null}
-        </div>
+    <>
+      {query.hasNextPage ? (
+        <Button
+          variant="link"
+          disabled={query.isFetchingNextPage}
+          onClick={() => void query.fetchNextPage()}
+        >
+          Load older voice inputs
+        </Button>
       ) : null}
-    </section>
+      {records.length ? (
+        <Thread
+          records={records}
+          working={props.working}
+          renderRecord={(record, index, context) => (
+            <>
+              {props.renderRecord ? (
+                props.renderRecord(record, index, context)
+              ) : (
+                <RecordRow record={record} />
+              )}
+              {record.kind === "user" ? (
+                <VoiceInputStatus
+                  request={requests.find((request) => request.turnId === record.turnId)}
+                  sending={
+                    send.isPending ||
+                    query.isFetching ||
+                    (send.isError && (query.isError || query.dataUpdatedAt < send.submittedAt))
+                  }
+                  onSend={send.mutate}
+                />
+              ) : null}
+            </>
+          )}
+        />
+      ) : (
+        props.children
+      )}
+      {query.isPending ? <Note variant="practical">Loading voice inputs…</Note> : null}
+      {query.isError || history.isError ? (
+        <Note variant="practical">
+          Could not load voice inputs.{" "}
+          <Button
+            variant="link"
+            onClick={() => {
+              void query.refetch();
+              void history.refetch();
+            }}
+          >
+            Retry
+          </Button>
+        </Note>
+      ) : null}
+      {send.isError ? (
+        <Note variant="practical">
+          Send could not be confirmed. Status will refresh; review it before trying again.
+        </Note>
+      ) : null}
+    </>
+  );
+}
+function VoiceInputStatus(props: {
+  readonly request?: ChatVoiceRequestStatus;
+  readonly sending: boolean;
+  readonly onSend: (id: string) => void;
+}) {
+  const request = props.request;
+  if (!request || request.state === "replied") return null;
+  return (
+    <Note variant="practical">
+      {request.statusMessage}
+      {request.state === "ready-to-send" ? (
+        <>
+          {" "}
+          <Button size="sm" disabled={props.sending} onClick={() => props.onSend(request.id)}>
+            Send to Main
+          </Button>
+        </>
+      ) : null}
+    </Note>
   );
 }

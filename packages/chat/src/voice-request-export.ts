@@ -8,7 +8,7 @@ export async function collectVoiceRequestExport(scopedDb: unknown, ctx: ModuleLi
   const result = await sql<Record<string, unknown>>`
     SELECT id::text, thread_id::text AS "threadId", source_device_id AS "sourceDeviceId",
       recording_id AS "recordingId", fingerprint, transcript_revision AS "transcriptRevision",
-      transcript, captured_at AS "capturedAt", automatic, turn_id::text AS "turnId",
+      transcript, captured_at AS "capturedAt", automatic, auto_send AS "autoSend", turn_id::text AS "turnId",
       user_message_id::text AS "userMessageId", assistant_message_id::text AS "assistantMessageId",
       state, confirmed_at AS "confirmedAt", dispatched_at AS "dispatchedAt",
       created_at AS "createdAt", updated_at AS "updatedAt"
