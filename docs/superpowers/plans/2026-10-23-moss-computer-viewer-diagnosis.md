@@ -74,3 +74,15 @@ resource floors and stops exact owned resources. Reconfirm line ranges when prep
 No model calls or product UI feedback are introduced; all evidence is generated from observed state.
 Expected diagnostic exit 0 means its explicitly named browser boundary was observed, never desktop
 acceptance. Real proof requires the original full predicate sequence and independent closure.
+
+### Observed first-sample race: bounded runner correction
+
+The r15 runner passed prelaunch admission but failed before `launch`: the watchdog created its
+log before writing the first sample, and `read_text().splitlines()[0]` raised `IndexError`.
+Correct this actual runner seam before the next exact packet. A small `await_first_sample(root,
+watch, timeout=10)` helper must wait for a complete first JSONL record while rejecting an exited
+watchdog, stop intent, malformed complete record, unhealthy sample or the original 10-second
+deadline. The regression must observe the original code rejecting an empty newly-created log,
+then verify delayed/partial sample completion succeeds and dead/stopped/malformed/unhealthy or
+timed-out monitors fail closed. No desktop or viewer assertions change. Independently review a
+fresh r16 identity and actual helper/call-site inputs before the next launch.
