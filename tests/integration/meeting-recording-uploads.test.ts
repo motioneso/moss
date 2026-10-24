@@ -126,6 +126,48 @@ async function serverFor(service: RecordingImportService) {
   return server;
 }
 describe("resumable recording transport and checkpointed transcription", () => {
+  it("bounds real ASR end drift before checkpointing windows and schedules one final summary", async () => {
+    const summary = vi.fn<RecordingImportDependencies["scheduleSummary"]>(async () => {});
+    const transcribe = vi.fn<RecordingImportDependencies["transcribe"]>();
+    transcribe.mockResolvedValueOnce({
+      segments: [
+        { startMs: 0, endMs: 29_840, text: "Before the boundary" },
+        { startMs: 29_840, endMs: 30_340, text: "At the boundary" }
+      ]
+    });
+    transcribe.mockResolvedValueOnce({
+      segments: [{ startMs: 0, endMs: 840, text: "Short final window" }]
+    });
+    const { service } = setup({
+      transcribe,
+      scheduleSummary: summary,
+      describeFailure: () => ({ retryable: false, unavailable: false })
+    });
+    const uploaded = await upload(service, recordingUpload(30_500));
+    await service.uploads.finalize(actor, uploaded.id);
+    const accepted = await service.status(actor, uploaded.id);
+    await service.process(actor, job(uploaded.id));
+    expect(await service.status(actor, uploaded.id)).toMatchObject({ state: "queued" });
+    expect(summary).not.toHaveBeenCalled();
+    await service.process(actor, job(uploaded.id, 30_000));
+    expect(await service.status(actor, uploaded.id)).toMatchObject({
+      state: "complete",
+      meetingId: accepted!.meetingId
+    });
+    const snapshot = await context.withDataContext(actor, (db) =>
+      transcripts.snapshot(db, accepted!.meetingId, { maxSegments: 500, maxCharacters: 100000 })
+    );
+    expect(
+      snapshot!.segments.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }))
+    ).toEqual([
+      { startMs: 0, endMs: 29_840, text: "Before the boundary" },
+      { startMs: 29_840, endMs: 30_000, text: "At the boundary" },
+      { startMs: 30_000, endMs: 30_500, text: "Short final window" }
+    ]);
+    await service.process(actor, job(uploaded.id, 30_000));
+    expect(transcribe).toHaveBeenCalledTimes(2);
+    expect(summary).toHaveBeenCalledTimes(1);
+  });
   it("applies changed language to subsequent normal windows", async () => {
     const preferences = new MeetingPreferencesRepository();
     try {
