@@ -25,26 +25,53 @@ afterEach(async () => {
 });
 
 /** Actual capture -> actual signer -> mandatory loader. Inherited OS/root/runtime/Node/cgroup projections. */
-async function fixture() {
+async function fixture(captureRootCase?: "mode" | "child" | "ancestor" | "receipt") {
   const f = await captureFixture((close) => cleanups.push(close));
   await f.run();
-  const path = join(f.capture, "capture.json");
+  let path = join(f.capture, "capture.json");
   const capture = JSON.parse(await fs.readFile(path, "utf8"));
   const artifact = join(f.root, "input/closure.cjs");
   await fs.writeFile(artifact, "/* disclosed verifier artifact projection */", { mode: 0o600 });
   const receiptPath = join(f.root, "receipt");
   await fs.mkdir(receiptPath, { mode: 0o700 });
   const { dev, ino, uid, gid, mode } = await f.io.lstat(receiptPath);
+  let supervisor = f.deployment.configuration;
+  const pin = async (path: string) => {
+    const { dev, ino, uid, gid, mode } = await f.io.lstat(path);
+    return { path, dev, ino, uid, gid, mode };
+  };
+  // Conflicting trusted-root negatives retain the actual published bytes and install the signer
+  // against this exact altered template, so unrelated template/hash failures cannot explain refusal.
+  if (captureRootCase) {
+    let capturePath = f.capture;
+    if (captureRootCase === "mode") await fs.chmod(capturePath, 0o750);
+    if (captureRootCase === "child") {
+      capturePath = join(supervisor.data.path, "capture");
+      await fs.mkdir(capturePath, { mode: 0o700 });
+    }
+    if (captureRootCase === "ancestor") {
+      capturePath = join(f.root, "capture-parent");
+      await fs.mkdir(capturePath, { mode: 0o700 });
+      const dataPath = join(capturePath, "data");
+      await fs.mkdir(dataPath, { mode: 0o700 });
+      supervisor = { ...supervisor, data: await pin(dataPath) };
+    }
+    if (captureRootCase === "receipt") capturePath = receiptPath;
+    const next = join(capturePath, "capture.json");
+    if (next !== path) await fs.copyFile(path, next);
+    path = next;
+    supervisor = { ...supervisor, capture: await pin(capturePath) };
+  }
   const signing = await signingFixture(
     f.root,
-    f.deployment.configuration,
+    supervisor,
     capture.provenance.namespaces.net,
     artifact
   );
   expect(await signing.install()).toBe(0);
   const installed = await signing.read();
   const config = {
-    supervisor: f.deployment.configuration,
+    supervisor,
     processes: { watchdog: f.watchdog, desktop: f.desktop, gateway: f.gateway },
     artifactSha256: trust.sha256(await fs.readFile(artifact)),
     captureSha256: trust.sha256(await fs.readFile(path)),
@@ -94,6 +121,15 @@ async function fixture() {
 }
 
 describe("mandatory sampled capture binding; no installed or descendant-complete qualification", () => {
+  it.each(["mode", "child", "ancestor", "receipt"] as const)(
+    "refuses capture directory %s with exact signer template and otherwise valid binding",
+    async (key) => {
+      const t = await fixture(key);
+      expect(parseClosureConfiguration(t.config).captureSha256).toBe(t.config.captureSha256);
+      await expect(loadClosureCapture(t.config, t.f.deployment.roots)).resolves.toBeDefined();
+      await expect(t.load()).rejects.toThrow();
+    }
+  );
   it("consumes actual published capture and signer after journal append, state transition and lock disappearance", async () => {
     const t = await fixture();
     const before = await fs.readFile(t.path);
