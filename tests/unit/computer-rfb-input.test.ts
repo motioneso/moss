@@ -108,6 +108,46 @@ describe("Computer RFB receiving input", () => {
     expect(f.receiver.snapshot().receivingReady).toBe(true);
   });
 
+  it("keeps an old completion closed across receiver-only parser replacement", async () => {
+    const f = await fixture();
+    const viewer = await f.receiver.connect(binding());
+    await f.receiver.takeOver(viewer);
+    await f.attach(viewer, true);
+    const gate = deferred();
+    const entered = deferred();
+    f.assertLive
+      .mockImplementationOnce(async () => undefined)
+      .mockImplementationOnce(() => {
+        entered.resolve();
+        return gate.promise;
+      });
+    // Reaffirming the same owner leaves the policy generation unchanged.
+    const old = f.receiver.takeOver(viewer).catch((e: unknown) => e);
+    await entered.promise;
+    f.holdFences();
+    const replacement = f.attach(viewer, true);
+    await tick();
+    gate.resolve();
+    const oldResult = await old;
+    expect(f.receiver.snapshot().receivingReady).toBe(false);
+    expect(oldResult).toBeInstanceOf(ComputerInputDenied);
+    f.acknowledge(f.fences.at(-1)!);
+    await replacement;
+    expect(f.receiver.snapshot().receivingReady).toBe(true);
+  });
+
+  it("rejects a fresh post-Fence session denial before opening admission", async () => {
+    const f = await fixture(80);
+    const viewer = await f.receiver.connect(binding());
+    f.holdFences();
+    const takeover = f.receiver.takeOver(viewer).catch((e: unknown) => e);
+    await tick();
+    f.assertLive.mockRejectedValueOnce(new Error("revoked after Fence request"));
+    f.acknowledge(f.fences.at(-1)!);
+    expect(await takeover).toBeInstanceOf(Error);
+    expect(f.receiver.snapshot()).toMatchObject({ mode: "paused", receivingReady: false });
+  });
+
   it("rejects owner events queued before the same viewer later regains control", async () => {
     const f = await fixture();
     const viewer = await f.receiver.connect(binding());
