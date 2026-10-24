@@ -6,6 +6,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.*;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.WindowInsetsController;
 import android.widget.*;
 
 /** Park Press native roles, mapped from apps/web/src/styles/tokens.css.
@@ -20,7 +21,7 @@ final class NativeTheme {
         this.activity = activity; dark = isDark(activity);
         paper = dark ? 0xff1c1a16 : 0xfff2eee4;
         surface = dark ? 0xff232019 : 0xfffaf8f1;
-        line = dark ? 0x14ffffff : 0xffc6cbbc;
+        line = dark ? 0xff514c42 : 0xffc6cbbc;
         text = dark ? 0xffece7dc : 0xff282c25;
         muted = dark ? 0xffb7b1a2 : 0xff676c60;
         accent = 0xff294b39; accentText = dark ? 0xff79a68d : accent;
@@ -29,6 +30,12 @@ final class NativeTheme {
     }
     static boolean isDark(Activity activity) {
         return (activity.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+    }
+    void window() {
+        activity.getWindow().setBackgroundDrawable(new ColorDrawable(paper));
+        activity.getWindow().setDecorFitsSystemWindows(false);
+        int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+        activity.getWindow().getDecorView().getWindowInsetsController().setSystemBarsAppearance(dark ? 0 : light, light);
     }
     int dp(int value) { return Math.round(value * activity.getResources().getDisplayMetrics().density); }
     TextView text(int size, boolean heading) {
@@ -46,9 +53,11 @@ final class NativeTheme {
     Button button(Runnable action, boolean primary) {
         Button view = new Button(activity);
         view.setAllCaps(false); view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        view.setTypeface(Typeface.create(sans, Typeface.BOLD)); view.setTextColor(primary ? onAccent : text);
+        view.setTypeface(Typeface.create(sans, Typeface.BOLD));
+        view.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}}, new int[]{muted, primary ? onAccent : accentText}));
         view.setMinHeight(dp(48)); view.setMinimumHeight(dp(48)); view.setPadding(dp(16), dp(12), dp(16), dp(12));
         StateListDrawable background = new StateListDrawable();
+        background.addState(new int[]{-android.R.attr.state_enabled}, buttonGround(false, false));
         background.addState(new int[]{android.R.attr.state_focused}, buttonGround(primary, true));
         background.addState(new int[]{}, buttonGround(primary, false));
         view.setBackground(new RippleDrawable(ColorStateList.valueOf((accentText & 0x00ffffff) | 0x33000000), background, null));

@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.*;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.ColorDrawable;
 import android.os.*;
 import android.text.format.DateUtils;
 import android.view.*;
@@ -40,11 +39,7 @@ public final class HardwareActivity extends Activity {
         if (!new SecretStore(this).exists()) {
             startActivity(new Intent(this, SetupActivity.class)); finish(); return;
         }
-        theme = new NativeTheme(this);
-        getWindow().setBackgroundDrawable(new ColorDrawable(theme.paper)); getWindow().setDecorFitsSystemWindows(false);
-        getWindow().getDecorView().getWindowInsetsController().setSystemBarsAppearance(theme.dark ? 0 :
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+        theme = new NativeTheme(this); theme.window();
         scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(theme.paper);
         scroll.setOnApplyWindowInsetsListener((view, insets) -> {
             android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
@@ -53,6 +48,7 @@ public final class HardwareActivity extends Activity {
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(theme.dp(24), theme.dp(12), theme.dp(24), theme.dp(32)); scroll.addView(body);
         setContentView(scroll); scroll.requestApplyInsets();
+        if ("connection".equals(getIntent().getStringExtra("page"))) page = "connection";
         if (saved != null) {
             page = saved.getString("page", "hardware"); restoreY = saved.getInt("scrollY");
             selectedId = saved.getString("selectedId", ""); recordingPage = saved.getInt("recordingPage");
@@ -216,7 +212,7 @@ public final class HardwareActivity extends Activity {
         final JSONObject state = delivery(), voice = state.optJSONObject("voice");
         final JSONObject recordings = config == null ? new JSONObject() : RingRecordings.read(this, config, state.optString("sourceDeviceId"));
         if (!page.equals("hardware")) button("back", "‹ " + (page.equals("recording") ? "Ring storage" : page.equals("ring") ? "Hardware" : "Vocci ring"), this::onBackPressed);
-        NativeTheme.update(place("eyebrow", TextView.class, () -> theme.eyebrow(), 12), "MOSS / SETTINGS / HARDWARE");
+        NativeTheme.update(place("eyebrow", TextView.class, () -> theme.eyebrow(), 12), "MOSS / SETTINGS");
         switch (page) {
             case "hardware":
                 text("title", "Hardware", 30, true);
@@ -237,7 +233,7 @@ public final class HardwareActivity extends Activity {
                     } else DeliveryActions.stop(this);
                 });
                 delivery.setEnabled(deliveryChoice == null);
-                text("delivery-help", "After you finish a normal recording, Moss retrieves it and creates a Meeting automatically. Uploads retry when your connection returns.", 13, false);
+                text("delivery-help", "Send finished recordings to Meetings. Retry when your connection returns.", 13, false);
                 text("delivery-state", choices.enabled() ? "Enabled · " + state.optString("activity", "starting").replace('_', ' ') : "Stopped · recordings remain on the ring", 13, false);
                 if (!choices.recovery().isEmpty()) text("recovery", choices.recovery(), 13, false);
                 rule("delivery-rule");
@@ -247,7 +243,7 @@ public final class HardwareActivity extends Activity {
                     voice.has("enablement") ? "Enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Off", 13, false);
                 rule("hold-rule");
                 toggle("reminder", "Remind me after an hour", choices.recordingReminder(), enabled -> choices.recordingReminder(enabled));
-                text("reminder-help", "An optional phone notification after the same recording has been observed for an hour. Requires delivery, notifications and ring status. Gaps in observation or restarting Moss reset the timer. It never stops recording.", 13, false);
+                text("reminder-help", "A phone reminder, never an auto-stop. Requires delivery and notifications; restarts or gaps in ring status reset the observed hour.", 13, false);
                 rule("reminder-rule");
                 row("storage", "Ring storage", "Capacity and saved recordings", () -> show("storage"));
                 row("phone", "Phone audio", "Delivered copies and automatic cleanup", () -> show("phone"));
