@@ -16,7 +16,8 @@ import type {
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   LocaleSettingsDto,
-  SourceFreshnessV1
+  SourceFreshnessV1,
+  VisualReplyV1
 } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
@@ -97,6 +98,8 @@ export interface ChatPersistencePort {
       readonly threadId?: string | null;
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
+      readonly visualReply?: VisualReplyV1;
+      readonly stopSignal?: AbortSignal;
       /** #1133 — display metadata for files sent with this turn (user-message tool_metadata). */
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
