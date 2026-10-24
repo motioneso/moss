@@ -57,10 +57,20 @@ repository design, review, resource, security and live-proof gates remain bindin
    accurate prerequisite/backlog ledger, and finish with a clean tree and no owned runtime/ports.
    No production deployment, automatic merge or premature issue closure is authorised here.
 
+## Approved design update
+
+Ben approved the chat-integrated layout in the [revised mockups](../specs/2026-10-23-moss-computer-chat-mockups.html),
+with concise UI copy and intentional viewer close returning control to Moss. This supersedes
+earlier explicit-return-only/close-leaves-paused UI wording. Close by the controlling owner uses
+the same authenticated, generation-fenced return action as Return to Moss before disconnecting;
+unexpected disconnect/revocation or failed return still fails closed. No new runtime attempt is
+authorized by this design approval; r12 exhausted the single prerequisite attempt.
+
 ## Required product behavior and security
 
 - Both app and browser open the SAME persistent Computer/session/files. Watching does not seize
-  input. Owner takeover pauses Moss input until explicit return. Show who controls the computer;
+  input. Owner takeover pauses Moss input until Return to Moss or intentional viewer close.
+  Show who controls the computer;
   enforce ownership at the input boundary, including stale/queued agent input, multiple viewers,
   disconnect, reconnect and restart. UI-only toggles do not establish control exclusion.
 - Use actual Moss owner authentication/authorisation for creation, status, view, input, reconnect,

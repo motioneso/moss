@@ -371,9 +371,25 @@ or navigation entry is intended. Browser access uses the same owner-authenticate
 
 [Revised interactive mockups](2026-10-23-moss-computer-chat-mockups.html) show five views: full-screen
 chat with a timestamped still, viewer beside the conversation, owner takeover, compact drawer and
-phone. Opening watches without taking over; explicit return resumes Moss input. Closing while
-controlling leaves input paused. Sleeping/waking/paused/disconnected/off variants retain honest
-capture-age/status labels. All sample screen content is illustrative; no live desktop runs here.
+phone. Opening watches without taking over; Return to Moss or intentionally closing the
+controlling viewer resumes Moss input (approved revision below). Sleeping/waking/paused/
+disconnected/off variants retain honest capture-age/status labels. All sample screen content is
+illustrative; no live desktop runs here.
 Production uses shared Button/Badge/BrandMark/Thread and PeekPanel lifecycle, with truthful chat
-feature metadata when wired. Proposed copy/placement and exact refresh policy await design review;
-the request to see mockups does not approve them. The internal policy and failed-r12 limits remain.
+feature metadata when wired. Ben approved this layout with the revision below. Exact screenshot
+refresh policy remains an implementation detail. The internal policy and failed-r12 limits remain.
+
+## 25. Approved chat layout and intentional-close handoff
+
+Ben approved the chat-integrated mockups, requesting concise copy and that closing the viewer
+returns control to Moss. Keep capture age, status and control labels; omit explanatory tutorials.
+This supersedes earlier close-leaves-paused and explicit-return-only UI requirements, including
+§21. Return to Moss remains available while viewing.
+
+Intentional close by the controlling owner uses the same authenticated, generation-fenced return
+action before closing its connection. It invalidates old owner/agent input; only a fresh agent
+lease can proceed. Unexpected disconnect, logout/revocation or a failed return still fails closed;
+a disconnect alone cannot grant input authority. Closing a watcher must not steal another viewer’s
+control. The current internal policy already separates returnToMoss from disconnect; actual
+transport wiring and receiving-side fencing remain unimplemented. Design approval does not waive
+persistence, lifecycle, egress, owner transport or live acceptance gates.

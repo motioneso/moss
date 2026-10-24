@@ -38,42 +38,42 @@ const states = {
   working: [
     "Working",
     "Checking the coastal shortlist.",
-    "Moss has control. You’re just looking.",
+    "",
     "Screenshot · 2 min ago",
     "Checking routes and nearby walks"
   ],
   sleeping: [
     "Sleeping",
     "Resting until it’s needed.",
-    "The last screenshot stays here while the computer sleeps.",
+    "Wake to continue.",
     "Last screenshot · 1 hr ago",
     "Computer is sleeping"
   ],
   waking: [
     "Waking",
     "Getting the computer ready.",
-    "You can keep chatting while it wakes up.",
+    "Getting ready…",
     "Last screenshot · 1 hr ago",
     "Waking the computer…"
   ],
   paused: [
     "Paused",
     "Waiting for your next step.",
-    "Moss won’t send input until you return control.",
+    "Return control to continue.",
     "Screenshot · 2 min ago",
     "Computer input is paused"
   ],
   disconnected: [
     "Disconnected",
     "We’ve lost the connection.",
-    "This is the last saved screenshot, not the current screen.",
+    "Reconnect to continue.",
     "Last screenshot · 8 min ago",
     "Computer connection lost"
   ],
   disabled: [
     "Off",
     "Computer is turned off.",
-    "Enable it when you want Moss to use its computer.",
+    "Enable Computer to continue.",
     "Last screenshot · before disabling",
     "Computer is turned off"
   ]
@@ -88,12 +88,10 @@ function render() {
   const current = [...states[state]];
   if (state === "working" && ownerControl) {
     current[0] = "You have control";
-    current[2] = "Moss input is paused.";
     current[4] = "You’re using the computer · Moss input paused";
   }
   if (state === "working" && inputPaused && !ownerControl) {
     current[0] = "Paused";
-    current[2] = "Return control to let Moss continue.";
     current[4] = "Computer input is paused";
   }
   $("scene-title").textContent = descriptions[scene][0];
@@ -106,17 +104,12 @@ function render() {
   document.querySelectorAll("[data-status]").forEach((el) => (el.textContent = current[0]));
   document.querySelectorAll("[data-capture]").forEach((el) => (el.textContent = current[3]));
   $("computer-copy").replaceChildren(document.createTextNode(current[1]));
-  const detail = document.createElement("span");
-  detail.textContent = current[2];
-  $("computer-copy").append(detail);
   $("activity-text").textContent = current[4];
   const expanded = scene === "watch" || scene === "control";
   const unavailable = ["sleeping", "waking", "disconnected", "disabled"].includes(state);
   const paused = inputPaused || state === "paused";
   $("preview-open").setAttribute("aria-expanded", String(expanded));
-  $("viewer-subtitle").textContent = ownerControl
-    ? "You’re in control · example viewer"
-    : "Watching · example viewer";
+  $("viewer-subtitle").textContent = ownerControl ? "You have control" : "Watching";
   $("controller-label").textContent = unavailable
     ? current[0]
     : ownerControl
@@ -135,11 +128,6 @@ function render() {
       ? "Return to Moss"
       : "Take over";
   $("control-button").disabled = state === "waking";
-  $("control-help").textContent = unavailable
-    ? current[2]
-    : ownerControl || paused
-      ? "Moss input stays paused until you explicitly return control. Closing this viewer won’t resume it."
-      : "Watching doesn’t interrupt Moss. Take over when you want to use the mouse and keyboard.";
   $("viewer-screen").hidden = unavailable;
   $("state-message").hidden = !unavailable;
   $("state-title").textContent =
@@ -166,7 +154,7 @@ function chooseScene(next) {
     ownerControl
   ) {
     ownerControl = false;
-    inputPaused = true;
+    inputPaused = false;
   }
   scene = next;
   if (next === "control") {
@@ -193,10 +181,6 @@ document
 for (const id of ["preview-open", "open-computer", "compact-open"])
   $(id).addEventListener("click", openViewer);
 $("close-viewer").addEventListener("click", () => {
-  if (ownerControl) {
-    ownerControl = false;
-    inputPaused = true;
-  }
   chooseScene(returnScene);
   if (getComputedStyle($("compact-open")).display !== "none") $("compact-open").focus();
   else $("preview-open").focus();

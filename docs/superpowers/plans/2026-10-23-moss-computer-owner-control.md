@@ -15,7 +15,7 @@ Independent reviewer: `/root/implementation_review`.
 | Rapid restart; bounded delayed restart and explicit reload        | Accepted r3/r4 evidence                                                                                                                | No arbitrary-outage or sustained-fit claim                                         |
 | Adopted-image active Firefox sandbox, clean flush and replacement | [r12 rejected at current UI connection](../../evidence/moss-computer/2026-10-23-persistence-r12.md); sandbox/flush/replacement NOT_RUN | Required before dependent integrated desktop acceptance; record its actual outcome |
 | Current owner/session authorization                               | Existing auth-owned binding API, below                                                                                                 | Reuse; enforce at upgrade, transitions and each input dispatch                     |
-| UI design                                                         | Concrete mockups to review before product UI                                                                                           | Ben owns the missing screen approval; independent backend work may proceed         |
+| UI design                                                         | Chat-integrated layout approved with concise copy and close-to-return                                                                  | Design gate passed; runtime and integration gates remain                           |
 | Trusted lifecycle, installed storage and confined Internet egress | No qualified installed candidate                                                                                                       | Hard blocker before integrated launch; implement/review separately                 |
 | Actual app/browser HTTPS/WSS path and revocation                  | Not qualified                                                                                                                          | Required before calling the vertical slice delivered                               |
 | Installer/platform/MacBook/manual and downloads                   | Later distinct acceptance                                                                                                              | No claim from this foundation                                                      |
@@ -57,11 +57,15 @@ perform fresh liveness checks and fence asynchronous completion against interven
 Foreign actors, closed handles and expired bindings fail closed. All permission decisions come
 from records/validated capabilities, never the model.
 
-The initial/restarted controller is paused. A live owner explicitly returning control enables Moss.
+The initial/restarted controller is paused. A live owner returning control through Return to Moss
+or intentional viewer close enables Moss.
 Watching never changes the current controller. Exactly one viewer may control input; another
-viewer cannot silently steal it. Controller disconnect or detected session revocation leaves
-input paused, and reconnect starts as a new watcher. A live owner can explicitly take over or
-return from paused state. Closing an unrelated watcher does not interrupt valid control.
+viewer cannot silently steal it. Unexpected controller disconnect or detected session revocation
+leaves input paused, and reconnect starts as a new watcher. A live owner can explicitly take over or
+return from paused state. An intentional close by the controlling viewer must call the same
+authenticated return action before disconnecting, minting a fresh generation; disconnect alone
+cannot grant control. Failed/unauthorized return stays paused. Closing an unrelated watcher does
+not interrupt valid control or steal another viewer’s ownership.
 
 Agent work uses opaque, generation-bound leases tied to the fresh browser session that explicitly returned control. Every agent dispatch revalidates that exact session and expiry through the auth-owned liveness port. Closing its viewer alone does not cancel authorized active work; revoking/expiring the session pauses input and invalidates leases. A future independent task authority needs its own reviewed contract; this slice cannot invent one. A takeover, explicit return, controller loss,
 session invalidation or shutdown invalidates earlier leases, even after control returns to Moss.
@@ -75,23 +79,28 @@ its queue, release pressed keys/buttons on handoff and separate watcher traffic 
 noVNC WS passthrough would bypass this policy and is prohibited. No remote input-exclusion claim
 until that receiving path and observed negative controls pass independent review/live proof.
 
-## Revised chat mockups awaiting design approval
+## Approved chat design
 
 Ben rejected the earlier separate-destination treatment: Computer belongs inside the chat drawer.
-The [v2 interactive mockups](../specs/2026-10-23-moss-computer-chat-mockups.html) show full-screen chat
+The [interactive mockups](../specs/2026-10-23-moss-computer-chat-mockups.html) show full-screen chat
 with a recent still thumbnail, the expanded viewer alongside the ongoing conversation, explicit
 takeover/return, a compact drawer strip and phone behavior. The preview shows screenshot age rather
-than implying a live stream. Opening the viewer does not seize input; closing while controlling
-pauses input until explicit return. Working/sleeping/waking/paused/disconnected/off states and
-light/dark/Teal are selectable. Screen and conversation data are illustrative, not desktop proof.
+than implying a live stream. Opening the viewer does not seize input; intentionally closing it
+while controlling returns control to Moss, as does Return to Moss. Working/sleeping/waking/paused/
+disconnected/off states and light/dark/Teal are selectable. Screen and conversation data are
+illustrative, not desktop proof.
 
 The prototype reuses actual chat markup/styles and canonical Button/Badge/BrandMark markup;
 production uses the corresponding `@moss/ui` components, Thread and the shared PeekPanel lifecycle.
 No separate Computer module or navigation entry is proposed. The [earlier screens](../specs/2026-10-23-moss-computer-screens.html)
-are retained as superseded design history. V2 awaits feedback/approval; requesting mockups or
-receiving a Taildrop file is not screen approval. Internal backend policy acceptance is unchanged.
+are retained as superseded design history. Ben approved the chat layout in conversation, with
+concise product copy and intentional close returning control to Moss. This supersedes the earlier
+close-leaves-paused proposal and explicit-return-only wording in older documents. Screenshot age,
+status and control labels suffice; omit tutorials about streaming, watching or handoff. Internal
+backend policy acceptance and runtime qualification limits are unchanged.
 
-V2 mockup verification: fresh Firefox/Playwright ran 450 layout/state/theme iterations at
+Historical V2 mockup verification (before the approved close behavior revision): fresh
+Firefox/Playwright ran 450 layout/state/theme iterations at
 1280/768/414/375/320px. State selection returns takeover scenes to watching, so those iterations
 include that fallback rather than 450 distinct scene combinations. Direct takeover/return and
 close-pauses behavior were exercised separately at 1280px. Other checks covered horizontal fit,
@@ -99,6 +108,12 @@ capture-age labels, focus restoration, local-only example messages and no outbou
 requests. Final cropped desktop/drawer/phone views were visually inspected. The self-contained
 `Moss-Computer-in-Chat-v2.html` was sent to the requested device by Taildrop on request (exit 0).
 These are prototype checks only; no product UI or desktop runtime was tested.
+
+Approved behavior revision: fresh Firefox/Playwright passed 450 layout/state/theme iterations,
+asserting the actual scene including unavailable-control fallbacks. At all five widths, watching
+retained Moss control; takeover followed by close, Return to Moss or chat collapse restored it.
+Focus, concise copy, local-only messages and no outbound HTTP(S) checks passed. Desktop and phone
+stage crops were visually inspected. This verifies the prototype, not owner transport or input.
 
 ## First integrated vertical slice (after design/runtime prerequisites)
 
@@ -124,8 +139,8 @@ here. Wake uses fresh resource admission and reports unavailable truthfully. No 
 fallback; an independently reviewed HTTP(S)/DNS egress design must exclude host/LAN/metadata/Moss
 services before useful Internet access can launch.
 
-Idle design: a connected viewer or active agent operation inhibits sleep. Controller loss pauses
-agent input without ending tracked agent work. Ten idle minutes may request a clean stop only
+Idle design: a connected viewer or active agent operation inhibits sleep. Unexpected controller
+loss pauses agent input without ending tracked agent work. Ten idle minutes may request a clean stop only
 after all inhibitors are gone and a reviewed flush/unsaved-work contract says stopping is safe.
 Unknown background work or inability to flush reports blocked sleep rather than killing it.
 Wake/disable/sleep serialize through a lifecycle generation; an older stop cannot kill a newer

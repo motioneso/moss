@@ -75,17 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Computer screen design (#3605)
-
-Owner: Codex `moss-computer-implementation`. Product UI awaits the screen approval required by
-`plan-build` and Development Standards; independent backend policy work continues. Review the
-[revised chat mockups](../superpowers/specs/2026-10-23-moss-computer-chat-mockups.html). Ben rejected
-the earlier separate-destination layout and asked for a thumbnail inside full-screen chat.
-V2 shows that preview, an expanded viewer alongside chat, takeover/return, small drawer and phone
-states. These revised screens await feedback/approval; the earlier proposal is superseded.
-This asks only for the missing design decision, not renewed implementation authority.
-
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;

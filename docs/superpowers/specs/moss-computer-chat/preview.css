@@ -352,6 +352,9 @@ textarea::placeholder {
   font-size: 11px;
   color: var(--text-muted);
 }
+.composer-hint:empty {
+  display: none;
+}
 .computer-rail {
   padding-top: 30px;
   min-width: 0;
@@ -407,21 +410,8 @@ textarea::placeholder {
   line-height: 1.6;
   margin-top: 20px;
 }
-.computer-copy span {
-  display: block;
-  color: var(--text-muted);
-  font-size: 12px;
-  margin-top: 6px;
-}
 .computer-rail > .jds-btn {
   margin-top: 16px;
-}
-.quiet-note {
-  border-top: 1px solid var(--border-subtle);
-  margin-top: 24px;
-  padding-top: 16px;
-  font-size: 12px;
-  color: var(--text-muted);
 }
 .compact-entry {
   display: none;
@@ -521,19 +511,8 @@ textarea::placeholder {
   font-size: 12px;
   font-weight: 600;
 }
-.viewer-foot p {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 12px;
-}
 .viewer-foot button {
   white-space: nowrap;
-}
-.sample-tag {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 11px;
-  padding: 0 16px 16px;
 }
 .state-message {
   padding: 32px 24px;
