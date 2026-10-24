@@ -27,6 +27,21 @@ function deferred() {
 }
 
 describe("Computer local input authority (no remote transport claim)", () => {
+  it("permanently fails closed if the receiving transition observer throws", async () => {
+    const { deps } = fixture();
+    const control = new ComputerInputControl({
+      ...deps,
+      onTransition: () => {
+        throw new Error("receiving failure");
+      }
+    });
+    const viewer = await control.connect(binding());
+    await expect(control.takeOver(viewer)).rejects.toThrow("receiving failure");
+    expect(control.snapshot()).toEqual({ mode: "paused", viewerCount: 0 });
+    await expect(control.dispatchOwner(viewer, () => undefined)).rejects.toThrow();
+    expect(() => control.acquireAgentLease("owner")).toThrow();
+  });
+
   it("starts paused and watching neither seizes nor resumes input", async () => {
     const { control } = fixture();
     const viewer = await control.connect(binding());

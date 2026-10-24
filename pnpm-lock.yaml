@@ -96,6 +96,9 @@ importers:
       react-test-renderer:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      rfb2:
+        specifier: 1.1.0
+        version: 1.1.0
       tar:
         specifier: ^7.5.16
         version: 7.5.16
@@ -174,6 +177,9 @@ importers:
       pg-boss:
         specifier: ^12.18.2
         version: 12.18.2
+      rfb2:
+        specifier: 1.1.0
+        version: 1.1.0
 
   apps/web:
     dependencies:
@@ -5182,6 +5188,10 @@ packages:
     resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
     engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
 
+  rfb2@1.1.0:
+    resolution: {integrity: sha512-Cwhy/yIWli6akZ28racdIBoYKhLW8YQ2+C/m7eNZ61oNtZhPQN4EZLmwDyvX14oDmksQENXUfmQWE6kqj0NB8A==}
+    engines: {node: '>=22.12.0'}
+
   rfdc@1.4.1:
     resolution: {integrity: sha512-q1b3N5QkRUWUl7iyylaaj3kOpIT0N2i9MqIEQXP73GVsN9cw3fdx8X63cEmWhJGi2PPCF23Ijp7ktmd39rawIA==}
 
@@ -9125,6 +9135,8 @@ snapshots:
   ret@0.5.0: {}
 
   reusify@1.1.0: {}
+
+  rfb2@1.1.0: {}
 
   rfdc@1.4.1: {}
 
