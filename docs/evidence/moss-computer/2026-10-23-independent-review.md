@@ -627,3 +627,53 @@ and home/socket below 10 GiB; no sustained resource-fit claim follows.
 Acceptance covers evidence accuracy and closure only. Viewer repair and persistence remain open.
 Draft #3612 stacks on unmerged draft #3607, itself on unmerged #3598. No runtime retry, merge,
 deployment or issue closure follows this review.
+
+## Continued diagnosis: complete bounded offline persistence accepted
+
+Ben directly instructed continued repair, superseding the preceding unsupported-repair stopping
+decision. That earlier exact review remains historical. Operator `/root` retained failures and
+corrected observed qualification harness faults in separately committed fresh packets, with
+independent read-only review before each launch. Reviewer `/root/viewer_review` authored no fixes.
+Original admission, isolation, deadlines, real acceptance assertions and closure remained binding.
+
+**PASS_EXACT_R21_LAUNCH_READINESS** accepted exact packet
+`fd34c7ba78b95b3b7ad690ae8211a275f1cbcef7`, all 56 actual immutable inputs and manifest
+`9aec7a404c9951a6afbc3f296059fe98cf9cc749905139827195eb2c738db6ea`.
+The actual bookmark caller sends one Arrow Down then one Enter, retaining the original query,
+wait, exact-target assertion and distinct initial-control URL. Fresh prelaunch admission and the
+first healthy watchdog sample were then independently verified before accepting runtime results.
+
+**PASS_BOUNDED_OFFLINE_PERSISTENCE_AND_CLOSURE** independently passed all 39 checks at
+2026-10-24 02:07:49 UTC. Complete RFB/access controls, actual connected UI/RFB and visible frames
+with 346/338 colours, fresh viewer input before/after, active Firefox level 6 and 5/4 actual tabs
+with added filters, clean close twice, intended data-negative controls, distinct replacement on
+the same home/image, unchanged durable hashes before reopening and actual persisted bookmark/file
+readback all passed. Final database hash changes after browser revisit are explicitly distinguished
+from unchanged before-reopen bytes.
+
+Independent current closure found exact proof/Compose containers/networks absent, browser/watchdog
+PID/start identities and owned scripts absent, no listener/reservation on the claimed port,
+ephemeral keys/certificates absent and Moss running healthy with `ok:true`. All six watchdog
+samples satisfy floors/heartbeat/home limits; actual stop is `operator closure` and
+`NO_RUNNING_PROOF_CONTAINERS`. Private independent runtime/closure receipt SHA-256:
+`6c65d682c89a44b3821366e41da9d884d10d0ba64a885a3570f0fa0c0b8e6e2e`.
+
+**PASS_EXACT_FINAL** accepted evidence candidate
+`776a85cc89b8cf43071829dfe30e22e329b7ba45`; no blocking findings. Reviewer independently
+matched all 274 raw-artifact hashes, all 223 surviving immutable-input hashes, all 147 deleted
+ephemeral identity inputs (21 for each r15–r21), manifest counts/hashes and every committed packet
+manifest row. Report/spec/JSON predicates were checked semantically against actual receipts.
+
+| Exact accepted artifact                                                                        | SHA-256                                                            |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [r21 report](2026-10-23-persistence-r21.md)                                                    | `2dd8d76569558a22974946f27efcb0cd0d0797a83e9bfab93fe0e08e3efa1e0c` |
+| [r21 JSON](2026-10-23-persistence-r21.json)                                                    | `8447db6e135c3038881f2252e23e66290dacd13fc7501f783ab7fd87ab50fa77` |
+| [Raw-artifact manifest](2026-10-23-viewer-repair-artifacts.json)                               | `2498d1743d98d2b967dedb7a369b557225665b3d9b6828017bb8810b7c431ede` |
+| [Spec with section 27](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `5d80dd3af4643136a9efb970356b5d40b7fc123a5f2cb9716beb142a7dcb776e` |
+
+Acceptance covers bounded offline amd64 persistence, actual viewer/input, sandbox/flush and closure.
+Original r12 connection and r18 initial clipboard timeout causes remain UNKNOWN; no causal noVNC
+patch is claimed. Synthetic mTLS does not qualify Moss owner authentication. Real owner transport/
+revocation, sole receiving input writer/queue/key fencing, chat/browser UI, installed storage/
+lifecycle/idle sleep-wake, confined Internet egress, platform release and sustained fit remain open.
+No deployment, merge or issue closure occurred. Draft #3612 remains on unmerged #3607/#3598.
