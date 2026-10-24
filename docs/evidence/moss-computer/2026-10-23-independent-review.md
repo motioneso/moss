@@ -2,7 +2,7 @@
 
 - **Candidate:** the exact spec, plan and qualification evidence in this documentation branch.
 - **Reviewer:** `/root/independent_review`, independent of author Codex `/root`.
-- **Current status:** r11 accepted bounded startup/protected viewer/fresh input. The single r12 prerequisite attempt was rejected at current UI/RFB connection and independently closed; sandbox/flush/replacement remain unqualified. Internal owner-control policy at `d9159bab7` passed exact independent review and scoped verification; no app/browser integration acceptance or screen approval follows. Historical rulings remain below.
+- **Current status:** r11 accepted bounded startup/protected viewer/fresh input. The single r12 prerequisite attempt was rejected at current UI/RFB connection and independently closed; sandbox/flush/replacement remain unqualified. The viewer-repair dispatch ended with independently accepted unresolved evidence and closure, zero new desktop attempts and no supported repair. Internal owner-control policy at `d9159bab7` passed exact independent review and scoped verification; no app/browser integration acceptance or screen approval follows. Historical rulings remain below.
 
 The reviewer must check authority, product destination, source/installed identity separation, private viewing and egress gates, resource/storage limits, named finish controls, manual versus automated acceptance, actual-replacement requirements, shared ownership, stop boundaries, and evidence honesty. Record exact document hashes or commit, verdict and material findings here. Do not convert documentation acceptance into runtime acceptance.
 
@@ -589,3 +589,41 @@ writer. Unexpected disconnect remains separate from authenticated intentional cl
 real owner HTTPS/WSS/active revocation, receiving-side queue fencing and key/button release,
 installed storage/lifecycle/idle and confined egress remain open. No runtime retry, merge,
 deployment or issue closure is authorized.
+
+## Viewer-repair dispatch: unresolved evidence accepted, no runtime
+
+Independent read-only reviewer `/root/viewer_review` accepted exact candidate
+`1310ab9d00d1cf8153acfa13df2fa4062f20a981` at 2026-10-24 01:27:58.596165 UTC:
+**ACCEPT_UNRESOLVED_NO_RUNTIME; closure PASS. No blocking findings.** The reviewer authored no
+fixes and launched no runtime.
+
+All seven new raw-artifact hashes, all 52/39 historical final-receipt hashes and all 34/27
+surviving launch-artifact hashes matched independently. The connection functions match; the
+reported method hash includes its terminating newline. The four-ordering Node VM check and
+failing removed-ready-state control exercise scheduling with DOM/settings doubles and a stub
+start only. They do not reproduce or repair the desktop failure. Missing browser-boundary
+observations leave the cause UNKNOWN. The documents correctly apply the unsupported-repair
+kill gate: zero new attempts, no image load, no accepted launch packet, and current UI/frame/
+input, Firefox sandbox/flush and replacement persistence NOT_RUN.
+
+Independent closure found no exact proposed-r13/r12/r11 containers or networks under either
+proof or Compose labels, no owned script/watchdog or recorded browser PID/start identities,
+no Computer reservation/listener and no ephemeral keys. Existing listeners on old proof ports
+belong to other services. The new private root contains receipts only; historical homes/archive
+and implementation receipts exist, without a comprehensive home/archive rehash. Moss was running
+healthy with health `ok:true`. No admission resampling or desktop attempt occurred.
+
+Both historical watchdog stop files record `operator closure` and
+`NO_RUNNING_PROOF_CONTAINERS`. All 2/14 recorded samples satisfy RAM/root 8 GiB, data 30 GiB
+and home/socket below 10 GiB; no sustained resource-fit claim follows.
+
+| Exact accepted artifact                                                                        | SHA-256                                                            |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Viewer diagnosis](2026-10-23-viewer-diagnosis.md)                                             | `25695b82d2ada1b4854a44f2de130dbbd4d1e4cdc73563e447162fa8fb3d789a` |
+| [Diagnosis JSON](2026-10-23-viewer-diagnosis.json)                                             | `3902e9a49a0e6d124bd77b1753ba29870389d4c383c1cb7d965a5a1053594c1d` |
+| [Diagnostic plan](../../superpowers/plans/2026-10-23-moss-computer-viewer-diagnosis.md)        | `4bb3cd77716df1f73972f3a5c391b4ff5b0400263a1630457bcb64b9be0efe40` |
+| [Spec with section 26](../../superpowers/specs/2026-10-23-moss-computer-persistent-desktop.md) | `9d007de7e1b00ef5ad050ec3582d3340b6277533972bd52380bcf2ca8b11e678` |
+
+Acceptance covers evidence accuracy and closure only. Viewer repair and persistence remain open.
+Draft #3612 stacks on unmerged draft #3607, itself on unmerged #3598. No runtime retry, merge,
+deployment or issue closure follows this review.
