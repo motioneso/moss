@@ -43,8 +43,6 @@ export const sportsLatestResultExecute: ToolExecute = async (db, input, ctx, ser
       ...(registered?.ok
         ? {
             presentation: {
-              description:
-                "If a visual helps, propose this source-bound card with chat.present. Keep useful prose; respect text-only instructions. Do not change facts or URLs.",
               proposal: {
                 catalogVersion: registered.catalogVersion,
                 blocks: [{ kind: registered.templateKind, snapshotRefs: [registered.ref] }],

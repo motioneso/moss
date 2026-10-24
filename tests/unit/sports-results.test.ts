@@ -10,7 +10,12 @@ import {
   sportsResultTemplate,
   readSportsResultSnapshot
 } from "../../packages/sports/src/results/contract.js";
-import { resultSnapshot } from "../../packages/sports/src/results/tool.js";
+import {
+  configureSportsResultRead,
+  sportsLatestResultExecute,
+  resultSnapshot
+} from "../../packages/sports/src/results/tool.js";
+import { dataContextBrand, type DataContextDb } from "@moss/db";
 import { installBuiltInVisualTemplates, validateVisualCatalogReply } from "@moss/shared";
 import { VisualPresentationService } from "../../packages/chat/src/visual/presentation-service.js";
 import { sportsPublicReadPresentation } from "../../packages/sports/src/approval-presentation.js";
@@ -156,6 +161,7 @@ function readerFixture(failed: boolean | "all" = false, empty = false) {
   );
   return {
     reader: new SportsResultReader({ getDataset }, { list }, () => new Date(window.to)),
+    getDataset,
     list
   };
 }
@@ -251,6 +257,27 @@ const identity = { actorUserId: "actor", threadId: "thread", turnId: "turn" };
 const ctx = { ...identity, chatSessionId: "session", requestId: "request" };
 
 describe("source snapshot boundary", () => {
+  it("passes an issued source proposal from the real read tool to chat.present", async () => {
+    const { getDataset, list } = readerFixture();
+    configureSportsResultRead({ getDataset }, { list });
+    const service = new VisualPresentationService();
+    const turn = service.begin("session", identity);
+    const db = { [dataContextBrand]: true, db: {} } as DataContextDb;
+    const read = await sportsLatestResultExecute(db, { teamName: "Liverpool" }, ctx, {
+      visualPresentation: service
+    });
+    const presentation = read.data.presentation as { proposal: unknown };
+    expect(presentation).toBeDefined();
+    expect(turn.reply).toBeUndefined();
+    const presented = service.present(ctx, presentation.proposal);
+    if (!presented.ok) throw new Error(presented.code);
+    expect(presented.reply.blocks[0]?.kind).toBe("sports.result");
+    expect(presented.reply.snapshots[0]?.fields).toMatchObject({
+      id: "2",
+      home: { score: 1 },
+      away: { score: 2 }
+    });
+  });
   it("does not present on read; saves only host facts and source-authored fallback", async () => {
     const service = new VisualPresentationService();
     const turn = service.begin("session", identity);

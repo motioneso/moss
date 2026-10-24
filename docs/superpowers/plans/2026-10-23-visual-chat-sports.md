@@ -135,3 +135,28 @@ After verified merge, update #3629/#3583 truthfully; commit/push the Weather han
 the successor base, launch an isolated named fresh session and verify its Start section
 is executing. Carry the full approved remaining roadmap and review/fix/verify/merge/next
 chain forward. Clean owned resources and release claimed ports before this session ends.
+
+## Acceptance checkpoint and integration repair
+
+Candidate `2901e1839` genuinely failed the installed Sports matrix on configured
+Codex economy `gpt-6-luna`: 0/20 first-attempt cards, with useful sourced prose in
+20/20 replies. No renderer/reload/phone claim follows from that run. The failure
+and measured recommendation remain recorded on #3583 and PR #3633. Ben decided:
+**Repair integration and retain the gate.** The renderer and 19/20 threshold stay.
+
+An ordinary-question diagnostic using the acceptance setup called
+`sports.latestResult` and returned the correct result, but never called
+`chat.present`. The source-tool/registration/presentation seam passes a direct
+behavioral test. The trusted turn guidance still described only user-data grammar
+and prohibited all other syntax; the source proposal's imperative description was
+inside an untrusted tool result. Repair that contract generically: the trusted host
+explains how to use current-turn source proposal data, scopes the user-data grammar
+to its catalog, and leaves visual selection to the model. Remove the imperative
+source description. Never relax tool-result instruction defenses or host validation.
+The live model repro is the regression seam for this selection behavior; a string
+assertion over guidance would not establish it. Re-run the original fixed matrix
+and the unchanged user-data matrix on the actual rollout model before acceptance.
+
+The stopped full local gate also exposed missing results-route classification and
+approval fixtures. Add those cases and make the approval fixture check GET query
+fields, matching the route catalog's existing request-schema semantics.
