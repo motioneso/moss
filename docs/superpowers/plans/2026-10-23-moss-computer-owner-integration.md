@@ -23,7 +23,7 @@ close #3616 or advertise a usable Computer until #3618/#3619 and real live proof
 ## Current seam evidence
 
 - `apps/api/src/computer/input-control.ts:32`: controller has no production caller (graph and
-  source checked). `:95–119` dispatch validates authority before synchronous send. `:183–186`
+  source checked). `:95–119` dispatch validates authority before synchronous send. `:195–197`
   advances local generation; no receiving queue/key release. `:86–93` authenticates intentional
   close, unlike `:121–126` unexpected disconnect.
 - `packages/auth/src/session-bindings.ts:47–55,69–81`: auth-owned fresh session-row/account/expiry
