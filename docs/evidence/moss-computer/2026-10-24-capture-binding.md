@@ -7,10 +7,18 @@ and [continuation](../../superpowers/handoffs/2026-10-24-moss-computer-closure-p
 ## Exact boundary
 
 Base26c2a366ef41c90e7198a8d2903004fe0ab61b6e, planf70e3c77e3ec52f62ce60d06db33bf24bc1b97ee,
-checked sourcede5a12bd095a58cc8e8624b23c42ad1cc0b50bad. Independent Security and Standards/Spec
-accepted the exact plan before implementation and exact source R1 without blockers. Source hashes,
+checked source6db03b5cb07ecb243a825178bc7ed0c73660d757. Independent Security and Standards/Spec
+accepted the exact plan before implementation and production source R1. Local Standards/Spec R1
+rejected missing isolated capture-directory0700 and root-overlap controls; Security R1 had accepted.
+Both reports remain retained. Four added focused mandatory-loader tests install the signer against
+the exact altered template and first pass parsing/capture binding before expecting loader refusal.
+New controls remove directory mode or root separation and observe their intended assertions fail.
+Production behavior is unchanged; final-r1 evidence is superseded by this corrected R2 execution. Source hashes,
 private report hashes, commands/exits, artifacts and retained correction logs are in the manifest.
-Subsequent documentation does not change checked production bytes. Checked source, final PR HEAD
+The source hash map covers the11 stable plan/production/test inputs. final-r2 also checked the
+three prior evidence/continuation documents as they existed before R2 evidence generation; their
+input hashes remain separately disclosed. Regenerated evidence receives a separate format/diff
+check and exact independent review. Documentation does not change checked production bytes. Checked source, final PR HEAD
 and actual protected merge are separate identities; required CI belongs to final PR HEAD.
 
 The actual closure parser requires captureSha256, supervisor.capture and lifetime. It reads only
@@ -30,15 +38,15 @@ Capture hash is transitively signed via the trusted configuration hash, never se
 
 ## Executed verification
 
-All 13 final-r1 unpiped checks exit0 with restored checked bytes: **773 tests across 32 Computer
+All 13 final-r2 unpiped checks exit0 with restored checked bytes: **777 tests across 32 Computer
 suites**, root/tests TypeScript, zero-warning scoped ESLint, changed-file Prettier, file-size/diff,
 five builtin-only Node24-target CJS bundles and a fresh gateway context build. The repository keeps
 test files sequential; the command caps workers at two. These are packaging/context builds, never
 Computer images/runtime.
 
-All 33 removed-protection controls produce intended executable assertion failures (42 failing
+All 35 removed-protection controls produce intended executable assertion failures (46 failing
 assertions), retain exact patches/logs and restore production byte-for-byte after each case.
-Coverage includes mandatory capture root/hash, byte/hash/envelope/type/run/time/native identity/
+Coverage includes capture-directory0700 and child/ancestor/receipt-root separation, mandatory capture root/hash, byte/hash/envelope/type/run/time/native identity/
 lifetime/role/full-ID/init-PID/StartedAt/boot/root/namespace bindings, journal shape/size/hash/inode/
 device/prefix/strict bootstrap window, actual records consumption and original capture inode/bytes
 revalidation. Composed/redundant revalidation checks are removed together where needed. Canonical
@@ -57,7 +65,8 @@ the historical capture. The fixture now constructs it after the projection. The 
 retains 50 failures in an inherited nested boundedFile spy before reaching loader validation; capturing
 the prior mock implementation fixes the recursion. The next focused run refused an unprojected new
 receipt root; measuring it through the existing projected fixture I/O fixes that fixture boundary.
-Then the focused actual composition and all 50 new tests passed. No production guard was weakened.
+Then the focused actual composition and all 50 original new tests passed. The four R2 root cases
+passed separately before35 controls; final-r2 includes all54 binding cases. No production guard was weakened.
 
 ## Limits and remaining gates
 
