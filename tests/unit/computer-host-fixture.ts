@@ -75,6 +75,7 @@ export async function hostFixture(
     missingImage: false,
     imageBytes: 0,
     remove: false,
+    removeWithoutResult: false,
     holdStart: null as Promise<void> | null
   };
   const dockerServer = createServer((request, response) => {
@@ -164,6 +165,7 @@ export async function hostFixture(
         default:
           if (method !== "DELETE" || container.State.Running || faults.remove) return send(409);
           containers.delete(container.Id);
+          if (faults.removeWithoutResult) return response.destroy();
           return send(204);
       }
     })().catch(() => {

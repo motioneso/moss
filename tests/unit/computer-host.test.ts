@@ -391,6 +391,45 @@ describe("Computer fixed host control (real Unix IPC, Docker HTTP stand-in only)
     expect(f.containers.size).toBe(0);
   });
 
+  it("lost successful removal replies reconcile known absent IDs after restart and disable", async () => {
+    const f = await fixture({ admitted: true });
+    await f.client.request(binding(), "enable", 0);
+    const resources = f.store.state.resources;
+    f.faults.removeWithoutResult = true;
+    expect((await f.client.request(binding(), "disable", 1)).state).toBe("unavailable");
+    expect(f.containers.size).toBe(0);
+    expect(f.store.state.resources).toEqual(resources);
+    await f.restart();
+    expect((await f.client.request(binding(), "disable", 2)).state).toBe("disabled");
+    expect(f.store.state.resources).toHaveLength(0);
+  });
+
+  it("a missing known desktop does not prevent disable from stopping the surviving gateway", async () => {
+    const f = await fixture({ admitted: true });
+    await f.client.request(binding(), "enable", 0);
+    const desktop = [...f.containers.values()].find((c) => c.Image === COMPUTER_IMAGE)!;
+    const gateway = [...f.containers.values()].find((c) => c.Image === GATEWAY_IMAGE)!;
+    f.containers.delete(desktop.Id);
+    f.calls.length = 0;
+    expect((await f.client.request(binding(), "disable", 1)).state).toBe("disabled");
+    expect(f.calls.filter((c) => c.path.endsWith("/stop?t=10")).map((c) => c.path)).toEqual([
+      `/containers/${gateway.Id}/stop?t=10`
+    ]);
+    expect(f.containers.size).toBe(0);
+    expect(f.store.state.resources).toHaveLength(0);
+  });
+
+  it("image inspect404 cannot erase known container identities or authorize cleanup", async () => {
+    const f = await fixture({ admitted: true });
+    await f.client.request(binding(), "enable", 0);
+    const resources = f.store.state.resources;
+    f.faults.missingImage = true;
+    f.calls.length = 0;
+    expect((await f.client.request(binding(), "disable", 1)).state).toBe("unavailable");
+    expect(f.store.state.resources).toEqual(resources);
+    expect(mutations(f)).toHaveLength(0);
+  });
+
   it("failed graceful stop reinspects and kills only the same verified immutable ID", async () => {
     const f = await fixture({ admitted: true });
     await f.client.request(binding(), "enable", 0);

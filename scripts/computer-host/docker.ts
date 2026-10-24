@@ -29,6 +29,8 @@ export interface InspectedResource {
   readonly running: boolean;
 }
 
+class KnownContainerAbsent extends Error {}
+
 /** Host-only Docker client. No exec, arbitrary command, image pull or API import/caller. */
 export class ComputerDocker {
   constructor(private readonly config: HostConfig) {}
@@ -55,7 +57,13 @@ export class ComputerDocker {
   }
   async inspect(resource: HostResource): Promise<InspectedResource> {
     const identity = resource.id ?? resourceName(this.config, resource);
-    const reply = await this.#call("GET", `/containers/${identity}/json`);
+    const reply = await this.#call("GET", `/containers/${identity}/json`).catch(
+      (error: unknown) => {
+        if (resource.id !== null && error instanceof HostHttpError && error.status === 404)
+          throw new KnownContainerAbsent("Recorded immutable Computer container is absent");
+        throw error;
+      }
+    );
     const expected = resourceSpec(this.config, resource);
     if (
       !isRecord(reply) ||
@@ -123,7 +131,13 @@ export class ComputerDocker {
     for (const resource of resources) {
       // A pending intent with no observed container is deliberately unresolved: a cancelled create
       // can still complete in Docker. Never clear it or claim closure from a single 404/list miss.
-      inspected.push(await this.inspect(resource));
+      try {
+        inspected.push(await this.inspect(resource));
+      } catch (error) {
+        // Only the exact known-ID container inspect404 proves absence. Image/spec failures and
+        // pending-name404 remain unavailable; they cannot erase durable cleanup identities.
+        if (!(error instanceof KnownContainerAbsent)) throw error;
+      }
     }
     const ids = new Set(inspected.map((entry) => entry.resource.id));
     if (ids.size !== reply.length || reply.some((row) => !ids.has(row.Id)))

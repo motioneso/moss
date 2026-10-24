@@ -82,7 +82,11 @@ resource generation: a failed/no-op operation must leave the existing pair reach
 On daemon restart, reconcile only recorded IDs/intents. A timed-out create is not retried; inspect
 the intent's exact deterministic name once and validate all identity/spec fields before recording
 its full ID. If Docker remains unreachable, retain unavailable pending state for explicit recovery.
-Never conclude an unknown Docker result means no container exists. Generation increments
+Never conclude an unknown Docker result means no container exists. Only an exact immutable-ID
+container inspect404 can drop a previously captured resource from a fully matched inventory.
+Image/spec404 and pending
+create-name404 never prove absence. This permits restart+disable after a lost successful removal
+reply or independent watchdog cleanup without stranding the surviving member. Generation increments
 and is durable **before** every mutation, including failed operations. Serialize operations;
 reject busy work instead of keeping an unbounded queue. Every mutating request carries the
 expected generation, and stale requests perform no Docker mutation. Daemon restart never
