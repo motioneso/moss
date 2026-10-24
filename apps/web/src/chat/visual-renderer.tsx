@@ -1,4 +1,5 @@
-import { createContext, useContext, useState } from "react";
+import { MODULE_VISUAL_RENDERERS } from "virtual:moss-module-web";
+import { createContext, useContext, useState, lazy } from "react";
 import { createLibrary, defineComponent, Renderer, useRenderNode } from "@openuidev/react-lang";
 import { z } from "zod/v4";
 import { Note, SectionHead } from "@moss/ui";
@@ -53,7 +54,7 @@ const Reply = defineComponent({
 });
 const library = createLibrary({ components: [Reply, Section, Fact], root: "Reply" });
 
-export default function VisualRenderer({ reply }: { reply: VisualReplyV1 }) {
+function UserDataRenderer({ reply }: { reply: VisualReplyV1 }) {
   const [failed, setFailed] = useState(false);
   const checked = validateVisualCatalogReply(reply);
   if (failed || !checked.ok) return <VisualFallback text={reply.fallbackText} />;
@@ -70,5 +71,29 @@ export default function VisualRenderer({ reply }: { reply: VisualReplyV1 }) {
         }}
       />
     </Snapshots.Provider>
+  );
+}
+
+// Keep the lazy identity outside the suspending tree: initial suspension discards hooks.
+const DomainRenderer = lazy(async () => {
+  const contributions = await Promise.all(MODULE_VISUAL_RENDERERS.map((load) => load()));
+  return {
+    default: function LoadedDomainRenderer({ reply }: { reply: VisualReplyV1 }) {
+      const kind = reply.blocks[0]!.kind;
+      const component = contributions.map((entry) => entry.default[kind]).find(Boolean);
+      if (!component) throw new Error("Visual template unavailable");
+      const Component = component;
+      return <Component snapshot={reply.snapshots[0]!} />;
+    }
+  };
+});
+
+export default function VisualRenderer({ reply }: { reply: VisualReplyV1 }) {
+  const checked = validateVisualCatalogReply(reply);
+  if (!checked.ok) return <VisualFallback text={reply.fallbackText} />;
+  return reply.blocks[0]!.kind === "composition" ? (
+    <UserDataRenderer reply={reply} />
+  ) : (
+    <DomainRenderer reply={reply} />
   );
 }

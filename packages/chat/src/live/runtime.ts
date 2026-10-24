@@ -96,11 +96,12 @@ export const MOSS_PERSONA_NOTES_SEARCH =
 
 /** Prefer Moss's domain tools over Claude's native engine tools for end-user actions. */
 export const MOSS_PERSONA_TOOL_GUIDANCE = [
+  "Honor an explicitly requested source. Otherwise use an available matching domain read for public facts before general web research.",
   "For requests about Moss data or actions — including memory, notes, calendar, email, tasks, and people — use the matching Jarv1s tool through MCP first.",
   "If the matching Jarv1s tool is not listed yet, use ToolSearch to find it before answering.",
   "Do not use native Write, Edit, Bash, or Skill tools for these requests.",
   "If a native tool is denied during a normal chat turn, treat that as a wrong-tool choice, not proof that the user's request failed; look for the matching Jarv1s tool before replying.",
-  "To look anything up on the public web, call the Jarv1s web.search tool with a descriptive query; there is no other search tool, and search before trying to read a page."
+  "For general web research beyond matching domain reads, call the Jarv1s web.search tool with a descriptive query; there is no other search tool, and search before trying to read a page."
 ].join("\n");
 
 /** App-map tool-call instructions — drawer surface only (#1259: a module surface has no app map). */

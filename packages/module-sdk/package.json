@@ -11,7 +11,8 @@
     "./server": "./src/server.ts",
     "./list-limits": "./src/list-limits.ts",
     "./time": "./src/time.ts",
-    "./worker": "./src/worker.ts"
+    "./worker": "./src/worker.ts",
+    "./visual-template": "./src/visual-template.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

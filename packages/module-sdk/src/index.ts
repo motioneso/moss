@@ -163,6 +163,19 @@ export interface ToolResult {
  */
 export type ToolServices = Readonly<Record<string, unknown>>;
 
+export type { ModuleVisualTemplate } from "./visual-template.js";
+import type { ModuleVisualTemplate } from "./visual-template.js";
+
+/** Injected only into authorized reads. Identity comes from the authenticated call context. */
+export interface VisualSnapshotRegistrationService {
+  registerSnapshot(
+    ctx: ToolContext,
+    snapshot: unknown
+  ):
+    | { ok: true; ref: string; templateKind: string; catalogVersion: string }
+    | { ok: false; code: string };
+}
+
 /**
  * Execution handler for an assistant tool. `scopedDb` is a DataContextDb supplied
  * by the gateway under withDataContext; it is typed as `unknown` here to avoid a
@@ -737,6 +750,9 @@ export interface ModuleAssistantToolManifest {
 }
 
 export interface MossModuleManifest {
+  /** Built-ins only. External packages cannot install executable presentation contracts. */
+  readonly visualTemplates?: readonly ModuleVisualTemplate[];
+
   readonly id: string;
   readonly name: string;
   readonly version: string;

@@ -68,10 +68,11 @@ describe("sports manifest", () => {
   });
 
   it("exposes follows plus bounded actor-scoped source tools", () => {
-    expect(sportsModuleManifest.assistantTools).toHaveLength(12);
+    expect(sportsModuleManifest.assistantTools).toHaveLength(13);
     const byName = Object.fromEntries(
       sportsModuleManifest.assistantTools.map((tool) => [tool.name, tool])
     );
+    expect(byName["sports.latestResult"]?.risk).toBe("read");
     expect(byName["sports.followedFactsToday"]?.risk).toBe("read");
     for (const name of ["sports.followTeam", "sports.unfollowTeam"]) {
       expect(byName[name]?.risk).toBe("write");
@@ -202,7 +203,7 @@ describe("sports manifest", () => {
     // articleBody (#857) MUST be listed — the service requests it, and an undeclared dataset makes
     // the real DatasetClient throw before its fallback path, 500ing the overview on every load.
     expect(espn?.datasets.map((d) => d.key).sort()).toEqual(
-      ["articleBody", "headlines", "schedule", "scoreboard", "standings", "teams"].sort()
+      ["articleBody", "headlines", "results", "schedule", "scoreboard", "standings", "teams"].sort()
     );
     expect(espn?.datasets.every((d) => d.staleness === "degrade-empty")).toBe(true);
   });

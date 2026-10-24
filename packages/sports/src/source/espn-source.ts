@@ -25,12 +25,9 @@ const CONTENT_BASE = "https://content.core.api.espn.com/v1/sports/news";
 // there rather than a.espncdn.com, so soccer cards and the news band showed blank art while the US
 // leagues looked fine (Ben 2026-08-01 console report). Adding a host changes the manifest hash —
 // the sports module must be redeployed for the new CSP to reach the browser.
-export const ESPN_IMAGE_HOSTS: readonly string[] = [
-  "a.espncdn.com",
-  "s.espncdn.com",
-  "s.secure.espncdn.com",
-  "espnmedia-cdn.akamaized.net"
-];
+export { ESPN_IMAGE_HOSTS } from "./espn-assets.js";
+import { ESPN_IMAGE_HOSTS } from "./espn-assets.js";
+import { fetchCompletedResults, type ResultsWindow } from "../results/espn-results.js";
 
 export const ESPN_FETCH_HOSTS: readonly string[] = [
   "site.api.espn.com",
@@ -799,6 +796,7 @@ async function getArticleBody(
 const ESPN_DATASET_KEYS = [
   "teams",
   "scoreboard",
+  "results",
   "schedule",
   "standings",
   "headlines",
@@ -825,6 +823,12 @@ export function createEspnDatasetAdapter(): ExternalSourceAdapter {
           return listTeams(ctx.fetchFn, params as unknown as EspnTeamsParams);
         case "scoreboard":
           return getScoreboard(ctx.fetchFn, params as unknown as EspnScoreboardParams);
+        case "results":
+          return fetchCompletedResults(
+            ctx.fetchFn,
+            params as unknown as ResultsWindow,
+            ESPN_IMAGE_HOSTS
+          );
         case "schedule":
           return getSchedule(ctx.fetchFn, params as unknown as EspnScheduleParams);
         case "standings":

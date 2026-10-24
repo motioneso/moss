@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./settings": "./src/settings/index.tsx",
-    "./web": "./src/web/index.tsx"
+    "./web": "./src/web/index.tsx",
+    "./visual": "./src/results/contract.ts",
+    "./web/visual": "./src/results/card.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

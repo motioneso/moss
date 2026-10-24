@@ -105,3 +105,5 @@ export * from "./highlight.js";
 
 export { useDialogLifecycle } from "./use-dialog-lifecycle.js";
 export type { DialogLifecycleOptions } from "./use-dialog-lifecycle.js";
+
+export { IdentityMetric } from "./identity-metric.js";

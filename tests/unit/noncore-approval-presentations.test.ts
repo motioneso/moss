@@ -413,6 +413,9 @@ const checkin = {
 const routeInputs: Record<string, RouteFixture> = {
   "GET /api/sports/leagues/:competitionKey/teams": { params: { competitionKey: "nfl" } },
   "GET /api/sports/standings": { query: { competitionKey: "nfl" } },
+  "GET /api/sports/results/latest": {
+    query: { teamName: "Liverpool", competitionKey: "eng.1", sourceTeamId: "364" }
+  },
   "GET /api/sports/sources/:sourceId/icon": { params: { sourceId: id } },
   "DELETE /api/backtrack/segments": {
     body: { from: "2026-10-06T10:00:00Z", to: "2026-10-07T10:00:00Z" }
@@ -519,7 +522,9 @@ describe.each(routes)("$method $path exact route disclosure", (route) => {
     expect(visible(result!)).not.toContain(second);
     const properties = (route.requestSchema as { properties?: object } | undefined)?.properties;
     if (properties)
-      expect(Object.keys(fixture.body ?? {}).sort()).toEqual(Object.keys(properties).sort());
+      expect(
+        Object.keys((route.method === "GET" ? fixture.query : fixture.body) ?? {}).sort()
+      ).toEqual(Object.keys(properties).sort());
   });
   it("rejects every unaccounted body, query and parameter field", async () => {
     const present = route.chat!.presentation!;

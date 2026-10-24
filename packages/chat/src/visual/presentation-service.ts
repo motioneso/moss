@@ -1,5 +1,12 @@
 import type { ToolContext } from "@moss/module-sdk";
-import { validateVisualCatalogReply, VISUAL_LIMITS, type VisualObject } from "@moss/shared";
+import {
+  validateVisualCatalogReply,
+  VISUAL_LIMITS,
+  type VisualObject,
+  tryCopyVisualSnapshot,
+  snapshotVisualTemplate,
+  BUILT_IN_VISUAL_CATALOG_VERSION
+} from "@moss/shared";
 import { presentationContext, promptVisualFields } from "./user-data.js";
 
 import {
@@ -65,12 +72,46 @@ export class VisualPresentationTurn {
     return registered;
   }
 
+  registerSource(
+    snapshot: unknown
+  ):
+    | { ok: true; ref: string; templateKind: string; catalogVersion: string }
+    | { ok: false; code: string } {
+    if (this.attempted) return { ok: false, code: "closed" };
+    const copied = tryCopyVisualSnapshot({ ...(snapshot as object), ref: "pending" });
+    if (!copied.ok) return copied;
+    const template = snapshotVisualTemplate(copied.snapshot);
+    if (!template) return { ok: false, code: "unsupported_snapshot" };
+    const formatted = template.format(copied.snapshot);
+    if (!formatted || formatted.length > VISUAL_LIMITS.fallbackTextLength)
+      return { ok: false, code: "limit_exceeded" };
+    const { ref: _ref, ...input } = copied.snapshot;
+    const registered = this.registry.register(this.identity, input);
+    if (!registered.ok) return registered;
+    this.sourceFallbacks.set(registered.ref, formatted);
+    return {
+      ...registered,
+      templateKind: template.kind,
+      catalogVersion: BUILT_IN_VISUAL_CATALOG_VERSION
+    };
+  }
+
+  private readonly sourceFallbacks = new Map<string, string>();
+
   present(proposal: unknown): PresentationResult {
     if (this.attempted) {
       return { ok: false, code: "already_presented", fallbackText: this.fallbackText };
     }
     this.attempted = true;
-    const result = this.registry.finalize(this.identity, proposal, this.fallbackText);
+    let result = this.registry.finalize(this.identity, proposal, this.fallbackText);
+    if (result.ok && result.reply.catalogVersion === BUILT_IN_VISUAL_CATALOG_VERSION) {
+      const fallback = result.reply.snapshots
+        .map((s) => this.sourceFallbacks.get(s.ref) ?? "")
+        .join("\n");
+      if (!fallback || fallback.length > VISUAL_LIMITS.fallbackTextLength)
+        return { ok: false, code: "invalid_program", fallbackText: this.fallbackText };
+      result = this.registry.finalize(this.identity, proposal, fallback);
+    }
     if (result.ok) {
       const semantic = validateVisualCatalogReply(result.reply);
       if (!semantic.ok) return { ok: false, code: semantic.code, fallbackText: this.fallbackText };
@@ -106,19 +147,28 @@ export class VisualPresentationService {
     return turn;
   }
 
-  present(ctx: ToolContext, proposal: unknown): PresentationResult {
+  private activeTurn(ctx: ToolContext): VisualPresentationTurn | undefined {
     const turn = this.turns.get(ctx.chatSessionId);
-    if (
-      !turn ||
-      !ctx.turnId ||
-      ctx.actorUserId !== turn.identity.actorUserId ||
-      ctx.threadId !== turn.identity.threadId ||
-      ctx.turnId !== turn.identity.turnId ||
-      turn.registry.state !== "open"
-    ) {
-      return { ok: false, code: "unavailable", fallbackText: PRESENTATION_UNAVAILABLE };
-    }
-    return turn.present(proposal);
+    return turn &&
+      ctx.turnId &&
+      ctx.actorUserId === turn.identity.actorUserId &&
+      ctx.threadId === turn.identity.threadId &&
+      ctx.turnId === turn.identity.turnId &&
+      turn.registry.state === "open"
+      ? turn
+      : undefined;
+  }
+
+  registerSnapshot(ctx: ToolContext, snapshot: unknown) {
+    const turn = this.activeTurn(ctx);
+    return turn ? turn.registerSource(snapshot) : { ok: false as const, code: "unavailable" };
+  }
+
+  present(ctx: ToolContext, proposal: unknown): PresentationResult {
+    const turn = this.activeTurn(ctx);
+    return turn
+      ? turn.present(proposal)
+      : { ok: false, code: "unavailable", fallbackText: PRESENTATION_UNAVAILABLE };
   }
 
   release(sessionId: string, turn: VisualPresentationTurn): void {

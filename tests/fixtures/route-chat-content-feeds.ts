@@ -27,6 +27,7 @@ export const FEEDS_EXPECTED_ROWS: readonly string[] = [
   "sports GET /api/sports/catalog read",
   "sports GET /api/sports/leagues/:competitionKey/teams read outbound",
   "sports GET /api/sports/teams/search read",
+  "sports GET /api/sports/results/latest read outbound",
   "sports GET /api/sports/overview blocked external_effect",
   "sports GET /api/sports/standings read outbound",
   "sports GET /api/sports/standings-preferences read",
