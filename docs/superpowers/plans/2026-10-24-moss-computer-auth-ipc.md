@@ -24,16 +24,16 @@ Verified against current source:
 - `packages/auth/src/index.ts:244-247,254-265,275,447-455`: runtime composes Better Auth,
   explicit administrative revocation and session bindings, but no active notification source.
   Better Auth options have user-create hooks only. Add a focused auth-owned source and session
-  delete-before hook; do not grow this already large file into a transport module.
+  delete-before/delete-after hooks; do not grow this already large file into a transport module.
 - `packages/auth/src/session-service.ts:123-192`: explicit current-user revocation uses raw SQL
-  rather than Better Auth hooks. Notify before each cookie deletion attempt, after current-session
+  rather than Better Auth hooks. Notify before and in finally after each cookie deletion attempt, after current-session
   refusal; target owner+session for revokeOne, owner except current session for revokeOthers.
-  Admin revokeUserSessions notifies the whole user before deletion. Conservative invalidation on
+  Admin revokeUserSessions notifies the whole user before and in finally after deletion. Conservative invalidation on
   a failed delete is allowed; a failed auth mutation must not preserve a claimed active capability.
 - Inspected installed pinned Better Auth `dist/api/routes/sign-out.mjs`: ordinary sign-out calls
   internalAdapter.deleteSession. `dist/db/internal-adapter.mjs:351-378,391-414` routes session
   deletion through deleteWithHooks/deleteManyWithHooks. `dist/db/with-hooks.mjs:116-180` calls
-  session.delete.before with the actual row before deleting. Install no secondaryStorage mode.
+  session.delete.before with the actual row before deleting, and delete.after on completion. Install no secondaryStorage mode.
   Hook notifications project only userId/id; never forward the vendor row/token. Failed vendor
   lookup can skip hooks, so independent polling/deadlines remain mandatory. These vendor facts
   require executable regressions through real Better Auth with an in-memory adapter, not just
@@ -58,7 +58,10 @@ not a replacement remote-desktop protocol. No dependency/manifest/lockfile chang
 subscriptions, unsubscribe and close. Runtime exposes one instance; close invalidates subscribers
 before auth pools close. Hook and explicit SQL paths share that instance. A subscriber failure
 must not skip other subscribers or prevent logout. Callbacks are local trusted code; the transport
-subscriber must fail closed and never throw. Events carry no token/cookie/headers/content.
+subscriber must fail closed and never throw. Events carry no token/cookie/headers/content. Notify both before and after successful vendor
+deletions, and before/finally after raw SQL revocations, so a registration racing an in-progress
+delete is retired before completed revocation returns. Vendor lookup failures can skip hooks;
+polling remains mandatory and no database-failure logout durability claim is made.
 
 `apps/api/src/computer/auth-channel.ts` owns bounded JSON-line framing, validation and constants;
 `auth-server.ts` owns the API-side issued-binding registry/listener;
@@ -89,7 +92,13 @@ Expiry is an integer epoch-millisecond upper bound fixed at issue, never extende
 Then `{type:"check", requestId}` gets a fresh check/reply on that connection and same binding.
 Request IDs are UUIDs; server enforces strictly unique IDs per connection using a bounded lifetime
 budget (at most 8192 requests, then retire; new API-issued binding required). No duplicate, unsolicited,
-unknown-field, foreign or malformed frames. At most32 outstanding checks, at most4096 bytes per
+unknown-field, foreign or malformed frames. At most four accepted sockets total, including unbound sockets; reject excess before installing
+handlers. Server enforces an absolute2s bind deadline, not just a client timer. At most32 actual
+outstanding auth promises globally across all sockets/issued lifetimes; release that accounting
+only when the underlying promise settles, never merely on timeout/entry retirement. Hung auth
+work therefore exhausts a bounded budget and blocks new checks rather than accumulating across
+reconnections. Each server check also retires its entry after2s. At most32 pending checks per
+client, at most4096 bytes per
 frame, at most32 frames per received chunk; bound actual writable backlog to64KiB. Reject/retire
 on protocol, overflow, denial, write failure, expiry or transport loss. No automatic retry.
 
@@ -150,7 +159,7 @@ existing computer receiver/host suites; `pnpm exec tsc --noEmit`;
 
 Tests assert actual serialized Unix traffic, initial/per-event fresh checks, no owner/session
 substitution, ordinary real-vendor signOut and raw-SQL revoke paths notifying the same source,
-unrelated-session preservation, active idle polling, absolute expiry, denial/timeout/disconnect,
+registration racing a held DELETE retired at completion, unrelated-session preservation, active idle polling, absolute expiry, denial/timeout/disconnect,
 delayed auth/reply resurrection, correlation, frame/connection/pending/backlog limits and closure.
 Observe removed identity, epoch, expiry, correlation, push and liveness protections fail at their
 intended assertions, restore source, run full scoped green and preserve exact hashes/receipts.
@@ -162,3 +171,13 @@ evidence review, required green CI and merge this internal prerequisite only. Ki
 `computer-gateway-integration`; stop/split if hooks cannot be observed through vendor logout or
 bounded IPC cannot exclude late resurrection. Evaluate phase1 before further detailed gateway work.
 Launch/verify a fresh isolated successor carrying the same chain and all remaining gates.
+
+## Plan review ledger
+
+Independent read-only reviewer `/root/auth_security_review` at `4e3579e91` returned BLOCKED.
+R1 receipt SHA-256 `1a884ae9075b0fc4e2f83e91bb797afb0dc769e54fcdd5f5625d1cca51ff7788`.
+Accepted B1: before-only notifications miss registrations during DELETE; add completion hooks
+and SQL finally notifications with a held-deletion race test. Accepted B2: issued-binding bounds
+do not cap unbound sockets or abandoned auth promises; add global accepted socket bound, server
+bind/check deadlines and actual global auth-work accounting until underlying settlement.
+No disputed findings. Amend/review exact plan before implementation.
