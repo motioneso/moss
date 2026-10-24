@@ -217,3 +217,16 @@ shrinking scope. Clean owned resources and keep durable routing/session identity
   command (143), and its installed build was stopped before prompt evaluation
   so both can restart on the final ruling commit. These are superseded runs,
   not passing acceptance evidence or hidden model retries.
+- 2026-10-24: installed run 9 on `dcd5935` produced 20/20 exact-source Weather
+  cards and passed Sports preservation, four prose controls, novel composition,
+  unchanged saved preferences and reload/drawer/390px/themes. It still failed:
+  one answer used Celsius despite the saved Fahrenheit preference, an actual
+  unit-preference failure confirmed by the independent Spec reviewer. Keep the
+  saved-unit check. The separate correct rounded 5°F difference failed because
+  floating-point distance was `0.6000000000000085` at an inclusive `0.6` bound.
+  Its exact observed-red regression permits only `1e-9` machine-noise slack;
+  an unsupported 5.01°F difference remains rejected. Generic trusted guidance
+  now preserves source units unless the user explicitly asks otherwise; the
+  app map reflects it. Retain run 9 as failed and obtain the required actual
+  decision on this new unit failure before dependent rollout. The obsolete
+  `dcd5935` gate was stopped with the official stop command (143).

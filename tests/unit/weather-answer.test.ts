@@ -70,12 +70,38 @@ describe("installed Weather prose assessment", () => {
       )
     ).toBe(true);
   });
+  it("keeps the inclusive rounding bound despite endpoint floating-point noise", () => {
+    const decimal = {
+      ...forecast,
+      intervals: forecast.intervals.map((item, index) => ({
+        ...item,
+        temperature: [70.6, 68.5, 67.3, 66.2][index]!
+      }))
+    };
+    expect(
+      hasUsefulWeatherAnswer(
+        "It will cool from about 71°F to 66°F—a drop of roughly 5°F. Bring a light layer.",
+        decimal
+      )
+    ).toBe(true);
+    expect(
+      hasUsefulWeatherAnswer(
+        "It will cool from about 71°F to 66°F—a drop of roughly 5.01°F. Bring a light layer.",
+        decimal
+      )
+    ).toBe(false);
+  });
   it.each([
     "It will cool from 60°F to 57°F—a drop of roughly 30°F. Bring a light layer.",
     "It will cool from 60°F to 57°F—a drop of roughly 3°C. Bring a light layer.",
     "Bring a light layer: it will be 3°F this evening."
   ])("rejects an unsupported difference or absolute temperature: %s", (reply) => {
     expect(hasUsefulWeatherAnswer(reply, forecast)).toBe(false);
+  });
+  it("requires the saved units even when other-unit values are accurately converted", () => {
+    expect(
+      hasUsefulWeatherAnswer("Bring a light layer: it will be around 14–16°C tonight.", forecast)
+    ).toBe(false);
   });
   it.each([
     "I don't know whether you need a jacket; perhaps check another forecast.",

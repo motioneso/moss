@@ -54,7 +54,7 @@ export function hasUsefulWeatherAnswer(reply: unknown, forecast: WeatherWindowDt
             change === null
               ? Number(value) >= Math.min(...temperatures) - 0.6 &&
                 Number(value) <= Math.max(...temperatures) + 0.6
-              : change >= 0 && Math.abs(Number(value) - change) <= 0.6
+              : change >= 0 && Math.abs(Number(value) - change) <= 0.6 + 1e-9
           )
       );
     })

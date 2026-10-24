@@ -190,7 +190,7 @@ export const chatModuleManifest = {
     {
       id: "chat.domain_read_resolution",
       description:
-        "Moss tries authorized module reads before clarifying names that saved preferences may resolve. Explicit sources are honored. Ambiguous results still need clarification; unavailable reads keep truthful text.",
+        "Moss tries authorized reads before clarifying names saved preferences may resolve. Replies keep source units unless asked otherwise. Explicit sources are honored; ambiguous results need clarification. Unavailable reads keep truthful text.",
       featureFlagId: "chat.module"
     },
     {
