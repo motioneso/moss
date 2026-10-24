@@ -42,7 +42,7 @@ export function computerMonotonicMs(): number {
   return safeMeasurement(process.hrtime.bigint() / 1_000_000n);
 }
 
-function snapshotProcess(value: WatchdogProcessIdentity): WatchdogProcessIdentity {
+export function snapshotProcess(value: WatchdogProcessIdentity): WatchdogProcessIdentity {
   const { pid, startTicks, processGroupId } = value;
   if (
     ![pid, processGroupId].every((n) => Number.isSafeInteger(n) && n > 0) ||
