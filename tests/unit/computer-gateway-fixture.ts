@@ -19,6 +19,7 @@ export async function gatewayFixture(options: { partialFirstFrame?: boolean } = 
   const [transport, guestStream] = duplexPair();
   const events: unknown[][] = [];
   let reply = true;
+  let frameRequests = 0;
   let holdFence = false;
   let heldFenceStart = 0;
   let stalledOutput = false;
@@ -67,6 +68,7 @@ export async function gatewayFixture(options: { partialFirstFrame?: boolean } = 
     ]);
   };
   guest.on("updateRequest", () => {
+    frameRequests++;
     if (reply) sendFrame();
   });
   const gateway = await connectComputerReceivingGateway({
@@ -84,6 +86,9 @@ export async function gatewayFixture(options: { partialFirstFrame?: boolean } = 
     upstream,
     events,
     fences,
+    get frameRequests() {
+      return frameRequests;
+    },
     sendFrame,
     noFrames() {
       reply = false;

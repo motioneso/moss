@@ -274,7 +274,9 @@ describe("Computer terminating receiving core", () => {
   it("bounds automatic vendor Fence replies before the raw write callback completes", async () => {
     const f = (fixture = await gatewayFixture());
     await vi.waitFor(() => expect(f.gateway.snapshot().frameReady).toBe(true));
+    const requests = f.frameRequests;
     f.noFrames();
+    await vi.waitFor(() => expect(f.frameRequests).toBeGreaterThan(requests));
     f.stallUpstreamOutput();
     const request = fencePacket(0x80000000, Buffer.alloc(64));
     f.guest.write(Buffer.concat(Array.from({ length: 1200 }, () => request)));
