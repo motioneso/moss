@@ -13,6 +13,15 @@ obtain independent Standards and Spec review, fix findings, verify, gated squash
 then launch and verify its fresh successor. Routine implementation decisions need no
 new approval. Genuine acceptance failures retain the decision gate below.
 
+Later authority clarification from Ben (2026-10-24): “can we not fix them?” and
+“yea no such thing as blockers if they can be fixed.” Fixable acceptance failures
+are work to diagnose, repair, independently review and verify autonomously under
+the existing gated merge/next authorization. Do not require another approval for
+each repair. Retain failed attempts and require every unchanged gate before rollout.
+This supersedes repeated decision holds for fixable failures in the original gate
+below; it does not waive any acceptance requirement.
+[Recorded decision](https://github.com/motioneso/moss/issues/3583#issuecomment-6388175847).
+
 Deliver a read-only Tasks summary answering ordinary questions such as “What needs
 doing today?” from actor-authorized data. Show stable task identity, title, actual
 due/overdue and completion state, optional supported priority, actor time zone,

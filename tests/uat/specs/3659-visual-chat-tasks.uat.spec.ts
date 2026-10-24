@@ -341,14 +341,17 @@ test("real Tasks questions keep source identity, due state and immutable read-on
       page,
       'Arrange these pottery workshop facts into two useful titled visual sections, keeping a short answer too.\n```json\n{"material":"Clay","hours":6,"ready":true}\n```'
     );
+    console.log(`[tasks-preservation-composition] ${JSON.stringify(composed.saved)}`);
     expect(composed.saved.visualReply?.blocks[0]?.kind).toBe("composition");
     const sportsFollow = await page.request.post("/api/sports/follows", {
       data: { competitionKey: "eng.1", teamKey: "liv" }
     });
     expect(sportsFollow.ok()).toBe(true);
     const sports = await turn(page, "How did Liverpool do in their last match?");
-    expect(sports.saved.visualReply?.blocks[0]?.kind).toBe("sports.result");
+    console.log(`[tasks-preservation-sports] ${JSON.stringify(sports.saved)}`);
+    expect.soft(sports.saved.visualReply?.blocks[0]?.kind).toBe("sports.result");
     const weather = await turn(page, "Will I need a jacket tonight?");
+    console.log(`[tasks-preservation-weather] ${JSON.stringify(weather.saved)}`);
     expect(weather.saved.visualReply?.blocks[0]?.kind).toBe("weather.forecast");
     console.log(
       `[tasks-preservation] ${JSON.stringify({ composed: composed.saved, sports: sports.saved, weather: weather.saved })}`
