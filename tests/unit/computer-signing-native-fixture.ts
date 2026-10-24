@@ -47,7 +47,7 @@ export async function prepareSigningNative(
           timerStartedAtNs,
           heldAtNs: process.hrtime.bigint().toString()
         });
-        return new Promise(() => {});
+        return new Promise<void>(() => {});
       };
       if (kind.endsWith("-close")) {
         const close = file.close.bind(file);
