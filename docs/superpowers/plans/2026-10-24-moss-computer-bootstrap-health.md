@@ -111,8 +111,11 @@ with a healthy object. Record native timer creation, actual guarded acknowledgeS
 journal first sample and completion streams/exit/timing. Positive health is bounded fixture proof,
 not installed delivery. Update prior capture continuation fixtures to reflect the stronger
 acknowledgement; preserve their capture persistence/equality coverage. Held first sample file and
-directory persistence and held collection must silently exit2 near the original5s despite repeated
-signals; positive acknowledgement must follow actual durable sample, never final cleanup. Native
+directory persistence must silently exit2 near the original5s despite repeated signals. Held
+collection without signals must hit that original bound; separately, repeated signals must yield
+no acknowledgement, retained failure evidence/lock and a bounded nonzero exit no later than the
+original bound. Successful collector termination and cleanup may finish promptly. Positive
+acknowledgement must follow actual durable sample, never final cleanup. Native
 nonroot CJS refusal stays silent exit2. Disclose Node22 versus Node24-target metadata.
 
 Observe intended assertion failures when each newly claimed protection is removed; retain patches,
@@ -130,3 +133,12 @@ Verify actual parents/tree/all PR and concurrent-main paths, then a fresh isolat
 actual native UUID, durable routing and preserved execution acknowledgement. Clean pushed tree;
 stop owned resources. All runtime/installed-provenance/Node24/128MiB/TigerVNC/fixed lifecycle/
 owner HTTPS/WSS/chat/API-leases/Fence/independent-live gates remain in the inherited dispatch.
+
+## Plan review ledger
+
+R1 at b8e440789: both reviewers found that held collection can terminate promptly after signals
+kill its child and stop persistence settles (`supervisor.ts:227–266`). Requiring a five-second
+minimum would reject correct terminal cleanup. Separate unsignalled collection deadline coverage
+from bounded signal failure; retain near-five-second timing for held sample persistence, whose
+ordered stop append waits behind that write. Failed reports remain private. Exact amended-plan
+acceptance is required before implementation.
