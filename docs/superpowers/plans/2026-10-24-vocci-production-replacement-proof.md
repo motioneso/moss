@@ -44,6 +44,38 @@ recording evidence remains outside git under `~/.local/state/moss/vocci-recovery
 
 ## Phase 1 — preflight, release and one replacement
 
+### Observer correction discovered during preflight
+
+The retained #3625 dumps show the exact target record as PENDING (enabled and
+permission cases) or SKIPPED (disabled), while unrelated records contain DELIVERED.
+`recovery.py:85` includes records whose trailing historical summary merely mentions
+the target; line 126 then matches receiver and delivery words across joined records.
+The previous dispatch acceptance is therefore withdrawn pending exact parsing.
+Retain the historical receipts unchanged and correct their public interpretation.
+
+Before the production replacement, extract the dump parser into
+`apps/vocci-delivery/upgrade-proof/replacement_broadcasts.py` and add a focused
+standard-library regression in `test_replacement_broadcasts.py`. First run the
+old logic against minimized target-PENDING/SKIPPED plus unrelated-DELIVERED and
+summary-contamination fixtures and observe failures. Then restrict record selection
+to the actual header/Intent package and delivery to the named receiver's own state.
+Verify actual retained receipts privately with that parser. This is diagnostic
+tooling only; no product recovery Java, manifest or app-map behavior changes.
+
+Ranked falsifiable hypotheses for the observer error:
+
+1. Historical-summary contamination selects unrelated records: removing summaries
+   and matching the record's own Intent will remove those false matches.
+2. Joining records mixes receiver and status evidence: matching the named receiver's
+   own state will reject PENDING/SKIPPED even beside another DELIVERED receiver.
+3. The platform's dump can lag actual execution: if service evidence exists while
+   the exact receiver remains PENDING, report that discrepancy without promoting it
+   to observed DELIVERED or assuming a product root cause.
+
+Expected regression command: `python3 -m unittest discover -s
+apps/vocci-delivery/upgrade-proof -p 'test_replacement_broadcasts.py'` (unbroken
+parser exit 0; original false-positive logic exit 1). Keep the negative receipt.
+
 1. Verify live PR merge/CI, fetch and merge current main while clean, and commit
    this plan before proof changes. Recheck private ownership transfer and phone
    physical identity. Capture actual API/version/UID, package/service state,
