@@ -39,15 +39,29 @@ export class ProvisionPublication {
   }
   static async create(
     root: RootIdentity,
-    name: "supervisor.json" | "gateway.json" | "prepared.json" | "capture.json",
+    name:
+      | "supervisor.json"
+      | "gateway.json"
+      | "prepared.json"
+      | "capture.json"
+      | "closure-key.pem"
+      | "installation.json",
     value: unknown,
     mode: number,
     gid: number,
     check: () => Promise<void>,
     current: () => void
   ): Promise<ProvisionPublication> {
-    const bytes = Buffer.from(JSON.stringify(value));
-    if (bytes.length > (name === "capture.json" ? 65536 : name === "gateway.json" ? 4096 : 16384))
+    if ((name === "closure-key.pem") !== Buffer.isBuffer(value)) throw supervisorError();
+    const bytes = Buffer.isBuffer(value) ? value : Buffer.from(JSON.stringify(value));
+    if (
+      bytes.length >
+      (name === "capture.json"
+        ? 65536
+        : name === "gateway.json" || name === "closure-key.pem"
+          ? 4096
+          : 16384)
+    )
       throw supervisorError();
     const directory = await openRoot(root);
     try {
