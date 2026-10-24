@@ -288,5 +288,43 @@
   "no_db_docker_guest_browser_image_production_mutation": true,
   "resources": "only transient in-memory streams and temporary auth Unix sockets; fixtures closed; no TCP listener/devport",
   "remaining_issues": [3618, 3619, 3616, 3577],
-  "handoff": "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-process.md"
+  "handoff": "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-process.md",
+  "final_reviews": [
+    {
+      "axis": "standards",
+      "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+      "verdict": "PASS",
+      "receipt": "review-standards-final-r1.md",
+      "sha256": "d2126fd8f5b97dd2f75a80ee41d1dc3e67385fda45de3c83c434117907ed37a2"
+    },
+    {
+      "axis": "spec",
+      "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+      "verdict": "PASS",
+      "receipt": "review-spec-final-r1.md",
+      "sha256": "e3fb49639d76ef62933a2f42178879be69cc060c7d63f71b482474e5f68e68d8"
+    },
+    {
+      "axis": "security_evidence",
+      "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+      "verdict": "PASS",
+      "receipt": "review-security-evidence-r1.md",
+      "sha256": "3f2f8bdaef4229032142140f78598f43c847f69c0bbaf5cb309a00f7cead3bc4"
+    }
+  ],
+  "independent_focused_run": {
+    "candidate": "517d27d125ccc021484e80b2e1b0126fc8128249",
+    "command": [
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "tests/unit/computer-guest-envelope.test.ts",
+      "tests/unit/computer-receiving-gateway.test.ts"
+    ],
+    "exit": 0,
+    "passed": 32,
+    "files": 2,
+    "log_sha256": "b232706e74be7ad1751b2e8ed88c1943d870af7401fb6031b946b39337887076"
+  }
 }

@@ -106,7 +106,11 @@ limit. Both actual vendor and direct raw+adapter queue assertions support this b
 
 ## Remaining acceptance and resources
 
-Independent exact evidence acceptance and required green CI precede merge. Keep #3618/#3619/#3616/
+Final Standards, Spec and independent security evidence review passed exact candidate
+517d27d125ccc021484e80b2e1b0126fc8128249 with zero findings. The security reviewer independently
+reran the two focused suites: 32/32 passed, exit 0. JSON records final receipt and fresh-run hashes.
+This subsequent ledger-only amendment changes no source, tests, evidence facts or gate semantics.
+Required green CI on the final PR head still precedes merge. Keep #3618/#3619/#3616/
 #3577 open. Next implement separately supervised process/private API transport, predecoder WebSocket
 bounds and exact gateway image qualification, then independent fresh admission/watchdog and actual
 fixed lifecycle operations/closure. Real TigerVNC Fence compatibility and ordering remain a gate.
