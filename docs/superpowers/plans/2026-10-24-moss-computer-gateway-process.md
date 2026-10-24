@@ -109,22 +109,27 @@ API client `connectComputerGatewayViewer({socketPath,viewerId})` returns a local
 watch/controller stream open, takeOver, returnToMoss, closeViewer, disconnect and snapshot.
 It serializes only the fixed vocabulary over trusted IPC, no cookies or core capability values.
 Own socket/operation deadlines, strict response correlation/shape/byte limits and no reconnect;
-any protocol/transport failure destroys the control and all its streams. A failed return stays
+a control-channel/protocol failure destroys the control and all its streams. Raw RFB stream close
+retires only that local stream; accepted core decides expected versus unexpected visual loss.
+Never cascade raw-stream close into control.disconnect during return/replacement, and never infer
+return or automatically reconnect. A failed return stays
 fail-closed. Deliberate controlling close uses the existing barrier/auth operation before loss.
 Later API must validate real cookie/exact trusted Origin before issuing the auth viewer binding.
 
 ## Guest WebSocket transport contract
 
 `connectComputerGuestWebSocket(socketPath): Promise<Duplex>` uses one ws client with fixed
-`ws+unix` target, binary subprotocol only, no redirects/compression/automatic pong; handshake2s,
+`ws://localhost/` URL and a public createConnection callback that always opens only the configured
+Unix socket; binary subprotocol only, no redirects/compression/automatic pong; handshake2s,
 maxPayload=1280*800*4+4096, maxFragments=1024, maxBufferedChunks=1024,
 allowSynchronousEvents=false. Validate exact binary protocol/no extensions. Only binary messages
 reach the core envelope. Readable queue plus next payload capped to two max messages; pause WS
-on backpressure, destroy on excess. One incomplete WS message absolute2s deadline must also cover
-trickled/fragmented input before complete message delivery (not merely RFB partial records).
-Use a fixed socket data-progress watchdog or a bounded public WS Receiver wrapper if needed;
-do not claim a message-event timer observes incomplete frames. Kill/split if public APIs cannot
-establish this bound. WS header/frame deadlines are independent of core's2s partial-record bound.
+on backpressure, destroy on excess. An always-armed2s deadline starts at WS open and refreshes only on each complete binary message.
+Raw bytes, fragments, ping and pong never refresh it; empty idle also closes after2s. Thus a
+fragmented/trickled tail cannot survive past2s after its preceding complete message. The core
+already requests updates every200ms with2s response limit; this conservative idle refusal is
+intentional. Test fragmented tail after a complete message, trickling and ping-only idle. This
+predecoder deadline is independent of the core's2s partial-RFB-record bound.
 
 Public Duplex write checks before Node queues: reserve twice all queued adapter bytes plus actual
 ws.bufferedAmount and new frame overhead against64KiB. Guard manual pong similarly (<=125bytes).
@@ -169,3 +174,13 @@ volumes. No always-successful admission/config bypass or production restart/data
 return/intentional-close, hostile/expired/revoked sessions and stale/pressed input remain open.
 Idle sleep/wake, confined Internet egress and release/platform claims remain separately bounded.
 No model calls/UI here; later status derives from records, model only authorized task/next input.
+
+## Plan review ledger
+
+Independent read-only process_plan_security R1 on6725432be: BLOCKED.
+Accepted B1: data-progress watchdog did not specify a reliable public predecoder deadline; replace
+with always-armed2s complete-binary-message deadline, closing idle too. Accepted B2: generic client
+stream-loss cascading could disconnect during expected parser retirement and fence a valid return.
+Only control-channel/protocol failure cascades; raw stream close retires that local stream and core
+owns visual-loss policy. No disputed findings. Use fixed URL with public Unix createConnection to
+avoid ws+unix path encoding ambiguity. Exact amended plan requires acceptance before code.
