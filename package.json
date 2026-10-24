@@ -174,6 +174,7 @@
     "test:recording-uploads": "tsx scripts/test-integration.ts tests/integration/meeting-recording-uploads.test.ts",
     "test:voice-recording-receiver": "tsx scripts/test-integration.ts tests/integration/meeting-voice-recordings.test.ts",
     "test:voice-requests": "tsx scripts/test-integration.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/meeting-voice-recordings.test.ts tests/integration/meeting-recording-imports.test.ts tests/integration/chat-voice-requests.test.ts tests/integration/chat-interrupted-turn.test.ts tests/integration/chat-classifier-gate-origin.test.ts tests/integration/chat-origin-action-history.test.ts tests/integration/meeting-account-export.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/account-self-deletion.test.ts",
+    "test:vocabulary-preferences": "tsx scripts/test-integration.ts tests/integration/meeting-vocabulary-preferences.test.ts",
     "test:vocabulary-live": "pnpm build:web && tsx scripts/verify-recording-import-live.ts",
     "test:recording-live": "pnpm build:web && tsx scripts/verify-recording-import-live.ts",
     "test:integration:3567": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-mirror.test.ts tests/integration/connectors.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/apply-writer-transaction.test.ts tests/integration/calendar-email.test.ts",

@@ -71,7 +71,7 @@ the following evidence rather than treating an old graph as current.
 6. A compatible endpoint may silently ignore prompt. Do not infer support from a
    provider name, URL, model or HTTP 200; do not add a support registry or block
    unknown semantic support. HTTP rejection is different: preserve the existing
-   safe failure classification and **one request only**, without stripping hints,
+   safe failure classification and **one request per configured-port invocation**, without stripping hints,
    switching provider or resending audio. Existing live gap/normal terminal-import
    behavior remains; settings changes affect later requests, not retained text or
    completed/failed imports. Network/rate-limit backoff stays as implemented.
@@ -152,3 +152,8 @@ An unavailable physical device does not block this software slice.
   can validate obsolete combinations under concurrency. Resolved in this revision
   by canonical owner-scoped update locking and single-snapshot key reads; isolated
   concurrent regression required. Original private reports are retained.
+- Amended plan `147592ae2`: Standards 0, Spec 0.
+- Product `b836a2e7d`: Standards P2 found app-map wording overclaimed that audio
+  never resends, although existing retryable service backoff remains. Correct the
+  declaration to exclude hint-stripping fallback and preserve retryable backoff.
+  No retry behavior changes. Full reports stay in private review receipts.

@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { sql } from "kysely";
 import { createDatabase, DataContextRunner } from "@moss/db";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
@@ -11,8 +12,24 @@ const context = new DataContextRunner(app);
 const owner = { actorUserId: ids.userA },
   other = { actorUserId: ids.userB };
 const preferences = new MeetingPreferencesRepository();
-beforeAll(async () => resetFoundationDatabase());
-afterAll(async () => app.destroy());
+beforeAll(async () => {
+  await resetFoundationDatabase();
+  // Isolated gate-only negative controls must make the corresponding regression red.
+  const control = process.env.VOCCI_VOCABULARY_NEGATIVE_CONTROL;
+  if (control === "lock") vi.spyOn(PreferencesRepository.prototype, "lock").mockResolvedValue();
+  if (control === "rls") {
+    const bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });
+    try {
+      await sql`ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY`.execute(bootstrap);
+    } finally {
+      await bootstrap.destroy();
+    }
+  }
+});
+afterAll(async () => {
+  vi.restoreAllMocks();
+  await app.destroy();
+});
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {

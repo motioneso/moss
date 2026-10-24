@@ -105,8 +105,7 @@ export function useMeetingVocabulary(
         draft.update((value) => ({
           ...value,
           requestKey: null,
-          error:
-            "Couldn’t save vocabulary. Your draft is kept here; the saved vocabulary still applies. Try Save vocabulary again."
+          error: `Couldn’t save vocabulary. Your draft is kept here; the saved vocabulary still applies. Try ${clear ? "Clear" : "Save"} vocabulary again.`
         }));
     }
   }

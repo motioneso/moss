@@ -365,7 +365,7 @@ export const meetingsModuleManifest = {
           code: "transcription_failed",
           class: "transient",
           description:
-            "ASR rejected or failed the request. Moss never strips hints, resends audio or switches providers. Live failures remain gaps; normal import failures retain evidence. No accuracy guarantee."
+            "ASR rejected or failed the request. No hint-stripping fallback or provider switch. Existing retryable backoff stays. Live failures remain gaps; failed normal imports retain evidence. No accuracy guarantee."
         }
       ],
       remediations: [
