@@ -157,3 +157,11 @@ An unavailable physical device does not block this software slice.
   never resends, although existing retryable service backoff remains. Correct the
   declaration to exclude hint-stripping fallback and preserve retryable backoff.
   No retry behavior changes. Full reports stay in private review receipts.
+
+- Product `6acf64c37`: Standards 0, Spec 0. Live run 3 passed Settings paths
+  after disclosing a service-worker-disabled browser observer, then its incorrect
+  expected HTTP 200 (actual accepted import 202) triggered early stand-in teardown.
+  The resulting immediate network rejection exposed unobserved request promises
+  during short/window admission commit. Match capture's existing immediate rejection
+  observer while preserving eventual error propagation, backoff and no fallback;
+  add real-DB immediate-rejection regressions. No production action.

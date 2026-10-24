@@ -136,6 +136,20 @@ describe("completed recording imports through real owner DB/vault paths", () => 
       );
     }
   });
+  it("retains a safe terminal failure when the admitted request rejects before commit", async () => {
+    const { service, input } = setup({
+      transcribe: async (_actor, request) =>
+        request.dispatch(async () => {
+          throw new Error("Synthetic immediate transport rejection");
+        })
+    });
+    const accepted = await service.accept(actor, input);
+    await service.process(actor, payload(accepted.id));
+    expect(await service.status(actor, accepted.id)).toMatchObject({
+      state: "failed",
+      code: "transcription_failed"
+    });
+  });
   it("blocks actual dispatch when the accepted recording owner is deactivated", async () => {
     const bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });
     let sent = false;

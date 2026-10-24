@@ -168,6 +168,22 @@ describe("resumable recording transport and checkpointed transcription", () => {
     expect(transcribe).toHaveBeenCalledTimes(2);
     expect(summary).toHaveBeenCalledTimes(1);
   });
+  it("retains a safe failure when a window request rejects during admission commit", async () => {
+    const { service } = setup({
+      describeFailure: () => ({ retryable: false, unavailable: false }),
+      transcribe: async (_actor, request) =>
+        request.dispatch(async () => {
+          throw new Error("Synthetic immediate window transport rejection");
+        })
+    });
+    const normal = await upload(service, recordingUpload(60000));
+    await service.uploads.finalize(actor, normal.id);
+    await service.process(actor, job(normal.id));
+    expect(await service.status(actor, normal.id)).toMatchObject({
+      state: "failed",
+      code: "transcription_failed"
+    });
+  });
   it("applies changed language to subsequent normal windows", async () => {
     const preferences = new MeetingPreferencesRepository();
     try {

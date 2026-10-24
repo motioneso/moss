@@ -90,7 +90,10 @@ export class RecordingWindowService {
               throw new Error("Recording attempt superseded");
             await this.deps.assertAvailable(actor);
             await validate?.(db);
-            return { request: send() };
+            const request = send();
+            // Observe early rejection while admission commits; the caller still receives it below.
+            void request.catch(() => undefined);
+            return { request };
           });
           return dispatch.request;
         }
