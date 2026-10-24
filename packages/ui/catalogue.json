@@ -655,6 +655,15 @@
       "flags": []
     },
     {
+      "name": "textarea",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/textarea.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Textarea"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "today-pill",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/today-pill.tsx", "type": "registry:ui" }],

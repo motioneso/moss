@@ -74,13 +74,13 @@ export class RecordingWindowService {
           throw new Error("Retained recording manifest changed");
         return readRecordingWindow(ctx, row.id, input.manifest, chunks, row.next_window_ms);
       });
-      const language = row.meeting_id
+      const transcriptionOptions = row.meeting_id
         ? await this.deps.dataContext.withDataContext(actor, (db) =>
-            new MeetingPreferencesRepository().getTranscriptLanguage(db)
+            new MeetingPreferencesRepository().getTranscriptionOptions(db)
           )
-        : null;
+        : {};
       const result = await this.deps.transcribe(actor, {
-        ...(language ? { language } : {}),
+        ...transcriptionOptions,
         audio: window.audio,
         signal: AbortSignal.timeout(35_000),
         expectedModelRoute: selected.modelRoute,
@@ -90,7 +90,10 @@ export class RecordingWindowService {
               throw new Error("Recording attempt superseded");
             await this.deps.assertAvailable(actor);
             await validate?.(db);
-            return { request: send() };
+            const request = send();
+            // Observe early rejection while admission commits; the caller still receives it below.
+            void request.catch(() => undefined);
+            return { request };
           });
           return dispatch.request;
         }

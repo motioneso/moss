@@ -3,7 +3,7 @@ import {
   type MeetingHistoryRoutesDependencies
 } from "./history-routes.js";
 import { registerMeetingTranscriptRoutes } from "./transcript-routes.js";
-import type { PreferencesRepository } from "@moss/structured-state";
+import type { MeetingPreferenceStore } from "./preferences.js";
 import { registerMeetingPreferenceRoutes } from "./preferences-routes.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -34,7 +34,7 @@ export interface MeetingRecordRoutesDependencies extends MeetingHistoryRoutesDep
     meetingId: string,
     actor: AccessContext
   ) => Promise<void>;
-  readonly preferences?: Pick<PreferencesRepository, "get" | "upsert">;
+  readonly preferences?: MeetingPreferenceStore;
   readonly repository?: Pick<
     MeetingRecordsRepository,
     "create" | "get" | "list" | "putNotes" | "remove" | "putTitle"

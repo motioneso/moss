@@ -108,7 +108,7 @@ export const meetingsModuleManifest = {
       id: "meetings.module-settings",
       label: "Meetings",
       description:
-        "Choose recording audio, transcript language and automatic summaries; see Mac link status and unlink your Mac.",
+        "Choose recording audio, transcript language, best-effort vocabulary and automatic summaries; see Mac link status and unlink your Mac.",
       path: "/settings?section=modules&module=meetings",
       scope: "user",
       permissionId: "meetings.write",
@@ -351,15 +351,42 @@ export const meetingsModuleManifest = {
   ],
   features: [
     {
+      id: "meetings.transcript_vocabulary",
+      description:
+        "Save/Clear 20 spellings, 200 UTF-8 bytes with separators, in Settings → Meetings. Needs explicit language. Selected ASR may ignore hints. Future live speech, short imports and long windows; existing text, hold and raw voice unchanged.",
+      errors: [
+        {
+          code: "meeting_vocabulary_invalid",
+          class: "validation",
+          description:
+            "Vocabulary exceeds the complete hint bounds, contains invalid characters or lacks an explicit transcript language."
+        },
+        {
+          code: "transcription_failed",
+          class: "transient",
+          description:
+            "ASR rejected or failed the request. No hint-stripping fallback or provider switch. Existing retryable backoff stays. Live failures remain gaps; failed normal imports retain evidence. No accuracy guarantee."
+        }
+      ],
+      remediations: [
+        {
+          id: "meetings.edit_transcript_vocabulary",
+          path: "/settings?section=modules&module=meetings",
+          description:
+            "Choose a language and matching spellings; shorten invalid hints. Clear vocabulary before Automatic detection. Save/Clear confirms returned preferences; errors retain the session draft. Changes affect future requests, not failed imports."
+        }
+      ]
+    },
+    {
       id: "meetings.transcript_language",
       description:
-        "Settings → Meetings has brief preference helpers. Language hints apply to upcoming clips and normal imports; automatic detection omits them. Requires ASR language support. Existing text and hold input stay unchanged.",
+        "Settings → Meetings sets the language for upcoming clips and normal imports. Automatic detection omits language and requires clearing vocabulary. Requires ASR language support. Existing text and hold input stay unchanged.",
       errors: [
         {
           code: "transcription_failed",
           class: "transient",
           description:
-            "The transcription service may reject an unsupported language. Choose a supported language or Automatic detection for subsequent requests. Moss does not retry without the hint or switch providers."
+            "ASR may reject an unsupported language. Choose a supported language or Automatic detection for later requests. Moss does not retry without the hint or switch providers."
         }
       ],
       remediations: [
@@ -367,7 +394,7 @@ export const meetingsModuleManifest = {
           id: "meetings.reset_transcript_language",
           path: "/settings?section=modules&module=meetings",
           description:
-            "Choose a supported language or Automatic detection for subsequent requests. Changing this setting or replaying an upload does not restart failed normal imports. Evidence stays retained; failed live clips remain gaps."
+            "Choose a supported language, or Clear vocabulary then Automatic detection. Later requests use it; changing settings or replaying uploads does not restart failed imports. Evidence remains; live failures remain gaps."
         }
       ]
     },

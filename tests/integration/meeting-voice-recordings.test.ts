@@ -173,15 +173,16 @@ describe("explicit versioned voice recording receiver", () => {
     const transcribe = vi.spyOn(f.deps, "transcribe");
     const preferences = new MeetingPreferencesRepository();
     await context.withDataContext(actor, (db) =>
-      preferences.update(db, { transcriptLanguage: "es" })
+      preferences.update(db, { transcriptLanguage: "es", transcriptVocabulary: ["José"] })
     );
     try {
       await f.process(accepted.id);
       expect(transcribe).toHaveBeenCalledTimes(1);
       expect(transcribe.mock.calls[0]![1]).not.toHaveProperty("language");
+      expect(transcribe.mock.calls[0]![1]).not.toHaveProperty("prompt");
     } finally {
       await context.withDataContext(actor, (db) =>
-        preferences.update(db, { transcriptLanguage: null })
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
       );
     }
     const status = await f.service.voiceStatus(actor, accepted.id);

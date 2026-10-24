@@ -15,6 +15,7 @@ import {
 import { captureKeys } from "./capture-client.js";
 import { useSessionDraft } from "./session-draft.js";
 import { meetingLinkKeys, useMeetingLinkActions } from "./meeting-link-state.js";
+import { useMeetingVocabulary, vocabularyDraftKey } from "./meeting-vocabulary-state.js";
 import { useMeetingConnection } from "./meeting-connection.js";
 
 export const meetingSettingsKeys = {
@@ -67,11 +68,17 @@ export function useMeetingSettings() {
           }
     );
   }, [preferences.data, draft.update]);
+  const vocabulary = useMeetingVocabulary(
+    preferences.data,
+    !!draft.data.requestKey || links.pending || connection.denied,
+    meetingSettingsKeys.draft
+  );
   async function save(changes: UpdateMeetingCapturePreferences) {
     const current = client.getQueryData<SettingsDraft>(meetingSettingsKeys.draft);
     if (
       !current ||
       current.requestKey ||
+      client.getQueryData<{ requestKey: string | null }>(vocabularyDraftKey)?.requestKey ||
       links.pending ||
       !draft.currentSession() ||
       client.getQueryState(meetingKeys.preferences)?.status !== "success" ||
@@ -128,10 +135,11 @@ export function useMeetingSettings() {
   }
   return {
     ...connection,
+    vocabulary,
     preferences,
     links,
     data: draft.data,
-    saving: !!draft.data.requestKey || links.pending,
+    saving: !!draft.data.requestKey || links.pending || vocabulary.pending,
     save: (mode: "computer-audio" | "microphone-only") => save({ defaultCaptureMode: mode }),
     saveSummary: (summarizeOnStop: boolean) => save({ summarizeOnStop }),
     saveLanguage: (transcriptLanguage: string | null) => save({ transcriptLanguage }),

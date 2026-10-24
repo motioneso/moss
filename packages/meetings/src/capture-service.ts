@@ -805,10 +805,10 @@ export class MeetingCaptureService {
       };
       // Silence still crosses the same admission fence and completes its source/epoch receipt.
       // No provider call means no live route check; speech still validates the reserved route.
-      const language = nearSilent
-        ? null
+      const transcriptionOptions = nearSilent
+        ? {}
         : await this.deps.dataContext.withDataContext(proof.actor, (db) =>
-            this.preferences.getTranscriptLanguage(db)
+            this.preferences.getTranscriptionOptions(db)
           );
       const generated = nearSilent
         ? await dispatch(async () => ({ segments: [], modelRoute: reservation.modelRoute! }))
@@ -816,7 +816,7 @@ export class MeetingCaptureService {
             signal,
             this.deps.transcribe(proof.actor, {
               audio: pcmWave(pcm, input.sampleRateHz),
-              ...(language ? { language } : {}),
+              ...transcriptionOptions,
               sampleRateHz: input.sampleRateHz,
               signal,
               expectedModelRoute: reservation.modelRoute!,
