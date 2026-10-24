@@ -17,6 +17,7 @@ import {
   type SupervisorConfiguration
 } from "../computer-watchdog/trust.js";
 import { closureFile, recheckClosureFile, type ClosureFile } from "./files.js";
+import { loadClosureCapture, type ClosureCapture } from "./capture.js";
 import {
   parseSigningInstallation,
   signingTemplateHash,
@@ -34,12 +35,14 @@ export interface ClosureConfiguration {
   readonly publicKeySha256: string;
   readonly installationPath: string;
   readonly installationSha256: string;
+  readonly captureSha256: string;
 }
 export interface ClosureDeployment {
   readonly configuration: ClosureConfiguration;
   readonly config: ClosureFile;
   readonly keyFile: ClosureFile;
   readonly installationFile: ClosureFile;
+  readonly capture: ClosureCapture;
   readonly signingKey: KeyObject;
   readonly artifactPath: string;
   readonly nodePath: string;
@@ -58,7 +61,7 @@ export function parseClosureConfiguration(value: unknown): ClosureConfiguration 
   if (
     !gatewayFields(
       value,
-      "artifactSha256,installationPath,installationSha256,netNamespace,processes,publicKeySha256,receipt,signingKeyPath,supervisor"
+      "artifactSha256,captureSha256,installationPath,installationSha256,netNamespace,processes,publicKeySha256,receipt,signingKeyPath,supervisor"
     ) ||
     !gatewayFields(value.processes, "desktop,gateway,watchdog") ||
     !gatewayFields(value.receipt, "dev,gid,ino,mode,path,uid") ||
@@ -66,6 +69,7 @@ export function parseClosureConfiguration(value: unknown): ClosureConfiguration 
     !signingHash(value.publicKeySha256) ||
     !signingPath(value.installationPath) ||
     !signingHash(value.installationSha256) ||
+    !signingHash(value.captureSha256) ||
     typeof value.netNamespace !== "string" ||
     !/^net:\[[0-9]+\]$/.test(value.netNamespace) ||
     typeof value.signingKeyPath !== "string" ||
@@ -74,7 +78,7 @@ export function parseClosureConfiguration(value: unknown): ClosureConfiguration 
   )
     throw supervisorError();
   const supervisor = parseSupervisorConfiguration(value.supervisor);
-  if (!supervisor.lifetime) throw supervisorError();
+  if (!supervisor.lifetime || !supervisor.capture) throw supervisorError();
   const identity = (item: unknown): WatchdogProcessIdentity => {
     if (!gatewayFields(item, "pid,processGroupId,startTicks")) throw supervisorError();
     return snapshotProcess(item as unknown as WatchdogProcessIdentity);
@@ -100,7 +104,8 @@ export function parseClosureConfiguration(value: unknown): ClosureConfiguration 
     signingKeyPath: value.signingKeyPath,
     publicKeySha256: value.publicKeySha256,
     installationPath: value.installationPath,
-    installationSha256: value.installationSha256
+    installationSha256: value.installationSha256,
+    captureSha256: value.captureSha256
   });
 }
 
@@ -148,7 +153,18 @@ export async function loadClosureDeployment(
     configuration.supervisor.dockerData
   ];
   const privateRoots = [...roots, ...trustedRoots];
-  if ((configuration.supervisor.monitor.mode & 0o7777) !== 0o700) throw supervisorError();
+  const captureRoot = configuration.supervisor.capture!;
+  if (
+    [...all, configuration.receipt].some(
+      (root) => overlaps(root.path, captureRoot.path) || overlaps(captureRoot.path, root.path)
+    )
+  )
+    throw supervisorError();
+  if (
+    (configuration.supervisor.monitor.mode & 0o7777) !== 0o700 ||
+    (configuration.supervisor.capture!.mode & 0o7777) !== 0o700
+  )
+    throw supervisorError();
   for (const ancestor of all)
     for (const child of all) {
       if (ancestor === child || !overlaps(ancestor.path, child.path)) continue;
@@ -226,11 +242,13 @@ export async function loadClosureDeployment(
       configuration.publicKeySha256
   )
     throw supervisorError();
+  const capture = await loadClosureCapture(configuration, roots);
   return Object.freeze({
     configuration,
     config,
     keyFile,
     installationFile,
+    capture,
     signingKey,
     artifactPath,
     nodePath,
@@ -247,6 +265,7 @@ export async function revalidateClosureDeployment(deployment: ClosureDeployment)
   await recheckClosureFile(deployment.config);
   await recheckClosureFile(deployment.keyFile);
   await recheckClosureFile(deployment.installationFile);
+  await recheckClosureFile(deployment.capture.file);
   const current = await loadClosureDeployment(deployment.config.path, deployment.artifactPath);
   if (
     current.config.dev !== deployment.config.dev ||
@@ -256,6 +275,9 @@ export async function revalidateClosureDeployment(deployment: ClosureDeployment)
     current.installationFile.dev !== deployment.installationFile.dev ||
     current.installationFile.ino !== deployment.installationFile.ino ||
     current.installationFile.hash !== deployment.installationFile.hash ||
+    current.capture.file.dev !== deployment.capture.file.dev ||
+    current.capture.file.ino !== deployment.capture.file.ino ||
+    current.capture.file.hash !== deployment.capture.file.hash ||
     current.config.hash !== deployment.config.hash ||
     current.keyFile.hash !== deployment.keyFile.hash ||
     JSON.stringify(current.roots) !== JSON.stringify(deployment.roots) ||

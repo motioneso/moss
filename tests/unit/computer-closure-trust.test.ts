@@ -9,6 +9,8 @@ import {
 import { closureFixture, deadClosureProcess } from "./computer-closure-fixture.js";
 import type { WatchdogProcessIdentity } from "../../scripts/computer-watchdog/policy.js";
 import { signingFixture, projectSigningNode } from "./computer-signing-fixture.js";
+import { inspectRoots } from "../../scripts/computer-host/config.js";
+import { constructedClosureCapture } from "./computer-closure-capture-fixture.js";
 
 vi.mock("node:fs/promises", async (original) => ({ ...(await original<typeof fs>()) }));
 vi.mock("../../scripts/computer-watchdog/trust.js", async (original) => ({
@@ -58,8 +60,8 @@ async function trustedFixture() {
   });
   const originalLink = fs.readlink;
   vi.spyOn(fs, "readlink").mockImplementation(async (path, ...args) =>
-    String(path) === "/proc/1/ns/net"
-      ? f.deployment.configuration.netNamespace
+    String(path).startsWith("/proc/1/ns/")
+      ? originalLink(String(path).replace("/proc/1/", "/proc/self/"), ...args)
       : originalLink(path, ...args)
   );
   const cloned = structuredClone(f.deployment.configuration);
@@ -68,9 +70,17 @@ async function trustedFixture() {
     config.supervisor.data,
     config.supervisor.dockerData,
     config.supervisor.monitor,
+    config.supervisor.capture!,
     config.receipt
   ])
     root.uid = 0;
+  config.captureSha256 = (
+    await constructedClosureCapture(
+      config,
+      await inspectRoots(config.supervisor.host),
+      f.journalPath
+    )
+  ).file.hash;
   const artifact = join(f.root, "verifier.cjs");
   await fs.writeFile(artifact, "/* disclosed artifact fixture */", { mode: 0o600 });
   config.artifactSha256 = trust.sha256(await fs.readFile(artifact));

@@ -1,0 +1,978 @@
+{
+  "task": 3668,
+  "pullRequest": 3669,
+  "base": "26c2a366ef41c90e7198a8d2903004fe0ab61b6e",
+  "plan": "f70e3c77e3ec52f62ce60d06db33bf24bc1b97ee",
+  "checkedSource": "6db03b5cb07ecb243a825178bc7ed0c73660d757",
+  "scope": "Mandatory sampled-init capture provenance in the actual post-stop closure loader; excludes per-run configuration publication, final descendants, prelaunch/installed/runtime qualification and owner delivery.",
+  "sourceSha256": {
+    "docs/superpowers/plans/2026-10-24-moss-computer-capture-binding.md": "029424506337c03a7998b8d3753c85721158dc3cc85471f3af1c1b2d1c8c5e49",
+    "scripts/computer-closure/capture.ts": "9983c1f4b40ee7c4c874a0679ef9089ee683effd7ba9d9b892ba9258de90bf07",
+    "scripts/computer-closure/config.ts": "6ad7ab5e3b994b46ce81588c3e10f61011c25b65a139cfa8a382347643f96b56",
+    "scripts/computer-closure/records.ts": "1fd12469d311afb4c3d34bd763143b0a922e870edb8122638067fcb5fbbd9609",
+    "tests/unit/computer-capture-fixture.ts": "04586a729e03021cb91270a7425db36e792f2c85201e7c86596b0e3cb1274628",
+    "tests/unit/computer-closure-capture-fixture.ts": "0398f6c5b5d00e2a32519adcf787d3ce106602a76f1c81fef3e1b0f9a48a0d7b",
+    "tests/unit/computer-closure-capture.test.ts": "c74bcdcd018b5aee153b4557fbfc6608e5a651694b9115acd6e8eb3af9398c6d",
+    "tests/unit/computer-closure-fixture.ts": "47459ae13e298e910d2150d70a6db8585af476e23f98344b3d6084283f226ed2",
+    "tests/unit/computer-closure-native-fixture.ts": "71d7605934f52c7a9776e52f8ff7da49f7626a97eaff1b0521320960d08b1ab9",
+    "tests/unit/computer-closure-trust.test.ts": "0eb2c2c71b2b2ffe4207aa8328f3351424f7a6909fcc350f9fdb78a034588b34",
+    "tests/unit/computer-signing.test.ts": "57e871d4769fb7d68cb07d960e000c2e048a0ea0daddc34896626dfa8d45327e"
+  },
+  "sourceRestorationSha256": "ac48ea6f04fda59906dd57c7d49f6d4d68d07f6105d107824a236e9a0001ff0f",
+  "preEvidenceDocumentationInputs": {
+    "docs/evidence/moss-computer/2026-10-24-capture-binding.json": "be573bb6c2aa236b1052ef99ff355eb5e2299f8680cd50feab2857870cf941b3",
+    "docs/evidence/moss-computer/2026-10-24-capture-binding.md": "f0d8b1c658064d9dd43040ac792e157fd4c19698d71350acba5d0095d32596b8",
+    "docs/superpowers/handoffs/2026-10-24-moss-computer-closure-publication.md": "0a00a9ee62eb23a8f92dda2e7951254e43a4aace498cbb442ce1faa11b310d12"
+  },
+  "checks": [
+    {
+      "name": "behavior",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-auth-endpoint.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-capture-trust.test.ts",
+        "tests/unit/computer-capture.test.ts",
+        "tests/unit/computer-closure-capture.test.ts",
+        "tests/unit/computer-closure-trust.test.ts",
+        "tests/unit/computer-closure.test.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-recovery.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-managed-host.test.ts",
+        "tests/unit/computer-provision.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-signing.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "--maxWorkers=2"
+      ],
+      "exit": 0,
+      "seconds": 312.1651363372803,
+      "logSha256": "e35a36644afbd5dceae12196e30abacc70ad3fe013fdc580703b54a0d3829aaa"
+    },
+    {
+      "name": "types-root",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 66.14101600646973,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "types-tests",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 43.3440465927124,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-closure/capture.ts",
+        "scripts/computer-closure/config.ts",
+        "scripts/computer-closure/records.ts",
+        "tests/unit/computer-capture-fixture.ts",
+        "tests/unit/computer-closure-capture-fixture.ts",
+        "tests/unit/computer-closure-capture.test.ts",
+        "tests/unit/computer-closure-fixture.ts",
+        "tests/unit/computer-closure-native-fixture.ts",
+        "tests/unit/computer-closure-trust.test.ts",
+        "tests/unit/computer-signing.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 1.6721060276031494,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/evidence/moss-computer/2026-10-24-capture-binding.json",
+        "docs/evidence/moss-computer/2026-10-24-capture-binding.md",
+        "docs/superpowers/handoffs/2026-10-24-moss-computer-closure-publication.md",
+        "docs/superpowers/plans/2026-10-24-moss-computer-capture-binding.md",
+        "scripts/computer-closure/capture.ts",
+        "scripts/computer-closure/config.ts",
+        "scripts/computer-closure/records.ts",
+        "tests/unit/computer-capture-fixture.ts",
+        "tests/unit/computer-closure-capture-fixture.ts",
+        "tests/unit/computer-closure-capture.test.ts",
+        "tests/unit/computer-closure-fixture.ts",
+        "tests/unit/computer-closure-native-fixture.ts",
+        "tests/unit/computer-closure-trust.test.ts",
+        "tests/unit/computer-signing.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 1.0309381484985352,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 1.5716500282287598,
+      "logSha256": "ad6fc421a3337de424a89fd8e6a6dca5e8e307e7607e3628ad9a6cb9e41d843e"
+    },
+    {
+      "name": "diff",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "seconds": 0.0048749446868896484,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bundle-signing",
+      "command": [
+        "node",
+        "<private-output>/build-builtin.mjs",
+        "scripts/computer-signing.ts",
+        "<private-output>/final-r2/signing.cjs"
+      ],
+      "exit": 0,
+      "seconds": 0.06511902809143066,
+      "logSha256": "c4785c0d884160f468e3389d02abf619f47fa80edac7b6ec819258ac597021bb"
+    },
+    {
+      "name": "bundle-watchdog",
+      "command": [
+        "node",
+        "<private-output>/build-builtin.mjs",
+        "scripts/computer-watchdog.ts",
+        "<private-output>/final-r2/watchdog.cjs"
+      ],
+      "exit": 0,
+      "seconds": 0.06835269927978516,
+      "logSha256": "2062a37757859fc3b7b98f036be04cf7f7146565eee2af88486cf6a4d2330946"
+    },
+    {
+      "name": "bundle-host",
+      "command": [
+        "node",
+        "<private-output>/build-builtin.mjs",
+        "scripts/computer-host.ts",
+        "<private-output>/final-r2/host.cjs"
+      ],
+      "exit": 0,
+      "seconds": 0.05356287956237793,
+      "logSha256": "ed1a5eb8938fc911f6ad86554160a463daca65481a53d2964dfaf136ae9d293c"
+    },
+    {
+      "name": "bundle-provision",
+      "command": [
+        "node",
+        "<private-output>/build-builtin.mjs",
+        "scripts/computer-provision.ts",
+        "<private-output>/final-r2/provision.cjs"
+      ],
+      "exit": 0,
+      "seconds": 0.06964516639709473,
+      "logSha256": "f56610b8dcff2898a3652988e5384d28fedef1b5c2af505d8b49b2aad891eed9"
+    },
+    {
+      "name": "bundle-closure",
+      "command": [
+        "node",
+        "<private-output>/build-builtin.mjs",
+        "scripts/computer-closure.ts",
+        "<private-output>/final-r2/closure.cjs"
+      ],
+      "exit": 0,
+      "seconds": 0.06799912452697754,
+      "logSha256": "1c8e6750ed0ff589cb3ce3d610f244d1eeda9d675876b67fa406ed83175fb04b"
+    },
+    {
+      "name": "gateway-context",
+      "command": ["pnpm", "build:computer-gateway", "<private-output>/final-r2/gateway-context"],
+      "exit": 0,
+      "seconds": 0.6014440059661865,
+      "logSha256": "f27893e4858f25d4cb56f29f48cd6b47cdfccd32ad3de38971f12a08cbb8ab47"
+    }
+  ],
+  "behavior": {
+    "tests": 777,
+    "suites": 32
+  },
+  "controls": {
+    "original": {
+      "scripts/computer-closure/capture.ts": "9983c1f4b40ee7c4c874a0679ef9089ee683effd7ba9d9b892ba9258de90bf07",
+      "scripts/computer-closure/config.ts": "6ad7ab5e3b994b46ce81588c3e10f61011c25b65a139cfa8a382347643f96b56",
+      "scripts/computer-closure/records.ts": "1fd12469d311afb4c3d34bd763143b0a922e870edb8122638067fcb5fbbd9609"
+    },
+    "controls": [
+      {
+        "name": "capture-hash",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "requires hash in actual configuration"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.020233631134033,
+        "patchSha256": "02548d30375df10704a900e1be3bb3655aa52e0446c95b99345cbf80eaa5f93f",
+        "logSha256": "dad094089e891168c7dc15eb494310fb6338da66eb90b5308ccd00746b138cc3",
+        "restored": true
+      },
+      {
+        "name": "closed-envelope",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched envelope-extra$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.372063636779785,
+        "patchSha256": "8203c7c233adcea604e49a6138744553b9f514b102524c5f4f10891d36084580",
+        "logSha256": "d660e89893254b92956095d2957c77ba8195f777a284f1cf997e8a1f4252822c",
+        "restored": true
+      },
+      {
+        "name": "kind-version-coverage",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched (version|kind|coverage)$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 7.696378946304321,
+        "patchSha256": "02b7bb4cdf2ce50f97ce5182a5286eaba574ca317f9823c2096d1b037bb1adc2",
+        "logSha256": "becd338950b62666b7de36717db7f552488c4d9079e52b01b6c4cf8b9e3e018a",
+        "restored": true
+      },
+      {
+        "name": "run",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched run$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.019662618637085,
+        "patchSha256": "a3fbffe9b37268208d4fdeeb40a8578c24059870974f33726b59f84140b6cbb0",
+        "logSha256": "2c8d3582823ad62b7cb1cd1cceb35fbc11711cd8c46250c9e162901cd80b02a1",
+        "restored": true
+      },
+      {
+        "name": "time-shape-order",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched (negative-time|reversed-time|unsafe-time)$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 6.876420259475708,
+        "patchSha256": "028c65148750b4a905b8f213d26e3d6ca78f2b4dc11091d0a61dd71709303d0d",
+        "logSha256": "ddd0c53fa7c08090f133d14e58f91020e20092f61ed9cefdc36ed6267eb0e8b5",
+        "restored": true
+      },
+      {
+        "name": "native-identities",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched (runner|watchdog|init-start|init-group)$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 8.630412101745605,
+        "patchSha256": "9409f14f65cb20ec66590ca60a0e186bc0bd748d511edab1cc7ad8b64602e898",
+        "logSha256": "0b523ee74ce12d38bae9754604f10f4d5467f6d5708bb81a10bd04d66bed8f26",
+        "restored": true
+      },
+      {
+        "name": "lifetime-binding",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched binding$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.4714772701263428,
+        "patchSha256": "a6c0a4812c9a18066b9c6f3e36e94d56836c4d78404cbfbd339593abf0059c36",
+        "logSha256": "7081a7d1bb3ef5e3016371cc4f4419993207e7d0a0b643637104da61b547e401",
+        "restored": true
+      },
+      {
+        "name": "two-roles",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched missing-role$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.672128438949585,
+        "patchSha256": "b737b041ed7968669bac73612f9a8d38be984f379adb48f1906811c726546de3",
+        "logSha256": "52b6fd9c3790164f4b1f8d91ac6f2e1be82cbdab91fa3ca704f3c08df2b4b49c",
+        "restored": true
+      },
+      {
+        "name": "distinct-roles",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched duplicate-role$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.8739211559295654,
+        "patchSha256": "dadec1856ab0079bfa4577b245647fb323625fe80f01c11cdf1af18ab9525df0",
+        "logSha256": "3e9de44a20e3a0c6665d02163ccdf9e1590a9ab4a612446a974c693f93cab8ad",
+        "restored": true
+      },
+      {
+        "name": "full-resource-id",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched init-full-id$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.6709439754486084,
+        "patchSha256": "2898543876f84c7e12690b9dde5c243928af0f9a6ff51e77b9fb3c5839ce0a8d",
+        "logSha256": "414d7b96d243fa5a62c3aba3f93d5cb428c038074b9cfd01d4b9a860b81d9b46",
+        "restored": true
+      },
+      {
+        "name": "init-pid-consistency",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched init-pid$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.1698801517486572,
+        "patchSha256": "138149246f58416c7981b7b350fc8ef8e34981a5e0540b080428b491ebd18d79",
+        "logSha256": "4ad1da2b2f775e783982f99a61d01dc1b4bf093a589163e063a9ec8898197d1a",
+        "restored": true
+      },
+      {
+        "name": "started-at",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched init-date$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.345646619796753,
+        "patchSha256": "cbf2460fab8c33008b278c0575cc22035e6dd94ff8db389c7fb2818527862fd2",
+        "logSha256": "c701b4042d94dd9a4470b6407692edfae1934f4cb6adaca622a1b7c2e27d9674",
+        "restored": true
+      },
+      {
+        "name": "boot",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched boot$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 4.846834659576416,
+        "patchSha256": "d12433bccf43b3a46b9bf989822ae8a68d5926082682e173147f523d8b734fa8",
+        "logSha256": "53e834255bb79fa392aa77ef602ea172050b6cb26e48634e3920599d7e48b727",
+        "restored": true
+      },
+      {
+        "name": "provenance-roots",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched roots$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.574918031692505,
+        "patchSha256": "fe9848096bfbbd700bac02a90a1ebb70016e198b96be3e2c78c4d2d19065a262",
+        "logSha256": "c46f4f49366bd79c75b91fb3355f219f149b2be78a5a506ee5fd3e80d6e7ad38",
+        "restored": true
+      },
+      {
+        "name": "configured-namespaces",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched (pid|mnt|user)$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 8.036811113357544,
+        "patchSha256": "36e94959fafbe03873d45d54afe43c29653b888aef40d54f570f29c76f686ff2",
+        "logSha256": "29d3eb781db4cac9b86b8df93c0ff422c7793a3c2af8329c06d36c32b7e363f4",
+        "restored": true
+      },
+      {
+        "name": "configured-net",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched net$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 5.006722688674927,
+        "patchSha256": "19372b3827addcc6994403327b699cba69e2c7ac3a92601a6678969b5acaaa06",
+        "logSha256": "c2a28aff758206d2ea545f098017ceb6a3c810e01346328773611e25e0e276f4",
+        "restored": true
+      },
+      {
+        "name": "current-cgroup",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched cgroup$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 4.3103578090667725,
+        "patchSha256": "b6dc549d49c679c5068561a3f97eb66e11d19ca4511c44c8976854fa46364b25",
+        "logSha256": "172c302535107c5617866adbab744819918433ae1e19eb5029da8728e2592c7e",
+        "restored": true
+      },
+      {
+        "name": "groups-namespace",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched group-net$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.270230293273926,
+        "patchSha256": "ddb78484f34f8ddd2aada7767cd1f2091111f9f55a6b01390734248941a555cb",
+        "logSha256": "0ebf7f51c994ab9cd0312c23a1796b3d48ea1463f0b4ade200479a605ace5cbe",
+        "restored": true
+      },
+      {
+        "name": "journal-shape",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched journal-shape$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 2.9696731567382812,
+        "patchSha256": "28550ab982d585fc1d5c5c7c805eb01e99079d29f1f3c777f060181bbf29ab2e",
+        "logSha256": "f5051714bc2bf195e0600908035643a65f18d8fec9885b545429c1707c59c811",
+        "restored": true
+      },
+      {
+        "name": "journal-inode-shape",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched journal-zero-inode$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.0205371379852295,
+        "patchSha256": "f190682449e5c1a609d478eedd6de70bf00c387d31db6205d467a5a7d07b0726",
+        "logSha256": "0914b45bf0283ee94222faaaaec72b481de0981848942916c8d99eb73dd8108d",
+        "restored": true
+      },
+      {
+        "name": "journal-size-bound",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched journal-size$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 2.970059633255005,
+        "patchSha256": "ce66eb88ce3c83bc7f2eae3eb380a577b24ba525e8d5c6b7b6b2c601057dba83",
+        "logSha256": "3dff17d010f7876ab37b3237f8eef72a4d39883b1ec8f54cd1c5c3035ff98801",
+        "restored": true
+      },
+      {
+        "name": "journal-hash-shape",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "mismatched journal-hash$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.069706916809082,
+        "patchSha256": "0d807bb7e698b0c252cab431cbb710f9345792e082de53614372e3b15c0d3b75",
+        "logSha256": "156cde00ceb2647b640d5eff834fe413a4786f44c49bb9c7d26e6a44e5687372",
+        "restored": true
+      },
+      {
+        "name": "journal-inode",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "binds retained journal inode$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.0700109004974365,
+        "patchSha256": "f685c3a6722a548facc49a2764b5e1e788cfcd8d6f8e8116b0e43851aa9f9cf6",
+        "logSha256": "9071163e3a212b6120e36526518932832de58dfb88c40668d26b93c393369e1a",
+        "restored": true
+      },
+      {
+        "name": "journal-device",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "binds retained journal dev$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.0195062160491943,
+        "patchSha256": "9a2a114df486d867c9fbb8e87708b295b9508eb7d46127d707e65fded7c7410b",
+        "logSha256": "63eff6421cd7ddc4de25b0f57198b34472407cee352914493f65561081010784",
+        "restored": true
+      },
+      {
+        "name": "journal-prefix-hash",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "binds retained journal prefix-hash$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 2.969731330871582,
+        "patchSha256": "e0994072aed636b8b9b615857f2769628aea03b15b3f777881dfed0b8d8f5361",
+        "logSha256": "17bee70466502b1f60707054aaf7f5df8f2f1366259bb664644b18c15cd1a7d7",
+        "restored": true
+      },
+      {
+        "name": "journal-prefix-size",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "binds retained journal prefix-size$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.0195844173431396,
+        "patchSha256": "917905fbe3337bbb5496eee5ad47d53bce23b33246a59515d74b3701bb1ae0c1",
+        "logSha256": "daf7de938ce99eed69e3157af4f1c6f0da2ee1bcd5d08ee3d4d756248ea3de34",
+        "restored": true
+      },
+      {
+        "name": "sample-after-start",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "binds retained journal before-start$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.0706024169921875,
+        "patchSha256": "90366321a85bb16032be59bae9112b4ac1c5b12998a4620fe366a6272be40415",
+        "logSha256": "5c05b5c80259acb20bdc203ffa35212b465dbe414aa8826c9f9822b0e03db0f8",
+        "restored": true
+      },
+      {
+        "name": "bootstrap-equality",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "binds retained journal equality$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.019498109817505,
+        "patchSha256": "62481414eb1691daa49d4b2d006a9350eaa93e66a483b1a312257633b129d66c",
+        "logSha256": "3609692b5ca801d33108accfe83394335a37ae71bbf4b91749248cf69815675f",
+        "restored": true
+      },
+      {
+        "name": "capture-inode-revalidation",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "revalidates original capture inode"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.069770097732544,
+        "patchSha256": "ea25ad07543f4db0910631ac9b2508b7a905947d29a0dac21329a1285ea6a3db",
+        "logSha256": "d64e4fc4ce5d5d6d06f6be57aac743f5082e3dd02f1e00577a521dc3e8d51f84",
+        "restored": true
+      },
+      {
+        "name": "required-capture-root",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "requires missing-root in actual configuration"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.320249080657959,
+        "patchSha256": "efa751ee5f71fcab1b7604da71d567e67d4e0b9de3366da2dca0de42f12c8c50",
+        "logSha256": "5c96b2fa6a5026e19378d79634d6e68c336f151e4159eab598209d9b9fbab5ca",
+        "restored": true
+      },
+      {
+        "name": "required-capture-hash",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "requires missing-hash in actual configuration"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.272334337234497,
+        "patchSha256": "dcd34facf555b7844dd9ace8dff7df2288ef3f16a3f42f84fa81015e6d2b76c7",
+        "logSha256": "8e0e914a4dbcf31fa82c0b8c42a59794496a09abd7fd4f9ad4194e1ebafeb2a5",
+        "restored": true
+      },
+      {
+        "name": "journal-consumer",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "binds retained journal inode$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.222243070602417,
+        "patchSha256": "ed1c6e191ce5484679a262b276f98451c829597cfcc47f129d8cd4f802d14649",
+        "logSha256": "77846695df15fd32feb489438728996952c87ed107eb02e23ddf7bab14dcd1e2",
+        "restored": true
+      },
+      {
+        "name": "capture-byte-revalidation",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "revalidates original capture bytes"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.11991286277771,
+        "patchSha256": "7ea0dba5a390c2cf4e4a3e52720befa387ab55a641fdf803798dbb2983ba055c",
+        "logSha256": "87a15b5cb1992eda759a221cf8477c3662137608acf584f180f6306acdf61e71",
+        "restored": true
+      },
+      {
+        "name": "capture-directory-mode",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "refuses capture directory mode"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 3.273313283920288,
+        "patchSha256": "1780f4340bd9ea9c24f46401e4f373059a274c7febebcadf4f9f91eee3fc74a4",
+        "logSha256": "b9ef84dff94920dcdf672a721f50d870cfec5942204f22e0e97971597f2f03fe",
+        "restored": true
+      },
+      {
+        "name": "capture-root-separation",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=1",
+          "-t",
+          "refuses capture directory (child|ancestor|receipt)"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "seconds": 6.726503372192383,
+        "patchSha256": "e603309c5661e8b88d0362a92df1fb9b5c5f1da90903a00d61ce890c747cf95c",
+        "logSha256": "5064f7513013956377aa9a72df949550d4bbc3d795f7fff6d35363c492c1ba26",
+        "restored": true
+      }
+    ]
+  },
+  "intendedFailingAssertions": 46,
+  "nativeNonroot": {
+    "receiptSha256": "e4521b4a61e12835133868be89a2c0c5ecdc92439c342804267d04c18d4c8013",
+    "exit": 2,
+    "stdoutBytes": 0,
+    "stderrBytes": 0,
+    "qualification": "Unprojected nonroot startup refusal on native Node22 only."
+  },
+  "reviews": {
+    "security-plan-r1.md": "38e1969a37e2a0ac2ee1d0fb287dbfebd6a948992da288fcdf9aaa9b0e297e46",
+    "spec-plan-r1.md": "ce151730e3cd98d832d17e129b2ac32a3e7860af9fe6fd83d6da94bcd93335ee",
+    "security-source-r1.md": "02c917d872f0f777c73cd8ca4017ca05aed22d3c29469d0f4e7bf5d044fa8a29",
+    "spec-source-r1.md": "4f4f4eb15e59bad1f4622da8f5d15f0e6bfbdec9f42abb2eaed1e696819da032",
+    "security-correction-r2.md": "b165f1ddc2defd23efb0b00188abb0bd9331fa3607c9c6a4288a52080d29e4e8",
+    "spec-correction-r2.md": "3e6ddac09ddf0f2a01fdefde737bbab92d191ee886bdad21c8833230fb5e52a1"
+  },
+  "retainedLocalR1": {
+    "security-local-r1.md": "fd3972fbd9eca565a079f22134dcc3f5c1ddcdedd474e297f6ba22b5110a9810",
+    "spec-local-r1.md": "ab510ab6598ee1090bd3e50f03c9dde6a6caff7a0572e99ba8fc36508eefecf1",
+    "final-r1/checks.json": "64164a63593280991e5f64217f4f2c36f8f9f4c085785087c4fbde901c7e5666",
+    "controls-r1/results.json": "e3e9da7d978328a40793ee90c10ca4f19619d653dacd0e6a0c80cd32e9b44957",
+    "source-restoration-r1.json": "bb75400d500e939d1d092b91ac1509334b6d9f82524a1104aa0e195e635abdd7"
+  },
+  "artifacts": {
+    "signing": {
+      "sha256": "060120eaa6a87a3f9b368a642fb7b2e1133c20e08c0be124e52ba6e91b09fa51",
+      "metadataSha256": "88230b7777118b867b6b0b4d651984fd3c526458eb602d28e78936eba255a065",
+      "target": "node24",
+      "builtinOnly": true
+    },
+    "watchdog": {
+      "sha256": "aec6d7eb60abdc83e498ecccf312d5145a26992477699deca8b581738d3cbb86",
+      "metadataSha256": "2232e742463bf74faced96988f7e3a5d56ca08505c0dc096f7b77cc9bc693a3a",
+      "target": "node24",
+      "builtinOnly": true
+    },
+    "host": {
+      "sha256": "320895edaf5460cdd79c3af773b22621235c373e570fa66f908dd1af136b6388",
+      "metadataSha256": "3a18ccf4d4e3a6f5eb4ce84fe330a668702146aeedcb6279c0a819e5c98361ee",
+      "target": "node24",
+      "builtinOnly": true
+    },
+    "provision": {
+      "sha256": "9ef8c79065e15a7cd003e4539f264c9163d8b28c342efefa708d1fdd4bd78d70",
+      "metadataSha256": "99e78b9d54a9a46712fda3503d761c084673367488ee3968172eec464b28521a",
+      "target": "node24",
+      "builtinOnly": true
+    },
+    "closure": {
+      "sha256": "135ec5b1db7cebe8ecb9b408bb2bb6426f68d73e3bcb64301c5cf084afca6db2",
+      "metadataSha256": "771600c04559b6e759ef2f856515f0e317d6b84a8f3a9130452a1502e8b0ab63",
+      "target": "node24",
+      "builtinOnly": true
+    }
+  },
+  "retainedFailures": {
+    "affected-initial-r1.log": {
+      "sha256": "2362cf8e03edb331c585ad91e79f04d0e65fbb63626c3c769176522d7fa8ebc5",
+      "record": "96 passed, one guest-root fixture ordering failure; corrected before source commit."
+    },
+    "capture-tests-r1.log": {
+      "sha256": "107acd6362fba8cc8028656bc893d6b4f0a79239dc0665369a9274e2526305cd",
+      "record": "All 50 new cases stopped in recursive inherited fixture mock before loader checks; corrected fixture implementation capture."
+    },
+    "capture-compose-r2.log": {
+      "sha256": "2794e48e0c5216ae11bc96c036027314ab9f4a2096869ac31da3fd21196204d6",
+      "record": "New receipt root was measured through unprojected test filesystem namespace; corrected to existing projected fixture I/O."
+    },
+    "capture-compose-r3.log": {
+      "sha256": "cab39d54d61e0b6c5ffdd79259b33e7eaacb63bd42d76c8e9a8a0ce076c00ebb",
+      "record": "Focused actual producer/signer/loader composition passed after corrections."
+    },
+    "capture-tests-r4.log": {
+      "sha256": "cdc2c94ab3d4c7d2400aaaac3de89a9c01d813bc30d52fa59282035bbe7851e6",
+      "record": "All 50 new binding tests passed before controls."
+    }
+  },
+  "limits": [
+    "Actual capture publisher, signer crypto/publication and mandatory loader/records/revalidation execute in the focused composition. It is not full observeClosure absence success.",
+    "Inherited root/runtime/PID1/namespace/cgroup/heartbeat/Node byte projections are disclosed. Constructed capture/deployment fixtures are excluded from actual producer provenance.",
+    "No installed root trust, actual Node24/image/128MiB fit, runtime admission or owner delivery qualification.",
+    "No Computer image/runtime, Docker mutation, DB, browser, TCP server or deployment operation. Admission unchanged and all owner parents remain open."
+  ]
+}
