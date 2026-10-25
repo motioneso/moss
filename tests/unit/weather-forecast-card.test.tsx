@@ -33,6 +33,7 @@ describe("saved Weather card", () => {
     expect(doc.body.textContent).not.toContain("America/Los_Angeles");
     expect(doc.body.textContent).not.toContain("2026-10-24");
     expect(doc.body.textContent).not.toContain("Local weather forecast");
+    expect(doc.body.textContent).not.toContain("Name another city and region");
     expect(doc.querySelector(".jds-card")).toBeNull();
     expect([...doc.querySelectorAll("li small")].map((e) => e.textContent)).toEqual([
       "6–7 PM",
@@ -84,6 +85,9 @@ describe("saved Weather card", () => {
     expect(doc.body.textContent).toContain("Partial forecast");
     expect(doc.body.textContent).toContain("7–8 PM unavailable");
     expect(doc.body.textContent).toContain("Approximate location");
+    expect(doc.body.textContent).toContain(
+      "Name another city and region in chat to correct it without saving Settings."
+    );
     expect(doc.body.textContent).toContain("Stale forecast");
     expect(doc.body.textContent).toContain("Observation unavailable");
     expect([...doc.querySelectorAll("dd")].map((e) => e.textContent)).toEqual([

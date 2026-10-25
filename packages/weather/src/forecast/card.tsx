@@ -78,6 +78,9 @@ export function WeatherForecastCard({ snapshot }: { snapshot: VisualSnapshotV1 }
             {p.window}
             {v.approximate ? " · Approximate location" : ""}
           </p>
+          {v.approximate && (
+            <p>Name another city and region in chat to correct it without saving Settings.</p>
+          )}
         </div>
         <ConditionIcon condition={p.condition} at={first.startsAt} zone={v.timeZone} size={36} />
       </header>

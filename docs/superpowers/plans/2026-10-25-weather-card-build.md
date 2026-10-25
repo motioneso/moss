@@ -22,10 +22,10 @@ Approved target: `docs/superpowers/2026-10-25-weather-card-design.md` and design
 2. Add focused rendering regressions for rounding, final bucket, partial gaps, fallback,
    metric units, long windows and DST. Observe failures against the original renderer.
    Update module feature metadata in the same PR.
-3. Run scoped tests and the static gate; open a draft PR against `design/weather-card-mockups`.
+3. Run scoped tests and the static gate; keep draft PR #3739 against `main` now that #3737 merged.
    Exercise real Profile → chat → forecast → reload on a disposable test copy using
    `3736-weather-card-design-a.uat.spec.ts`; attach live proof and report to coordinator
-   `w1:p1E`, then stop. Retarget after #3737 merges.
+   `w1:p1E`, then stop.
 
 Determinism: all card content comes from the saved record; no model jobs, prompt changes,
 chat injection, requests or saved-setting changes.
@@ -44,3 +44,10 @@ Commands are unpiped; expected exit 0 except the original-renderer regression ru
   runs the real UI/live-data path in the isolated provisioned stack (expected exit 0).
 - Merge requires that real UI/live-data UAT evidence on the PR per the live-path gate.
   Until that exists the product status is **code-complete, unverified**; do not merge or mark Done.
+
+## Review follow-up
+
+PR #3737 merged; rebase the renderer branch onto `main`. Restore the approximate-place
+correction hint, which was omitted unintentionally, and verify that exact locations omit it.
+The hint names the city/region correction path and explains that Settings are not saved;
+the Weather feature metadata describes the same behavior.

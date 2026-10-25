@@ -45,7 +45,7 @@ export const weatherModuleManifest = {
     {
       id: "weather.visual_forecast",
       description:
-        "Immutable hourly forecasts show whole-degree curves, condition icons and every hour range in saved units. Approximate places, missing hours and unknown rain/wind are labeled. Corrections never save Settings; history never refetches.",
+        "Hourly forecasts show whole-degree curves, icons and every hour range in saved units. Approximate places offer correction hints; gaps and unknown rain/wind are labeled. Corrections never save Settings; history never refetches.",
       errors: [
         {
           code: "weather_location_ambiguous",
