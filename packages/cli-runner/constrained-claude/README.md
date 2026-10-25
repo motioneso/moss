@@ -40,7 +40,9 @@ Executable SHA-256: 6764ffc39e9fed425a493ff61ea28506d1ba83996ce81a48d1177dbb3934
 ```
 
 `constrained-claude-profile.ts` hashes the managed executable without executing it and accepts
-only these source-reviewed bytes. Other versions require explicit re-verification. The managed
+only these source-reviewed bytes. Promoted release **2.1.286** is also listed (see
+`docs/evidence/3565-meeting-claude/native-compatibility.md`). Other versions require explicit
+re-verification. The managed
 installation is trusted not to replace the executable between verification and launch. No
 credential, transcript, or provider request is needed for this check.
 

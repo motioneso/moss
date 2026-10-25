@@ -9,12 +9,16 @@ import { runConstrainedStructuredProcess } from "./constrained-structured-proces
 import { CliChatUnavailableError } from "./errors.js";
 
 import {
-  CONSTRAINED_CLAUDE_SHA256,
+  CONSTRAINED_CLAUDE_RELEASES,
+  CONSTRAINED_CLAUDE_VERSION,
   ConstrainedClaudeUnsupportedError,
   parseConstrainedClaudeOutput,
   prepareConstrainedClaudeProfile,
   type ConstrainedClaudeProfileOptions
 } from "./constrained-claude-profile.js";
+
+const FLOOR = CONSTRAINED_CLAUDE_RELEASES[CONSTRAINED_CLAUDE_VERSION]!;
+const PROMOTED = CONSTRAINED_CLAUDE_RELEASES["2.1.286"]!;
 
 const options: ConstrainedClaudeProfileOptions = {
   token: "synthetic-token",
@@ -26,7 +30,7 @@ const options: ConstrainedClaudeProfileOptions = {
 const deps = {
   platform: "linux" as const,
   arch: "x64",
-  digest: vi.fn(async () => CONSTRAINED_CLAUDE_SHA256.x64!)
+  digest: vi.fn(async () => FLOOR.x64!)
 };
 
 describe("constrained Claude profile", () => {
@@ -89,9 +93,27 @@ describe("constrained Claude profile", () => {
       prepareConstrainedClaudeProfile(options, {
         ...deps,
         arch: "arm64",
-        digest: async () => CONSTRAINED_CLAUDE_SHA256.arm64!
+        digest: async () => FLOOR.arm64!
       })
     ).resolves.toMatchObject({ command: options.executablePath });
+  });
+
+  it("admits the verified promoted release on both architectures", async () => {
+    for (const arch of ["x64", "arm64"]) {
+      await expect(
+        prepareConstrainedClaudeProfile(options, {
+          ...deps,
+          arch,
+          digest: async () => PROMOTED[arch]!
+        })
+      ).resolves.toMatchObject({ command: options.executablePath });
+    }
+  });
+
+  it("rejects another architecture's hash and unlisted bytes", async () => {
+    await expect(
+      prepareConstrainedClaudeProfile(options, { ...deps, digest: async () => PROMOTED.arm64! })
+    ).rejects.toBeInstanceOf(ConstrainedClaudeUnsupportedError);
   });
 
   it("rejects unsupported bytes without running the executable", async () => {
