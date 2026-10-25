@@ -45,7 +45,8 @@ export class ProvisionPublication {
       | "prepared.json"
       | "capture.json"
       | "closure-key.pem"
-      | "installation.json",
+      | "installation.json"
+      | "closure.json",
     value: unknown,
     mode: number,
     gid: number,
