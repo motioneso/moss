@@ -30,7 +30,7 @@
 #
 # USAGE
 #
-#   scripts/run-gate.sh start [--gate <pnpm-script>] [--exclusive] [--keep-db]
+#   scripts/run-gate.sh start [--gate <pnpm-script>] [--exclusive] [--keep-db] [--no-sweep]
 #       Launches a throwaway pgvector Postgres server just for this run (own
 #       container, own host port, nothing shared with the dev database or any
 #       other gate), CREATEs a fresh gate database inside it, exports the
@@ -124,7 +124,8 @@
 #     never share a server with each other or with the dev instance. The
 #     container is removed when the run ends on every path — pass, fail,
 #     killed, aborted start — and each start sweeps leftover gate containers
-#     whose run is no longer alive. `--keep-db` is accepted for compatibility
+#     whose run is no longer alive, unless `--no-sweep` skips that sweep.
+#     `--keep-db` is accepted for compatibility
 #     but keeps nothing: the database dies with its server.
 #   - The gate's output is only ever redirected to a file, never piped. A pipe
 #     returns the *filter's* exit code, so a red gate reads as green.
@@ -346,12 +347,13 @@ sweep_gate_containers() {
 # ---------------------------------------------------------------------------
 
 cmd_start() {
-  local gate="verify:foundation" exclusive=0 keep_db=0
+  local gate="verify:foundation" exclusive=0 keep_db=0 no_sweep=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --gate) gate="${2:?--gate needs a pnpm script name}"; shift 2 ;;
       --exclusive) exclusive=1; shift ;;
       --keep-db) keep_db=1; shift ;;
+      --no-sweep) no_sweep=1; shift ;;
       *) die "unknown option for start: $1" ;;
     esac
   done
@@ -439,8 +441,12 @@ cmd_start() {
   rm -f "$fp_status" "$fp_files" "$fp_content" 2>/dev/null || true
 
   # Collect servers whose run is already over (#2989). Runs before this
-  # run launches its own, so one sweep happens per start.
-  sweep_gate_containers
+  # run launches its own, so one sweep happens per start. The opt-in
+  # --no-sweep skips only this global sweep, for callers that must not
+  # enumerate or remove containers they do not own (#3529).
+  if [ "$no_sweep" = "0" ]; then
+    sweep_gate_containers
+  fi
 
   # Throwaway gate server (#2989). Own container, own loopback port, generous
   # shm — shared with no other gate and never with the dev instance. The name

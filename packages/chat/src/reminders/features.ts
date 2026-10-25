@@ -21,7 +21,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         code: "scheduled_read_unresolved",
         class: "validation",
         description:
-          "An unresolved repeating check is refused and saves nothing; an unresolved one-time check stays in ordinary chat. Name one task you own and a supported time or cadence."
+          "An unresolved check is refused and saves nothing once Moss has started interpreting it. Name one task you own and a supported time or cadence."
       },
       {
         code: "scheduled_read_unavailable",

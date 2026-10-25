@@ -45,6 +45,8 @@ export function createScheduledReadResolver(deps: {
       title: "",
       when: null
     };
+    const requestsRepeat = /\b(?:every|each|daily|weekly|monthly|hourly)\b/i.test(request);
+    let interpretationStarted = false;
     let stage: ScheduledReadFailureStage = "active_modules";
     try {
       if (!(await deps.resolveActiveModules(actorUserId)).some((module) => module.id === "tasks")) {
@@ -61,6 +63,7 @@ export function createScheduledReadResolver(deps: {
             request,
             candidates,
             async () => {
+              interpretationStarted = true;
               stage = "model_route";
               const run = await deps.dataContext.withDataContext(
                 { actorUserId, requestId: "scheduled-read:terms" },
@@ -120,7 +123,9 @@ export function createScheduledReadResolver(deps: {
                   : "Error",
         error instanceof ScheduledReadGenerationError ? error.validation : undefined
       );
-      return refused;
+      return interpretationStarted && !requestsRepeat
+        ? { ...refused, interpretationStarted: true as const }
+        : refused;
     }
   };
 }

@@ -24,6 +24,7 @@ const SAVED = {
 
 function setup(options: {
   read?: ReturnType<typeof vi.fn>;
+  gateMode?: string;
   incognito?: boolean;
   pending?: ReturnType<typeof vi.fn>;
   pendingProposal?: boolean;
@@ -38,7 +39,7 @@ function setup(options: {
   ]);
   Object.assign(engine, { purgeTranscripts: vi.fn().mockResolvedValue(undefined) });
   const recordReminderTurn = options.record ?? vi.fn().mockResolvedValue(SAVED);
-  const gate = { mode: vi.fn().mockResolvedValue("on"), evaluate: vi.fn() };
+  const gate = { mode: vi.fn().mockResolvedValue(options.gateMode ?? "on"), evaluate: vi.fn() };
   gate.evaluate.mockResolvedValue({ kind: "declined" });
   let opened = !options.noConversation;
   const openNewConversation = vi.fn(async () => {
@@ -205,6 +206,132 @@ describe("chat reminder turn (#3309)", () => {
     await manager.submitTurn("u1", "Ben", "Check the status of my laundry task in 20 minutes");
     expect(engine.launchCount).toBe(1);
     expect(recordReminderTurn).not.toHaveBeenCalled();
+  });
+  it.each(["off", "shadow", "on"])(
+    "keeps a marked one-time check terminal in gate mode %s",
+    async (gateMode) => {
+      const read = vi.fn().mockResolvedValue({
+        kind: "scheduled_read",
+        interpretationStarted: true,
+        taskId: null,
+        title: "",
+        when: null
+      });
+      const { manager, engine, gate, recordReminderTurn } = setup({ read, gateMode });
+      await manager.submitTurn("u1", "Ben", "Check the status of my laundry task in 20 minutes");
+      expect(recordReminderTurn.mock.calls[0]?.[2]).toMatchObject({
+        kind: "scheduled_read",
+        interpretationStarted: true,
+        taskId: null
+      });
+      expect(gate.evaluate).not.toHaveBeenCalled();
+      expect(engine.launchCount).toBe(0);
+    }
+  );
+  it("says nothing is set when a marked check cannot be stored", async () => {
+    const read = vi.fn().mockResolvedValue({
+      kind: "scheduled_read",
+      interpretationStarted: true,
+      taskId: null,
+      title: "",
+      when: null
+    });
+    const record = vi.fn().mockRejectedValue(new Error("db down"));
+    const { manager, engine } = setup({ read, record });
+    const result = await manager.submitTurn(
+      "u1",
+      "Ben",
+      "Check the status of my laundry task in 20 minutes"
+    );
+    expect(result.reply).toBe(REMINDER_STORAGE_FAILURE_MESSAGE);
+    expect(engine.launchCount).toBe(0);
+  });
+  it("cancels a marked check when the user stops it during a failing save", async () => {
+    const holder: { manager?: ChatSessionManager } = {};
+    const read = vi.fn().mockResolvedValue({
+      kind: "scheduled_read",
+      interpretationStarted: true,
+      taskId: null,
+      title: "",
+      when: null
+    });
+    const record = vi.fn(async () => {
+      await holder.manager?.stopTurn("u1");
+      return undefined;
+    });
+    const ctx = setup({ read, record });
+    holder.manager = ctx.manager;
+    const result = await ctx.manager.submitTurn(
+      "u1",
+      "Ben",
+      "Check the status of my laundry task in 20 minutes"
+    );
+    expect(result.reply).toBe("");
+    expect(ctx.records).toEqual([{ kind: "status", text: "Stopped by user." }]);
+    expect(ctx.engine.launchCount).toBe(0);
+  });
+  it("keeps the storage failure reply for an unmarked check stopped during a failing save", async () => {
+    const holder: { manager?: ChatSessionManager } = {};
+    const read = vi.fn().mockResolvedValue({
+      kind: "scheduled_read",
+      failure: "unavailable",
+      taskId: null,
+      title: "",
+      when: null
+    });
+    const record = vi.fn(async () => {
+      await holder.manager?.stopTurn("u1");
+      return undefined;
+    });
+    const ctx = setup({ read, record });
+    holder.manager = ctx.manager;
+    const result = await ctx.manager.submitTurn(
+      "u1",
+      "Ben",
+      "Check the status of my laundry task in 20 minutes"
+    );
+    expect(result.reply).toBe(REMINDER_STORAGE_FAILURE_MESSAGE);
+    expect(ctx.engine.launchCount).toBe(0);
+  });
+  it("falls back to ordinary chat for a check when no resolver is wired", async () => {
+    const { manager, engine, recordReminderTurn } = setup({});
+    await manager.submitTurn("u1", "Ben", "Check the status of my laundry task in 20 minutes");
+    expect(engine.launchCount).toBe(1);
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+  });
+  it("does not resolve a check that arrives with an attachment", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValue({ kind: "scheduled_read", taskId: null, title: "", when: null });
+    const { manager, engine } = setup({ read });
+    await manager.submitTurn("u1", "Ben", "Check the status of my laundry task in 20 minutes", {
+      attachments: [
+        {
+          id: "file",
+          fileName: "note.txt",
+          mimeType: "text/plain",
+          sizeBytes: 1,
+          createdAt: "2026-10-12T10:00:00Z"
+        }
+      ]
+    });
+    expect(read).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(1);
+  });
+  it("does not resolve a check in a private chat", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValue({ kind: "scheduled_read", taskId: null, title: "", when: null });
+    const { manager, engine, recordReminderTurn } = setup({ read, incognito: true });
+    const result = await manager.submitTurn(
+      "u1",
+      "Ben",
+      "Check the status of my laundry task in 20 minutes"
+    );
+    expect(read).not.toHaveBeenCalled();
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(engine.launchCount).toBe(0);
+    expect(result.reply).toBe(REMINDER_MANAGE_MAIN_ONLY_REPLY);
   });
   it.each([
     "let the dog out at night",

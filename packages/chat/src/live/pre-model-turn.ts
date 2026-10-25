@@ -98,7 +98,8 @@ export async function tryPreModelTurn(
         if (
           recognition?.kind === "scheduled_read" &&
           (!recognition.taskId || !recognition.when) &&
-          !recognition.failure
+          !recognition.failure &&
+          !recognition.interpretationStarted
         )
           recognition = undefined;
       } catch {
@@ -269,6 +270,12 @@ export async function tryPreModelTurn(
   }
   if (stored === "stopped") return done(cancelledTurn(host, actorUserId, surface));
   if (!stored) {
+    if (
+      recognition.kind === "scheduled_read" &&
+      recognition.interpretationStarted &&
+      controller.signal.aborted
+    )
+      return done(cancelledTurn(host, actorUserId, surface));
     const reply =
       recognition.kind === "confirm_delete"
         ? REMINDER_AGREEMENT_FAILURE_MESSAGE
