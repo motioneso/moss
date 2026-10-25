@@ -29,6 +29,11 @@ and the server log. No production database access. Tracks #3565 and #3584.
 - The server never saw a failed attempt. The ring-to-phone transfer takes about 4 seconds, so the
   cut was not shown to land mid-transfer. Byte-offset resume is not proven here.
 
+## Acceptance
+
+Ben reviewed both results, including the stand-in and the unproven mid-transfer cut, and accepted
+both checks as passed on 2026-10-25.
+
 ## Phone state
 
 Restored and unchanged: delivery running, hold-to-talk on (set by Ben before the session), screen

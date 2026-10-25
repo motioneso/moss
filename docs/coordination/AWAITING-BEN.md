@@ -86,19 +86,14 @@ Checked at origin/main `cf6ade9c3`. Production runs edge `8786e0a3c` (healthy af
 host reboot). No software-only item remains in the approved queue:
 
 - Package-update recovery: no new testable lead; any probe needs a phone package replacement.
-- Interrupted-upload check (partly done 2026-10-25): a recording made with phone Bluetooth off, then
-  an airplane-mode cut, was delivered exactly once on its own after the network returned. A cut
-  landing mid-transfer is not proven. The ring-to-phone transfer takes about 4 seconds, too short to
-  time by hand. It needs a scripted cut or the instrumented device check. Evidence:
-  `docs/evidence/vocci/2026-10-25-phone-range-check.md`.
 - One-hour reminder endurance: reminder is built; the physical run needs a new long recording.
 - Hold-to-talk production acceptance: needs Ben to opt in and record a sample.
 - Single-recording deletion: needs a validated command and a disposable sample.
 - Audio enhancement: needs a design decision on how originals are kept, plus mockups.
 - Firmware and streaming: need hardware compatibility evidence first.
 
-Recommendation: one arranged phone session for the out-of-range/offline and interrupted-upload
-checks, which matter most for daily use.
+Resolved 2026-10-25: Ben accepted the out-of-range/offline and interrupted-upload checks as passed
+(`docs/evidence/vocci/2026-10-25-phone-range-check.md`).
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
 
