@@ -37,6 +37,16 @@ it("finds only an executable managed native install with the exact inspected ver
     JSON.stringify({ ...metadata, version: "0.0.0" })
   );
   expect(await findConstrainedClaudeExecutable(directory)).toBeUndefined();
+  for (const version of ["2.1.286", "2.1.287"]) {
+    await writeFile(join(directory, "package.json"), JSON.stringify({ ...metadata, version }));
+    expect(await findConstrainedClaudeExecutable(directory)).toBe(
+      version === "2.1.286" ? executable : undefined
+    );
+  }
+  for (const version of ["constructor", "__proto__", "toString"]) {
+    await writeFile(join(directory, "package.json"), JSON.stringify({ ...metadata, version }));
+    expect(await findConstrainedClaudeExecutable(directory)).toBeUndefined();
+  }
   await writeFile(
     join(directory, "package.json"),
     JSON.stringify({ ...metadata, name: "other-package" })
