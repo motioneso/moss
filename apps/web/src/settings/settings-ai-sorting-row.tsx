@@ -64,8 +64,7 @@ export const CLASSIFIER_GATE_ON_NOTE =
   "When Use in chat is on, every user's eligible messages go to the decision model's provider.";
 
 export const CLASSIFIER_HEADING = "Decision model";
-export const CLASSIFIER_HELP =
-  "Optional. A separate model for quick sorting and checking jobs. Moss never picks one for you.";
+export const CLASSIFIER_HELP = "Optional. A separate model for quick sorting and checking jobs.";
 
 /** Neutral starting draft for "Ask Moss to help". It names no model and no provider. */
 export const DECISION_MODEL_HELP_DRAFT =
