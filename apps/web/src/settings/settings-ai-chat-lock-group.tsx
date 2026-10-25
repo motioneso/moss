@@ -90,6 +90,11 @@ export function ChatLockRows() {
             onChange={(event) => mutation.mutate(event.target.value || null)}
           >
             <option value="">Not locked</option>
+            {value && !models.some((model) => model.id === value) ? (
+              <option value={value} disabled>
+                Locked model (unavailable)
+              </option>
+            ) : null}
             {[...grouped.entries()].map(([group, groupModels]) => (
               <optgroup key={group} label={group}>
                 {groupModels.map((model) => (

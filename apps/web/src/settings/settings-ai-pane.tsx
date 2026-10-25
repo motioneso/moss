@@ -356,6 +356,7 @@ function ChatModel({
   const settings = settingsQuery.data?.settings;
   const ownPin = useOwnAiPin(isAdmin).pinQuery.data?.pin;
   const locked = Boolean(ownPin?.pinnedModelId || ownPin?.pinnedProviderId);
+  const unavailableLock = ownPin?.effectiveChatReason === "admin-pin-unavailable";
   const mutation = useMutation({
     mutationFn: (modelId: string | null) => putChatModelOverride({ modelId }),
     onSuccess: (result) => {
@@ -440,10 +441,18 @@ function ChatModel({
             <GitCommitHorizontal size={20} aria-hidden="true" />
           </div>
           <div className="ai-empty__main">
-            <div className="ai-empty__t">No assistant configured yet</div>
+            <div className="ai-empty__t">
+              {unavailableLock ? "Your locked model is unavailable" : "No assistant configured yet"}
+            </div>
             <div className="ai-empty__d">
-              An admin needs to add an AI provider before {assistantName} can chat. Ask whoever set
-              up this instance. If that's you, add one under {providerSettingsLink}.
+              {unavailableLock ? (
+                "Clear your lock below, or ask an admin to turn the model back on."
+              ) : (
+                <>
+                  An admin needs to add an AI provider before {assistantName} can chat. Ask whoever
+                  set up this instance. If that's you, add one under {providerSettingsLink}.
+                </>
+              )}
             </div>
           </div>
         </div>
