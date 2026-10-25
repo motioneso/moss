@@ -44,6 +44,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Simpler way to add AI providers.** Adding an AI provider now happens in one pop-up window, and the less-used settings on the page fold away until you need them. [PR #3683](https://github.com/motioneso/moss/pull/3683)
 - **The Classifier's chat gate turns on straight away.** You can now switch the Classifier's chat gate to On in Settings straight away, with no Shadow trial or review first. [PR #3673](https://github.com/motioneso/moss/pull/3673)
 - **OpenCode no longer has its own card in AI provider settings.** The separate OpenCode card and its built-in chat model choice are gone, and OpenCode now works like any other provider, using the model you pick from its own list. [PR #3676](https://github.com/motioneso/moss/pull/3676)
 - **Ring messages flow straight into chat.** New ring messages send automatically and appear alongside normal chat messages while preserving your unsent drafts. [PR #3656](https://github.com/motioneso/moss/pull/3656)
