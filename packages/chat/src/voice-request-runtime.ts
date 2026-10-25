@@ -67,14 +67,15 @@ export function createVoiceRequestService(deps: {
       )
         throw new HttpError(404, "Chat unavailable");
     },
-    async submit(actor, request, claim) {
+    async submit(actor, request, claim, whenAvailable) {
       const userName = await deps.runtime.resolveUserName(actor.actorUserId);
       return deps.runtime.manager.submitMainVoiceTurn(
         actor.actorUserId,
         userName,
         request.transcript,
         request,
-        claim
+        claim,
+        whenAvailable
       );
     }
   });

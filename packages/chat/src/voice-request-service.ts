@@ -30,7 +30,8 @@ export interface VoiceRequestDependencies {
       readonly threadId: string;
       readonly turnId: string;
     },
-    claim: () => Promise<boolean>
+    claim: () => Promise<boolean>,
+    whenAvailable: () => Promise<void>
   ): Promise<"deferred" | "unclaimed" | "executed">;
 }
 
@@ -113,7 +114,12 @@ export class VoiceRequestService {
           return this.deps.dataContext.withDataContext(actor, async (db) =>
             Boolean(await this.requests.claim(db, id, this.deps.bootId, this.deps.now()))
           );
-        }
+        },
+        () =>
+          this.deps.dataContext.withDataContext(actor, async (db) => {
+            const current = await this.requests.get(db, id, true);
+            if (current?.state === "queued") await this.deps.schedule(db, actor, id);
+          })
       );
       await this.deps.dataContext.withDataContext(actor, async (db) => {
         if (result === "deferred") {

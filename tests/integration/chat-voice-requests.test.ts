@@ -310,6 +310,61 @@ describe("durable Main voice admission", () => {
       )
     ).rejects.toThrow("immutable");
   });
+  it("requeues busy work on turn completion and consumes the delayed replay without duplicate effects", async () => {
+    let wake!: () => Promise<void>;
+    let busy = true;
+    const { service, deps } = setup();
+    const execute = deps.submit;
+    deps.submit = async (...args) => {
+      if (!busy) return execute(...args);
+      wake = args[3];
+      return "deferred";
+    };
+    const { request } = await service.admit(actor, input());
+    await service.process(actor, request.id);
+    expect(deps.schedule).toHaveBeenLastCalledWith(expect.anything(), actor, request.id, 15);
+    expect((await service.status(actor, request.id))?.state).toBe("queued");
+    busy = false;
+    await wake();
+    expect(deps.schedule).toHaveBeenLastCalledWith(expect.anything(), actor, request.id);
+    await Promise.all([service.process(actor, request.id), service.process(actor, request.id)]);
+    const completed = await service.status(actor, request.id);
+    expect(completed?.state).toBe("replied");
+    await service.process(actor, request.id);
+    const schedules = vi.mocked(deps.schedule).mock.calls.length;
+    await wake();
+    expect(deps.schedule).toHaveBeenCalledTimes(schedules);
+    expect(await service.status(actor, request.id)).toEqual(completed);
+    expect(
+      await context.withDataContext(actor, (ctx) => chat.listMessages(ctx, request.thread_id))
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: request.user_message_id }),
+        expect.objectContaining({ id: request.assistant_message_id })
+      ])
+    );
+  });
+  it("retains the delayed recovery when an immediate wake fails, and can defer again", async () => {
+    let wake!: () => Promise<void>;
+    const { service, deps } = setup({
+      submit: async (...args) => {
+        wake = args[3];
+        return "deferred";
+      }
+    });
+    const { request } = await service.admit(actor, input());
+    await service.process(actor, request.id);
+    expect(deps.schedule).toHaveBeenLastCalledWith(expect.anything(), actor, request.id, 15);
+    vi.mocked(deps.schedule).mockRejectedValueOnce(new Error("temporary queue failure"));
+    await expect(wake()).rejects.toThrow("temporary queue failure");
+    expect((await service.status(actor, request.id))?.state).toBe("queued");
+    await wake();
+    expect(deps.schedule).toHaveBeenLastCalledWith(expect.anything(), actor, request.id);
+    await service.process(actor, request.id);
+    expect(deps.schedule).toHaveBeenLastCalledWith(expect.anything(), actor, request.id, 15);
+    await wake();
+    expect(deps.schedule).toHaveBeenLastCalledWith(expect.anything(), actor, request.id);
+  });
   it("keeps new busy work automatic while legacy queued work still ages into review", async () => {
     let time = now;
     const { service, deps } = setup({
