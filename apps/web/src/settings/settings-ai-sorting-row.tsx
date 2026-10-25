@@ -217,7 +217,7 @@ export function SortingModelRow(props: {
         <Button
           ref={chooseButtonRef}
           variant="secondary"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || gateQuery.isPending}
           onClick={() => setDialogOpen(true)}
         >
           {bound ? "Change model" : "Choose a model"}
