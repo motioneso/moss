@@ -1,6 +1,6 @@
 # Meals: weekly meal planning, pantry and shopping list
 
-**Status:** DRAFT for Ben's review (2026-10-09)  
+**Status:** Final (2026-10-25), after Ben's review and a user-story review  
 **Issue:** #3317  
 **Terms:** the Meals and meal planning section of CONTEXT.md. ADR 0011 (shared Kitchen).  
 **Primary verification seam:** install Meals, set up a household, generate a week, swap and lock
@@ -97,7 +97,7 @@ of it.
 
 A user describes their household once. Each Household member has a Meal pattern, restrictions,
 preferences, an optional calorie target and an optional link to a Moss account. The user then asks
-for a week. Moss writes the Meal plan day by day, showing progress as each day fills in. Meals are
+for a plan, a week by default or any number of days. Moss writes the Meal plan day by day, showing progress as each day fills in. Meals are
 Shared meals by default, sized per eater, and a member can have a One-off meal. Every meal passes a
 Safety check against every eater's restrictions before the user sees it.
 
@@ -132,9 +132,9 @@ change the later phases.
 
 ### Phase 2. Core planning
 
-- Household members with Meal pattern, restrictions, preferences, calorie target and stored
-  account link.
-- On-demand seven-day Meal plan, generated day by day with visible progress and a small, tasteful
+- Household members with Meal pattern, restrictions, preferences, optional calorie target and
+  stored account link. Planning for just yourself needs no household setup.
+- On-demand Meal plan, seven days by default or any number of days the user names, generated day by day with visible progress and a small, tasteful
   animation.
 - Safety check with automatic regeneration of failing meals.
 - Shared meals sized per eater, One-off meals, plain-text slots ("eating out", "leftovers").
@@ -142,8 +142,11 @@ change the later phases.
 - Two or three swap choices per meal.
 - Calorie-fit line per meal and per day for each eater with a target.
 - Cook-time limit per night.
-- At most one Favourite per person per week. No repeats of last week's meals unless asked.
-- Full recipes with original ingredient text kept beside parsed amounts.
+- Favourites labelled with whose they are. No repeats of last week's meals unless asked. Repeats
+  within a plan are allowed when the user asks for a pattern or meal prep.
+- Full recipes with original ingredient text kept beside parsed amounts. Servings start scaled to
+  the eaters and the user can change them on any meal.
+- A short check-the-label note on any ingredient that names a brand or packaged product.
 - Pantry with three modes: ignore, prefer on hand then top up (default), cook only from on hand.
 - Staples list, visible and editable.
 - Shopping list built by deterministic aggregation, with Purchase amounts, store sections, manual
@@ -168,7 +171,7 @@ change the later phases.
 - Recurring restock items.
 - Fridge photo to fill the Pantry (#1695, #1696).
 - Undo and history for Pantry changes.
-- Per-food unit conversions.
+- Per-food unit conversions, so a recipe's 300 g of onion becomes 2 onions on the list.
 - Substitutes when an ingredient is missing.
 
 ### Phase 4. Learning and money
@@ -179,7 +182,7 @@ change the later phases.
 - Rebalance the rest of the week after a change.
 - Recipe import from a link or a photo.
 - Shopping list sorted in store-walk order, learned from tick-off order.
-- USDA nutrition check.
+- USDA nutrition cross-check. Large gaps are flagged. It never overrides the estimate.
 
 ### Phase 5. Sharing and automation
 
@@ -195,8 +198,8 @@ so that project can use them.
 
 ### Household
 
-1. As a user, I want to plan for just myself without setting up a household, so that a single
-   person gets value immediately.
+1. As a user, I want to plan either for just myself or for a household, my choice, so that a single
+   person gets value immediately and a family can still add everyone.
 2. As a user, I want to add Household members by name, so that the plan covers everyone I cook for.
 3. As a user, I want each member to have a Meal pattern, so that one person can have breakfast,
    lunch and dinner while another has only dinner.
@@ -208,7 +211,8 @@ so that project can use them.
 7. As a user, I want to record each member's preferences, so that plans lean toward what they enjoy.
 8. As a user, I want restrictions treated as hard rules and preferences as soft ones, so that
    safety never loses to taste.
-9. As a user, I want to give a member a calorie target, so that their portions fit it.
+9. As a user, I want the option of giving a member a calorie target, so that their portions fit it
+   when I care to set one.
 10. As a user, I want my own member record to hold my nutrition targets, so that I set them once.
 11. As a user, I want to link a member to another Moss account, so that sharing can build on it
     later.
@@ -217,8 +221,8 @@ so that project can use them.
 
 ### Generating a plan
 
-14. As a user, I want to ask for a seven-day plan starting on a date I choose, so that it fits my
-    week.
+14. As a user, I want to ask for a plan starting on a date I choose, for seven days or any number
+    of days I name, so that it fits my week.
 15. As a user, I want to see each day fill in as it is written, so that I know it is working.
 16. As a user, I want a small animation while a day is being written, so that the wait feels alive
     without being noisy.
@@ -235,22 +239,22 @@ so that project can use them.
 19. As a user, I want shared meals sized per eater, so that each person's portion fits them.
 20. As a user, I want to give one member a One-off meal, so that someone with different needs is
     covered.
-21. As a user, I want to set a slot to plain text such as "eating out" or "leftovers", so that Moss
-    does not plan a meal we will not cook.
+21. As a user, I want to set a slot to plain text such as "eating out" or "leftovers", and change
+    it later, so that Moss does not plan a meal we will not cook even when plans shift.
 22. As a user, I want to set a cook-time limit for a night, so that busy evenings get quick meals.
 23. As a user, I want to see how each meal fits each eater's calorie target, so that I can judge
     the plan at a glance.
 24. As a user, I want a day total per eater, so that I can see whether a day runs over.
 25. As a user, I want no meal from last week repeated unless I ask, so that we do not get bored.
-26. As a user, I want at most one Favourite per person per week, labelled with whose it is, so that
-    favourites appear without taking over.
+26. As a user, I want Favourites labelled with whose they are, and repeats allowed when I ask for a
+    pattern or meal prep, so that favourites appear without taking over.
 27. As a user, I want to tell Moss to repeat something from last week, so that a hit can return.
 28. As a user, I want the plan to use food from the Pantry according to my Pantry mode, so that I
     waste less and buy less.
 29. As a user, I want to choose ignore, prefer on hand, or only on hand for each plan, so that I
     can do a clear-out week.
-30. As a user, I want a failed day to show a retry button, so that one failure does not lose the
-    week.
+30. As a user, I want a day Moss could not finish writing to show a retry button, so that one
+    failed attempt does not lose the rest of the week.
 31. As a user, I want a clear message when AI is unavailable, while the rest of Meals keeps working,
     so that I can still use my list and pantry.
 32. As a user, I want to cancel a plan that is still being written, so that I can change my mind.
@@ -262,8 +266,8 @@ so that project can use them.
 34. As a user, I want a failing meal rewritten automatically, so that I do not have to fix it.
 35. As a user, I want a slot that cannot be made safe to show as failed with a retry, so that Moss
     never shows an unsafe meal as a fallback.
-36. As a user, I want no warnings about uncertain ingredients like brands, so that the plan is not
-    cluttered with doubts I already manage.
+36. As a user, I want a short note on uncertain ingredients like brands, so that I do not assume a
+    suggested brand was already checked.
 37. As a user, I want swaps, regenerations and imported Favourites to pass the same check, so that
     every path is safe.
 
@@ -295,7 +299,8 @@ so that project can use them.
 
 47. As a user, I want each meal to have a full recipe with ingredients, steps, cook time and
     servings, so that I can cook it.
-48. As a user, I want ingredient amounts scaled to the eaters, so that I cook the right quantity.
+48. As a user, I want ingredient amounts scaled to the eaters as a starting point, and to change
+    the servings myself, so that I cook the right quantity.
 49. As a user, I want the original ingredient wording kept beside the parsed amount, so that nothing
     is lost when parsing is imperfect.
 50. As a user, I want units shown in my chosen system, defaulting to US, so that amounts make sense.
@@ -321,8 +326,8 @@ so that project can use them.
 63. As a user, I want to mark the list Bought, editing the amount I actually got, so that the
     Pantry is right.
 64. As a user, I want Bought lines moved into the Pantry, so that I do not type them twice.
-65. As a user, I want to paste a receipt into Chat and have Moss update the Pantry, so that a shop
-    without the list still counts.
+65. As a user, I want to tell Moss in Chat what I bought, or paste a receipt's text, and have Moss
+    update the Pantry, so that a shop made without the list still counts.
 66. As a user, I want to photograph a receipt for the same result, once Moss can read images, so
     that I do not type.
 67. As a user, I want the list to keep store-neutral structured fields, so that a later ordering
@@ -384,7 +389,8 @@ that I can compare results.
 88. As a user, I want recurring restock items, so that weekly basics appear automatically.
 89. As a user, I want to photograph my fridge to fill the Pantry, so that setup is fast.
 90. As a user, I want to undo Pantry changes and see their history, so that mistakes are cheap.
-91. As a user, I want per-food conversions such as one onion in grams, so that amounts reconcile.
+91. As a user, I want Moss to know how much one of a food weighs, so that a recipe asking for
+    300 g of onion puts 2 onions on the list.
 92. As a user, I want substitutes suggested when something is missing, so that I can still cook.
 
 ### Phase 4 learning and money
@@ -397,7 +403,8 @@ that I can compare results.
 98. As a user, I want to import a recipe from a link or a photo, so that my own recipes join plans.
 99. As a user, I want the list sorted in the order I walk the store, learned from how I tick, so
     that shopping is quicker.
-100.  As a user, I want nutrition checked against USDA data, so that estimates are more trustworthy.
+100.  As a user, I want nutrition estimates cross-checked against USDA data, with large gaps
+      flagged but never overridden, so that one outdated source cannot mislead the plan.
 
 ### Phase 5 sharing and automation
 
@@ -407,8 +414,8 @@ that I can compare results.
 103. As a joining user, I want my own Kitchen put away rather than deleted, and to copy Pantry items
      in first, so that I lose nothing.
 104. As a leaving user, I want my old Kitchen back, so that I can carry on alone.
-105. As a Kitchen owner, I want to be the only one who invites, removes and deletes, so that control
-     is clear.
+105. As a Kitchen owner, I want to be the only one who invites people in, removes people and
+     deletes the shared Kitchen, so that control over who shares it is clear.
 106. As a Kitchen member, I want to edit members, Pantry, plans and lists, so that we share the work.
 107. As a Kitchen member, I want my own food log to stay private, so that sharing a kitchen does not
      share my eating record.
@@ -454,12 +461,13 @@ Kitchen always has exactly one member, its owner.
 - **plan_days.** Date, status (`pending`, `writing`, `ready`, `failed`), progress, failure reason,
   optional cook-time limit.
 - **planned_meals.** Day, slot name, kind (`recipe`, `text`), sharing (`shared`, `solo`), eaters,
-  `locked`, `one_off_for`, favourite source, calorie fit per eater, recipe reference, plain text.
+  `locked`, `one_off_for`, favourite source, servings override, calorie fit per eater, recipe reference, plain text.
   A `solo` slot produces one planned meal per eater; a per-day override changes `sharing` for that
   slot on that day only.
 - **recipes.** Title, steps, cook minutes, base servings, source (`generated`, `favourite`,
   `imported`).
-- **recipe_ingredients.** Original text, parsed quantity, unit and name, store section.
+- **recipe_ingredients.** Original text, parsed quantity, unit and name, store section,
+  `check_label` flag.
 - **swap_choices.** Planned meal, two or three candidate recipes, status.
 - **ratings.** Member, recipe, stars, rated at.
 - **favourites.** Member, recipe.
@@ -475,7 +483,7 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
 ### Generation
 
 - A plan run enqueues one job per day. Day jobs chain one after another so the no-repeat rule and
-  the Favourite cap see earlier days. This keeps every job inside the module run limit of 500 AI
+  pattern requests see earlier days. This keeps every job inside the module run limit of 500 AI
   calls and ten minutes.
 - Job payloads carry plan and day ids only. Prompts are assembled inside the job from the database.
 - Each day job splits each eater's calorie target across their Meal pattern, asks
@@ -485,6 +493,8 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
 - The Safety check is deterministic first (restriction terms against parsed and original ingredient
   text) and AI-assisted second. A failing meal is regenerated up to a fixed cap. A meal still
   failing after the cap leaves its slot failed with a retry.
+- The Safety check never vouches for a brand. An ingredient that names a brand or packaged
+  product gets `check_label`, and the page shows a short check-the-label note.
 - Locked meals, plain-text slots and unchanged days are never rewritten.
 - A `solo` slot generates one meal per eater against that eater's target and restrictions only.
 - Mid-week re-plan reuses the day jobs for days after today (and today's meals whose slot time has
@@ -505,6 +515,7 @@ Log tables keep `owner_user_id` only. The log is personal and never moves into a
 
 - The list is built by deterministic aggregation with no AI. Lines merge by normalised name and
   compatible unit. Incompatible units stay as separate lines.
+- Ingredient amounts use a meal's servings override when set.
 - Pantry subtraction follows the plan's Pantry mode. Purchase amounts round up using a module-owned
   table of pack sizes, falling back to the raw amount.
 - Each line stores the planned meals it came from. A plan change rebuilds generated lines and
@@ -547,7 +558,8 @@ Three seams cover everything, agreed with Ben 2026-10-09.
    - Plan generation per day, chaining order, progress, cancel, failed day and retry.
    - Safety check pass, rewrite, cap reached, and every path that creates a meal (generate, swap,
      regenerate, Favourite placement).
-   - No-repeat rule against last week and its override, Favourite cap per person per week.
+   - No-repeat rule against last week and its override, repeats on request for patterns and meal
+     prep, check-the-label notes on brand ingredients, servings override feeding the list.
    - Lock, regenerate all, one day and one meal, move, change eaters, plain-text slots,
      One-off meals, cook-time limit.
    - Calorie fit per meal and per day.
