@@ -6,14 +6,15 @@ import { getMe } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
-import { Group, Note, Row, Select } from "./settings-ui";
+import { Note, Row, Select } from "./settings-ui";
 import type { AiConfiguredModelDto } from "@moss/shared";
 
 function modelGroupLabel(model: AiConfiguredModelDto): string {
   return model.providerDisplayName || "Unknown provider";
 }
 
-export function ChatLockGroup() {
+/** The chat lock for this account, as rows inside the "Which model does what" section. */
+export function ChatLockRows() {
   const queryClient = useQueryClient();
   const { toast } = useFeedback();
 
@@ -64,12 +65,9 @@ export function ChatLockGroup() {
   };
 
   return (
-    <Group
-      title="Chat lock (this account)"
-      desc="Pin a specific model for your own chat sessions. While locked, no instance-wide override applies to you."
-    >
+    <>
       <Row
-        name="Locked model"
+        name="Lock my chat to one model"
         desc={effectiveDesc()}
         control={
           <Select
@@ -103,6 +101,6 @@ export function ChatLockGroup() {
           No chat-capable active models on your account.
         </Note>
       ) : null}
-    </Group>
+    </>
   );
 }

@@ -293,11 +293,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "models yet', 'The sign-in helper is not running', 'The provider rejected the API key', or 'Could not reach the provider') and an " +
       "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
       "reads '* Manually added', and they survive refreshes and re-logins). A decision model (the " +
-      "System One provider kind) is offered as three presets: Jev (TypeSafe), Clef (Cloudflare) and " +
+      "System One provider kind) is offered as three choices under Decision models: Jev, Clef and " +
       "Any compatible service. Jev asks for an optional address and an API key; Clef asks for a " +
       "Cloudflare account ID and API token and builds the address from them; Any compatible " +
-      "service asks for an address and an API key, stays addable more than once, and is named for " +
-      "its address host (for example Decision model (openrouter.ai)). A decision " +
+      "service asks for an address and an API key and stays addable more than once. A decision " +
       "model answers fixed named questions and is used only for the Trail Marker focus judgment " +
       "and the story and email sorting questions, not chat: its models are offered only in the " +
       "Classifier row and its card has no Set as default button. A model added by hand on a " +
@@ -315,11 +314,19 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +
-      "on the login's default. The provider catalog offers explicit Codex and OpenCode CLI choices " +
-      "because they share a protocol family but use separate agent identities; changing an existing " +
-      "OpenAI-compatible provider to CLI auth requires choosing its agent. " +
-      "The catalog also offers Anthropic (API key), whose optional Base URL field points it at any " +
-      "Anthropic-compatible service; chat, background jobs and model lists use that address. " +
+      "on the login's default. The Providers header and the empty state each have an Add provider button that opens one " +
+      "dialog with two steps. Choose lists Sign in with a subscription (Claude, Codex, Gemini, " +
+      "OpenCode), Use an API key (OpenAI-compatible, Anthropic, Google, Ollama (local)) and " +
+      "Decision models (Jev, Clef, Any compatible service); Connect starts with a Name field " +
+      "prefilled with the next free name (Claude, then Claude 2) and shows only the fields that " +
+      "choice needs, and Back returns to Choose. A subscription choice has no fields and ends in " +
+      "the sign-in dialog. How a provider connects is fixed when it is added, so a card has no " +
+      "Authentication switch and no CLI agent dropdown; to change method, remove the provider " +
+      "and add it again. API key choices can be added any number of times. A subscription " +
+      "choice that already has a provider is disabled with the line 'Already connected. Remove " +
+      "it to sign in with another account.', because a second subscription of the same kind " +
+      "would share the first sign-in. Anthropic by API key has an optional Base URL field that " +
+      "points it at any Anthropic-compatible service; chat, background jobs and model lists use that address. " +
       "A provider address that includes a username or password is refused when saved. " +
       "An Anthropic or OpenAI-compatible API-key provider card also shows whether chat can use it. " +
       "When chat cannot, a line on the card reads 'The provider rejected the API key', 'Could " +
@@ -353,9 +360,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in. " +
-      "The Services group has an Email reading row: it reads the emails the classifier " +
+      "The page's second section, Which model does what, holds the Chat and briefing and Email reading rows, the Classifier row, the switch that lets people choose their own chat model and the lock that pins your own chat to one model. The Voice, Web search and Auto-approve actions sections start collapsed, each showing a one-line summary of its state, and remember open or closed per browser. The Email reading row: it reads the emails the classifier " +
       "cannot settle and writes their summaries and suggested actions. " +
-      "The Services group ends with a Classifier row: a dropdown with Use main model and " +
+      "The section ends its model rows with a Classifier row: a dropdown with Use main model and " +
       "every active JSON-capable model, grouped by provider, plus a Chat gate choice of Off, " +
       "Shadow or On. The Chat gate is an instance-wide setting held through the admin " +
       "configuration boundary. Any of Off, Shadow or On can be picked as soon as a classifier " +
@@ -386,7 +393,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "confirmations and account or policy notices stay kept and searchable but are left out of " +
       "the morning briefing. Mail it is unsure about, or all mail when it fails or none is " +
       "chosen, is sorted by the main model as before. A " +
-      "separate Web search group has a 'Use your model's built-in web search' switch, on by " +
+      "Web search section (collapsed by default) has a 'Use your model's built-in web search' switch, on by " +
       "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
       "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +
       "field below it is described as giving consistent results for every model, including " +

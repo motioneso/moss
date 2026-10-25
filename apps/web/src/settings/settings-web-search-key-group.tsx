@@ -7,7 +7,7 @@ import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
-import { Field, Group, Note, Row, Switch } from "./settings-ui";
+import { CollapsibleGroup, Field, Note, Row, Switch } from "./settings-ui";
 import { Button } from "@moss/ui";
 
 export function WebSearchKeyGroup() {
@@ -59,9 +59,10 @@ export function WebSearchKeyGroup() {
       : "Off. Add a Brave key or turn on built-in search.";
 
   return (
-    <Group
+    <CollapsibleGroup
       title="Web search"
-      desc={`${assistantName} can search the live web to answer questions. Each person's chat model uses its own built-in search by default; add a Brave Search key for consistent results across every model, including local ones.`}
+      storageKey="web-search"
+      summary={configured ? "Brave key set" : nativeSearchEnabled ? "Built-in search" : "Off"}
     >
       <Row
         name="Use your model's built-in web search"
@@ -132,6 +133,6 @@ export function WebSearchKeyGroup() {
           </>
         )}
       </Note>
-    </Group>
+    </CollapsibleGroup>
   );
 }

@@ -7,12 +7,13 @@ import {
   listAiModels,
   listAiProviders,
   listAiServiceBindings,
-  putAiServiceBinding
+  putAiServiceBinding,
+  getVoiceEndpoint
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
-import { Field, Group, Note, Select } from "./settings-ui";
+import { CollapsibleGroup, Field, Group, Note, Select } from "./settings-ui";
 import { VoiceConfigGroup } from "./settings-voice-config-group";
 
 /** One admin-selected transcription model for the instance, using live provider credentials. */
@@ -30,6 +31,12 @@ export function TranscriptionConfigGroup() {
     queryFn: listAiServiceBindings,
     retry: false
   });
+  const voiceEndpoint = useQuery({
+    queryKey: queryKeys.ai.voiceEndpoint,
+    queryFn: getVoiceEndpoint,
+    retry: false
+  });
+  const voiceConfigured = voiceEndpoint.data?.endpoint?.configured ?? false;
   const binding = bindings.data?.bindings.transcription;
   const saved = binding?.kind === "model" ? binding.modelId : "";
   const [draft, setDraft] = useState<string | null>(null);
@@ -72,8 +79,16 @@ export function TranscriptionConfigGroup() {
     onError: (failure) => toast(readError(failure), { tone: "drift" })
   });
   return (
-    <>
-      <Group title="Transcription" desc="For everyone's voice input and Meeting transcripts.">
+    <CollapsibleGroup
+      title="Voice"
+      storageKey="voice"
+      summary={saved || voiceConfigured ? "Configured" : "Not configured"}
+    >
+      <Group
+        title="Transcription"
+        titleAs="h4"
+        desc="For everyone's voice input and Meeting transcripts."
+      >
         {error ? (
           <Note>
             Could not load transcription providers: {readError(error)}{" "}
@@ -141,6 +156,6 @@ export function TranscriptionConfigGroup() {
         ) : null}
       </Group>
       {bindings.isSuccess && !saved ? <VoiceConfigGroup /> : null}
-    </>
+    </CollapsibleGroup>
   );
 }
