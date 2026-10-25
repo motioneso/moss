@@ -834,6 +834,8 @@ export interface AiConfiguredModelsTable {
 }
 
 export interface AiAssistantActionRequestsTable {
+  origin: ColumnType<"module_page" | null, "module_page" | null | undefined, "module_page" | null>;
+  input_digest: ColumnType<Buffer | null, Buffer | null | undefined, Buffer | null>;
   id: string;
   chat_thread_id: string | null;
   chat_session_id: string | null;

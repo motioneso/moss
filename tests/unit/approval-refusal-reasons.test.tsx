@@ -59,6 +59,8 @@ describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (pat
       const now = new Date();
       action = {
         id: "42000000-0000-4000-8000-000000000001",
+        origin: null,
+        input_digest: null,
         owner_user_id: "u1",
         chat_thread_id: input.chatThreadId ?? null,
         chat_session_id: input.chatSessionId ?? null,
