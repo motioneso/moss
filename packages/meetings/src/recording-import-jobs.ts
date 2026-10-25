@@ -39,7 +39,7 @@ export async function registerRecordingImportWorker(
   const service = new RecordingImportService(deps);
   const id = await boss.work<RecordingImportPayload>(
     RECORDING_IMPORT_QUEUE,
-    { pollingIntervalSeconds: 2 },
+    { pollingIntervalSeconds: 0.5 },
     async ([job]) => {
       if (
         !job ||

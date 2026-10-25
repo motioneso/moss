@@ -55,6 +55,11 @@ final class VoiceDelivery {
         store.save(); // Freeze the exact inventory and key before POST; never rebuild after a lost response.
         synchronize(port);
     }
+    /** True while hold-to-talk is on and the receiver has confirmed it. */
+    boolean active() {
+        JSONObject epoch = state.optJSONObject("enablement");
+        return state.optBoolean("desired") && epoch != null && epoch.optBoolean("enabled");
+    }
     JSONObject intent(String id) throws Exception {
         JSONObject epoch = state.optJSONObject("enablement");
         if (!id.startsWith("amsg_") || !state.optBoolean("desired") || epoch == null || !epoch.getBoolean("enabled") ||

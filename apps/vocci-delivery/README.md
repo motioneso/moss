@@ -28,10 +28,10 @@ still pending in #3565. Use a development build for this pre-release flow.
    **Send code** and enter the email code directly in the app. If requested, enter
    your authenticator code. Resend is explicit and shows a cooldown. Unsupported
    sign-in methods stop with an explanation; this does not create an account.
-3. Choose a ring from **Rings on your Vocci account**, then **Select ring**. Allow
-   Nearby devices, turn Bluetooth on and keep the ring close. If Vocci is installed,
-   open its app settings → Permissions and remove Nearby devices access. Return
-   and choose **Verify ring**. Cloud lookup alone does not complete verification.
+3. Choose a ring from **Rings on your Vocci account**, then **Select ring**. If Vocci
+   is installed, open its app settings → Permissions and remove Nearby devices access.
+   Then allow Nearby devices for this app, turn Bluetooth on and keep the ring close.
+   Return and choose **Verify ring**. Cloud lookup alone does not complete verification.
 4. After setup is saved, review Bluetooth, notifications and background battery
    settings in **Delivery**, then explicitly **Start delivery**. Enable
    **Hold-to-talk in Main chat** only when you want it. Enrollment waits for two
@@ -107,7 +107,7 @@ and notifications. The ongoing notification reports record-derived progress and
 opens the status screen, with Start/Stop, permissions, account/ring identity,
 voice opt-in and recent queue entries. To stop explicitly, launch the activity with action `stop`; physical
 proof cleanup also force-stops this developer package before restoring Vocci.
-The service polls every 30 seconds and retains a partial wake lock only during
+The service polls every 30 seconds. While hold-to-talk is on it instead keeps one ring link open between cycles and starts a cycle when the ring reports a press ending (hold, then idle), re-checking every 1.5 s for up to five tries until the recording is complete. A silent or dropped link reconnects after 3 s, and a one-minute listen acts as the safety net. A hold-to-talk recording is fetched on first sighting once its sidecar is complete; other recordings need identical sizes on two listings. It retains a partial wake lock only during
 bounded work. Sticky service restart handles OS reclamation. An explicit Start also enables
 recovery after boot/unlock and app update; Stop disables recovery. Android can
 refuse a background start, which leaves an Open app/Start delivery reminder.

@@ -41,7 +41,7 @@ export async function registerVoiceRequestWorker(
 ) {
   return boss.work<VoiceRequestPayload>(
     CHAT_VOICE_REQUEST_QUEUE,
-    { pollingIntervalSeconds: 2 },
+    { pollingIntervalSeconds: 0.5 },
     async ([job]) => {
       if (
         !job?.data ||

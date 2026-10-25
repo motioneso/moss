@@ -119,10 +119,10 @@ public final class SetupActivity extends Activity {
             link.clearBinding(); inventory = Collections.emptyList(); lookedUp = false;
             return "Moss stays connected. Sign into Vocci again to choose another ring.";
         }), false);
-        nearby = button(ringSection, "Allow Nearby devices", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 31), false);
-        appSettings = button(ringSection, "Open companion app settings", () -> settings(getPackageName()), false);
         text(ringSection, "If you use the Vocci app, remove its Nearby devices permission before verifying here. Your ring and recordings are kept.", 15, false);
         handoff = button(ringSection, "Open Vocci app settings", () -> settings(DeliveryService.OFFICIAL), false);
+        nearby = button(ringSection, "Allow Nearby devices", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 31), false);
+        appSettings = button(ringSection, "Open companion app settings", () -> settings(getPackageName()), false);
         permissionSummary = text(ringSection, "", 15, false);
         verifyRing = button(ringSection, "Verify ring", () -> perform(() -> {
             if (!bluetoothAllowed()) return "Allow Nearby devices in this app's settings before verifying.";

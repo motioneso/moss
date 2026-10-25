@@ -114,6 +114,12 @@ final class RingConnection implements AutoCloseable {
             throw new IOException("write_unavailable");
         await("write");
     }
+    private final HoldWatcher watcher = new HoldWatcher();
+    private volatile boolean released;
+    private void note(int command, byte[] payload) {
+        telemetry.accept(command, payload, System.currentTimeMillis());
+        if (watcher.accept(command, payload)) released = true;
+    }
     private final ArrayDeque<byte[]> responses = new ArrayDeque<>();
     private byte[] response(String id, int opcode) throws Exception {
         return response(id, opcode, System.nanoTime() + TimeUnit.SECONDS.toNanos(60));
@@ -124,7 +130,7 @@ final class RingConnection implements AutoCloseable {
             Event event = pending.isEmpty() ? next(deadline) : pending.remove();
             if (event.kind.equals(id)) {
                 (id.equals(RingAuth.AUTH_UUID) ? auth : uart).accept(event.bytes, (command, payload) -> {
-                    if (id.equals(RingProtocol.UART)) telemetry.accept(command, payload, System.currentTimeMillis());
+                    if (id.equals(RingProtocol.UART)) note(command, payload);
                     if (command == opcode) responses.add(payload);
                 });
             } else if (event.kind.equals(RingProtocol.FILE)) throw new IOException("orphan_file_bytes");
@@ -146,6 +152,28 @@ final class RingConnection implements AutoCloseable {
             } catch (InterruptedException interrupted) { throw interrupted; }
             catch (Exception unavailable) { /* Other optional fields may still be supported. */ }
         }
+    }
+    /**
+     * Waits on the open link for up to {@code ms}. Returns true when the ring reports the end of a hold press, and false on
+     * timeout or when {@code interrupted} turns true. Throws if the link drops or the ring goes silent (it sends a message
+     * about once a second while connected).
+     */
+    boolean listen(long ms, java.util.function.BooleanSupplier interrupted) throws Exception {
+        long now = System.nanoTime(), end = now + TimeUnit.MILLISECONDS.toNanos(ms), lastSeen = now;
+        while (System.nanoTime() < end && !interrupted.getAsBoolean()) {
+            if (released) { released = false; return true; }
+            if (closed || overflow) throw new IOException("connection_closed");
+            Event e = pending.isEmpty() ? events.poll(500, TimeUnit.MILLISECONDS) : pending.remove();
+            if (e == null) {
+                if (System.nanoTime() - lastSeen > TimeUnit.SECONDS.toNanos(10)) throw new IOException("link_silent");
+                continue;
+            }
+            if (e.kind.equals("disconnected") || e.status != 0) throw new IOException("gatt_timeout_or_error");
+            lastSeen = System.nanoTime();
+            if (e.kind.equals(RingProtocol.UART)) uart.accept(e.bytes, this::note);
+            if (released) { released = false; return true; }
+        }
+        return false;
     }
     Map<String, Integer> inventory() throws Exception {
         stage = "inventory";
@@ -177,7 +205,7 @@ final class RingConnection implements AutoCloseable {
             Event event = pending.isEmpty() ? next() : pending.remove();
             if (event.kind.equals(RingProtocol.FILE)) transfer.append(event.bytes);
             else if (event.kind.equals(RingProtocol.UART)) uart.accept(event.bytes, (command, payload) -> {
-                telemetry.accept(command, payload, System.currentTimeMillis());
+                note(command, payload);
                 if (command == 0x12) transfer.control(payload);
             });
         }
