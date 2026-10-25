@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-25
+
+#### Fixed
+
+- **Faster ring hold-to-talk.** Holding the ring button to talk now gets a response in about 15 seconds instead of around 50, and those recordings no longer show up as meetings. [PR #3704](https://github.com/motioneso/moss/pull/3704)
+
 ### 2026-10-24
 
 #### Fixed
