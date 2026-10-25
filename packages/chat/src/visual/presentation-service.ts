@@ -89,6 +89,7 @@ export class VisualPresentationTurn {
     const registered = this.registry.register(this.identity, input);
     if (!registered.ok) return registered;
     this.sourceFallbacks.set(registered.ref, formatted);
+    this.sources.push({ ref: registered.ref, templateKind: template.kind });
     return {
       ...registered,
       templateKind: template.kind,
@@ -97,6 +98,22 @@ export class VisualPresentationTurn {
   }
 
   private readonly sourceFallbacks = new Map<string, string>();
+  private readonly sources: { ref: string; templateKind: string }[] = [];
+
+  /**
+   * Presents the latest source snapshot of one kind when the model registered it but did not
+   * present a visual itself. Does nothing once a presentation was attempted.
+   */
+  presentRegisteredSource(templateKind: string): PresentationResult | undefined {
+    if (this.attempted) return undefined;
+    const source = [...this.sources].reverse().find((s) => s.templateKind === templateKind);
+    if (!source) return undefined;
+    return this.present({
+      catalogVersion: BUILT_IN_VISUAL_CATALOG_VERSION,
+      blocks: [{ kind: templateKind, snapshotRefs: [source.ref] }],
+      interactions: []
+    });
+  }
 
   present(proposal: unknown): PresentationResult {
     if (this.attempted) {

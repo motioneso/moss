@@ -511,6 +511,8 @@ export async function runChatTurn(
     if (controller.signal.aborted)
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
 
+    // A reminder listing always gets its card, even when the model answered in prose.
+    visualTurn?.presentRegisteredSource("reminders.summary");
     const checkedVisual = visualTurn?.reply
       ? validateVisualCatalogReply(visualTurn.reply)
       : undefined;

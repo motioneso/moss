@@ -120,6 +120,36 @@ describe("read-only reminder summary", () => {
     }
     turn.close();
   });
+  it("presents the latest registered summary when the model did not, and only once", () => {
+    const service = new VisualPresentationService();
+    const identity = { actorUserId: "actor", threadId: "thread", turnId: "turn" };
+    const ctx = { ...identity, requestId: "test", chatSessionId: "session" };
+    const turn = service.begin("session", identity);
+    expect(turn.presentRegisteredSource("reminders.summary")).toBeUndefined();
+    expect(service.registerSnapshot(ctx, reminderSnapshot()).ok).toBe(true);
+    const presented = turn.presentRegisteredSource("reminders.summary");
+    expect(presented?.ok).toBe(true);
+    expect(turn.reply?.blocks.map((b) => b.kind)).toEqual(["reminders.summary"]);
+    expect(turn.presentRegisteredSource("reminders.summary")).toBeUndefined();
+    turn.close();
+  });
+  it("does not replace a visual the model already presented", () => {
+    const service = new VisualPresentationService();
+    const identity = { actorUserId: "actor", threadId: "thread", turnId: "turn" };
+    const ctx = { ...identity, requestId: "test", chatSessionId: "session" };
+    const turn = service.begin("session", identity);
+    const registered = service.registerSnapshot(ctx, reminderSnapshot());
+    if (!registered.ok) throw new Error("registration failed");
+    service.present(ctx, {
+      catalogVersion: registered.catalogVersion,
+      blocks: [{ kind: registered.templateKind, snapshotRefs: [registered.ref] }],
+      interactions: []
+    });
+    const before = turn.reply;
+    expect(turn.presentRegisteredSource("reminders.summary")).toBeUndefined();
+    expect(turn.reply).toBe(before);
+    turn.close();
+  });
   it("binds references to actor, thread and turn and rejects forged references", () => {
     const service = new VisualPresentationService();
     const identity = { actorUserId: "actor", threadId: "thread", turnId: "turn" };
