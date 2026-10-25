@@ -72,11 +72,20 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
   await signIn(page);
   await openAssistantAndAiSettings(page);
 
-  // A JSON-capable model under a sorting-bindable provider kind (Anthropic CLI, created like the
+  // A JSON-capable model under a sorting-bindable provider kind (Claude, created like the
   // #2842 spec) is what the Classifier row offers.
-  await page.getByRole("button", { name: "Add provider" }).click();
-  await page.getByRole("button", { name: "Anthropic", exact: true }).click();
-  const ownerCard = page.locator(".prov").filter({ has: page.getByLabel("Remove Anthropic") });
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const addDialog = page.getByRole("dialog", { name: /Add a provider|Connect/ });
+  await addDialog.getByRole("radio", { name: "Claude" }).check();
+  await addDialog.getByRole("button", { name: "Next" }).click();
+  await addDialog.getByRole("button", { name: /^Add/ }).click();
+  // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
+  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  await addedSignIn.waitFor({ timeout: 10_000 }).then(
+    () => addedSignIn.getByRole("button", { name: "Close" }).click(),
+    () => undefined
+  );
+  const ownerCard = page.locator(".prov").filter({ has: page.getByLabel("Remove Claude") });
   await expect(ownerCard).toBeVisible({ timeout: 30_000 });
   await ownerCard.getByRole("button", { name: "Add model", exact: true }).click();
   await ownerCard.getByLabel("Model id").fill("uat-classifier-model");

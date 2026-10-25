@@ -340,6 +340,44 @@ describe("AiProvidersPane Add provider dialog", () => {
     await unmount(renderer);
   });
 
+  it("still renders and edits a pre-existing Custom provider", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        {
+          id: "p-custom",
+          providerKind: "custom",
+          displayName: "My custom host",
+          authMethod: "api_key",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: true,
+          isInstanceDefault: false
+        }
+      ]
+    } as never);
+    vi.mocked(apiClient.updateAiProvider).mockClear();
+    const renderer = await renderPane();
+    expect(JSON.stringify(renderer.toJSON())).toContain("My custom host");
+
+    clickButtonByText(renderer, "Edit");
+    await flush();
+    expect(renderer.root.findByProps({ "aria-label": "Base URL" })).toBeTruthy();
+    await fill(renderer, "API key", "sk-custom-new");
+    clickButtonByText(renderer, "Save");
+    await flush();
+
+    expect(apiClient.updateAiProvider).toHaveBeenCalledWith(
+      "p-custom",
+      expect.objectContaining({ credentialPayload: { apiKey: "sk-custom-new" } })
+    );
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).not.toContain("Authentication");
+    expect(text).not.toContain("CLI agent");
+
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    await unmount(renderer);
+  });
+
   it("shows one section for which model does what, with the override switch inside it", async () => {
     const renderer = await renderPane();
     const text = JSON.stringify(renderer.toJSON());
