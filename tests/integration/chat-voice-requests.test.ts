@@ -264,7 +264,12 @@ describe("durable Main voice admission", () => {
       const { service, deps } = setup();
       const { request } = await service.admit(actor, input({ transcript }));
       expect(request.state).toBe("no-speech");
-      expect(request.transcript).toBe(transcript);
+      expect(request.transcript).toBe("");
+      const replay = await service.admit(
+        actor,
+        input({ transcript, recordingId: request.recording_id })
+      );
+      expect(replay.created).toBe(false);
       await service.process(actor, request.id);
       expect(deps.submit).not.toHaveBeenCalled();
       expect(deps.schedule).not.toHaveBeenCalled();

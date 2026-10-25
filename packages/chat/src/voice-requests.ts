@@ -118,7 +118,8 @@ export class VoiceRequestRepository {
         recording_id: input.recordingId,
         fingerprint,
         transcript_revision: input.transcriptRevision,
-        transcript: input.transcript,
+        // The table requires no-speech rows to hold an empty transcript; the fingerprint keeps the source.
+        transcript: state === "no-speech" ? "" : input.transcript,
         ...timing,
         turn_id: randomUUID(),
         user_message_id: randomUUID(),
