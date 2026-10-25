@@ -1,7 +1,7 @@
 # One path for AI calls
 
 Issue #3689. Follow-up to #3565 (PRs #3608 and #3690). Evidence in
-`docs/evidence/acp-tools-off/results.md`. Status: draft for Ben's approval. No build yet.
+`docs/evidence/acp-tools-off/results.md`. Status: approved by Ben, 2026-10-25.
 
 ## Problem
 
