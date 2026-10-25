@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import type { Socket } from "node:net";
 import { processIdentity, supervisorError } from "./trust.js";
-import type { WatchdogProcessIdentity } from "../../apps/api/src/computer/host-contract.js";
+import type { WatchdogProcessIdentity } from "./policy.js";
 
 const ACK_TIMEOUT_MS = 7000;
 
