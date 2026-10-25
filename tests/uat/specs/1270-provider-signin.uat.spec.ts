@@ -65,13 +65,21 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.getByRole("button", { name: "AI providers" }).click();
 }
 
-// `exact` is required throughout the provider picker: getByRole's name match is substring-based by
-// default, so a bare "OpenAI" would also match the "OpenAI-compatible" entry (a strict-mode
-// violation) and "Anthropic" would match the "Remove Anthropic" icon button.
+// Adds a subscription provider through the Add provider dialog (choose, Next, Add and sign in)
+// and closes the sign-in dialog that opens afterwards. The empty state has a second Add provider
+// button, so the first one is used. Radio names are matched by substring: "Claude" is unique.
 async function addProviderFromPicker(page: Page, label: string): Promise<void> {
-  await page.getByRole("button", { name: "Add provider" }).click();
-  await expect(page.getByText("Add a provider")).toBeVisible();
-  await page.getByRole("button", { name: label, exact: true }).click();
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const addDialog = page.getByRole("dialog", { name: /Add a provider|Connect/ });
+  await expect(addDialog).toBeVisible();
+  await addDialog.getByRole("radio", { name: label }).check();
+  await addDialog.getByRole("button", { name: "Next" }).click();
+  await addDialog.getByRole("button", { name: /^Add/ }).click();
+  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  await addedSignIn.waitFor({ timeout: 10_000 }).then(
+    () => addedSignIn.getByRole("button", { name: "Close" }).click(),
+    () => undefined
+  );
 }
 
 // The Live-Path Gate wants screenshots on the PR, not just a green tick, so this spec captures the
@@ -132,11 +140,11 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   await expect(page.getByText("No providers yet")).toBeVisible();
 
   // --- A CLI catalog entry yields a CLI provider (the passthrough's cli branch).
-  await addProviderFromPicker(page, "Anthropic");
-  const anthropic = providerCard(page, "Anthropic");
+  await addProviderFromPicker(page, "Claude");
+  const anthropic = providerCard(page, "Claude");
   // The card renders two .prov__auth lines (status, then an ACP sign-in note, #2727); the status
-  // line reads "Anthropic CLI", "Anthropic CLI <version>" or "Anthropic CLI unavailable".
-  await expect(anthropic.locator(".prov__auth").first()).toContainText("Anthropic CLI");
+  // line reads "Claude CLI", "Claude CLI <version>" or "Claude CLI unavailable".
+  await expect(anthropic.locator(".prov__auth").first()).toContainText("Claude CLI");
 
   // --- d05fca6c: a real sign-in path from Settings, in whichever form this stack's CLI presence
   // probe dictates. "Log in" (automated) appears in the card actions only when the CLI is present;
@@ -155,9 +163,9 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   if (usesAutomatedLogin) {
     await automated.click();
     // settings-provider-login-dialog.tsx aria-label = `${displayName} sign-in`.
-    const loginDialog = page.getByRole("dialog", { name: "Anthropic sign-in" });
+    const loginDialog = page.getByRole("dialog", { name: "Claude sign-in" });
     await expect(loginDialog).toBeVisible();
-    await expect(loginDialog.getByText("Sign in to Anthropic")).toBeVisible();
+    await expect(loginDialog.getByText("Sign in to Claude")).toBeVisible();
     // The flow STARTS on open (beginLogin), so it lands in one of: awaiting-token (paste a code),
     // awaiting-authorization/polling (device code), error (no authenticated CLI on this stack).
     // Any of those proves a real server round-trip rather than main's cosmetic toast. Assert the
@@ -184,7 +192,7 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   if (usesAutomatedLogin) {
     await anthropic.getByRole("button", { name: "Terminal" }).click();
   }
-  const terminal = page.getByRole("dialog", { name: "Anthropic terminal" });
+  const terminal = page.getByRole("dialog", { name: "Claude terminal" });
   await expect(terminal).toBeVisible();
 
   // First run: no terminal password set yet (terminal-modal.tsx set-password phase). This is a
@@ -241,27 +249,29 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   await expect(terminal).not.toBeAttached();
 });
 
-// #1325: an api_key catalog entry (Mistral here) used to fire createAiProvider immediately with no
+// #1325: an api_key catalog entry (OpenAI-compatible here) used to fire createAiProvider immediately with no
 // credentialPayload, and the server's fail-closed guard (packages/ai/src/routes.ts:759) 400'd every
 // attempt — the picker showed an error toast and added nothing. settings-ai-admin-pane.tsx now
 // branches the picker's onClick on authMethod: api_key opens an inline credential form and only
 // creates once a key is entered. Fable-verified: the create route soft-fails discovery (routes.ts
 // ~199-214, try/catch), so a fake key still yields a created, rendered provider card even though it
-// can never really authenticate — this is expected on a UAT stack with no live Mistral credential.
+// can never really authenticate — this is expected on a UAT stack with no live provider credential.
 test("Settings collects an API key before creating a picker provider (#1325)", async ({ page }) => {
   await signIn(page);
   await skipOnboarding(page);
   await openAssistantAndAiSettings(page);
 
-  await addProviderFromPicker(page, "Mistral");
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const addDialog = page.getByRole("dialog", { name: /Add a provider|Connect/ });
+  await addDialog.getByRole("radio", { name: "OpenAI-compatible" }).check();
+  await addDialog.getByRole("button", { name: "Next" }).click();
 
   // Still just the form: no provider has been created yet. `exact: true` is required: the same
   // Admin / Setup settings page also mounts the voice and web-search groups' own "...API key"
-  // fields (settings-voice-config-group.tsx, settings-web-search-key-group.tsx), and getByLabel's
-  // default substring match would otherwise catch those too (strict-mode violation).
-  const apiKeyField = page.getByLabel("API key", { exact: true });
+  // fields, and getByLabel's default substring match would otherwise catch those too.
+  const apiKeyField = addDialog.getByLabel("API key", { exact: true });
   await expect(apiKeyField).toBeVisible();
-  const addButton = page.getByRole("button", { name: "Add", exact: true });
+  const addButton = addDialog.getByRole("button", { name: "Add", exact: true });
   await expect(addButton).toBeDisabled();
   await shot(page, "05-picker-api-key-credential-form");
 
@@ -269,7 +279,7 @@ test("Settings collects an API key before creating a picker provider (#1325)", a
   await expect(addButton).toBeEnabled();
   await addButton.click();
 
-  const mistral = providerCard(page, "Mistral");
+  const mistral = providerCard(page, "OpenAI-compatible");
   await expect(mistral).toBeVisible();
   // hasCredential is NOT NULL on a non-cli provider — no "No credential" branch to fall into.
   await expect(mistral.locator(".prov__auth")).toContainText("API key stored");

@@ -11,7 +11,7 @@ import {
   Trash2,
   Unlink
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button, IconButton, Menu } from "@moss/ui";
 import {
@@ -35,10 +35,10 @@ import { useAssistantName } from "../api/use-assistant-name.js";
 import { CliUpdateStatus, cliVersionLine } from "./cli-update-status";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
-import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
+import { Badge, Field, Group, PaneHead, Row, Select, Switch } from "./settings-ui";
 import { MODEL_TIERS, TIERS } from "./settings-ai-edit-model-form";
-import { CREDENTIAL_EXAMPLES, OPENAI_COMPATIBLE_CLI_AGENTS } from "./settings-ai-provider-catalog";
-import { ProviderAddPanel } from "./settings-ai-provider-picker";
+import { CREDENTIAL_EXAMPLES } from "./settings-ai-provider-catalog";
+import { AddProviderDialog } from "./settings-ai-provider-picker";
 import { ProviderModels } from "./settings-ai-provider-models";
 import { TerminalModal } from "./terminal-modal";
 import {
@@ -46,13 +46,12 @@ import {
   supportsAutomatedProviderLogin,
   type AutomatedLoginProvider
 } from "./settings-provider-login-dialog";
-import { ChatLockGroup } from "./settings-ai-chat-lock-group";
+import { ChatLockRows } from "./settings-ai-chat-lock-group";
 import { YoloAdminGroup } from "./settings-yolo-admin-group";
 import { WebSearchKeyGroup } from "./settings-web-search-key-group";
 import { TranscriptionConfigGroup } from "./settings-transcription-config-group";
 import { SortingModelRow } from "./settings-ai-sorting-row";
 import {
-  type AiAuthMethod,
   type AiConfiguredModelDto,
   type AiModelCapability,
   type AiModelTier,
@@ -94,7 +93,6 @@ function ProviderCard(props: {
   readonly models: readonly AiConfiguredModelDto[];
   readonly editing: boolean;
   readonly onEdit: (id: string | null) => void;
-  readonly onAuth: (id: string, method: AiAuthMethod, acpAgentId?: string) => void;
   readonly onLogin: () => void;
   readonly onCredential: (id: string, input: { baseUrl: string; apiKey: string }) => void;
   readonly onModelOverride: (model: AiConfiguredModelDto, allowed: boolean) => void;
@@ -113,8 +111,6 @@ function ProviderCard(props: {
   const { toast } = useFeedback();
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
-  const [cliAgentId, setCliAgentId] = useState(provider.acpAgentId ?? "");
-  const [requiresCliAgentSelection, setRequiresCliAgentSelection] = useState(false);
   // #1059 — a CLI-auth provider has no API key to credential-test; its Test action opens
   // a live owner-gated terminal onto the CLI instead of calling testMutation.
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -252,62 +248,6 @@ function ProviderCard(props: {
 
       {props.editing ? (
         <div className="prov__edit">
-          <Field
-            label="Authentication"
-            hint="CLI uses an existing subscription — no key to manage. API key bills usage directly to the provider."
-          >
-            <Segmented<AiAuthMethod>
-              value={provider.authMethod}
-              options={[
-                { value: "cli", label: "CLI subscription" },
-                { value: "api_key", label: "API key" }
-              ]}
-              ariaLabel="Authentication method"
-              onChange={(method) => {
-                if (method === "cli" && provider.providerKind === "openai-compatible") {
-                  if (!cliAgentId) {
-                    setRequiresCliAgentSelection(true);
-                    return;
-                  }
-                  props.onAuth(provider.id, method, cliAgentId);
-                  return;
-                }
-                props.onAuth(provider.id, method);
-              }}
-            />
-          </Field>
-          {provider.providerKind === "openai-compatible" ? (
-            <Field
-              label="CLI agent"
-              hint={
-                requiresCliAgentSelection
-                  ? "Choose a CLI agent before switching to CLI auth."
-                  : "Codex and OpenCode use separate sign-ins, so choose the agent this provider should launch."
-              }
-            >
-              <Select
-                value={cliAgentId}
-                aria-label={`${provider.displayName} CLI agent`}
-                onChange={(event) => {
-                  const agentId = event.target.value;
-                  setCliAgentId(agentId);
-                  if (provider.authMethod === "cli" || requiresCliAgentSelection) {
-                    setRequiresCliAgentSelection(false);
-                    if (agentId) props.onAuth(provider.id, "cli", agentId);
-                  }
-                }}
-              >
-                <option value="" disabled={provider.authMethod === "cli"}>
-                  Choose a CLI agent
-                </option>
-                {OPENAI_COMPATIBLE_CLI_AGENTS.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : null}
           {provider.authMethod === "cli" ? (
             <div className="provcfg__cli">
               <span className="provcfg__cli-ic">
@@ -538,7 +478,8 @@ export function AiProvidersPane() {
   const queryClient = useQueryClient();
   const { toast, confirm } = useFeedback();
   const assistantName = useAssistantName();
-  const [pick, setPick] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [loginProvider, setLoginProvider] = useState<AutomatedLoginProvider | null>(null);
   const providersQuery = useQuery({
@@ -655,30 +596,13 @@ export function AiProvidersPane() {
         desc={`The AI providers this instance runs on, and which model handles each kind of work. Everyone's ${assistantName} draws from what you set up here.`}
       />
       <Group
-        title="User chat override"
-        desc="Let each person choose which allowed chat-capable model answers their own conversations."
-      >
-        <Row
-          name="Allow user override"
-          desc="When off, Personal → Your assistant shows the instance default as read-only."
-          control={
-            <Switch
-              ariaLabel="Allow users to override their chat model"
-              checked={overrideQuery.data?.settings.overrideEnabled ?? false}
-              disabled={overrideQuery.isLoading || overrideToggleMutation.isPending}
-              onChange={(enabled) => overrideToggleMutation.mutate(enabled)}
-            />
-          }
-        />
-      </Group>
-      <Group
         title="Providers"
-        desc={`Add provider accounts for the whole instance. ${assistantName} reads each one's models automatically the moment it connects.`}
         action={
           <Button
+            ref={addButtonRef}
             variant="secondary"
             size="sm"
-            onClick={() => setPick((x) => !x)}
+            onClick={() => setAdding(true)}
             icon={<Plus size={15} />}
           >
             Add provider
@@ -693,9 +617,11 @@ export function AiProvidersPane() {
             <div className="ai-empty__main">
               <div className="ai-empty__t">No providers yet</div>
               <div className="ai-empty__d">
-                {assistantName} can't chat until at least one provider is added. Connect one to
-                bring its models online for everyone on this instance.
+                {assistantName} can't chat until at least one provider is added.
               </div>
+              <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+                Add provider
+              </Button>
             </div>
           </div>
         ) : (
@@ -707,23 +633,6 @@ export function AiProvidersPane() {
                 models={models.filter((m) => m.providerConfigId === provider.id)}
                 editing={editId === provider.id}
                 onEdit={setEditId}
-                onAuth={(id, method, acpAgentId) => {
-                  const selectedAgent = OPENAI_COMPATIBLE_CLI_AGENTS.find(
-                    (agent) => agent.id === acpAgentId
-                  );
-                  updateMutation.mutate({
-                    id,
-                    patch: {
-                      authMethod: method,
-                      ...(method === "cli" && acpAgentId !== undefined
-                        ? {
-                            acpAgentId,
-                            ...(selectedAgent ? { displayName: selectedAgent.label } : {})
-                          }
-                        : {})
-                    }
-                  });
-                }}
                 onLogin={() => {
                   if (
                     provider.acpAgentId !== "opencode" &&
@@ -773,17 +682,27 @@ export function AiProvidersPane() {
             ))}
           </div>
         )}
-        {pick ? (
-          <ProviderAddPanel
-            providers={providers}
-            onAdded={(label) => {
-              setPick(false);
-              void invalidate();
-              toast(`Added ${label}`, { icon: <GitCommitHorizontal size={17} /> });
-            }}
-          />
-        ) : null}
       </Group>
+
+      {adding ? (
+        <AddProviderDialog
+          providers={providers}
+          returnFocusRef={addButtonRef}
+          onClose={() => setAdding(false)}
+          onAdded={(provider, choice) => {
+            setAdding(false);
+            void invalidate();
+            toast(`Added ${provider.displayName}`, { icon: <GitCommitHorizontal size={17} /> });
+            if (
+              choice.authMethod === "cli" &&
+              provider.acpAgentId !== "opencode" &&
+              supportsAutomatedProviderLogin(provider)
+            ) {
+              setLoginProvider(provider);
+            }
+          }}
+        />
+      ) : null}
 
       {loginProvider ? (
         <ProviderLoginDialog
@@ -799,35 +718,45 @@ export function AiProvidersPane() {
         />
       ) : null}
 
-      {providers.length ? (
-        <Group
-          title="Services"
-          desc="Bind each listed service to a mode or a specific capable model. Unlisted AI work is routed automatically."
-        >
-          {SERVICE_ROWS.map((service) => (
-            <ServiceRow
-              key={service.k}
-              service={service}
-              binding={serviceBindingsQuery.data?.bindings[service.k]}
+      <Group
+        title="Which model does what"
+        desc="Pick a mode or a specific model for each job. Work not listed here is routed automatically."
+      >
+        {providers.length ? (
+          <>
+            {SERVICE_ROWS.map((service) => (
+              <ServiceRow
+                key={service.k}
+                service={service}
+                binding={serviceBindingsQuery.data?.bindings[service.k]}
+                models={models}
+                providers={providers}
+              />
+            ))}
+            <SortingModelRow
+              binding={serviceBindingsQuery.data?.bindings.sorting}
               models={models}
               providers={providers}
             />
-          ))}
-          <SortingModelRow
-            binding={serviceBindingsQuery.data?.bindings.sorting}
-            models={models}
-            providers={providers}
-          />
-        </Group>
-      ) : null}
+          </>
+        ) : null}
+        <Row
+          name="Let people choose their own chat model"
+          desc="When off, Personal → Your assistant shows the instance default as read-only."
+          control={
+            <Switch
+              ariaLabel="Allow users to override their chat model"
+              checked={overrideQuery.data?.settings.overrideEnabled ?? false}
+              disabled={overrideQuery.isLoading || overrideToggleMutation.isPending}
+              onChange={(enabled) => overrideToggleMutation.mutate(enabled)}
+            />
+          }
+        />
+        {providers.length ? <ChatLockRows /> : null}
+      </Group>
       <TranscriptionConfigGroup />
-      <ChatLockGroup />
       <WebSearchKeyGroup />
       <YoloAdminGroup />
-      <Note icon={<GitCommitHorizontal size={13} />}>
-        Each person can override which model powers their own chat under{" "}
-        <b>Personal → Your assistant</b>. Background services follow the bindings above.
-      </Note>
     </>
   );
 }

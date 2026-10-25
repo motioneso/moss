@@ -12,7 +12,7 @@ import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
-import { Group, Row, Switch } from "./settings-ui";
+import { CollapsibleGroup, Row, Switch } from "./settings-ui";
 import type { YoloAdminUserDto } from "@moss/shared";
 
 function roleLabel(user: YoloAdminUserDto): string {
@@ -89,9 +89,14 @@ export function YoloAdminGroup() {
   };
 
   return (
-    <Group
+    <CollapsibleGroup
       title="Auto-approve actions"
-      desc="Blanket auto-approval for interactive chat actions. RLS and account permissions still apply."
+      storageKey="auto-approve"
+      summary={
+        yoloQuery.data?.instanceEnabled
+          ? `On, ${allowedUsers.length} ${allowedUsers.length === 1 ? "member" : "members"} allowed`
+          : "Off"
+      }
     >
       <Row
         name="Instance master"
@@ -184,6 +189,6 @@ export function YoloAdminGroup() {
           }
         />
       ))}
-    </Group>
+    </CollapsibleGroup>
   );
 }
