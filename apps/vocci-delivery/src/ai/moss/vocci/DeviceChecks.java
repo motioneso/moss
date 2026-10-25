@@ -131,6 +131,12 @@ public final class DeviceChecks extends Instrumentation {
             check(!store.needsRetrieval(invalid));
             check(store.entries.getJSONObject(invalid).getString("error").equals("sidecar_invalid"));
             check(store.needsRetrieval(id));
+            String cut = "1700000002_cut";
+            store.discover(cut);
+            check(!store.admitSidecar(cut, "{\"record\":[1,\"sta".getBytes(StandardCharsets.UTF_8), false));
+            check(store.needsRetrieval(cut) && !store.entries.getJSONObject(cut).has("error"));
+            check(!store.admitSidecar(cut, "{\"record\":[1,\"sta".getBytes(StandardCharsets.UTF_8), true));
+            check(!store.needsRetrieval(cut));
             String[] invalidDurations = {"", ",{\"duration\":[1,0]}", ",{\"duration\":[1,-1]}", ",{\"duration\":[1,\"bad\"]}", ",{\"duration\":[1,\"NaN\"]}"};
             for (int n = 0; n < invalidDurations.length; n++) {
                 String invalidDuration = "1700000010_duration" + n;

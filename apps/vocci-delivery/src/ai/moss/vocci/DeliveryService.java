@@ -24,6 +24,9 @@ public final class DeliveryService extends Service {
     private PowerManager.WakeLock wake;
     private final Map<String, Integer> previousInventory = new HashMap<>();
     private int reconnectAttempts;
+    // Hold-to-talk keeps one ring link open and listens for the end of a press; fastRetries re-checks the ring soon after a press.
+    private boolean keepOpen;
+    private int fastRetries, admitRetries;
     private final RecordingReminder reminder = new RecordingReminder();
     private int latestStartId;
     interface RetryVoice { JSONObject retry(String statusId) throws Exception; }
@@ -92,6 +95,7 @@ public final class DeliveryService extends Service {
             wake = getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moss:vocci-delivery");
             while (!stopping && !Thread.currentThread().isInterrupted()) {
                 try {
+                    keepOpen = false;
                     wake.acquire(4 * 60 * 60 * 1000L);
                     consumeCommands(client, config);
                     if (!new DeliveryPreferences(this).enabled()) break;
@@ -107,6 +111,7 @@ public final class DeliveryService extends Service {
                         retrieve(config, client);
                         reconnectAttempts = 0;
                         deliver(client);
+                        keepOpen = voice.active() && active != null && !stopping;
                     } else report("storage_capacity");
                 } catch (OwnerMismatch error) { report("owner_mismatch"); break;
                 } catch (MossClient.Rejected error) {
@@ -121,10 +126,19 @@ public final class DeliveryService extends Service {
                     reconnectAttempts = RetryPolicy.connectionFailure(reconnectAttempts);
                     report("retry_pending");
                 } finally {
-                    if (active != null) { active.close(); active = null; }
+                    if (active != null && !keepOpen) { active.close(); active = null; }
                     if (wake.isHeld()) wake.release();
                 }
                 if (stopping || Thread.currentThread().isInterrupted()) break;
+                long lostLinkWait = 0;
+                if (keepOpen && active != null) {
+                    try {
+                        boolean pressed = active.listen(fastRetries > 0 ? 1500 : 60_000, () -> !commands.isEmpty() || stopping);
+                        if (pressed) { fastRetries = 5; admitRetries = 0; } else if (fastRetries > 0) fastRetries--;
+                        continue;
+                    } catch (java.io.IOException lost) { active.close(); active = null; lostLinkWait = 3000; }
+                }
+                if (lostLinkWait > 0) { synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(lostLinkWait); } continue; }
                 synchronized (signal) { if (commands.isEmpty() && !stopping) signal.wait(RetryPolicy.connectionDelayMs(reconnectAttempts)); }
             }
         } catch (InterruptedException error) { Thread.currentThread().interrupt();
@@ -142,7 +156,7 @@ public final class DeliveryService extends Service {
     }
     private void retrieve(JSONObject config, MossClient client) throws Exception {
         report("retrieving");
-        active = new RingConnection(this, config);
+        if (active == null) active = new RingConnection(this, config);
         try {
             Map<String, Integer> inventory = active.inventory();
             long inventoryAt = System.currentTimeMillis();
@@ -153,8 +167,10 @@ public final class DeliveryService extends Service {
                 Integer packetSize = inventory.get(name);
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
-                if (!store.retrievalDue(id) || sidecarSize == null ||
-                    !packetSize.equals(previousInventory.get(name)) || !sidecarSize.equals(previousInventory.get(sidecarName))) continue;
+                boolean settled = packetSize.equals(previousInventory.get(name)) && sidecarSize != null && sidecarSize.equals(previousInventory.get(sidecarName));
+                if (!RetrievalGate.wanted(id, store.contains(id), voice.intent(id) != null)) continue;
+                if (!store.retrievalDue(id) || !RetrievalGate.ready(voice.intent(id) != null, sidecarSize, packetSize,
+                    previousInventory.get(sidecarName), previousInventory.get(name))) continue;
                 if (!store.hasStorageCapacity() || stopping) break;
                 if (!store.contains(id) && !store.canDiscover()) continue;
                 store.discover(id, voice.intent(id));
@@ -164,13 +180,14 @@ public final class DeliveryService extends Service {
                 byte[] sidecar;
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
-                if (!store.admitSidecar(id, sidecar)) continue;
+                if (!store.admitSidecar(id, sidecar, settled)) { if (voice.intent(id) != null && admitRetries++ < 3) fastRetries = Math.max(fastRetries, 3); continue; }
                 consumeCommands(client, config);
                 if (store.excluded(id)) continue;
                 store.reserveRetrieval(id, packetSize, sidecarSize, sidecar);
                 try { active.retrieve(name, packetSize, store.file(id, "packets.bin")); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 store.retrieved(id, sidecar);
+                if (voice.intent(id) != null) { fastRetries = 0; admitRetries = 0; }
             }
             previousInventory.clear(); previousInventory.putAll(inventory);
             if (!stopping) {
@@ -187,7 +204,7 @@ public final class DeliveryService extends Service {
                 try { HardwareStatus.publish(this, config, active.telemetry, inventoryAt, recordings); }
                 catch (Exception unavailable) { /* Optional status storage never blocks completed audio delivery. */ }
             }
-        } finally { active.close(); active = null; }
+        } catch (Exception error) { active.close(); active = null; throw error; }
         report(store.canDiscover() ? "waiting_for_completed_recordings" : "storage_capacity");
     }
     private void remindRecording() {
