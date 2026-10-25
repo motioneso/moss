@@ -151,8 +151,23 @@ work, list every pending Ben question, push, report the PR to coordinator w1:p1E
   slice approach. Existing runtime gates remain untouched by slice 1.
 - Slice 1 baseline: public-validator tests exited 1 with 15 rejection cases failing and
   35 acceptance/compatibility cases passing before the guard was added. This directly observes
-  the missing protections; follow-up passing results will be recorded before publication.
+  the missing protections. With guards added, both validator suites passed: 113 tests,
+  including all 50 new cases. Root `tsc --noEmit`, scoped lint, touched-file formatting and
+  file-size checks also passed.
 - Remaining slice 2: #3720; slice 3: #3721; slice 4: #3722. These are ordered prerequisites,
   not completed work. #3715 and the Meals consumer remain blocked on their delivery.
 - This session stops after slice 1 to preserve room for complete verification and publication;
   no RPC/runtime capability is exposed by this slice.
+
+- Publication follow-up authorized by Ben: Finance alone is bumped from 0.6.11 to 0.6.12,
+  with its existing version assertion updated, so the rebuilt registry artifact has a new
+  version. #3731 will rebase on this bump and own its subsequent bump. The read-only registry
+  check is rerun; signed release upload belongs to the existing main-merge workflow.
+- Baseline artifact evidence is preserved in #3732: Finance built using the spec branch's
+  tracked sources and this branch both produced SHA-256
+  `89607cee1d7b3c44c7b2cd303140ebc168e76d135306b1813861abc0a0467dc0` (73,685 bytes),
+  versus published 0.6.11 at 73,677 bytes. The SDK type change emitted identical JavaScript.
+  The version bump proceeds under Ben's explicit coordination ruling rather than rewriting
+  that observation as proof that this type-only change altered the artifact.
+- The initial static gate passed lint and was deliberately stopped during formatting when the
+  Finance bump was assigned, to avoid reporting stale gate inputs. Final validation is rerun.
