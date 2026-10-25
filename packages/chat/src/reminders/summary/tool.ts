@@ -63,7 +63,7 @@ export const reminderSummaryTool: ModuleAssistantToolManifest = {
   risk: "read",
   content: "outside",
   description:
-    "Read a bounded, read-only summary of the user's saved reminders: upcoming (scheduled or paused, default), delivered, ended (cancelled, expired, failed) or all. Returns at most twelve rows with the reminder text, real state, due time, deadline, repeat terms, destination, delivery time, actor time zone, source time and honest coverage. It changes nothing and never creates, edits, cancels or delivers. Dismissing from chat context is not cancelling. Repeats show the saved next time only. Source-bound visual proposal is available when useful; use the returned proposal unchanged. Keep concise grounded prose alongside it.",
+    "Read a bounded, read-only summary of the user's saved reminders: upcoming (scheduled or paused, default), delivered, ended (cancelled, expired, failed) or all. Returns at most twelve rows with the reminder text, real state, due time, deadline, repeat terms, destination, delivery time, actor time zone, source time and honest coverage. It changes nothing and never creates, edits, cancels or delivers. Dismissing from chat context is not cancelling. Repeats show the saved next time only. Whenever the user asks to see, list or check their reminders, present the returned visual proposal unchanged, even for an empty result. Keep concise grounded prose alongside it.",
   inputSchema: {
     type: "object",
     additionalProperties: false,

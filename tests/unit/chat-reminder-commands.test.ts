@@ -52,10 +52,9 @@ describe("recognizing list and cancel", () => {
     "Show me my reminders.",
     "what are my reminders?",
     "what reminders do I have",
-    "Hey Moss, do I have any reminders?",
-    "please list all my reminders"
-  ])("lists for %j", (say) => {
-    expect(recognizeReminderCommand(say)).toEqual({ kind: "list" });
+    "Hey Moss, do I have any reminders?"
+  ])("leaves the list request %j to the model so it can answer with a card", (say) => {
+    expect(recognizeReminderCommand(say)).toEqual({ kind: "none" });
   });
 
   it.each([
