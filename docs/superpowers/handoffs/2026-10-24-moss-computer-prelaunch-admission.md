@@ -14,16 +14,14 @@ Branch `feat/moss-computer-closure-reconcile`. Parked for a machine restart. Not
 
 ## Mid-flight
 
-- The plan is unreviewed. No independent Security or Standards/Spec review has run.
-- No code, no PR, no CI. `unavailableAdmission` is unchanged. No servers or browsers were started.
+- PR 3684 is open. The first review found fixes (see Update), now applied. Re-review pending.
+- No code. `unavailableAdmission` is unchanged. No servers or browsers were started.
 
 ## Next
 
-1. Open a docs PR with the plan and this handoff (fill in the Release note section as `Category: N/A`).
-2. Get a fresh Opus 5.5 reviewer, who did not write the plan, for Security and Standards/Spec.
-   Give it the plan and the three cited source ranges, not a conclusion.
-3. Fix findings, then merge with `gh pr merge --squash --auto` once CI is green.
-4. Only after acceptance, build the host-only prelaunch sample with a removed-protection test per
+1. Get fresh Opus 5.5 reviewers (Security, Standards/Spec) to re-review the revised plan.
+2. Fix findings, then merge with `gh pr merge --squash --auto` once CI is green.
+3. Only after acceptance, build the host-only prelaunch sample with a removed-protection test per
    admission rule.
 
 Local state note: `/tmp/computer-reconcile-state.md` (may be lost on restart).
