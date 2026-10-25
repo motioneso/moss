@@ -12,6 +12,9 @@ This plan amends the [handover plan](2026-10-24-moss-computer-prelaunch-handover
 - Line 106 says the `hold` watchdog's stdin must be the runner's heartbeat pipe. That is superseded.
   Before launch there is no runner and no heartbeat. `hold` takes stdin from `/dev/null` and the
   loader asserts it (section 4).
+- Lines 147-150 say `hold` acknowledges and a test shows it survives past 5s. That is superseded.
+  `hold` acknowledges by writing one byte on descriptor 3, and the launcher accepts that byte, not
+  survival past 5s (section 4).
 
 Everything else in the handover plan stands. The sampler keeps stdio pipe, pipe, ignore, reads one
 bounded stdin record and returns its sample on stdout, as `collect` does today
@@ -107,7 +110,7 @@ with its own types. Security review of the plan found C safe on those terms.
   by the launcher. The loader asserts that and `hold` writes a single byte to it.
 - Acknowledgement. `acknowledgeStartup()` runs once the load has succeeded and `hold` has read its
   own identity with `processIdentity(process.pid)`. It then writes the byte on descriptor 3. The
-  launcher counts the hold as acknowledged only when it has read that byte within 7s of spawn and
+  launcher counts the hold as acknowledged only when it has read that byte within 7s of spawn (the child's 5s deadline plus 2s for process start and the pipe read) and
   the hold's identity (pid, start ticks, group) is unchanged. A hold that is alive but has not
   written the byte is refused and killed. This is a positive signal, so the 5s deadline timing
   inside the child cannot be misread, and no fixed wait is added to each enable.
@@ -117,7 +120,7 @@ with its own types. Security review of the plan found C safe on those terms.
   equals the parent's. This compares against the actual parent, because the prelaunch
   configuration pins no runner. The check is a separation guard and makes no trust claim about the
   parent.
-- Parent loss. `hold` records its parent pid at start and exits 0 when `process.ppid` changes. It
+- Parent loss. `hold` records its parent pid at start and exits 0 when `process.ppid` changes, checked every 1s on the injected clock. It
   also exits 0 at 1800s of monotonic age, the existing run limit. Item 4 of the handoff may
   shorten that. An orphan is therefore bounded by the next parent check, not by the full cap.
 - One per run. The launcher refuses to spawn a second hold for the same run while one is live.
@@ -149,7 +152,7 @@ with its own types. Security review of the plan found C safe on those terms.
 2. The shared-checks extraction and `loadPrelaunchDeployment`.
 3. A new `scripts/computer-watchdog/main.ts` that holds the mode dispatch as `runWatchdog(argv,
 deps)`, with the clock, exit and descriptors injected. `scripts/computer-watchdog.ts` becomes a
-   thin entry that calls it. This gives tests a seam, because the entry script today runs
+   thin entry that calls it. The pinned artifact hash must cover the bundled code that runs, `main.ts` included. This gives tests a seam, because the entry script today runs
    `main()` on import and exits the process.
 4. `hold` mode in `main.ts` with the contract above, and the matrix check.
 5. Tests, each seen failing with its protection removed.
