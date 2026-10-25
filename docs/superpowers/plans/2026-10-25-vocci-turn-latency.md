@@ -99,3 +99,12 @@ blockers; 20 unit tests passed. Pending thread/privacy selection deferrals retai
 delayed-only recovery by design. Live run 11 passed real Settings/Chat, TTS import,
 tools, reply and replay assertions: cancellation-to-admission fell from 14703 ms
 to 158 ms. Stage tables and limits are in the committed turn-latency evidence.
+
+CI follow-up: the unchanged email-context time-budget test intermittently started
+a second call when its 200 ms wall-clock timer fired before the deadline. Replace
+that test's wall clock with scoped fake timers, explicitly establish the first
+call, advance exactly 200 ms and retain the one-call/all-unknown assertions.
+Restore real timers in finally. No email production code changes. The observed
+CI failure is the red receipt; the focused nine-test suite passes with the
+controlled clock. Existing Backtrack and watchdog timing failures passed their
+single reruns without source/test changes.
