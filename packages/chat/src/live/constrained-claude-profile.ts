@@ -8,7 +8,8 @@ import { CliChatUnavailableError } from "./errors.js";
 
 /**
  * The image floor stays aligned with the runner recipe. A promoted release joins the allowlist
- * only after its native profile controls pass and its archive integrity is verified.
+ * only after its archive integrity is verified for every listed architecture and its native
+ * profile controls pass on at least one. The evidence doc records which architectures ran.
  */
 export const CONSTRAINED_CLAUDE_VERSION = "2.1.282";
 export const CONSTRAINED_CLAUDE_RELEASES: Readonly<
