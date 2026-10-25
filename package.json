@@ -180,7 +180,8 @@
     "test:vocabulary-live": "pnpm build:web && tsx scripts/verify-recording-import-live.ts",
     "test:recording-live": "pnpm build:web && tsx scripts/verify-recording-import-live.ts",
     "test:integration:3567": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-mirror.test.ts tests/integration/connectors.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/apply-writer-transaction.test.ts tests/integration/calendar-email.test.ts",
-    "test:integration:3567:ui": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-ui.test.ts"
+    "test:integration:3567:ui": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-ui.test.ts",
+    "test:integration:3659": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/task-summary.test.ts tests/integration/tasks.test.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
