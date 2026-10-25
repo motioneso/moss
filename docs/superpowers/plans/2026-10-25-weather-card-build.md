@@ -23,7 +23,9 @@ Approved target: `docs/superpowers/2026-10-25-weather-card-design.md` and design
    metric units, long windows and DST. Observe failures against the original renderer.
    Update module feature metadata in the same PR.
 3. Run scoped tests and the static gate; open a draft PR against `design/weather-card-mockups`.
-   Report to coordinator `w1:p1E`, then stop. Retarget after #3737 merges.
+   Exercise real Profile → chat → forecast → reload on a disposable test copy using
+   `3736-weather-card-design-a.uat.spec.ts`; attach live proof and report to coordinator
+   `w1:p1E`, then stop. Retarget after #3737 merges.
 
 Determinism: all card content comes from the saved record; no model jobs, prompt changes,
 chat injection, requests or saved-setting changes.
@@ -38,5 +40,7 @@ Commands are unpiped; expected exit 0 except the original-renderer regression ru
 - `pnpm exec vitest run tests/unit/weather-forecast-card.test.tsx`
 - `scripts/run-gate.sh start --gate verify:static`, then `scripts/run-gate.sh wait --follow`.
 - Browser DOM/layout assertions at 390px and desktop in light, dark and sage are fixture checks.
-- Merge requires separate real UI/live-data UAT evidence on the PR per the live-path gate.
+- `JARVIS_UAT_CLAIMED_WEB_PORT=<claimed port> MOSS_UAT_CAPTURE_OFF=1 pnpm test:uat 3736-weather-card-design-a.uat.spec.ts`
+  runs the real UI/live-data path in the isolated provisioned stack (expected exit 0).
+- Merge requires that real UI/live-data UAT evidence on the PR per the live-path gate.
   Until that exists the product status is **code-complete, unverified**; do not merge or mark Done.
