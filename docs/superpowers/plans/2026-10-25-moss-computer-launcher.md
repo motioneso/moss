@@ -46,7 +46,47 @@ imports `main.ts`, `trust.ts` and more, so none of the real code is pinned.
 | C      | Native helper makes the pipe.                           | New build and delivery burden.                                                      |
 
 Recommendation: A. The write-only check never proved who owns the other end, and the ownership
-test (below) covers that. Escalated to the coordinator; A is built unless told otherwise.
+test (below) covers that. Coordinator approved A provisionally. It is not final until a fresh
+Security reviewer accepts it. If the reviewer rejects A, work stops and is reported.
+
+### Amendment to the runner contract (section 4, PR 3692)
+
+The contract says descriptor 3 is "a pipe write end held by the launcher" and that the loader
+asserts `pipe:[n]` and a write-only open mode (trust.ts `assertHoldDescriptors`). This amendment
+replaces that with a socket pair.
+
+Why a pipe is not possible from Node. Observed on this host: `spawn` with a `pipe` stdio entry
+gives the child `/proc/self/fd/3 -> socket:[n]` with open flags `02` (read-write). Node has no call
+that makes an anonymous pipe, so a Node launcher cannot hand a child `pipe:[n]`. An opened FIFO
+shows as a path, not `pipe:[n]`.
+
+What A loses.
+
+- The write-only check. A socket end is read-write, so `hold` could read from the launcher's end
+  and the launcher's end could be written by anything holding it. The old check also never proved
+  the launcher holds the other end.
+- The distinct `pipe:[n]` shape. Any socket now passes the shape check, so the shape no longer
+  separates the launcher's channel from a socket inherited some other way.
+
+What replaces it.
+
+- Loader asserts descriptor 3 is `socket:[n]`. The rest of the descriptor rules stand.
+- The launcher creates the channel and keeps the peer. The launcher accepts the byte only from its
+  own end, only as exactly one `0x01`, only within 7s, and only while the child identity is
+  unchanged. Trust in the byte rests on the launcher owning the peer, as it did for the pipe.
+- A test proves ownership: it fails if the launcher does not hold its end, or if the child ends up
+  with a second route to the peer.
+
+Open for the Security reviewer to attack.
+
+1. Can any process other than the launcher write the byte, given only the child holds the other
+   end and the launcher keeps its own? Does the read-write socket give `hold` or a descendant any
+   capability the pipe did not?
+2. Does `socket:[n]` on descriptor 3 let an attacker who controls the child's inherited
+   descriptors pass a socket from elsewhere (for example a connection to another process)? Is the
+   launcher-side identity check enough to stop that?
+3. Is option B or C needed for the first real caller, even if A is acceptable for this host-only
+   slice?
 
 ## Tests (each seen failing with its protection removed)
 
