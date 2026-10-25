@@ -25,3 +25,20 @@ Accepted by fresh Security and Standards/Spec reviewers at head 1170863e0. No co
 
 Write and review a contract for open item 1 (and 2, 3 with it). It may need a decision from Ben
 about what the pinned runner is before launch. Then build the host-only prelaunch sample.
+
+## Status after the launcher slice
+
+Done (PR for branch feat/moss-computer-launcher, no production caller):
+
+- The watchdog is bundled into one file and the pinned hash covers all of it
+  (`scripts/computer-watchdog/bundle.ts`). Closes PR 3692 note (a).
+- The launcher (`scripts/computer-watchdog/launcher.ts`) creates the start-up channel, keeps its
+  end, and accepts only one `0x01` byte in time from an unchanged child. Closes note (b).
+- Descriptor 3 is a socket pair end, not a pipe, because Node cannot make an anonymous pipe. This
+  amends the runner contract and is provisional until a fresh Security reviewer accepts it. See
+  the launcher plan.
+- The launcher takes its node, bundle and config paths as inputs. It does not derive or verify
+  them, and a real run against a root-owned install was not done on this host.
+
+Still open: item 4 (bound second phase, first healthy sample), item 5 (installed delivery, orphan
+`hold` cleanup, runtime packet, launcher path derivation and verification, one hold per run).
