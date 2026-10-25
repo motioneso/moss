@@ -113,18 +113,18 @@ then T14 through a real installed module and real worker/RLS path. Meals/Food pa
 in their own PRs. If no real consumer is available, retain code-complete/unverified status and a
 hard merge blocker for assembled proof; do not manufacture stubbed live evidence.
 
-## Provisional choices and Ben questions
+## Ben decisions and remaining checks
 
-1. Fork A uses risk plus the module's confirm rule, independent of Moss tiers (draft recommendation).
-2. Outbound always asks (draft recommendation).
-3. Default 120 changes/minute/session/module, optional override (draft recommendation).
-4. Sandboxed frames remain out of scope (draft recommendation); Ben decides whether to track later.
-5. Confirmed-row consumers: seams pass above resolves author-owned investigation, recheck on activation.
-6. Activity records: draft has no recommendation. Safest interim choice is no new activity content;
-   confirmation rows retain decision metadata. Ben must decide before claiming activity parity.
+Ben's 2026-10-25 answers supersede the provisional choices:
 
-Collect Ben questions 1, 2, 3, 4 and 6 in every implementation PR body. None blocks this dormant
-foundation. Actual blockers go to `needs-ben page-write-tools` and project AWAITING-BEN if present.
+1. Fork A approved: a page click runs writes regardless of Moss action tier; risk and tool confirmation rules still apply.
+2. Outbound tools always ask first, including Send clicks. #3723 enforces confirmation; #3724 owns the host dialog and live proof.
+3. Default 120 changes/minute/module confirmed; keep the designed session/module bucket and optional override.
+4. Sandboxed frames were not asked about; track separately as later task #3734, outside these slices.
+5. Confirmed-row consumers: foundation seams pass above; recheck on activation.
+6. Page writes must write an activity record. #3723 owns recording executed writes and retry/replay coverage; #3724 proves the record through the real installed-module path. The dormant foundation still adds no activity records.
+
+Carry these decisions into continuation PRs. Actual blockers go to `needs-ben page-write-tools` and project AWAITING-BEN if present.
 
 ## Determinism and kill gate
 
