@@ -153,8 +153,8 @@ public final class DeliveryService extends Service {
                 Integer packetSize = inventory.get(name);
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
-                if (!store.retrievalDue(id) || sidecarSize == null ||
-                    !packetSize.equals(previousInventory.get(name)) || !sidecarSize.equals(previousInventory.get(sidecarName))) continue;
+                if (!store.retrievalDue(id) || !RetrievalGate.ready(voice.intent(id) != null, sidecarSize, packetSize,
+                    previousInventory.get(sidecarName), previousInventory.get(name))) continue;
                 if (!store.hasStorageCapacity() || stopping) break;
                 if (!store.contains(id) && !store.canDiscover()) continue;
                 store.discover(id, voice.intent(id));
