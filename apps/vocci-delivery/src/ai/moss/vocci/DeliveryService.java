@@ -154,6 +154,7 @@ public final class DeliveryService extends Service {
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
                 boolean settled = packetSize.equals(previousInventory.get(name)) && sidecarSize != null && sidecarSize.equals(previousInventory.get(sidecarName));
+                if (!RetrievalGate.wanted(id, store.contains(id), voice.intent(id) != null)) continue;
                 if (!store.retrievalDue(id) || !RetrievalGate.ready(voice.intent(id) != null, sidecarSize, packetSize,
                     previousInventory.get(sidecarName), previousInventory.get(name))) continue;
                 if (!store.hasStorageCapacity() || stopping) break;

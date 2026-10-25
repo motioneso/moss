@@ -14,4 +14,9 @@ final class RetrievalGate {
         if (hold) return true;
         return packetSize.equals(previousPacketSize) && sidecarSize.equals(previousSidecarSize);
     }
+
+    /** Hold-to-talk files (amsg_ prefix) without a voice intent stay on the ring, so they never import as meetings. */
+    static boolean wanted(String id, boolean tracked, boolean voiceIntent) {
+        return tracked || voiceIntent || !id.startsWith("amsg_");
+    }
 }
