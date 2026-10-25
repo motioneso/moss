@@ -139,21 +139,46 @@ export function SortingModelRow(props: {
     retry: false
   });
   const savedGateMode = readGateMode(gateQuery.data?.config.value);
-  const gateMutation = useMutation({
-    mutationFn: (mode: ClassifierGateMode) =>
-      putAdminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY, mode),
-    onSuccess: (data) => {
-      queryClient.setQueryData(
-        queryKeys.settings.adminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY),
-        data
-      );
-      toast("Use in chat updated", { icon: <GitCommitHorizontal size={17} /> });
-    },
-    onError: (error) => toast(readError(error), { tone: "drift" })
-  });
 
   const eligible = eligibleSortingModels(props.models);
   const boundId = props.binding?.kind === "model" ? props.binding.modelId : null;
+  const saveMutation = useMutation({
+    mutationFn: async ({ modelId, mode }: { modelId: string; mode: ClassifierGateMode }) => {
+      let currentMode = savedGateMode;
+      const saveMode = async (nextMode: ClassifierGateMode) => {
+        const data = await putAdminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY, nextMode);
+        currentMode = nextMode;
+        queryClient.setQueryData(
+          queryKeys.settings.adminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY),
+          data
+        );
+      };
+      try {
+        // Stop forwarding before switching providers. A failed later write leaves chat off.
+        if (modelId !== boundId) {
+          if (currentMode !== "off") await saveMode("off");
+          await putAiServiceBinding(SORTING_SERVICE_KEY, { binding: { kind: "model", modelId } });
+        }
+        if (mode !== currentMode) await saveMode(mode);
+      } catch (error) {
+        throw new Error(
+          `Could not finish saving. Use in chat is ${currentMode === "shadow" ? "Watch only" : currentMode}. ${readError(error)}`,
+          { cause: error }
+        );
+      }
+    },
+    onSuccess: () => {
+      setDialogOpen(false);
+      toast("Decision model updated", { icon: <GitCommitHorizontal size={17} /> });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ai.serviceBindings });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.adminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)
+      });
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
   const bound = boundId ? (eligible.find((model) => model.id === boundId) ?? null) : null;
   const boundProvider = bound
     ? (props.providers.find((provider) => provider.id === bound.providerConfigId) ?? null)
@@ -195,6 +220,11 @@ export function SortingModelRow(props: {
             {SORTING_DISCLOSURE} {TRAIL_MARKER_DISCLOSURE}
           </div>
         ) : null}
+        {gateQuery.isError ? (
+          <div className="rt__desc" role="alert">
+            Could not load Use in chat. Reload settings before choosing a model.
+          </div>
+        ) : null}
         {showApiDisclosure ? <div className="rt__desc">{CLASSIFIER_API_DISCLOSURE}</div> : null}
       </div>
       <div className="rt__pick">
@@ -216,7 +246,7 @@ export function SortingModelRow(props: {
         <Button
           ref={chooseButtonRef}
           variant="secondary"
-          disabled={mutation.isPending || gateQuery.isPending}
+          disabled={mutation.isPending || gateQuery.isPending || gateQuery.isError}
           onClick={() => setDialogOpen(true)}
         >
           {bound ? "Change model" : "Choose a model"}
@@ -240,24 +270,14 @@ export function SortingModelRow(props: {
           initialModelId={bound ? bound.id : null}
           initialGateMode={savedGateMode}
           gateTip={GATE_TIP}
-          saving={mutation.isPending || gateMutation.isPending}
+          saving={saveMutation.isPending}
           returnFocusRef={chooseButtonRef}
           onClose={() => setDialogOpen(false)}
           onAskMoss={() => {
             setDialogOpen(false);
             openAssistantWithDraft(DECISION_MODEL_HELP_DRAFT);
           }}
-          onSave={(modelId, mode) => {
-            void (async () => {
-              try {
-                if (modelId !== boundId) await mutation.mutateAsync(modelId);
-                if (mode !== savedGateMode) await gateMutation.mutateAsync(mode);
-                setDialogOpen(false);
-              } catch {
-                // The mutation already showed the error.
-              }
-            })();
-          }}
+          onSave={(modelId, mode) => saveMutation.mutate({ modelId, mode })}
         />
       ) : null}
     </div>

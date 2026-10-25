@@ -46,6 +46,7 @@ export function ChatLockRows() {
     onSuccess: (data) => {
       if (pinQueryKey) queryClient.setQueryData(pinQueryKey, data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.ai.capability("chat") });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ai.chatModelOverride });
       toast(data.pin.pinnedModelId ? "AI locked to one model" : "AI lock cleared", {
         icon: data.pin.pinnedModelId ? <LockKeyhole size={17} /> : <LockKeyholeOpen size={17} />
       });

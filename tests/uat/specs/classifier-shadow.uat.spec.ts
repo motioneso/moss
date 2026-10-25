@@ -97,7 +97,10 @@ async function setGate(page: Page, name: string): Promise<void> {
   );
   const dialog = await openDecisionDialog(page);
   await dialog.getByRole("button", { name: /^Advanced/ }).click();
-  await dialog.getByRole("group", { name: "Use in chat" }).getByRole("button", { name }).click();
+  await dialog
+    .getByRole("group", { name: "Use in chat" })
+    .getByRole("button", { name, exact: true })
+    .click();
   await dialog.getByRole("button", { name: "Save" }).click();
   expect((await saved).status()).toBe(200);
   await expect(dialog).toBeHidden();

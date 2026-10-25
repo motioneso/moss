@@ -89,7 +89,7 @@ async function setGate(page: Page, name: string): Promise<void> {
     { timeout: 30_000 }
   );
   const dialog = await openDecisionDialog(page);
-  await (await openAdvanced(dialog)).getByRole("button", { name }).click();
+  await (await openAdvanced(dialog)).getByRole("button", { name, exact: true }).click();
   await dialog.getByRole("button", { name: "Save" }).click();
   expect((await saved).status()).toBe(200);
   await expect(dialog).toBeHidden();
@@ -98,7 +98,10 @@ async function setGate(page: Page, name: string): Promise<void> {
 async function expectGate(page: Page, name: string): Promise<void> {
   const dialog = await openDecisionDialog(page);
   const group = await openAdvanced(dialog);
-  await expect(group.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+  await expect(group.getByRole("button", { name, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
 }
@@ -179,6 +182,15 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
   await page.reload();
   await openAssistantAndAiSettings(page);
   await expectGate(page, "On");
+
+  // An inherited On mode must disclose its instance-wide reach before Save, even with Advanced closed.
+  const inheritedDialog = await openDecisionDialog(page);
+  await expect(inheritedDialog.getByRole("status")).toContainText("Use in chat: On.");
+  await expect(inheritedDialog.getByRole("status")).toContainText(
+    "Eligible chat messages from everyone who uses this Moss go to Claude."
+  );
+  await expect(inheritedDialog.getByRole("group", { name: "Use in chat" })).toHaveCount(0);
+  await inheritedDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // The row reads in light, dark and one park theme.
   for (const theme of [

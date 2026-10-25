@@ -429,7 +429,6 @@ function ChatModel({
               control={hasWebSearch ? <Badge tone="steel">Web search</Badge> : undefined}
             />
           )}
-          {isAdmin ? <ChatLockRows /> : null}
           <Note>
             Providers, credentials and which model handles each kind of work live in{" "}
             {providerSettingsLink}. A transcription model enables the microphone in chat.
@@ -449,6 +448,7 @@ function ChatModel({
           </div>
         </div>
       )}
+      {isAdmin ? <ChatLockRows /> : null}
     </Group>
   );
 }

@@ -381,6 +381,55 @@ describe("SortingModelRow (Classifier)", () => {
     expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "on");
   });
 
+  it("stops forwarding before changing a provider and keeps the requested Off mode", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({ config: { value: "on", source: "instance" } });
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await openGate(renderer);
+    await act(async () => {
+      radios(renderer)[1]!.props.onChange();
+      gateButton(renderer, "Off").props.onClick();
+    });
+    await click(renderer, "Save");
+    expect(putAdminRuntimeConfig).toHaveBeenCalledExactlyOnceWith(
+      "chat.classifier_gate_mode",
+      "off"
+    );
+    expect(putAdminRuntimeConfig.mock.invocationCallOrder[0]).toBeLessThan(
+      putAiServiceBinding.mock.invocationCallOrder[0]!
+    );
+  });
+
+  it("does not switch providers if stopping forwarding fails", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({ config: { value: "on", source: "instance" } });
+    putAdminRuntimeConfig.mockRejectedValueOnce(new Error("Cannot save mode"));
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await openDialog(renderer);
+    await act(async () => {
+      radios(renderer)[1]!.props.onChange();
+    });
+    await click(renderer, "Save");
+    expect(putAiServiceBinding).not.toHaveBeenCalled();
+    expect(text(renderer)).toContain("Could not finish saving. Use in chat is on.");
+    expect(text(renderer)).toContain("Choose a decision model");
+  });
+
+  it("leaves forwarding off and reports the partial save if changing providers fails", async () => {
+    getAdminRuntimeConfig.mockResolvedValue({ config: { value: "on", source: "instance" } });
+    putAiServiceBinding.mockRejectedValueOnce(new Error("Cannot save model"));
+    const renderer = await render({ kind: "model", modelId: "small-json" });
+    await openDialog(renderer);
+    await act(async () => {
+      radios(renderer)[1]!.props.onChange();
+    });
+    await click(renderer, "Save");
+    expect(putAdminRuntimeConfig).toHaveBeenCalledExactlyOnceWith(
+      "chat.classifier_gate_mode",
+      "off"
+    );
+    expect(text(renderer)).toContain("Could not finish saving. Use in chat is off.");
+    expect(text(renderer)).toContain("Choose a decision model");
+  });
+
   it("does not save anything when the dialog closes with Cancel", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
     await openGate(renderer);

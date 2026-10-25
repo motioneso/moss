@@ -31,6 +31,7 @@ export function DecisionModelDialog(props: {
   const [modelId, setModelId] = useState<string | null>(props.initialModelId);
   const [gateMode, setGateMode] = useState<ClassifierGateMode>(props.initialGateMode);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const selectedModel = props.models.find((model) => model.id === modelId);
 
   return (
     <Dialog
@@ -75,6 +76,12 @@ export function DecisionModelDialog(props: {
         )}
         {modelId ? (
           <div className="provdlg__group">
+            {selectedModel && gateMode !== "off" ? (
+              <p className="rt__desc" role="status">
+                Use in chat: {GATE_LABELS[gateMode]}. Eligible chat messages from everyone who uses
+                this Moss go to {selectedModel.providerDisplayName}.
+              </p>
+            ) : null}
             <DisclosureToggle
               expanded={advancedOpen}
               controls="decision-advanced"

@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useRef, useState, type RefObject } from "react";
+import { useId, useRef, useState, type RefObject } from "react";
 
 import { Button, Dialog, RadioCardGroup, SectionHead } from "@moss/ui";
 import {
@@ -41,6 +41,7 @@ export function AddProviderDialog(props: {
   const [apiKey, setApiKey] = useState("");
   const [accountId, setAccountId] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
+  const fieldId = useId();
 
   const choice = PROVIDER_CATALOG.find((entry) => entry.id === choiceId) ?? null;
   const existingNames = props.providers.map((provider) => provider.displayName);
@@ -171,8 +172,15 @@ export function AddProviderDialog(props: {
           })
         ) : choice ? (
           <>
-            <Field label="Name" hint="Shown on the card and in model lists.">
+            <Field
+              label="Name"
+              hint="Shown on the card and in model lists."
+              controlId={`${fieldId}-name`}
+              hintId={`${fieldId}-name-hint`}
+            >
               <input
+                id={`${fieldId}-name`}
+                aria-describedby={`${fieldId}-name-hint`}
                 className="jds-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -184,8 +192,12 @@ export function AddProviderDialog(props: {
                 <Field
                   label="Account ID"
                   hint="On the Cloudflare dashboard, top right of Overview."
+                  controlId={`${fieldId}-account`}
+                  hintId={`${fieldId}-account-hint`}
                 >
                   <input
+                    id={`${fieldId}-account`}
+                    aria-describedby={`${fieldId}-account-hint`}
                     className="jds-input"
                     value={accountId}
                     onChange={(e) => setAccountId(e.target.value)}
@@ -193,8 +205,15 @@ export function AddProviderDialog(props: {
                     aria-label="Account ID"
                   />
                 </Field>
-                <Field label="API token" hint='Use the "Workers AI" template. Stored encrypted.'>
+                <Field
+                  label="API token"
+                  hint='Use the "Workers AI" template. Stored encrypted.'
+                  controlId={`${fieldId}-token`}
+                  hintId={`${fieldId}-token-hint`}
+                >
                   <input
+                    id={`${fieldId}-token`}
+                    aria-describedby={`${fieldId}-token-hint`}
                     className="jds-input"
                     type="password"
                     value={apiKey}
@@ -208,6 +227,8 @@ export function AddProviderDialog(props: {
               <>
                 <Field
                   label={isCompatible ? "Address" : "Base URL"}
+                  controlId={`${fieldId}-address`}
+                  hintId={`${fieldId}-address-hint`}
                   hint={
                     isCompatible
                       ? "A decision model service, such as OpenRouter or your own server."
@@ -215,6 +236,8 @@ export function AddProviderDialog(props: {
                   }
                 >
                   <input
+                    id={`${fieldId}-address`}
+                    aria-describedby={`${fieldId}-address-hint`}
                     className="jds-input"
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
@@ -226,8 +249,15 @@ export function AddProviderDialog(props: {
                     aria-label={isCompatible ? "Address" : "Base URL"}
                   />
                 </Field>
-                <Field label="API key" hint="Stored encrypted.">
+                <Field
+                  label="API key"
+                  hint="Stored encrypted."
+                  controlId={`${fieldId}-key`}
+                  hintId={`${fieldId}-key-hint`}
+                >
                   <input
+                    id={`${fieldId}-key`}
+                    aria-describedby={`${fieldId}-key-hint`}
                     className="jds-input"
                     type="password"
                     value={apiKey}
