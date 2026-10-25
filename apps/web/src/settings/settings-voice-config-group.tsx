@@ -85,6 +85,7 @@ export function VoiceConfigGroup() {
   return (
     <Group
       title="Voice (speech-to-text)"
+      titleAs="h4"
       desc="A single OpenAI-compatible transcription endpoint powers the microphone for everyone on this instance. Configure it here — it is separate from the chat providers above."
     >
       {configured ? (

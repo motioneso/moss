@@ -1,255 +1,248 @@
 import { useMutation } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 
-import { Button } from "@moss/ui";
+import { Button, Dialog, RadioCardGroup, SectionHead } from "@moss/ui";
 import {
   cloudflareDecisionBaseUrl,
-  decisionModelDialect,
   isCloudflareAccountId,
-  isTypesafeDecisionBaseUrl,
   type AiProviderConfigDto
 } from "@moss/shared";
 
 import { createAiProvider } from "../api/client";
-import { useAssistantName } from "../api/use-assistant-name.js";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Field } from "./settings-ui";
-import { CREDENTIAL_EXAMPLES, PROVIDER_CATALOG } from "./settings-ai-provider-catalog";
+import {
+  CREDENTIAL_EXAMPLES,
+  PROVIDER_CATALOG,
+  PROVIDER_GROUPS,
+  SUBSCRIPTION_TAKEN_NOTE,
+  nextFreeName,
+  subscriptionChoiceTaken,
+  type ProviderChoice
+} from "./settings-ai-provider-catalog";
 
 /**
- * #3057: which catalog entry is already present. A decision-model entry is matched by its address,
- * not its label, because all three presets share the `system-one` kind. "Any compatible service" is
- * never considered added, so a second compatible service can always be added.
+ * The Add provider dialog, in two steps. Choose picks what to connect, Connect names it and asks
+ * for only the fields that choice needs. The caller owns open/closed and the refresh after adding.
  */
-function catalogEntryIsAdded(
-  option: (typeof PROVIDER_CATALOG)[number],
-  providers: readonly AiProviderConfigDto[]
-): boolean {
-  if (option.acpAgentId !== undefined) {
-    return providers.some(
-      (provider) => provider.authMethod === "cli" && provider.acpAgentId === option.acpAgentId
-    );
-  }
-  if (option.preset === "cloudflare") {
-    return providers.some(
-      (provider) =>
-        provider.providerKind === "system-one" &&
-        decisionModelDialect(provider.baseUrl) === "cloudflare"
-    );
-  }
-  if (option.preset === "typesafe") {
-    return providers.some(
-      (provider) =>
-        provider.providerKind === "system-one" && isTypesafeDecisionBaseUrl(provider.baseUrl)
-    );
-  }
-  if (option.preset === "compatible") return false;
-  return providers.some((provider) => provider.displayName === option.label);
-}
-
-/**
- * A compatible service has no vendor label, so name it by its address host. The Classifier and
- * privacy notes can then say where data goes, and two compatible services stay distinguishable.
- */
-function providerDisplayName(option: (typeof PROVIDER_CATALOG)[number], baseUrl: string): string {
-  if (option.preset !== "compatible") return option.label;
-  try {
-    const host = new URL(baseUrl).host;
-    return host ? `Decision model (${host})` : option.label;
-  } catch {
-    return option.label;
-  }
-}
-
-/**
- * The "Add provider" panel: a catalog grid, then the credential form for the chosen entry. It owns
- * the field state and the create request; the caller owns the open/closed toggle and refresh.
- */
-export function ProviderAddPanel(props: {
+export function AddProviderDialog(props: {
   readonly providers: readonly AiProviderConfigDto[];
-  readonly onAdded: (label: string) => void;
+  readonly onClose: () => void;
+  readonly onAdded: (provider: AiProviderConfigDto, choice: ProviderChoice) => void;
+  readonly returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const { toast } = useFeedback();
-  const assistantName = useAssistantName();
-  const [credentialFor, setCredentialFor] = useState<(typeof PROVIDER_CATALOG)[number] | null>(
-    null
-  );
+  const [choiceId, setChoiceId] = useState<string | null>(null);
+  const [step, setStep] = useState<"choose" | "connect">("choose");
+  const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [accountId, setAccountId] = useState("");
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  const choice = PROVIDER_CATALOG.find((entry) => entry.id === choiceId) ?? null;
+  const existingNames = props.providers.map((provider) => provider.displayName);
+
+  // Focus lands on the first choice you can pick, resolved when the dialog opens.
+  const firstChoiceRef = {
+    get current() {
+      return (
+        bodyRef.current?.querySelector<HTMLElement>("input[type=radio]:not(:disabled)") ?? null
+      );
+    }
+  } as RefObject<HTMLElement | null>;
 
   const createMutation = useMutation({
     mutationFn: (input: {
-      option: (typeof PROVIDER_CATALOG)[number];
+      choice: ProviderChoice;
+      name: string;
       baseUrl: string;
       apiKey: string;
     }) =>
       createAiProvider({
-        providerKind: input.option.kind,
-        displayName: providerDisplayName(input.option, input.baseUrl),
-        authMethod: input.option.authMethod,
+        providerKind: input.choice.kind,
+        displayName: input.name,
+        authMethod: input.choice.authMethod,
         ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
-        ...(input.option.acpAgentId ? { acpAgentId: input.option.acpAgentId } : {}),
+        ...(input.choice.acpAgentId ? { acpAgentId: input.choice.acpAgentId } : {}),
         ...(input.apiKey ? { credentialPayload: { apiKey: input.apiKey } } : {})
       }),
-    onSuccess: (_data, input) => {
-      setCredentialFor(null);
-      setBaseUrl("");
-      setApiKey("");
-      setAccountId("");
-      props.onAdded(input.option.label);
-    },
+    onSuccess: ({ provider }, input) => props.onAdded(provider, input.choice),
     onError: (error) => toast(readError(error), { tone: "drift", icon: <X size={17} /> })
   });
 
-  const isCloudflarePreset = credentialFor?.preset === "cloudflare";
-  const isCompatiblePreset = credentialFor?.preset === "compatible";
-  const canAddCredential = isCloudflarePreset
-    ? isCloudflareAccountId(accountId.trim()) && apiKey.trim() !== ""
-    : isCompatiblePreset
-      ? baseUrl.trim() !== "" && apiKey.trim() !== ""
-      : apiKey.trim() !== "";
+  const isSubscription = choice?.authMethod === "cli";
+  const isCloudflare = choice?.preset === "cloudflare";
+  const isCompatible = choice?.preset === "compatible";
+  const fieldsValid = isSubscription
+    ? true
+    : isCloudflare
+      ? isCloudflareAccountId(accountId.trim()) && apiKey.trim() !== ""
+      : isCompatible
+        ? baseUrl.trim() !== "" && apiKey.trim() !== ""
+        : apiKey.trim() !== "";
+  const canAdd = choice !== null && name.trim() !== "" && fieldsValid;
+
+  const choose = (id: string) => setChoiceId(id);
+  const next = () => {
+    if (!choice) return;
+    setName(nextFreeName(choice.label, existingNames));
+    setStep("connect");
+  };
+  const back = () => {
+    setStep("choose");
+    setBaseUrl("");
+    setApiKey("");
+    setAccountId("");
+  };
+
+  const footer =
+    step === "choose" ? (
+      <>
+        <Button variant="quiet" onClick={props.onClose}>
+          Cancel
+        </Button>
+        <Button variant="primary" disabled={choice === null} onClick={next}>
+          Next
+        </Button>
+      </>
+    ) : (
+      <>
+        <Button variant="quiet" onClick={back}>
+          Back
+        </Button>
+        <Button
+          variant="primary"
+          disabled={!canAdd || createMutation.isPending}
+          onClick={() =>
+            choice &&
+            createMutation.mutate({
+              choice,
+              name: name.trim(),
+              baseUrl: isCloudflare ? cloudflareDecisionBaseUrl(accountId.trim()) : baseUrl.trim(),
+              apiKey: apiKey.trim()
+            })
+          }
+        >
+          {createMutation.isPending ? "Adding" : isSubscription ? "Add and sign in" : "Add"}
+        </Button>
+      </>
+    );
 
   return (
-    <div className="provpick">
-      <div className="provpick__hd">
-        {credentialFor ? `${credentialFor.label} credentials` : "Add a provider"}
-      </div>
-      {credentialFor ? (
-        <>
-          {isCloudflarePreset ? (
-            <>
-              <Field label="Account ID" hint="On the Cloudflare dashboard, top right of Overview.">
-                <input
-                  className="jds-input"
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  placeholder="0123456789abcdef0123456789abcdef"
-                  aria-label="Account ID"
-                />
-              </Field>
-              <Field label="API token" hint='Use the "Workers AI" template. Stored encrypted.'>
-                <input
-                  className="jds-input"
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Cloudflare API token"
-                  aria-label="API token"
-                />
-              </Field>
-            </>
-          ) : isCompatiblePreset ? (
-            <>
-              <Field
-                label="Address"
-                hint="A service that speaks the System One API, such as OpenRouter or your own server."
-              >
-                <input
-                  className="jds-input"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://openrouter.ai/api"
-                  aria-label="Address"
-                />
-              </Field>
-              <Field label="API key" hint="Stored encrypted. Never shown in briefings or logs.">
-                <input
-                  className="jds-input"
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Your API key"
-                  aria-label="API key"
-                />
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="Base URL" hint="Leave blank to use the provider's default endpoint.">
-                <input
-                  className="jds-input"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].baseUrl}
-                  aria-label="Base URL"
-                />
-              </Field>
-              <Field label="API key" hint="Stored encrypted. Never shown in briefings or logs.">
-                <input
-                  className="jds-input"
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].apiKey}
-                  aria-label="API key"
-                />
-              </Field>
-            </>
-          )}
-          <div className="provpick__cred-acts">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!canAddCredential}
-              onClick={() =>
-                createMutation.mutate({
-                  option: credentialFor,
-                  baseUrl: isCloudflarePreset
-                    ? cloudflareDecisionBaseUrl(accountId.trim())
-                    : baseUrl.trim(),
-                  apiKey: apiKey.trim()
-                })
+    <Dialog
+      className="provdlg"
+      title={step === "choose" ? "Add a provider" : `Connect ${choice?.label ?? ""}`}
+      onClose={props.onClose}
+      closeLabel="Close"
+      initialFocusRef={step === "choose" ? firstChoiceRef : undefined}
+      returnFocusRef={props.returnFocusRef}
+      footer={footer}
+    >
+      <div ref={bodyRef} className="provdlg__body">
+        {step === "choose" ? (
+          PROVIDER_GROUPS.map((group) => {
+            const options = PROVIDER_CATALOG.filter((entry) => entry.group === group.id).map(
+              (entry) => {
+                const taken = subscriptionChoiceTaken(entry, props.providers);
+                return {
+                  value: entry.id,
+                  label: entry.label,
+                  description: taken ? SUBSCRIPTION_TAKEN_NOTE : entry.description,
+                  disabled: taken
+                };
               }
-            >
-              Add
-            </Button>
-            <Button
-              variant="quiet"
-              size="sm"
-              onClick={() => {
-                setCredentialFor(null);
-                setBaseUrl("");
-                setApiKey("");
-                setAccountId("");
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="provpick__grid">
-            {PROVIDER_CATALOG.map((option) => {
-              const has = catalogEntryIsAdded(option, props.providers);
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  className="provpick__item"
-                  disabled={has}
-                  onClick={() =>
-                    option.authMethod === "cli"
-                      ? createMutation.mutate({ option, baseUrl: "", apiKey: "" })
-                      : setCredentialFor(option)
+            );
+            const selected = options.some((option) => option.value === choiceId) ? choiceId : null;
+            return (
+              <section key={group.id} className="provdlg__group">
+                <SectionHead title={group.label} titleAs="h3" />
+                <RadioCardGroup
+                  name="provider-choice"
+                  ariaLabel={group.label}
+                  value={selected}
+                  options={options}
+                  onChange={choose}
+                />
+              </section>
+            );
+          })
+        ) : choice ? (
+          <>
+            <Field label="Name" hint="Shown on the card and in model lists.">
+              <input
+                className="jds-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-label="Name"
+              />
+            </Field>
+            {isCloudflare ? (
+              <>
+                <Field
+                  label="Account ID"
+                  hint="On the Cloudflare dashboard, top right of Overview."
+                >
+                  <input
+                    className="jds-input"
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    placeholder="0123456789abcdef0123456789abcdef"
+                    aria-label="Account ID"
+                  />
+                </Field>
+                <Field label="API token" hint='Use the "Workers AI" template. Stored encrypted.'>
+                  <input
+                    className="jds-input"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Cloudflare API token"
+                    aria-label="API token"
+                  />
+                </Field>
+              </>
+            ) : isSubscription ? null : (
+              <>
+                <Field
+                  label={isCompatible ? "Address" : "Base URL"}
+                  hint={
+                    isCompatible
+                      ? "A service that speaks the System One API, such as OpenRouter or your own server."
+                      : "Leave blank to use the provider's default endpoint."
                   }
                 >
-                  <span className="provpick__dot" />
-                  {option.label}
-                  {has ? <span className="provpick__on">Added</span> : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="provpick__foot">
-            {assistantName} reads the available models from the provider automatically when it
-            connects.
-          </div>
-        </>
-      )}
-    </div>
+                  <input
+                    className="jds-input"
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={
+                      isCompatible
+                        ? "https://openrouter.ai/api"
+                        : CREDENTIAL_EXAMPLES[choice.kind].baseUrl
+                    }
+                    aria-label={isCompatible ? "Address" : "Base URL"}
+                  />
+                </Field>
+                <Field label="API key" hint="Stored encrypted. Never shown in briefings or logs.">
+                  <input
+                    className="jds-input"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={
+                      isCompatible ? "Your API key" : CREDENTIAL_EXAMPLES[choice.kind].apiKey
+                    }
+                    aria-label="API key"
+                  />
+                </Field>
+              </>
+            )}
+          </>
+        ) : null}
+      </div>
+    </Dialog>
   );
 }

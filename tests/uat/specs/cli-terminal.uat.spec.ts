@@ -56,13 +56,22 @@ test("owner opens the CLI terminal, runs a command, sees output, closes clean", 
   // Terminal button exists (settings-ai-admin-pane.tsx's createMutation always creates with
   // authMethod: "cli" — no credential fields required, so this works with no real provider CLI
   // installed or authenticated in the provisioned instance).
-  await page.getByRole("button", { name: "Add provider" }).click();
-  await page.getByRole("button", { name: "Anthropic" }).click();
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const addDialog = page.getByRole("dialog", { name: /Add a provider|Connect/ });
+  await addDialog.getByRole("radio", { name: "Claude" }).check();
+  await addDialog.getByRole("button", { name: "Next" }).click();
+  await addDialog.getByRole("button", { name: /^Add/ }).click();
+  // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
+  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  await addedSignIn.waitFor({ timeout: 10_000 }).then(
+    () => addedSignIn.getByRole("button", { name: "Close" }).click(),
+    () => undefined
+  );
   await expect(page.getByText("No providers yet")).toBeHidden();
 
   await page.getByRole("button", { name: "Terminal" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Anthropic terminal" });
+  const dialog = page.getByRole("dialog", { name: "Claude terminal" });
   await expect(dialog).toBeVisible();
 
   // First run: no terminal password set yet (terminal-modal.tsx's set-password phase, gated by

@@ -47,13 +47,22 @@ test("OpenCode provider has no separate card or hardcoded model choice (#3671)",
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "AI providers" }).click();
-  await expect(page.getByRole("button", { name: "Add provider" })).toBeVisible({
+  await expect(page.getByRole("button", { name: "Add provider" }).first()).toBeVisible({
     timeout: 30_000
   });
 
   // Add the OpenCode CLI provider through the real catalog.
-  await page.getByRole("button", { name: "Add provider" }).click();
-  await page.getByRole("button", { name: "OpenCode", exact: true }).click();
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const addDialog = page.getByRole("dialog", { name: /Add a provider|Connect/ });
+  await addDialog.getByRole("radio", { name: "OpenCode" }).check();
+  await addDialog.getByRole("button", { name: "Next" }).click();
+  await addDialog.getByRole("button", { name: /^Add/ }).click();
+  // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
+  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  await addedSignIn.waitFor({ timeout: 10_000 }).then(
+    () => addedSignIn.getByRole("button", { name: "Close" }).click(),
+    () => undefined
+  );
 
   // The provider itself is still there as a normal provider card.
   const card = page.locator(".prov").filter({ has: page.getByLabel("Remove OpenCode") });

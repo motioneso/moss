@@ -270,8 +270,13 @@ test("configures chat and email extraction models through settings", async ({ pa
   await page.getByRole("button", { name: "AI providers" }).click();
 
   await expect(page.getByRole("heading", { name: "AI providers" })).toBeVisible();
-  await page.getByRole("button", { name: "Add provider" }).click();
-  await page.getByRole("button", { name: "Anthropic", exact: true }).click();
+  // The empty state shows a second Add provider button next to the header one.
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const addDialog = page.getByRole("dialog");
+  await addDialog.getByRole("radio", { name: "Anthropic" }).check();
+  await addDialog.getByRole("button", { name: "Next" }).click();
+  await addDialog.getByLabel("API key").fill("sk-ant-e2e");
+  await addDialog.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator(".prov__name", { hasText: "Anthropic" })).toBeVisible();
 
   await page.getByRole("button", { name: "Test", exact: true }).click();
@@ -291,10 +296,9 @@ test("configures chat and email extraction models through settings", async ({ pa
   await expect(page.getByRole("button", { name: "Refresh models", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add model", exact: true })).toBeVisible();
 
-  // #870 Slice 1: services (Chat / Voice) replace the old capability-routing rows.
-  // exact:true — the default substring match also hits the footer Note ("…follows the
-  // services above"), so scope to the section heading div (strict-mode 2-element violation).
-  await expect(page.getByText("Services", { exact: true })).toBeVisible();
+  // #870 Slice 1: services (Chat / Voice) replace the old capability-routing rows. They now sit
+  // in the "Which model does what" section.
+  await expect(page.getByText("Which model does what", { exact: true })).toBeVisible();
   await expect(page.getByText(/Routing override .*not wired/)).toHaveCount(0);
   await page.getByLabel("Binding for Chat & briefing").selectOption("mode:reasoning");
   await expect(page.getByText("Service updated")).toBeVisible();
