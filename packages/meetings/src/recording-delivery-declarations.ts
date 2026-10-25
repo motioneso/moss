@@ -73,7 +73,7 @@ export const recordingUploadFeature = {
       code: "recording_import_invalid",
       class: "validation",
       description:
-        "Use canonical audio, a complete sidecar and matching SHA256 hashes. Chunks are at most 1 MiB. Declared duration must match audio; long recordings allow bounded ring-clock drift."
+        "Use canonical audio, a complete sidecar and matching SHA256 hashes. Chunks are at most 1 MiB. Ring clock times and declared duration are kept as reported and never refuse audio; bookmarks outside the audio are dropped."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];

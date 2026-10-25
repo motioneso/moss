@@ -81,8 +81,7 @@ export async function validateRecordingSource(
   await validateFile(read("sidecar"), files.sidecar, (chunk, offset) => sidecar.set(chunk, offset));
   const metadata = recordingSidecarMetadata(sidecar, durationMs, {
     maxBytes: RECORDING_SOURCE_LIMITS.sidecar,
-    maxEntries: RECORDING_SOURCE_LIMITS.sidecar,
-    durationDigits: 7
+    maxEntries: RECORDING_SOURCE_LIMITS.sidecar
   });
   return { durationMs, packetCount: count, ...metadata };
 }

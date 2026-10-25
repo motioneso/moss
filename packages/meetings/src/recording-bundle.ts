@@ -74,8 +74,7 @@ export function validateRecordingBundle(value: unknown) {
   const durationMs = recordingWavDuration(wav.bytes, wav.bytes.length, 120_000);
   const metadata = recordingSidecarMetadata(sidecar.bytes, durationMs, {
     maxBytes: LIMITS.sidecar,
-    maxEntries: 512,
-    durationDigits: 6
+    maxEntries: 512
   });
   const manifest: MeetingRecordingImportInput = {
     version: 1,

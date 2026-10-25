@@ -87,7 +87,7 @@ describe("incremental source validation", () => {
     expect(result.endMs - result.startMs).toBe(durationMs - 4_160);
   });
 
-  const sidecarLimits = { maxBytes: 256 * 1024, maxEntries: 256 * 1024, durationDigits: 7 };
+  const sidecarLimits = { maxBytes: 256 * 1024, maxEntries: 256 * 1024 };
 
   it("accepts the 7-minute production source whose ring clock ran 2.32 s behind its audio", () => {
     const result = recordingSidecarMetadata(metadata(442_320, -2_320), 442_320, sidecarLimits);
@@ -106,6 +106,32 @@ describe("incremental source validation", () => {
   it("keeps a declared duration that disagrees with the decoded audio", () => {
     const result = recordingSidecarMetadata(metadata(2_513_160, -4_160), 2_515_000, sidecarLimits);
     expect(result.recordedDurationMs).toBe(2_513_160);
+  });
+
+  it("keeps a declared duration far longer than the decoded audio", () => {
+    const result = recordingSidecarMetadata(metadata(10_000_000), 120_000, sidecarLimits);
+    expect(result.recordedDurationMs).toBe(10_000_000);
+  });
+
+  it("keeps an end time the ring reported before its start time", () => {
+    const result = recordingSidecarMetadata(metadata(120_000, -125_000), 120_000, sidecarLimits);
+    expect(result.endMs).toBeLessThan(result.startMs);
+  });
+
+  it("keeps in-range bookmarks while dropping one past the decoded audio", () => {
+    const start = 1_792_470_000_000;
+    const sidecar = Buffer.from(
+      [
+        { record: [String(start), "start"] },
+        { btn: [String(start + 30_000), "1"] },
+        { btn: [String(start + 200_000), "1"] },
+        { duration: [String(start + 120_000), "120000"] },
+        { record: [String(start + 120_000), "end"] }
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join(",")
+    );
+    expect(recordingSidecarMetadata(sidecar, 120_000, sidecarLimits).bookmarksMs).toEqual([30_000]);
   });
 
   it("drops a bookmark that falls outside the decoded audio", () => {
@@ -302,17 +328,13 @@ describe("duration boundaries and version-1 compatibility", () => {
     }
   });
 
-  it("retains the legacy WAV limit and six-digit sidecar duration", () => {
+  it("retains the legacy WAV limit and accepts any declared sidecar duration", () => {
     expect(() => recordingWavDuration(wavHeader(120_001), 44 + 120_001 * 32, 120_000)).toThrow(
       expect.objectContaining({ statusCode: 413 })
     );
-    const limits = { maxBytes: 256 * 1024, maxEntries: 512, durationDigits: 6 };
-    expect(() => recordingSidecarMetadata(metadata(7_200_000), 7_200_000, limits)).toThrow(
-      RecordingImportInputError
-    );
-    expect(
-      recordingSidecarMetadata(metadata(7_200_000), 7_200_000, { ...limits, durationDigits: 7 })
-        .bookmarksMs
-    ).toEqual([7_200_000]);
+    const limits = { maxBytes: 256 * 1024, maxEntries: 512 };
+    expect(recordingSidecarMetadata(metadata(7_200_000), 7_200_000, limits).bookmarksMs).toEqual([
+      7_200_000
+    ]);
   });
 });

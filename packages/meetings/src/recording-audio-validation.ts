@@ -75,7 +75,7 @@ export function recordingWavDuration(
 export function recordingSidecarMetadata(
   bytes: Buffer,
   durationMs: number,
-  limits: { maxBytes: number; maxEntries: number; durationDigits: number }
+  limits: { maxBytes: number; maxEntries: number }
 ) {
   if (bytes.length > limits.maxBytes) throw new RecordingImportInputError(413);
   let entries: unknown;
@@ -113,7 +113,7 @@ export function recordingSidecarMetadata(
           recordedDurationMs !== null ||
           typeof pair[1] !== "string" ||
           !/^\d+$/.test(pair[1]) ||
-          pair[1].length > limits.durationDigits
+          !Number.isSafeInteger(Number(pair[1]))
         )
           invalid();
         recordedDurationMs = Number(pair[1]);
