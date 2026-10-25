@@ -56,7 +56,7 @@ Add a read-only prelaunch observation that reuses the existing sample fields wit
   fails it on shape. Removed-protection tests feed a prelaunch sample to the post-launch parser, and a post-launch
   sample or a sample file left from before a reboot to the prelaunch parser. The prelaunch parser
   is exact on keys and values. `computerMonotonicMs` is Linux `process.hrtime`, which is shared by
-  all processes on one boot and resets across reboots, so a pre-reboot sample fails on age.
+  all processes on one boot and restarts from zero at each boot, so age alone cannot reject a sample from an earlier boot. The sample carries the trusted boot ID (trust.ts:35), and the prelaunch parser refuses any other. A test removes that check.
 - Is anchored at first I/O. `measuredAtMs` is read before any observation I/O and never freshened,
   as in `observeComputer` (observe.ts:147). Equal timestamps refuse, as the bootstrap plan requires.
 
@@ -80,26 +80,32 @@ must prove each check with a forged-sample test that fails when the check is rem
 
 Admission rules, each with a removed-protection test:
 
-1. Sample age under 5s at the check, by `computerMonotonicMs` (linux.ts, system-wide
-   `process.hrtime`), so ages compare across the watchdog and host processes. Refuse rollback, a
-   future sample time, and equal timestamps.
+1. Sample age under 5s, by `computerMonotonicMs` (linux.ts, `process.hrtime`), which is shared by
+   all processes within one boot. Age is checked twice: at `assertAdmitted` (operations.ts:75) and
+   again immediately before the desktop create (line 100). Images, inventory and removal run
+   between them (lines 81-94). A sample older than 5s at either point refuses, and the owner
+   retries. That is fail-closed. Refuse rollback, a future sample time, and equal timestamps.
 2. Watchdog identity (pid, start ticks, group) re-read at the check and equal to the pinned
    identity and the sample.
 3. Sample run ID equals the pinned run ID. Sample generation equals the generation after the bump
-   (line 68). The sample is taken after the bump.
+   (line 68). The bump is saved at lines 66-70 before admission runs, so the watchdog must produce
+   the sample after the bump. How admission obtains a fresh sample (wait or request) and how it
+   reaches the launch guard are open items for the handover contract.
 4. A stop marker, latched stop, or stale generation refuses.
-5. A fresh host-side inventory check, never the sample's word, runs after the removal step and
-   inside the launch guard that `docker.create` calls (docker.ts:50-52, operations.ts:32-35).
-   Before the desktop create it requires no resources. Before the gateway create (after the
-   desktop start, line 105) it requires only this generation's desktop. Another actor could still
-   create a container between the check and the create. Only the host's busy flag (operations.ts:51)
-   covers that, and it covers this process only. The build adds a check after each create that the
-   inventory holds exactly the expected containers.
-6. A sample is single use for admission. The age rule is checked against the sample's original
-   timestamp at the desktop create only, because the gateway create follows the desktop start and a
-   consumed sample cannot be re-read. Consuming the sample records its hash durably before the
-   desktop create, so a host restart cannot replay it inside its 5s window. A test proves the
-   gateway create stays reachable on a healthy run.
+5. A fresh host-side inventory check, never the sample's word, runs after the removal step. It is
+   new code in the store's launch guard (docker.ts:50-52, operations.ts:32-35), which today calls
+   only `assertLaunchable` and `assertNotStopped`. Before the desktop create it requires no
+   resources. Before the gateway create (after the desktop start, line 105) it requires only this
+   generation's desktop. Another actor could still create a container between a check and its
+   create. Only the host's busy flag (operations.ts:51) covers that, and it covers this process
+   only. The build adds a check after each create that the inventory holds exactly the expected
+   containers.
+6. A sample is single use. Admission consumes it at the desktop create, and the gateway create
+   does not re-read it. The consumed hash is stored durably before the desktop create so a host
+   restart cannot replay the sample inside its 5s window. The host state file accepts exactly
+   `enabled,generation,resources` (state.ts:62), so the build needs a new private record file,
+   which is an open item for the handover contract. A test proves the gateway create stays
+   reachable on a healthy run.
 7. A missing, unreadable, oversized or malformed sample refuses, one test per case.
 8. Post-launch sample within 10s of the prelaunch sample, or the run stops. This rule depends on the
    later handover contract and cannot be tested in this slice.
