@@ -1,9 +1,14 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { launchHold, type LaunchOptions } from "../../scripts/computer-watchdog/launcher.js";
+import {
+  assertRunningImage,
+  launchHold,
+  type LaunchOptions
+} from "../../scripts/computer-watchdog/launcher.js";
 
 const dirs: string[] = [];
 const pids: number[] = [];
@@ -30,6 +35,11 @@ const gone = async (pid: number) => {
   return !alive(pid);
 };
 
+const hashOf = async (path: string) =>
+  createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex");
+
 /** A stand-in watchdog that runs the given body. Descriptor 3 is the launcher's channel. */
 async function stub(body: string, overrides: Partial<LaunchOptions> = {}): Promise<LaunchOptions> {
   const dir = await mkdtemp(join(tmpdir(), "launcher-"));
@@ -39,6 +49,9 @@ async function stub(body: string, overrides: Partial<LaunchOptions> = {}): Promi
   return {
     nodePath: process.execPath,
     bundlePath,
+    nodeSha256: await hashOf(process.execPath),
+    bundleSha256: await hashOf(bundlePath),
+    assertTrusted: async () => undefined,
     configPath: join(dir, "config.json"),
     ackTimeoutMs: 1500,
     ...overrides
@@ -142,5 +155,81 @@ describe("launchHold", () => {
       })
     ).rejects.toThrow();
     expect(await gone(pid)).toBe(true);
+  });
+
+  describe("file verification", () => {
+    const ok = `fs.writeSync(3,Buffer.from([1]));${idle}`;
+    const neverStarts = async (options: LaunchOptions) => {
+      let spawned = false;
+      await expect(launchHold({ ...options, onSpawn: () => (spawned = true) })).rejects.toThrow();
+      expect(spawned).toBe(false);
+    };
+
+    it("refuses a bundle whose hash differs and starts nothing", async () => {
+      const options = await stub(ok);
+      await neverStarts({ ...options, bundleSha256: "0".repeat(64) });
+    });
+
+    it("refuses a node binary whose hash differs and starts nothing", async () => {
+      const options = await stub(ok);
+      await neverStarts({ ...options, nodeSha256: "0".repeat(64) });
+    });
+
+    it("refuses a bundle edited after its hash was pinned", async () => {
+      const options = await stub(ok);
+      await writeFile(options.bundlePath, `${ok}//`);
+      await neverStarts(options);
+    });
+
+    it.each(["", "ABC", "0".repeat(63), "G".repeat(64)])(
+      "refuses malformed hash %j",
+      async (bad) => {
+        const options = await stub(ok);
+        await neverStarts({ ...options, bundleSha256: bad });
+      }
+    );
+
+    it("refuses paths that are not root-owned with a closed ancestry by default", async () => {
+      const options = await stub(ok);
+      const { assertTrusted: _unused, ...real } = options;
+      await neverStarts(real);
+    });
+
+    it("refuses a path the trust check rejects", async () => {
+      const options = await stub(ok);
+      await neverStarts({
+        ...options,
+        assertTrusted: async (path) => {
+          if (path === options.bundlePath) throw new Error("untrusted");
+        }
+      });
+    });
+  });
+
+  describe("assertRunningImage", () => {
+    const start = async () => {
+      const dir = await mkdtemp(join(tmpdir(), "image-"));
+      dirs.push(dir);
+      const script = join(dir, "s.cjs");
+      await writeFile(script, idle);
+      const child = spawn(process.execPath, [script, "hold"], { stdio: "ignore", detached: true });
+      pids.push(child.pid!);
+      await new Promise((r) => setTimeout(r, 200));
+      const { dev, ino } = await stat(process.execPath, { bigint: true });
+      return { pid: child.pid!, key: { dev, ino }, argv: [process.execPath, script, "hold"] };
+    };
+
+    it("accepts the verified binary running the given arguments", async () => {
+      const c = await start();
+      await expect(assertRunningImage(c.pid, c.key, c.argv)).resolves.toBeUndefined();
+    });
+
+    it("refuses another binary and other arguments", async () => {
+      const c = await start();
+      await expect(
+        assertRunningImage(c.pid, { ...c.key, ino: c.key.ino + 1n }, c.argv)
+      ).rejects.toThrow();
+      await expect(assertRunningImage(c.pid, c.key, [...c.argv, "extra"])).rejects.toThrow();
+    });
   });
 });
