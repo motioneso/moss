@@ -1,0 +1,1004 @@
+{
+  "kind": "staged-closure-publication-local-evidence",
+  "task": 3674,
+  "base": "71616c7b2fb1d6f768c0f4948bb2a85ae111d99c",
+  "acceptedPlan": {
+    "commit": "447af6424ced8e87e45fe83897fba9c4455cd78e",
+    "sha256": "611c97db65df4ceb445e5bcdc4dd36771aa48b6acb9f9db0ec62a2841a17a3d9",
+    "factualCorrectionSha256": "2d30c0ef0a69365dbdfcba33ebb9b955e7c4116d8fe1d431e78db7aedeaf0862"
+  },
+  "checkedSource": "2efad77409ce1c0f554d9549d944cae26248f111",
+  "sourceHashes": {
+    "docs/superpowers/plans/2026-10-24-moss-computer-staged-closure-publication.md": "2d30c0ef0a69365dbdfcba33ebb9b955e7c4116d8fe1d431e78db7aedeaf0862",
+    "scripts/computer-closure-publication.ts": "f2c8e7ce6d02937b3e166c31429378dba35c8c593d35f778f393a6333a596813",
+    "scripts/computer-closure-publication/config.ts": "9af26cdea9f347d8d34600840954f32b21991b6e9dc9f8071a3e920fbac10ad1",
+    "scripts/computer-closure-publication/request.ts": "cf8af52144f9c33311a81ecd9380895a0cb240f4bc6befb1b6abaf8ffb45df51",
+    "scripts/computer-closure-publication/run.ts": "b64e8b5ce7daa02cc9e7d35726e677dbe02eb3cdc862305fc968d9afde8bc23b",
+    "scripts/computer-closure/capture.ts": "3bef913b29bfa88d2652b614c983469bdb71fb8cb2d27770d9c787e47fa31be9",
+    "scripts/computer-closure/config.ts": "2fc9958075cb8e783396df60e42518c52a74d4c28a6dedc6e4571d7c30b1a0ad",
+    "scripts/computer-provision/publication.ts": "195ceacadfed565a53f0eb517a482a0b2d3bc9e70eb9c5a2fa2a03977cb09d58",
+    "tests/unit/computer-closure-publication-consumer.test.ts": "d260c05d4cbc2d115647111ae0bbfb2df04cd161cb33edabd869b0ca68276386",
+    "tests/unit/computer-closure-publication-fixture.ts": "ba95dff36d751adf6bedd690d20ff97c560ad3d801415d47702ba95be6f6e5e4",
+    "tests/unit/computer-closure-publication-native.test.ts": "c5d1e31a5fbbf5b7fc76cd75f57b49419243abc7bae39f4f830af49208b54bcf",
+    "tests/unit/computer-closure-publication-trust.test.ts": "8b5b402f06ccaf5297a7549f345b3aae314b331f92a6eff455444c10654a8091",
+    "tests/unit/computer-closure-publication.test.ts": "cd22a9634a7396a188b1982ab1d09500f29f205fbbf088049d74334f1fa95bf4",
+    "tests/unit/computer-signing-native-fixture.ts": "11ef11677f08acb8b92472e1ecce413ebc5a18695a1dc20f334c58ea7f362585"
+  },
+  "computerExecution": {
+    "passedTests": 845,
+    "passedSuites": 36,
+    "newFocusedCases": 68
+  },
+  "checks": [
+    {
+      "name": "computer-tests",
+      "command": ["pnpm", "exec", "vitest", "run", "tests/unit/computer-", "--maxWorkers=2"],
+      "exit": 0,
+      "elapsedSeconds": 454.902,
+      "logSha256": "575ac88c7c7914f10108dec74c0f650b3047bb6b9eec2dd54e0b72fedb10e542"
+    },
+    {
+      "name": "root-tsc",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 82.223,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 46.834,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-closure-publication.ts",
+        "scripts/computer-closure-publication/config.ts",
+        "scripts/computer-closure-publication/request.ts",
+        "scripts/computer-closure-publication/run.ts",
+        "scripts/computer-closure/capture.ts",
+        "scripts/computer-closure/config.ts",
+        "scripts/computer-provision/publication.ts",
+        "tests/unit/computer-closure-publication-consumer.test.ts",
+        "tests/unit/computer-closure-publication-fixture.ts",
+        "tests/unit/computer-closure-publication-native.test.ts",
+        "tests/unit/computer-closure-publication-trust.test.ts",
+        "tests/unit/computer-closure-publication.test.ts",
+        "tests/unit/computer-signing-native-fixture.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 1.507,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/superpowers/plans/2026-10-24-moss-computer-staged-closure-publication.md",
+        "scripts/computer-closure-publication.ts",
+        "scripts/computer-closure-publication/config.ts",
+        "scripts/computer-closure-publication/request.ts",
+        "scripts/computer-closure-publication/run.ts",
+        "scripts/computer-closure/capture.ts",
+        "scripts/computer-closure/config.ts",
+        "scripts/computer-provision/publication.ts",
+        "tests/unit/computer-closure-publication-consumer.test.ts",
+        "tests/unit/computer-closure-publication-fixture.ts",
+        "tests/unit/computer-closure-publication-native.test.ts",
+        "tests/unit/computer-closure-publication-trust.test.ts",
+        "tests/unit/computer-closure-publication.test.ts",
+        "tests/unit/computer-signing-native-fixture.ts"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 1.062,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "elapsedSeconds": 1.822,
+      "logSha256": "b4b01b09f13006047cd969a3029abc745ce92a9aae97b0680a38d8a6afdc4f93"
+    },
+    {
+      "name": "diff",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "elapsedSeconds": 0.004,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "builtin-bundles",
+      "command": ["node", "<private>/build-bundles-r2.cjs"],
+      "exit": 0,
+      "elapsedSeconds": 0.13,
+      "logSha256": "6accc398b12febf1fcd5d8c3d75bacaf8245ba8376cdf1ac59a2cb89a30c44ad"
+    },
+    {
+      "name": "gateway-context",
+      "command": ["pnpm", "build:computer-gateway", "<private>/gateway-context-final-r2"],
+      "exit": 0,
+      "elapsedSeconds": 0.728,
+      "logSha256": "7ca667b47d0de4ebb21a03e4e9edda481aabd1dfae553535c37f6447f84bfd29"
+    }
+  ],
+  "controls": {
+    "validControls": 25,
+    "emittedAssertionErrorBlocks": 28,
+    "intendedFailedTestCases": 36,
+    "originalSourceHashes": {
+      "scripts/computer-closure-publication/config.ts": "9af26cdea9f347d8d34600840954f32b21991b6e9dc9f8071a3e920fbac10ad1",
+      "scripts/computer-closure-publication/request.ts": "cf8af52144f9c33311a81ecd9380895a0cb240f4bc6befb1b6abaf8ffb45df51",
+      "scripts/computer-closure-publication/run.ts": "b64e8b5ce7daa02cc9e7d35726e677dbe02eb3cdc862305fc968d9afde8bc23b",
+      "scripts/computer-closure-publication.ts": "f2c8e7ce6d02937b3e166c31429378dba35c8c593d35f778f393a6333a596813",
+      "scripts/computer-closure/capture.ts": "3bef913b29bfa88d2652b614c983469bdb71fb8cb2d27770d9c787e47fa31be9"
+    },
+    "cases": [
+      {
+        "name": "external-request-hash",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "requires external raw request hash"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.824,
+        "patchSha256": "f0e1a867485de94914cb6edf2e02bcb8d950de6e7ca05288eccffc4cfc71249a",
+        "logSha256": "d8445f8a956f0f234bb790b2f2eb1092a8ac7d434ac8b6bfa98e580e09415a56",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "raw-supervisor-hash",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "requires external raw request hash"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 4.231,
+        "patchSha256": "ace8c5717e13c9c96d58bbf9edb23c781d94218ebe3f73a90fcaa60ea01f63cf",
+        "logSha256": "9704eb66e079cd4d74debc088a58508ddae3719cc882bfe612152e9ce20a1cc1",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "publisher-node-hashes",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses wrong independently pinned (artifactSha256|nodeSha256)"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 7.391,
+        "patchSha256": "fb018194ab04a76bd236ba2a61442d97e63e7c958fa6fa074ec51ab102d38fd3",
+        "logSha256": "eed0e5be6604523669c6ec282e7e92d5f67b357c20fc21e7b352352f0862c562",
+        "emittedAssertionErrorBlocks": 2,
+        "intendedFailedTestCases": 2
+      },
+      {
+        "name": "request-cgroup-anchor",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses wrong independently pinned cgroupNamespace"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.672,
+        "patchSha256": "f90aa1c900faf40aebd07930162e111f9bd5b84b80a7724dbcd94abebfa6e683",
+        "logSha256": "cfb4dc2a1ac5732340f87e3b89631ae6262da62ac72fde7e41737aea2c7f6d3a",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "dedicated-root-0700",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-trust.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "requires dedicated0700"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 5.977,
+        "patchSha256": "31f00725fe214468e54ba4d40c75bf9135ff33100e691a1ffde7c730d113d264",
+        "logSha256": "0a8e8de25d982b30d006ac59b1bdcde8f8a92012dcd4443f50f9dee430ed2361",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 2
+      },
+      {
+        "name": "output-root-bidirectional",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-trust.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses output separation ancestor"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.622,
+        "patchSha256": "40dc61b9a0fb131a759e47233816429159665ae16a3a1bf11a1f55ca76667ac0",
+        "logSha256": "9d4e8a832f996a894e9be7a51c8e301e8ac2be506871817fc3821944aa50c2ac",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "output-receipt-bidirectional",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-trust.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses output separation receipt-ancestor"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.923,
+        "patchSha256": "d02e5e117347d97da8dfc4964257b90d12fb0dacf25c6b4f5be99891382b0ac7",
+        "logSha256": "0f7c7363e8f8071d1f0a5943a5fe856a032a7b711c8433151c831ddab3faaa39",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "output-private-paths",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-trust.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses output separation input"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.773,
+        "patchSha256": "60e1224b21669904696789630d0b712ce4b28c89e993cd80e716bb5114aecf07",
+        "logSha256": "b8b2affa61c4c2ce229f3cce701095a73410084f12152f92fafed57d390d42ea",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "original-input-inodes",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "retains original .* inode"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 12.899,
+        "patchSha256": "4f5a3e38c3db384561aa22f7fa18b3cb4bdedf0573046e454c6b3e3189baa53e",
+        "logSha256": "324c3c55cae0fde602a35494f62083887575f1b0054d1be681e8aebd35630d96",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 5
+      },
+      {
+        "name": "publisher-original-metadata",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-trust.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "revalidates original publisher-inode"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.924,
+        "patchSha256": "d449c48cda9ae74e59a82c515b65600b2b382a5565ca4b34f7a7027ec5cde5e1",
+        "logSha256": "7116fb2bc1c9b6393c217acd9f5360b6b9fb7aa413009f1457f40fca2da11764",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "empty-output",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-trust.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses unrelated existing output"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 5.035,
+        "patchSha256": "3f04482ad61b250f85dd370487ad0363e74cb9a1d9afda0914127c780117622f",
+        "logSha256": "eff93ca0dc3c0ee497e22139b9dd293feafb7c3f153c60801c74b7bde229137b",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "clock-rollback",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-trust.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "preserves last observed time"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 2.098,
+        "patchSha256": "4ecdf2399c8c0e6ef9de41b0f2ac17ec7eccb44da4d6b005fe039cc4e624122a",
+        "logSha256": "e8dea80d208ac8d6bfb1c1c41a1a5f304810417491e9029fb9df0847a7053bac",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "clock-deadline-equality",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses equality on"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 4.331,
+        "patchSha256": "1a266a58c006f4e750b0d65cf761e5dd2e7fab08a4960d1a3f30eebf9b19844f",
+        "logSha256": "a9f9ee96778833f853fcc41e2f07a2867d0755454863b7b546c74aa708cafc6d",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "clock-signal-latch",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses signal on"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 4.227,
+        "patchSha256": "295e8ee71c0cd66ac139bfae452e969ff6f835610fa53544b693d923fc92de1f",
+        "logSha256": "c0648b40cb99ad0caab2a5a23548a4b9651e8adb477bf83dd2419542535d9abc",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "native-final-continuation",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-native.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "native (equality|signal|rollback)$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 9.133,
+        "patchSha256": "aa8045d4fd4986fd5132a033f820128460b4e16b87e273b5a3b66414c7f05450",
+        "logSha256": "7e0e7aeddc14a20c151d7334256859edb5423e2e4623cee7067ef43ae46466dc",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 3
+      },
+      {
+        "name": "native-original-timer",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-native.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "native (file|directory)$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 5.88,
+        "patchSha256": "254d42a815a8c645108d0c27960b27998a8a1d599149e957ce665a100ba515d6",
+        "logSha256": "6937e44b193c37251718f2699327c59e06b56434f85372e97bb6f43c61f141df",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 2
+      },
+      {
+        "name": "mandatory-independent-tuples",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-capture.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "rejects repinned malformed or mismatched (watchdog|init-start|init-group)$"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 7.787,
+        "patchSha256": "d0a5eb237d3cade86632c54d73ec78e79dd1882fce7ed8599c306a98c787ee90",
+        "logSha256": "cac7141afd5fdc748062113178287d8484fd7c7db7871dbc62ae7b3babf4177d",
+        "emittedAssertionErrorBlocks": 3,
+        "intendedFailedTestCases": 3
+      },
+      {
+        "name": "closed-request-schema",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "rejects open schema"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.724,
+        "patchSha256": "06e93b991732cc0680fa8af2e30fee5853985dc6109a125301dbd66e322888d7",
+        "logSha256": "5dc2cd9ea87c7cc6bbdbe320c2ab5146a87464b2aadf06a8c7f3233583e2f2d8",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "strict-argv-count-r2",
+        "source": "097ce51adfad68de8fc2e78487d8e6ac0ecbc728",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "refuses malformed argv"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "patchSha256": "0daa35adc6478a55572c70280ab0298ae69addf466a3e5edc4ce6fee4fd55c75",
+        "logSha256": "4fbf0a9e1af4314d484c66f39d1929534dc937b7798473952822ffc20feeae96",
+        "originalSha256": "cf8af52144f9c33311a81ecd9380895a0cb240f4bc6befb1b6abaf8ffb45df51",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "mandatory-consumer",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-consumer.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "executes its own actual loader"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 6.955,
+        "patchSha256": "22fce451e410acfcb30b2d1c993cb625c5ce6a54c9a3c612e62857b9e5516e21",
+        "logSha256": "c901732e6573ce9e2dd0730771de20fcca9f0154190bca798e0b32549aee0547",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "mandatory-revalidator",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-consumer.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "executes its own actual loader"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.47,
+        "patchSha256": "f3fdbdd9f7aa0b9f812bfcfa900b497651080ee2323aae6a2907e0d9d08edada",
+        "logSha256": "1c3d8e603d75d0178087c6013e71d98e8639fef9384e33e77fe8b253160b406d",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "consumed-hash",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-consumer.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "rejects altered consumed hash"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.671,
+        "patchSha256": "69377ed0bca649075fb4a1fcf7f571d7fedc2848cbe90ad5d2964e85ce84ad88",
+        "logSha256": "e03e65d9fb1470aa648dc739a2680349b13a8d459c6737fb18f84937218359b6",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "consumed-dev",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-consumer.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "rejects altered consumed dev"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.471,
+        "patchSha256": "c84fbe434d9a7458ed3d437eac4fedb3322cddda645713e88390b75b8c84deba",
+        "logSha256": "43a387abf9e8f2376e8b55b533b56d68090c9caf598c6e5a6f59ec67bedfaf47",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "consumed-ino",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-consumer.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "rejects altered consumed ino"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.27,
+        "patchSha256": "13cc886a524204e530d03c5c7770d8c9933fafba638377db7c724fd89ba52db0",
+        "logSha256": "9201b6874649fcafc94bf5ff606d25e0b73c740894230b62b03fd891ac78ab3f",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      },
+      {
+        "name": "consumed-bytes",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "tests/unit/computer-closure-publication-consumer.test.ts",
+          "--maxWorkers=2",
+          "-t",
+          "rejects altered consumed bytes"
+        ],
+        "exit": 1,
+        "intendedAssertionFailure": true,
+        "restored": true,
+        "elapsedSeconds": 3.771,
+        "patchSha256": "b0305980abe67fefb8237fed4b61e5c0f78eb0ba9a89f65adeec69aa392e8251",
+        "logSha256": "f8addf31b2974d87f0c574f2c05ce389b9ebc53621b224a5964e21c938566e96",
+        "emittedAssertionErrorBlocks": 1,
+        "intendedFailedTestCases": 1
+      }
+    ],
+    "excludedZeroSelectedControl": {
+      "name": "strict-argv-count",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure-publication.test.ts",
+        "--maxWorkers=2",
+        "-t",
+        "refuses malformed argv.*extra"
+      ],
+      "exit": 0,
+      "intendedAssertionFailure": false,
+      "restored": true,
+      "elapsedSeconds": 1.419,
+      "patchSha256": "0daa35adc6478a55572c70280ab0298ae69addf466a3e5edc4ce6fee4fd55c75",
+      "logSha256": "0a4e1b1fdb6b3a167f96c9941faa99317952fb5c7356547c40df2a948bdddcd3",
+      "assertionFailures": 0
+    },
+    "consumerSource": "2efad77409ce1c0f554d9549d944cae26248f111",
+    "consumerReceiptSha256": "633533af64a5582c62582e771b227857d802a8bd1aea28720100b13ac1131a55",
+    "consumerDriverSha256": "66573257ff678d636875eb55b21172476867841fe0cc938a9240bbba54d4a79f",
+    "consumerDriverLogSha256": "f43748f86d206306b150615de53c2ecc96b8b9fe7fb7e07fdf32afb5fdf38d25",
+    "driverSha256": "c456674da55e575acac9ff743d35f0a6998d12f22c007db14b02ed77e291cbab",
+    "driverLogSha256": "750a7eb8b163adb5ba6d0121ec0ac1a9b5ece7bdfd8fe865c4c4d4d4ddb4141c",
+    "correctionBaselineLogSha256": "bd12b3f3d545fdfb084fd45840a7831bdc67dbb8d55e229036c39888df09864d"
+  },
+  "historicalExecutions": [
+    {
+      "name": "publication-tests-r1.log",
+      "meaning": "initial publisher focused pass29",
+      "sha256": "b78d9f29201dd594be4742892793356c4f4b5815e1d9a1ae3762704b9cf6f99e"
+    },
+    {
+      "name": "publication-native-r1.log",
+      "meaning": "initial native directory fixture failure; other8passed",
+      "sha256": "9c8153150e6eb60c4f0340f680a5b44a2f8f717b50f5d7095c3a4104493b2150"
+    },
+    {
+      "name": "publication-native-r2.log",
+      "meaning": "corrected native focused9pass",
+      "sha256": "1984d87b3686dfed62ab1fc04463aeb6ab853de0cc8db04827f3dcf560b9ed32"
+    },
+    {
+      "name": "publication-trust-r1.log",
+      "meaning": "initial imported-fs partial-sync fixture failure;21passed",
+      "sha256": "78c7ae4c50e1d3164918f4a5089bf7615623c3f20d0521afb55e1c55588f1205"
+    },
+    {
+      "name": "publication-trust-r2.log",
+      "meaning": "same fixture failure retained; stopped and rebound f.io",
+      "sha256": "6ba0992a39a48f16c39dbc9dd35ae1020bbdb0839ced383214d9c5b631393707"
+    },
+    {
+      "name": "publication-partial-r3.log",
+      "meaning": "corrected f.io targeted partial-sync1pass",
+      "sha256": "595ce2f752a027271629aed380030388e8cd21a0ab337b2b5876cadda11da7d7"
+    },
+    {
+      "name": "publication-trust-r3.log",
+      "meaning": "corrected trust24pass",
+      "sha256": "53173055ae3718a98adafd028f27d75f47e137709b88e82c8c927182fc0296b3"
+    },
+    {
+      "name": "argv-baseline-r2.log",
+      "meaning": "complete argv-vector baseline7pass",
+      "sha256": "bd12b3f3d545fdfb084fd45840a7831bdc67dbb8d55e229036c39888df09864d"
+    },
+    {
+      "name": "control-strict-argv-count.log",
+      "meaning": "zero selected29skipped; NOT accepted",
+      "sha256": "0a4e1b1fdb6b3a167f96c9941faa99317952fb5c7356547c40df2a948bdddcd3"
+    },
+    {
+      "name": "lint-r1.log",
+      "meaning": "prefer-const error corrected without behavior change",
+      "sha256": "98712b31386b77b63df1053bc13ee5494a84323a46645fa468d73110e0821762"
+    },
+    {
+      "name": "final-r1-computer-tests.log",
+      "meaning": "097ce51a full840cases35suites passed before rootTSC failed; historical source",
+      "sha256": "f846281580b19e435abc76ac2b54027317a9990e7213ad867fd0105be5ad5a6b"
+    },
+    {
+      "name": "final-r1-root-tsc.log",
+      "meaning": "TS2322 held-I/O Promise unknown; corrected to void",
+      "sha256": "fd58036ab64c132a61baf883f36e6d71811005de8b5e6122fccc5042cbec847b"
+    },
+    {
+      "name": "consumer-baseline-r1.log",
+      "meaning": "new consumer fixture import ordering failure;5failed unsafe roots",
+      "sha256": "83368cc636ee1bca5407cf835cfcd84862436fabf820040456a3f1e0fc44f318"
+    },
+    {
+      "name": "consumer-baseline-r2.log",
+      "meaning": "corrected fixture-first import5passed; baseline before final exact-source checks",
+      "sha256": "4a584a5a146a80683cf7bff6ab66d8457e14fb62f7398eb682b6eedd95d6fae7"
+    }
+  ],
+  "independentReports": {
+    "security-base-seams-r1": {
+      "file": "security-base-seams-r1.md",
+      "sha256": "bef004d4c04e43b962bf6eaf623e6cf049209aa71457df7eb4388e5397bcca0b"
+    },
+    "spec-base-seams-r1": {
+      "file": "spec-base-seams-r1.md",
+      "sha256": "2675783a81803ab8998a541bd5921ce96305d72e5bec9831052bab4bb49649e9"
+    },
+    "security-plan-r1": {
+      "file": "security-plan-r1.md",
+      "sha256": "28a8c36d841af7a59c8cc4733fb8072ce968bbf547c78725ba50e060b433439e"
+    },
+    "security-plan-r2": {
+      "file": "security-plan-r2.md",
+      "sha256": "35cfd38b5a4637d5e2465d8a45324328b6d1dbf1b98e61508b9a52106fe420c7"
+    },
+    "spec-plan-r1": {
+      "file": "spec-plan-r1.md",
+      "sha256": "4c31f41bca1cc85784fc3110ebeaf59546c1008af7fcdb0b511b7da4e1be32e5"
+    },
+    "security-source-r1": {
+      "file": "security-source-r1.md",
+      "sha256": "072239f024dadab8453ca4d81c1e105e1a6b21958d44f6b677e3632d154cbe73"
+    },
+    "spec-source-r1": {
+      "file": "spec-source-r1.md",
+      "sha256": "47d89dc348b041baebb835841aca5d1f2ee788e66f8491f434d6d5e62383fe3a"
+    },
+    "spec-source-r2": {
+      "file": "spec-source-r2.md",
+      "sha256": "59d2cdb888807386d7b5fcaf90ba22f6d73d439ace2e4b335b06d76f1769bc11"
+    },
+    "spec-source-r3": {
+      "file": "spec-source-r3.md",
+      "sha256": "c260ac5aba0023d1c18878191c2c1c3cce2b9c44707017ee6a6fcc07f2609868"
+    },
+    "security-controls-r1": {
+      "file": "security-controls-r1.md",
+      "sha256": "d9056710f55775ffffb122345d0c65bf69a82650f940ef5592c4dab0b2b3f9c1"
+    },
+    "spec-controls-r1": {
+      "file": "spec-controls-r1.md",
+      "sha256": "10ef45e96ea6f0321b2b5d3aabbca884b1941b952e106e0b803baecb9b498dfb"
+    },
+    "spec-consumer-draft-r1": {
+      "file": "spec-consumer-draft-r1.md",
+      "sha256": "22effe56c658fc5abe8a510016e3140901583f81ae3f4136cfe3c1e53d69c351"
+    },
+    "spec-source-r4": {
+      "file": "spec-source-r4.md",
+      "sha256": "b7b2a9c85d691501e8ff9a02cd3dc97297f15d65721f9fae9f0bccd35e77fe2e"
+    },
+    "security-source-r2": {
+      "file": "security-source-r2.md",
+      "sha256": "9b0f4b8becc52cab7b4eefe8d925e498465c48adcf52f2d2ee8df8ec2aad887f"
+    },
+    "security-consumer-controls-r1": {
+      "file": "security-consumer-controls-r1.md",
+      "sha256": "e897239154c1953a1b9ffa1e5cf998ee0cba08f48347f5fac93d1fb942e0135e"
+    },
+    "spec-consumer-controls-r1": {
+      "file": "spec-consumer-controls-r1.md",
+      "sha256": "3cb9cc8b50468712bae88c8ceab2aa93cb600e255f7241a57d25d25093212acc"
+    }
+  },
+  "native": [
+    {
+      "name": "native-directory-close.json",
+      "sha256": "6e6190fbfa31a1cc25a552221dd40897e4ae602c8f60a536b000c2d84504ddf3",
+      "kind": "directory-close",
+      "exit": 2,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": 2003.843864,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    },
+    {
+      "name": "native-directory.json",
+      "sha256": "74b92623a96cb0d01f5aa32b25d0ff8c2e78fe5da9f1b9c08643924eb219e6ab",
+      "kind": "directory",
+      "exit": 2,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": 2003.693455,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    },
+    {
+      "name": "native-equality.json",
+      "sha256": "cf670f8a458f1dc6657a558865b04e9a43c69f66571795a55403dfea029f5b24",
+      "kind": "equality",
+      "exit": 2,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": null,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    },
+    {
+      "name": "native-file-close.json",
+      "sha256": "0ecd91ce5455f32f3e3007931db7e3ee9b79e2e34185fdaea10f26fe6bd0de1b",
+      "kind": "file-close",
+      "exit": 2,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": 2004.934928,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    },
+    {
+      "name": "native-file.json",
+      "sha256": "3a0b6a797fad4a1212bf7c28136ffb9d2f7b01a17a0a9c1aeb51c4272b8c5631",
+      "kind": "file",
+      "exit": 2,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": 2005.115851,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    },
+    {
+      "name": "native-rollback.json",
+      "sha256": "be19170507cea1adb0dad7e773bf9aad672b907ebf0f6b5c9be3a0219c8a210e",
+      "kind": "rollback",
+      "exit": 2,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": null,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    },
+    {
+      "name": "native-signal.json",
+      "sha256": "83b584dcaa3342b2ee3384f90481e3d63240670fcb3a2fa993ab23af0b4e753a",
+      "kind": "signal",
+      "exit": 2,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": null,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    },
+    {
+      "name": "native-success.json",
+      "sha256": "61ab6170a81932062a00dc06ba16042ffd59325bb2d56247afe44df13ecd6c64",
+      "kind": "success",
+      "exit": 0,
+      "signal": null,
+      "stdoutEmpty": true,
+      "stderrEmpty": true,
+      "elapsedMs": null,
+      "node": "v22.22.2",
+      "artifactSha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+      "preloadSha256": "44ad1b261529d192767d9653ca7e990274c3b4fcf8c4b23337c85002a0c08908"
+    }
+  ],
+  "bundles": {
+    "actualNode": "v22.22.2",
+    "artifacts": [
+      {
+        "name": "signing",
+        "sha256": "060120eaa6a87a3f9b368a642fb7b2e1133c20e08c0be124e52ba6e91b09fa51",
+        "bytes": 27327,
+        "builtinOnly": true,
+        "target": "node24"
+      },
+      {
+        "name": "watchdog",
+        "sha256": "aec6d7eb60abdc83e498ecccf312d5145a26992477699deca8b581738d3cbb86",
+        "bytes": 117932,
+        "builtinOnly": true,
+        "target": "node24"
+      },
+      {
+        "name": "host",
+        "sha256": "320895edaf5460cdd79c3af773b22621235c373e570fa66f908dd1af136b6388",
+        "bytes": 37468,
+        "builtinOnly": true,
+        "target": "node24"
+      },
+      {
+        "name": "provision",
+        "sha256": "9ef8c79065e15a7cd003e4539f264c9163d8b28c342efefa708d1fdd4bd78d70",
+        "bytes": 60249,
+        "builtinOnly": true,
+        "target": "node24"
+      },
+      {
+        "name": "closure",
+        "sha256": "e24d58c74c569c0cb39189e247f9e0bae12bb522fcd783fbe40b92670c1d83a0",
+        "bytes": 67166,
+        "builtinOnly": true,
+        "target": "node24"
+      },
+      {
+        "name": "closure-publication",
+        "sha256": "43c39b81dd37cb876ce11cfd581c540ba55220f534159faa52f99098259befc2",
+        "bytes": 44752,
+        "builtinOnly": true,
+        "target": "node24"
+      }
+    ]
+  },
+  "limits": [
+    "Fixtures project OS/root/runtime/PID1/namespaces/cgroup/heartbeat/Node bytes.",
+    "Native held-I/O timer scales original60s to2s. Final callback injects equality/signal/rollback.",
+    "Actual native nonroot Node22 refusal is separate; Node24 target metadata is packaging only.",
+    "Consumer fault-return projections isolate each new hash/dev/inode/bytes comparison; protected path rejects before actual revalidator, removal controls call actual revalidator on retained original.",
+    "Constructed altered-template root negatives are not producer-lineage qualification.",
+    "Staged delivery is consistency, not external producer approval, successful absence, installation/runtime admission or owner acceptance.",
+    "Reused canonical private-file/key/install/root/namespace/capture guards retain inherited coverage; new controls do not claim to reimplement each existing guard.",
+    "Final checked source, public evidence HEAD and actual protected merge remain distinct; final required CI/supplemental/merge/successor acceptance remains required."
+  ],
+  "ownerParentsRemainOpen": [3577, 3616, 3617, 3618, 3619],
+  "unavailableAdmissionChanged": false
+}

@@ -135,10 +135,6 @@ export function SortingModelRow(props: {
     retry: false
   });
   const savedGateMode = readGateMode(gateQuery.data?.config.value);
-  // Ruling: `on` is not usable before the release gate. With no release signal available at this
-  // slice, the control stays disabled unless the saved record already reads `on` (written through
-  // the admin boundary by the later release step).
-  const canChooseOn = savedGateMode === "on";
   const gateMutation = useMutation({
     mutationFn: (mode: ClassifierGateMode) =>
       putAdminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY, mode),
@@ -172,8 +168,7 @@ export function SortingModelRow(props: {
     groups.set(model.providerDisplayName, list);
   }
 
-  // Temporary shadow report (#2957): while the gate is in Shadow, the badge and the
-  // note below link to the report. The Shadow switch option itself only changes the mode.
+  // The Shadow badge links to the report. The Shadow switch option only changes the mode.
   const shadowReportHref = "/settings?section=shadowreport";
   const badge =
     savedGateMode === "shadow" ? (
@@ -259,20 +254,10 @@ export function SortingModelRow(props: {
             options={CLASSIFIER_GATE_MODES.map((mode) => ({
               value: mode,
               label: GATE_LABELS[mode],
-              disabled: gateMutation.isPending || gateDisabled || (mode === "on" && !canChooseOn),
-              title:
-                mode === "on" && !canChooseOn
-                  ? "Available after shadow results are reviewed"
-                  : undefined
+              disabled: gateMutation.isPending || gateDisabled
             }))}
           />
         </Field>
-        {!gateDisabled && !canChooseOn ? (
-          <div className="rt__desc">
-            On opens after shadow review.{" "}
-            {savedGateMode === "shadow" ? <a href={shadowReportHref}>See shadow results</a> : null}
-          </div>
-        ) : null}
       </div>
     </div>
   );

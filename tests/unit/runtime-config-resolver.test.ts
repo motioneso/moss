@@ -124,17 +124,27 @@ describe("RuntimeConfigResolver", () => {
     );
   });
 
-  // #2881 blocker 2: the environment variable must not turn the gate on with no release record.
-  // An env value of "on" fails closed to the off default; other env values still pass through.
-  it("fails the classifier gate closed to off when the environment says on (#2881)", async () => {
+  it("lets the environment turn the classifier gate on when nothing is saved", async () => {
     const resolver = new RuntimeConfigResolver(scopedDbWithSetting(undefined), {
+      MOSS_CHAT_CLASSIFIER_GATE_MODE: "on"
+    });
+
+    await expect(resolver.resolveEnum(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).resolves.toBe("on");
+    await expect(resolver.getStatus(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).resolves.toEqual({
+      value: "on",
+      source: "env"
+    });
+  });
+
+  it("keeps a saved off ahead of an environment on for the classifier gate", async () => {
+    const resolver = new RuntimeConfigResolver(scopedDbWithSetting({ value: "off" }), {
       MOSS_CHAT_CLASSIFIER_GATE_MODE: "on"
     });
 
     await expect(resolver.resolveEnum(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).resolves.toBe("off");
     await expect(resolver.getStatus(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).resolves.toEqual({
       value: "off",
-      source: "default"
+      source: "instance"
     });
   });
 

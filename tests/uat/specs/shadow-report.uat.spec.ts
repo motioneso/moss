@@ -198,7 +198,6 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   await chooseClassifier(page, "UAT Classifier Fixture Model");
   await setGate(page, "Shadow");
   await expect(page.getByRole("link", { name: "See shadow results" }).first()).toBeVisible();
-  await expect(page.getByText("On opens after shadow review.")).toBeVisible();
 
   // 1. Match: the fixture picks calendar.listVisibleEvents and the model calls it.
   await page.goto(requireBaseURL());
