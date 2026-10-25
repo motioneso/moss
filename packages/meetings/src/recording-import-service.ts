@@ -76,10 +76,6 @@ export class RecordingImportService {
   async accept(actor: AccessContext, value: unknown) {
     await this.deps.assertAvailable(actor);
     const bundle = validateRecordingBundle(value);
-    if (bundle.mode === "voice-request")
-      throw new RecordingVoiceIneligibleError(
-        "Hold recordings go to Main chat and never become meetings"
-      );
     const result = await this.acceptBundle(actor, bundle);
     return { created: result.created, ...recordingImportStatus(result.row) };
   }
@@ -147,6 +143,10 @@ export class RecordingImportService {
         if (existing.fingerprint !== bundle.fingerprint) throw new RecordingImportConflictError();
         return { row: existing, created: false };
       }
+      if (!voice && bundle.mode === "voice-request")
+        throw new RecordingVoiceIneligibleError(
+          "Hold recordings go to Main chat and never become meetings"
+        );
       const id = randomUUID();
       const policy = voice
         ? await new RecordingVoiceEnablementRepository().admit(db, {

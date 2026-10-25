@@ -36,10 +36,6 @@ export class RecordingUploadService {
   async reserve(actor: AccessContext, value: unknown) {
     await this.deps.assertAvailable(actor);
     const input = parseRecordingUpload(value);
-    if (input.mode === "voice-request" && input.manifest.destination.intent === "meeting")
-      throw new RecordingVoiceIneligibleError(
-        "Hold recordings go to Main chat and never become meetings"
-      );
     if (input.manifest.destination.intent === "voice-request" && !this.deps.admitVoiceRequest)
       throw new HttpError(503, "Voice admission unavailable");
     const id = await this.deps.dataContext.withDataContext(actor, async (db) => {
@@ -56,6 +52,10 @@ export class RecordingUploadService {
           throw new RecordingImportConflictError();
         return prior.id;
       }
+      if (input.mode === "voice-request" && input.manifest.destination.intent === "meeting")
+        throw new RecordingVoiceIneligibleError(
+          "Hold recordings go to Main chat and never become meetings"
+        );
       const id = randomUUID();
       const destination = input.manifest.destination;
       if (destination.intent === "voice-request") {
@@ -178,6 +178,11 @@ export class RecordingUploadService {
       if (row.ready) return this.progress(db, row);
       this.active(row);
       const input = parseRecordingUpload(JSON.parse(row.source_manifest_json!));
+      // Uploads reserved before hold recordings were refused as meetings must not finish as one.
+      if (input.mode === "voice-request" && input.manifest.destination.intent === "meeting")
+        throw new RecordingVoiceIneligibleError(
+          "Hold recordings go to Main chat and never become meetings"
+        );
       const chunks = await this.uploads.chunks(db, id);
       for (const kind of recordingSourceKinds) {
         const selected = chunks.filter((c) => c.kind === kind);
