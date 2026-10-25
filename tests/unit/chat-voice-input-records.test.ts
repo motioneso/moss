@@ -114,6 +114,16 @@ describe("normal voice input reconciliation", () => {
     const result = mergeVoiceInputRecords([typed], [receipt("a", "interrupted")], new Map());
     expect(result.map((record) => record.turnId)).toEqual(["a", "typed"]);
   });
+  it("places a pending receipt before a live user turn that was just saved without a timestamp", () => {
+    const live: TranscriptRecord = {
+      kind: "user",
+      text: "Typed now",
+      turnId: "typed",
+      messageId: "typed-message"
+    };
+    const result = mergeVoiceInputRecords([live], [receipt("a", "interrupted")], new Map());
+    expect(result.map((record) => record.turnId)).toEqual(["a", "typed"]);
+  });
   it("appends a pending receipt after older saved messages", () => {
     const older: TranscriptRecord = {
       kind: "user",
