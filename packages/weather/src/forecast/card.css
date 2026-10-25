@@ -67,6 +67,7 @@
   outline-offset: 2px;
 }
 .weather-forecast__curve {
+  --weather-hours: 1;
   width: max(100%, calc(var(--weather-hours) * 64px));
   padding-top: var(--space-2);
 }
