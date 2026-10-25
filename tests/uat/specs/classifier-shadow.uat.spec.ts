@@ -60,9 +60,9 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.getByRole("button", { name: "AI providers" }).click();
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
+const classifierSelect = (page: Page) => page.getByLabel("Decision model", { exact: true });
 const gateButton = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
+  page.getByRole("group", { name: "Use in chat" }).getByRole("button", { name });
 
 async function chooseClassifier(page: Page, label: string): Promise<void> {
   // Wait for the binding save before navigating away, or the next screen can load before the

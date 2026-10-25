@@ -157,8 +157,9 @@ test("real Tasks questions keep source identity, due state and immutable read-on
   try {
     await bringUpRealChatProvider(page);
     const model = await discoverCheapestChatModel(page);
-    // Actual Settings binding, using the discovered economy route for this newly signed-up owner.
-    await page.goto("/settings?section=aiproviders");
+    // Actual Settings lock on Your assistant, using the discovered economy route for this newly
+    // signed-up owner.
+    await page.goto("/settings?section=assistant");
     const lock = page.getByLabel("Locked chat model", { exact: true });
     await expect(lock).toBeEnabled();
     await lock.selectOption(model.id);

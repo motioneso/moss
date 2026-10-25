@@ -226,7 +226,7 @@ export function AddProviderDialog(props: {
                     aria-label={isCompatible ? "Address" : "Base URL"}
                   />
                 </Field>
-                <Field label="API key" hint="Stored encrypted. Never shown in briefings or logs.">
+                <Field label="API key" hint="Stored encrypted.">
                   <input
                     className="jds-input"
                     type="password"

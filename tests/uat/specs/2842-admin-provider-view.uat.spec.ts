@@ -69,7 +69,7 @@ test("a second admin sees the models of a provider another admin added (#2842)",
   await addDialog.getByRole("button", { name: "Next" }).click();
   await addDialog.getByRole("button", { name: /^Add/ }).click();
   // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
-  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  const addedSignIn = page.getByRole("dialog", { name: /^Sign in to / });
   await addedSignIn.waitFor({ timeout: 10_000 }).then(
     () => addedSignIn.getByRole("button", { name: "Close" }).click(),
     () => undefined

@@ -59,9 +59,9 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.getByRole("button", { name: "AI providers" }).click();
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
+const classifierSelect = (page: Page) => page.getByLabel("Decision model", { exact: true });
 const gateButton = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
+  page.getByRole("group", { name: "Use in chat" }).getByRole("button", { name });
 
 async function chooseClassifier(page: Page, label: string): Promise<void> {
   const saved = page.waitForResponse(
@@ -150,7 +150,7 @@ test("the classifier gate turns On with no shadow review and answers a chat requ
   await expect(gateButton(page, "Off")).toHaveAttribute("aria-pressed", "true");
   expect(reviewCount(project)).toBe(0);
   await setGate(page, "On");
-  await setGate(page, "Shadow");
+  await setGate(page, "Watch only");
   await setGate(page, "On");
   await expect(page.getByText("On opens after shadow review.")).toHaveCount(0);
 

@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ChatControlsProvider } from "../../apps/web/src/shell/chat-controls-context.js";
 
 const putAiServiceBinding = vi.fn(async (_service: string, input: unknown) => ({
   service: "sorting",
@@ -27,6 +28,8 @@ import {
   CLASSIFIER_API_DISCLOSURE,
   CLASSIFIER_GATE_ON_NOTE,
   CLASSIFIER_HEADING,
+  CLASSIFIER_HELP,
+  DECISION_MODEL_HELP_DRAFT,
   SORTING_DISCLOSURE,
   SYSTEM_ONE_SORTING_NOTE,
   SortingModelRow
@@ -78,6 +81,13 @@ const models = [
   model("ollama-json", "p-ollama", "ollama", "Ollama", ["json"])
 ];
 
+const chatControls = {
+  openChat: () => {},
+  openChatThread: () => {},
+  openChatWith: () => {},
+  openAssistantWithDraft: vi.fn()
+};
+
 async function render(
   binding?: unknown,
   fixtureModels: readonly unknown[] = models,
@@ -91,13 +101,17 @@ async function render(
         QueryClientProvider,
         { client },
         createElement(
-          FeedbackProvider,
-          null,
-          createElement(SortingModelRow, {
-            binding: binding as never,
-            models: fixtureModels as never,
-            providers: fixtureProviders as never
-          })
+          ChatControlsProvider,
+          { value: chatControls },
+          createElement(
+            FeedbackProvider,
+            null,
+            createElement(SortingModelRow, {
+              binding: binding as never,
+              models: fixtureModels as never,
+              providers: fixtureProviders as never
+            })
+          )
         )
       )
     );
@@ -112,7 +126,7 @@ const select = (renderer: ReactTestRenderer) => renderer.root.findByType("select
 const text = (renderer: ReactTestRenderer) => JSON.stringify(renderer.toJSON());
 const gateGroup = (renderer: ReactTestRenderer) =>
   renderer.root.find(
-    (node) => node.props.role === "group" && node.props["aria-label"] === "Gate state"
+    (node) => node.props.role === "group" && node.props["aria-label"] === "Use in chat"
   );
 const gateButton = (renderer: ReactTestRenderer, label: string) => {
   const button = gateGroup(renderer)
@@ -133,11 +147,11 @@ describe("SortingModelRow (Classifier)", () => {
     } as never);
   });
 
-  it("renames the user-facing row to Classifier", async () => {
+  it("names the row Decision model", async () => {
     const renderer = await render();
     expect(text(renderer)).toContain(CLASSIFIER_HEADING);
     expect(text(renderer)).not.toContain("Sorting model");
-    expect(text(renderer)).toContain("Optional model to handle classification requests.");
+    expect(text(renderer)).toContain(CLASSIFIER_HELP);
   });
 
   it("offers Use main model plus only eligible models, grouped by provider", async () => {
@@ -263,20 +277,40 @@ describe("SortingModelRow (Classifier)", () => {
     expect(values).toEqual(["", "model:nocred-json"]);
   });
 
-  it("reads the saved gate record and keeps the gate unusable until a classifier is chosen", async () => {
+  it("hides Use in chat until a decision model is chosen", async () => {
     const renderer = await render();
+    expect(text(renderer)).not.toContain("Use in chat");
+    expect(
+      renderer.root.findAll(
+        (node) => node.props.role === "group" && node.props["aria-label"] === "Use in chat"
+      )
+    ).toHaveLength(0);
+  });
+
+  it("reads the saved gate record once a decision model is chosen", async () => {
+    const renderer = await render({ kind: "model", modelId: "small-json" });
     expect(getAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode");
     expect(gateButton(renderer, "Off").props["aria-pressed"]).toBe(true);
-    // The mockup keeps the whole gate disabled while no classifier is chosen.
-    expect(gateButton(renderer, "Off").props.disabled).toBe(true);
-    expect(gateButton(renderer, "Shadow").props.disabled).toBe(true);
-    expect(gateButton(renderer, "On").props.disabled).toBe(true);
-    expect(gateButton(renderer, "On").props.title).toBeUndefined();
+  });
+
+  it("offers Ask Moss to help with a draft that names no model", async () => {
+    const renderer = await render();
+    const button = renderer.root
+      .findAllByType("button")
+      .find((candidate) => candidate.children.join("") === "Ask Moss to help");
+    if (!button) throw new Error("Ask Moss to help not found");
+    await act(async () => {
+      button.props.onClick();
+    });
+    expect(chatControls.openAssistantWithDraft).toHaveBeenCalledWith(DECISION_MODEL_HELP_DRAFT);
+    for (const m of models) {
+      expect(DECISION_MODEL_HELP_DRAFT).not.toContain((m as { id: string }).id);
+    }
   });
 
   it("enables all three gate choices once a classifier is chosen, with no review step", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
-    for (const label of ["Off", "Shadow", "On"]) {
+    for (const label of ["Off", "Watch only", "On"]) {
       expect(gateButton(renderer, label).props.disabled).toBe(false);
     }
     expect(gateButton(renderer, "On").props.title).toBeUndefined();
@@ -324,26 +358,23 @@ describe("SortingModelRow (Classifier)", () => {
       gateButton(renderer, "On").props.onClick();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    for (const label of ["Off", "Shadow", "On"]) {
+    for (const label of ["Off", "Watch only", "On"]) {
       expect(gateButton(renderer, label).props.disabled).toBe(true);
     }
   });
 
-  it("shows a saved On as pressed but locked once the classifier is cleared", async () => {
-    getAdminRuntimeConfig.mockResolvedValue({
+  it("hides Use in chat again once the decision model is cleared", async () => {
+    getAdminRuntimeConfig.mockResolvedValueOnce({
       config: { value: "on", source: "instance" }
     } as never);
     const renderer = await render();
-    expect(gateButton(renderer, "On").props["aria-pressed"]).toBe(true);
-    for (const label of ["Off", "Shadow", "On"]) {
-      expect(gateButton(renderer, label).props.disabled).toBe(true);
-    }
+    expect(text(renderer)).not.toContain("Use in chat");
   });
 
   it("saves an allowed gate choice and reads feedback from the saved record", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
     await act(async () => {
-      gateButton(renderer, "Shadow").props.onClick();
+      gateButton(renderer, "Watch only").props.onClick();
     });
     expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "shadow");
   });
@@ -358,7 +389,7 @@ describe("SortingModelRow (Classifier)", () => {
     const shadow = await render({ kind: "model", modelId: "small-json" });
     expect(text(shadow)).toContain(CLASSIFIER_API_DISCLOSURE);
     expect(text(shadow)).toContain("every user's eligible messages");
-    expect(text(shadow)).toContain("Shadow");
+    expect(text(shadow)).toContain("Watch only");
   });
 
   it("does not show the API disclosure for an unavailable saved model", async () => {
@@ -377,13 +408,13 @@ describe("SortingModelRow (Classifier)", () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
     const hrefs = renderer.root.findAllByType("a").map((anchor) => anchor.props.href);
     expect(hrefs.filter((href) => href === "/settings?section=shadowreport")).toHaveLength(1);
-    expect(text(renderer)).toContain("See shadow results");
+    expect(text(renderer)).toContain("See watch-only results");
   });
 
   it("shows no shadow report link while the gate is off", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
     const hrefs = renderer.root.findAllByType("a").map((anchor) => anchor.props.href);
     expect(hrefs).not.toContain("/settings?section=shadowreport");
-    expect(text(renderer)).not.toContain("See shadow results");
+    expect(text(renderer)).not.toContain("See watch-only results");
   });
 });

@@ -19,6 +19,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { loadPersonaSettings, useAssistantName } from "../api/use-assistant-name.js";
+import { ChatLockRows, useOwnAiPin } from "./settings-ai-chat-lock-group";
 import { useFeedback } from "./settings-feedback";
 import {
   applyGuidedPersonaText,
@@ -139,7 +140,7 @@ function Persona({ who }: { readonly who: string }) {
       setP(next);
       setSaved(result.persona);
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.persona });
-      toast("Persona saved. Your next briefing and replies will use this voice.", {
+      toast("Saved. Your next briefing and replies use this voice.", {
         icon: <GitCommitHorizontal size={17} />
       });
     },
@@ -353,6 +354,8 @@ function ChatModel({
     retry: false
   });
   const settings = settingsQuery.data?.settings;
+  const ownPin = useOwnAiPin(isAdmin).pinQuery.data?.pin;
+  const locked = Boolean(ownPin?.pinnedModelId || ownPin?.pinnedProviderId);
   const mutation = useMutation({
     mutationFn: (modelId: string | null) => putChatModelOverride({ modelId }),
     onSuccess: (result) => {
@@ -394,11 +397,15 @@ function ChatModel({
           {settings?.overrideEnabled ? (
             <Field
               label="Powering your chat"
-              hint="Defaults to the instance routing your admin set. Override it to a specific model for your own conversations."
+              hint={
+                locked
+                  ? "Your own AI lock is set below, so it decides the model and this picker is off."
+                  : "Starts with the model your admin chose. Pick another for your own chats."
+              }
             >
               <Select
                 value={value}
-                disabled={mutation.isPending || settingsQuery.isLoading}
+                disabled={mutation.isPending || settingsQuery.isLoading || locked}
                 onChange={(e) =>
                   mutation.mutate(e.target.value === "default" ? null : e.target.value)
                 }
@@ -422,6 +429,7 @@ function ChatModel({
               control={hasWebSearch ? <Badge tone="steel">Web search</Badge> : undefined}
             />
           )}
+          {isAdmin ? <ChatLockRows /> : null}
           <Note>
             Providers, credentials and which model handles each kind of work live in{" "}
             {providerSettingsLink}. A transcription model enables the microphone in chat.
@@ -476,16 +484,16 @@ function YoloMode() {
   return (
     <Group
       title="Auto-approve actions"
-      desc="Your personal approval preference for interactive chat. The instance owner controls whether it can take effect."
+      desc="Your own setting for chat. The owner decides whether it applies."
     >
       <Row
         name="Auto-approve actions"
         desc={
           state.instanceEnabled && state.self.enabled
-            ? "Effective state: enabled for interactive chat. Background work still uses its own policy."
+            ? "On for chat. Background work still asks as usual."
             : state.instanceEnabled
-              ? "Effective state: inactive because your preference is off."
-              : "Effective state: inactive because the instance owner has turned auto-approve off. Your preference remains saved."
+              ? "Off, because you have it switched off."
+              : "Off, because the owner turned it off for everyone. Your choice is saved."
         }
         control={
           <Switch

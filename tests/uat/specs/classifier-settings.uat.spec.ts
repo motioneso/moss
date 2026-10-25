@@ -54,11 +54,11 @@ async function json(
   );
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
+const classifierSelect = (page: Page) => page.getByLabel("Decision model", { exact: true });
 const classifierHeading = (page: Page) =>
   page.locator(".rt__name").filter({ hasText: "Classifier" }).first();
 const gateButton = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
+  page.getByRole("group", { name: "Use in chat" }).getByRole("button", { name });
 
 async function selectClassifier(page: Page): Promise<void> {
   await classifierSelect(page).selectOption({ label: "UAT Classifier Model" });
@@ -80,7 +80,7 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
   await addDialog.getByRole("button", { name: "Next" }).click();
   await addDialog.getByRole("button", { name: /^Add/ }).click();
   // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
-  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  const addedSignIn = page.getByRole("dialog", { name: /^Sign in to / });
   await addedSignIn.waitFor({ timeout: 10_000 }).then(
     () => addedSignIn.getByRole("button", { name: "Close" }).click(),
     () => undefined
@@ -99,14 +99,14 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
   // The row is renamed and shows the approved disclosure control.
   await expect(classifierHeading(page)).toBeVisible();
   await expect(page.locator(".rt__name").filter({ hasText: "Sorting model" })).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Use in chat" })).toBeVisible();
   await expect(gateButton(page, "Off")).toHaveAttribute("aria-pressed", "true");
   // No classifier chosen yet: the mockup keeps the gate unusable.
-  await expect(gateButton(page, "Shadow")).toBeDisabled();
+  await expect(gateButton(page, "Watch only")).toBeDisabled();
 
   // Pick a classifier, reload, confirm it stuck from the saved record.
   await selectClassifier(page);
-  await expect(gateButton(page, "Shadow")).toBeEnabled();
+  await expect(gateButton(page, "Watch only")).toBeEnabled();
   await page.reload();
   await openAssistantAndAiSettings(page);
   await expect(classifierSelect(page)).toHaveValue(/^model:/);
@@ -120,15 +120,15 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
 
   // Re-pick, then Shadow. On is open straight away, with no review step.
   await selectClassifier(page);
-  await gateButton(page, "Shadow").click();
-  await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");
+  await gateButton(page, "Watch only").click();
+  await expect(gateButton(page, "Watch only")).toHaveAttribute("aria-pressed", "true");
   await expect(gateButton(page, "On")).toBeEnabled();
   await expect(page.getByText("On opens after shadow review.")).toHaveCount(0);
   // Ruling 1: the row states the admin-wide reach of the gate.
   await expect(page.getByText(/every user's eligible messages/)).toBeVisible();
   await page.reload();
   await openAssistantAndAiSettings(page);
-  await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");
+  await expect(gateButton(page, "Watch only")).toHaveAttribute("aria-pressed", "true");
 
   // Shadow to On through the row. The save lands and survives a reload.
   const onSaved = page.waitForResponse(
@@ -160,7 +160,7 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
       else document.documentElement.removeAttribute("data-theme");
     }, theme);
     await expect(classifierHeading(page)).toBeVisible();
-    await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Use in chat" })).toBeVisible();
     if (process.env.MOSS_UAT_CAPTURE_OFF !== "1") {
       await page.screenshot({
         path: test.info().outputPath(`classifier-row-${theme.name}.png`),

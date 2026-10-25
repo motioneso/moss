@@ -9,6 +9,7 @@ import { renderToString } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
+import { ChatControlsProvider } from "../../apps/web/src/shell/chat-controls-context.js";
 
 const createAiProvider = vi.fn(async (_input: unknown) => ({
   provider: {
@@ -93,6 +94,13 @@ async function flush(): Promise<void> {
   });
 }
 
+const chatControls = {
+  openChat: () => {},
+  openChatThread: () => {},
+  openChatWith: () => {},
+  openAssistantWithDraft: vi.fn()
+};
+
 async function renderPane(): Promise<ReactTestRenderer> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let renderer!: ReactTestRenderer;
@@ -101,7 +109,11 @@ async function renderPane(): Promise<ReactTestRenderer> {
       createElement(
         QueryClientProvider,
         { client },
-        createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        createElement(
+          ChatControlsProvider,
+          { value: chatControls },
+          createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        )
       )
     );
   });
@@ -389,7 +401,7 @@ describe("AiProvidersPane Add provider dialog", () => {
 });
 
 describe("AiProvidersPane services group (#2594)", () => {
-  it("shows the Classifier row under the per-job rows", async () => {
+  it("shows the Decision model row under the per-job rows", async () => {
     const client = await import("../../apps/web/src/api/client.js");
     vi.mocked(client.listAiProviders).mockResolvedValueOnce({
       providers: [
@@ -408,7 +420,7 @@ describe("AiProvidersPane services group (#2594)", () => {
     const renderer = await renderPane();
     const text = JSON.stringify(renderer.toJSON());
     expect(text.indexOf("Email reading")).toBeGreaterThan(-1);
-    expect(text.indexOf("Classifier")).toBeGreaterThan(text.indexOf("Email reading"));
+    expect(text.indexOf("Decision model")).toBeGreaterThan(text.indexOf("Email reading"));
   });
 });
 
@@ -419,7 +431,11 @@ describe("AiProvidersPane", () => {
       createElement(
         QueryClientProvider,
         { client },
-        createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        createElement(
+          ChatControlsProvider,
+          { value: chatControls },
+          createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        )
       )
     );
 
@@ -436,7 +452,7 @@ describe("AiProvidersPane", () => {
 // separate Trail Marker row. A System One model is offered only in the Classifier row. The
 // Services group only renders once a provider exists, so each test seeds one.
 describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
-  const SORTING_LABEL = "Classifier model";
+  const SORTING_LABEL = "Decision model";
 
   function seedSystemOne(): void {
     vi.mocked(apiClient.listAiProviders).mockResolvedValue({
@@ -494,7 +510,7 @@ describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
     const renderer = await renderPane();
     expect(selects(renderer, "Binding for Trail Marker focus judgment")).toHaveLength(0);
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("Classifier");
+    expect(text).toContain("Decision model");
     await act(async () => {
       renderer.unmount();
     });

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitCommitHorizontal, MinusCircle } from "lucide-react";
 
-import { Badge, Field, FormLabel, InfoTip, Segmented, Select } from "@moss/ui";
+import { Badge, Button, Field, FormLabel, InfoTip, Segmented, Select } from "@moss/ui";
 import {
   CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   CLASSIFIER_GATE_MODE_DEFAULT,
@@ -22,6 +22,7 @@ import {
   putAiServiceBinding
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
+import { useChatControls } from "../shell/chat-controls-context";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 
@@ -56,26 +57,31 @@ export const CLASSIFIER_API_DISCLOSURE =
   "API model: eligible chat messages also go to its provider. When the gate is on, every " +
   "user's eligible messages go to that provider.";
 
-// The same ruling, shown in the Chat gate help and asserted by the unit test.
+// The same ruling, shown in the Use in chat help and asserted by the unit test.
 export const CLASSIFIER_GATE_ON_NOTE =
-  "When the gate is on, every user's eligible messages go to the classifier's provider.";
+  "When Use in chat is on, every user's eligible messages go to the decision model's provider.";
 
-export const CLASSIFIER_HEADING = "Classifier";
-export const CLASSIFIER_HELP = "Optional model to handle classification requests.";
+export const CLASSIFIER_HEADING = "Decision model";
+export const CLASSIFIER_HELP =
+  "Optional. A separate model for quick sorting and checking jobs. Moss never picks one for you.";
+
+/** Neutral starting draft for "Ask Moss to help". It names no model and no provider. */
+export const DECISION_MODEL_HELP_DRAFT =
+  "I want to choose a decision model for this instance. Explain what it does, what the Use in chat setting changes, and what I should think about. Do not pick or recommend a model for me.";
 
 const CLASSIFIER_TIP =
-  "Picks a tool and fills in simple values for quick chat requests, so they skip your default " +
+  "A decision model picks a tool and fills in simple values for quick chat requests, so they skip your default " +
   "model. Also used for yes/no and pick-one questions in the background.";
 
 const GATE_TIP = (
   <>
-    Lets the classifier answer quick chat requests before your default model sees them.
+    Lets the decision model answer quick chat requests before your default model sees them.
     <ul style={{ margin: "var(--space-2) 0 0", paddingLeft: "var(--space-4)" }}>
       <li>
         <b>Off</b>: not used.
       </li>
       <li>
-        <b>Shadow</b>: it guesses and logs, but your default model still answers.
+        <b>Watch only</b>: it guesses and logs, but your default model still answers.
       </li>
       <li>
         <b>On</b>: it answers requests it is sure about.
@@ -87,7 +93,7 @@ const GATE_TIP = (
 
 const GATE_LABELS: Readonly<Record<ClassifierGateMode, string>> = {
   off: "Off",
-  shadow: "Shadow",
+  shadow: "Watch only",
   on: "On"
 };
 
@@ -116,6 +122,7 @@ export function SortingModelRow(props: {
   readonly providers: readonly AiProviderConfigDto[];
 }) {
   const { toast } = useFeedback();
+  const { openAssistantWithDraft } = useChatControls();
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (modelId: string | null) =>
@@ -143,7 +150,7 @@ export function SortingModelRow(props: {
         queryKeys.settings.adminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY),
         data
       );
-      toast("Classifier gate updated", { icon: <GitCommitHorizontal size={17} /> });
+      toast("Use in chat updated", { icon: <GitCommitHorizontal size={17} /> });
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
@@ -172,8 +179,8 @@ export function SortingModelRow(props: {
   const shadowReportHref = "/settings?section=shadowreport";
   const badge =
     savedGateMode === "shadow" ? (
-      <a href={shadowReportHref} aria-label="See shadow results">
-        <Badge tone="amber">Shadow</Badge>
+      <a href={shadowReportHref} aria-label="See watch-only results">
+        <Badge tone="amber">Watch only</Badge>
       </a>
     ) : savedGateMode === "on" ? (
       <Badge tone="forest">On</Badge>
@@ -182,16 +189,13 @@ export function SortingModelRow(props: {
   // bindable classifier kind is a hosted provider, so it shows whenever a model is bound and the
   // gate is Shadow or On (the mockup's `api` pattern).
   const showApiDisclosure = bound != null && savedGateMode !== "off";
-  // The mockup keeps the gate unusable until a classifier is chosen (chdis/gdis on the no-model
-  // and unavailable views).
-  const gateDisabled = bound == null;
 
   return (
     <div className="rt">
       <div className="rt__main">
         <div className="rt__name">
           {CLASSIFIER_HEADING} {badge}{" "}
-          <InfoTip label="What the classifier does">{CLASSIFIER_TIP}</InfoTip>
+          <InfoTip label="What the decision model does">{CLASSIFIER_TIP}</InfoTip>
         </div>
         <div className="rt__desc">{CLASSIFIER_HELP}</div>
         {bound?.providerKind === "system-one" ? (
@@ -209,11 +213,11 @@ export function SortingModelRow(props: {
       </div>
       <div className="rt__pick">
         <Field>
-          <FormLabel htmlFor="classifier-model">Classifier model</FormLabel>
+          <FormLabel htmlFor="classifier-model">Decision model</FormLabel>
           <Select
             id="classifier-model"
             value={boundId ? `model:${boundId}` : ""}
-            aria-label="Classifier model"
+            aria-label="Decision model"
             disabled={mutation.isPending}
             onChange={(event) => {
               const raw = event.target.value;
@@ -243,21 +247,26 @@ export function SortingModelRow(props: {
             Chosen model is unavailable. Using your main model.
           </span>
         ) : null}
-        <Field>
-          <span className="jds-label">
-            Chat gate <InfoTip label="What the chat gate does">{GATE_TIP}</InfoTip>
-          </span>
-          <Segmented
-            value={savedGateMode}
-            ariaLabel="Gate state"
-            onChange={(mode) => gateMutation.mutate(mode)}
-            options={CLASSIFIER_GATE_MODES.map((mode) => ({
-              value: mode,
-              label: GATE_LABELS[mode],
-              disabled: gateMutation.isPending || gateDisabled
-            }))}
-          />
-        </Field>
+        {bound ? (
+          <Field>
+            <span className="jds-label">
+              Use in chat <InfoTip label="What Use in chat does">{GATE_TIP}</InfoTip>
+            </span>
+            <Segmented
+              value={savedGateMode}
+              ariaLabel="Use in chat"
+              onChange={(mode) => gateMutation.mutate(mode)}
+              options={CLASSIFIER_GATE_MODES.map((mode) => ({
+                value: mode,
+                label: GATE_LABELS[mode],
+                disabled: gateMutation.isPending
+              }))}
+            />
+          </Field>
+        ) : null}
+        <Button variant="link" onClick={() => openAssistantWithDraft(DECISION_MODEL_HELP_DRAFT)}>
+          Ask Moss to help
+        </Button>
       </div>
     </div>
   );

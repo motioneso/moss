@@ -94,7 +94,7 @@ async function modelsOf(page: Page, providerName: string) {
 /** Chooses a model in the Classifier row's picker, through the screen. */
 async function bindClassifier(page: Page, providerName: string, modelLabel: RegExp) {
   await openProviders(page);
-  const picker = page.getByLabel("Classifier model");
+  const picker = page.getByLabel("Decision model");
   const value = await picker
     .locator(`optgroup[label="${providerName}"] option`)
     .filter({ hasText: modelLabel })
@@ -246,7 +246,7 @@ test("Clef: add, test, bind to the Classifier row, sort, Activity names the mode
 
   await bindClassifier(page, "Clef (Cloudflare)", /clef-flash/i);
   await page
-    .getByLabel("Classifier model")
+    .getByLabel("Decision model")
     .locator("xpath=ancestor::div[@class='rt'][1]")
     .screenshot({
       path: shot("2-clef-flash-bound")

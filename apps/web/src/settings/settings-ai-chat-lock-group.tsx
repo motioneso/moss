@@ -13,28 +13,40 @@ function modelGroupLabel(model: AiConfiguredModelDto): string {
   return model.providerDisplayName || "Unknown provider";
 }
 
-/** The chat lock for this account, as rows inside the "Which model does what" section. */
-export function ChatLockRows() {
-  const queryClient = useQueryClient();
-  const { toast } = useFeedback();
-
-  const meQuery = useQuery({ queryKey: queryKeys.auth.me, queryFn: getMe, retry: false });
+/** The signed-in admin's own AI lock (read side), shared by the lock row and the chat picker. */
+export function useOwnAiPin(enabled = true) {
+  const meQuery = useQuery({
+    queryKey: queryKeys.auth.me,
+    queryFn: () => getMe(),
+    enabled,
+    retry: false
+  });
   const userId = meQuery.data?.user.id ?? null;
-
   const pinQueryKey = userId ? queryKeys.ai.adminUserAiPin(userId) : null;
   const pinQuery = useQuery({
     queryKey: pinQueryKey ?? ["ai", "admin", "users", "__none__", "pin"],
     queryFn: () => getAdminUserAiPin(userId!),
-    enabled: userId !== null,
+    enabled: enabled && userId !== null,
     retry: false
   });
+  return { userId, pinQueryKey, pinQuery };
+}
+
+/**
+ * The lock for this account, shown on Personal > Your assistant. A set lock wins over the chat
+ * picker and applies to chat, voice and background work, so the copy says so.
+ */
+export function ChatLockRows() {
+  const queryClient = useQueryClient();
+  const { toast } = useFeedback();
+  const { userId, pinQueryKey, pinQuery } = useOwnAiPin();
 
   const mutation = useMutation({
     mutationFn: (modelId: string | null) => putAdminUserAiPin(userId!, { modelId }),
     onSuccess: (data) => {
       if (pinQueryKey) queryClient.setQueryData(pinQueryKey, data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.ai.capability("chat") });
-      toast(data.pin.pinnedModelId ? "Chat model locked" : "Chat lock cleared", {
+      toast(data.pin.pinnedModelId ? "AI locked to one model" : "AI lock cleared", {
         icon: data.pin.pinnedModelId ? <LockKeyhole size={17} /> : <LockKeyholeOpen size={17} />
       });
     },
@@ -59,16 +71,16 @@ export function ChatLockRows() {
   const effectiveDesc = (): string => {
     if (!pin) return "";
     if (pin.effectiveChatModel) {
-      return `Current effective model: ${pin.effectiveChatModel.displayName}`;
+      return `Right now you are using ${pin.effectiveChatModel.displayName}`;
     }
-    return "No active chat model";
+    return "No chat model is active for you";
   };
 
   return (
     <>
       <Row
-        name="Lock my chat to one model"
-        desc={effectiveDesc()}
+        name="Lock my own AI to one model"
+        desc={`Only your account. A lock wins over the chat model picker and covers chat, voice and background work. ${effectiveDesc()}. To lock someone else, use People & access.`}
         control={
           <Select
             value={value}
@@ -76,7 +88,7 @@ export function ChatLockRows() {
             disabled={busy || (models.length === 0 && !value)}
             onChange={(event) => mutation.mutate(event.target.value || null)}
           >
-            <option value="">Unlocked — use instance default</option>
+            <option value="">Not locked</option>
             {[...grouped.entries()].map(([group, groupModels]) => (
               <optgroup key={group} label={group}>
                 {groupModels.map((model) => (
@@ -92,13 +104,13 @@ export function ChatLockRows() {
       />
       {isUnavailable ? (
         <Note icon={<ServerCog size={13} />}>
-          The locked model is unavailable or disabled. Chat is blocked until the lock is cleared or
-          the model is re-enabled.
+          The locked model is unavailable or disabled. Chat is blocked until you clear the lock or
+          the model is turned back on.
         </Note>
       ) : null}
       {models.length === 0 && !pinQuery.isLoading ? (
         <Note icon={<LockKeyholeOpen size={13} />}>
-          No chat-capable active models on your account.
+          No model that can chat is available to you yet.
         </Note>
       ) : null}
     </>

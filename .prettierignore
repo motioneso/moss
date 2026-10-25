@@ -70,4 +70,8 @@ docs/superpowers/specs/assets/2026-10-03-activity-history/
 
 # Preserve the historical Meetings critique without reformatting its original review.
 docs/superpowers/mockups/meetings-minimal/critique.md
+<<<<<<< HEAD
 docs/evidence/builder-sessions/
+=======
+docs/superpowers/specs/ai-providers-polish-mockups/
+>>>>>>> b779ac066 (feat(settings): AI providers polish - decision model row, chat model section, own-account lock on Your assistant)

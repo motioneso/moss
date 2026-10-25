@@ -82,9 +82,9 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.getByRole("button", { name: "AI providers" }).click();
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
+const classifierSelect = (page: Page) => page.getByLabel("Decision model", { exact: true });
 const gateButton = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
+  page.getByRole("group", { name: "Use in chat" }).getByRole("button", { name });
 
 async function chooseClassifier(page: Page, label: string): Promise<void> {
   const saved = page.waitForResponse(
@@ -197,7 +197,7 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   await openAssistantAndAiSettings(page);
   await chooseClassifier(page, "UAT Classifier Fixture Model");
   await setGate(page, "Shadow");
-  await expect(page.getByRole("link", { name: "See shadow results" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "See watch-only results" }).first()).toBeVisible();
 
   // 1. Match: the fixture picks calendar.listVisibleEvents and the model calls it.
   await page.goto(requireBaseURL());
@@ -284,7 +284,7 @@ test("the shadow report counts real shadow records and lists the disagreement (#
 
   // Open the report from the Shadow note link and prove the numbers and the row on screen.
   await openAssistantAndAiSettings(page);
-  await page.getByRole("link", { name: "See shadow results" }).last().click();
+  await page.getByRole("link", { name: "See watch-only results" }).last().click();
   await expect(page).toHaveURL(/section=shadowreport/);
   await expect(page.getByRole("heading", { name: "Shadow report" })).toBeVisible();
   await expect(page.getByText("Messages checked")).toBeVisible();

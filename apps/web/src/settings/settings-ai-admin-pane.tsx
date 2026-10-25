@@ -35,7 +35,7 @@ import { useAssistantName } from "../api/use-assistant-name.js";
 import { CliUpdateStatus, cliVersionLine } from "./cli-update-status";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
-import { Badge, Field, Group, PaneHead, Row, Select, Switch } from "./settings-ui";
+import { Badge, Field, Group, Note, PaneHead, Row, Select, Switch } from "./settings-ui";
 import { MODEL_TIERS, TIERS } from "./settings-ai-edit-model-form";
 import { CREDENTIAL_EXAMPLES } from "./settings-ai-provider-catalog";
 import { AddProviderDialog } from "./settings-ai-provider-picker";
@@ -46,7 +46,6 @@ import {
   supportsAutomatedProviderLogin,
   type AutomatedLoginProvider
 } from "./settings-provider-login-dialog";
-import { ChatLockRows } from "./settings-ai-chat-lock-group";
 import { YoloAdminGroup } from "./settings-yolo-admin-group";
 import { WebSearchKeyGroup } from "./settings-web-search-key-group";
 import { TranscriptionConfigGroup } from "./settings-transcription-config-group";
@@ -81,7 +80,7 @@ const SERVICE_ROWS: readonly {
     k: "module.connectors.email-extract",
     capability: "json",
     name: "Email reading",
-    desc: "Reads the emails the classifier cannot settle and writes their summaries and suggested actions.",
+    desc: "Reads your email and writes summaries and suggested actions.",
     requireExplicitBinding: true
   }
 ];
@@ -118,7 +117,7 @@ function ProviderCard(props: {
     provider.acpAgentId !== "opencode" && supportsAutomatedProviderLogin(provider);
   const modelChoiceNote =
     provider.providerKind === "google"
-      ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
+      ? "Chat uses the model this provider picks. You can't choose one here yet."
       : undefined;
   const queryClient = useQueryClient();
   const retryMutation = useMutation({
@@ -172,9 +171,7 @@ function ProviderCard(props: {
                 : "API key needed"}
           </div>
           {provider.authMethod === "cli" ? (
-            <div className="prov__auth">
-              Chat checks this sign-in when the ACP adapter initializes.
-            </div>
+            <div className="prov__auth">Chat checks this sign-in each time it starts.</div>
           ) : null}
           {provider.authMethod === "cli" && provider.cliTools ? (
             <div className="prov__auth">
@@ -254,10 +251,8 @@ function ProviderCard(props: {
                 <Terminal size={16} aria-hidden="true" />
               </span>
               <div className="provcfg__cli-main">
-                <div className="provcfg__cli-t">Signed in via the {provider.displayName} CLI</div>
-                <div className="provcfg__cli-d">
-                  Routes through your authenticated subscription. No key stored.
-                </div>
+                <div className="provcfg__cli-t">Signed in with {provider.displayName}</div>
+                <div className="provcfg__cli-d">Uses your subscription. No key needed.</div>
               </div>
               <Button
                 variant="quiet"
@@ -278,7 +273,7 @@ function ProviderCard(props: {
                   aria-label="Base URL"
                 />
               </Field>
-              <Field label="API key" hint="Stored encrypted. Never shown in briefings or logs.">
+              <Field label="API key" hint="Stored encrypted.">
                 <input
                   className="jds-input"
                   type="password"
@@ -451,7 +446,7 @@ function ServiceRow(props: {
         {needsConfig ? (
           <span className="rt__none">
             <MinusCircle size={13} aria-hidden="true" />
-            Needs configuration
+            Needs a model
           </span>
         ) : resolvedModel ? (
           <div className="rt__resolved">
@@ -462,7 +457,7 @@ function ServiceRow(props: {
         ) : (
           <span className="rt__none">
             <MinusCircle size={13} aria-hidden="true" />
-            No model resolved
+            No model yet
           </span>
         )}
       </div>
@@ -506,6 +501,7 @@ export function AiProvidersPane() {
     retry: false
   });
   const providers = (providersQuery.data?.providers ?? []).filter((p) => p.status !== "revoked");
+  const instanceDefault = providers.find((p) => p.isInstanceDefault) ?? null;
   const models = modelsQuery.data?.models ?? [];
 
   const invalidate = () =>
@@ -542,7 +538,7 @@ export function AiProvidersPane() {
     mutationFn: (enabled: boolean) => putAdminChatModelOverrideEnabled({ enabled }),
     onSuccess: () => {
       void invalidate();
-      toast("Chat override setting updated", { icon: <GitCommitHorizontal size={17} /> });
+      toast("Saved", { icon: <GitCommitHorizontal size={17} /> });
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
@@ -551,7 +547,7 @@ export function AiProvidersPane() {
       updateAiModel(input.model.id, { allowUserOverride: input.allowed }),
     onSuccess: (_data, input) => {
       void invalidate();
-      toast(`${input.model.displayName} override access updated`, {
+      toast(`${input.model.displayName} access updated`, {
         icon: <GitCommitHorizontal size={17} />
       });
     },
@@ -593,7 +589,7 @@ export function AiProvidersPane() {
     <>
       <PaneHead
         title="AI providers"
-        desc={`The AI providers this instance runs on, and which model handles each kind of work. Everyone's ${assistantName} draws from what you set up here.`}
+        desc={`The AI providers ${assistantName} uses, and which model does each job.`}
       />
       <Group
         title="Providers"
@@ -661,7 +657,7 @@ export function AiProvidersPane() {
                   confirm({
                     title: `Remove ${model.providerModelId}?`,
                     description:
-                      "The model is deleted from this provider. Any work bound to it falls back to another model.",
+                      "Removes the model from this provider. Work that used it switches to another model.",
                     confirmLabel: "Remove",
                     danger: true,
                     onConfirm: () => modelDeleteMutation.mutate(model)
@@ -720,7 +716,7 @@ export function AiProvidersPane() {
 
       <Group
         title="Which model does what"
-        desc="Pick a mode or a specific model for each job. Work not listed here is routed automatically."
+        desc="Choose a model for each job. Anything not listed picks one for itself."
       >
         {providers.length ? (
           <>
@@ -740,19 +736,34 @@ export function AiProvidersPane() {
             />
           </>
         ) : null}
-        <Row
-          name="Let people choose their own chat model"
-          desc="When off, Personal → Your assistant shows the instance default as read-only."
-          control={
-            <Switch
-              ariaLabel="Allow users to override their chat model"
-              checked={overrideQuery.data?.settings.overrideEnabled ?? false}
-              disabled={overrideQuery.isLoading || overrideToggleMutation.isPending}
-              onChange={(enabled) => overrideToggleMutation.mutate(enabled)}
+      </Group>
+      <Group title="Who can choose the chat model" desc="Applies to everyone who uses this Moss.">
+        {providers.length ? (
+          <>
+            <Row
+              name="Let people choose their own chat model"
+              desc="Off: everyone uses the default. On: people pick from the models you allow."
+              control={
+                <Switch
+                  ariaLabel="Allow users to override their chat model"
+                  checked={overrideQuery.data?.settings.overrideEnabled ?? false}
+                  disabled={overrideQuery.isLoading || overrideToggleMutation.isPending}
+                  onChange={(enabled) => overrideToggleMutation.mutate(enabled)}
+                />
+              }
             />
-          }
-        />
-        {providers.length ? <ChatLockRows /> : null}
+            <Row
+              name="Instance default"
+              desc={
+                instanceDefault
+                  ? `${instanceDefault.displayName}. Chat uses the model set under Which model does what. To change it, press Set as default on another provider card.`
+                  : "No provider is the default yet. Press Set as default on a provider card."
+              }
+            />
+          </>
+        ) : (
+          <Note>Add a provider first. Then you can choose who may pick a chat model.</Note>
+        )}
       </Group>
       <TranscriptionConfigGroup />
       <WebSearchKeyGroup />
