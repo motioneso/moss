@@ -43,15 +43,15 @@ Verified 2026-10-25 against `origin/main` at `3adeb2de3`.
 
 ### 1.2 Absent, and what each blocks
 
-| Gap                                              | Evidence                                                                                                                        | Blocks                        | Issue                 |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | --------------------- |
-| Module page cannot run its own write tools       | `packages/ai/src/routes.ts:967-990` returns 403 `confirmation_required`                                                         | Every page action in phase 2  | #1699, closed unfixed |
-| A job or tool handler cannot enqueue a job       | No enqueue member in `worker.ts:56-182` or `worker-rpc-host.ts:211-534`                                                         | Day-by-day plan generation    | Not filed             |
-| Data export for downloaded modules               | No export key in `external-module.ts:389-457`; `validate.ts:915-950`                                                            | Live-path gate for all phases | #1694 open            |
-| Module attachments; image input to structured AI | Spec §Platform Blockers                                                                                                         | Receipt and fridge photos     | #1695, #1696 open     |
-| Per-task AI binding inside a module              | RPC has no task field (`worker-rpc-host.ts:574-600`); admin pane lists chat and email only (`settings-ai-admin-pane.tsx:72-86`) | Stories 83b to 83d            | Not filed             |
-| Instance AI pin overrides module bindings        | `packages/ai/src/repository.ts:1405-1410`; the module bridge never sets `requireExplicitBinding`                                | Stories 83b to 83d            | Not filed             |
-| Cross-user Kitchen RLS                           | One owner predicate for all tables (`module-rls-emitter.ts:43-69`)                                                              | Phase 5 sharing               | Not filed             |
+| Gap                                              | Evidence                                                                                                                        | Blocks                        | Issue                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------- |
+| Module page cannot run its own write tools       | `packages/ai/src/routes.ts:967-990` returns 403 `confirmation_required`                                                         | Every page action in phase 2  | #1699, reopened 2026-10-25 |
+| A job or tool handler cannot enqueue a job       | No enqueue member in `worker.ts:56-182` or `worker-rpc-host.ts:211-534`                                                         | Day-by-day plan generation    | #3715                      |
+| Data export for downloaded modules               | No export key in `external-module.ts:389-457`; `validate.ts:915-950`                                                            | Live-path gate for all phases | #1694 open                 |
+| Module attachments; image input to structured AI | Spec §Platform Blockers                                                                                                         | Receipt and fridge photos     | #1695, #1696 open          |
+| Per-task AI binding inside a module              | RPC has no task field (`worker-rpc-host.ts:574-600`); admin pane lists chat and email only (`settings-ai-admin-pane.tsx:72-86`) | Stories 83b to 83d            | #3716                      |
+| Instance AI pin overrides module bindings        | `packages/ai/src/repository.ts:1405-1410`; the module bridge never sets `requireExplicitBinding`                                | Stories 83b to 83d            | #3716                      |
+| Cross-user Kitchen RLS                           | One owner predicate for all tables (`module-rls-emitter.ts:43-69`)                                                              | Phase 5 sharing               | Not filed                  |
 
 ### 1.3 Corrections to the spec
 
@@ -91,10 +91,10 @@ platform gap. A2 stays the fallback if A1 has not landed when phase 2 starts.
 
 ### Fork B: page writes while #1699 is open
 
-| Option                                                | For                        | Against                                                              |
-| ----------------------------------------------------- | -------------------------- | -------------------------------------------------------------------- |
-| **B1. Reopen #1699 and build it first (recommended)** | The page works as designed | Platform work ahead of phase 2                                       |
-| B2. Ship phase 2 with every write through Chat        | No platform dependency     | Ticking a list line through an approval prompt is unusable in a shop |
+| Option                                         | For                        | Against                                                              |
+| ---------------------------------------------- | -------------------------- | -------------------------------------------------------------------- |
+| **B1. Build #1699 first (recommended)**        | The page works as designed | Platform work ahead of phase 2                                       |
+| B2. Ship phase 2 with every write through Chat | No platform dependency     | Ticking a list line through an approval prompt is unusable in a shop |
 
 B2 is rejected because ticking, locking and marking Bought happen many times a minute.
 
@@ -286,12 +286,9 @@ Phases 3 to 5 follow the spec's phase list. Each gets its own plan after the pha
 
 ## 7. Open questions
 
-| #   | Question                                                                             | Owner         |
-| --- | ------------------------------------------------------------------------------------ | ------------- |
-| Q1  | Reopen #1699, or file a fresh issue for page writes?                                 | Ben           |
-| Q2  | File the enqueue blocker (Fork A1) now, so it can be specced during phase 1?         | Ben           |
-| Q3  | File the per-task AI binding blocker, including the pin-override and fallback fixes? | Ben           |
-| Q4  | Does an in-flight AI call reset the 30 s stall timer?                                | Phase 2 build |
+| #   | Question                                              | Owner         |
+| --- | ----------------------------------------------------- | ------------- |
+| Q4  | Does an in-flight AI call reset the 30 s stall timer? | Phase 2 build |
 
 ---
 
