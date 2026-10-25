@@ -8,8 +8,8 @@ Branch `feat/moss-computer-closure-reconcile`. Parked for a machine restart. Not
 - Chose one slice: the check that must pass before any launch (watchdog alive plus a first
   healthy sample).
 - Wrote the [plan](../plans/2026-10-24-moss-computer-prelaunch-admission.md). It shows that
-  today's health sample needs the running pair (`scripts/computer-watchdog/observe.ts:57-60,121-126`),
-  so it cannot gate the launch at `scripts/computer-host/operations.ts:86-93`. It recommends a
+  today's health sample needs the running pair (`scripts/computer-watchdog/observe.ts:65-71,114-132`),
+  so it cannot gate the launch at `scripts/computer-host/operations.ts:75`. It recommends a
   two-phase watchdog and accepts only the host-only half.
 
 ## Mid-flight
@@ -27,3 +27,7 @@ Branch `feat/moss-computer-closure-reconcile`. Parked for a machine restart. Not
    admission rule.
 
 Local state note: `/tmp/computer-reconcile-state.md` (may be lost on restart).
+
+## Update
+
+PR 3684 plan reviewed by two fresh Opus reviewers (security, standards): both accept with fixes. Fixes applied in the plan: corrected citations, stop-marker carry-over, generation binding, policy rejection of prelaunch samples, recheck before create, stated scope limit. A re-review of the revised plan is the next step.
