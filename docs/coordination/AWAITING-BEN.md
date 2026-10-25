@@ -79,6 +79,22 @@ No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
 source-quality checks remain required before imports are enabled (#3567).
+
+### Vocci: every remaining item needs Ben (#3565, #3584) — 2026-10-24
+
+Checked at origin/main `cf6ade9c3`. Production runs edge `8786e0a3c` (healthy after the
+host reboot). No software-only item remains in the approved queue:
+
+- Package-update recovery: no new testable lead; any probe needs a phone package replacement.
+- Out-of-range/offline and interrupted-upload checks: need Ben, phone, ring and a new recording.
+- One-hour reminder endurance: reminder is built; the physical run needs a new long recording.
+- Hold-to-talk production acceptance: needs Ben to opt in and record a sample.
+- Single-recording deletion: needs a validated command and a disposable sample.
+- Audio enhancement: needs a design decision on how originals are kept, plus mockups.
+- Firmware and streaming: need hardware compatibility evidence first.
+
+Recommendation: one arranged phone session for the out-of-range/offline and interrupted-upload
+checks, which matter most for daily use.
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
 
