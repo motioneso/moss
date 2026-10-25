@@ -1,10 +1,12 @@
-import { assertDataContextDb, type DataContextDb, type Task } from "@moss/db";
+import { assertDataContextDb, withSavepoint, type DataContextDb, type Task } from "@moss/db";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 
 import { TaskBreakdownRepository } from "./breakdown.js";
 import { TaskDriftRepository } from "./drift.js";
 import { TaskListsRepository } from "./lists.js";
 import { TasksRepository, type CreateTaskInput, type UpdateTaskInput } from "./repository.js";
+import { readTaskSummary } from "./summary/repository.js";
+import { taskSummaryData } from "./summary/tool.js";
 import {
   serializeTask,
   serializeTaskActivity,
@@ -121,7 +123,8 @@ export const taskGetExecute: ToolExecute = async (scopedDb, input, _ctx): Promis
 export const taskFocusExecute: ToolExecute = async (
   scopedDb,
   _input,
-  _ctx
+  ctx,
+  services
 ): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
   const tasks = await drift.getFocus(scopedDb);
@@ -129,8 +132,25 @@ export const taskFocusExecute: ToolExecute = async (
     scopedDb,
     tasks.map((t) => t.id)
   );
+  // Focus retains its existing ranking and recurrence reconciliation. Its optional
+  // today context is an independent bounded summary, never a relabeling of Focus rows.
+  let todayContext;
+  if (services?.visualPresentation) {
+    try {
+      const summary = await withSavepoint(scopedDb, () => readTaskSummary(scopedDb, "today"));
+      const data = taskSummaryData(summary, ctx, services);
+      todayContext = data.presentation
+        ? data
+        : { ...data, unavailable: "Visual presentation unavailable; summary remains readable." };
+    } catch {
+      todayContext = { unavailable: "Today summary unavailable; Focus items remain available." };
+    }
+  }
   return {
-    data: { items: tasks.map((task) => serializeTask(task, tagMap.get(task.id) ?? [])) },
+    data: {
+      ...(todayContext ? { todayContext } : {}),
+      items: tasks.map((task) => serializeTask(task, tagMap.get(task.id) ?? []))
+    },
     columnOrder: ["id", "title", "status", "dueAt", "priority"]
   };
 };
