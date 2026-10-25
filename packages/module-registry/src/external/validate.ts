@@ -19,6 +19,7 @@ import type {
   ModuleWebDeclaration
 } from "@moss/module-sdk";
 import { validateClassifierDeclaration } from "./validate-classifier.js";
+import { isMetadataOnlyEnqueueSchema } from "./module-enqueue-schema.js";
 import {
   validateModuleNavigation,
   validateModulePreferences,
@@ -344,6 +345,16 @@ function validateWorker(
     if (!isNonEmptyString(queue.handler)) errors.push("worker queue handler is required");
     if (queue.paramsSchema !== undefined && !isValidModuleParamsSchema(queue.paramsSchema)) {
       errors.push("worker queue paramsSchema is invalid");
+    }
+    if (queue.allowModuleEnqueue !== undefined && typeof queue.allowModuleEnqueue !== "boolean") {
+      errors.push("worker queue allowModuleEnqueue must be a boolean");
+    }
+    if (queue.allowModuleEnqueue === true) {
+      if (!isValidModuleParamsSchema(queue.paramsSchema)) {
+        errors.push("worker queue allowModuleEnqueue requires a valid paramsSchema");
+      } else if (!isMetadataOnlyEnqueueSchema(queue.paramsSchema)) {
+        errors.push("worker queue allowModuleEnqueue paramsSchema must not contain string fields");
+      }
     }
     if (
       queue.retryLimit !== undefined &&
