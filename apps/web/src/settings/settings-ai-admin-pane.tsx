@@ -272,11 +272,13 @@ function ProviderCard(props: {
                   props.onAuth(provider.id, method, cliAgentId);
                   return;
                 }
+                setRequiresCliAgentSelection(false);
                 props.onAuth(provider.id, method);
               }}
             />
           </Field>
-          {provider.providerKind === "openai-compatible" ? (
+          {provider.providerKind === "openai-compatible" &&
+          (provider.authMethod === "cli" || requiresCliAgentSelection) ? (
             <Field
               label="CLI agent"
               hint={

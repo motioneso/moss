@@ -644,3 +644,52 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
     });
   });
 });
+
+describe("AiProvidersPane CLI agent field", () => {
+  function compatibleProvider(authMethod: "api_key" | "cli") {
+    return {
+      id: "p-compat",
+      providerKind: "openai-compatible",
+      displayName: "Kimi",
+      authMethod,
+      acpAgentId: authMethod === "cli" ? "opencode" : null,
+      executionMode: "interactive",
+      status: "active",
+      hasCredential: authMethod === "api_key",
+      isInstanceDefault: false,
+      baseUrl: "https://api.example.com"
+    };
+  }
+
+  async function openEditor(authMethod: "api_key" | "cli"): Promise<ReactTestRenderer> {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [compatibleProvider(authMethod)]
+    } as never);
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Edit");
+    await flush();
+    return renderer;
+  }
+
+  it("does not ask for a CLI agent on an API key provider", async () => {
+    const renderer = await openEditor("api_key");
+
+    expect(renderer.root.findAllByProps({ "aria-label": "Kimi CLI agent" })).toHaveLength(0);
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("asks for a CLI agent when the provider uses a CLI subscription", async () => {
+    const renderer = await openEditor("cli");
+
+    expect(renderer.root.findAllByProps({ "aria-label": "Kimi CLI agent" }).length).toBeGreaterThan(
+      0
+    );
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
