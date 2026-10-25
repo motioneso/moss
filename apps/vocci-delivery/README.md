@@ -107,7 +107,7 @@ and notifications. The ongoing notification reports record-derived progress and
 opens the status screen, with Start/Stop, permissions, account/ring identity,
 voice opt-in and recent queue entries. To stop explicitly, launch the activity with action `stop`; physical
 proof cleanup also force-stops this developer package before restoring Vocci.
-The service polls every 30 seconds. A hold-to-talk recording is fetched on first sighting once its sidecar is complete; other recordings need identical sizes on two listings. It retains a partial wake lock only during
+The service polls every 30 seconds. While hold-to-talk is on it instead keeps one ring link open between cycles and starts a cycle when the ring reports a press ending (hold, then idle), re-checking every 1.5 s for up to five tries until the recording is complete. A silent or dropped link reconnects after 3 s, and a one-minute listen acts as the safety net. A hold-to-talk recording is fetched on first sighting once its sidecar is complete; other recordings need identical sizes on two listings. It retains a partial wake lock only during
 bounded work. Sticky service restart handles OS reclamation. An explicit Start also enables
 recovery after boot/unlock and app update; Stop disables recovery. Android can
 refuse a background start, which leaves an Open app/Start delivery reminder.
