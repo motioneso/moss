@@ -85,6 +85,9 @@ describe("runtime config registry", () => {
       enumValues: ["off", "shadow", "on"],
       moduleOwner: "chat"
     });
+    // The gate turns on with no review step, so its description must not promise one.
+    expect(entry?.description).not.toMatch(/review/i);
+    expect(entry?.description).toContain("On lets the gate act");
     // The switch is an instance/admin setting, never a per-user preference, and carries no secret.
     expect(KNOWN_INSTANCE_SETTING_KEYS.has(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).toBe(true);
     expect(SECRET_INSTANCE_SETTING_KEYS.has(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)).toBe(false);
