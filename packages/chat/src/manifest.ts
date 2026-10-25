@@ -197,7 +197,7 @@ export const chatModuleManifest = {
     {
       id: "chat.voice_requests",
       description:
-        "Ring text sends normally in Main. Busy inputs retry after the answer, with delayed recovery. Legacy inputs keep inline Send; Load older pages retained inputs. Private/other chats defer and hide inputs; interrupted turns never auto-replay.",
+        "Ring text sends normally in Main. Busy inputs retry when Chat is ready, with delayed recovery. Legacy inputs keep inline Send; Load older pages retained inputs. Private/other chats defer and hide inputs; interrupted turns never auto-replay.",
       featureFlagId: "chat.module"
     },
     {

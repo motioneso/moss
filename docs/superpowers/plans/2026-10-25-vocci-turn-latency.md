@@ -39,16 +39,28 @@ session preparation, engine launch, tool readiness, context assembly, submission
 and first returned records. Record model latency separately from queue admission;
 engine records do not by themselves prove provider-internal first-token timing.
 
-Rank options from those observations before implementing a model-path change:
+Baseline local timing: cold engine launch 6891 ms (19 ms launch preparation),
+pre-model work 10 ms, context assembly 24 ms. Warm turns reached session readiness
+in 8/6 ms and first returned engine record in 2005/1324 ms. These records are not
+provider-internal first-token measurements. The baseline speech endpoint was
+unconfigured for transcription; proof provisions local CPU ASR and restores its
+previous disabled configuration after each run. Chat selection is unchanged.
 
-1. Reuse/warm the existing session: inspect the current stream prestart and manager
-   reuse before adding another lifetime owner. A cold launch may overlap ASR only
-   if privacy, replay and provider selection remain correct.
+Ranked decisions from those observations:
+
+1. Reuse/warm the existing session: already implemented by stream prestart and
+   manager reuse. Build the missing readiness wakeup: a voice arrival during an
+   existing warm launch must requeue as soon as that launch succeeds. Failed
+   launches keep delayed recovery. Test-first red observed the new wake assertion
+   fail while the existing 18 tests passed. This removes a readiness deferral;
+   it does not claim to shorten the engine's own startup.
 2. Cache tool discovery: keep the full authorized tool set, permission freshness
    and per-turn attach proof. Cache only if discovery itself dominates; caching
-   across changed authorization would change behavior.
+   across changed authorization would change behavior. Keep existing discovery:
+   no measured resolver bottleneck justifies a new invalidation policy.
 3. Reduce repeated prompt work: preserve tool contracts, persona and all admitted
-   context. Only measured redundant work is a candidate, with regression proof.
+   context. Preparation/context took tens of milliseconds, so retain it; no
+   seconds-scale saving was established.
 4. Different model or a new voice setting: Ben's decision; document, do not build.
 
 The first three preserve the configured provider/model. Fast model selection has
@@ -81,3 +93,9 @@ Initial independent Sonnet review: no blockers. Added stale-hint scheduling and
 re-deferral/failure tests, distinct duplicate callbacks, and a stalled-hint test.
 Wakeups no longer delay the completed turn's response. Failures remain recovery
 hints: delayed jobs are authoritative; no new logging of owner content is added.
+
+Final independent Sonnet review of the busy and warm-launch source diff: no
+blockers; 20 unit tests passed. Pending thread/privacy selection deferrals retain
+delayed-only recovery by design. Live run 11 passed real Settings/Chat, TTS import,
+tools, reply and replay assertions: cancellation-to-admission fell from 14703 ms
+to 158 ms. Stage tables and limits are in the committed turn-latency evidence.

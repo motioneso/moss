@@ -428,6 +428,48 @@ describe("admitted Main voice turns", () => {
     expect(persistence.recordTurn).not.toHaveBeenCalled();
     expect((await manager.getPrivacyState("owner")).threadId).toBe("private");
   });
+  it("retries as soon as an already-warming session is ready", async () => {
+    const { manager, persistence } = setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    persistence.resolveActiveProvider = async () => {
+      await held;
+      return { provider: "anthropic", model: "test" };
+    };
+    const launching = manager.ensureSession("owner", "Owner");
+    const claim = vi.fn(async () => true);
+    const wake = vi.fn(async () => {});
+    expect(await manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, claim, wake)).toBe(
+      "deferred"
+    );
+    expect(wake).not.toHaveBeenCalled();
+    release();
+    await launching;
+    await vi.waitFor(() => expect(wake).toHaveBeenCalledOnce());
+    expect(claim).not.toHaveBeenCalled();
+  });
+  it("leaves failed warm launches to delayed recovery without a wake loop", async () => {
+    const { manager, persistence } = setup();
+    let fail!: (error: Error) => void;
+    const held = new Promise<never>((_resolve, reject) => {
+      fail = reject;
+    });
+    persistence.resolveActiveProvider = () => held;
+    const launching = manager.ensureSession("owner", "Owner");
+    const wake = vi.fn(async () => {});
+    expect(
+      await manager.submitMainVoiceTurn("owner", "Owner", "Voice", binding, async () => true, wake)
+    ).toBe("deferred");
+    const failed = expect(launching).rejects.toThrow("unavailable");
+    fail(new Error("unavailable"));
+    await failed;
+    expect(wake).not.toHaveBeenCalled();
+    persistence.resolveActiveProvider = async () => ({ provider: "anthropic", model: "test" });
+    await manager.ensureSession("owner", "Owner");
+    expect(wake).not.toHaveBeenCalled();
+  });
   it("does not claim while another engine is launching", async () => {
     const { manager, persistence } = setup();
     let release!: () => void;

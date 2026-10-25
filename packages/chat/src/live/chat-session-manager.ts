@@ -245,11 +245,12 @@ export class ChatSessionManager {
     whenAvailable?: () => Promise<void>
   ): Promise<"deferred" | "unclaimed" | "executed"> {
     const key = surfaceSessionKey(actorUserId, DEFAULT_CHAT_SURFACE);
-    if (this.turnsInFlight.has(key)) {
+    if (this.turnsInFlight.has(key) || this.launching.has(key)) {
       if (whenAvailable) {
         const waiting = this.deferredVoiceWakeups.get(key) ?? new Map();
         waiting.set(binding.turnId, whenAvailable);
         this.deferredVoiceWakeups.set(key, waiting);
+        void this.wakeDeferredVoiceRequests(key);
       }
       return "deferred";
     }
@@ -302,6 +303,18 @@ export class ChatSessionManager {
   }
 
   private async wakeDeferredVoiceRequests(key: string): Promise<void> {
+    if (this.turnsInFlight.has(key)) return;
+    const launching = this.launching.get(key);
+    if (launching) {
+      try {
+        await launching;
+      } catch {
+        // Failed launches keep the delayed recovery rather than retrying immediately.
+        if (!this.turnsInFlight.has(key)) this.deferredVoiceWakeups.delete(key);
+        return;
+      }
+      if (this.turnsInFlight.has(key)) return;
+    }
     const waiting = this.deferredVoiceWakeups.get(key);
     this.deferredVoiceWakeups.delete(key);
     // Requeue hints only; durable claims and the delayed jobs remain authoritative.

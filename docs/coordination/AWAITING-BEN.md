@@ -83,7 +83,7 @@ source-quality checks remain required before imports are enabled (#3567).
 ### Vocci: every remaining item needs Ben (#3565, #3584) — 2026-10-24
 
 Checked at origin/main `cf6ade9c3`. Production runs edge `8786e0a3c` (healthy after the
-host reboot). No software-only item remains in the approved queue:
+host reboot). The remaining physical checks and decisions are:
 
 - Package-update recovery: no new testable lead; any probe needs a phone package replacement.
 - One-hour reminder endurance: reminder is built; the physical run needs a new long recording.
@@ -92,6 +92,11 @@ host reboot). No software-only item remains in the approved queue:
   presses from release to Moss acting. The isolated server proof measures queue
   pickup separately from ASR and model/tool time; physical timing is still Ben's
   remaining acceptance step. The queue improvement alone does not halve total time.
+- Chat-turn latency: after `updateMoss`, time five real short presses from release
+  to Moss acting. The server now retries busy voice input as soon as the active
+  answer or session startup finishes; the 15-second delayed job remains recovery.
+  The isolated proof keeps the configured chat model; no model change or new
+  voice setting is proposed without a separately approved comparison.
 - Single-recording deletion: needs a validated command and a disposable sample.
 - Audio enhancement: needs a design decision on how originals are kept, plus mockups.
 - Firmware and streaming: need hardware compatibility evidence first.
