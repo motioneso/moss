@@ -71,7 +71,11 @@ export function mergeVoiceInputRecords(
             );
         records.splice(nextIndex < 0 ? records.length : nextIndex, 0, ...saved);
       } else {
-        const placeholder: TranscriptRecord = hasSpokenText(request.transcript)
+        // A legacy waiting receipt keeps its bubble so Send stays reachable. Otherwise text
+        // without speech is never a bubble, and a finished one has nothing left to show.
+        const spoken = hasSpokenText(request.transcript) || request.state === "ready-to-send";
+        if (!spoken && request.state === "interrupted") continue;
+        const placeholder: TranscriptRecord = spoken
           ? {
               kind: "user",
               text: request.transcript,

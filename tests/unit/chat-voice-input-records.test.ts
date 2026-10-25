@@ -125,13 +125,23 @@ describe("normal voice input reconciliation", () => {
     const result = mergeVoiceInputRecords([older], [receipt("a", "interrupted")], new Map());
     expect(result.map((record) => record.turnId)).toEqual(["typed", "a"]);
   });
-  it.each([".", "…", " ? "])("never makes a bubble from punctuation-only text %j", (transcript) => {
+  it.each([".", "…", " ? "])(
+    "shows nothing for an interrupted receipt with text %j",
+    (transcript) => {
+      const result = mergeVoiceInputRecords(
+        [],
+        [{ ...receipt("dot", "interrupted"), transcript }],
+        new Map()
+      );
+      expect(result).toEqual([]);
+    }
+  );
+  it("keeps a bubble for a legacy waiting punctuation-only receipt so Send stays reachable", () => {
     const result = mergeVoiceInputRecords(
       [],
-      [{ ...receipt("dot", "interrupted"), transcript, statusMessage: "Interrupted." }],
+      [{ ...receipt("dot", "ready-to-send"), transcript: "." }],
       new Map()
     );
-    expect(result.filter((r) => r.kind === "user")).toEqual([]);
-    expect(result).toEqual([{ kind: "status", text: "Interrupted.", turnId: "dot" }]);
+    expect(result).toEqual([{ kind: "user", text: ".", turnId: "dot" }]);
   });
 });

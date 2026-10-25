@@ -203,7 +203,7 @@ export const chatModuleManifest = {
     {
       id: "chat.voice_request_notices",
       description:
-        "An interrupted ring request shows 'Moss was interrupted before replying' under its question until a newer message arrives. Ring text with no letters or digits counts as no speech and never becomes a message.",
+        "An interrupted ring request shows 'Moss was interrupted before replying' under its question until you send a newer message. Ring text with no letters or digits counts as no speech and never becomes a message.",
       featureFlagId: "chat.module"
     },
     {
