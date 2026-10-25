@@ -322,6 +322,12 @@ and the upgrade caveat.
 
 ## Open questions
 
+**Decided by Ben, 2026-10-25.**
+
+- Q1: approved as written. 5 per invocation, 10 pending, 120 an hour.
+- Q2: separate later issue (#3735). This work does not cancel pending jobs.
+- Q3 and Q4 stay deferred.
+
 | #   | Question                                                                                                                                                                                    | Owner              |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | 1   | Approve the numbers: 5 per invocation, 10 pending, 120 an hour                                                                                                                              | Ben                |

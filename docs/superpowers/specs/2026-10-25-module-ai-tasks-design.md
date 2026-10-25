@@ -390,6 +390,13 @@ Module-owned entries (Meals' own `appMap`) are Meals' work, not this spec's.
 
 ## Open questions
 
+**Decided by Ben, 2026-10-25.**
+
+- Q1: option 1. Return the model's display name only, never its id or provider, when the call resolved through a task or module binding.
+- Q2: show only enabled modules.
+- Q4: yes. Ship `requires: ["vision"]` before #1696 lands.
+- Q3 stays with the plan author. Q5 is tracked as #3729.
+
 | #   | Question                                                                                                                                                                                                                                                                                                                                                         | Owner                         |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | Q1  | Story 83d wants the page to say which model wrote a plan. Modules are blind to the model by design (`external-module-ai-bridge.ts:45-49`). Option 1: return the model's display name, never its id or provider, when the call resolved through a task or module binding. Option 2: keep modules blind and drop 83d. Recommendation: option 1, display name only. | Ben                           |

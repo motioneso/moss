@@ -302,6 +302,15 @@ Each line states the behaviour, then why a broken build fails it.
 
 ## Open questions
 
+**Decided by Ben, 2026-10-25.**
+
+- Q1: yes. A page click runs a module's write tools whatever the Moss action tier says. Risky tools and tools that ask for their own confirmation still confirm.
+- Q2: outbound tools always ask first, as drafted.
+- Q3: 120 changes per minute per module is confirmed.
+- Q4: sandboxed module page frames become a later task issue.
+- Q6: page writes write an activity record, as chat writes do.
+- Q5 stays with the plan author.
+
 | #   | Question                                                                                                          | Owner                   |
 | --- | ----------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | 1   | Approve Fork A: a page click runs a module's write tools whatever the Moss action tier says                       | Ben                     |
