@@ -124,6 +124,8 @@ export interface ExternalModuleQueueDeclaration {
   readonly retryLimit?: number;
   readonly deadLetterQueue?: string;
   readonly allowManualRun?: boolean;
+  /** Opt in to module-authored jobs; requires a paramsSchema without free string fields. */
+  readonly allowModuleEnqueue?: boolean;
   // #1286 Task 2e: per-queue override of the worker's hard invocation ceiling
   // (WorkerLane's invocationHardTimeoutMs default), clamped to MAX_INVOCATION_MS by
   // validateWorker below. Absent means the runtime's own default applies.

@@ -144,4 +144,10 @@ work, list every pending Ben question, push, report the PR to coordinator w1:p1E
 
 - Boot brief explicitly permits provisional implementation against the draft; Ben approved the
   slice approach. Existing runtime gates remain untouched by slice 1.
-- Slice results and remaining issue links will be recorded here before publication.
+- Slice 1 baseline: public-validator tests exited 1 with 15 rejection cases failing and
+  35 acceptance/compatibility cases passing before the guard was added. This directly observes
+  the missing protections; follow-up passing results will be recorded before publication.
+- Remaining slice 2: #3720; slice 3: #3721; slice 4: #3722. These are ordered prerequisites,
+  not completed work. #3715 and the Meals consumer remain blocked on their delivery.
+- This session stops after slice 1 to preserve room for complete verification and publication;
+  no RPC/runtime capability is exposed by this slice.
