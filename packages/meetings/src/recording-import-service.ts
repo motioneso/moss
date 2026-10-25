@@ -8,7 +8,10 @@ import {
 } from "@moss/vault";
 import { HttpError } from "@moss/module-sdk";
 import type { VoiceRequestInput } from "@moss/shared";
-import { RecordingVoiceEnablementRepository } from "./recording-voice-enablement.js";
+import {
+  RecordingVoiceEnablementRepository,
+  RecordingVoiceIneligibleError
+} from "./recording-voice-enablement.js";
 import { validateVoiceRecordingBundle } from "./recording-voice-bundle.js";
 import { validateRecordingBundle, type RecordingBundle } from "./recording-bundle.js";
 import {
@@ -140,6 +143,10 @@ export class RecordingImportService {
         if (existing.fingerprint !== bundle.fingerprint) throw new RecordingImportConflictError();
         return { row: existing, created: false };
       }
+      if (!voice && bundle.mode === "voice-request")
+        throw new RecordingVoiceIneligibleError(
+          "Hold recordings go to Main chat and never become meetings"
+        );
       const id = randomUUID();
       const policy = voice
         ? await new RecordingVoiceEnablementRepository().admit(db, {

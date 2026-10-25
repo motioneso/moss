@@ -126,6 +126,28 @@ async function serverFor(service: RecordingImportService) {
   return server;
 }
 describe("resumable recording transport and checkpointed transcription", () => {
+  it("refuses a hold upload aimed at a meeting", async () => {
+    const { service } = setup();
+    await expect(
+      service.uploads.reserve(actor, recordingUpload(90_000, true).manifest)
+    ).rejects.toMatchObject({ statusCode: 409 });
+    const rows = await context.withDataContext(actor, (db) =>
+      sql`SELECT 1 FROM app.meeting_recording_imports WHERE recording_id LIKE 'amsg\\_%'`.execute(
+        db.db
+      )
+    );
+    expect(rows.rows).toHaveLength(0);
+  });
+  it("refuses to finalize a hold upload that was reserved as a meeting before the rule", async () => {
+    const { service } = setup();
+    const uploaded = await upload(service, recordingUpload(30_500));
+    await sql`UPDATE app.meeting_recording_imports SET source_manifest_json=replace(source_manifest_json, '"recordingId":"', '"recordingId":"amsg_') WHERE id=${uploaded.id}::uuid`.execute(
+      bootstrap
+    );
+    await expect(service.uploads.finalize(actor, uploaded.id)).rejects.toMatchObject({
+      statusCode: 409
+    });
+  });
   it("bounds real ASR end drift before checkpointing windows and schedules one final summary", async () => {
     const summary = vi.fn<RecordingImportDependencies["scheduleSummary"]>(async () => {});
     const transcribe = vi.fn<RecordingImportDependencies["transcribe"]>();

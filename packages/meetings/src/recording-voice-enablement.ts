@@ -122,7 +122,7 @@ export class RecordingVoiceEnablementRepository {
       ).rows.length > 0;
     if (baseline)
       throw new RecordingVoiceIneligibleError(
-        "Recordings in the enablement inventory remain meeting imports"
+        "Recordings in the enablement inventory are not imported"
       );
     // A missing phone-observed capture time is deliberately uncertain, even with ring timestamps.
     const capturedMs = input.capturedAt === null ? NaN : Date.parse(input.capturedAt);

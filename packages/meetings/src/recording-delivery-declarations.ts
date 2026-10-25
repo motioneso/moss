@@ -96,7 +96,7 @@ export const recordingVoiceFeature = {
       class: "prerequisite",
       remediationRef: "meetings.voice_developer_setup",
       description:
-        "Enable hold-to-talk with a complete ring inventory first. Baseline recordings remain meeting imports."
+        "Enable hold-to-talk with a complete ring inventory first. Older hold recordings already on the ring are not imported."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];
