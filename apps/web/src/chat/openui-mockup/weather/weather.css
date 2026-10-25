@@ -1,0 +1,403 @@
+/* Hallmark · component: forecast · genre: editorial · theme: Park Press
+ * States: clear, rain/wind, partial, unavailable. Static read-only cards.
+ * Pre-emit critique: Philosophy 5 · Hierarchy 4 · Execution 4 · Specificity 5 · Restraint 5 · Variety 4.
+ * Prototype compositions only; shared tokens and primitives remain unchanged. */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.review {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font: var(--text-sm)/1.5 var(--font-sans);
+}
+h1,
+h2,
+p {
+  margin: 0;
+}
+h1,
+h2 {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
+}
+.review-head {
+  padding: var(--space-6) var(--space-7);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+h1 {
+  font-size: var(--text-2xl);
+  margin-top: var(--space-1);
+}
+.review-head p,
+.review-foot {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.review-controls {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.review-controls label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.design-picker {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-5);
+}
+.stage {
+  padding: var(--space-3) var(--space-4) var(--space-7);
+  display: flex;
+  justify-content: center;
+}
+.chat-stage {
+  width: 800px;
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.chat-stage.phone {
+  width: 390px;
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.chat-head strong {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+.chat-head span {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.conversation {
+  padding: var(--space-7);
+}
+.question {
+  margin: 0 0 var(--space-7) auto;
+  width: fit-content;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border-radius: var(--radius-lg);
+}
+.answer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.answer {
+  max-width: 64ch;
+  line-height: var(--leading-relaxed);
+  margin-bottom: var(--space-5);
+}
+.forecast {
+  display: grid;
+  gap: var(--space-5);
+  font-variant-numeric: tabular-nums;
+}
+.forecast-A {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+.forecast-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.forecast-head h2 {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-heavy);
+  margin: var(--space-1) 0;
+}
+.forecast-head p {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.forecast-head > svg {
+  color: var(--accent-fg);
+}
+.curve-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.curve-summary strong {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-heavy);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+.curve-summary strong span {
+  font-size: var(--text-lg);
+  margin-left: var(--space-1);
+}
+.curve-summary > span {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.curve {
+  position: relative;
+  padding-top: var(--space-2);
+}
+.curve > svg {
+  display: block;
+  width: 100%;
+  height: 105px;
+  overflow: visible;
+}
+.baseline {
+  stroke: var(--border);
+  fill: none;
+  stroke-width: 1;
+}
+.temp-line {
+  fill: none;
+  stroke: var(--accent-fg);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+.temp-dot {
+  fill: var(--surface);
+  stroke: var(--accent-fg);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.curve-values {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.curve-values > div {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+}
+.curve-values span {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+}
+.curve-values svg {
+  color: var(--accent-fg);
+}
+.curve-values small {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+.weather-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+.weather-facts > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.weather-facts svg {
+  color: var(--accent-fg);
+  flex-shrink: 0;
+}
+.weather-facts span {
+  display: block;
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+.weather-facts strong {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+.source {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+.forecast .jds-divider {
+  margin: 0;
+}
+.coverage {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.hour-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.hour {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-1);
+}
+.hour + .hour {
+  border-left: 1px solid var(--border);
+}
+.hour-time {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+.hour > svg {
+  color: var(--accent-fg);
+}
+.hour > strong {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  line-height: var(--leading-none);
+  font-weight: var(--weight-heavy);
+}
+.hour-rain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+.missing-icon {
+  height: 29px;
+  color: var(--text-muted);
+}
+.hour-missing {
+  background: var(--surface-2);
+}
+.strip-unit {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+.headline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: var(--space-6);
+}
+.headline-number {
+  display: grid;
+  gap: var(--space-2);
+}
+.range-label {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+.headline-number > strong {
+  font-family: var(--font-display);
+  font-size: var(--text-6xl);
+  font-weight: var(--weight-black);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+.headline-number > span:last-child {
+  color: var(--accent-fg);
+  font-size: var(--text-xs);
+}
+.temperature-ladder {
+  display: grid;
+  gap: var(--space-3);
+}
+.ladder-row {
+  display: grid;
+  grid-template-columns: 34px 1fr 28px;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+}
+.ladder-row > span {
+  color: var(--text-muted);
+}
+.ladder-track {
+  height: 5px;
+  background: var(--surface-2);
+}
+.ladder-track > div {
+  height: 100%;
+  background: var(--accent-fg);
+}
+.review-foot {
+  text-align: center;
+  padding: 0 var(--space-4) var(--space-6);
+}
+.phone .conversation {
+  padding: var(--space-5) var(--space-4);
+}
+.phone .jds-card {
+  padding: var(--space-4);
+}
+.phone .headline {
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+.phone .headline-number > strong {
+  font-size: var(--text-5xl);
+}
+.phone .headline-number {
+  justify-items: start;
+}
+.phone .forecast-head h2 {
+  font-size: var(--text-xl);
+}
+.phone .hour > strong {
+  font-size: var(--text-2xl);
+}
+@media (max-width: 650px) {
+  .review-head {
+    flex-direction: column;
+    align-items: start;
+    padding: var(--space-5);
+  }
+  .conversation {
+    padding: var(--space-5) var(--space-4);
+  }
+  .stage {
+    padding-inline: 0;
+  }
+  .chat-stage {
+    border-radius: 0;
+  }
+  .headline {
+    grid-template-columns: 1fr;
+  }
+  .jds-card {
+    padding: var(--space-4);
+  }
+}
+
+.forecast-B .weather-facts {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.forecast .jds-empty {
+  min-height: 0;
+  padding: var(--space-6) 0;
+}
