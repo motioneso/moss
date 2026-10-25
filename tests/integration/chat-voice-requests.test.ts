@@ -258,6 +258,23 @@ describe("durable Main voice admission", () => {
     expect(deps.submit).not.toHaveBeenCalled();
     expect(deps.schedule).not.toHaveBeenCalled();
   });
+  it.each([".", "...", "?!", "\u2026"])(
+    "records punctuation-only transcript %j as no speech without dispatch",
+    async (transcript) => {
+      const { service, deps } = setup();
+      const { request } = await service.admit(actor, input({ transcript }));
+      expect(request.state).toBe("no-speech");
+      expect(request.transcript).toBe("");
+      const replay = await service.admit(
+        actor,
+        input({ transcript, recordingId: request.recording_id })
+      );
+      expect(replay.created).toBe(false);
+      await service.process(actor, request.id);
+      expect(deps.submit).not.toHaveBeenCalled();
+      expect(deps.schedule).not.toHaveBeenCalled();
+    }
+  );
   it.each([
     { capturedAt: null },
     { capturedAt: new Date(now.getTime() - 900_001).toISOString() },

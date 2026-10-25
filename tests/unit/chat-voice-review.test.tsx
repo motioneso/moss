@@ -34,6 +34,7 @@ const receipt: ChatVoiceRequestStatus = {
   assistantMessageId: null,
   statusMessage: "Review before sending."
 };
+const INTERRUPTED = "Moss was interrupted before replying. Anything it started may not be done.";
 const open = vi.fn();
 const props = {
   ownerId: "owner",
@@ -123,6 +124,17 @@ describe("Main voice request review", () => {
       method: "POST"
     });
     expect(open).not.toHaveBeenCalled();
+  });
+  it("shows the interrupted notice only while its turn is the latest, without pointing to Main chat", async () => {
+    const interrupted = { ...receipt, state: "interrupted" as const, statusMessage: INTERRUPTED };
+    request.mockImplementation(async () => ({ requests: [interrupted] }));
+    await mount(<VoiceInputThread {...props} />);
+    await see(INTERRUPTED);
+    expect(container.textContent).not.toContain("Check Main chat");
+    const newer = { kind: "user" as const, text: "Newer typed message", turnId: "typed" };
+    await render(<VoiceInputThread {...props} records={[newer]} />);
+    await see("Newer typed message");
+    expect(container.textContent).not.toContain(INTERRUPTED);
   });
   it("refreshes the durable status after a lost Send response", async () => {
     let sent = false;

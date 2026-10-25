@@ -227,6 +227,8 @@ export interface TranscriptRecord {
   readonly id?: string;
   readonly sequence?: number;
   readonly messageId?: string;
+  /** Save time of a stored message; absent on live records that are not saved yet. */
+  readonly createdAt?: string;
   /** #3195: the server turn behind a reply. Its stored version replaces only that turn's reply. */
   readonly turnId?: string;
   /** #3195: a message committed outside any turn, such as a delivered reminder. */
