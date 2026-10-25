@@ -70,4 +70,38 @@ describe("queue wakeup lifecycle", () => {
     expect(second.query).toHaveBeenCalledWith(`LISTEN ${JOB_QUEUE_WAKEUP_CHANNEL}`);
     await listener.stop();
   });
+
+  it("closes a connection that finishes opening during shutdown without waking work", async () => {
+    const client = new Client();
+    let release: (client: Client) => void = () => {};
+    client.connect.mockReturnValueOnce(
+      new Promise<Client>((resolve) => {
+        release = resolve;
+      })
+    );
+    const { listener, notifyWorker } = fixture([client]);
+    const stopping = listener.stop();
+    expect(client.end).not.toHaveBeenCalled();
+    release(client);
+    await stopping;
+    expect(client.end).toHaveBeenCalledTimes(1);
+    expect(notifyWorker).not.toHaveBeenCalled();
+  });
+
+  it("continues reconnecting after a reconnect attempt fails", async () => {
+    vi.useFakeTimers();
+    const first = new Client(),
+      failed = new Client(),
+      recovered = new Client();
+    failed.connect.mockRejectedValueOnce(new Error("still unavailable"));
+    const { listener, notifyWorker } = fixture([first, failed, recovered]);
+    await listener.ready;
+    notifyWorker.mockClear();
+    first.emit("error", new Error("connection lost"));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(failed.end).toHaveBeenCalledTimes(1);
+    expect(recovered.query).toHaveBeenCalledWith(`LISTEN ${JOB_QUEUE_WAKEUP_CHANNEL}`);
+    expect(notifyWorker).toHaveBeenCalledExactlyOnceWith("worker");
+    await listener.stop();
+  });
 });

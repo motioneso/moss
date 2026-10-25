@@ -88,6 +88,10 @@ host reboot). No software-only item remains in the approved queue:
 - Package-update recovery: no new testable lead; any probe needs a phone package replacement.
 - One-hour reminder endurance: reminder is built; the physical run needs a new long recording.
 - Hold-to-talk production acceptance: needs Ben to opt in and record a sample.
+- Server pickup latency (#3707): after deployment, time five short hold-to-talk
+  presses from release to Moss acting. The isolated server proof measures queue
+  pickup separately from ASR and model/tool time; physical timing is still Ben's
+  remaining acceptance step. The queue improvement alone does not halve total time.
 - Single-recording deletion: needs a validated command and a disposable sample.
 - Audio enhancement: needs a design decision on how originals are kept, plus mockups.
 - Firmware and streaming: need hardware compatibility evidence first.

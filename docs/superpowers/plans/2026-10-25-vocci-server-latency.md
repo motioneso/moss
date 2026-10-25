@@ -14,13 +14,15 @@ Stored pg-boss/receipt timestamps and observed chat events give these millisecon
 | --------------------------------------- | ------------: | -----: | -----: |
 | Transcription job created → picked up   |           251 |    287 |    314 |
 | Picked up → transcript/receipt ready    |          1392 |   1406 |   1249 |
-| Receipt ready → chat claimed            |           392 |    138 |    277 |
-| Claimed → user event                    |            52 |     19 |     17 |
+| Receipt ready → chat admitted           |           392 |    138 |    277 |
+| Admitted → user event                   |            52 |     19 |     17 |
 | Upload returned → first tool event      |          7610 |   5261 |   5501 |
 | Upload returned → requested tool result |          9394 |   5462 |   5700 |
 | Upload returned → first reply event     |         10398 |   6468 |   6901 |
 
-The first session also discovered tools. First reply events are the first observed
+Here chat admission uses the receipt dispatched timestamp. Queue pickup itself
+uses pg-boss started minus created; the two baseline queue waits total
+631/412/581 ms. The first session also discovered tools. First reply events are the first observed
 reply records, not a claim to provider-internal token timing. Audio used actual TTS
 and actual ASR; padding kept ASR's segment boundaries inside the clip.
 
@@ -30,10 +32,10 @@ and actual ASR; padding kept ASR's segment boundaries inside the clip.
    current provider is selected by the user and tool discovery is provider-owned.
    No measured alternative yet. Preserve the configured router; do not silently
    enable a classifier, replace a model, or remove tools to achieve a benchmark.
-2. **Commit-triggered worker wakeups:** save the measured 0.43–0.64 seconds spent
+2. **Commit-triggered worker wakeups:** save the measured 0.41–0.63 seconds spent
    waiting across the two queues, without changing claims or delivery. Build this
    bounded slice. Keep 0.5-second polling for missed notifications and delayed jobs.
-3. **Inline chat dispatch:** can remove only the second queue's 0.14–0.39 seconds.
+3. **Inline chat dispatch:** can remove only the second queue's 0.13–0.38 seconds.
    Its strongest case is less infrastructure. Reject because overlapping direct
    execution and queued recovery complicate the durable lifetime of dispatch.
 4. **Faster configured transcription:** approximately 1.25–1.41 seconds available
@@ -93,3 +95,15 @@ Kill gate: if wakeups do not remove the queue waits, fix or drop this slice. Aft
 this slice stop broadening routing changes: publish the measured remaining model
 time and leave physical release-to-action timing in the Vocci AWAITING-BEN entry.
 The implementing agent owns that decision; Ben owns post-deploy physical timing.
+
+## Review rulings
+
+Fresh Sonnet 5.5 review of `13fc36f49`: no blocking findings; scoped lint and root
+TypeScript check passed. Restored source-format details and plain language in the
+app map. Added pending-connect shutdown and failed-reconnect tests.
+
+The reviewer noted a second LISTEN lifecycle beside reminder arrival. Keep the
+generic queue helper in Jobs: it wakes synchronous pg-boss fetches, while reminder
+arrival owns serialized private rereads and delivery. Consolidating transport-only
+lifecycle can be a later refactor, without mixing those policies. Two idle database
+connections and a notification per immediate enqueue are the measured slice's cost.
