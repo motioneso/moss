@@ -147,6 +147,32 @@ final class RingConnection implements AutoCloseable {
             catch (Exception unavailable) { /* Other optional fields may still be supported. */ }
         }
     }
+    /**
+     * Waits on the open link for up to {@code ms}. Returns true when the ring reports the end of a hold press, and false on
+     * timeout or when {@code interrupted} turns true. Throws if the link drops or the ring goes silent (it sends a message
+     * about once a second while connected).
+     */
+    boolean listen(long ms, java.util.function.BooleanSupplier interrupted) throws Exception {
+        long now = System.nanoTime(), end = now + TimeUnit.MILLISECONDS.toNanos(ms), lastSeen = now;
+        HoldWatcher watcher = new HoldWatcher();
+        boolean[] released = {false};
+        while (System.nanoTime() < end && !interrupted.getAsBoolean()) {
+            if (closed || overflow) throw new IOException("connection_closed");
+            Event e = pending.isEmpty() ? events.poll(500, TimeUnit.MILLISECONDS) : pending.remove();
+            if (e == null) {
+                if (System.nanoTime() - lastSeen > TimeUnit.SECONDS.toNanos(10)) throw new IOException("link_silent");
+                continue;
+            }
+            if (e.kind.equals("disconnected") || e.status != 0) throw new IOException("gatt_timeout_or_error");
+            lastSeen = System.nanoTime();
+            if (e.kind.equals(RingProtocol.UART)) uart.accept(e.bytes, (command, payload) -> {
+                telemetry.accept(command, payload, System.currentTimeMillis());
+                if (watcher.accept(command, payload)) released[0] = true;
+            });
+            if (released[0]) return true;
+        }
+        return false;
+    }
     Map<String, Integer> inventory() throws Exception {
         stage = "inventory";
         Map<String, Integer> files = new LinkedHashMap<>();
