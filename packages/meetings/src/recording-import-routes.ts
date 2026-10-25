@@ -5,6 +5,7 @@ import { RECORDING_IMPORT_BODY_LIMIT, RecordingImportInputError } from "./record
 import { RecordingImportConflictError } from "./recording-import-repository.js";
 import type { RecordingImportService } from "./recording-import-service.js";
 import { registerRecordingVoiceRoutes } from "./recording-voice-routes.js";
+import { RecordingVoiceIneligibleError } from "./recording-voice-enablement.js";
 import { registerRecordingUploadRoutes } from "./recording-upload-routes.js";
 export function registerRecordingImportRoutes(
   server: FastifyInstance,
@@ -23,6 +24,8 @@ export function registerRecordingImportRoutes(
         const { created, ...status } = result;
         return reply.code(created ? 202 : 200).send(status);
       } catch (error) {
+        if (error instanceof RecordingVoiceIneligibleError)
+          return reply.code(409).send({ code: "recording_voice_ineligible", error: error.message });
         if (error instanceof RecordingImportInputError)
           return reply.code(error.statusCode).send({ code: "recording_import_invalid" });
         if (error instanceof RecordingImportConflictError)
