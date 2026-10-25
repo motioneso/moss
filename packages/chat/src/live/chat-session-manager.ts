@@ -88,6 +88,7 @@ export class ChatSessionManager {
   private readonly pendingForcedReplay = new Set<string>();
   /** #6.5 — one turn at a time per actor + surface. */
   private readonly turnsInFlight = new Set<string>();
+  private readonly deferredVoiceWakeups = new Map<string, Map<string, () => Promise<void>>>();
   private readonly voiceTurns = new Map<
     string,
     {
@@ -227,6 +228,7 @@ export class ChatSessionManager {
       return await runChatTurn(this.turnHost, actorUserId, userName, text, opts, chatSurface);
     } finally {
       this.turnsInFlight.delete(sessionKey);
+      void this.wakeDeferredVoiceRequests(sessionKey);
     }
   }
 
@@ -239,10 +241,18 @@ export class ChatSessionManager {
     userName: string,
     text: string,
     binding: { readonly threadId: string; readonly turnId: string },
-    claim: () => Promise<boolean>
+    claim: () => Promise<boolean>,
+    whenAvailable?: () => Promise<void>
   ): Promise<"deferred" | "unclaimed" | "executed"> {
     const key = surfaceSessionKey(actorUserId, DEFAULT_CHAT_SURFACE);
-    if (this.turnsInFlight.has(key)) return "deferred";
+    if (this.turnsInFlight.has(key)) {
+      if (whenAvailable) {
+        const waiting = this.deferredVoiceWakeups.get(key) ?? new Map();
+        waiting.set(binding.turnId, whenAvailable);
+        this.deferredVoiceWakeups.set(key, waiting);
+      }
+      return "deferred";
+    }
     this.turnsInFlight.add(key);
     try {
       const transition = this.originTransitions.get(key);
@@ -287,6 +297,20 @@ export class ChatSessionManager {
     } finally {
       this.voiceTurns.delete(key);
       this.turnsInFlight.delete(key);
+      void this.wakeDeferredVoiceRequests(key);
+    }
+  }
+
+  private async wakeDeferredVoiceRequests(key: string): Promise<void> {
+    const waiting = this.deferredVoiceWakeups.get(key);
+    this.deferredVoiceWakeups.delete(key);
+    // Requeue hints only; durable claims and the delayed jobs remain authoritative.
+    for (const wake of waiting?.values() ?? []) {
+      try {
+        await wake();
+      } catch {
+        // A failed hint must not fail the completed turn; its delayed job recovers it.
+      }
     }
   }
 

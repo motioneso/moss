@@ -67,6 +67,115 @@ function setup(overrides: Partial<ChatSessionManagerDeps> = {}) {
   return { manager, engines, persistence };
 }
 describe("admitted Main voice turns", () => {
+  it("wakes each busy receipt once, in arrival order, after the blocking turn releases", async () => {
+    const { manager, persistence } = setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = persistence.recordTurn;
+    persistence.recordTurn = async (...args) => {
+      await held;
+      return original(...args);
+    };
+    const blocking = manager.submitTurn("owner", "Owner", "Typed");
+    const order: string[] = [];
+    const staleRetry = vi.fn(async () => {
+      order.push("stale");
+    });
+    const retry = async () => {
+      order.push("first");
+    };
+    const claim = vi.fn(async () => true);
+    for (const [turnId, wake] of [
+      ["first", staleRetry],
+      ["first", retry],
+      [
+        "second",
+        async () => {
+          order.push("second");
+        }
+      ]
+    ] as const) {
+      expect(
+        await manager.submitMainVoiceTurn(
+          "owner",
+          "Owner",
+          "Voice",
+          { ...binding, turnId },
+          claim,
+          wake
+        )
+      ).toBe("deferred");
+    }
+    expect(order).toEqual([]);
+    release();
+    await blocking;
+    await vi.waitFor(() => expect(order).toEqual(["first", "second"]));
+    expect(claim).not.toHaveBeenCalled();
+    expect(staleRetry).not.toHaveBeenCalled();
+  });
+  it("does not delay a completed turn while its requeue hint is stalled", async () => {
+    const { manager } = setup();
+    let release!: (value: boolean) => void;
+    let releaseWake!: () => void;
+    const held = new Promise<boolean>((resolve) => {
+      release = resolve;
+    });
+    const stalledWake = new Promise<void>((resolve) => {
+      releaseWake = resolve;
+    });
+    const blocking = manager.submitMainVoiceTurn("owner", "Owner", "First", binding, () => held);
+    expect(
+      await manager.submitMainVoiceTurn(
+        "owner",
+        "Owner",
+        "Second",
+        { ...binding, turnId: "second" },
+        async () => true,
+        () => stalledWake
+      )
+    ).toBe("deferred");
+    release(false);
+    try {
+      await expect(
+        Promise.race([
+          blocking,
+          new Promise((resolve) => setTimeout(() => resolve("stalled"), 100))
+        ])
+      ).resolves.toBe("unclaimed");
+    } finally {
+      releaseWake();
+    }
+  });
+  it("isolates wakeup failures from the completed turn and releases the guard before waking", async () => {
+    const { manager } = setup();
+    let release!: (value: boolean) => void;
+    const held = new Promise<boolean>((resolve) => {
+      release = resolve;
+    });
+    const blocking = manager.submitMainVoiceTurn("owner", "Owner", "First", binding, () => held);
+    let nextReply: string | undefined;
+    const wake = vi.fn(async () => {
+      nextReply = (await manager.submitTurn("owner", "Owner", "Next")).reply;
+      throw new Error("queue unavailable");
+    });
+    expect(
+      await manager.submitMainVoiceTurn(
+        "owner",
+        "Owner",
+        "Second",
+        { ...binding, turnId: "second" },
+        async () => true,
+        wake
+      )
+    ).toBe("deferred");
+    release(false);
+    expect(await blocking).toBe("unclaimed");
+    expect(wake).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(nextReply).toBe("Reply"));
+  });
+
   it.each(["anthropic", "openai-compatible"] as const)(
     "admits a supported %s API-key provider through the ordinary Main turn",
     async (provider) => {
