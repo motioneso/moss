@@ -26,7 +26,7 @@ public final class DeliveryService extends Service {
     private int reconnectAttempts;
     // Hold-to-talk keeps one ring link open and listens for the end of a press; fastRetries re-checks the ring soon after a press.
     private boolean keepOpen;
-    private int fastRetries;
+    private int fastRetries, admitRetries;
     private final RecordingReminder reminder = new RecordingReminder();
     private int latestStartId;
     interface RetryVoice { JSONObject retry(String statusId) throws Exception; }
@@ -134,7 +134,7 @@ public final class DeliveryService extends Service {
                 if (keepOpen && active != null) {
                     try {
                         boolean pressed = active.listen(fastRetries > 0 ? 1500 : 60_000, () -> !commands.isEmpty() || stopping);
-                        if (pressed) fastRetries = 5; else if (fastRetries > 0) fastRetries--;
+                        if (pressed) { fastRetries = 5; admitRetries = 0; } else if (fastRetries > 0) fastRetries--;
                         continue;
                     } catch (java.io.IOException lost) { active.close(); active = null; lostLinkWait = 3000; }
                 }
@@ -180,14 +180,14 @@ public final class DeliveryService extends Service {
                 byte[] sidecar;
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
-                if (!store.admitSidecar(id, sidecar, settled)) { if (voice.intent(id) != null) fastRetries = Math.max(fastRetries, 3); continue; }
+                if (!store.admitSidecar(id, sidecar, settled)) { if (voice.intent(id) != null && admitRetries++ < 3) fastRetries = Math.max(fastRetries, 3); continue; }
                 consumeCommands(client, config);
                 if (store.excluded(id)) continue;
                 store.reserveRetrieval(id, packetSize, sidecarSize, sidecar);
                 try { active.retrieve(name, packetSize, store.file(id, "packets.bin")); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 store.retrieved(id, sidecar);
-                if (voice.intent(id) != null) fastRetries = 0;
+                if (voice.intent(id) != null) { fastRetries = 0; admitRetries = 0; }
             }
             previousInventory.clear(); previousInventory.putAll(inventory);
             if (!stopping) {
