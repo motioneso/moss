@@ -1,6 +1,6 @@
-# Computer prelaunch admission: parked before review
+# Computer prelaunch admission: plan under review
 
-Branch `feat/moss-computer-closure-reconcile`. Parked for a machine restart. Nothing is merged.
+Branch `feat/moss-computer-closure-reconcile`, PR 3684. Nothing is merged.
 
 ## Done
 

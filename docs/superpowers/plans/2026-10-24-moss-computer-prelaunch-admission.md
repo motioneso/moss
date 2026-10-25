@@ -43,7 +43,8 @@ Add a read-only prelaunch observation that reuses the existing sample fields wit
 
 - Same checks as `observeComputer` minus `checkComputerLogs` and the lifetime-binding half of
   `assertFencedComputerState` (which returns early without a lifetime, observe.ts:119). The stop-marker
-  check (observe.ts:133-139) is carried over, and admission also calls `assertLaunchable`
+  check (observe.ts:133-139) and the enabled check (observe.ts:122) sit behind that early return, so
+  the build moves them into a function that runs without a lifetime, and admission also calls `assertLaunchable`
   (state.ts:164) at the check.
 - Keeps Moss readiness, null outputs, trusted deployment revalidation, journal inspection, and
   the RAM, root and data floors (RAM and root at least 8 GiB, data at least 30 GiB). The home and
@@ -52,16 +53,30 @@ Add a read-only prelaunch observation that reuses the existing sample fields wit
   listed in rule 5.
 - Carries its kind as a separate top-level key. The post-launch parser (`policy.ts`, exact
   `sampleKeys` at lines 65-77, `fields` at 85-95, parse at 207) stays exact, so a prelaunch sample
-  fails it on shape. A removed-protection test feeds a prelaunch sample to the post-launch parser.
+  fails it on shape. Removed-protection tests feed a prelaunch sample to the post-launch parser, and a post-launch
+  sample or a sample file left from before a reboot to the prelaunch parser. The prelaunch parser
+  is exact on keys and values. `computerMonotonicMs` is Linux `process.hrtime`, which is shared by
+  all processes on one boot and resets across reboots, so a pre-reboot sample fails on age.
 - Is anchored at first I/O. `measuredAtMs` is read before any observation I/O and never freshened,
   as in `observeComputer` (observe.ts:147). Equal timestamps refuse, as the bootstrap plan requires.
 
 Where values come from. `assertAdmitted()` takes no arguments (operations.ts:12), so the admission
-implementation is constructed with the host store and the pinned deployment configuration that the
-watchdog also loads (`trust.ts`). The run ID, the expected watchdog identity and the generation
-being admitted come from those, never from the sample. The sample is read from the watchdog's
-journal directory, which must pass the existing root-owner and mode checks (`assertRoot`). The
-plan makes no wider security claim. The build must prove it with a forged-sample test.
+implementation is constructed with the host store and the pinned deployment configuration
+(`trust.ts`). That configuration pins the run ID (trust.ts:27) and the runner identity (trust.ts:28).
+It pins no watchdog identity, and `observeComputer` receives the watchdog as an argument
+(observe.ts:145). The sample therefore cannot be checked against a trusted watchdog identity today.
+The build must add one trusted source for it, either a new pinned field or a value recorded by the
+supervisor when the watchdog starts, and this plan leaves that choice to the handover contract.
+Until it exists, rule 2 is not satisfiable and admission stays unavailable.
+
+The run ID, the pinned runner and the generation being admitted come from the host store and the
+pinned configuration, never from the sample.
+
+Sample file checks. `assertRoot` (linux-files.ts:37-43) only matches a recorded directory identity
+and real path. It does not check owner or mode. The sample file must also pass the journal's file
+rules (journal.ts:47-48): regular file, owner equal to the root identity's owner, mode 0600, one
+link, size under a fixed cap, and no symlink. The plan makes no wider security claim. The build
+must prove each check with a forged-sample test that fails when the check is removed.
 
 Admission rules, each with a removed-protection test:
 
@@ -74,11 +89,17 @@ Admission rules, each with a removed-protection test:
    (line 68). The sample is taken after the bump.
 4. A stop marker, latched stop, or stale generation refuses.
 5. A fresh host-side inventory check, never the sample's word, runs after the removal step and
-   inside the launch guard that `docker.create` calls (operations.ts:32-35). Before the desktop
-   create it requires no resources. Before the gateway create (after the desktop start, line 105)
-   it requires only this generation's desktop. Age is re-checked at both points.
-6. A sample is single use. Consuming it records its hash, and a second admission with the same
-   sample refuses.
+   inside the launch guard that `docker.create` calls (docker.ts:50-52, operations.ts:32-35).
+   Before the desktop create it requires no resources. Before the gateway create (after the
+   desktop start, line 105) it requires only this generation's desktop. Another actor could still
+   create a container between the check and the create. Only the host's busy flag (operations.ts:51)
+   covers that, and it covers this process only. The build adds a check after each create that the
+   inventory holds exactly the expected containers.
+6. A sample is single use for admission. The age rule is checked against the sample's original
+   timestamp at the desktop create only, because the gateway create follows the desktop start and a
+   consumed sample cannot be re-read. Consuming the sample records its hash durably before the
+   desktop create, so a host restart cannot replay it inside its 5s window. A test proves the
+   gateway create stays reachable on a healthy run.
 7. A missing, unreadable, oversized or malformed sample refuses, one test per case.
 8. Post-launch sample within 10s of the prelaunch sample, or the run stops. This rule depends on the
    later handover contract and cannot be tested in this slice.
