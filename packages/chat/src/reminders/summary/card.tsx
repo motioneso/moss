@@ -2,11 +2,48 @@ import { Card, SectionHead, Badge, Note } from "@moss/ui";
 import { type VisualSnapshotV1 } from "@moss/shared";
 import {
   readReminderSummarySnapshot,
+  reminderRepeatText,
   reminderScopeLabels,
-  reminderSummaryCoverage,
-  reminderSummaryItemText
+  reminderSummaryCoverage
 } from "./contract.js";
+import type { ReminderSummaryItem } from "./types.js";
 import "./card.css";
+
+function formatWhen(iso: string, timeZone: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(d);
+}
+
+function ReminderRow({ item, timeZone }: { item: ReminderSummaryItem; timeZone: string }) {
+  const state = item.state.charAt(0).toUpperCase() + item.state.slice(1);
+  const destination = item.destinationTitle ?? "Main chat";
+  return (
+    <li data-reminder-id={item.id}>
+      <strong>{item.text}</strong>
+      <span>
+        {state === "Queued" ? "Scheduled" : state} for {formatWhen(item.dueAt, timeZone)}
+      </span>
+      <span>
+        {reminderRepeatText(item.repeat)} · {destination}
+      </span>
+      {item.deadlineAt ? <span>Deadline {formatWhen(item.deadlineAt, timeZone)}</span> : null}
+      {item.deliveredAt ? (
+        <span>
+          Delivered {formatWhen(item.deliveredAt, timeZone)}
+          {item.late ? " (late)" : " (on time)"}
+        </span>
+      ) : null}
+    </li>
+  );
+}
 
 export function ReminderSummaryCard({ snapshot }: { snapshot: VisualSnapshotV1 }) {
   const v = readReminderSummarySnapshot(snapshot);
@@ -25,10 +62,7 @@ export function ReminderSummaryCard({ snapshot }: { snapshot: VisualSnapshotV1 }
         {v.items.length ? (
           <ul className="reminders-summary__rows" aria-label="Reminder summary">
             {v.items.map((item) => (
-              <li key={item.id} data-reminder-id={item.id}>
-                <strong>{item.text}</strong>
-                <span>{reminderSummaryItemText(item, v.timeZone)}</span>
-              </li>
+              <ReminderRow key={item.id} item={item} timeZone={v.timeZone} />
             ))}
           </ul>
         ) : (
