@@ -1,6 +1,6 @@
+// @vitest-environment jsdom
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import { WeatherForecastCard } from "../../packages/weather/src/forecast/card.js";
 import {
@@ -17,8 +17,10 @@ import {
 } from "../fixtures/weather-forecast.js";
 
 function render(snapshot = forecastSnapshot()) {
-  return new JSDOM(renderToStaticMarkup(createElement(WeatherForecastCard, { snapshot }))).window
-    .document;
+  return new DOMParser().parseFromString(
+    renderToStaticMarkup(createElement(WeatherForecastCard, { snapshot })),
+    "text/html"
+  );
 }
 
 describe("saved Weather card", () => {
