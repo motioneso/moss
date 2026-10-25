@@ -20,6 +20,7 @@ import type {
 } from "@moss/module-sdk";
 import { validateClassifierDeclaration } from "./validate-classifier.js";
 import { isMetadataOnlyEnqueueSchema } from "./module-enqueue-schema.js";
+import { validateAiTasks } from "./validate-ai-tasks.js";
 import {
   validateModuleNavigation,
   validateModulePreferences,
@@ -858,6 +859,7 @@ export function validateExternalModuleManifest(
 
   // #3168: screens, settings and features the module adds to Moss's app map.
   const appMap = validateModuleAppMap(obj, expectedId, errors);
+  const aiTasks = validateAiTasks(obj.aiTasks, errors);
 
   // #1282: positive validation of the briefing contribution declaration. Same shape as
   // every other allow-listed surface above: unknown keys rejected outright rather than
@@ -951,6 +953,7 @@ export function validateExternalModuleManifest(
     ...(preferences !== undefined ? { preferences } : {}),
     ...(settingsPath !== undefined ? { settingsPath } : {}),
     ...(appMap !== undefined ? { appMap } : {}),
+    ...(aiTasks !== undefined ? { aiTasks } : {}),
     // #1282: this literal is an allow-list — a validated field that is not re-emitted
     // here vanishes from the manifest with validation still returning ok. Omitting this
     // line is silent, and only tests/unit/external-module-briefing-manifest.test.ts
