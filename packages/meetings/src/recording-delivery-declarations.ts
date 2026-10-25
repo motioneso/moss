@@ -112,7 +112,7 @@ export const recordingImportFeature = {
     }
   ],
   description:
-    "Legacy bundle imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Transcripts appear in Meetings history. Limit: 120 seconds; Android uses resumable uploads for longer recordings.",
+    "Imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Transcripts appear in Meetings history. Uploaded voice requests start sooner. Legacy limit: 120 seconds; Android resumes longer uploads.",
   errors: [
     {
       code: "recording_import_invalid",
