@@ -353,13 +353,22 @@ describe("listEmailContext", () => {
       liveTriageBudgetMs: 200
     });
 
-    const startedAt = Date.now();
-    const result = await listEmailContext(scopedDb, deps, {});
+    vi.useFakeTimers();
+    try {
+      const startedAt = Date.now();
+      const pending = listEmailContext(scopedDb, deps, {});
+      await vi.advanceTimersByTimeAsync(0);
+      expect(runChat).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(200);
+      const result = await pending;
 
-    expect(Date.now() - startedAt).toBeLessThan(2_000);
-    expect(runChat).toHaveBeenCalledTimes(1);
-    expect(result.items).toHaveLength(4);
-    expect(result.items.every((item) => item.actionability === "unknown")).toBe(true);
+      expect(Date.now() - startedAt).toBe(200);
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(result.items).toHaveLength(4);
+      expect(result.items.every((item) => item.actionability === "unknown")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("starts no triage when opening the savepoint spends the time budget", async () => {
