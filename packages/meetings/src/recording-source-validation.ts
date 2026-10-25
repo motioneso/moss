@@ -75,15 +75,13 @@ export async function validateRecordingSource(
     files.wav.byteLength,
     RECORDING_SOURCE_LIMITS.durationMs
   );
-  if (durationMs < count * 20 || durationMs > count * 60) throw new RecordingImportInputError();
 
   // The sidecar alone is buffered, after its 256 KiB bound has been validated.
   const sidecar = Buffer.alloc(files.sidecar.byteLength);
   await validateFile(read("sidecar"), files.sidecar, (chunk, offset) => sidecar.set(chunk, offset));
   const metadata = recordingSidecarMetadata(sidecar, durationMs, {
     maxBytes: RECORDING_SOURCE_LIMITS.sidecar,
-    maxEntries: RECORDING_SOURCE_LIMITS.sidecar,
-    durationDigits: 7
+    maxEntries: RECORDING_SOURCE_LIMITS.sidecar
   });
   return { durationMs, packetCount: count, ...metadata };
 }
