@@ -60,7 +60,10 @@ describe("launchHold", () => {
     ["no byte, still alive", idle],
     ["a different byte", `fs.writeSync(3,Buffer.from([2]));${idle}`],
     ["two bytes", `fs.writeSync(3,Buffer.from([1,1]));${idle}`],
-    ["one byte then a second", `fs.writeSync(3,Buffer.from([1]));fs.writeSync(3,Buffer.from([1]));${idle}`],
+    [
+      "one byte then a second",
+      `fs.writeSync(3,Buffer.from([1]));fs.writeSync(3,Buffer.from([1]));${idle}`
+    ],
     ["an early exit", "process.exit(2);"],
     ["a closed channel", `fs.closeSync(3);${idle}`]
   ])("refuses %s and leaves nothing running", async (_name, body) => {
