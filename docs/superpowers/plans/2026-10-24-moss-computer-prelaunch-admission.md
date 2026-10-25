@@ -13,7 +13,7 @@ bootstrap contract"). The tree has no such gate. Three sources show why.
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scripts/computer-host/operations.ts:11-21,68,75,100` | `ComputerRuntimeAdmission.assertAdmitted()` runs at line 75, after the generation bump (line 68) and before `docker.create` (line 100). It is the only launch seam.                             |
 | `scripts/computer-watchdog/observe.ts:65-71`          | `checkComputerLogs` refuses unless the pair is already running when `config.lifetime` is set (line 71).                                                                                         |
-| `scripts/computer-watchdog/observe.ts:114-132`        | `assertFencedComputerState` (returns early without a lifetime, line 118) requires state resources to equal `binding.desktopId` and `binding.gatewayId`, which exist only after `docker.create`. |
+| `scripts/computer-watchdog/observe.ts:114-132`        | `assertFencedComputerState` (returns early without a lifetime, line 119) requires state resources to equal `binding.desktopId` and `binding.gatewayId`, which exist only after `docker.create`. |
 
 A run configuration without a lifetime already skips both checks. What is missing is a
 configuration that carries the lifetime binding AND exists before create. The binding holds
@@ -34,40 +34,61 @@ ordering.
 
 ## Bounded contract: host-only prelaunch sample
 
+The lifecycle order in `operations.ts` does not change. Admission (line 75) still runs before the
+image check (81), the inventory check (86), the already-running return (88-92) and the removal step
+(94). A refused or missing sample therefore also refuses a re-enable of a running pair. That is
+fail-closed on purpose.
+
 Add a read-only prelaunch observation that reuses the existing sample fields without the pair:
 
 - Same checks as `observeComputer` minus `checkComputerLogs` and the lifetime-binding half of
-  `assertFencedComputerState`. The stop-marker check (observe.ts:128-132) is carried over, and
-  admission also calls `assertLaunchable` (state.ts:164) at the check.
+  `assertFencedComputerState` (which returns early without a lifetime, observe.ts:119). The stop-marker
+  check (observe.ts:133-139) is carried over, and admission also calls `assertLaunchable`
+  (state.ts:164) at the check.
 - Keeps Moss readiness, null outputs, trusted deployment revalidation, journal inspection, and
-  the resource floors (RAM and root at least 8 GiB, data at least 30 GiB, home and socket
-  under 10 GiB).
-- Requires zero Computer resources in state and in the Docker inventory. A re-enable of a
-  running pair therefore needs a disable first, on purpose.
-- Carries a sample kind. The policy (`policy.ts`, exact key set near line 88) must reject a
-  prelaunch sample explicitly, not by accident of the key set.
-- Is bound to the state generation being admitted. The host bumps the generation (line 68)
-  before admission runs, so the sample is taken after the bump and carries that generation.
-  The watchdog writes it into the existing journal over the same private channel, and the host
-  reads it from there. The run ID is bound to the watchdog identity when the sample is written.
+  the RAM, root and data floors (RAM and root at least 8 GiB, data at least 30 GiB). The home and
+  socket cap is measured on the prepared roots, which exist before create, and may be near zero.
+- Makes no claim about Computer resources. The host checks resources itself, fresh, at the points
+  listed in rule 5.
+- Carries its kind as a separate top-level key. The post-launch parser (`policy.ts`, exact
+  `sampleKeys` at lines 65-77, `fields` at 85-95, parse at 207) stays exact, so a prelaunch sample
+  fails it on shape. A removed-protection test feeds a prelaunch sample to the post-launch parser.
+- Is anchored at first I/O. `measuredAtMs` is read before any observation I/O and never freshened,
+  as in `observeComputer` (observe.ts:147). Equal timestamps refuse, as the bootstrap plan requires.
 
-Admission rules the later implementation must enforce, each with a removed-protection test:
+Where values come from. `assertAdmitted()` takes no arguments (operations.ts:12), so the admission
+implementation is constructed with the host store and the pinned deployment configuration that the
+watchdog also loads (`trust.ts`). The run ID, the expected watchdog identity and the generation
+being admitted come from those, never from the sample. The sample is read from the watchdog's
+journal directory, which must pass the existing root-owner and mode checks (`assertRoot`). The
+plan makes no wider security claim. The build must prove it with a forged-sample test.
 
-1. Sample age under 5s at the check. Both processes use `computerMonotonicMs` (linux.ts). The
-   host refuses rollback and a sample time in the future.
-2. Watchdog identity (pid, start ticks, group) re-read at the check and equal to the sample.
-3. Sample run ID and state generation equal the run being admitted.
+Admission rules, each with a removed-protection test:
+
+1. Sample age under 5s at the check, by `computerMonotonicMs` (linux.ts, system-wide
+   `process.hrtime`), so ages compare across the watchdog and host processes. Refuse rollback, a
+   future sample time, and equal timestamps.
+2. Watchdog identity (pid, start ticks, group) re-read at the check and equal to the pinned
+   identity and the sample.
+3. Sample run ID equals the pinned run ID. Sample generation equals the generation after the bump
+   (line 68). The sample is taken after the bump.
 4. A stop marker, latched stop, or stale generation refuses.
-5. Age and the zero-resource fact are re-checked after the removal step and immediately before
-   each create, because images, inventory and removal run between line 75 and line 100.
-6. Post-launch sample within 10s of the prelaunch sample, or the run stops. This rule depends on
-   the later handover contract and cannot be tested in this slice.
+5. A fresh host-side inventory check, never the sample's word, runs after the removal step and
+   inside the launch guard that `docker.create` calls (operations.ts:32-35). Before the desktop
+   create it requires no resources. Before the gateway create (after the desktop start, line 105)
+   it requires only this generation's desktop. Age is re-checked at both points.
+6. A sample is single use. Consuming it records its hash, and a second admission with the same
+   sample refuses.
+7. A missing, unreadable, oversized or malformed sample refuses, one test per case.
+8. Post-launch sample within 10s of the prelaunch sample, or the run stops. This rule depends on the
+   later handover contract and cannot be tested in this slice.
 
 Limits stay as accepted: 1800s run, 90s heartbeat, 5s bootstrap bound, 5s age, gap under 10s.
 Nothing here changes them.
 
 This slice alone does not satisfy the BEFORE-launch gate. The watchdog that guards the run is
-not yet the one admitted. Launch stays blocked until the handover contract is accepted.
+not yet the one admitted. `unavailableAdmission` stays the only admission until the handover
+contract is accepted, and launch stays blocked until then.
 
 ## Out of scope
 
