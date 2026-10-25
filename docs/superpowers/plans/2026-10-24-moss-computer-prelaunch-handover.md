@@ -93,7 +93,10 @@ not prove the watchdog is healthy. Health stays with the first complete sample i
 4. Corrections to the admission plan. Its rules 1 and 6 say "desktop create", but the create loop
    makes the gateway first (config.ts:7, operations.ts:97), so every "desktop create" there means
    the first create. Its rule 2 "pinned identity" means the identity held in launcher memory by
-   decision 1. Its rule 7 is covered by launcher rules 5 and 6 below. Its rules 3, 4 and 5 stand.
+   decision 1. Its rule 7 is covered by launcher rules 5 and 6 below. Its rule 5 has the same inversion (it names the desktop create first), so its first-create check
+   applies before the gateway and its second-create check before the desktop. Its rules 3 and 4
+   stand. The sample also echoes the watchdog identity, and the launcher compares it with the
+   identity it holds, so rule 2 keeps its comparison with the sample.
 
 ## Sampler contract
 
@@ -121,30 +124,47 @@ cannot prove the real one works.
 1. Binary pin. A node path, artifact path or artifact hash that differs from the pin refuses before
    spawn.
 2. Identity. A process whose exe or cmdline is not the pinned program refuses. A child handle that
-   shows an exit refuses. Two reads that differ refuse.
+   shows an exit refuses. Two reads that differ refuse. A test replaces the child with a different
+   process that holds the same pid after the original exited, and it must refuse.
 3. A sample with a wrong nonce, generation, run ID or boot ID refuses, one test per field.
-4. Age. A sample whose `measuredAtMs` is more than 5s before the launcher's own clock read, or after it, refuses at
-   `assertAdmitted` and again immediately before the first (gateway) create. Images, inventory and
+4. Age. Both processes read `computerMonotonicMs`, the system-wide monotonic clock (linux.ts:41-42),
+   which is shared on one boot. The launcher reads T0 before spawning the sampler and T1 when it
+   takes the sample. The sample's `measuredAtMs` must satisfy T0 < measuredAtMs <= T1 and
+   T1 - measuredAtMs < 5s. A sample at or before T0 (stale or equal) refuses, and so does one after
+   T1. The check runs at `assertAdmitted` and again immediately before the first (gateway) create,
+   where the age is measured against a fresh read of the clock. Images, inventory and
    removal run between them (operations.ts:81-94), so a slow removal cannot get a re-sample. It can
    only refuse, and the owner retries.
 5. A malformed, oversized, truncated or duplicated record refuses, one test per case.
 6. A sampler that exits non-zero or hangs refuses. Stderr is ignored (supervisor.ts:66-68), so it
    carries no verdict.
-7. Two concurrent admissions each get their own nonce and neither accepts the other's sample. The
-   second create stays reachable on a healthy run after the sample is consumed.
+7. Two concurrent admissions each get their own nonce and neither accepts the other's sample. A
+   consumed sample cannot admit a second launch, and the second create still proceeds on a healthy
+   run after the sample is consumed. One test each, with the consume mark removed.
 8. Real sampler. The stop marker, the enabled check, each floor, a dead watchdog and the nonce echo
    each refuse, with the protection removed in turn and the failure observed.
 
 ## Still open, and why launch stays blocked
 
+- The prelaunch runner. The pinned loader requires a live runner with null stdout and stderr
+  before it will load any configuration, and for a non-collector process also a heartbeat pipe from
+  that runner (trust.ts:331-334). Both `hold` and the `prelaunch` sampler go through that loader.
+  What the pinned runner is before launch, and who supplies its heartbeat pipe, is not settled here.
+  Decisions 1 and 2 depend on it, so this plan fixes their shape and not their satisfiability.
+- The `hold` startup acknowledgement. The watchdog exits after 5s unless startup is acknowledged
+  (computer-watchdog.ts:12-17), and today only the `manage` and supervise paths acknowledge. The
+  build must define the condition on which `hold` acknowledges and stays alive. A test shows it
+  survives past 5s and that removing the acknowledgement kills it at 5s.
 - The bound second phase. After create the watchdog needs a configuration that carries the container
   IDs, and the post-launch loader requires that configuration to be pinned before use. Where the
   binding comes from, without letting the host mint its own trust, is the next contract. Rule 8 of
   the admission plan (post-launch sample within 10s) depends on it.
 - The first complete healthy sample from the long-running watchdog's own journal before launch.
-  This plan checks that the process the launcher started is still the same process, not that it has finished a sample
-  cycle.
+  This plan checks that the process the launcher started is still the same process. It does not
+  check that the watchdog has finished a sample cycle.
 - Installed delivery of the watchdog and sampler binaries, orphan cleanup, and any runtime packet.
+- Launch therefore stays blocked on the open items above. No part of this plan is buildable until
+  the prelaunch runner is settled.
 
 No security claim here goes beyond what the build proves with the tests above. The claim that only
 the launcher holds the pipe must be confirmed by reading how Node spawns the child before it is
