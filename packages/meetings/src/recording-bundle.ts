@@ -70,10 +70,8 @@ export function validateRecordingBundle(value: unknown) {
     invalid();
   const validator = new RecordingPacketValidator();
   validator.push(packets.bytes);
-  const count = validator.finish(),
-    durationMs = recordingWavDuration(wav.bytes, wav.bytes.length, 120_000);
-  // Legacy firmware emits 20ms or 60ms packets. No claim of independent Opus decoding.
-  if (durationMs < count * 20 || durationMs > count * 60) invalid();
+  validator.finish();
+  const durationMs = recordingWavDuration(wav.bytes, wav.bytes.length, 120_000);
   const metadata = recordingSidecarMetadata(sidecar.bytes, durationMs, {
     maxBytes: LIMITS.sidecar,
     maxEntries: 512,

@@ -120,21 +120,10 @@ export function recordingSidecarMetadata(
       }
     }
   }
-  // The ring's wall clock and audio sample clock drift over long captures.
-  // Allow 0.2% elapsed-clock drift plus one second of timestamp quantization,
-  // retaining the 1.5-second floor for short recordings. The declared duration
-  // must still match decoded audio independently below.
-  const elapsedToleranceMs = Math.max(1500, 1000 + durationMs * 0.002);
-  if (
-    startMs === null ||
-    endMs === null ||
-    endMs < startMs ||
-    Math.abs(endMs - startMs - durationMs) > elapsedToleranceMs ||
-    recordedDurationMs === null ||
-    Math.abs(recordedDurationMs - durationMs) > 1000
-  )
-    invalid();
-  const bookmarksMs = bookmarks.map((at) => at - startMs);
-  if (bookmarksMs.some((at) => at < 0 || at > durationMs)) invalid();
+  // The decoded WAV is the duration of record. The ring's own clock and declared
+  // duration drift from it, so they are kept as reported and never refuse audio.
+  if (startMs === null || endMs === null || recordedDurationMs === null) invalid();
+  const start = startMs;
+  const bookmarksMs = bookmarks.map((at) => at - start).filter((at) => at >= 0 && at <= durationMs);
   return { startMs, endMs, recordedDurationMs, bookmarksMs };
 }

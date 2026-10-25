@@ -87,34 +87,30 @@ describe("incremental source validation", () => {
     expect(result.endMs - result.startMs).toBe(durationMs - 4_160);
   });
 
-  it.each([-1_501, 1_501])("retains the short-recording clock bound at %s ms", (drift) => {
-    expect(() =>
-      recordingSidecarMetadata(metadata(120_000, drift), 120_000, {
-        maxBytes: 256 * 1024,
-        maxEntries: 256 * 1024,
-        durationDigits: 7
-      })
-    ).toThrow(RecordingImportInputError);
+  const sidecarLimits = { maxBytes: 256 * 1024, maxEntries: 256 * 1024, durationDigits: 7 };
+
+  it("accepts the 7-minute production source whose ring clock ran 2.32 s behind its audio", () => {
+    const result = recordingSidecarMetadata(metadata(442_320, -2_320), 442_320, sidecarLimits);
+    expect(result.endMs - result.startMs).toBe(440_000);
+    expect(result.recordedDurationMs).toBe(442_320);
   });
 
-  it.each([-30_000, 30_000])("rejects excessive long-recording clock drift of %s ms", (drift) => {
-    expect(() =>
-      recordingSidecarMetadata(metadata(2_513_160, drift), 2_513_160, {
-        maxBytes: 256 * 1024,
-        maxEntries: 256 * 1024,
-        durationDigits: 7
-      })
-    ).toThrow(RecordingImportInputError);
+  it.each([-1_501, 1_501, -30_000, 30_000])(
+    "keeps ring-clock drift of %s ms as reported instead of refusing the audio",
+    (drift) => {
+      const result = recordingSidecarMetadata(metadata(120_000, drift), 120_000, sidecarLimits);
+      expect(result.endMs - result.startMs).toBe(120_000 + drift);
+    }
+  );
+
+  it("keeps a declared duration that disagrees with the decoded audio", () => {
+    const result = recordingSidecarMetadata(metadata(2_513_160, -4_160), 2_515_000, sidecarLimits);
+    expect(result.recordedDurationMs).toBe(2_513_160);
   });
 
-  it("rejects a mismatched declared duration despite acceptable long-recording clock drift", () => {
-    expect(() =>
-      recordingSidecarMetadata(metadata(2_513_160, -4_160), 2_515_000, {
-        maxBytes: 256 * 1024,
-        maxEntries: 256 * 1024,
-        durationDigits: 7
-      })
-    ).toThrow(RecordingImportInputError);
+  it("drops a bookmark that falls outside the decoded audio", () => {
+    const result = recordingSidecarMetadata(metadata(120_000), 119_000, sidecarLimits);
+    expect(result.bookmarksMs).toEqual([]);
   });
 
   it("validates every byte split of the WAV header and UTF8 sidecar", async () => {
@@ -230,13 +226,11 @@ describe("incremental source validation", () => {
     );
   });
 
-  it("rejects valid packet framing inconsistent with the WAV duration", async () => {
+  it("accepts valid packet framing whose count disagrees with the WAV duration", async () => {
     const { bytes } = fixture();
     bytes.packets = Buffer.from([0, 1, 0]);
     const { files, read } = source(bytes);
-    await expect(validateRecordingSource(files, read)).rejects.toBeInstanceOf(
-      RecordingImportInputError
-    );
+    await expect(validateRecordingSource(files, read)).resolves.toMatchObject({ packetCount: 1 });
   });
 
   it("rejects a partial sidecar despite a matching file hash", async () => {
