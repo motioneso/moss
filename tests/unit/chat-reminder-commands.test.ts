@@ -268,11 +268,18 @@ describe("list and cancel wording", () => {
 });
 
 describe("no other way in", () => {
-  it("declares no route, action or tool for reminders", () => {
+  // The only reminder surface besides the controlled commands is the read-only summary tool.
+  const summaryTool = "chat.remindersSummary";
+
+  it("declares no route or action for reminders, and only the read-only summary tool", () => {
+    const tools = chatModuleManifest.assistantTools ?? [];
+    const summary = tools.filter((tool) => tool.name === summaryTool);
+    expect(summary).toHaveLength(1);
+    expect(summary[0]).toMatchObject({ risk: "read", permissionId: "chat.view" });
     const surfaces = JSON.stringify({
       routes: chatModuleManifest.routes.map((route) => route.path),
       actions: chatModuleManifest.assistantActionFamilies,
-      tools: chatModuleManifest.assistantTools
+      tools: tools.filter((tool) => tool.name !== summaryTool)
     });
     expect(surfaces).not.toMatch(/remind/i);
   });
