@@ -11,17 +11,20 @@ close #1699 until the draft decisions and assembled live proof are settled.
 1. **Confirmation foundation (this session).** AI-owned persistence and public functions,
    additive migration, database types and schema catalog, real database regression tests.
    No new route or UI is registered; no page can execute through this foundation alone.
-2. **Module invoke route (separate task issue).** External-only admission, active actor module
+2. **Module invoke route (#3723).** External-only admission, active actor module
    check, trusted origin, per-session/module rate limit, validation, classification, digest,
    direct/confirmed execution, result screening and rejection codes, route/chat guards.
-3. **Host tools handle and assembled proof (separate task issue).** SDK browser contracts,
+3. **Host tools handle and assembled proof (#3724).** SDK browser contracts,
    optional Root prop and actual shell wiring, host dialog/cancel, deterministic outcomes,
    core app-map entries, developer documentation, real installed-module browser proof.
 
 Slices 2 and 3 are deliberately outlined rather than implemented in advance. Create one GitHub
 `task` issue for each if this session ends after slice 1, with their dependency order and tests.
-Use one branch and one implementation PR for work performed this session. Rebase on main before
-opening it. Preserve the draft spec commit from PR #3718; do not close #1699 from a partial PR.
+Use one branch and one implementation PR for work performed this session. Ben subsequently
+superseded the brief's main-rebase instruction for stacking: rebase on the latest
+`docs/module-platform-specs` and target that branch (stacked on #3718), then retarget main
+after #3718 merges. Preserve the exact spec ancestry rather than copying/replaying its files.
+Do not close #1699 from a partial PR.
 
 ## Seams verified against this tree
 
@@ -147,7 +150,7 @@ unpiped; expected exit is 0 (the intentional security mutation expects 1).
 - `scripts/run-gate.sh start` then asynchronous `scripts/run-gate.sh wait --follow` for full gate;
   record environmental/baseline failures accurately rather than claiming CI equivalence.
 
-Commit explicit paths, rebase main, push, open PR with release note Category N/A for dormant
+Commit explicit paths, update the spec-branch stack, push, open a PR stacked on `docs/module-platform-specs` with release note Category N/A for dormant
 foundation, link leftover issues, report PR and verification to coordinator, leave clean tree.
 
 ## Rulings ledger
@@ -156,3 +159,20 @@ foundation, link leftover issues, report PR and verification to coordinator, lea
 - 2026-10-25: draft's immediate-expiry claim is stale; lifecycle only expires after stored deadline.
 - 2026-10-25: internal foundation stops before a route; all observable behavior and app-map changes
   remain acceptance criteria of dependent slices. No security property of those future paths is claimed.
+
+## Slice 1 execution record
+
+- Initial scoped launch found the fresh-worktree app-map artifact absent. The scoped test command
+  now builds the app map before server-based tests.
+- Scoped database gate passed 31 tests across four suites after that setup correction.
+- A combined negative control removed consume owner/origin/module/tool/digest/status/deadline
+  predicates and, only in the throwaway gate migration, disabled action RLS and dropped the new
+  page identity trigger and shape constraint. Nine of ten tests failed, including replay
+  (`[true, true]` instead of `[false, true]`), changed digest/module/tool, cross-user consumption,
+  chat-row confusion, expired approval, mutable identity and invalid row shape. The REST case also
+  failed because consuming its cancelled row reached the existing resolved-state trigger
+  instead of returning false. This was a combined mutation, not isolated
+  proof for each predicate. All mutations were restored before the final verification run.
+- Root TypeScript and test TypeScript passed. Nullable database columns required updates to two
+  existing raw-row fixtures. Three focused unit suites passed 26 tests.
+- Follow-up tasks are #3723 and #3724. The complete module-page write feature remains incomplete.

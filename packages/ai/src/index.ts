@@ -27,6 +27,7 @@ export * from "./api-key-chat-readiness.js";
 export * from "./provider-identity.js";
 export * from "./provider-base-url.js";
 export * from "./repository.js";
+export * from "./module-page-confirmations.js";
 export * from "./terminal-password-repository.js";
 // #1059 — re-exported so the composition root (packages/module-registry) and its tests can name
 // TerminalRpcHandle/TerminalRpcConnectOptions/TerminalRoutesDependencies without an internal-file

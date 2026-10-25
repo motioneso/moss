@@ -148,7 +148,10 @@ export interface AiConfiguredModelSafeRow {
   readonly updated_at: Date;
 }
 
-export type AiAssistantActionRequestSafeRow = AiAssistantActionRequest;
+export type AiAssistantActionRequestSafeRow = Omit<
+  AiAssistantActionRequest,
+  "origin" | "input_digest"
+>;
 
 export interface AiAdminUserCheckRow {
   readonly id: string;
