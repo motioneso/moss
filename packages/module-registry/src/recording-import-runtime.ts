@@ -1,6 +1,6 @@
 import type { DataContextRunner } from "@moss/db";
 import { sql } from "kysely";
-import { createPgBossClient, type PgBoss } from "@moss/jobs";
+import { createPgBossClient, startJobQueueWakeup, type PgBoss } from "@moss/jobs";
 import {
   ConfiguredTranscriptionError,
   createConfiguredTranscription,
@@ -67,19 +67,27 @@ export function createRecordingImportWorkerRuntime(
 ) {
   const consumer = createPgBossClient(workerConnectionString);
   let started = false;
+  let wakeup: ReturnType<typeof startJobQueueWakeup> | undefined;
   return {
     async start() {
       try {
         await consumer.start();
-        await registerRecordingImportWorker(consumer, createRecordingImportRuntime(deps));
+        const ids = await registerRecordingImportWorker(
+          consumer,
+          createRecordingImportRuntime(deps)
+        );
+        wakeup = startJobQueueWakeup(workerConnectionString, RECORDING_IMPORT_QUEUE, consumer, ids);
+        await wakeup.ready;
         started = true;
       } catch (error) {
+        await wakeup?.stop();
         await consumer.stop({ graceful: true });
         throw error;
       }
     },
     async close() {
       if (!started) return;
+      await wakeup?.stop();
       await consumer.offWork(RECORDING_IMPORT_QUEUE, { wait: true });
       await consumer.stop({ graceful: true });
       started = false;
