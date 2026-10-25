@@ -46,8 +46,11 @@ describe("Reminder summary actor-scoped persisted reads", () => {
         })
         .returning("id")
         .executeTakeFirstOrThrow();
+      const destination = opts.destinationTitle
+        ? await chat.openNewThread(db, { title: opts.destinationTitle })
+        : thread;
       const r = await reminders.create(db, {
-        threadId: thread.id,
+        threadId: destination.id,
         sourceMessageId: source.id,
         text,
         when: opts.when ?? { timing: "relative", delaySeconds: 3600 },
