@@ -24,9 +24,7 @@ import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./cur
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
 import { chatReadAttachmentExecute } from "./attachment-tool.js";
 import { chatPresentTool } from "./visual/present-tool.js";
-import { reminderSummaryTemplate } from "./reminders/summary/contract.js";
-import { reminderSummaryTool } from "./reminders/summary/tool.js";
-import { reminderSummaryFeature } from "./reminders/summary/feature.js";
+import { reminderSummaryTemplate, reminderSummaryTool } from "./reminders/summary/surface.js";
 import {
   chatSetResponseStyleExecute,
   chatResponseStylePresentation,
@@ -192,7 +190,6 @@ export const chatModuleManifest = {
   },
   visualTemplates: [reminderSummaryTemplate],
   features: [
-    reminderSummaryFeature,
     {
       id: "chat.domain_read_resolution",
       description:
