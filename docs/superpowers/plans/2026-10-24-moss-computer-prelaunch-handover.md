@@ -4,15 +4,18 @@ Plan only. No code, no runtime, image, Docker, deployment or production operatio
 `unavailableAdmission` stays the only admission. Parents #3577, #3616, #3617, #3618 and #3619 stay
 open. This settles the open items in the
 [prelaunch admission plan](2026-10-24-moss-computer-prelaunch-admission.md): the trusted watchdog
-identity, the fresh-sample path, the used-sample record and the boot ID source.
+identity, the fresh-sample path, the used-sample record and the boot ID source, for the prelaunch
+phase only. The handover to the bound second phase and the first healthy sample stay open (below).
+The limits stay as accepted and unchanged: 1800s run, 90s heartbeat, 5s bootstrap bound, 5s sample
+age, gap under 10s. The gap rule needs the second phase and is deferred with it.
 
 ## Facts from the tree
 
 | Source                                                                                     | Fact                                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/computer-watchdog.ts:33-38,72-77`                                                 | The watchdog refuses to share a pid or process group with the pinned runner. Modes are `observe`, `fence`, `manage` and `collect`. `observe` rejects a lifetime and `manage` needs one.            |
+| `scripts/computer-watchdog.ts:22,34-36,74-75`                                              | The watchdog refuses to share a pid or process group with the pinned runner. Modes are `observe`, `fence`, `manage` and `collect`. `observe` rejects a lifetime and `manage` needs one.            |
 | `scripts/computer-watchdog.ts:39-71`                                                       | `collect` is a one-shot. It reads one bounded JSON record on stdin with exactly the keys `configSha256`, `runId` and `watchdog`, runs `observeComputer`, and writes one sample to stdout (16 KiB). |
-| `scripts/computer-watchdog/trust.ts:168-171`                                               | The watchdog and its sampler require uid 0 and an empty `execArgv`. They hash their own artifact against the pinned configuration (trust.ts:275).                                                  |
+| `scripts/computer-watchdog/trust.ts:169-175`                                               | The watchdog and its sampler require uid 0 and an empty `execArgv`. They hash their own artifact against the pinned configuration (trust.ts:275).                                                  |
 | `scripts/computer-watchdog/supervisor.ts:58-100`                                           | The supervisor spawns the collector with empty environment and stdio pipe, pipe, ignore (lines 66-68), and reads the sample over a pipe it owns.                                                   |
 | `scripts/computer-watchdog/trust.ts:27-28,35,236-246`                                      | The pinned configuration holds the run ID, runner identity and boot ID. `processIdentity(pid)` reads pid, group and start ticks from `/proc`.                                                      |
 | `scripts/computer-watchdog/linux.ts:76-95`                                                 | `readComputerProcess` proves a process with that pid and start ticks exists in state R, S or D. It does not prove which program it runs.                                                           |
@@ -26,30 +29,38 @@ process. The contract reuses the pipe model the supervisor already uses.
 
 ### Pins
 
-The launcher is a root process (the sampler needs uid 0, trust.ts:168-171). It loads the same
-pinned deployment configuration the watchdog loads, with the same loader, and takes the node path,
-artifact path, artifact hash, config path, config hash and run ID from it. Nothing in a request or
-a sample supplies an expected value. Before every spawn the launcher checks the node and artifact
-paths with `assertTrustedPath` and the artifact hash, as `computer-watchdog.ts` does at startup.
-A replaced binary fails that check. Root on the box is the trust boundary, as it is for the existing
-supervisor, and this plan claims nothing beyond that.
+The launcher must run as root, because the sampler requires uid 0 (trust.ts:169-175). The host
+tool already runs as the owner of the managed state (state.ts:36), but no source shows that it is
+root. Running it as root is an assumption this plan adds, and the build must prove it or refuse to
+start. The launcher loads the same pinned deployment configuration the watchdog loads, with the same
+loader, and takes the node path, artifact path, artifact hash, config path, config hash and run ID
+from it. Nothing in a request or a sample supplies an expected value. Before every spawn the
+launcher checks the node and artifact paths with `assertTrustedPath` and the artifact hash, as
+`computer-watchdog.ts` does at startup. A replaced binary fails that check. Root on the box is the
+trust boundary, as it is for the existing supervisor, and this plan claims nothing beyond that.
 
 ### 1. Watchdog identity source
 
+`manage` mode needs a lifetime binding (computer-watchdog.ts:34), and the binding holds container IDs that
+exist only after create. A `manage` watchdog therefore cannot exist before launch. The prelaunch
+phase needs a lifetime-free long-running mode, called `hold` here. It starts under the pinned
+configuration without a lifetime, refuses a lifetime like `observe`, keeps the process and its
+single-instance guard alive, and does no fencing. Adding `hold` is part of the build. The move from
+`hold` to a bound `manage` watchdog after create is the second phase and stays open below.
+
 1. When the launcher starts, before any enable request and outside the enable path, it spawns the
-   long-running watchdog in `manage` mode with fixed argv and empty environment. Lifecycle order in
-   `operations.ts` does not change.
+   `hold` watchdog with fixed argv and empty environment. Lifecycle order in `operations.ts` does
+   not change.
 2. Immediately after spawn it reads the identity with `processIdentity` and also reads
    `/proc/<pid>/exe` and `/proc/<pid>/cmdline`. Both must equal the pinned node path, artifact path
    and config path. A process running some other program fails here.
 3. The child handle must show no exit or signal (`exitCode` and `signalCode` null) at that read and
-   again at each admission read. Node reaps an exited child, so this closes pid reuse between the
-   reads.
+   again at each admission read. The build must confirm by reading Node's behavior that an exited
+   child is reaped, so that this check closes pid reuse between the reads.
 4. The identity stays in launcher memory. The sample is never its source.
-5. If the launcher restarts it holds no identity and refuses to admit until it spawns a new
-   watchdog. An orphan watchdog from the earlier launcher still holds `daemon.lock`, so the new
-   spawn fails and admission stays refused. Cleaning up such an orphan belongs to the delivery
-   contract.
+5. If the launcher restarts it holds no identity and refuses to admit until it spawns a new `hold`
+   watchdog. What happens to a `hold` watchdog left by the earlier launcher is not settled here. It
+   belongs to the delivery contract, and until then admission stays refused.
 
 This proves the launcher started the pinned program and that it is still the same process. It does
 not prove the watchdog is healthy. Health stays with the first complete sample item below.
@@ -72,13 +83,17 @@ not prove the watchdog is healthy. Health stays with the first complete sample i
 
 1. The nonce is single use and lives in launcher memory. The sample echoes the nonce, the
    generation and the boot ID. The expected boot ID is the pinned one (trust.ts:35).
-2. A new spawn and nonce are needed for each admission, so bytes from an earlier pipe cannot match.
+2. A new spawn and nonce are needed for each admission. The fresh child on a private pipe is what stops replay. The nonce adds a second check that a record belongs to this request, and it is a real protection only against a record from another request or an earlier run. Bytes from an earlier pipe cannot match.
    A launcher restart drops the nonce, so an old sample has no matching request.
 3. The launcher marks the sample consumed in memory at the first create (gateway). The second
    create and both starts do not read the sample again. This replaces rule 6 of the admission plan,
    which asked for a durable consumed hash in a new file. The host state file stays unchanged
    (state.ts:62). The admission plan's sample-file checks and its separate top-level kind key are
    superseded because no file exists. The kind stays as a field in the pipe record.
+4. Corrections to the admission plan. Its rules 1 and 6 say "desktop create", but the create loop
+   makes the gateway first (config.ts:7, operations.ts:97), so every "desktop create" there means
+   the first create. Its rule 2 "pinned identity" means the identity held in launcher memory by
+   decision 1. Its rule 7 is covered by launcher rules 5 and 6 below. Its rules 3, 4 and 5 stand.
 
 ## Sampler contract
 
@@ -91,6 +106,12 @@ not prove the watchdog is healthy. Health stays with the first complete sample i
 - Reads `measuredAtMs` before any I/O. Output is one exact-key record under 16 KiB. Extra keys, a
   second record or trailing bytes refuse.
 - Hard wall-clock limit well under 5s. The launcher kills it on timeout and refuses.
+- Both spawns (the `hold` watchdog and the sampler) use a fixed argv, empty environment, no shell,
+  and stdio pipe, pipe, ignore for the sampler and ignore for the watchdog. The watchdog is spawned
+  detached so it has its own process group, and the build refuses a watchdog that shares a pid or
+  group with the pinned runner (computer-watchdog.ts:74-75). A test removes each of these.
+- The artifact hash is checked before spawn, not on the running image. A swap between the check and
+  the spawn is possible for a writer with root, and root is the stated trust boundary.
 
 ## Launcher rules, each with a removed-protection test
 
@@ -102,7 +123,7 @@ cannot prove the real one works.
 2. Identity. A process whose exe or cmdline is not the pinned program refuses. A child handle that
    shows an exit refuses. Two reads that differ refuse.
 3. A sample with a wrong nonce, generation, run ID or boot ID refuses, one test per field.
-4. Age. A sample older than 5s, in the future, or with an equal timestamp refuses at
+4. Age. A sample whose `measuredAtMs` is more than 5s before the launcher's own clock read, or after it, refuses at
    `assertAdmitted` and again immediately before the first (gateway) create. Images, inventory and
    removal run between them (operations.ts:81-94), so a slow removal cannot get a re-sample. It can
    only refuse, and the owner retries.
@@ -121,7 +142,7 @@ cannot prove the real one works.
   binding comes from, without letting the host mint its own trust, is the next contract. Rule 8 of
   the admission plan (post-launch sample within 10s) depends on it.
 - The first complete healthy sample from the long-running watchdog's own journal before launch.
-  This plan checks that the pinned program runs and is current, not that it has finished a sample
+  This plan checks that the process the launcher started is still the same process, not that it has finished a sample
   cycle.
 - Installed delivery of the watchdog and sampler binaries, orphan cleanup, and any runtime packet.
 
