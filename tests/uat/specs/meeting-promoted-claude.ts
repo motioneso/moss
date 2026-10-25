@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { buildUatComposeArgs } from "../compose-args.js";
 
-/** Seed an authentic promoted CLI in this disposable stack; the updater itself is not under test. */
+/** Seed the official npm release of a promoted CLI (version-checked) in this disposable stack; the updater itself is not under test. */
 export function installPromotedMeetingClaude(projectName: string): void {
   if (!/^uat-[a-zA-Z0-9_]+$/.test(projectName)) throw new Error("Expected disposable UAT project");
   const receipt = execFileSync(
