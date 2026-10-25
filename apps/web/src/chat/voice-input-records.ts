@@ -1,4 +1,20 @@
-import type { ChatVoiceRequestStatus, TranscriptRecord } from "@moss/shared";
+import { hasSpokenText, type ChatVoiceRequestStatus, type TranscriptRecord } from "@moss/shared";
+
+/**
+ * Where an unsaved receipt belongs by time: before the first saved message created after it, or
+ * the first live user turn that is not saved yet. Activity rows carry no time and never anchor.
+ */
+function indexByTime(
+  records: readonly TranscriptRecord[],
+  createdAt: string,
+  receiptTurns: ReadonlySet<string>
+): number {
+  return records.findIndex((record) =>
+    record.createdAt
+      ? record.createdAt > createdAt
+      : record.kind === "user" && !record.messageId && !receiptTurns.has(record.turnId ?? "")
+  );
+}
 
 /** Reconcile receipt placeholders with canonical turns without comparing message text. */
 export function mergeVoiceInputRecords(
@@ -11,6 +27,7 @@ export function mergeVoiceInputRecords(
   const ordered = [...requests].sort(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
   );
+  const receiptTurns = new Set(ordered.map((request) => request.turnId));
   const positions = new Map(ordered.map((request, index) => [request.turnId, index]));
   for (const request of ordered) {
     const saved = recovered.get(request.turnId) ?? [];
@@ -54,14 +71,18 @@ export function mergeVoiceInputRecords(
             );
         records.splice(nextIndex < 0 ? records.length : nextIndex, 0, ...saved);
       } else {
-        const placeholder: TranscriptRecord = request.transcript
+        const placeholder: TranscriptRecord = hasSpokenText(request.transcript)
           ? {
               kind: "user",
               text: request.transcript,
               turnId: request.turnId
             }
           : { kind: "status", text: request.statusMessage, turnId: request.turnId };
-        records.splice(nextVoiceIndex < 0 ? records.length : nextVoiceIndex, 0, placeholder);
+        const anchors = [
+          nextVoiceIndex,
+          indexByTime(records, request.createdAt, receiptTurns)
+        ].filter((index) => index >= 0);
+        records.splice(anchors.length ? Math.min(...anchors) : records.length, 0, placeholder);
       }
     } else {
       for (const record of saved) {

@@ -7,7 +7,7 @@ const messages: Record<VoiceRequest["state"], string> = {
   queued: "Waiting until Main chat is available.",
   dispatching: "Moss is responding in Main chat.",
   replied: "Moss replied in Main chat.",
-  interrupted: "This request was interrupted. Check Main chat before sending a new message."
+  interrupted: "Moss was interrupted before replying. Anything it started may not be done."
 };
 
 /** Explicit public projection: dispatch boot identity and internal fingerprints stay internal. */

@@ -9,6 +9,11 @@ export const CHAT_VOICE_REQUEST_STATES = [
   "interrupted"
 ] as const;
 
+/** True when a transcript holds at least one letter or digit; punctuation alone is not speech. */
+export function hasSpokenText(transcript: string): boolean {
+  return /[\p{L}\p{N}]/u.test(transcript);
+}
+
 export interface ChatVoiceRequestStatus {
   readonly id: string;
   readonly sourceDeviceId: string;

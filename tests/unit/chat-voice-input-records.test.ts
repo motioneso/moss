@@ -103,4 +103,35 @@ describe("normal voice input reconciliation", () => {
     expect(result.filter((r) => r.kind === "user")).toEqual([live]);
     expect(result.at(-1)).toMatchObject({ kind: "status", text: "No speech detected." });
   });
+  it("places a pending receipt before a newer saved typed message", () => {
+    const typed: TranscriptRecord = {
+      kind: "user",
+      text: "Typed later",
+      turnId: "typed",
+      messageId: "typed-message",
+      createdAt: "2026-10-24T10:05:00.000Z"
+    };
+    const result = mergeVoiceInputRecords([typed], [receipt("a", "interrupted")], new Map());
+    expect(result.map((record) => record.turnId)).toEqual(["a", "typed"]);
+  });
+  it("appends a pending receipt after older saved messages", () => {
+    const older: TranscriptRecord = {
+      kind: "user",
+      text: "Typed earlier",
+      turnId: "typed",
+      messageId: "typed-message",
+      createdAt: "2026-10-24T09:00:00.000Z"
+    };
+    const result = mergeVoiceInputRecords([older], [receipt("a", "interrupted")], new Map());
+    expect(result.map((record) => record.turnId)).toEqual(["typed", "a"]);
+  });
+  it.each([".", "…", " ? "])("never makes a bubble from punctuation-only text %j", (transcript) => {
+    const result = mergeVoiceInputRecords(
+      [],
+      [{ ...receipt("dot", "interrupted"), transcript, statusMessage: "Interrupted." }],
+      new Map()
+    );
+    expect(result.filter((r) => r.kind === "user")).toEqual([]);
+    expect(result).toEqual([{ kind: "status", text: "Interrupted.", turnId: "dot" }]);
+  });
 });

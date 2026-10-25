@@ -4,7 +4,7 @@ import { assertDataContextDb, type DataContextDb, type MossDatabase } from "@mos
 
 export const VOICE_AUTOMATIC_MAX_AGE_MS = 15 * 60_000;
 
-import type { ChatVoiceRequestCursor, VoiceRequestInput } from "@moss/shared";
+import { hasSpokenText, type ChatVoiceRequestCursor, type VoiceRequestInput } from "@moss/shared";
 export type { VoiceRequestInput } from "@moss/shared";
 
 function parseVoiceRequest(value: VoiceRequestInput): VoiceRequestInput {
@@ -103,7 +103,7 @@ export class VoiceRequestRepository {
       captured_at: input.capturedAt ? new Date(input.capturedAt) : null,
       confirmed_at: null
     };
-    const state = !input.transcript.trim()
+    const state = !hasSpokenText(input.transcript)
       ? "no-speech"
       : voiceNeedsConfirmation(timing, now)
         ? "ready-to-send"
