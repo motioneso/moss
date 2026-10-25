@@ -48,7 +48,8 @@ describe("provider catalog", () => {
         providerKind: "anthropic" as const,
         authMethod: "cli" as const,
         displayName: "Claude",
-        acpAgentId: null
+        // The server fills this in for Claude, so a real Claude row always carries it.
+        acpAgentId: "claude-acp"
       },
       {
         providerKind: "openai-compatible" as const,
@@ -57,7 +58,19 @@ describe("provider catalog", () => {
         acpAgentId: "codex-acp"
       }
     ];
+    const gemini = PROVIDER_CATALOG.find((e) => e.id === "gemini")!;
     expect(subscriptionChoiceTaken(claude, existing)).toBe(true);
+    expect(subscriptionChoiceTaken(gemini, existing)).toBe(false);
+    expect(
+      subscriptionChoiceTaken(gemini, [
+        {
+          providerKind: "google" as const,
+          authMethod: "cli" as const,
+          displayName: "Gemini",
+          acpAgentId: "gemini-acp"
+        }
+      ])
+    ).toBe(true);
     expect(subscriptionChoiceTaken(codex, existing)).toBe(true);
     expect(subscriptionChoiceTaken(opencode, existing)).toBe(false);
     // An API key provider of the same company never blocks anything, in either direction.

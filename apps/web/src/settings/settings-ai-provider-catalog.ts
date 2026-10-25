@@ -149,7 +149,11 @@ type ExistingProvider = {
   readonly status?: string;
 };
 
-/** True when a subscription choice already has a provider. API key choices never do. */
+/**
+ * True when a subscription choice already has a provider. API key choices never do. The server
+ * fills in a default agent id for Claude and Gemini, so only choices that name an agent (Codex,
+ * OpenCode) compare it.
+ */
 export function subscriptionChoiceTaken(
   choice: ProviderChoice,
   providers: readonly ExistingProvider[]
@@ -160,7 +164,7 @@ export function subscriptionChoiceTaken(
       provider.status !== "revoked" &&
       provider.authMethod === "cli" &&
       provider.providerKind === choice.kind &&
-      (provider.acpAgentId ?? undefined) === choice.acpAgentId
+      (choice.acpAgentId === undefined || provider.acpAgentId === choice.acpAgentId)
   );
 }
 
