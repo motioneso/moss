@@ -114,15 +114,25 @@ describe("normal voice input reconciliation", () => {
     const result = mergeVoiceInputRecords([typed], [receipt("a", "interrupted")], new Map());
     expect(result.map((record) => record.turnId)).toEqual(["a", "typed"]);
   });
-  it("places a pending receipt before a live user turn that was just saved without a timestamp", () => {
-    const live: TranscriptRecord = {
+  it("orders a receipt against a live turn saved this session by its send time", () => {
+    const sent = (createdAt: string): TranscriptRecord => ({
       kind: "user",
-      text: "Typed now",
+      text: "Typed",
       turnId: "typed",
-      messageId: "typed-message"
-    };
-    const result = mergeVoiceInputRecords([live], [receipt("a", "interrupted")], new Map());
-    expect(result.map((record) => record.turnId)).toEqual(["a", "typed"]);
+      messageId: "typed-message",
+      createdAt
+    });
+    const request = receipt("a", "interrupted");
+    expect(
+      mergeVoiceInputRecords([sent("2026-10-24T10:05:00.000Z")], [request], new Map()).map(
+        (r) => r.turnId
+      )
+    ).toEqual(["a", "typed"]);
+    expect(
+      mergeVoiceInputRecords([sent("2026-10-24T09:55:00.000Z")], [request], new Map()).map(
+        (r) => r.turnId
+      )
+    ).toEqual(["typed", "a"]);
   });
   it("appends a pending receipt after older saved messages", () => {
     const older: TranscriptRecord = {

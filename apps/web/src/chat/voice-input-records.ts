@@ -12,7 +12,7 @@ function indexByTime(
   return records.findIndex((record) =>
     record.createdAt
       ? record.createdAt > createdAt
-      : record.kind === "user" && !receiptTurns.has(record.turnId ?? "")
+      : record.kind === "user" && !record.messageId && !receiptTurns.has(record.turnId ?? "")
   );
 }
 
