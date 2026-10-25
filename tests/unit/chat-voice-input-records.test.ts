@@ -103,4 +103,65 @@ describe("normal voice input reconciliation", () => {
     expect(result.filter((r) => r.kind === "user")).toEqual([live]);
     expect(result.at(-1)).toMatchObject({ kind: "status", text: "No speech detected." });
   });
+  it("places a pending receipt before a newer saved typed message", () => {
+    const typed: TranscriptRecord = {
+      kind: "user",
+      text: "Typed later",
+      turnId: "typed",
+      messageId: "typed-message",
+      createdAt: "2026-10-24T10:05:00.000Z"
+    };
+    const result = mergeVoiceInputRecords([typed], [receipt("a", "interrupted")], new Map());
+    expect(result.map((record) => record.turnId)).toEqual(["a", "typed"]);
+  });
+  it("orders a receipt against a live turn saved this session by its send time", () => {
+    const sent = (createdAt: string): TranscriptRecord => ({
+      kind: "user",
+      text: "Typed",
+      turnId: "typed",
+      messageId: "typed-message",
+      createdAt
+    });
+    const request = receipt("a", "interrupted");
+    expect(
+      mergeVoiceInputRecords([sent("2026-10-24T10:05:00.000Z")], [request], new Map()).map(
+        (r) => r.turnId
+      )
+    ).toEqual(["a", "typed"]);
+    expect(
+      mergeVoiceInputRecords([sent("2026-10-24T09:55:00.000Z")], [request], new Map()).map(
+        (r) => r.turnId
+      )
+    ).toEqual(["typed", "a"]);
+  });
+  it("appends a pending receipt after older saved messages", () => {
+    const older: TranscriptRecord = {
+      kind: "user",
+      text: "Typed earlier",
+      turnId: "typed",
+      messageId: "typed-message",
+      createdAt: "2026-10-24T09:00:00.000Z"
+    };
+    const result = mergeVoiceInputRecords([older], [receipt("a", "interrupted")], new Map());
+    expect(result.map((record) => record.turnId)).toEqual(["typed", "a"]);
+  });
+  it.each([".", "…", " ? "])(
+    "shows nothing for an interrupted receipt with text %j",
+    (transcript) => {
+      const result = mergeVoiceInputRecords(
+        [],
+        [{ ...receipt("dot", "interrupted"), transcript }],
+        new Map()
+      );
+      expect(result).toEqual([]);
+    }
+  );
+  it("keeps a bubble for a legacy waiting punctuation-only receipt so Send stays reachable", () => {
+    const result = mergeVoiceInputRecords(
+      [],
+      [{ ...receipt("dot", "ready-to-send"), transcript: "." }],
+      new Map()
+    );
+    expect(result).toEqual([{ kind: "user", text: ".", turnId: "dot" }]);
+  });
 });

@@ -417,6 +417,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
           kind: "user",
           text: message.body,
           messageId: message.id,
+          createdAt: message.createdAt,
           turnId: message.turnId,
           meetingContext: message.meetingContext,
           attachments: message.attachments
@@ -440,6 +441,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
               text: message.body,
               scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
+              createdAt: message.createdAt,
               turnId: message.turnId,
               ...(isDeliveredReminder(message)
                 ? { background: true as const, backgroundThreadId: message.threadId }

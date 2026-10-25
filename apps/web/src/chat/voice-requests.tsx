@@ -90,6 +90,8 @@ function OwnerVoiceThread(props: VoiceThreadProps) {
     recovered,
     recordsFromMessages(history.data?.messages ?? [])
   );
+  // An interrupted notice only matters until the conversation moves on.
+  const latestUserTurn = [...records].reverse().find((record) => record.kind === "user")?.turnId;
   const send = useMutation({
     mutationFn: (id: string) =>
       requestJson<ChatVoiceRequestStatus>(
@@ -124,6 +126,7 @@ function OwnerVoiceThread(props: VoiceThreadProps) {
               {record.kind === "user" ? (
                 <VoiceInputStatus
                   request={requests.find((request) => request.turnId === record.turnId)}
+                  latest={record.turnId === latestUserTurn}
                   sending={
                     send.isPending ||
                     query.isFetching ||
@@ -164,10 +167,12 @@ function OwnerVoiceThread(props: VoiceThreadProps) {
 function VoiceInputStatus(props: {
   readonly request?: ChatVoiceRequestStatus;
   readonly sending: boolean;
+  readonly latest: boolean;
   readonly onSend: (id: string) => void;
 }) {
   const request = props.request;
   if (!request || request.state === "replied") return null;
+  if (request.state === "interrupted" && !props.latest) return null;
   return (
     <Note variant="practical">
       {request.statusMessage}

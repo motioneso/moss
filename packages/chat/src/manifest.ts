@@ -201,6 +201,12 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.voice_request_notices",
+      description:
+        "An interrupted ring request shows 'Moss was interrupted before replying' under its question until you send a newer message. Ring text with no letters or digits counts as no speech and never becomes a message.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.unread_messages",
       description:
         "Closed chat shows unread Moss messages and reminders (99+ cap). Counts persist across reloads/devices. Only visible, loaded conversations clear; others keep picker counts. Private and module chats are excluded.",

@@ -45,6 +45,31 @@ export interface SupervisorDeployment {
   readonly marker: string;
 }
 
+export interface PrelaunchConfiguration {
+  readonly kind: "prelaunch";
+  readonly runId: string;
+  readonly host: HostConfig;
+  readonly data: RootIdentity;
+  readonly dockerData: RootIdentity;
+  readonly monitor: RootIdentity;
+  readonly readyUrl: string;
+  readonly artifactSha256: string;
+  readonly bootId: string;
+  readonly namespaces: Readonly<Record<"pid" | "mnt" | "user", string>>;
+}
+interface CommonDeployment {
+  readonly configPath: string;
+  readonly configSha256: string;
+  readonly artifactPath: string;
+  readonly nodePath: string;
+  readonly roots: readonly RootIdentity[];
+  readonly marker: string;
+}
+/** Carries no runner, so it cannot be passed where a SupervisorDeployment is required. */
+export interface PrelaunchDeployment extends CommonDeployment {
+  readonly configuration: PrelaunchConfiguration;
+}
+
 function exact(value: unknown, keys: readonly string[]): Record<string, unknown> {
   if (!isRecord(value) || Object.keys(value).sort().join(",") !== [...keys].sort().join(","))
     throw supervisorError();
@@ -54,32 +79,12 @@ function pinnedRoot(value: unknown): RootIdentity {
   exact(value, ["path", "dev", "ino", "uid", "gid", "mode"]);
   return snapshotRoot(value as RootIdentity);
 }
-export function parseSupervisorConfiguration(value: unknown): SupervisorConfiguration {
-  const record = exact(value, [
-    "runId",
-    "runner",
-    "host",
-    "data",
-    "dockerData",
-    "monitor",
-    "readyUrl",
-    "artifactSha256",
-    "bootId",
-    "namespaces",
-    ...(isRecord(value) && Object.hasOwn(value, "lifetime") ? ["lifetime"] : []),
-    ...(isRecord(value) && Object.hasOwn(value, "capture") ? ["capture"] : [])
-  ]);
-  const runner = exact(record.runner, ["pid", "startTicks", "processGroupId"]);
+type CommonFields = Omit<PrelaunchConfiguration, "kind">;
+function parseCommonFields(record: Record<string, unknown>): CommonFields {
   const namespaces = exact(record.namespaces, ["pid", "mnt", "user"]);
   if (
     !isUuid(record.runId) ||
     !isUuid(record.bootId) ||
-    ![runner.pid, runner.processGroupId].every(
-      (n) => typeof n === "number" && Number.isSafeInteger(n) && n > 0
-    ) ||
-    typeof runner.startTicks !== "string" ||
-    !/^[0-9]{1,20}$/.test(runner.startTicks) ||
-    /^0+$/.test(runner.startTicks) ||
     typeof record.artifactSha256 !== "string" ||
     !/^[0-9a-f]{64}$/.test(record.artifactSha256) ||
     typeof record.readyUrl !== "string" ||
@@ -102,29 +107,75 @@ export function parseSupervisorConfiguration(value: unknown): SupervisorConfigur
     url.href !== record.readyUrl
   )
     throw supervisorError();
-  const host = parseHostConfig(record.host);
-  const lifetime = Object.hasOwn(record, "lifetime")
-    ? parseComputerLifetime(record.lifetime)
-    : undefined;
-  if (
-    lifetime &&
-    (lifetime.binding.runId !== record.runId || lifetime.binding.instanceId !== host.instanceId)
-  )
-    throw supervisorError();
-  return Object.freeze({
-    ...(lifetime ? { lifetime } : {}),
-    ...(Object.hasOwn(record, "capture") ? { capture: pinnedRoot(record.capture) } : {}),
+  return {
     runId: record.runId,
     bootId: record.bootId,
-    runner: Object.freeze({ ...runner }) as unknown as WatchdogProcessIdentity,
-    host,
+    host: parseHostConfig(record.host),
     data: pinnedRoot(record.data),
     dockerData: pinnedRoot(record.dockerData),
     monitor: pinnedRoot(record.monitor),
     readyUrl: url.href,
     artifactSha256: record.artifactSha256,
     namespaces: Object.freeze({ ...namespaces }) as SupervisorConfiguration["namespaces"]
+  };
+}
+export function parseSupervisorConfiguration(value: unknown): SupervisorConfiguration {
+  const record = exact(value, [
+    "runId",
+    "runner",
+    "host",
+    "data",
+    "dockerData",
+    "monitor",
+    "readyUrl",
+    "artifactSha256",
+    "bootId",
+    "namespaces",
+    ...(isRecord(value) && Object.hasOwn(value, "lifetime") ? ["lifetime"] : []),
+    ...(isRecord(value) && Object.hasOwn(value, "capture") ? ["capture"] : [])
+  ]);
+  const runner = exact(record.runner, ["pid", "startTicks", "processGroupId"]);
+  if (
+    ![runner.pid, runner.processGroupId].every(
+      (n) => typeof n === "number" && Number.isSafeInteger(n) && n > 0
+    ) ||
+    typeof runner.startTicks !== "string" ||
+    !/^[0-9]{1,20}$/.test(runner.startTicks) ||
+    /^0+$/.test(runner.startTicks)
+  )
+    throw supervisorError();
+  const common = parseCommonFields(record);
+  const lifetime = Object.hasOwn(record, "lifetime")
+    ? parseComputerLifetime(record.lifetime)
+    : undefined;
+  if (
+    lifetime &&
+    (lifetime.binding.runId !== record.runId ||
+      lifetime.binding.instanceId !== common.host.instanceId)
+  )
+    throw supervisorError();
+  return Object.freeze({
+    ...(lifetime ? { lifetime } : {}),
+    ...(Object.hasOwn(record, "capture") ? { capture: pinnedRoot(record.capture) } : {}),
+    ...common,
+    runner: Object.freeze({ ...runner }) as unknown as WatchdogProcessIdentity
   });
+}
+export function parsePrelaunchConfiguration(value: unknown): PrelaunchConfiguration {
+  const record = exact(value, [
+    "kind",
+    "runId",
+    "host",
+    "data",
+    "dockerData",
+    "monitor",
+    "readyUrl",
+    "artifactSha256",
+    "bootId",
+    "namespaces"
+  ]);
+  if (record.kind !== "prelaunch") throw supervisorError();
+  return Object.freeze({ kind: "prelaunch" as const, ...parseCommonFields(record) });
 }
 
 /** Strict root ancestry. Sticky writable directories are not trusted deployment locations. */
@@ -214,7 +265,9 @@ export async function assertHeartbeatPipe(runner: WatchdogProcessIdentity): Prom
   await readComputerProcess(runner);
 }
 
-export async function assertNamespaceAnchors(config: SupervisorConfiguration): Promise<void> {
+export async function assertNamespaceAnchors(
+  config: Pick<SupervisorConfiguration, "bootId" | "namespaces">
+): Promise<void> {
   await assertLinuxProc();
   if (
     (await boundedFile("/proc/sys/kernel/random/boot_id", 128)).toString("utf8").trim() !==
@@ -254,93 +307,147 @@ const contains = (a: string, b: string) => {
   return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 };
 
+/** Checks that depend on neither a runner nor a capture root. */
+async function loadCommonChecks<C extends CommonFields>(
+  configPath: string,
+  artifactPath: string,
+  collector: boolean,
+  parse: (value: unknown) => C,
+  beforeMarker?: (context: {
+    configuration: C;
+    nodePath: string;
+    all: readonly RootIdentity[];
+  }) => Promise<void>
+): Promise<CommonDeployment & { readonly configuration: C }> {
+  assertSupervisorRuntime(collector);
+  await assertTrustedPath(configPath, false);
+  const metadata = await lstat(configPath);
+  const parent = await lstat(dirname(configPath));
+  if ((metadata.mode & 0o7777) !== 0o600 || (parent.mode & 0o7777) !== 0o700)
+    throw supervisorError();
+  const bytes = await boundedFile(configPath, 16384);
+  const configuration = parse(JSON.parse(bytes.toString("utf8")));
+  const nodePath = process.execPath;
+  await assertTrustedPath(nodePath, false);
+  await assertTrustedPath(artifactPath, false);
+  if (sha256(await boundedFile(artifactPath, 2 * 1024 ** 2)) !== configuration.artifactSha256)
+    throw supervisorError();
+  await assertNamespaceAnchors(configuration);
+  const roots = await inspectRoots(configuration.host);
+  const dockerSocket = configuration.host.dockerSocket;
+  await assertTrustedPath(dirname(dockerSocket), true);
+  const socket = await lstat(dockerSocket);
+  if (
+    !socket.isSocket() ||
+    socket.uid !== 0 ||
+    socket.nlink !== 1 ||
+    (socket.mode & 0o002) !== 0 ||
+    (await realpath(dockerSocket)) !== dockerSocket
+  )
+    throw supervisorError();
+  for (const root of [configuration.data, configuration.dockerData, configuration.monitor]) {
+    await assertRoot(root);
+    await assertTrustedPath(root.path, true);
+  }
+  if ((configuration.monitor.mode & 0o7777) !== 0o700) throw supervisorError();
+  const all = [...roots, configuration.data, configuration.dockerData, configuration.monitor];
+  for (let i = 0; i < all.length; i++)
+    for (let j = i + 1; j < all.length; j++) {
+      const a = all[i]!,
+        b = all[j]!;
+      for (const [ancestor, child] of [
+        [a, b],
+        [b, a]
+      ]) {
+        if (
+          contains(ancestor!.path, child!.path) &&
+          (ancestor!.path === child!.path ||
+            ![configuration.data, configuration.dockerData].includes(ancestor!))
+        )
+          throw supervisorError();
+      }
+    }
+  await beforeMarker?.({ configuration, nodePath, all });
+  const marker = JSON.stringify({ config: configuration.host, roots });
+  if (JSON.stringify(await privateJson(`${configuration.host.stateDir}/identity.json`)) !== marker)
+    throw supervisorError();
+  return Object.freeze({
+    configuration,
+    configPath,
+    configSha256: sha256(bytes),
+    artifactPath,
+    nodePath,
+    roots: Object.freeze(roots),
+    marker
+  });
+}
+
 export async function loadSupervisorDeployment(
   configPath: string,
   artifactPath: string,
   collector = false
 ): Promise<SupervisorDeployment> {
   try {
-    assertSupervisorRuntime(collector);
-    await assertTrustedPath(configPath, false);
-    const metadata = await lstat(configPath);
-    const parent = await lstat(dirname(configPath));
-    if ((metadata.mode & 0o7777) !== 0o600 || (parent.mode & 0o7777) !== 0o700)
-      throw supervisorError();
-    const bytes = await boundedFile(configPath, 16384);
-    const configuration = parseSupervisorConfiguration(JSON.parse(bytes.toString("utf8")));
-    if (configuration.capture && !configuration.lifetime) throw supervisorError();
-    const nodePath = process.execPath;
-    await assertTrustedPath(nodePath, false);
-    await assertTrustedPath(artifactPath, false);
-    if (sha256(await boundedFile(artifactPath, 2 * 1024 ** 2)) !== configuration.artifactSha256)
-      throw supervisorError();
-    await assertNamespaceAnchors(configuration);
-    const roots = await inspectRoots(configuration.host);
-    const dockerSocket = configuration.host.dockerSocket;
-    await assertTrustedPath(dirname(dockerSocket), true);
-    const socket = await lstat(dockerSocket);
-    if (
-      !socket.isSocket() ||
-      socket.uid !== 0 ||
-      socket.nlink !== 1 ||
-      (socket.mode & 0o002) !== 0 ||
-      (await realpath(dockerSocket)) !== dockerSocket
-    )
-      throw supervisorError();
-    for (const root of [configuration.data, configuration.dockerData, configuration.monitor]) {
-      await assertRoot(root);
-      await assertTrustedPath(root.path, true);
-    }
-    if ((configuration.monitor.mode & 0o7777) !== 0o700) throw supervisorError();
-    const all = [...roots, configuration.data, configuration.dockerData, configuration.monitor];
-    for (let i = 0; i < all.length; i++)
-      for (let j = i + 1; j < all.length; j++) {
-        const a = all[i]!,
-          b = all[j]!;
-        for (const [ancestor, child] of [
-          [a, b],
-          [b, a]
-        ]) {
-          if (
-            contains(ancestor!.path, child!.path) &&
-            (ancestor!.path === child!.path ||
-              ![configuration.data, configuration.dockerData].includes(ancestor!))
-          )
-            throw supervisorError();
-        }
+    const common = await loadCommonChecks(
+      configPath,
+      artifactPath,
+      collector,
+      (value) => {
+        const configuration = parseSupervisorConfiguration(value);
+        if (configuration.capture && !configuration.lifetime) throw supervisorError();
+        return configuration;
+      },
+      async ({ configuration, nodePath, all }) => {
+        if (!configuration.capture) return;
+        const capture = configuration.capture;
+        await assertRoot(capture);
+        await assertTrustedPath(capture.path, true);
+        if (
+          capture.uid !== 0 ||
+          (capture.mode & 0o7777) !== 0o700 ||
+          all.some(
+            (root) => contains(root.path, capture.path) || contains(capture.path, root.path)
+          ) ||
+          [configPath, artifactPath, nodePath].some((path) => contains(capture.path, path))
+        )
+          throw supervisorError();
       }
-    if (configuration.capture) {
-      const capture = configuration.capture;
-      await assertRoot(capture);
-      await assertTrustedPath(capture.path, true);
-      if (
-        capture.uid !== 0 ||
-        (capture.mode & 0o7777) !== 0o700 ||
-        all.some(
-          (root) => contains(root.path, capture.path) || contains(capture.path, root.path)
-        ) ||
-        [configPath, artifactPath, nodePath].some((path) => contains(capture.path, path))
-      )
-        throw supervisorError();
-    }
-    const marker = JSON.stringify({ config: configuration.host, roots });
-    if (
-      JSON.stringify(await privateJson(`${configuration.host.stateDir}/identity.json`)) !== marker
-    )
-      throw supervisorError();
+    );
+    const configuration = common.configuration;
     await assertNullOutputs(configuration.runner.pid);
     if (!collector) await assertNullOutputs(process.pid);
     await readComputerProcess(configuration.runner);
     if (!collector) await assertHeartbeatPipe(configuration.runner);
-    return Object.freeze({
-      configuration,
+    return common;
+  } catch {
+    throw supervisorError();
+  }
+}
+
+/** The hold watchdog has no stdio and gets one pipe write end on descriptor 3 from its launcher. */
+async function assertHoldDescriptors(): Promise<void> {
+  for (const fd of [0, 1, 2])
+    if ((await readlink(`/proc/self/fd/${fd}`)) !== "/dev/null") throw supervisorError();
+  if (!/^pipe:\[[0-9]+\]$/.test(await readlink("/proc/self/fd/3"))) throw supervisorError();
+  const info = (await boundedFile("/proc/self/fdinfo/3", 4096)).toString("utf8");
+  const flags = /^flags:\s+([0-7]+)$/m.exec(info);
+  if (!flags || (Number.parseInt(flags[1]!, 8) & 3) !== 1) throw supervisorError();
+}
+
+export async function loadPrelaunchDeployment(
+  configPath: string,
+  artifactPath: string,
+  mode: "hold" | "prelaunch"
+): Promise<PrelaunchDeployment> {
+  try {
+    const common = await loadCommonChecks(
       configPath,
-      configSha256: sha256(bytes),
       artifactPath,
-      nodePath,
-      roots: Object.freeze(roots),
-      marker
-    });
+      mode === "prelaunch",
+      parsePrelaunchConfiguration
+    );
+    if (mode === "hold") await assertHoldDescriptors();
+    return common;
   } catch {
     throw supervisorError();
   }

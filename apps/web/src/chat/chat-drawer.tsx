@@ -354,6 +354,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
               kind: "user",
               text: trimmed,
               messageId: result.userMessageId,
+              // Send time on this device, so a ring receipt can be ordered against the turn.
+              createdAt: new Date().toISOString(),
               attachments,
               ...("meetingContext" in result ? { meetingContext: result.meetingContext } : {})
             },
