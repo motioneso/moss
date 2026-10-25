@@ -92,7 +92,7 @@ async function fixture(): Promise<Fixture> {
     ["/proc/self/fd/0", "/dev/null"],
     ["/proc/self/fd/1", "/dev/null"],
     ["/proc/self/fd/2", "/dev/null"],
-    ["/proc/self/fd/3", "pipe:[77]"],
+    ["/proc/self/fd/3", "socket:[77]"],
     [`/proc/${process.pid}/fd/1`, "/dev/null"],
     [`/proc/${process.pid}/fd/2`, "/dev/null"]
   ]);
@@ -349,7 +349,7 @@ describe("shared checks refuse through both loaders", () => {
 
 describe("hold descriptors", () => {
   const hold = (f: Fixture) => loadPrelaunchDeployment(f.configPath, f.artifact, "hold");
-  it("accepts null stdio and a pipe write end on descriptor 3", async () => {
+  it("accepts null stdio and a socket on descriptor 3", async () => {
     await expect(hold(await fixture())).resolves.toBeDefined();
   });
   it.each([0, 1, 2])("refuses when descriptor %i is not /dev/null", async (fd) => {
@@ -357,14 +357,14 @@ describe("hold descriptors", () => {
     f.links.set(`/proc/self/fd/${fd}`, "/dev/pts/0");
     await expect(hold(f)).rejects.toThrow();
   });
-  it("refuses a descriptor 3 that is not a pipe", async () => {
+  it("refuses a descriptor 3 that is not a socket", async () => {
     const f = await fixture();
     f.links.set("/proc/self/fd/3", "/tmp/file");
     await expect(hold(f)).rejects.toThrow();
   });
-  it("refuses a descriptor 3 that is a read end", async () => {
+  it("refuses a pipe on descriptor 3", async () => {
     const f = await fixture();
-    await fs.writeFile(join(f.dir, "fdinfo-3"), "flags:\t00\n");
+    f.links.set("/proc/self/fd/3", "pipe:[77]");
     await expect(hold(f)).rejects.toThrow();
   });
   it("does not ask the prelaunch sampler mode for those descriptors", async () => {

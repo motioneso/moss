@@ -424,14 +424,14 @@ export async function loadSupervisorDeployment(
   }
 }
 
-/** The hold watchdog has no stdio and gets one pipe write end on descriptor 3 from its launcher. */
+/**
+ * The hold watchdog has no stdio and gets one socket on descriptor 3 from its launcher, which keeps
+ * the peer. Node cannot make an anonymous pipe, so the end is a socket pair end (read-write).
+ */
 async function assertHoldDescriptors(): Promise<void> {
   for (const fd of [0, 1, 2])
     if ((await readlink(`/proc/self/fd/${fd}`)) !== "/dev/null") throw supervisorError();
-  if (!/^pipe:\[[0-9]+\]$/.test(await readlink("/proc/self/fd/3"))) throw supervisorError();
-  const info = (await boundedFile("/proc/self/fdinfo/3", 4096)).toString("utf8");
-  const flags = /^flags:\s+([0-7]+)$/m.exec(info);
-  if (!flags || (Number.parseInt(flags[1]!, 8) & 3) !== 1) throw supervisorError();
+  if (!/^socket:\[[0-9]+\]$/.test(await readlink("/proc/self/fd/3"))) throw supervisorError();
 }
 
 export async function loadPrelaunchDeployment(
