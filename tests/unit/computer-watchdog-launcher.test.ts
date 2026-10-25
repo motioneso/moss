@@ -61,7 +61,7 @@ describe("launchHold", () => {
     ["a different byte", `fs.writeSync(3,Buffer.from([2]));${idle}`],
     ["two bytes", `fs.writeSync(3,Buffer.from([1,1]));${idle}`],
     [
-      "one byte then a second",
+      "two single bytes written back to back",
       `fs.writeSync(3,Buffer.from([1]));fs.writeSync(3,Buffer.from([1]));${idle}`
     ],
     ["an early exit", "process.exit(2);"],

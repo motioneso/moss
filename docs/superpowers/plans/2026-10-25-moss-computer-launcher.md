@@ -68,14 +68,25 @@ What A loses.
 - The distinct `pipe:[n]` shape. Any socket now passes the shape check, so the shape no longer
   separates the launcher's channel from a socket inherited some other way.
 
+What A gains. A pipe write end can be reopened and written through `/proc/<pid>/fd/3` by any
+process that may open that path. A socket cannot be reopened that way, so the child's end cannot be
+re-attached by a third process.
+
+What neither option covers, and A does not change. The launcher does not verify the bundle file
+or the node binary it spawns, and it cannot see the child call exec. A child that has exec'd into
+different code can still write the byte. The identity check (pid, start ticks, group) does not
+detect an exec. Launcher-side verification of the bundle and node path must be built before the
+first real caller exists. Until then this slice proves only that the process the launcher started
+wrote the byte, not what code it is running.
+
 What replaces it.
 
 - Loader asserts descriptor 3 is `socket:[n]`. The rest of the descriptor rules stand.
 - The launcher creates the channel and keeps the peer. The launcher accepts the byte only from its
   own end, only as exactly one `0x01`, only within 7s, and only while the child identity is
   unchanged. Trust in the byte rests on the launcher owning the peer, as it did for the pipe.
-- A test proves ownership: it fails if the launcher does not hold its end, or if the child ends up
-  with a second route to the peer.
+- A test proves ownership: it fails if the launcher gets no end of the channel. It does not prove
+  that no other process holds the peer.
 
 Open for the Security reviewer to attack.
 
@@ -90,15 +101,13 @@ Open for the Security reviewer to attack.
 
 ## Tests (each seen failing with its protection removed)
 
-- Bundle: contains code from `main.ts` and `trust.ts`; has only builtin imports; hash changes when
-  an imported file's content changes (fixture tree); refuses a non-builtin import.
-- Ownership: the launcher's own end of the channel is open in the launcher and the child holds only
-  descriptor 3. A launcher variant that does not keep its end (or hands the child an end it cannot
-  distinguish) fails the test.
+- Bundle: contains code from `main.ts` and `trust.ts`; fails the build on an import it cannot bundle; hash changes when
+  an imported file's content changes (fixture tree);
+- Ownership: a launcher that gets no end of the channel (child given `ignore` on descriptor 3)
+  refuses, and a launcher that never reads its end accepts nothing.
 - Outcomes: only one byte `0x01` in time with an unchanged identity is accepted. Each other outcome
   above refuses and kills the child.
 - Spawn shape: detached, stdio `ignore, ignore, ignore, channel`; removing `detached` fails.
-- Real end-to-end run on this host with the real bundle where the host allows it.
 
 ## Gates
 

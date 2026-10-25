@@ -42,3 +42,8 @@ Done (PR for branch feat/moss-computer-launcher, no production caller):
 
 Still open: item 4 (bound second phase, first healthy sample), item 5 (installed delivery, orphan
 `hold` cleanup, runtime packet, launcher path derivation and verification, one hold per run).
+
+Gate for the first real caller: the launcher must verify the bundle file (hash and trusted path)
+and the node binary it spawns before it starts them, and it cannot see an exec by the child.
+Today it does neither. Security review of PR 3698 accepted the socket-pair change on that
+condition.
