@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Faster ring hold-to-talk.** Holding the ring button to talk now gets a response in about 15 seconds instead of around 50, and those recordings no longer show up as meetings. [PR #3704](https://github.com/motioneso/moss/pull/3704)
 
+#### Changed
+
+- **Faster voice request pickup.** Moss starts processing uploaded recordings and recognized voice requests sooner. [PR #3707](https://github.com/motioneso/moss/pull/3707)
+
 ### 2026-10-24
 
 #### Fixed
