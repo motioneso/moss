@@ -73,7 +73,7 @@ describe("Reminder summary actor-scoped persisted reads", () => {
     await resetFoundationDatabase();
     await save(ids.userA, "Water plants");
     await save(ids.userA, "Stretch", {
-      when: { timing: "relative", delaySeconds: 600, repeat: { kind: "daily" } }
+      when: { timing: "relative", delaySeconds: 600, repeat: { kind: "interval", seconds: 3600 } }
     });
     await save(ids.userA, "Old cancelled");
     await save(ids.userA, "Old delivered", { destinationTitle: "Errands" });
@@ -110,7 +110,10 @@ describe("Reminder summary actor-scoped persisted reads", () => {
     const all = await read("all");
     expect(all.items).toHaveLength(4);
     expect(all.items.map((i) => i.text)).not.toContain("User B secret");
-    expect(all.items.find((i) => i.text === "Stretch")?.repeat).toEqual({ kind: "daily" });
+    expect(all.items.find((i) => i.text === "Stretch")?.repeat).toEqual({
+      kind: "interval",
+      seconds: 3600
+    });
     expect(readReminderSummarySnapshot({})).toBeNull();
   });
   it("denies another user's reminders and the admin's view of private ones", async () => {
