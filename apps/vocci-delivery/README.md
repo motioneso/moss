@@ -28,10 +28,10 @@ still pending in #3565. Use a development build for this pre-release flow.
    **Send code** and enter the email code directly in the app. If requested, enter
    your authenticator code. Resend is explicit and shows a cooldown. Unsupported
    sign-in methods stop with an explanation; this does not create an account.
-3. Choose a ring from **Rings on your Vocci account**, then **Select ring**. Allow
-   Nearby devices, turn Bluetooth on and keep the ring close. If Vocci is installed,
-   open its app settings → Permissions and remove Nearby devices access. Return
-   and choose **Verify ring**. Cloud lookup alone does not complete verification.
+3. Choose a ring from **Rings on your Vocci account**, then **Select ring**. If Vocci
+   is installed, open its app settings → Permissions and remove Nearby devices access.
+   Then allow Nearby devices for this app, turn Bluetooth on and keep the ring close.
+   Return and choose **Verify ring**. Cloud lookup alone does not complete verification.
 4. After setup is saved, review Bluetooth, notifications and background battery
    settings in **Delivery**, then explicitly **Start delivery**. Enable
    **Hold-to-talk in Main chat** only when you want it. Enrollment waits for two
