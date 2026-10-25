@@ -99,10 +99,12 @@ final class DeliveryStore {
         if (voiceIntent != null) entry.put("voiceIntent", voiceIntent);
         entries.put(id, entry); save();
     }
-    boolean admitSidecar(String id, byte[] sidecar) throws Exception {
+    boolean admitSidecar(String id, byte[] sidecar) throws Exception { return admitSidecar(id, sidecar, true); }
+    /** An unsettled sidecar (first sighting) may be cut mid-row by an in-progress write, so a parse error is retried, not terminal. */
+    boolean admitSidecar(String id, byte[] sidecar, boolean settled) throws Exception {
         try { return CompletedSidecar.isComplete(sidecar, entries.getJSONObject(id).has("voiceIntent") ? 120000 : 7200000); }
         catch (CompletedSidecar.TooLong invalid) { rejectSidecar(id, sidecar, "duration_limit"); return false; }
-        catch (org.json.JSONException invalid) { rejectSidecar(id, sidecar, "sidecar_invalid"); return false; }
+        catch (org.json.JSONException invalid) { if (!settled) return false; rejectSidecar(id, sidecar, "sidecar_invalid"); return false; }
     }
     private void rejectSidecar(String id, byte[] sidecar, String code) throws Exception {
         PrivateFiles.write(file(id, "sidecar.bin"), sidecar);

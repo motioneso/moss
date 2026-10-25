@@ -5,7 +5,7 @@ final class RetrievalGate {
     private RetrievalGate() {}
 
     /**
-     * Hold-to-talk recordings are short, so the sidecar is fetched on first sighting; the completed
+     * Recordings with a fresh voice-request intent are short, so the sidecar is fetched on first sighting; the completed
      * sidecar check and the announced transfer size still keep a growing file from being delivered.
      * Every other recording needs identical packet and sidecar sizes on two listings in a row.
      */

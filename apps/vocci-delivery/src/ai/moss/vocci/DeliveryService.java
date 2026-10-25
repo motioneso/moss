@@ -153,6 +153,7 @@ public final class DeliveryService extends Service {
                 Integer packetSize = inventory.get(name);
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
+                boolean settled = packetSize.equals(previousInventory.get(name)) && sidecarSize != null && sidecarSize.equals(previousInventory.get(sidecarName));
                 if (!store.retrievalDue(id) || !RetrievalGate.ready(voice.intent(id) != null, sidecarSize, packetSize,
                     previousInventory.get(sidecarName), previousInventory.get(name))) continue;
                 if (!store.hasStorageCapacity() || stopping) break;
@@ -164,7 +165,7 @@ public final class DeliveryService extends Service {
                 byte[] sidecar;
                 try { sidecar = active.retrieve(sidecarName, sidecarSize); }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
-                if (!store.admitSidecar(id, sidecar)) continue;
+                if (!store.admitSidecar(id, sidecar, settled)) continue;
                 consumeCommands(client, config);
                 if (store.excluded(id)) continue;
                 store.reserveRetrieval(id, packetSize, sidecarSize, sidecar);
