@@ -143,6 +143,7 @@ describe("hold mode", () => {
 
 describe("mode dispatch", () => {
   it("prelaunch loads a prelaunch deployment in prelaunch mode and then refuses", async () => {
+    holdable();
     trust.loadPrelaunchDeployment.mockResolvedValue({});
     expect(await runWatchdog(argv("prelaunch"), harness().deps)).toBe(2);
     expect(trust.loadPrelaunchDeployment).toHaveBeenCalledWith(

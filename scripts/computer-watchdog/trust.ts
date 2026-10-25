@@ -307,10 +307,8 @@ const contains = (a: string, b: string) => {
   return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 };
 
-type CommonConfiguration = Omit<PrelaunchConfiguration, "kind">;
-
 /** Checks that depend on neither a runner nor a capture root. */
-async function loadCommonChecks<C extends CommonConfiguration>(
+async function loadCommonChecks<C extends CommonFields>(
   configPath: string,
   artifactPath: string,
   collector: boolean,

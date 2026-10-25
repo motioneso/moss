@@ -39,6 +39,7 @@ interface Fixture {
   readonly runnerPid: number;
   /** Paths whose metadata reads back as owned by a non-root user. */
   readonly untrusted: Set<string>;
+  readonly writable: Set<string>;
   /** Replaces what readlink reports for a path. */
   readonly links: Map<string, string>;
   /** Replaces the file opened for a path. */
@@ -86,6 +87,7 @@ async function fixture(): Promise<Fixture> {
   ])
     vi.stubEnv(key, undefined);
   const untrusted = new Set<string>();
+  const writable = new Set<string>();
   const links = new Map<string, string>([
     ["/proc/self/fd/0", "/dev/null"],
     ["/proc/self/fd/1", "/dev/null"],
@@ -107,7 +109,11 @@ async function fixture(): Promise<Fixture> {
     const trusted = big || !untrusted.has(String(a[0]));
     return Object.assign(stat, {
       uid: big ? (trusted ? 0n : 1000n) : trusted ? 0 : 1000,
-      mode: big ? (stat.mode as bigint) & ~0o022n : (stat.mode as number) & ~0o022
+      mode: writable.has(String(a[0]))
+        ? stat.mode
+        : big
+          ? (stat.mode as bigint) & ~0o022n
+          : (stat.mode as number) & ~0o022
     });
   }) as typeof fs.lstat);
   const originalOpen = fs.open;
@@ -166,6 +172,7 @@ async function fixture(): Promise<Fixture> {
     stateDir: host.config.stateDir,
     runnerPid: process.pid,
     untrusted,
+    writable,
     links,
     files,
     write
@@ -225,6 +232,13 @@ const sharedChecks: readonly [string, (f: Fixture, kind: Kind) => Promise<void>]
     async (f) => {
       await fs.unlink(f.socketPath);
       await fs.writeFile(f.socketPath, "", { mode: 0o600 });
+    }
+  ],
+  [
+    "docker socket world writable",
+    async (f) => {
+      await fs.chmod(f.socketPath, 0o666);
+      f.writable.add(f.socketPath);
     }
   ],
   ["docker socket not root owned", async (f) => void f.untrusted.add(f.socketPath)],
