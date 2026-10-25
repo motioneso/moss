@@ -46,12 +46,13 @@ dominates. Option 3 stays a research item.
 
 ## Seams to prove (open questions)
 
-| Question                                                               | Owner                            | How                                                                                          |
-| ---------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------- |
-| Is the sidecar `end` record written after the audio file is closed?    | device run, `vocci-hold-latency` | Poll inventory during a real press, log sizes and sidecar text at 1 s steps, no transcripts. |
-| Does the ring send any event at hold start or end on the UART channel? | device run                       | Log opcodes seen while connected through a press.                                            |
-| How long does connection setup take?                                   | device run                       | Timestamp each stage in `RingConnection`, local only.                                        |
-| How long do transcription and the chat turn take?                      | dev instance                     | Receipt and message store times through the product API.                                     |
+| Question                                                                                                                            | Owner                            | How                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Does the ring list and serve a file while it is still being recorded, and does a read return the bytes so far or the size at start? | device run                       | Read a growing file during a press into a scratch buffer only; compare with the final file. Never use it for delivery in this test. |
+| Is the sidecar `end` record written after the audio file is closed?                                                                 | device run, `vocci-hold-latency` | Poll inventory during a real press, log sizes and sidecar text at 1 s steps, no transcripts.                                        |
+| Does the ring send any event at hold start or end on the UART channel?                                                              | device run                       | Log opcodes seen while connected through a press.                                                                                   |
+| How long does connection setup take?                                                                                                | device run                       | Timestamp each stage in `RingConnection`, local only.                                                                               |
+| How long do transcription and the chat turn take?                                                                                   | dev instance                     | Receipt and message store times through the product API.                                                                            |
 
 ## Phases
 
