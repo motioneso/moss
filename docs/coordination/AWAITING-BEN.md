@@ -86,7 +86,11 @@ Checked at origin/main `cf6ade9c3`. Production runs edge `8786e0a3c` (healthy af
 host reboot). No software-only item remains in the approved queue:
 
 - Package-update recovery: no new testable lead; any probe needs a phone package replacement.
-- Out-of-range/offline and interrupted-upload checks: need Ben, phone, ring and a new recording.
+- Interrupted-upload check (partly done 2026-10-25): a recording made with phone Bluetooth off, then
+  an airplane-mode cut, was delivered exactly once on its own after the network returned. A cut
+  landing mid-transfer is not proven. The ring-to-phone transfer takes about 4 seconds, too short to
+  time by hand. It needs a scripted cut or the instrumented device check. Evidence:
+  `docs/evidence/vocci/2026-10-25-phone-range-check.md`.
 - One-hour reminder endurance: reminder is built; the physical run needs a new long recording.
 - Hold-to-talk production acceptance: needs Ben to opt in and record a sample.
 - Single-recording deletion: needs a validated command and a disposable sample.
