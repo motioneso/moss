@@ -12,7 +12,12 @@ This session delivers slice 1 only; remaining slices become separate GitHub task
 explicit dependencies. They describe decisions and acceptance criteria, not prewritten code.
 
 No SQL, migration edits, model/provider literals, or private job payloads. Sibling specs own
-page writes and job enqueue; do not implement those here. Rebase this branch on main before PR.
+page writes and job enqueue; do not implement those here. Per Ben's later instruction, stack the
+PR on `docs/module-platform-specs` while #3718 is open; retarget/rebase onto main after it merges.
+Do not duplicate the spec into a new commit.
+
+Remaining task issues: resolver #3725, RPC/bridges #3726, admin API #3727, Settings/live proof
+#3728. Binding retention Q5 is tracked separately in #3729.
 
 ## Seams verified in the current tree
 
@@ -160,7 +165,8 @@ any gate/DB run, including narrowed scripts. Do not run database tests directly.
   slices uses `scripts/run-gate.sh start` instead. Neither replaces CI or required live proof.
 
 Before commit: inspect every diff, use shared-checkout skill and explicit paths. After each
-commit inspect `git show --name-only HEAD`. Before PR: clean tree, rebase on main, rerun checks
+commit inspect `git show --name-only HEAD`. Before PR: clean tree, use the stacking rule above,
+rerun checks
 if inputs changed, push branch, fill Release note (slice 1 Category: N/A), list Ben questions and
 remaining task links in PR body, report PR to coordinator w1:p1E using herdr-pane-message.
 
@@ -171,3 +177,5 @@ remaining task links in PR body, report PR to coordinator w1:p1E using herdr-pan
 - 2026-10-25: Q3 is not simply “hash drift disables modules.” Package drift disables; canonical
   manifest drift clears descriptor approval and rejects worker invocation until admin re-enable.
   Evidence: reconcile `:89-104`, worker invoke `:177-195`, enable repository `:114-154` above.
+- 2026-10-25: Ben directed stacking the build PR on #3718's branch while that PR is open,
+  rather than copying its AI spec into a separate commit. Retarget after the spec PR merges.
