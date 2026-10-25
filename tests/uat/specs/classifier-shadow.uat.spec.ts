@@ -170,7 +170,7 @@ test("shadow records a would-handle match without executing or raising a card, a
   // Pick the fixture classifier and turn the gate to Shadow through the real settings row.
   await openAssistantAndAiSettings(page);
   await chooseClassifier(page, "UAT Classifier Fixture Model");
-  await setGate(page, "Shadow");
+  await setGate(page, "Watch only");
 
   const cardsBefore = approvalCardCount(project);
 

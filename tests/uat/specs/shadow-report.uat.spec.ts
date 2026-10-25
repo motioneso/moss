@@ -210,7 +210,7 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   // Fixture classifier plus Shadow gate through the real settings row.
   await openAssistantAndAiSettings(page);
   await chooseClassifier(page, "UAT Classifier Fixture Model");
-  await setGate(page, "Shadow");
+  await setGate(page, "Watch only");
   await expect(page.getByRole("link", { name: "See watch-only results" }).first()).toBeVisible();
 
   // 1. Match: the fixture picks calendar.listVisibleEvents and the model calls it.
