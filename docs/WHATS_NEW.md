@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Ring hold commands stay out of Meetings.** Short voice commands you hold the ring button for now go only to chat and no longer also show up as meetings. [PR #3717](https://github.com/motioneso/moss/pull/3717)
 - **Faster ring hold-to-talk.** Holding the ring button to talk now gets a response in about 15 seconds instead of around 50, and those recordings no longer show up as meetings. [PR #3704](https://github.com/motioneso/moss/pull/3704)
 
 #### Changed
