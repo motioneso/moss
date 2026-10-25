@@ -87,22 +87,16 @@ host reboot). The remaining physical checks and decisions are:
 
 - Package-update recovery: no new testable lead; any probe needs a phone package replacement.
 - One-hour reminder endurance: reminder is built; the physical run needs a new long recording.
-- Hold-to-talk production acceptance: needs Ben to opt in and record a sample.
-- Server pickup latency (#3707): after deployment, time five short hold-to-talk
-  presses from release to Moss acting. The isolated server proof measures queue
-  pickup separately from ASR and model/tool time; physical timing is still Ben's
-  remaining acceptance step. The queue improvement alone does not halve total time.
-- Chat-turn latency: after `updateMoss`, time five real short presses from release
-  to Moss acting. The server now retries busy voice input as soon as the active
-  answer or session startup finishes; the 15-second delayed job remains recovery.
-  The isolated proof keeps the configured chat model; no model change or new
-  voice setting is proposed without a separately approved comparison.
 - Single-recording deletion: needs a validated command and a disposable sample.
 - Audio enhancement: needs a design decision on how originals are kept, plus mockups.
 - Firmware and streaming: need hardware compatibility evidence first.
 
 Resolved 2026-10-25: Ben accepted the out-of-range/offline and interrupted-upload checks as passed
 (`docs/evidence/vocci/2026-10-25-phone-range-check.md`).
+
+Resolved 2026-10-25: Ben used hold-to-talk on production and accepted it after the speedups
+(#3704, #3707, #3709) were deployed: "It's fine for now, I've updated moss but we don't need to do
+more tests". Further speed is expected from the classifier gate, tracked separately.
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
 
