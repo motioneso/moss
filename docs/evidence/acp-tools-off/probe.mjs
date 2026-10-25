@@ -41,7 +41,9 @@ const fixture = http.createServer((req, res) => {
         tools: (j.tools ?? []).map((t) => t.name ?? t.type),
         sawProjectDoc: b.includes("PINEAPPLE")
       });
-    } catch {}
+    } catch {
+      // non-JSON request body; nothing to record
+    }
     res.writeHead(200, { "content-type": "text/event-stream" });
     res.write(sse("response.created", { response: { id: "r1" } }));
     res.write(
@@ -75,7 +77,6 @@ const port = provider === "codex" ? fixture.address().port : 0;
 const env = { PATH: process.env.PATH, HOME: home, LANG: "C.UTF-8" };
 let bin,
   newSessionMeta = {};
-const toolsOff = variant !== "control" && !variant.startsWith("no-");
 if (provider === "claude") {
   env.CLAUDE_CODE_OAUTH_TOKEN = readFileSync(
     process.env.HOME + "/.cache/moss-uat-claude-signin/claude-setup-token",
