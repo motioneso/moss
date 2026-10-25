@@ -142,7 +142,7 @@ test("ordinary evening questions use actual place-local intervals and immutable 
     expect.soft(envelope!.snapshots[0]!.fields).toEqual(turnSource.forecast);
     const slot = (await drawer(page)).getByLabel("Visual reply").last();
     await expect(
-      slot.getByRole("heading", { name: "Local weather forecast", exact: true })
+      slot.getByRole("heading", { name: source.forecast.place, exact: true })
     ).toBeVisible();
     await expect(slot.getByText(source.forecast.place, { exact: true })).toBeVisible();
     await expect(slot.getByLabel("Hourly forecast").locator("li")).toHaveCount(4);
@@ -175,10 +175,7 @@ test("ordinary evening questions use actual place-local intervals and immutable 
         history.messages.find((m: { id: string }) => m.id === saved.assistantMessageId).visualReply
       ).toEqual(envelope);
       await expect(
-        chat
-          .getByLabel("Visual reply")
-          .last()
-          .getByRole("heading", { name: "Local weather forecast" })
+        chat.getByLabel("Visual reply").last().getByRole("heading", { name: source.forecast.place })
       ).toBeVisible();
       console.log(
         "[weather-lifecycle] exact saved snapshot, 390px/drawer, light/dark/forest/sage and reload passed"
