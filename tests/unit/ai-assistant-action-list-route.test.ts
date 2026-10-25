@@ -35,6 +35,8 @@ function harness(
 function pendingAction(id: string): AiAssistantActionRequest {
   return {
     id,
+    origin: null,
+    input_digest: null,
     owner_user_id: "user-a",
     chat_thread_id: threadId,
     outcome_recorded_at: null,

@@ -19,6 +19,8 @@ import type {
   ModuleWebDeclaration
 } from "@moss/module-sdk";
 import { validateClassifierDeclaration } from "./validate-classifier.js";
+import { isMetadataOnlyEnqueueSchema } from "./module-enqueue-schema.js";
+import { validateAiTasks } from "./validate-ai-tasks.js";
 import {
   validateModuleNavigation,
   validateModulePreferences,
@@ -344,6 +346,16 @@ function validateWorker(
     if (!isNonEmptyString(queue.handler)) errors.push("worker queue handler is required");
     if (queue.paramsSchema !== undefined && !isValidModuleParamsSchema(queue.paramsSchema)) {
       errors.push("worker queue paramsSchema is invalid");
+    }
+    if (queue.allowModuleEnqueue !== undefined && typeof queue.allowModuleEnqueue !== "boolean") {
+      errors.push("worker queue allowModuleEnqueue must be a boolean");
+    }
+    if (queue.allowModuleEnqueue === true) {
+      if (!isValidModuleParamsSchema(queue.paramsSchema)) {
+        errors.push("worker queue allowModuleEnqueue requires a valid paramsSchema");
+      } else if (!isMetadataOnlyEnqueueSchema(queue.paramsSchema)) {
+        errors.push("worker queue allowModuleEnqueue paramsSchema must not contain string fields");
+      }
     }
     if (
       queue.retryLimit !== undefined &&
@@ -847,6 +859,7 @@ export function validateExternalModuleManifest(
 
   // #3168: screens, settings and features the module adds to Moss's app map.
   const appMap = validateModuleAppMap(obj, expectedId, errors);
+  const aiTasks = validateAiTasks(obj.aiTasks, errors);
 
   // #1282: positive validation of the briefing contribution declaration. Same shape as
   // every other allow-listed surface above: unknown keys rejected outright rather than
@@ -940,6 +953,7 @@ export function validateExternalModuleManifest(
     ...(preferences !== undefined ? { preferences } : {}),
     ...(settingsPath !== undefined ? { settingsPath } : {}),
     ...(appMap !== undefined ? { appMap } : {}),
+    ...(aiTasks !== undefined ? { aiTasks } : {}),
     // #1282: this literal is an allow-list — a validated field that is not re-emitted
     // here vanishes from the manifest with validation still returning ok. Omitting this
     // line is silent, and only tests/unit/external-module-briefing-manifest.test.ts

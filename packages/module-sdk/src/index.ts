@@ -556,6 +556,17 @@ export {
 } from "./ai-capabilities.js";
 import type { AiModelCapability, AiModelTier } from "./ai-capabilities.js";
 
+/** Named structured-AI work declared by a downloaded module (#3716). */
+export interface ModuleAiTaskDeclaration {
+  /** Lowercase slug, starting with a letter, at most 32 characters. */
+  readonly id: string;
+  /** Settings label, 1–48 characters. */
+  readonly label: string;
+  readonly defaultTier: AiModelTier;
+  /** Extra capabilities beyond the implicit structured-output `json` capability. */
+  readonly requires?: readonly "vision"[];
+}
+
 // #1110 regression fix: moved to ./errors.ts (a node-clean leaf) for the same reason as
 // ai-capabilities.ts above — see that leaf's docstring. Re-exported here so existing barrel
 // consumers are unaffected.
