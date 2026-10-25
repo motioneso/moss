@@ -126,6 +126,12 @@ async function serverFor(service: RecordingImportService) {
   return server;
 }
 describe("resumable recording transport and checkpointed transcription", () => {
+  it("refuses a hold upload aimed at a meeting", async () => {
+    const { service } = setup();
+    await expect(
+      service.uploads.reserve(actor, recordingUpload(90_000, true).manifest)
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
   it("bounds real ASR end drift before checkpointing windows and schedules one final summary", async () => {
     const summary = vi.fn<RecordingImportDependencies["scheduleSummary"]>(async () => {});
     const transcribe = vi.fn<RecordingImportDependencies["transcribe"]>();

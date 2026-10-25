@@ -23,7 +23,10 @@ import {
   RECORDING_SOURCE_LIMITS,
   type RecordingSourceKind
 } from "./recording-source-validation.js";
-import { RecordingVoiceEnablementRepository } from "./recording-voice-enablement.js";
+import {
+  RecordingVoiceEnablementRepository,
+  RecordingVoiceIneligibleError
+} from "./recording-voice-enablement.js";
 import { MeetingRecordsRepository } from "./repository.js";
 
 export class RecordingUploadService {
@@ -33,6 +36,10 @@ export class RecordingUploadService {
   async reserve(actor: AccessContext, value: unknown) {
     await this.deps.assertAvailable(actor);
     const input = parseRecordingUpload(value);
+    if (input.mode === "voice-request" && input.manifest.destination.intent === "meeting")
+      throw new RecordingVoiceIneligibleError(
+        "Hold recordings go to Main chat and never become meetings"
+      );
     if (input.manifest.destination.intent === "voice-request" && !this.deps.admitVoiceRequest)
       throw new HttpError(503, "Voice admission unavailable");
     const id = await this.deps.dataContext.withDataContext(actor, async (db) => {

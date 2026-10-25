@@ -8,7 +8,10 @@ import {
 } from "@moss/vault";
 import { HttpError } from "@moss/module-sdk";
 import type { VoiceRequestInput } from "@moss/shared";
-import { RecordingVoiceEnablementRepository } from "./recording-voice-enablement.js";
+import {
+  RecordingVoiceEnablementRepository,
+  RecordingVoiceIneligibleError
+} from "./recording-voice-enablement.js";
 import { validateVoiceRecordingBundle } from "./recording-voice-bundle.js";
 import { validateRecordingBundle, type RecordingBundle } from "./recording-bundle.js";
 import {
@@ -73,6 +76,10 @@ export class RecordingImportService {
   async accept(actor: AccessContext, value: unknown) {
     await this.deps.assertAvailable(actor);
     const bundle = validateRecordingBundle(value);
+    if (bundle.mode === "voice-request")
+      throw new RecordingVoiceIneligibleError(
+        "Hold recordings go to Main chat and never become meetings"
+      );
     const result = await this.acceptBundle(actor, bundle);
     return { created: result.created, ...recordingImportStatus(result.row) };
   }

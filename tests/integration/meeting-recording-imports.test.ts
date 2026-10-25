@@ -326,23 +326,17 @@ describe("completed recording imports through real owner DB/vault paths", () => 
     );
     expect(rows.rows).toHaveLength(2);
   });
-  it("retains voice-request classification without executing tasks", async () => {
+  it("refuses a hold recording sent as a meeting and creates no meeting", async () => {
     const { service } = setup();
-    const accepted = await service.accept(actor, {
-      ...recordingBundle(true),
-      sourceDeviceId: randomUUID()
-    });
-    await service.process(actor, payload(accepted.id));
-    expect(await service.status(actor, accepted.id)).toMatchObject({
-      mode: "voice-request",
-      state: "complete"
-    });
-    const tasks = await context.withDataContext(actor, (db) =>
-      sql`SELECT * FROM app.meeting_action_candidates WHERE meeting_id=${accepted.meetingId}::uuid`.execute(
+    await expect(
+      service.accept(actor, { ...recordingBundle(true), sourceDeviceId: randomUUID() })
+    ).rejects.toMatchObject({ statusCode: 409 });
+    const rows = await context.withDataContext(actor, (db) =>
+      sql`SELECT 1 FROM app.meeting_recording_imports WHERE recording_id LIKE 'amsg\\_%'`.execute(
         db.db
       )
     );
-    expect(tasks.rows).toHaveLength(0);
+    expect(rows.rows).toHaveLength(0);
   });
   it("does not dispatch without configuration and never resets failed work on replay", async () => {
     const { service, input, deps } = setup({

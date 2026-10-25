@@ -336,7 +336,7 @@ remains supported alongside version 3. Version 2 denotes short explicit voice in
    with `{ version: 2, sourceDeviceId, requestKey, recordingIds }`. Keep the request
    key and response ID durably before attempting voice delivery. Retrying the same
    key returns the same snapshot and enablement time; changed inventory conflicts.
-2. Existing inventory members remain meeting imports across later enablements.
+2. Existing inventory members are never imported, as meetings or as chat input; hold recordings never become meetings.
    For a new hold file only, POST `/api/meetings/voice-recordings` with
    `{ version: 2, intent: "voice-request", enablementId, capturedAt, recording }`.
    `recording` is the original version-1 bundle, including exact source evidence.

@@ -138,22 +138,10 @@ function setup(options: { fresh?: boolean; text?: string; failAdmission?: boolea
 }
 
 describe("explicit versioned voice recording receiver", () => {
-  it("keeps version-one hold files as meetings forever", async () => {
+  it("refuses version-one hold files sent as meetings", async () => {
     const f = setup();
-    const prior = await f.service.accept(actor, f.source);
-    await f.process(prior.id);
-    expect(await f.service.status(actor, prior.id)).toMatchObject({
-      state: "complete",
-      meetingId: prior.meetingId
-    });
-    expect(f.summary).toHaveBeenCalledOnce();
-    const voice = await f.enable();
-    await expect(f.service.acceptVoice(actor, voice)).rejects.toThrow();
-    expect(await f.chat.list(actor)).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ source_device_id: f.source.sourceDeviceId })
-      ])
-    );
+    await expect(f.service.accept(actor, f.source)).rejects.toMatchObject({ statusCode: 409 });
+    expect(f.summary).not.toHaveBeenCalled();
   });
   it("rejects the baseline even after disable and a later empty snapshot", async () => {
     const f = setup();
