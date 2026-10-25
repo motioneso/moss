@@ -57,9 +57,7 @@ export function DecisionModelDialog(props: {
       }
     >
       <div className="provdlg__body">
-        <p className="rt__desc">
-          Handles quick sorting and checking jobs. Every connected model is listed.
-        </p>
+        <p className="rt__desc">Handles quick sorting and checking jobs.</p>
         {props.models.length === 0 ? (
           <p className="rt__desc">No connected model can do this yet.</p>
         ) : (

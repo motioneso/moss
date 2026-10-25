@@ -210,7 +210,7 @@ export function AddProviderDialog(props: {
                   label={isCompatible ? "Address" : "Base URL"}
                   hint={
                     isCompatible
-                      ? "A service that speaks the System One API, such as OpenRouter or your own server."
+                      ? "A decision model service, such as OpenRouter or your own server."
                       : "Leave blank to use the provider's default endpoint."
                   }
                 >
