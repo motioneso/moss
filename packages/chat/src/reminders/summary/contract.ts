@@ -127,7 +127,10 @@ export function readReminderSummarySnapshot(value: unknown): ReminderSummary | n
 }
 export function reminderRepeatText(r: ReminderSummaryItem["repeat"]): string {
   if (!r) return "Does not repeat";
-  if (r.kind === "interval") return `Repeats every ${r.seconds / 60} minutes`;
+  if (r.kind === "interval")
+    return r.seconds % 60 === 0
+      ? `Repeats every ${r.seconds / 60} minutes`
+      : `Repeats every ${r.seconds} seconds`;
   return r.kind === "daily" ? "Repeats daily" : "Repeats weekly";
 }
 export function reminderSummaryItemText(item: ReminderSummaryItem, timeZone: string): string {

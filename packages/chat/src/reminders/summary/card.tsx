@@ -28,7 +28,6 @@ export function ReminderSummaryCard({ snapshot }: { snapshot: VisualSnapshotV1 }
               <li key={item.id} data-reminder-id={item.id}>
                 <strong>{item.text}</strong>
                 <span>{reminderSummaryItemText(item, v.timeZone)}</span>
-                <span>Reminder {item.id}</span>
               </li>
             ))}
           </ul>
