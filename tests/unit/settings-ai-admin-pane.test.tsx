@@ -452,8 +452,6 @@ describe("AiProvidersPane", () => {
 // separate Trail Marker row. A System One model is offered only in the Classifier row. The
 // Services group only renders once a provider exists, so each test seeds one.
 describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
-  const SORTING_LABEL = "Decision model";
-
   function seedSystemOne(): void {
     vi.mocked(apiClient.listAiProviders).mockResolvedValue({
       providers: [
@@ -519,7 +517,15 @@ describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
   it("offers a System One model only in the Classifier row and never as the default provider (fails without the provider-kind filters)", async () => {
     seedSystemOne();
     const renderer = await renderPane();
-    expect(optionTexts(renderer, SORTING_LABEL)).toContain("Jev");
+    await act(async () => {
+      renderer.root
+        .findAllByType("button")
+        .find((button) => button.children.join("") === "Choose a model")!
+        .props.onClick();
+    });
+    const dialogText = JSON.stringify(renderer.toJSON());
+    expect(dialogText).toContain("Choose a decision model");
+    expect(dialogText).toContain("Jev");
     expect(optionTexts(renderer, "Binding for Email reading")).not.toContain("Jev");
     const setDefault = renderer.root
       .findAllByType("button")
@@ -534,12 +540,20 @@ describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
     seedSystemOne();
     vi.mocked(apiClient.putAiServiceBinding).mockResolvedValue({} as never);
     const renderer = await renderPane();
-    const [row] = selects(renderer, SORTING_LABEL);
-    await act(async () => {
-      (row!.props.onChange as (event: { target: { value: string } }) => void)({
-        target: { value: "model:model1" }
+    const press = async (label: string) =>
+      act(async () => {
+        renderer.root
+          .findAllByType("button")
+          .find((button) => button.children.join("") === label)!
+          .props.onClick();
       });
+    await press("Choose a model");
+    await act(async () => {
+      renderer.root
+        .findAll((node) => node.type === "input" && node.props.type === "radio")[0]!
+        .props.onChange();
     });
+    await press("Save");
     await flush();
     expect(apiClient.putAiServiceBinding).toHaveBeenCalledWith("sorting", {
       binding: { kind: "model", modelId: "model1" }

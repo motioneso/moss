@@ -122,12 +122,33 @@ async function render(
   return renderer;
 }
 
-const select = (renderer: ReactTestRenderer) => renderer.root.findByType("select");
 const text = (renderer: ReactTestRenderer) => JSON.stringify(renderer.toJSON());
+const buttonByLabel = (renderer: ReactTestRenderer, label: string) => {
+  const button = renderer.root
+    .findAllByType("button")
+    .find((candidate) => candidate.children.join("") === label);
+  if (!button) throw new Error(`button ${label} not found`);
+  return button;
+};
+const click = async (renderer: ReactTestRenderer, label: string) => {
+  await act(async () => {
+    buttonByLabel(renderer, label).props.onClick();
+  });
+};
+const openDialog = async (renderer: ReactTestRenderer) => {
+  const label = text(renderer).includes("Change model") ? "Change model" : "Choose a model";
+  await click(renderer, label);
+};
+const radios = (renderer: ReactTestRenderer) =>
+  renderer.root.findAll((node) => node.type === "input" && node.props.type === "radio");
 const gateGroup = (renderer: ReactTestRenderer) =>
   renderer.root.find(
     (node) => node.props.role === "group" && node.props["aria-label"] === "Use in chat"
   );
+const openGate = async (renderer: ReactTestRenderer) => {
+  await openDialog(renderer);
+  await click(renderer, "Advanced: use in chat");
+};
 const gateButton = (renderer: ReactTestRenderer, label: string) => {
   const button = gateGroup(renderer)
     .findAllByType("button")
@@ -154,56 +175,49 @@ describe("SortingModelRow (Classifier)", () => {
     expect(text(renderer)).toContain(CLASSIFIER_HELP);
   });
 
-  it("offers Use main model plus only eligible models, grouped by provider", async () => {
+  it("lists every eligible model equally with nothing preselected", async () => {
     const renderer = await render();
-    expect(select(renderer).props.value).toBe("");
-    const groups = renderer.root.findAllByType("optgroup").map((group) => group.props.label);
-    expect(groups).toEqual(["Local box", "Cloud"]);
-    const values = renderer.root.findAllByType("option").map((option) => option.props.value);
-    expect(values).toEqual(["", "model:small-json", "model:cloud-json"]);
-    expect(text(renderer)).toContain("Use main model");
+    expect(text(renderer)).toContain("Not chosen");
+    await openDialog(renderer);
+    const values = radios(renderer).map((radio) => radio.props.value);
+    expect(values).toEqual(["small-json", "cloud-json"]);
+    expect(radios(renderer).every((radio) => radio.props.checked === false)).toBe(true);
+    expect(buttonByLabel(renderer, "Save").props.disabled).toBe(true);
+    expect(text(renderer)).not.toContain("Advanced: use in chat");
     expect(text(renderer)).not.toContain(SORTING_DISCLOSURE);
   });
 
-  it("selecting a model saves a model binding", async () => {
+  it("saving a chosen model saves a model binding", async () => {
     const renderer = await render();
+    await openDialog(renderer);
     await act(async () => {
-      select(renderer).props.onChange({ target: { value: "model:small-json" } });
+      radios(renderer)[0]!.props.onChange();
     });
+    await click(renderer, "Save");
     expect(putAiServiceBinding).toHaveBeenCalledWith("sorting", {
       binding: { kind: "model", modelId: "small-json" }
     });
   });
 
-  it("choosing Use main model clears the binding", async () => {
+  it("Use main model clears the binding", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
-    await act(async () => {
-      select(renderer).props.onChange({ target: { value: "" } });
-    });
+    await click(renderer, "Use main model");
     expect(deleteAiServiceBinding).toHaveBeenCalledWith("sorting");
     expect(putAiServiceBinding).not.toHaveBeenCalled();
   });
 
-  it("shows the third-party line whenever a sorting model is chosen", async () => {
+  it("shows the chosen model and the third-party line", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
-    expect(select(renderer).props.value).toBe("model:small-json");
+    expect(text(renderer)).toContain("small-json");
+    expect(text(renderer)).toContain("Change model");
     expect(text(renderer)).toContain(SORTING_DISCLOSURE);
   });
 
-  it("keeps an unavailable saved model selected, shows the note, and clears it", async () => {
+  it("shows the unavailable note for a saved model that cannot be used, and clears it", async () => {
     const renderer = await render({ kind: "model", modelId: "ollama-json" });
-    expect(select(renderer).props.value).toBe("model:ollama-json");
-    const unavailable = renderer.root
-      .findAllByType("option")
-      .find((option) => option.props.value === "model:ollama-json");
-    if (!unavailable) throw new Error("unavailable option not found");
-    expect(unavailable.props.disabled).toBe(true);
-    expect(text(renderer)).toContain("ollama-json (unavailable)");
     expect(text(renderer)).toContain("Chosen model is unavailable. Using your main model.");
     expect(text(renderer)).toContain(SORTING_DISCLOSURE);
-    await act(async () => {
-      select(renderer).props.onChange({ target: { value: "" } });
-    });
+    await click(renderer, "Use main model");
     expect(deleteAiServiceBinding).toHaveBeenCalledWith("sorting");
   });
 
@@ -273,8 +287,8 @@ describe("SortingModelRow (Classifier)", () => {
       model("nocred-json", "p-nocred", "openai-compatible", "No cred", ["json"])
     ];
     const renderer = await render(undefined, noCredentialModel, noCredentialProvider);
-    const values = renderer.root.findAllByType("option").map((option) => option.props.value);
-    expect(values).toEqual(["", "model:nocred-json"]);
+    await openDialog(renderer);
+    expect(radios(renderer).map((radio) => radio.props.value)).toEqual(["nocred-json"]);
   });
 
   it("hides Use in chat until a decision model is chosen", async () => {
@@ -290,6 +304,7 @@ describe("SortingModelRow (Classifier)", () => {
   it("reads the saved gate record once a decision model is chosen", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
     expect(getAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode");
+    await openGate(renderer);
     expect(gateButton(renderer, "Off").props["aria-pressed"]).toBe(true);
   });
 
@@ -310,12 +325,22 @@ describe("SortingModelRow (Classifier)", () => {
 
   it("enables all three gate choices once a classifier is chosen, with no review step", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
+    await openGate(renderer);
     for (const label of ["Off", "Watch only", "On"]) {
-      expect(gateButton(renderer, label).props.disabled).toBe(false);
+      expect(gateButton(renderer, label).props.disabled).toBeFalsy();
     }
     expect(gateButton(renderer, "On").props.title).toBeUndefined();
     expect(text(renderer)).not.toContain("On opens after shadow review.");
     expect(text(renderer)).not.toContain("Available after shadow results are reviewed");
+  });
+
+  it("offers Ask Moss to help me decide inside the dialog", async () => {
+    const renderer = await render();
+    chatControls.openAssistantWithDraft.mockClear();
+    await openDialog(renderer);
+    await click(renderer, "Ask Moss to help me decide");
+    expect(chatControls.openAssistantWithDraft).toHaveBeenCalledWith(DECISION_MODEL_HELP_DRAFT);
+    expect(text(renderer)).not.toContain("Choose a decision model");
   });
 
   it("states the admin-wide reach of the gate", () => {
@@ -323,44 +348,45 @@ describe("SortingModelRow (Classifier)", () => {
     expect(CLASSIFIER_API_DISCLOSURE).toContain("every user's eligible messages");
   });
 
-  it("enables On when the saved record already reads on", async () => {
+  it("shows On pressed when the saved record already reads on", async () => {
     getAdminRuntimeConfig.mockResolvedValue({
       config: { value: "on", source: "instance" }
     } as never);
     const renderer = await render({ kind: "model", modelId: "small-json" });
-    expect(gateButton(renderer, "On").props.disabled).toBe(false);
+    await openGate(renderer);
     expect(gateButton(renderer, "On").props["aria-pressed"]).toBe(true);
   });
 
-  it("turns the gate on from off in one click", async () => {
+  it("turns the gate on from off by saving the dialog", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
+    await openGate(renderer);
     await act(async () => {
       gateButton(renderer, "On").props.onClick();
     });
+    await click(renderer, "Save");
     expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "on");
+    expect(putAiServiceBinding).not.toHaveBeenCalled();
   });
 
-  it("turns the gate on from shadow in one click", async () => {
+  it("turns the gate on from shadow by saving the dialog", async () => {
     getAdminRuntimeConfig.mockResolvedValue({
       config: { value: "shadow", source: "instance" }
     } as never);
     const renderer = await render({ kind: "model", modelId: "small-json" });
+    await openGate(renderer);
     await act(async () => {
       gateButton(renderer, "On").props.onClick();
     });
+    await click(renderer, "Save");
     expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "on");
   });
 
-  it("locks every gate choice while a change is saving", async () => {
-    putAdminRuntimeConfig.mockImplementationOnce(() => new Promise<never>(() => undefined));
+  it("does not save anything when the dialog closes with Cancel", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
-    await act(async () => {
-      gateButton(renderer, "On").props.onClick();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    for (const label of ["Off", "Watch only", "On"]) {
-      expect(gateButton(renderer, label).props.disabled).toBe(true);
-    }
+    await openGate(renderer);
+    await click(renderer, "Cancel");
+    expect(putAdminRuntimeConfig).not.toHaveBeenCalled();
+    expect(putAiServiceBinding).not.toHaveBeenCalled();
   });
 
   it("hides Use in chat again once the decision model is cleared", async () => {
@@ -373,9 +399,11 @@ describe("SortingModelRow (Classifier)", () => {
 
   it("saves an allowed gate choice and reads feedback from the saved record", async () => {
     const renderer = await render({ kind: "model", modelId: "small-json" });
+    await openGate(renderer);
     await act(async () => {
       gateButton(renderer, "Watch only").props.onClick();
     });
+    await click(renderer, "Save");
     expect(putAdminRuntimeConfig).toHaveBeenCalledWith("chat.classifier_gate_mode", "shadow");
   });
 

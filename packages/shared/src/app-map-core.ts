@@ -362,9 +362,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "genuinely broken sign-in always gets a fresh place to sign back in. " +
       "The page's second section, Which model does what, holds the Chat and briefing and Email reading rows, the Decision model row, and a Who can choose the chat model section with the switch that lets people choose their own chat model and the instance default. The lock that pins your own AI to one model, Lock my own AI to one model, now lives on Settings > Your assistant, where it wins over the chat model picker and covers chat, voice and background work. The Voice, Web search and Auto-approve actions sections start collapsed, each showing a one-line summary of its state, and remember open or closed per browser. The Email reading row: it reads the emails the classifier " +
       "cannot settle and writes their summaries and suggested actions. " +
-      "The section ends its model rows with a Decision model row, with a Choose-nothing option, an Ask Moss to help button that opens the chat with an editable neutral draft that recommends no model, and: a dropdown with Use main model and " +
-      "every active JSON-capable model, grouped by provider, plus a Use in chat choice of Off, " +
-      "Watch only or On, shown once a decision model is chosen. Use in chat is an instance-wide setting held through the admin " +
+      "The section ends its model rows with a Decision model row, that reads Not chosen until a model is picked. Choose a model opens a dialog listing every active " +
+      "JSON-capable model equally, with nothing preselected and no recommendation, and Ask Moss to help opens the chat with an editable neutral draft that recommends no model. Use main model clears the choice. Under Advanced in the dialog, a Use in chat choice of Off, " +
+      "Watch only or On shows once a model is selected. Use in chat is an instance-wide setting held through the admin " +
       "configuration boundary. Any of Off, Watch only or On can be picked as soon as a classifier " +
       "is chosen, with no Watch only run or review first. With On, the classifier answers the chat " +
       "requests it is sure about and every other message goes to the main model. Once a model " +

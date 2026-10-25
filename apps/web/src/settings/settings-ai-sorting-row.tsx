@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitCommitHorizontal, MinusCircle } from "lucide-react";
+import { useRef, useState } from "react";
 
-import { Badge, Button, Field, FormLabel, InfoTip, Segmented, Select } from "@moss/ui";
+import { Badge, Button, InfoTip } from "@moss/ui";
 import {
   CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   CLASSIFIER_GATE_MODE_DEFAULT,
@@ -23,6 +24,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useChatControls } from "../shell/chat-controls-context";
+import { DecisionModelDialog } from "./settings-ai-decision-dialog";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 
@@ -91,12 +93,6 @@ const GATE_TIP = (
   </>
 );
 
-const GATE_LABELS: Readonly<Record<ClassifierGateMode, string>> = {
-  off: "Off",
-  shadow: "Watch only",
-  on: "On"
-};
-
 // Models the Classifier may be: the model and its provider are active, it has the json
 // capability, and its provider kind is one generateStructured executes, or System One, which
 // answers the sorting questions as choices. The save route applies this same rule.
@@ -124,6 +120,8 @@ export function SortingModelRow(props: {
   const { toast } = useFeedback();
   const { openAssistantWithDraft } = useChatControls();
   const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const chooseButtonRef = useRef<HTMLButtonElement>(null);
   const mutation = useMutation({
     mutationFn: (modelId: string | null) =>
       modelId
@@ -164,17 +162,6 @@ export function SortingModelRow(props: {
   const boundIsTypeSafe =
     bound?.providerKind === "system-one" &&
     isTypesafeDecisionBaseUrl(boundProvider?.baseUrl ?? null);
-  const unavailableName =
-    boundId && !bound
-      ? (props.models.find((model) => model.id === boundId)?.displayName ?? "Unavailable model")
-      : null;
-  const groups = new Map<string, AiConfiguredModelDto[]>();
-  for (const model of eligible) {
-    const list = groups.get(model.providerDisplayName) ?? [];
-    list.push(model);
-    groups.set(model.providerDisplayName, list);
-  }
-
   // The Shadow badge links to the report. The Shadow switch option only changes the mode.
   const shadowReportHref = "/settings?section=shadowreport";
   const badge =
@@ -212,62 +199,68 @@ export function SortingModelRow(props: {
         {showApiDisclosure ? <div className="rt__desc">{CLASSIFIER_API_DISCLOSURE}</div> : null}
       </div>
       <div className="rt__pick">
-        <Field>
-          <FormLabel htmlFor="classifier-model">Decision model</FormLabel>
-          <Select
-            id="classifier-model"
-            value={boundId ? `model:${boundId}` : ""}
-            aria-label="Decision model"
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              const raw = event.target.value;
-              mutation.mutate(raw.startsWith("model:") ? raw.slice("model:".length) : null);
-            }}
-          >
-            <option value="">Use main model</option>
-            {unavailableName ? (
-              <option value={`model:${boundId}`} disabled>
-                {`${unavailableName} (unavailable)`}
-              </option>
-            ) : null}
-            {[...groups].map(([providerName, list]) => (
-              <optgroup key={providerName} label={providerName}>
-                {list.map((model) => (
-                  <option key={model.id} value={`model:${model.id}`}>
-                    {model.displayName}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </Select>
-        </Field>
+        <div className="rt__none">
+          {bound ? (
+            <>
+              {bound.displayName} <span className="rt__desc">{bound.providerDisplayName}</span>
+            </>
+          ) : (
+            "Not chosen"
+          )}
+        </div>
         {boundId && !bound ? (
           <span className="rt__none">
             <MinusCircle size={13} aria-hidden="true" />
             Chosen model is unavailable. Using your main model.
           </span>
         ) : null}
-        {bound ? (
-          <Field>
-            <span className="jds-label">
-              Use in chat <InfoTip label="What Use in chat does">{GATE_TIP}</InfoTip>
-            </span>
-            <Segmented
-              value={savedGateMode}
-              ariaLabel="Use in chat"
-              onChange={(mode) => gateMutation.mutate(mode)}
-              options={CLASSIFIER_GATE_MODES.map((mode) => ({
-                value: mode,
-                label: GATE_LABELS[mode],
-                disabled: gateMutation.isPending
-              }))}
-            />
-          </Field>
+        <Button
+          ref={chooseButtonRef}
+          variant="secondary"
+          disabled={mutation.isPending}
+          onClick={() => setDialogOpen(true)}
+        >
+          {bound ? "Change model" : "Choose a model"}
+        </Button>
+        {boundId ? (
+          <Button
+            variant="link"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate(null)}
+          >
+            Use main model
+          </Button>
         ) : null}
         <Button variant="link" onClick={() => openAssistantWithDraft(DECISION_MODEL_HELP_DRAFT)}>
           Ask Moss to help
         </Button>
       </div>
+      {dialogOpen ? (
+        <DecisionModelDialog
+          models={eligible}
+          initialModelId={bound ? bound.id : null}
+          initialGateMode={savedGateMode}
+          gateTip={GATE_TIP}
+          saving={mutation.isPending || gateMutation.isPending}
+          returnFocusRef={chooseButtonRef}
+          onClose={() => setDialogOpen(false)}
+          onAskMoss={() => {
+            setDialogOpen(false);
+            openAssistantWithDraft(DECISION_MODEL_HELP_DRAFT);
+          }}
+          onSave={(modelId, mode) => {
+            void (async () => {
+              try {
+                if (modelId !== boundId) await mutation.mutateAsync(modelId);
+                if (mode !== savedGateMode) await gateMutation.mutateAsync(mode);
+                setDialogOpen(false);
+              } catch {
+                // The mutation already showed the error.
+              }
+            })();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

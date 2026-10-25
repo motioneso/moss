@@ -60,22 +60,31 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.getByRole("button", { name: "AI providers" }).click();
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Decision model", { exact: true });
-const gateButton = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Use in chat" }).getByRole("button", { name });
+const decisionDialog = (page: Page) =>
+  page.getByRole("dialog", { name: "Choose a decision model" });
+
+async function openDecisionDialog(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: /^(Choose a model|Change model)$/ }).click();
+  const dialog = decisionDialog(page);
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
 
 async function chooseClassifier(page: Page, label: string): Promise<void> {
   // Wait for the binding save before navigating away, or the next screen can load before the
-  // classifier selection has landed and the gate keeps its previous classifier.
+  // choice has landed.
   const saved = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/ai/services/sorting/binding") &&
       response.request().method() === "PUT",
     { timeout: 30_000 }
   );
-  await classifierSelect(page).selectOption({ label });
+  const dialog = await openDecisionDialog(page);
+  await dialog.getByRole("radio", { name: label }).check();
+  await dialog.getByRole("button", { name: "Save" }).click();
   expect((await saved).status()).toBe(200);
-  await expect(classifierSelect(page)).toHaveValue(/^model:/);
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Change model" })).toBeVisible();
 }
 
 async function setGate(page: Page, name: string): Promise<void> {
@@ -86,9 +95,12 @@ async function setGate(page: Page, name: string): Promise<void> {
       ) && response.request().method() === "PUT",
     { timeout: 30_000 }
   );
-  await gateButton(page, name).click();
+  const dialog = await openDecisionDialog(page);
+  await dialog.getByRole("button", { name: /^Advanced/ }).click();
+  await dialog.getByRole("group", { name: "Use in chat" }).getByRole("button", { name }).click();
+  await dialog.getByRole("button", { name: "Save" }).click();
   expect((await saved).status()).toBe(200);
-  await expect(gateButton(page, name)).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog).toBeHidden();
 }
 
 async function openChat(page: Page): Promise<Locator> {
