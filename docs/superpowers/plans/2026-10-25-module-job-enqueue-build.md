@@ -129,14 +129,19 @@ Expected exit code 0 for each successful command; commands are never piped:
 - `pnpm install` before work (completed).
 - `pnpm exec vitest run tests/unit/external-validate-module-enqueue.test.ts tests/unit/external-validate.test.ts`
 - `pnpm lint`, `pnpm format:check`, `pnpm check:file-size`, `pnpm typecheck`.
-- Full gate: `scripts/run-gate.sh start`, then `scripts/run-gate.sh wait --follow` using the
+- Slice 1 static gate: `scripts/run-gate.sh start --gate verify:static`, then
+  `scripts/run-gate.sh wait --follow` using the
   returned log and a detached tool session. Only this skill-managed throwaway DB procedure may
   run DB checks. Inspect the actual exit code; any failures must be named, never called green.
+  Full `verify:foundation` belongs to the runtime/database slices; slice 1 changes only pure
+  manifest validation and is covered by the static gate plus the two focused validator suites.
 
 For leftover slices, create one `task` issue each with `Part of #3715`, ordering/dependencies,
 owned paths, tests and security mutation evidence required. Link them here and in the PR;
-none closes #3715. Rebase on current `origin/main` before opening the single PR; do not carry
-unrelated sibling specs into its diff. Fill Release note with `Category: N/A` for internal-only
+none closes #3715. Publication ruling from Ben: open the single build PR against `docs/module-platform-specs`,
+without committing any spec files. Keep this plan in the build PR. Retarget to `main` once
+PR #3718 merges. A rebase onto current `origin/main` was performed before this ruling; the final
+build commits are based on the spec branch to keep the PR diff limited to this build. Fill Release note with `Category: N/A` for internal-only
 work, list every pending Ben question, push, report the PR to coordinator w1:p1E using
 `docs/agents/herdr-pane-message.md`, and verify the worktree is clean.
 
