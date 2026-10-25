@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Meeting summaries work after a Claude update.** Meeting summaries and Rewrite work again after the Claude connection was updated to a newer version. [PR #3690](https://github.com/motioneso/moss/pull/3690)
 - **Ring setup matches Hardware settings.** Ring setup now shows a simpler connection summary and returns to Hardware settings when you finish. [PR #3635](https://github.com/motioneso/moss/pull/3635)
 
 #### Added
