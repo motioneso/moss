@@ -22,13 +22,24 @@ by eye, not measured. The info icons and the delete icon look smaller than 44px.
 - Decision model gets its own row. Empty it reads "Not chosen" with two buttons, Choose a model and Ask Moss to help. Choosing opens a dialog that lists every connected model equally, with nothing preselected and no recommendation. The Off/Watch only/On setting moves under an Advanced fold in that dialog and appears only once a model is chosen.
 - Moss help opens the chat drawer with a neutral question about what the user needs. It never picks a model.
 - Provider card keeps Edit and an overflow menu (Sign in again, Terminal, Remove). Models become one disclosure line with Refresh and Add model inside it.
-- Chat access keeps only "Let people choose their own chat model". "Lock my chat to one model" moves to Personal > Your assistant.
+- The instance-wide lock stays on this page, under a section named "Who can choose the chat model" (the switch plus the instance default). "Lock my chat to one model" is renamed "Lock my own AI to one model" and sits under a "Just for you" heading. Nothing moves to Personal.
 - Plain wording throughout. No jargon, no arrows or dashes in labels.
 
 ## Open questions
 
-1. Where does "Lock my chat to one model" live? A) Personal > Your assistant (recommended, that is where chat model choice already is). B) Stay here.
-2. Does "Ask Moss to help" open the chat drawer with a prefilled neutral prompt (recommended, no new backend)? Or A) a guided in-page questionnaire?
+1. Does the self-lock ("Lock my own AI to one model") stay on this page under "Just for you" (recommended) or move to Personal > Your assistant? It is a hard lock on all of that person's AI use, not only chat.
+2. Approved: Ask Moss to help opens the chat drawer with a neutral starting prompt.
+
+## What the three controls do (from the code)
+
+| Control | Scope | Effect |
+|---|---|---|
+| "Let people choose their own chat model" switch | Whole instance | Off: everyone chats with the instance default and Personal shows it read-only. On: people may pick models flagged as allowed. This is the instance-wide lock. |
+| Instance default provider | Whole instance | Chat follows its model choice inside this provider. |
+| "Lock my chat to one model" | One account (the signed-in admin only) | A hard pin on every AI job that person triggers (chat, voice, background work), not just chat. While set, the person's own chat chooser is rejected with "An admin has pinned your AI provider". |
+
+An admin pins other people from People & access (an "AI pin" per person, a model or a whole provider).
+The self-lock overlaps the chooser on Personal > Your assistant, and wins over it.
 
 ## Notes carried over from the #3683 review
 
