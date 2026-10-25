@@ -225,7 +225,7 @@ describe("owner-typed quiet-hours agreement through real turn persistence", () =
     expect(rows.rows[0].source_message_id).toBe(agreement.userMessageId);
   });
 
-  it.each(["no", "list my reminders", "let stretch through quiet hours"])(
+  it.each(["no", "cancel my reminder", "let stretch through quiet hours"])(
     "invalidates the earlier proposal on %j",
     async (reply) => {
       const target = await reminder("water the plants");
@@ -331,7 +331,7 @@ describe("owner-typed quiet-hours agreement through real turn persistence", () =
 
   it("rolls back a persisted allowance when its transaction fails", async () => {
     const target = await reminder();
-    const source = await say("list my reminders");
+    const source = await say("let stretch through quiet hours");
     await expect(
       runner.withDataContext({ actorUserId: ids.userA }, async (scoped) => {
         await saveQuietHoursAllowance(scoped, target, true, source.userMessageId);
@@ -370,7 +370,7 @@ describe("owner-typed quiet-hours agreement through real turn persistence", () =
 
   it("rejects an assistant message as the saved authority", async () => {
     const target = await reminder();
-    const source = await say("list my reminders");
+    const source = await say("let stretch through quiet hours");
     await expect(
       runner.withDataContext({ actorUserId: ids.userA }, (scoped) =>
         saveQuietHoursAllowance(scoped, target, true, source.assistantMessageId)
