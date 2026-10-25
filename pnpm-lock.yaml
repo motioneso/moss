@@ -192,6 +192,9 @@ importers:
       '@moss/calendar':
         specifier: workspace:*
         version: link:../../packages/calendar
+      '@moss/chat':
+        specifier: workspace:*
+        version: link:../../packages/chat
       '@moss/email':
         specifier: workspace:*
         version: link:../../packages/email

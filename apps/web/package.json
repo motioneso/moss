@@ -13,6 +13,7 @@
   "dependencies": {
     "@moss/backtrack": "workspace:*",
     "@moss/calendar": "workspace:*",
+    "@moss/chat": "workspace:*",
     "@moss/email": "workspace:*",
     "@moss/goals": "workspace:*",
     "@moss/meetings": "workspace:*",
