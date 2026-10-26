@@ -16,9 +16,9 @@ API 33; tested devices/results belong on the PR.
 
 ## Set up an already-owned ring
 
-Fresh installs open **Set up your ring**. Configured installs open **Hardware**,
-with **Vocci ring** settings, and keep their current ring, account, pending audio
-and hold choice.
+The launcher opens **Vocci ring** Home. A status card offers **Set up ring** when
+setup is needed, or the current delivery/account/permission action for configured
+installs. Updates keep the current ring, account, pending audio and hold choice.
 The new wizard is implemented; its complete setup-to-recording live acceptance is
 still pending in #3565. Use a development build for this pre-release flow.
 
@@ -32,16 +32,14 @@ still pending in #3565. Use a development build for this pre-release flow.
    is installed, open its app settings → Permissions and remove Nearby devices access.
    Then allow Nearby devices for this app, turn Bluetooth on and keep the ring close.
    Return and choose **Verify ring**. Cloud lookup alone does not complete verification.
-4. After setup is saved, review Bluetooth, notifications and background battery
-   settings in **Delivery**, then explicitly **Start delivery**. Enable
-   **Hold-to-talk in Main chat** only when you want it. Enrollment waits for two
-   stable ring inventories; review each new hold transcript in Moss and press
-   **Send** for a text reply. Setup itself starts neither delivery nor hold input.
-   **Continue to Hardware** returns to the settings list. **Ring setup and delivery
-   options** reopens a compact **Ring connection** summary with the saved account,
-   ring and current choices; it hides completed sign-in forms. **Connection &
-   permissions** opens the matching Hardware detail page. Recent deliveries remain
-   under **Hardware → Vocci ring → Delivery details**. Back keeps saved setup.
+4. After setup is saved, choose **Continue to Vocci ring**. Home offers the current
+   action: resolve account or permission blockers, then explicitly **Start delivery**.
+   **Settings → Permissions and battery** holds Android background help.
+   Enable **Settings → Voice messages** only when you want hold-to-talk.
+   Enrollment waits for two stable ring inventories. Existing voice consent and
+   transcript-review behavior are unchanged. Setup starts neither delivery nor voice input.
+   **Settings → Set up ring again** opens the saved **Ring connection** summary;
+   completed sign-in forms stay hidden. Back keeps saved setup.
 
 Cancel setup confirms remote cleanup when online. If offline, reconnect and retry;
 unconfirmed cleanup remains pending. Reopening resumes staged Moss/ring selection.
@@ -104,8 +102,8 @@ changing the binding.
 
 Start `ai.moss.vocci/.DeliveryActivity` from the launcher or ADB. Grant Bluetooth
 and notifications. The ongoing notification reports record-derived progress and
-opens the status screen, with Start/Stop, permissions, account/ring identity,
-voice opt-in and recent queue entries. To stop explicitly, launch the activity with action `stop`; physical
+opens Home, with one state-appropriate action, account/ring identity and recent deliveries.
+Settings contains voice opt-in, account disconnection and permission help. To stop explicitly, launch the activity with action `stop`; physical
 proof cleanup also force-stops this developer package before restoring Vocci.
 The service polls every 30 seconds. While hold-to-talk is on it instead keeps one ring link open between cycles and starts a cycle when the ring reports a press ending (hold, then idle), re-checking every 1.5 s for up to five tries until the recording is complete. A silent or dropped link reconnects after 3 s, and a one-minute listen acts as the safety net. A hold-to-talk recording is fetched on first sighting once its sidecar is complete; other recordings need identical sizes on two listings. It retains a partial wake lock only during
 bounded work. Sticky service restart handles OS reclamation. An explicit Start also enables
@@ -113,7 +111,7 @@ recovery after boot/unlock and app update; Stop disables recovery. Android can
 refuse a background start, which leaves an Open app/Start delivery reminder.
 Only **Start delivery** enables recovery. While stopped, voice changes, manual cleanup
 and transcription retries ask you to Start first; maintenance actions never enable
-restart recovery. Force-stop still requires a manual launch. Permissions and background settings opens App settings
+restart recovery. Force-stop still requires a manual launch. Settings → Permissions and battery opens Android app settings
 for battery/permission recovery and Vocci settings for Nearby devices handoff.
 Choose Unrestricted battery use and remove Moss from Samsung Sleeping apps for
 daily use. Device-specific endurance remains a live validation requirement.
@@ -122,14 +120,36 @@ HTTP is accepted only at loopback for isolated development using an owned ADB
 reverse on a claimed devport. Remote delivery requires HTTPS; redirects are
 rejected. Never reuse/remove another session's forward or server.
 
-## Native Hardware settings
+## Native Home and Settings
 
-The launcher opens **Hardware → Vocci ring** using the selected flat Park Press
-settings list. The app is named **Moss** (development packages say **Moss (dev)**).
-Opening it starts neither delivery nor hold enrollment. Automatic delivery is the
-existing explicit Start/Stop choice; hold enrollment remains separately opted in.
-Delivery details keeps the previous status, account recovery and recent delivery UI.
-This does not add an embedded Moss web shell or a new web Hardware route.
+The launcher activity (`HardwareActivity`) routes to **Vocci ring** Home
+(`DeliveryActivity`). Home shows one status-card action chosen by the plain
+`HomeStatus` policy: setup/recovery, account connection, pending approval with a
+text Cancel link, competing Vocci access, missing permissions, background battery
+restriction, recovery message, then Start or Stop. An unreadable saved setup shows
+its recovery text without an action. Host tests cover combined blockers as well as
+healthy delivering and stopped states.
+
+**Recent** shows the latest three deliveries with source time, kind, retained
+length when known and outcome. Tap a row for delivery details, **Open meeting** or
+**Review in Moss**, and eligible **Retry transcription**. **All deliveries** keeps
+the previous 30-entry history available. **Recordings on ring** opens the inventory.
+Its list and detail Back actions return Home.
+
+**Settings** (`HardwareActivity`, `page=settings`) holds each daily preference once:
+**Remind me after an hour**, **Voice messages**, account name/origin and connected
+account **Disconnect**, **Set up ring again**, **About this ring**, **How to use your
+ring**, **Clear delivered audio** with phone usage, and **Permissions and battery**.
+The storage subpage retains optional seven-day cleanup and confirmed manual cleanup;
+troubleshooting retains Bluetooth/notifications, Android battery/app settings and
+conditional Vocci app settings. The existing `page=connection` intent still opens it.
+About retains dated battery/recording observations and firmware. Settings subpages
+return Settings.
+
+The app is named **Moss** (development packages say **Moss (dev)**). Opening Home or
+Settings starts neither delivery nor hold enrollment. Existing service commands,
+intent actions and preference names are unchanged. This adds no embedded web shell
+or new web Hardware route.
 
 Battery, recording state, ring capacity and firmware are optional saved observations,
 with per-field times. A stale read never claims a current connection. Queries run on
@@ -144,7 +164,7 @@ focus and scroll; system dark mode and font scale apply. Archivo is bundled unde
 
 Ring storage and Phone audio stay separate. Completed phone-copy cleanup confirms
 its scope; optional seven-day cleanup keeps pending/failed/interrupted audio. Neither
-removes ring sources or Moss copies. Connection & permissions has Android permission,
+removes ring sources or Moss copies. Settings → Permissions and battery has Android permission,
 battery and official-app handoff guidance. How to use your ring explains double-click
 recording, bookmarks, hold review/send and offline behavior. About this ring shows
 saved identity and observed versions.
@@ -157,7 +177,7 @@ clears once the recording is no longer observed. Unknown/missing status, observa
 over two minutes, and service restart reset the timer. A missing source name cannot
 start a timer. This is observed time, not a measurement of the recording duration.
 
-**Ring storage → Refresh saved recordings** explicitly reads the saved ring inventory
+**Vocci ring → Recordings on ring → Refresh saved recordings** explicitly reads the saved ring inventory
 without enabling delivery or hold enrollment, including while delivery is stopped.
 Keep Bluetooth available and relinquish the official app's Nearby devices access.
 The dated snapshot lists actual supported audio sources in pages of 25; absence from

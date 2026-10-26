@@ -13,19 +13,20 @@ import java.util.*;
 import java.util.function.Supplier;
 import org.json.JSONObject;
 
-/** Settings > Hardware. This screen reads snapshots; opening it never starts ring delivery. */
+/** Native ring settings and saved ring inspection. Opening starts no delivery. */
 public final class HardwareActivity extends Activity {
     private NativeTheme theme;
+    private final java.util.concurrent.ExecutorService accountWorker = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private boolean disconnecting;
+    private String accountStatus = "";
     private LinearLayout body;
     private ScrollView scroll;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, View> views = new LinkedHashMap<>();
     private final Set<String> used = new HashSet<>();
-    private String page = "hardware";
+    private String page = "settings";
     private int position;
     private boolean updating;
-    private Boolean deliveryChoice;
-    private long deliveryChoiceAt;
     private Integer restoreY;
     private String selectedId = "", pendingRecordingRequest = "";
     private long pendingRecordingAt;
@@ -36,8 +37,11 @@ public final class HardwareActivity extends Activity {
     @Override public void onCreate(Bundle saved) {
         setTheme(NativeTheme.isDark(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(saved);
-        if (!new SecretStore(this).exists()) {
-            startActivity(new Intent(this, SetupActivity.class)); finish(); return;
+        String requested = getIntent().getStringExtra("page");
+        if (saved == null && requested == null) {
+            Intent home = new Intent(this, DeliveryActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            if (getIntent().hasExtra(ReminderDismissal.WINDOW)) home.putExtra(ReminderDismissal.WINDOW, getIntent().getLongExtra(ReminderDismissal.WINDOW, 0));
+            startActivity(home); finish(); return;
         }
         theme = new NativeTheme(this); theme.window();
         scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(theme.paper);
@@ -48,15 +52,16 @@ public final class HardwareActivity extends Activity {
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(theme.dp(24), theme.dp(12), theme.dp(24), theme.dp(32)); scroll.addView(body);
         setContentView(scroll); scroll.requestApplyInsets();
-        if ("connection".equals(getIntent().getStringExtra("page"))) page = "connection";
+        if (requested != null) page = requested;
         if (saved == null) { RecordingReminder.SHARED.dismiss(getIntent().getLongExtra(ReminderDismissal.WINDOW, 0)); getIntent().removeExtra(ReminderDismissal.WINDOW); }
         if (saved != null) {
-            page = saved.getString("page", "hardware"); restoreY = saved.getInt("scrollY");
+            page = saved.getString("page", "settings"); restoreY = saved.getInt("scrollY");
             selectedId = saved.getString("selectedId", ""); recordingPage = saved.getInt("recordingPage");
             pendingRecordingRequest = saved.getString("recordingRequest", ""); pendingRecordingAt = saved.getLong("recordingAt");
         }
     }
     @Override public void onResume() { super.onResume(); if (body != null) handler.post(refresh); }
+    @Override public void onDestroy() { accountWorker.shutdown(); super.onDestroy(); }
     @Override public void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
     @Override public void onSaveInstanceState(Bundle saved) {
         saved.putString("page", page); if (scroll != null) saved.putInt("scrollY", scroll.getScrollY()); super.onSaveInstanceState(saved);
@@ -64,7 +69,8 @@ public final class HardwareActivity extends Activity {
         saved.putString("recordingRequest", pendingRecordingRequest); saved.putLong("recordingAt", pendingRecordingAt);
     }
     @Override public void onBackPressed() {
-        if (page.equals("hardware")) super.onBackPressed(); else show(page.equals("recording") ? "storage" : page.equals("ring") ? "hardware" : "ring");
+        if (page.equals("settings") || page.equals("storage") || page.equals("recording")) home();
+        else show("settings");
     }
     private void show(String next) { page = next; render(); scroll.scrollTo(0, 0); }
     private <T extends View> T place(String key, Class<T> type, Supplier<T> factory, int gap) {
@@ -90,7 +96,7 @@ public final class HardwareActivity extends Activity {
         place(key, SettingsRow.class, () -> new SettingsRow(theme), 0).update(title, detail, action); rule(key + "-rule");
     }
     private void button(String key, String title, Runnable action) {
-        Button button = place(key, Button.class, () -> theme.button(action, false), 12);
+        Button button = place(key, Button.class, () -> theme.button(action, key.equals("clear") || key.equals("refresh") || key.equals("exclude")), 12);
         NativeTheme.update(button, title); button.setOnClickListener(v -> action.run());
     }
     private Switch toggle(String key, String label, boolean checked, java.util.function.Consumer<Boolean> action) {
@@ -106,10 +112,29 @@ public final class HardwareActivity extends Activity {
         String result = DeliveryActions.command(this, action);
         Toast.makeText(this, result, Toast.LENGTH_LONG).show(); return result;
     }
-    private void diagnostics() { startActivity(new Intent(this, DeliveryActivity.class)); }
+    private void disconnect() {
+        if (disconnecting) return;
+        disconnecting = true; DeliveryActions.stop(this); render();
+        accountWorker.execute(() -> {
+            String message;
+            try { new MossLink(this).disconnect(); message = "Disconnected. Ring binding and queued recordings are kept."; }
+            catch (Exception unavailable) { message = "Could not disconnect. Check your connection and try again; your ring and queue are kept."; }
+            final String result = message;
+            handler.post(() -> { if (isDestroyed()) return; disconnecting = false; accountStatus = result; render(); });
+        });
+    }
+    private void home() { startActivity(new Intent(this, DeliveryActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)); finish(); }
     private JSONObject delivery() {
         try { return PrivateFiles.json(new File(getNoBackupFilesDir(), "delivery/state.json")); }
         catch (Exception unavailable) { return new JSONObject(); }
+    }
+    private String permissionStatus() {
+        return checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ? "All allowed" : "Permission needed";
+    }
+    private String phoneUsage(JSONObject entries) {
+        try { return entries == null ? "Usage unavailable" : DeliveryStatus.storage(new File(getNoBackupFilesDir(), "delivery"), entries).split("\\n")[0].replace("Local audio: ", ""); }
+        catch (Exception unavailable) { return "Usage unavailable"; }
     }
     private String phoneStorage(JSONObject entries) {
         if (entries == null) return "No delivery snapshot available yet.";
@@ -206,55 +231,44 @@ public final class HardwareActivity extends Activity {
     private void render() {
         position = 0; used.clear();
         DeliveryPreferences choices = new DeliveryPreferences(this);
-        if (deliveryChoice != null && (choices.enabled() == deliveryChoice || SystemClock.elapsedRealtime() - deliveryChoiceAt >= 5000)) deliveryChoice = null;
         JSONObject config = null;
         try { config = new SecretStore(this).load(); } catch (Exception unavailable) { /* Show setup/recovery, keep existing data. */ }
         final JSONObject snapshot = config == null ? new JSONObject() : HardwareStatus.read(this, config);
         final JSONObject state = delivery(), voice = state.optJSONObject("voice");
         final JSONObject recordings = config == null ? new JSONObject() : RingRecordings.read(this, config, state.optString("sourceDeviceId"));
-        if (!page.equals("hardware")) button("back", "‹ " + (page.equals("recording") ? "Ring storage" : page.equals("ring") ? "Hardware" : "Vocci ring"), this::onBackPressed);
-        NativeTheme.update(place("eyebrow", TextView.class, () -> theme.eyebrow(), 12), "MOSS / SETTINGS");
+        button("back", "‹ " + (page.equals("settings") || page.equals("storage") || page.equals("recording") ? "Vocci ring" : "Settings"), this::onBackPressed);
+        NativeTheme.update(place("eyebrow", TextView.class, () -> theme.eyebrow(), 12), "VOCCI RING");
         switch (page) {
-            case "hardware":
-                text("title", "Hardware", 30, true);
-                text("intro", "The devices you use with Moss.", 15, false); rule("head-rule");
-                row("ring", "Vocci ring", config == null ? "Set up or recover your ring connection" : battery(snapshot),
-                    () -> { if (new SecretStore(this).exists()) show("ring"); else startActivity(new Intent(this, SetupActivity.class)); });
-                if (config == null) text("setup-note", "Setup keeps your existing ring and pending audio. It starts no recording or delivery.", 13, false);
-                break;
-            case "ring":
-                text("title", "Vocci ring", 30, true);
-                text("contact", snapshot.has("contactAt") ? "Last ring contact · " + observed(snapshot.optLong("contactAt")) : "Waiting for a ring status check", 13, false);
-                text("battery", battery(snapshot), 15, false); text("recording", recording(snapshot), 15, false);
-                text("status-note", "Status is a saved observation. It refreshes while automatic delivery is running and the ring is nearby.", 13, false);
-                rule("status-rule");
-                Switch delivery = toggle("delivery", "Automatic delivery", deliveryChoice == null ? choices.enabled() : deliveryChoice, enabled -> {
-                    if (enabled) {
-                        if (DeliveryActions.CHANGE_QUEUED.equals(command("start"))) { deliveryChoice = true; deliveryChoiceAt = SystemClock.elapsedRealtime(); }
-                    } else DeliveryActions.stop(this);
-                });
-                delivery.setEnabled(deliveryChoice == null);
-                text("delivery-help", "Send finished recordings to Meetings. Retry when your connection returns.", 13, false);
-                text("delivery-state", choices.enabled() ? "Enabled · " + state.optString("activity", "starting").replace('_', ' ') : "Stopped · recordings remain on the ring", 13, false);
-                if (!choices.recovery().isEmpty()) text("recovery", choices.recovery(), 13, false);
-                rule("delivery-rule");
-                toggle("hold", "Hold-to-talk in Main chat", voice != null && voice.optBoolean("desired"), enabled -> command(enabled ? "voice-on" : "voice-off"));
-                text("hold-help", "Review each new hold transcript in Moss, then press Send for a text reply. Existing recordings keep their destination.", 13, false);
+            case "hardware": case "ring": page = "settings"; handler.post(this::render); break;
+            case "settings":
+                text("title", "Settings", 30, true);
+                toggle("reminder", "Remind me after an hour", choices.recordingReminder(), enabled -> choices.recordingReminder(enabled));
+                text("reminder-help", "Pop-up while the ring keeps recording.", 13, false); rule("reminder-rule");
+                Switch hold = toggle("hold", "Voice messages", voice != null && voice.optBoolean("desired"), enabled -> command(enabled ? "voice-on" : "voice-off"));
+                hold.setEnabled(config != null && choices.enabled());
+                text("hold-help", "Hold to talk sends to Main chat.", 13, false);
                 text("hold-state", voice == null ? "Off" : voice.has("disableId") ? "Turning off" : voice.has("snapshot") ? "Saving enrollment" :
                     voice.has("enablement") ? "Enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Off", 13, false);
-                rule("hold-rule");
-                toggle("reminder", "Remind me after an hour", choices.recordingReminder(), enabled -> choices.recordingReminder(enabled));
-                text("reminder-help", "A phone alert that repeats every 30 minutes until dismissed, never an auto-stop. Requires delivery and notifications; restarts or gaps in ring status reset the observed hour.", 13, false);
-                rule("reminder-rule");
-                row("storage", "Ring storage", "Capacity and saved recordings", () -> show("storage"));
-                row("phone", "Phone audio", "Delivered copies and automatic cleanup", () -> show("phone"));
-                row("connection", "Connection & permissions", "Bluetooth, background delivery and account recovery", () -> show("connection"));
-                row("guide", "How to use your ring", "Recording, bookmarks and hold-to-talk", () -> show("guide"));
-                row("about", "About this ring", "Ring identity and installed firmware", () -> show("about"));
-                row("diagnostics", "Delivery details", "Recent Meetings, voice requests and troubleshooting", this::diagnostics);
+                rule("account-rule"); text("account-title", "Account", 20, true);
+                text("account", config == null ? "Saved setup unavailable" : config.optString("accountName", config.optString("ownerId")) + "\n" + config.optString("origin"), 15, false);
+                if (config != null && config.has("credential")) {
+                    TextView disconnect = place("disconnect", TextView.class, () -> theme.textLink(() -> {}), 8);
+                    NativeTheme.update(disconnect, "Disconnect");
+                    disconnect.setEnabled(!disconnecting);
+                    disconnect.setOnClickListener(v -> disconnect());
+                }
+                if (!accountStatus.isEmpty()) text("account-status", accountStatus, 13, false);
+                rule("ring-rule"); text("ring-title", "Ring", 20, true);
+                row("setup", "Set up ring again", "", () -> startActivity(new Intent(this, SetupActivity.class)));
+                row("about", "About this ring", battery(snapshot), () -> show("about"));
+                row("guide", "How to use your ring", "", () -> show("guide"));
+                text("phone-title", "Phone storage", 20, true);
+                row("phone", "Clear delivered audio", phoneUsage(state.optJSONObject("entries")), () -> show("phone"));
+                text("troubleshooting-title", "Troubleshooting", 20, true);
+                row("connection", "Permissions and battery", permissionStatus(), () -> show("connection"));
                 break;
             case "storage":
-                text("title", "Ring storage", 30, true);
+                text("title", "Recordings on ring", 30, true);
                 JSONObject storage = snapshot.optJSONObject("storage");
                 if (storage == null) text("unknown", "Storage unavailable. A status check runs during automatic delivery.", 15, false);
                 else {
@@ -274,30 +288,29 @@ public final class HardwareActivity extends Activity {
                 inspectRecording(recordings, state, exclusionPending);
                 break;
             case "phone":
-                text("title", "Phone audio", 30, true);
+                text("title", "Clear delivered audio", 30, true);
                 JSONObject entries = state.optJSONObject("entries");
                 text("usage", phoneStorage(entries), 15, false);
                 toggle("cleanup", "Clear delivered audio after 7 days", choices.autoCleanup(), enabled -> choices.autoCleanup(enabled));
                 text("cleanup-help", "Cleanup runs while delivery is active. Pending, failed and interrupted recordings stay here. Moss and ring copies are kept.", 13, false);
-                button("clear", "Clear completed phone audio", () -> new android.app.AlertDialog.Builder(this).setTitle("Clear completed phone audio?")
+                button("clear", "Clear delivered audio", () -> new android.app.AlertDialog.Builder(this).setTitle("Clear completed phone audio?")
                     .setMessage("Remove completed delivery audio from this phone. Pending and failed audio, Moss copies and ring recordings are kept.")
                     .setNegativeButton("Keep audio", null).setPositiveButton("Clear phone copies", (dialog, which) -> command("clear-completed")).show());
+                views.get(page + "/clear").setEnabled(choices.enabled() && state.optJSONObject("entries") != null);
                 break;
             case "connection":
-                text("title", "Connection & permissions", 30, true);
+                text("title", "Permissions and battery", 30, true);
                 text("permission-state", "Nearby devices: " + (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed") +
                     "\nNotifications: " + (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed"), 15, false);
-                button("permissions", "Allow Bluetooth and notifications", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 1));
+                if (!permissionStatus().equals("All allowed")) button("permissions", "Allow Bluetooth and notifications", () -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS}, 1));
                 PowerManager power = getSystemService(PowerManager.class);
                 text("background", power.isIgnoringBatteryOptimizations(getPackageName()) ? "Battery use: unrestricted" : "Allow Unrestricted battery use in Android settings and remove Moss from Samsung Sleeping apps.", 15, false);
                 button("app-settings", "Open Android app settings", () -> startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + getPackageName()))));
-                text("restart", "Automatic delivery resumes after restart when Android permits. After Force stop, open Moss and turn Automatic delivery on again.", 13, false);
+                text("restart", "Automatic delivery resumes after restart when Android permits. After Force stop, open Moss and choose Start delivery on Home.", 13, false);
                 if (getPackageManager().checkPermission(Manifest.permission.BLUETOOTH_CONNECT, DeliveryService.OFFICIAL) == PackageManager.PERMISSION_GRANTED) {
                     text("handoff", "Vocci has Nearby devices access. Remove that permission before using Moss for delivery; restore it when switching back.", 15, false);
                     button("official-settings", "Open Vocci app settings", () -> startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + DeliveryService.OFFICIAL))));
                 }
-                button("account", "Moss account and recovery", this::diagnostics);
-                button("setup", "Ring setup", () -> startActivity(new Intent(this, SetupActivity.class)));
                 break;
             case "guide":
                 text("title", "How to use your ring", 30, true);
@@ -316,11 +329,12 @@ public final class HardwareActivity extends Activity {
                 text("title", "About this ring", 30, true);
                 text("identity", config == null ? "Saved setup unavailable. Use Ring setup to recover." : "Vocci ring\nSerial: " + config.optString("sn"), 15, false);
                 JSONObject info = snapshot.optJSONObject("info");
+                text("recording", recording(snapshot), 15, false);
                 text("firmware", info == null ? "Firmware not checked yet" : "Firmware " + info.optString("firmware") + "\nHardware " + info.optString("hardware") +
                     (info.optString("model").isEmpty() ? "" : "\nModel " + info.optString("model")) + "\n" + observed(info.optLong("at")), 15, false);
                 text("updates", "Firmware updating is not available in Moss yet.", 13, false);
                 break;
-            default: page = "hardware"; handler.post(this::render);
+            default: page = "settings"; handler.post(this::render);
         }
         for (String key : new ArrayList<>(views.keySet())) if (!used.contains(key)) body.removeView(views.remove(key));
         if (restoreY != null) {
