@@ -30,7 +30,7 @@ Task: #3761. Builds on the ring app layout spec, `2026-10-25-vocci-ring-app-layo
 
 1. First open: Connect to Moss
 2. Sign in and approve on Moss's approval page, inside the app
-3. Connected: Moss opens; ring setup waits in Hardware
+3. Connected: just Moss
 
 ## Decisions
 
@@ -105,6 +105,8 @@ One scrolling native page. It merges PR 3760's Home and Settings screens, in thi
 - Picks up at the Vocci account step, reusing the existing Moss link. The Moss section leaves the ring
   setup screen.
 - Setting up or redoing the ring never disconnects Moss. Only Account, Disconnect does that.
+- Outside Hardware, the app never mentions the ring: no prompt, banner or notification after
+  connecting.
 - With a Moss link and no ring, the status card shows "Set up your ring" with Set up ring as its button,
   and no ring problem notification is posted.
 
