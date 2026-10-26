@@ -1,6 +1,6 @@
 # Outlook work mail as context for Moss
 
-Date: 2026-10-26. Status: draft, awaiting review.
+Date: 2026-10-26. Status: approved by Ben, 2026-10-26.
 
 ## Intent
 
@@ -15,13 +15,13 @@ registration, no tokens, no mailbox sync, no admin approval.
 
 ## Decisions
 
-| Question                 | Ruling                                                                           |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| Which messages           | The newest messages since the previous scrape.                                   |
-| How much of each message | The full text.                                                                   |
-| What Moss does with it   | Reads it, and updates vault notes when it finds something important.             |
-| Stored mail              | None. Moss does not keep a copy of the mailbox.                                  |
-| Why not Graph or IMAP    | Graph and desktop mail apps need tenant approval. Password IMAP is off.          |
+| Question                 | Ruling                                                                  |
+| ------------------------ | ----------------------------------------------------------------------- |
+| Which messages           | The newest messages since the previous scrape.                          |
+| How much of each message | The full text.                                                          |
+| What Moss does with it   | Reads it, and updates vault notes when it finds something important.    |
+| Stored mail              | None. Moss does not keep a copy of the mailbox.                         |
+| Why not Graph or IMAP    | Graph and desktop mail apps need tenant approval. Password IMAP is off. |
 
 ## Prior evidence
 
@@ -53,10 +53,10 @@ registration, no tokens, no mailbox sync, no admin approval.
 Both routes feed the same processing, preferences, vault rules and last-read marker. They differ
 only in where the reading happens.
 
-| Route                     | Where it reads                                | Best for                                  |
-| ------------------------- | --------------------------------------------- | ----------------------------------------- |
-| Add-on (first)            | The user's own browser, signed in to Outlook  | Users who may install add-ons             |
-| Server window (second)    | A signed-in browser window on the Moss server | Users who cannot install add-ons          |
+| Route                  | Where it reads                                | Best for                         |
+| ---------------------- | --------------------------------------------- | -------------------------------- |
+| Add-on (first)         | The user's own browser, signed in to Outlook  | Users who may install add-ons    |
+| Server window (second) | A signed-in browser window on the Moss server | Users who cannot install add-ons |
 
 The Shape section below describes the server window route. The add-on route differs as follows.
 
@@ -99,14 +99,14 @@ edited or forgotten there, and is read by the AI step on every scrape.
 - Defaults apply until the user says otherwise. Defaults are the values below, and the user can
   change each one.
 
-| Setting                | Default                                                      |
-| ---------------------- | ------------------------------------------------------------ |
-| Messages per scrape    | Newest since the last scrape, capped at 25                   |
-| Scrape interval        | 30 minutes                                                   |
-| Read depth             | Full text, processed and dropped                             |
-| Vault destination      | The relevant existing note, else one "Work mail notes" note  |
-| Write style            | Append dated, sourced entries. Never edit the user's text    |
-| Entry for plain mail   | None when a message asks nothing and says nothing new        |
+| Setting              | Default                                                     |
+| -------------------- | ----------------------------------------------------------- |
+| Messages per scrape  | Newest since the last scrape, capped at 25                  |
+| Scrape interval      | 30 minutes                                                  |
+| Read depth           | Full text, processed and dropped                            |
+| Vault destination    | The relevant existing note, else one "Work mail notes" note |
+| Write style          | Append dated, sourced entries. Never edit the user's text   |
+| Entry for plain mail | None when a message asks nothing and says nothing new       |
 
 Limits no preference can change. Moss stays read-only on the mailbox, keeps no mail copy, and
 never writes to a note the user marked private.

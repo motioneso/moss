@@ -11,12 +11,12 @@ Written to the `plan-build` skill. Contracts, DDL and test behaviour only; no fu
 
 ## 0. Gates
 
-| Gate                       | State                                                                                                     |
-| -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Spec approved              | Approved per Ben (relayed 2026-10-26). PR #3767 still open; spec header still says draft. Merge it first. |
-| Mockups approved           | Approved per Ben (relayed). PR #3768 still open. Merge it first.                                          |
-| Task issue                 | #3766, open                                                                                               |
-| Live tests before building | L1 to L5 below must pass before slice 2 starts. L6 before slice 4.                                        |
+| Gate                       | State                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| Spec approved              | Approved by Ben 2026-10-26; spec header says approved. PR #3767 still open. Merge it first. |
+| Mockups approved           | Approved per Ben (relayed). PR #3768 still open. Merge it first.                            |
+| Task issue                 | #3766, open                                                                                 |
+| Live tests before building | L1 to L5 below must pass before slice 2 starts. L6 before slice 4.                          |
 
 ## 1. Seams check
 
@@ -59,7 +59,7 @@ Every capability the plan relies on, with evidence. Paths are relative to `~/Jar
 | People lookup by query                                         | `packages/people/src/service.ts:25`                                                                                                                                                                               | Sender context.                                                                                                    |
 | Vault I/O and the notes-folder root                            | `packages/vault/src/vault-context.ts:31-49`, `:63-70`; `packages/vault/src/index.ts:11-30`; precedent `packages/module-registry/src/index.ts:2969-2990`; `packages/settings/src/notes-source-routes.ts:24`, `:43` | Writes go through `withVaultContextAt` on the notes folder.                                                        |
 | `@moss/connectors` depends on neither memory, people nor vault | `packages/connectors/package.json` deps; `pnpm check:package-deps`                                                                                                                                                | Pipeline takes injected ports (ruling R4).                                                                         |
-| A user-marked private note                                     | Not found. Only generated private exports exist (`packages/notes/src/private-note-export.ts:7`)                                                                                                                   | Open question Q4.                                                                                                  |
+| A user-marked private note                                     | Not found. Only generated private exports exist (`packages/notes/src/private-note-export.ts:7`)                                                                                                                   | Ruling B6.                                                                                                         |
 
 ### 1.4 Add-on, pairing, hosting
 
@@ -73,7 +73,7 @@ Every capability the plan relies on, with evidence. Paths are relative to `~/Jar
 | Owner-only RLS pattern                                                                | `packages/connectors/sql/0022_connectors_owner_only.sql:11-40`                                                      | Copied for new tables.                                                          |
 | Spike add-on: MV3, `activeTab` + `scripting`, network blocked by CSP                  | `spikes/o365-firefox-preview-prototype/manifest.json`; results `README.md:244-437`                                  | Product add-on starts from the reader code, not from this manifest.             |
 | Hosted file download from Moss                                                        | Only data export (`packages/settings/src/data-export-async-routes.ts:76`)                                           | Slice 5 adds a static download route.                                           |
-| Microsoft sign-in (Graph) connector                                                   | Not found in `packages/connectors/src` or `apps`                                                                    | Open question Q1. The first mockup screen has nothing to call.                  |
+| Microsoft sign-in (Graph) connector                                                   | Not found in `packages/connectors/src` or `apps`                                                                    | Ruling B1. Screen 02 is built disabled.                                         |
 
 ### 1.5 Web and app map
 
@@ -88,18 +88,18 @@ Every capability the plan relies on, with evidence. Paths are relative to `~/Jar
 
 ## 2. Live tests before building
 
-Run on the dedicated server browser with invented messages only, sent with Ben's explicit allowance (the spike used five per round). Record counts and pass or fail only. No real mail text leaves the browser.
+Run on the dedicated server browser against mail already in Ben's inbox. No test messages are sent (ruling B3). Record counts and pass or fail only. No mail text, subject or sender leaves the browser or enters any log, note or report.
 
-| #   | Question                                                    | Pass                                                                                                                         | Blocks                |
-| --- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| L1  | Does Outlook's own "Mark as unread" restore state reliably? | 5 of 5 unread messages opened by script and marked unread again still show unread after a page reload and on a second client | Slice 2               |
-| L2  | Inbox sort. Is the sort a mailbox-wide setting?             | Record the default. Change it in the dedicated window and check a second client. If it syncs, Moss must not change it (Q2).  | Slice 2               |
-| L3  | Row time format                                             | Record what the row shows for today, yesterday and older mail, and whether the opened message shows a full date and time     | Slice 2 marker design |
-| L4  | Focused Inbox                                               | Record whether "Other" exists on the account and whether Moss must read both                                                 | Slice 2               |
-| L5  | A second tab on `/mail/` in the same profile                | Calendar job stays `current` across 3 runs while a mail tab opens and closes; no sign-out                                    | Slice 2 (ruling R2)   |
-| L6  | Can the add-on be installed on Ben's managed work browser?  | Unsigned temporary load succeeds on Firefox and in Chrome developer mode                                                     | Slice 4 timing        |
+| #   | Question                                                    | Pass                                                                                                                                                                                       | Blocks                |
+| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| L1  | Does Outlook's own "Mark as unread" restore state reliably? | 5 of 5 unread messages opened by script and marked unread again still show unread after a page reload and on a second client                                                               | Slice 2               |
+| L2  | Inbox sort. Is the sort a mailbox-wide setting?             | Record the default. Change it in the dedicated window and check a second client. Moss never changes it either way (ruling B4); this test only records whether a non-date sort is possible. | Slice 2               |
+| L3  | Row time format                                             | Record what the row shows for today, yesterday and older mail, and whether the opened message shows a full date and time                                                                   | Slice 2 marker design |
+| L4  | Focused Inbox                                               | Record whether "Other" exists on the account and whether Moss must read both                                                                                                               | Slice 2               |
+| L5  | A second tab on `/mail/` in the same profile                | Calendar job stays `current` across 3 runs while a mail tab opens and closes; no sign-out                                                                                                  | Slice 2 (ruling R2)   |
+| L6  | Can the add-on be installed on Ben's managed work browser?  | Unsigned temporary load succeeds on Firefox and in Chrome developer mode                                                                                                                   | Slice 4 timing        |
 
-Owner: Ben runs L6 on his laptop. A build agent runs L1 to L5 through the dedicated browser, with Ben's allowance for the test sends.
+Owner: Ben runs L6 on his laptop. A build agent runs L1 to L5 through the dedicated browser. For L1, use messages that are already unread; if fewer than 5 exist, test every unread message present and record the count.
 
 ## 3. Design forks
 
@@ -123,7 +123,7 @@ The spec's goal is that the calendar keeps its single page. Option A meets it mo
 
 | Option                                                         | For                                                                                                                                                              | Against                                                                                                                                  |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Connector-owned code and token tables (chosen)**          | Matches the approved mockup (code on screen). Owned by connectors, so no change to platform auth or the route-guard allow-list. Token can only call mail routes. | New tables, new token code. Still needs the Moss address typed into the add-on (Q3).                                                     |
+| **A. Connector-owned code and token tables (chosen)**          | Matches the approved mockup (code on screen). Owned by connectors, so no change to platform auth or the route-guard allow-list. Token can only call mail routes. | New tables, new token code. Still needs the Moss address typed into the add-on (ruling B5).                                              |
 | B. Reuse companion pairing with a new `browser-addon` platform | Proven three-secret flow, rate limits, expiry. The Android app already solves "type the address, approve in Moss" with no code.                                  | Changes platform auth owned by no module. Companion credentials carry device and recording semantics. Diverges from the approved screen. |
 
 ### F4. Ordering
@@ -283,7 +283,7 @@ export async function ingestWorkMail(
 - Messages are sorted oldest first. The cursor advances after each message that finishes.
 - On an AI failure the batch stops, and the cursor stays at the last finished message.
 - A vault write that returns `changed` (the user edited the note mid-write) re-reads once, then counts as `vault-unavailable`.
-- The default note is `Work mail notes.md` at the notes-folder root. With no notes folder linked, see Q5.
+- The default note is `Work mail notes.md` at the notes-folder root. With no notes folder linked, it is `Work mail notes.md` in the private Moss vault (ruling B7).
 
 **Tests (behaviour, and why a broken build fails them)**
 
@@ -407,7 +407,7 @@ export interface OutlookMailStatus {
 - Runs only when the calendar sync in the same job did not end in `sign-in-needed` or `source-changed`, the email grant is on, and 30 minutes have passed since the last attempt.
 - Budget is 120 seconds and 25 messages. Leftovers wait for the next run.
 - Before opening a row, record whether it is unread. After capture, mark it unread again if it was. A failed restore counts and the read continues.
-- Never sends, moves, deletes or flags. Never changes the inbox sort unless Q2 rules otherwise.
+- Never sends, moves, deletes or flags. Never changes the inbox sort (ruling B4). If the list is not sorted newest first, the read stops with `source-changed`.
 - The mail tab is closed in `finally`. Stray mail tabs from a crashed run are closed at the start of the next run.
 - Reader rows are parsed in an isolated world, like the calendar input guard.
 
@@ -450,13 +450,13 @@ Use the `design-system` skill before writing UI.
 
 **Screens built** (from the approved mockup)
 
-| Mockup       | Built in this slice                                                                                                |
-| ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| 01 picker    | Yes                                                                                                                |
-| 02 sign-in   | Only if Q1 is settled with a working connector. Otherwise the picker opens the connect page directly.              |
-| 03 blocked   | The "Use the server window" link only, shown when `available` is true for this user. Add-on steps come in slice 4. |
-| 04 connected | Yes. Status line reads "Server window" for this route.                                                             |
-| 05 problems  | Sign-in needed and page changed. "Add-on not seen" comes in slice 4.                                               |
+| Mockup       | Built in this slice                                                                                                                           |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01 picker    | Yes                                                                                                                                           |
+| 02 sign-in   | Yes, disabled. "Sign in with Microsoft" shows as unavailable with the line "Not available yet" (ruling B1). The browser choices sit below it. |
+| 03 blocked   | The "Use the server window" link only, shown when `available` is true for this user. Add-on steps come in slice 4.                            |
+| 04 connected | Yes. Status line reads "Server window" for this route.                                                                                        |
+| 05 problems  | Sign-in needed and page changed. "Add-on not seen" comes in slice 4.                                                                          |
 
 **Tests**
 
@@ -466,7 +466,7 @@ Use the `design-system` skill before writing UI.
 | same                                              | At 390px no control overlaps its neighbour (bounding-box check)                                                                                            | Crowding                                                        |
 | `tests/unit/app-map-integrity.test.ts` (existing) | Passes with the new Connections text                                                                                                                       | App map not updated                                             |
 
-**Live proof (Live-Path Gate).** On a dev instance bound to the dedicated browser, with invented messages sent under Ben's allowance: turn on Email access, wait one run, see "Last read" update, open the note and find the entry, and confirm the test messages are still unread in Outlook. Recorded on PR A. Without it PR A stays code-complete, unverified.
+**Live proof (Live-Path Gate).** On a dev instance bound to the dedicated browser, using mail already in Ben's inbox (ruling B3): turn on Email access, wait one run, see "Last read" update, open the note and find any entry, and confirm messages that were unread before the run are still unread in Outlook. The PR records counts only, never mail content. Recorded on PR A. Without it PR A stays code-complete, unverified.
 
 **Verification**
 
@@ -483,7 +483,7 @@ Then the full gate through `verify-gate`, expect exit 0.
 
 ### Slice 4. Browser add-on, pairing and upload
 
-Needs L6 and Q3 settled. New PR (PR B), new worktree.
+Needs L6 passed. Address shown beside the code (ruling B5). New PR (PR B), new worktree.
 
 **Files**
 
@@ -592,7 +592,7 @@ export type AddonMessageResponse =
 | `apps/outlook-mail-addon/src/outlook-reader.test.ts`   | Reader against the same fixture inbox as slice 2. Restores unread.                                                      | Reader drifts from the server reader |
 | `tests/e2e/outlook-mail-addon-flow.spec.ts`            | Blocked screen shows the code, New code replaces it, the row shows Browser add-on and Revoke                            | Screens not wired                    |
 
-**Live proof.** Ben loads the developer build in his own browser, pairs with a dev instance, and sends invented messages. The row shows the read time and the note gets the entry. Recorded on PR B.
+**Live proof.** Ben loads the developer build in his own browser, pairs with a dev instance, and leaves Outlook open on his existing inbox (no test sends). The row shows the read time and the note gets the entry. Recorded on PR B.
 
 **Verification**
 
@@ -662,18 +662,20 @@ Starts only after #3570's managed collector and Settings onboarding merge. Plann
 | Slice 6                                           | Yes.                                            |
 | Server-window link for anyone but the bound owner | Yes. Hidden until then.                         |
 
-## 7. Open questions for Ben
+## 7. Ben's rulings (2026-10-26)
 
-| #   | Question                                                                                                                                           | Proposed                                                                                                                                  | Blocks  |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| Q1  | Mockup screen 02 is "Sign in with Microsoft". No Microsoft sign-in connector exists, and your employer already blocked it. Build the screen now?   | Skip screen 02 until a real connector exists, which is its own milestone. The picker opens the add-on and server-window choices directly. | Slice 3 |
-| Q2  | If L2 shows the inbox sort is saved to the mailbox, Moss changing it would change your Outlook everywhere.                                         | Never change it. If the sort is not by date, show "Outlook page changed" with a plain reason.                                             | Slice 2 |
-| Q3  | The add-on cannot know your Moss address. Mockup step 3 shows only a code.                                                                         | Show the address beside the code: "Enter this address and code in the add-on".                                                            | Slice 4 |
-| Q4  | "Never write to a note marked private" has no existing meaning in Moss.                                                                            | A note whose front matter has `private: true` is never a destination.                                                                     | Slice 1 |
-| Q5  | Where entries go when no notes folder is linked.                                                                                                   | The private Moss vault, in `Work mail notes.md`.                                                                                          | Slice 1 |
-| Q6  | Spec says scrape interval and messages per scrape are user-changeable. Preferences are free text, so code cannot read a number from them reliably. | Fixed at 30 minutes and 25 for now. Free-text preferences steer only what counts as important and where it goes.                          | Slice 1 |
-| Q7  | Live tests L1 to L5 need a few invented messages sent to your work mailbox.                                                                        | Allowance of 10 test sends, deleted afterwards as in the spike.                                                                           | Slice 2 |
-| Q8  | The spec puts the add-on first. This plan builds the server window first (F4).                                                                     | Server window first.                                                                                                                      | Order   |
+| #   | Ruling                                                                                                                                 | Applies to               |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| B1  | Keep the "Sign in with Microsoft" screen, but disabled, saying it is not available yet. No Microsoft sign-in connector is built.       | Slice 3                  |
+| B2  | Build the server window first, then the add-on.                                                                                        | Order                    |
+| B3  | Live tests and live proofs use mail already in Ben's inbox. No test messages are sent.                                                 | L1 to L5, slices 3 and 4 |
+| B4  | Moss never changes the inbox sort.                                                                                                     | Slice 2                  |
+| B5  | The blocked screen shows the Moss address beside the pairing code: "Enter this address and code in the add-on".                        | Slice 4                  |
+| B6  | A note whose front matter has `private: true` is never a destination.                                                                  | Slice 1                  |
+| B7  | Default destination is a "Work mail notes" note: in the notes folder when linked, else in the private Moss vault.                      | Slice 1                  |
+| B8  | Read interval fixed at 30 minutes and cap at 25 messages. Free-text preferences steer only what counts as important and where it goes. | Slices 1, 2              |
+
+No open questions remain for slices 1 to 5.
 
 ## 8. Rulings ledger
 
@@ -694,5 +696,5 @@ Facts and decisions found while planning, kept so nobody re-derives them.
 | R11 | Fact                 | Structured prompts are capped at 64 KB                                                                                                                                       | `schema-bounds.ts:4`                                                                       |
 | R12 | Fact                 | Firefox unlisted signing needs a one-time developer account for the project, not for each user. Spec's "no store account" holds for users only.                              | Mozilla signing policy; not in the tree                                                    |
 | R13 | Not cited            | Whether structured AI calls persist prompt text anywhere. No insert of prompt text found in a grep of `packages/ai/src`, but not proven. The slice 1 canary test settles it. | —                                                                                          |
-| R14 | Not cited            | A user-marked private note                                                                                                                                                   | Q4                                                                                         |
-| R15 | Not cited            | A Microsoft sign-in connector                                                                                                                                                | Q1                                                                                         |
+| R14 | Not cited            | A user-marked private note                                                                                                                                                   | B6                                                                                         |
+| R15 | Not cited            | A Microsoft sign-in connector                                                                                                                                                | B1                                                                                         |
