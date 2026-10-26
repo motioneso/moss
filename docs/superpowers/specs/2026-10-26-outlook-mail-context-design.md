@@ -1,18 +1,19 @@
 # Outlook work mail as context for Moss
 
-Date: 2026-10-26. Status: draft from a conversation with Ben, awaiting his review.
+Date: 2026-10-26. Status: draft, awaiting review.
 
 ## Intent
 
-Ben's work mail lives in Microsoft 365. The tenant requires admin approval for any app that signs
-in, and IT approval is not available yet. Moss still needs to know what is happening in that
-mailbox so it can plan his day and keep his notes current.
+Many people keep their work mail in Microsoft 365, and many employers require admin approval for
+any app that signs in. Those users cannot connect Moss to their mail through a normal connector,
+yet Moss still needs to know what is happening in the mailbox so it can plan their day and keep
+their notes current.
 
-The existing Outlook calendar collector already keeps a signed-in Chrome window on the server.
-This feature reads mail through the same window, the way a person would. No app registration, no
-tokens, no mailbox sync.
+The Outlook calendar collector already keeps a signed-in browser window on the server for each
+connected user. This feature reads mail through the same window, the way a person would. No app
+registration, no tokens, no mailbox sync, no admin approval.
 
-## Decisions (Ben, 2026-10-26)
+## Decisions
 
 | Question                 | Ruling                                                                           |
 | ------------------------ | -------------------------------------------------------------------------------- |
@@ -20,14 +21,14 @@ tokens, no mailbox sync.
 | How much of each message | The full text.                                                                   |
 | What Moss does with it   | Reads it, and updates vault notes when it finds something important.             |
 | Stored mail              | None. Moss does not keep a copy of the mailbox.                                  |
-| Why not Graph or IMAP    | Tenant approval is required for Graph and for Thunderbird. Password IMAP is off. |
+| Why not Graph or IMAP    | Graph and desktop mail apps need tenant approval. Password IMAP is off.          |
 
 ## Prior evidence
 
 - Spike `spikes/o365-firefox-preview-prototype` (2026-10-21, version 0.4.3) opened a new message
   from a watched inbox and captured its full body locally. Live result: body captured, one row
   opened, 38 scans.
-- Gaps from the spike. Sender showed as "Not found". Only one message per run. No restart
+- Gaps from the spike. The sender showed as "Not found". Only one message per run. No restart
   recovery. No Moss ingestion.
 - PR #3568 (production) runs the calendar collector. It needs exactly one Calendar page open in
   its Chrome window, and breaks when that page is anything else.
@@ -96,8 +97,8 @@ settings. Mail inherits that rule and does not weaken it. For other people to us
 - Provider-agnostic AI. The step asks for a capability. No model name appears.
 - Vault writes go through `VaultContext` only.
 - Moss reads only. It never sends, deletes, moves, flags or marks mail unread.
-- Opening a message in Outlook marks it read (confirmed on Ben's account, 2026-10-26). Users change
-  no Outlook setting. Moss accepts that messages it reads become read, and tells the user so in
+- Opening a message in Outlook marks it read (confirmed live, 2026-10-26). Users change no Outlook
+  setting. Moss accepts that messages it reads become read, and tells the user so in
   settings. Moss never marks anything unread again, because that would be a mailbox write.
 - Moss does not rely on read or unread state to find new mail. It tracks the last message it read
   (sender, subject, received time and a hash of them) and reads only messages newer than that
