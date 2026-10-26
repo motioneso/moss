@@ -208,6 +208,9 @@
   cursor: pointer;
   transition: var(--transition-control);
 }
+a.set2__navitem {
+  text-decoration: none;
+}
 .set2__navitem .ic {
   display: inline-flex;
   flex: none;

@@ -12,8 +12,8 @@ import xml.etree.ElementTree as ET
 
 from replacement_broadcasts import replacement_records, receiver_delivered
 
-PACKAGE = "ai.moss.vocci.upgradeproof"
-SERVICE = "ai.moss.vocci.DeliveryService"
+PACKAGE = "ai.moss.android.upgradeproof"
+SERVICE = "ai.moss.android.DeliveryService"
 BLUETOOTH = "android.permission.BLUETOOTH_CONNECT"
 
 
@@ -106,7 +106,7 @@ def main():
             adb("shell", "pm", "grant", PACKAGE, BLUETOOTH)
         enabled = args.case != "disabled"
         output = adb("shell", "am", "instrument", "-w", "-e", "mode", "init", "-e", "enabled", str(enabled).lower(),
-                     "-e", "port", args.port, PACKAGE + "/ai.moss.vocci.UpgradeFixture", timeout=60)
+                     "-e", "port", args.port, PACKAGE + "/ai.moss.android.UpgradeFixture", timeout=60)
         check("INSTRUMENTATION_CODE: -1" in output and "result=PASS" in output, "generated_fixture_initialized")
         before = snapshot()
         check(choices().get("enabled") == str(enabled).lower(), "baseline_choice_saved")
@@ -123,7 +123,7 @@ def main():
             service = SERVICE in adb("shell", "dumpsys", "activity", "services", PACKAGE)
             current = state()
             advice = choices().get("recovery", "")
-            delivered = any(receiver_delivered(block, PACKAGE, "ai.moss.vocci.DeliveryRecovery") for block in records.values())
+            delivered = any(receiver_delivered(block, PACKAGE, "ai.moss.android.DeliveryRecovery") for block in records.values())
             observed = current.get("activity") == "retry_pending" if args.case == "enabled" else bool(advice) if args.case == "permission-denied" else True
             if (delivered and observed) or time.monotonic() >= deadline:
                 break

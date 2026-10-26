@@ -1,7 +1,7 @@
 # Installed upgrade persistence proof
 
 This optional developer proof builds unchanged production Java sources as
-`ai.moss.vocci.upgradeproof`. It refuses to reuse an installed package. The
+`ai.moss.android.upgradeproof`. It refuses to reuse an installed package. The
 fixture creates only generated silence, a partial download, frozen normal/voice
 uploads, failed/interrupted/completed entries and dummy encrypted configuration.
 It never signs in, connects to a real account or ring, or alters the existing
@@ -145,7 +145,7 @@ The first unlocked attempt failed at the harness's implicit activity launch.
 The corrected runner obtains the actual launchable class from APK badging,
 checks the disposable manifest's exported declaration and starts that explicit
 component. Package-manager resolution independently identified the same
-`ai.moss.vocci.DeliveryActivity`. No production source or APK changed for this
+`ai.moss.android.DeliveryActivity`. No production source or APK changed for this
 harness correction. Earlier failed receipts remain failed. Enabled recovery,
 physical reboot and resumed real pending transfers are not claimed.
 

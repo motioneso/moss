@@ -5,13 +5,13 @@ never the release application. The regular companion still requires the
 provisioning described in its parent README until the remaining wizard is built.
 
 `bash apps/vocci-delivery/proof/build.sh` builds a separate
-`ai.moss.vocci.setupproof` application, **Moss setup proof**. It compiles the same
+`ai.moss.android.setupproof` application, **Moss setup proof**. It compiles the same
 `VocciAccount`, `VocciHttp` and `VocciBindings` classes intended for the setup
 wizard. It has Internet and Bluetooth connect access, but no delivery service
 or private-file provisioning flow. Ring access is requested explicitly only for
 the selected-ring proof described below. It does not request scan access. The optional Moss-link proof screen is
 described below. Installing it does not replace
-`ai.moss.vocci`.
+`ai.moss.android`.
 
 Open the proof and use the email of your existing Vocci account. **Send code**
 starts native sign-in. **Verify code** completes email verification and requests
@@ -46,7 +46,7 @@ Installed synthetic contract checks:
 
 ```bash
 adb -s <phone> shell am instrument -w \
-  ai.moss.vocci.setupproof/ai.moss.vocci.VocciAuthChecks
+  ai.moss.android.setupproof/ai.moss.android.VocciAuthChecks
 ```
 
 Expected: `result=PASS`, instrumentation code `-1`. These checks use synthetic
@@ -68,7 +68,7 @@ The same isolated APK also contains `MossSetupProofActivity`, backed by
 
 ```bash
 adb -s <phone> shell am start -n \
-  ai.moss.vocci.setupproof/ai.moss.vocci.MossSetupProofActivity
+  ai.moss.android.setupproof/ai.moss.android.MossSetupProofActivity
 ```
 
 Enter the Moss HTTPS origin, choose **Connect Moss in browser**, approve the phone
@@ -95,7 +95,7 @@ Installed synthetic staging checks use dedicated synthetic stores:
 
 ```bash
 adb -s <phone> shell am instrument -w \
-  ai.moss.vocci.setupproof/ai.moss.vocci.SetupLinkChecks
+  ai.moss.android.setupproof/ai.moss.android.SetupLinkChecks
 ```
 
 For the private live UI harness, `-e inspect true` returns only phase/staging/config
@@ -138,7 +138,7 @@ Installed synthetic checks (dedicated stores, synthetic network and ring ports):
 
 ```bash
 adb -s <phone> shell am instrument -w \
-  ai.moss.vocci.setupproof/ai.moss.vocci.SetupRingChecks
+  ai.moss.android.setupproof/ai.moss.android.SetupRingChecks
 ```
 
 These contracts do not prove live physical setup. Real native selection and a separate physical diagnostic passed; the complete
@@ -152,7 +152,7 @@ and existing-key acceptance using the candidate selected through this actual UI:
 
 ```bash
 adb -s <phone> shell am instrument -w \
-  ai.moss.vocci.setupproof/ai.moss.vocci.SetupPhysicalCheck
+  ai.moss.android.setupproof/ai.moss.android.SetupPhysicalCheck
 ```
 
 It returns only pass/fail, a bounded connection-stage code on failure, and whether

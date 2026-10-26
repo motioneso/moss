@@ -1,4 +1,4 @@
-package ai.moss.vocci;
+package ai.moss.android;
 
 import android.app.Instrumentation;
 import android.os.Bundle;
@@ -10,7 +10,7 @@ import org.json.JSONObject;
 /** Generated content only. Refuses every package except the disposable upgrade proof. */
 public final class UpgradeFixture extends Instrumentation {
     private Bundle arguments;
-    private static final String PACKAGE = "ai.moss.vocci.upgradeproof";
+    private static final String PACKAGE = "ai.moss.android.upgradeproof";
     @Override public void onCreate(Bundle args) { arguments = args; super.onCreate(args); start(); }
     @Override public void onStart() {
         Bundle result = new Bundle();

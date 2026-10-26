@@ -9,7 +9,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
-PACKAGE = "ai.moss.vocci.upgradeproof"
+PACKAGE = "ai.moss.android.upgradeproof"
 HERE = Path(__file__).resolve().parent
 ANDROID = "http://schemas.android.com/apk/res/android"
 ATTR = lambda name: "{" + ANDROID + "}" + name
@@ -40,16 +40,16 @@ def main():
     android_jar, build_tools = sdk / "platforms/android-35/android.jar", sdk / "build-tools/35.0.0"
     classes, dex = out / "classes", out / "dex"
     classes.mkdir(); dex.mkdir()
-    sources = sorted((source / "src/ai/moss/vocci").glob("*.java"))
+    sources = sorted((source / "src/ai/moss/android").glob("*.java"))
     sources.append(HERE / "UpgradeFixture.java")
-    selection = source / "proof/src/ai/moss/vocci/SetupSelectionChecks.java"
+    selection = source / "proof/src/ai/moss/android/SetupSelectionChecks.java"
     selection_digest = None
     if selection.exists():
         # Keep the isolation guard; substitute only the explicitly owned test package.
         original = selection.read_text()
-        assert original.count('"ai.moss.vocci.setupproof"') == 1
+        assert original.count('"ai.moss.android.setupproof"') == 1
         adapted = out / "SetupSelectionChecks.java"
-        adapted.write_text(original.replace('"ai.moss.vocci.setupproof"', '"' + PACKAGE + '"'))
+        adapted.write_text(original.replace('"ai.moss.android.setupproof"', '"' + PACKAGE + '"'))
         sources.append(adapted)
         selection_digest = digest(selection)
     run(java / "javac", "--release", "11", "-cp", android_jar, "-d", classes, *sources)
@@ -70,7 +70,7 @@ def main():
     for item in root.findall("instrumentation"):
         root.remove(item)
     for name in ["UpgradeFixture"] + (["SetupSelectionChecks"] if selection.exists() else []):
-        ET.SubElement(root, "instrumentation", {ATTR("name"): "ai.moss.vocci." + name,
+        ET.SubElement(root, "instrumentation", {ATTR("name"): "ai.moss.android." + name,
             ATTR("targetPackage"): PACKAGE, ATTR("functionalTest"): "true"})
     manifest = out / "AndroidManifest.xml"
     tree.write(manifest, encoding="utf-8", xml_declaration=True)
