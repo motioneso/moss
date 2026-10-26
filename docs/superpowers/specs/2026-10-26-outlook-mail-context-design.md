@@ -115,7 +115,7 @@ settings. Mail inherits that rule and does not weaken it. For other people to us
 
 Settings shows one new row under the Outlook connection, "Work mail", with an on/off switch, the
 time of the last scrape, and the count of messages read. It follows the calendar row's layout and
-states. Mockups still need Ben's agreement before building.
+states. Mockups need approval before building.
 
 ## Open questions
 
