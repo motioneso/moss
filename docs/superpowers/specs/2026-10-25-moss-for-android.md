@@ -12,6 +12,7 @@ Task: #3761. Builds on the ring app layout spec, `2026-10-25-vocci-ring-app-layo
 
 ## Goal
 
+- First open connects the app to a Moss instance. It says nothing about the ring.
 - The app is how Android opens Moss. It shows the Moss site full screen, with no tab bar.
 - Moss's own Settings gains a Hardware entry under Connections, shown only inside the Android app.
 - Hardware opens a native page styled like Moss Settings, holding only the ring settings.
@@ -25,6 +26,12 @@ Task: #3761. Builds on the ring app layout spec, `2026-10-25-vocci-ring-app-layo
 2. Hardware page, top: status card, recent deliveries, switches
 3. Hardware page, scrolled: ring, phone storage, account, troubleshooting, and the problem card
 
+`setup.html`, rendered as `setup.png`:
+
+1. First open: Connect to Moss
+2. Sign in and approve on Moss's approval page, inside the app
+3. Connected: Moss opens; ring setup waits in Hardware
+
 ## Decisions
 
 | Question                                     | Decision                                                                                                                                        |
@@ -35,9 +42,25 @@ Task: #3761. Builds on the ring app layout spec, `2026-10-25-vocci-ring-app-layo
 | Which Moss address the app opens             | The origin saved by ring setup. With no saved origin, the app opens the Hardware page, whose status card offers Set up ring.                    |
 | Sign-in                                      | Normal Moss sign-in inside the web view, with its own cookies. Separate from the ring's account link.                                           |
 
+## First open: Connect to Moss
+
+- Shown only while the app has no Moss link. Existing installs with a saved link skip it.
+- Eyebrow "MOSS", title "Connect to Moss", one field "Moss address", one primary button "Connect".
+  No ring, Vocci or delivery wording.
+- Connect starts the existing Moss link (`MossLink` / `SetupLink`, phases EMPTY to APPROVAL to LINKED).
+- The approval page opens inside the app's web view, not the external browser. The user signs in to
+  Moss there once, so the web view is already signed in afterwards.
+- While the approval page shows, the app checks the link in the background every few seconds. Remove the
+  Check approval button. On approval the app opens the Moss screen.
+- A Cancel action in the top bar cancels the attempt and returns to Connect to Moss.
+- Errors (bad address, unreachable server, declined) show as one line under the field.
+- Web change: the approval page's Android wording says "Moss for Android" instead of "Moss ring
+  companion".
+
 ## The Moss screen (new launcher)
 
-- New activity, the app's launcher. A full-screen `WebView` on the saved origin.
+- New activity, the app's launcher. A full-screen `WebView` on the saved origin. With no Moss link it
+  shows Connect to Moss instead.
 - Same-origin pages stay in the web view. Any other address opens in the default browser.
 - Android back goes back in web history. At the first page it leaves the app.
 - Opening Hardware and returning keeps the web view's page and scroll.
@@ -76,6 +99,15 @@ One scrolling native page. It merges PR 3760's Home and Settings screens, in thi
   returns to Hardware.
 - Exactly one primary button on the page, the status card's when the state needs one.
 
+## Ring setup
+
+- Starts from the status card's "Set up ring" on Hardware, or Ring, Set up ring again.
+- Picks up at the Vocci account step, reusing the existing Moss link. The Moss section leaves the ring
+  setup screen.
+- Setting up or redoing the ring never disconnects Moss. Only Account, Disconnect does that.
+- With a Moss link and no ring, the status card shows "Set up your ring" with Set up ring as its button,
+  and no ring problem notification is posted.
+
 ## Ring problem notifications
 
 - New channel "Ring problems", default importance.
@@ -110,8 +142,10 @@ One scrolling native page. It merges PR 3760's Home and Settings screens, in thi
 
 - `./test.sh` green, including the new notification-choice tests.
 - Web unit test: Hardware shows with the marker and is absent without it.
+- Host tests: first open shows Connect to Moss only with no Moss link; ring setup starts at the Vocci
+  step when a link exists.
 - Live on Ben's phone, installed as an update with the kept development key:
-  - The app opens Moss full screen, signed in.
+  - The app opens Moss full screen, signed in. The existing link and ring setup survive the update.
   - Settings, Connections, Hardware opens the native page. Back returns to the same Moss page.
   - The same Settings in a desktop browser has no Hardware entry.
   - An outside link opens in the browser.
