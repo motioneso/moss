@@ -96,8 +96,10 @@ settings. Mail inherits that rule and does not weaken it. For other people to us
 - Provider-agnostic AI. The step asks for a capability. No model name appears.
 - Vault writes go through `VaultContext` only.
 - Moss reads only. It never sends, deletes, moves, flags or marks mail read.
-- Opening a message in Outlook can mark it read. The job must keep it unread, or Ben must accept
-  the change. See open questions.
+- Opening a message in Outlook marks it read (confirmed on Ben's account, 2026-10-26). Moss reads
+  through the reading pane. Setup asks the user to set Outlook's "mark as read" option to never,
+  so Moss leaves read state untouched. If the user declines, a preference lets Moss mark the
+  messages it opened as read, and Moss tells the user it will.
 
 ## Failure behavior
 
@@ -114,8 +116,8 @@ states. Mockups still need Ben's agreement before building.
 
 ## Open questions
 
-1. Does opening a message mark it read in Ben's Outlook, and does he mind. Check live before
-   building.
+1. Whether Outlook's "never mark as read" option stops the mark when Moss selects a message.
+   Check live before building.
 2. Where users set mail preferences. Proposed chat first, with the saved facts visible in the
    memory screen, and no separate settings form for them.
 3. Do shared or delegated mailboxes matter. Proposed no, the primary mailbox only.
