@@ -48,6 +48,38 @@ registration, no tokens, no mailbox sync, no admin approval.
 6. The job records a scrape marker and a small dedupe list (hash of message id and time). Nothing
    else about the mail is stored.
 
+## Two ways to read mail
+
+Both routes feed the same processing, preferences, vault rules and last-read marker. They differ
+only in where the reading happens.
+
+| Route                     | Where it reads                                | Best for                                  |
+| ------------------------- | --------------------------------------------- | ----------------------------------------- |
+| Add-on (first)            | The user's own browser, signed in to Outlook  | Users who may install add-ons             |
+| Server window (second)    | A signed-in browser window on the Moss server | Users who cannot install add-ons          |
+
+The Shape section below describes the server window route. The add-on route differs as follows.
+
+### Add-on route
+
+- The add-on grows out of `spikes/o365-firefox-preview-prototype`. The prototype is a throwaway
+  that loads only as a temporary add-on and is blocked from any network request. The product
+  add-on adds a connection to the user's own Moss and nothing else.
+- Moss offers the add-on for download from Settings, next to the "Work mail" row, with plain
+  install steps. Moss hosts a signed package so no store account is needed for Firefox.
+- Pairing. Settings shows a one-time pairing code. The user enters it in the add-on, which then
+  holds a per-user token that Moss can revoke from Settings. The add-on may call only the paired
+  Moss address.
+- While the user has Outlook open, the add-on finds messages newer than the last-read marker,
+  opens each, and sends the message text to Moss over HTTPS. Moss replies with the new marker.
+- Message text is handled in the request that receives it and is dropped afterwards. It never
+  goes into a job payload. If processing cannot finish in the request, Moss stores nothing and
+  asks the add-on to resend (see open questions).
+- Mail only flows while the user's browser is open on Outlook. The settings row shows the time
+  of the last read so a gap is visible.
+- Chrome and Edge packaging needs a store listing or an enterprise install, and is a later step.
+  Firefox ships first because the prototype already runs there.
+
 ## Mail preferences (per user, kept in Moss memory)
 
 Each user tells Moss how to handle their mail in plain words, in chat or in settings. Moss saves
@@ -125,6 +157,10 @@ states. Mockups need approval before building.
    memory screen, and no separate settings form for them.
 3. Do shared or delegated mailboxes matter. Proposed no, the primary mailbox only.
 4. Whether per-user browser profiles are practical on a shared server. Depends on issue 3570.
+5. Where the add-on route processes message text, given that job payloads cannot carry it.
+   Proposed, process inside the receiving request with a time limit, and have the add-on retry.
+6. Whether employers that block add-ons also block this one. Cannot be known in advance, so the
+   server window route stays as the fallback.
 
 ## Not in scope
 
