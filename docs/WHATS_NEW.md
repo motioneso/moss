@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-26
+
+#### Added
+
+- **Moss for Android.** Moss now has an Android app that opens Moss full screen, with ring settings under Settings, Connections, Hardware. [PR #3764](https://github.com/motioneso/moss/pull/3764)
+
 ### 2026-10-25
 
 #### Fixed
