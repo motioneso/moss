@@ -202,10 +202,10 @@ function Blocked() {
       <ol className="onb-guide">
         <Step n={1} text="Download the add-on">
           <Button variant="secondary" size="sm" icon={<Download size={15} />}>
-            Download for Firefox
+            Download
           </Button>
         </Step>
-        <Step n={2} text="Open it in Firefox and click Add" />
+        <Step n={2} text="Add it to your browser" />
         <Step n={3} text="Enter this code in the add-on">
           <dl className="wm-code" aria-label="Pairing code">
             <div className="conn__count">
