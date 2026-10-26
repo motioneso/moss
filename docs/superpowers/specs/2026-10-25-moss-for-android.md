@@ -132,6 +132,8 @@ One scrolling native page. It merges PR 3760's Home and Settings screens, in thi
 - Picks up at the Vocci account step, reusing the existing Moss link. The Moss section leaves the ring
   setup screen.
 - Setting up or redoing the ring never disconnects Moss. Only Account, Disconnect does that.
+- After an app update, delivery restarts by itself if it was on before. Today an update leaves it
+  stopped until someone taps Start.
 - A phone with no ring set up runs no ring service and shows no delivery notification.
 - Outside Hardware, the app never mentions the ring: no prompt, banner or notification after
   connecting.
