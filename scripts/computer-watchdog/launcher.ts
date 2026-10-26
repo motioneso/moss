@@ -75,6 +75,9 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
     const before = await readIdentity(pid);
     await assertRunningImage(pid, nodeKey, [options.nodePath, ...args]);
     await receiveSignal(child, channel, options.ackTimeoutMs ?? ACK_TIMEOUT_MS);
+    // Anything arriving after the signal, while the checks below run, refuses.
+    let extra = false;
+    channel.on("data", () => (extra = true));
     const after = await readIdentity(pid);
     // An exec after spawn replaces the executable or the arguments, and this catches both.
     await assertRunningImage(pid, nodeKey, [options.nodePath, ...args]);
@@ -85,7 +88,7 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
       before.processGroupId !== pid
     )
       throw supervisorError();
-    // Nothing else may arrive once the signal is in.
+    if (extra) throw supervisorError();
     channel.removeAllListeners("data");
     channel.destroy();
     return Object.freeze({ identity: before, kill });
