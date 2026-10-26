@@ -12,6 +12,9 @@ Task: #3761. Builds on the ring app layout spec, `2026-10-25-vocci-ring-app-layo
 
 ## Goal
 
+The app is Moss for Android. The ring is an optional add-on that lives under Hardware, not the app's
+purpose.
+
 - First open connects the app to a Moss instance. It says nothing about the ring.
 - The app is how Android opens Moss. It shows the Moss site full screen, with no tab bar.
 - Moss's own Settings gains a Hardware entry under Connections, shown only inside the Android app.
@@ -105,6 +108,7 @@ One scrolling native page. It merges PR 3760's Home and Settings screens, in thi
 - Picks up at the Vocci account step, reusing the existing Moss link. The Moss section leaves the ring
   setup screen.
 - Setting up or redoing the ring never disconnects Moss. Only Account, Disconnect does that.
+- A phone with no ring set up runs no ring service and shows no delivery notification.
 - Outside Hardware, the app never mentions the ring: no prompt, banner or notification after
   connecting.
 - With a Moss link and no ring, the status card shows "Set up your ring" with Set up ring as its button,
