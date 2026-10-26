@@ -1,120 +1,22 @@
 /* Layout only for the Work mail mockup. Look comes from moss-ui.css. */
 
-.wm-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  margin-top: var(--space-7);
-}
-
 .wm-state {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  margin-top: var(--space-7);
 }
 
-.jds-note--practical p {
-  margin: 0;
-}
-
-.jds-note--practical > * + * {
-  margin-top: var(--space-1);
-}
-
-.wm-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.wm-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.wm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.jds-note--practical > .wm-actions {
-  margin-top: var(--space-3);
-}
-
-/* Steps on the left, pairing code on the right; one column on phones. */
-.wm-setup {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr);
-  gap: var(--space-5) var(--space-7);
-  align-items: start;
-}
-
-.jds-note--practical > .wm-setup {
-  margin-top: var(--space-3);
-}
-
-.wm-steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-  padding-left: var(--space-5);
-}
-
-.wm-steps li > span {
-  display: block;
-}
-
-.wm-steps li > .wm-inline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin-top: var(--space-3);
+.wm-state > .pane__card {
+  margin-top: var(--space-2);
 }
 
 .wm-code {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-left: var(--space-5);
-  border-left: 1px solid var(--line);
-}
-
-.wm-code__value {
-  font-family: var(--font-display);
-  font-size: var(--text-3xl);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.1;
-}
-
-.jds-note--practical > .jds-divider {
-  margin: var(--space-3) 0;
-}
-
-.wm-alt {
-  display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
 }
 
-@media (max-width: 720px) {
-  .wm-setup {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .wm-code {
-    padding-left: 0;
-    padding-top: var(--space-3);
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
+.wm-code__count {
+  margin: 0;
 }

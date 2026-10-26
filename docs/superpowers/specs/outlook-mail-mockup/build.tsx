@@ -1,12 +1,26 @@
-/** Design artifact only. Renders the Work mail settings row with shipped Moss primitives. */
+/** Design artifact only. Renders the Work mail settings section with shipped Moss primitives. */
 import React, { type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { build } from "esbuild";
-import { Badge, Button, ButtonLink, Divider, Eyebrow, Note, Switch } from "@moss/ui";
-import { PaneHead } from "@moss/settings-ui";
-import { Bell, CalendarClock, ChevronDown, Link2, Palette, User } from "lucide-react";
+import { Button, ButtonLink, Eyebrow, Indicator, Switch } from "@moss/ui";
+import { Group, PaneHead, Row } from "@moss/settings-ui";
+import {
+  Bell,
+  CalendarClock,
+  ChevronDown,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  FolderSearch,
+  Link2,
+  Mail,
+  MailCheck,
+  MailWarning,
+  Palette,
+  User
+} from "lucide-react";
 
 Object.assign(globalThis, { React });
 
@@ -61,202 +75,324 @@ function Shell({ children }: { children: ReactNode }) {
           />
           <dl className="conn__counts" aria-label="Connections at a glance">
             <div className="conn__count">
-              <dd>2</dd>
+              <dd>0</dd>
               <dt>Accounts</dt>
             </div>
             <div className="conn__count">
-              <dd>Linked</dd>
+              <dd>None</dd>
               <dt>Notes folder</dt>
             </div>
             <div className="conn__count">
-              <dd>3</dd>
+              <dd>0</dd>
               <dt>Services</dt>
             </div>
           </dl>
-          <div className="wm-stack">
-            <CalendarRow />
-            {children}
-          </div>
+          {children}
+          <AccountsNeighbour />
+          <NotesNeighbour />
         </div>
       </div>
     </div>
   );
 }
 
-/* Static copy of the shipped calendar row in its current state, for placement. */
-function CalendarRow() {
+/* Static copies of the shipped neighbouring sections, for comparison. */
+function AccountsNeighbour() {
   return (
-    <Note variant="practical" aria-label="Outlook calendar connection">
-      <p>
-        <strong>Outlook calendar · Read only</strong>
-      </p>
-      <p role="status">Outlook calendar is current within the covered dates.</p>
-      <p>
-        Last complete refresh: 26 Oct 2026, 2:30 PM. Covered dates: 2026-10-19 through 2026-11-09
-        (end date excluded).
-      </p>
-      <div className="wm-actions">
-        <Button>Sync now</Button>
-        <Button>Disconnect</Button>
+    <Group title="Accounts">
+      <div className="provpick">
+        <div className="provpick__hd">Connect an account</div>
+        <div className="provpick__grid">
+          <button type="button" className="provpick__item">
+            <span className="provpick__dot" />
+            Google
+          </button>
+          <button type="button" className="provpick__item">
+            <span className="provpick__dot" />
+            Email (IMAP)
+          </button>
+        </div>
+        <div className="provpick__foot">
+          Connect Google or an email (IMAP) account using the credentials you provide.
+        </div>
       </div>
-    </Note>
+    </Group>
   );
 }
 
-/* ---- The Work mail row ---- */
+function NotesNeighbour() {
+  return (
+    <Group
+      title={<span className="src-title">Notes folder</span>}
+      desc="Choose a folder of Markdown notes on this server."
+    >
+      <div className="vault">
+        <span className="vault__ic">
+          <FolderOpen size={18} aria-hidden="true" />
+        </span>
+        <div className="vault__main" role="status">
+          <div className="vault__path vault__path--empty">No folder linked</div>
+          <div className="vault__meta">
+            Choose a folder on the server to include your notes as context.
+          </div>
+        </div>
+        <div className="vault__act">
+          <Button variant="secondary" size="sm" icon={<FolderSearch size={15} />}>
+            Browse…
+          </Button>
+        </div>
+      </div>
+    </Group>
+  );
+}
 
-type Tone = "amber" | "red";
+/* ---- The Work mail section ---- */
 
-function MailRow(props: {
-  on: boolean;
-  badge?: { tone: Tone; text: string };
-  status: string;
-  children?: ReactNode;
+type Health = "ready" | "drift" | "error" | "idle";
+
+function WorkMail(props: { on: boolean; children: ReactNode }) {
+  return (
+    <Group
+      title={<span className="src-title">Work mail</span>}
+      desc="Outlook on the web, read only."
+      action={<Switch ariaLabel="Read work mail" checked={props.on} />}
+    >
+      {props.children}
+    </Group>
+  );
+}
+
+/* One status row in the Notes folder pattern: icon tile, status, detail lines, small actions. */
+function StatusRow(props: {
+  icon: ReactNode;
+  status: ReactNode;
+  empty?: boolean;
+  health?: Health;
+  meta: ReactNode[];
+  actions?: ReactNode;
 }) {
   return (
-    <Note variant="practical" aria-label="Outlook work mail connection">
-      <div className="wm-head">
-        <p className="wm-title">
-          <strong>Outlook work mail · Read only</strong>
-          {props.badge ? <Badge tone={props.badge.tone}>{props.badge.text}</Badge> : null}
-        </p>
-        <Switch ariaLabel="Read work mail" checked={props.on} />
+    <div className="vault">
+      <span className="vault__ic">{props.icon}</span>
+      <div className="vault__main" role="status">
+        <div className={`vault__path${props.empty ? " vault__path--empty" : ""}`}>
+          {props.health ? <Indicator status={props.health} label={props.status} /> : props.status}
+        </div>
+        {props.meta.map((line, i) => (
+          <div className="vault__meta" key={i}>
+            {line}
+          </div>
+        ))}
       </div>
-      <p role="status">{props.status}</p>
-      {props.children}
-    </Note>
+      {props.actions ? <div className="vault__act">{props.actions}</div> : null}
+    </div>
   );
 }
 
 const READ_LINE = "Messages Moss opens show as read in Outlook.";
-
-function Actions({ children }: { children: ReactNode }) {
-  return <div className="wm-actions">{children}</div>;
-}
+const LAST_READ = (when: string) => `Last read ${when} · 214 messages read`;
 
 function Off() {
-  return <MailRow on={false} status="Moss is not reading your work mail." />;
+  return (
+    <WorkMail on={false}>
+      <StatusRow
+        icon={<Mail size={18} aria-hidden="true" />}
+        status="Not reading work mail"
+        empty
+        meta={["Switch on to pair the Moss add-on."]}
+      />
+    </WorkMail>
+  );
 }
 
 function TurningOn() {
   return (
-    <MailRow on status="Waiting for the add-on to pair.">
-      <div className="wm-setup">
-        <ol className="wm-steps">
-          <li>
-            <span>Download the add-on and open the file in Firefox.</span>
-            <span className="wm-inline">
-              <ButtonLink href="#download">Download for Firefox</ButtonLink>
-              <span>Chrome and Edge come later.</span>
-            </span>
-          </li>
-          <li>Click Add when Firefox asks.</li>
-          <li>Open Outlook on the web, click the Moss add-on, and enter this code.</li>
-        </ol>
-        <div className="wm-code" aria-label="Pairing code">
-          <Eyebrow tone="gold">Pairing code</Eyebrow>
-          <p className="wm-code__value">K7Q 4MP</p>
-          <p>Works once. Expires at 2:55 PM.</p>
-          <div>
-            <Button variant="link">New code</Button>
-          </div>
-        </div>
-      </div>
-      <Divider />
-      <p className="wm-alt">
-        <span>Cannot install add-ons?</span>
-        <Button variant="link">Use the server window</Button>
-      </p>
-    </MailRow>
+    <WorkMail on>
+      <StatusRow
+        icon={<Mail size={18} aria-hidden="true" />}
+        status="Waiting for the add-on"
+        empty
+        meta={["Pairing code expires at 2:55 PM."]}
+      />
+      <Row
+        className="set-row--stack-narrow"
+        name="1. Download the add-on"
+        desc="Open the file in Firefox. Chrome and Edge come later."
+        control={
+          <Button variant="secondary" size="sm" icon={<Download size={15} />}>
+            Download for Firefox
+          </Button>
+        }
+      />
+      <Row name="2. Add it to Firefox" desc="Click Add when Firefox asks." />
+      <Row
+        className="set-row--stack-narrow"
+        name="3. Enter the pairing code"
+        desc="Open Outlook on the web, click the Moss add-on, and enter this code. It works once."
+        control={
+          <span className="wm-code">
+            <dl className="wm-code__count">
+              <div className="conn__count">
+                <dd>K7Q 4MP</dd>
+                <dt>Pairing code</dt>
+              </div>
+            </dl>
+            <Button variant="quiet" size="sm">
+              New code
+            </Button>
+          </span>
+        }
+      />
+      <Row
+        className="set-row--stack-narrow"
+        name="Cannot install add-ons?"
+        desc="Moss can read mail in a browser window on its server instead."
+        control={
+          <Button variant="secondary" size="sm">
+            Use the server window
+          </Button>
+        }
+      />
+    </WorkMail>
   );
 }
 
 function ServerWindow() {
   return (
-    <MailRow on status="Waiting for Outlook sign-in in the server window.">
-      <p>
-        Open the server window and sign in to Outlook with your work account. Moss starts reading
-        once you are signed in.
-      </p>
-      <Actions>
-        <Button>Open server window</Button>
-        <Button variant="link">Use the add-on instead</Button>
-      </Actions>
-    </MailRow>
+    <WorkMail on>
+      <StatusRow
+        icon={<Mail size={18} aria-hidden="true" />}
+        status="Waiting for Outlook sign-in"
+        empty
+        meta={["Open the server window and sign in with your work account."]}
+        actions={
+          <>
+            <Button variant="secondary" size="sm" icon={<ExternalLink size={15} />}>
+              Open server window
+            </Button>
+            <Button variant="quiet" size="sm">
+              Use the add-on
+            </Button>
+          </>
+        }
+      />
+    </WorkMail>
   );
 }
 
 function Connected() {
   return (
-    <MailRow on status="Reading work mail through the Firefox add-on.">
-      <p>Last read: today, 2:41 PM. 214 messages read.</p>
-      <p>Add-on paired on 26 Oct 2026.</p>
-      <p>{READ_LINE}</p>
-      <Actions>
-        <Button variant="secondary">Revoke add-on</Button>
-      </Actions>
-    </MailRow>
+    <WorkMail on>
+      <StatusRow
+        icon={<MailCheck size={18} aria-hidden="true" />}
+        status="Reading through the Firefox add-on"
+        meta={[LAST_READ("today, 2:41 PM"), `Add-on paired 26 Oct 2026. ${READ_LINE}`]}
+        actions={
+          <Button variant="quiet" size="sm">
+            Revoke add-on
+          </Button>
+        }
+      />
+    </WorkMail>
   );
 }
 
 function NotSeen() {
   return (
-    <MailRow
-      on
-      badge={{ tone: "amber", text: "Not seen" }}
-      status="The add-on has not checked in since yesterday at 5:12 PM. Mail is read only while Outlook is open in Firefox."
-    >
-      <p>Last read: yesterday, 5:12 PM. 214 messages read.</p>
-      <p>{READ_LINE}</p>
-      <Actions>
-        <ButtonLink href="https://outlook.office.com/mail/">Open Outlook</ButtonLink>
-        <Button variant="secondary">Revoke add-on</Button>
-      </Actions>
-    </MailRow>
+    <WorkMail on>
+      <StatusRow
+        icon={<MailWarning size={18} aria-hidden="true" />}
+        health="drift"
+        status="Add-on not seen since yesterday, 5:12 PM"
+        meta={[
+          "Mail is read only while Outlook is open in Firefox.",
+          LAST_READ("yesterday, 5:12 PM")
+        ]}
+        actions={
+          <>
+            <ButtonLink
+              variant="secondary"
+              size="sm"
+              href="https://outlook.office.com/mail/"
+              icon={<ExternalLink size={15} />}
+            >
+              Open Outlook
+            </ButtonLink>
+            <Button variant="quiet" size="sm">
+              Revoke add-on
+            </Button>
+          </>
+        }
+      />
+    </WorkMail>
   );
 }
 
 function SignInAddOn() {
   return (
-    <MailRow
-      on
-      badge={{ tone: "amber", text: "Sign-in needed" }}
-      status="Outlook sign-in required; work mail is not current. Sign in to Outlook in Firefox, then Moss carries on."
-    >
-      <p>Last read: today, 9:05 AM. 214 messages read.</p>
-      <Actions>
-        <ButtonLink href="https://outlook.office.com/mail/">Open Outlook</ButtonLink>
-        <Button variant="secondary">Revoke add-on</Button>
-      </Actions>
-    </MailRow>
+    <WorkMail on>
+      <StatusRow
+        icon={<MailWarning size={18} aria-hidden="true" />}
+        health="drift"
+        status="Outlook sign-in required"
+        meta={[
+          "Work mail is not current. Sign in to Outlook in Firefox, then Moss carries on.",
+          LAST_READ("today, 9:05 AM")
+        ]}
+        actions={
+          <ButtonLink
+            variant="secondary"
+            size="sm"
+            href="https://outlook.office.com/mail/"
+            icon={<ExternalLink size={15} />}
+          >
+            Open Outlook
+          </ButtonLink>
+        }
+      />
+    </WorkMail>
   );
 }
 
 function SignInServer() {
   return (
-    <MailRow
-      on
-      badge={{ tone: "amber", text: "Sign-in needed" }}
-      status="Outlook sign-in required; work mail is not current. Open the server window and sign in, then retry."
-    >
-      <p>Last read: today, 9:05 AM. 214 messages read.</p>
-      <Actions>
-        <Button>Open server window</Button>
-        <Button>Retry</Button>
-      </Actions>
-    </MailRow>
+    <WorkMail on>
+      <StatusRow
+        icon={<MailWarning size={18} aria-hidden="true" />}
+        health="drift"
+        status="Outlook sign-in required"
+        meta={[
+          "Work mail is not current. Open the server window and sign in, then retry.",
+          LAST_READ("today, 9:05 AM")
+        ]}
+        actions={
+          <>
+            <Button variant="secondary" size="sm" icon={<ExternalLink size={15} />}>
+              Open server window
+            </Button>
+            <Button variant="secondary" size="sm">
+              Retry
+            </Button>
+          </>
+        }
+      />
+    </WorkMail>
   );
 }
 
 function PageChanged() {
   return (
-    <MailRow
-      on
-      badge={{ tone: "red", text: "Paused" }}
-      status="Outlook mail layout is unsupported. Reading is paused; the reader needs repair."
-    >
-      <p>Last read: today, 11:20 AM. 214 messages read.</p>
-    </MailRow>
+    <WorkMail on>
+      <StatusRow
+        icon={<MailWarning size={18} aria-hidden="true" />}
+        health="error"
+        status="Paused: Outlook mail page changed"
+        meta={[
+          "Moss cannot read the new layout and needs an update.",
+          LAST_READ("today, 11:20 AM")
+        ]}
+      />
+    </WorkMail>
   );
 }
 
@@ -308,7 +444,7 @@ for (const p of pages) writeFileSync(resolve(out, `${p.file}.html`), page(p.titl
 const links = pages.map((p) => `<li><a href="${p.file}.html">${p.title}</a></li>`).join("");
 writeFileSync(
   resolve(out, "index.html"),
-  `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Work mail mockup</title><link rel="stylesheet" href="moss-ui.css"></head><body><main style="padding:var(--space-7)"><h1>Work mail settings row</h1><ul>${links}</ul></main></body></html>\n`
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Work mail mockup</title><link rel="stylesheet" href="moss-ui.css"></head><body><main style="padding:var(--space-7)"><h1>Work mail settings section</h1><ul>${links}</ul></main></body></html>\n`
 );
 
 /* ---- Frozen stylesheet: the app's cascade plus the Settings sheets, fonts kept local ---- */
