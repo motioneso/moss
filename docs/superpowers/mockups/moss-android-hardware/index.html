@@ -1,0 +1,93 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Archivo;src:url(../../../../apps/vocci-delivery/assets/fonts/Archivo-Black.ttf)}
+body{margin:0;background:#0f0e0b;display:flex;gap:32px;padding:32px;font-family:Roboto,Arial,sans-serif}
+.col{display:flex;flex-direction:column;gap:10px;width:360px}.cap{font-size:15px;color:#ece7dc;font-weight:600}.capsub{font-size:13px;color:#b7b1a2;line-height:1.45}
+.phone{width:360px;height:740px;background:#f2eee4;border-radius:28px;border:1px solid #514c42;box-sizing:border-box;overflow:hidden;position:relative;color:#282c25;font-size:14px}
+.title{font-family:Archivo;font-size:30px;margin:26px 18px 14px;letter-spacing:-.02em}
+.back{margin:22px 18px 0;color:#294b39;font-size:14px;font-weight:600}
+.picker{margin:0 18px;border:1px solid #c6cbbc;background:#faf8f1;border-radius:6px;padding:10px 12px;display:flex;justify-content:space-between}
+.picker small{color:#676c60;font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:block}
+.dim{position:absolute;inset:0;background:rgba(40,44,37,.35)}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:120px;background:#faf8f1;border-radius:16px 16px 0 0;padding:14px 14px}
+.sh{display:flex;justify-content:space-between;font-weight:700;padding:4px 8px 6px}
+.grp{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#676c60;padding:12px 10px 5px}
+.it{padding:8px 10px;border-radius:5px;display:flex;gap:10px;align-items:center}.it i{width:6px;height:6px;background:#9aa08f;border-radius:50%;display:inline-block}
+.new{background:#e4ebe3;outline:2px solid #294b39}.new i{background:#294b39}
+.tag{margin-left:auto;font-size:11px;color:#294b39;font-weight:700}
+.card{margin:10px 18px;background:#faf8f1;border:1px solid #c6cbbc;border-radius:6px;padding:14px}
+.state{display:flex;gap:8px;align-items:center;font-weight:700;font-size:16px}.dot{width:10px;height:10px;border-radius:50%;background:#3f7a59}.dot.warn{background:#b5762a}
+.det{color:#676c60;font-size:13px;margin:5px 0 12px;line-height:1.45}
+.btn{display:inline-block;border:1px solid #294b39;color:#294b39;border-radius:6px;padding:9px 14px;font-weight:600;font-size:13px}.btn.p{background:#294b39;color:#f2eee4}
+.sec{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#676c60;margin:18px 18px 6px}
+.list{margin:0 18px;background:#faf8f1;border:1px solid #c6cbbc;border-radius:6px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:11px 12px;border-top:1px solid #e3e0d5;gap:10px}.row:first-child{border-top:0}
+.row span small{display:block;color:#676c60;font-size:12px;margin-top:2px}
+.sw{width:34px;height:20px;border-radius:10px;background:#294b39;position:relative;flex:none}.sw:after{content:"";position:absolute;right:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#faf8f1}
+.sw.off{background:#c6cbbc}.sw.off:after{left:3px;right:auto}
+.chev{color:#9aa08f}.red{color:#9b3b2e}
+.ok{color:#3f7a59;font-size:12px}.bad{color:#9b3b2e;font-size:12px}
+</style></head><body>
+
+<div class="col"><div class="phone">
+<div class="title">Settings</div>
+<div class="picker"><span><small>Section</small>Account &amp; preferences</span><span class="chev">&#9662;</span></div>
+<div class="dim"></div>
+<div class="sheet">
+<div class="sh"><span>Sections</span><span class="chev">&#10005;</span></div>
+<div class="grp">Your account</div>
+<div class="it"><i></i>Account &amp; preferences</div>
+<div class="it"><i></i>Appearance</div>
+<div class="grp">Your assistant</div>
+<div class="it"><i></i>Your assistant</div>
+<div class="it"><i></i>Scheduled tasks</div>
+<div class="it"><i></i>Memory &amp; context</div>
+<div class="it"><i></i>Alerts &amp; quiet hours</div>
+<div class="grp">Connections</div>
+<div class="it"><i></i>Connections</div>
+<div class="it new"><i></i>Hardware</div>
+</div></div>
+<div class="cap">1. Moss Settings, inside the Android app</div>
+<div class="capsub">The Moss site fills the screen. Hardware sits under Connections in the normal Settings list. It only shows inside the Android app, never in a browser.</div></div>
+
+<div class="col"><div class="phone">
+<div class="back">&#8249; Settings</div>
+<div class="title" style="margin-top:10px">Hardware</div>
+<div class="card"><div class="state"><span class="dot"></span>Delivering</div>
+<div class="det">Alex's ring &middot; connected to moss.example.com<br>Last sent 4:35 pm</div>
+<span class="btn">Stop delivery</span></div>
+<div class="sec">Recent</div>
+<div class="list">
+<div class="row"><span>Meeting, 42 min<small>Today 4:35 pm</small></span><span class="ok">Delivered</span></div>
+<div class="row"><span>Voice message, 0:18<small>Today 11:02 am</small></span><span class="ok">Delivered</span></div>
+<div class="row"><span>Meeting, 7 min<small>Yesterday</small></span><span class="bad">Failed &#8250;</span></div>
+</div>
+<div class="sec">Ring</div>
+<div class="list">
+<div class="row"><span>Remind me after an hour<small>While the ring is recording</small></span><span class="sw"></span></div>
+<div class="row"><span>Voice messages<small>Hold to talk</small></span><span class="sw"></span></div>
+<div class="row"><span>Recordings on ring</span><span class="chev">&#8250;</span></div>
+</div></div>
+<div class="cap">2. Hardware, top of the page</div>
+<div class="capsub">A native page in the same paper, cards and fonts as Moss Settings. Status card first, with the one button that fits now. Back returns to Moss Settings.</div></div>
+
+<div class="col"><div class="phone">
+<div class="sec" style="margin-top:26px">Ring</div>
+<div class="list">
+<div class="row"><span>Set up ring again</span><span class="chev">&#8250;</span></div>
+<div class="row"><span>About this ring</span><span class="chev">&#8250;</span></div>
+<div class="row"><span>How to use your ring</span><span class="chev">&#8250;</span></div>
+</div>
+<div class="sec">Phone storage</div>
+<div class="list"><div class="row"><span>Clear delivered audio<small>120 MB on this phone</small></span><span class="chev">&#8250;</span></div></div>
+<div class="sec">Account</div>
+<div class="list"><div class="row"><span>Alex<small>moss.example.com</small></span><span class="red">Disconnect</span></div></div>
+<div class="sec">Troubleshooting</div>
+<div class="list"><div class="row"><span>Permissions and battery</span><span class="chev">&#8250;</span></div></div>
+<div class="sec" style="margin-top:28px">When something is wrong</div>
+<div class="card"><div class="state"><span class="dot warn"></span>Can't reach the ring</div>
+<div class="det">The Vocci app still holds Nearby devices.</div>
+<span class="btn p">Open Vocci app settings</span></div>
+</div>
+<div class="cap">3. Hardware, scrolled down</div>
+<div class="capsub">Everything else from the ring app's settings, each once. When the ring has a problem, the status card turns amber with one fix, and a phone notification says the same.</div></div>
+</body></html>
