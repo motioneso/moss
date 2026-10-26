@@ -77,8 +77,14 @@ The Shape section below describes the server window route. The add-on route diff
   asks the add-on to resend (see open questions).
 - Mail only flows while the user's browser is open on Outlook. The account's row shows the time
   of the last read so a gap is visible.
-- Chrome and Edge packaging needs a store listing or an enterprise install, and is a later step.
-  Firefox ships first because the prototype already runs there.
+- One code base builds for Firefox and for Chrome and Edge (Manifest V3 in all three). Only
+  packaging differs.
+  - Firefox. Moss hosts a signed package, so no store account is needed.
+  - Chrome and Edge. Chrome blocks installing add-ons from outside its store, so these browsers
+    need an unlisted Chrome Web Store listing (Edge can use the same package). Employers who
+    manage the browser can also push it by policy. Until the listing exists, the download offers
+    Firefox, and Chrome users get the server window.
+- Chrome and Edge add-ons cannot read mail from a browser tab that is closed, same as Firefox.
 
 ## Mail preferences (per user, kept in Moss memory)
 
