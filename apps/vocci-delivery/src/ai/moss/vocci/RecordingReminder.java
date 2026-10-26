@@ -8,7 +8,10 @@ final class RecordingReminder {
     static final RecordingReminder SHARED = new RecordingReminder();
 
     private String source = "";
-    private long first, previous, due, window;
+    private long first, previous, due;
+
+    // Seeded from wall time so a notification from before a process restart cannot match.
+    private long window = System.currentTimeMillis();
     private boolean dismissed;
     synchronized boolean observe(boolean enabled, String state, String key, long elapsed) {
         if (!enabled || !"recording".equals(state) || key == null || key.isEmpty()) {
