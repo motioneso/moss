@@ -45,6 +45,30 @@ purpose.
 | Which Moss address the app opens             | The origin saved by ring setup. With no saved origin, the app opens the Hardware page, whose status card offers Set up ring.                    |
 | Sign-in                                      | Normal Moss sign-in inside the web view, with its own cookies. Separate from the ring's account link.                                           |
 
+## App identity
+
+- App name "Moss", not "Moss (dev)".
+- Application id `ai.moss.android`, replacing `ai.moss.vocci`. The Java package moves to match. The
+  proof app becomes `ai.moss.android.setupproof`.
+- The folder `apps/vocci-delivery` keeps its name.
+- Android treats the new id as a different app. It cannot read the old app's files or saved secrets.
+- Update every `android:ai.moss.vocci/...` path in `packages/shared/src/app-map-core.ts` and every adb
+  command in the READMEs.
+
+## Moving Ben's phone to the new app
+
+The phone keeps the old app until the new one is proven, then moves over once:
+
+1. Back up the old app's delivery records with `run-as ai.moss.vocci`, to a private folder outside the
+   repo.
+2. Install the new app with the kept key. Ben connects to Moss and sets up the ring again from Hardware.
+   This needs Ben for the approval and the Vocci email code.
+3. Before starting delivery, restore only `delivery/state.json` and the delivery records into the new app
+   with `run-as ai.moss.android`. That keeps the same source id, so Moss skips recordings it already has.
+   Never restore `ring-recordings.json` or the saved secrets.
+4. Start delivery in the new app, confirm no duplicate meetings, then uninstall the old app so two apps
+   never compete for the ring.
+
 ## First open: Connect to Moss
 
 - Shown only while the app has no Moss link. Existing installs with a saved link skip it.
@@ -125,8 +149,8 @@ One scrolling native page. It merges PR 3760's Home and Settings screens, in thi
 
 ## Rules
 
-- Existing commands, intents, extras and stored settings keep their names and behaviour, so the app
-  installs as an update.
+- Existing service commands, intent extras and stored setting names keep their meaning. Actions move to
+  the new package prefix.
 - The state-to-notification choice is a plain function with host tests, next to the state-to-button
   function.
 - Keep the app map truthful in the same PR:
@@ -151,7 +175,7 @@ One scrolling native page. It merges PR 3760's Home and Settings screens, in thi
 - Host tests: first open shows Connect to Moss only with no Moss link; ring setup starts at the Vocci
   step when a link exists.
 - Live on Ben's phone, installed as an update with the kept development key:
-  - The app opens Moss full screen, signed in. The existing link and ring setup survive the update.
+  - The app opens Moss full screen, signed in. Ben's phone moved over with no duplicate meetings.
   - Settings, Connections, Hardware opens the native page. Back returns to the same Moss page.
   - The same Settings in a desktop browser has no Hardware entry.
   - An outside link opens in the browser.
