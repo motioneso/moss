@@ -27,7 +27,7 @@ public final class DeliveryService extends Service {
     // Hold-to-talk keeps one ring link open and listens for the end of a press; fastRetries re-checks the ring soon after a press.
     private boolean keepOpen;
     private int fastRetries, admitRetries;
-    private final RecordingReminder reminder = new RecordingReminder();
+    private final RecordingReminder reminder = RecordingReminder.SHARED;
     private int latestStartId;
     interface RetryVoice { JSONObject retry(String statusId) throws Exception; }
     private static final class OwnerMismatch extends Exception { }
@@ -48,6 +48,12 @@ public final class DeliveryService extends Service {
         super.onCreate();
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel("delivery", "Recording delivery", NotificationManager.IMPORTANCE_LOW));
+
+        // Channel importance is fixed at creation, so the heads-up alert needs a new channel id.
+        manager.deleteNotificationChannel("recording-reminder");
+        NotificationChannel reminders = new NotificationChannel("recording-reminder-alert", "Long recordings", NotificationManager.IMPORTANCE_HIGH);
+        reminders.enableVibration(true);
+        manager.createNotificationChannel(reminders);
         startForeground(3550, notification("Working with your ring"));
     }
     private Notification notification(String text) {
@@ -74,7 +80,6 @@ public final class DeliveryService extends Service {
         latestStartId = startId;
         DeliveryPreferences choices = new DeliveryPreferences(this);
         String action = intent == null ? null : intent.getAction();
-        if ("reminder-dismissed".equals(action)) { reminder.dismiss(); return choices.enabled() ? START_STICKY : START_NOT_STICKY; }
         boolean enabled = choices.applyAction(action);
         if (!enabled && !recordingCommand(action)) { stopSelf(); return START_NOT_STICKY; }
         if (intent != null && (recordingCommand(action) || Arrays.asList("voice-on", "voice-off", "clear-completed", "retry-transcription").contains(action))) commands.add(new Intent(intent));
@@ -199,6 +204,7 @@ public final class DeliveryService extends Service {
                     boolean allowed = new DeliveryPreferences(this).recordingReminder() && getSystemService(NotificationManager.class).areNotificationsEnabled();
                     if (reminder.observe(allowed && recent, active.telemetry.recording,
                         active.telemetry.recordingSource, SystemClock.elapsedRealtime())) remindRecording();
+                    else if (!reminder.tracking()) getSystemService(NotificationManager.class).cancel(3551);
                 } catch (Exception unavailable) { /* A phone reminder cannot fail recording delivery. */ }
                 int recordings = 0;
                 for (String name : inventory.keySet()) if (name.endsWith(".opus")) recordings++;
@@ -211,21 +217,17 @@ public final class DeliveryService extends Service {
     private void remindRecording() {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (!manager.areNotificationsEnabled()) return;
-
-        // Channel importance is fixed at creation, so the heads-up alert needs a new channel id.
-        manager.deleteNotificationChannel("recording-reminder");
-        NotificationChannel channel = new NotificationChannel("recording-reminder-alert", "Long recordings", NotificationManager.IMPORTANCE_HIGH);
-        channel.enableVibration(true);
-        manager.createNotificationChannel(channel);
-        Intent seen = new Intent(this, HardwareActivity.class).putExtra("reminderSeen", true);
-        Intent dismissed = new Intent(this, DeliveryService.class).setAction("reminder-dismissed");
+        long window = reminder.window();
+        Intent seen = new Intent(this, HardwareActivity.class).putExtra(ReminderDismissal.WINDOW, window);
+        Intent dismissed = new Intent(this, ReminderDismissal.class).putExtra(ReminderDismissal.WINDOW, window);
+        int flags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
         manager.notify(3551, new Notification.Builder(this, "recording-reminder-alert")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Still recording on your ring?")
             .setContentText("Your ring has been recording for over an hour. Double-click its button to finish if you’re done.")
             .setStyle(new Notification.BigTextStyle().bigText("Your ring has been recording for over an hour. Double-click its button to finish if you’re done. Moss never stops a recording for you."))
             .setCategory(Notification.CATEGORY_REMINDER)
-            .setContentIntent(PendingIntent.getActivity(this, 3, seen, PendingIntent.FLAG_IMMUTABLE))
-            .setDeleteIntent(PendingIntent.getService(this, 4, dismissed, PendingIntent.FLAG_IMMUTABLE))
+            .setContentIntent(PendingIntent.getActivity(this, 3, seen, flags))
+            .setDeleteIntent(PendingIntent.getBroadcast(this, 4, dismissed, flags))
             .setAutoCancel(true).build());
     }
     private void deliver(MossClient client) throws Exception {

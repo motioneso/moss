@@ -152,7 +152,8 @@ saved identity and observed versions.
 An opt-in **Remind me after an hour** notification follows repeated observations
 of the same active recording. It requires delivery and notifications and never stops
 capture. It alerts as a heads-up banner with sound and vibration, then repeats every 30
-minutes until swiped away or tapped; either silences it for that recording. Unknown/missing status, observation gaps
+minutes until swiped away or tapped; either silences it for that recording only. It
+clears once the recording is no longer observed. Unknown/missing status, observation gaps
 over two minutes, and service restart reset the timer. A missing source name cannot
 start a timer. This is observed time, not a measurement of the recording duration.
 

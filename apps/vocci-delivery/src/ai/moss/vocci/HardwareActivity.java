@@ -49,8 +49,7 @@ public final class HardwareActivity extends Activity {
         body.setPadding(theme.dp(24), theme.dp(12), theme.dp(24), theme.dp(32)); scroll.addView(body);
         setContentView(scroll); scroll.requestApplyInsets();
         if ("connection".equals(getIntent().getStringExtra("page"))) page = "connection";
-        if (saved == null && getIntent().getBooleanExtra("reminderSeen", false))
-            startService(new Intent(this, DeliveryService.class).setAction("reminder-dismissed"));
+        if (saved == null) { RecordingReminder.SHARED.dismiss(getIntent().getLongExtra(ReminderDismissal.WINDOW, 0)); getIntent().removeExtra(ReminderDismissal.WINDOW); }
         if (saved != null) {
             page = saved.getString("page", "hardware"); restoreY = saved.getInt("scrollY");
             selectedId = saved.getString("selectedId", ""); recordingPage = saved.getInt("recordingPage");

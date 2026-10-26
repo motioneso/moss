@@ -18,6 +18,7 @@
       </intent-filter>
     </activity>
     <service android:name=".DeliveryService" android:exported="false" android:foregroundServiceType="connectedDevice" />
+    <receiver android:name=".ReminderDismissal" android:exported="false" />
     <receiver android:name=".DeliveryRecovery" android:exported="false">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />
