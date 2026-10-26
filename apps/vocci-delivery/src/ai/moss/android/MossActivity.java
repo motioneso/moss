@@ -12,29 +12,14 @@ import org.json.JSONObject;
 
 /** The launcher. Shows the saved Moss site full screen and hands ring settings to the native Hardware page. */
 public final class MossActivity extends Activity {
-    static final String HARDWARE = "moss-android://hardware";
     private static final int PICK_FILE = 7;
     private NativeTheme theme;
     private WebView web;
     private LinearLayout failure;
     private ValueCallback<Uri[]> picker;
+    private FrameLayout root;
     private Uri home;
     private boolean failed;
-
-    /** Only the exact Hardware address opens the native page. */
-    static boolean isHardware(Uri uri) {
-        String path = uri.getPath();
-        return "moss-android".equals(uri.getScheme()) && "hardware".equals(uri.getHost()) && uri.getPort() == -1 &&
-            uri.getUserInfo() == null && (path == null || path.isEmpty() || path.equals("/")) && uri.getQuery() == null && uri.getFragment() == null;
-    }
-
-    static boolean sameOrigin(Uri origin, Uri target) {
-        return origin.getScheme() != null && origin.getScheme().equalsIgnoreCase(target.getScheme()) &&
-            origin.getHost().equalsIgnoreCase(target.getHost()) && port(origin) == port(target);
-    }
-    private static int port(Uri uri) {
-        return uri.getPort() != -1 ? uri.getPort() : "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
-    }
 
     @Override public void onCreate(Bundle saved) {
         setTheme(NativeTheme.isDark(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
@@ -46,19 +31,30 @@ public final class MossActivity extends Activity {
             finish(); return;
         }
         theme = new NativeTheme(this); theme.window();
-        FrameLayout root = new FrameLayout(this); root.setBackgroundColor(theme.paper);
+        root = new FrameLayout(this); root.setBackgroundColor(theme.paper);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets;
         });
-        web = new WebView(this); web.setBackgroundColor(theme.paper);
-        configure(web);
-        root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        web = newWeb();
+        root.addView(web, 0, new FrameLayout.LayoutParams(-1, -1));
         failure = failureView(); failure.setVisibility(View.GONE);
         root.addView(failure, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root); root.requestApplyInsets();
         if (saved != null && web.restoreState(saved) != null) return;
         web.loadUrl(home.toString());
+    }
+
+    private WebView newWeb() {
+        WebView view = new WebView(this); view.setBackgroundColor(theme.paper);
+        configure(view); return view;
+    }
+
+    /** A crashed web view cannot recover, so it is replaced with a fresh one. */
+    private void replaceWeb() {
+        WebView dead = web;
+        root.removeView(dead); dead.destroy();
+        web = newWeb(); root.addView(web, 0, new FrameLayout.LayoutParams(-1, -1));
     }
 
     private void configure(WebView view) {
@@ -71,20 +67,19 @@ public final class MossActivity extends Activity {
         view.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
                 Uri target = request.getUrl();
-                if (isHardware(target)) { startActivity(new Intent(MossActivity.this, DeliveryActivity.class)); return true; }
-                if (sameOrigin(home, target)) return false;
-                if ("http".equals(target.getScheme()) || "https".equals(target.getScheme())) {
-                    try { startActivity(new Intent(Intent.ACTION_VIEW, target)); }
-                    catch (ActivityNotFoundException unavailable) { Toast.makeText(MossActivity.this, "Install a browser to open this link", Toast.LENGTH_SHORT).show(); }
+                switch (LinkRouter.decide(home.toString(), target.toString(), request.isForMainFrame())) {
+                    case STAY: return false;
+                    case HARDWARE: startActivity(new Intent(MossActivity.this, DeliveryActivity.class)); return true;
+                    case BROWSER: case SYSTEM: openOutside(target); return true;
+                    default: return true;
                 }
-                return true;
             }
             @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) { failed = false; showFailure(false); }
             @Override public void onReceivedError(WebView v, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) { failed = true; showFailure(true); }
             }
             @Override public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail detail) {
-                failed = true; showFailure(true); return true;
+                failed = true; replaceWeb(); showFailure(true); return true;
             }
         });
         view.setWebChromeClient(new WebChromeClient() {
@@ -95,6 +90,12 @@ public final class MossActivity extends Activity {
                 catch (ActivityNotFoundException unavailable) { picker = null; return false; }
             }
         });
+    }
+
+    /** Hands a link to the system. Missing apps only produce a short message. */
+    private void openOutside(Uri target) {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, target)); }
+        catch (ActivityNotFoundException unavailable) { Toast.makeText(this, "No app can open this link", Toast.LENGTH_SHORT).show(); }
     }
 
     /** The user agent suffix the web Settings page looks for. */

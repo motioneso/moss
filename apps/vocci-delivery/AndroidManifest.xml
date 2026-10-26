@@ -11,7 +11,7 @@
   <application android:label="Moss" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
     <activity android:name=".SetupActivity" android:exported="false" />
     <activity android:name=".ConnectActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-    <activity android:name=".DeliveryActivity" android:exported="true" />
+    <activity android:name=".DeliveryActivity" android:exported="false" />
     <activity android:name=".HardwareActivity" android:exported="true" />
     <activity android:name=".MossActivity" android:exported="true" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation">
       <intent-filter>

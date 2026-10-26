@@ -25,6 +25,8 @@ public final class ConnectActivity extends Activity {
     private LinearLayout form, approval;
     private WebView web;
     private Uri approvalOrigin;
+    private String approvalUrl = "";
+    private int pollFailures;
     private boolean busy = true, polling;
     private final Runnable poll = new Runnable() {
         @Override public void run() { if (polling) check(); }
@@ -103,10 +105,17 @@ public final class ConnectActivity extends Activity {
         view.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
                 Uri target = request.getUrl();
-                if (approvalOrigin != null && MossActivity.sameOrigin(approvalOrigin, target)) return false;
-                if ("http".equals(target.getScheme()) || "https".equals(target.getScheme())) {
-                    try { startActivity(new Intent(Intent.ACTION_VIEW, target)); } catch (ActivityNotFoundException unavailable) { /* No browser installed. */ }
+                String origin = approvalOrigin == null ? null : approvalOrigin.toString();
+                switch (LinkRouter.decide(origin, target.toString(), request.isForMainFrame())) {
+                    case STAY: return false;
+                    case BROWSER: case SYSTEM:
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, target)); } catch (ActivityNotFoundException unavailable) { /* No app can open it. */ }
+                        return true;
+                    default: return true;
                 }
+            }
+            @Override public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail detail) {
+                runOnUiThread(() -> restartApproval());
                 return true;
             }
         });
@@ -132,7 +141,7 @@ public final class ConnectActivity extends Activity {
                 Uri page = Uri.parse(url);
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
-                    approvalOrigin = page; form.setVisibility(View.GONE); approval.setVisibility(View.VISIBLE);
+                    approvalOrigin = page; approvalUrl = url; pollFailures = 0; form.setVisibility(View.GONE); approval.setVisibility(View.VISIBLE);
                     web.loadUrl(url); busy = false; polling = true; handler.postDelayed(poll, POLL_MS);
                 });
             } catch (Exception failure) { reset(failure); }
@@ -143,9 +152,24 @@ public final class ConnectActivity extends Activity {
         worker.execute(() -> {
             try {
                 if (link.check()) { runOnUiThread(this::finishConnected); return; }
-            } catch (Exception failure) { reset(failure); return; }
+                pollFailures = 0;
+            } catch (Exception failure) {
+                int status = failure instanceof MossClient.Rejected ? ((MossClient.Rejected) failure).status : 0;
+                if (PollPolicy.choose(failure, status, ++pollFailures) == PollPolicy.Next.CANCEL) { reset(failure); return; }
+            }
             runOnUiThread(() -> { if (polling && !isDestroyed()) handler.postDelayed(poll, POLL_MS); });
         });
+    }
+
+    /** A crashed approval page is replaced and reloaded while the check keeps running. */
+    private void restartApproval() {
+        if (isDestroyed() || web == null) return;
+        ViewGroup parent = (ViewGroup) web.getParent();
+        int index = parent.indexOfChild(web);
+        parent.removeView(web); web.destroy();
+        web = new WebView(this); web.setBackgroundColor(theme.paper); configure(web);
+        parent.addView(web, index, new LinearLayout.LayoutParams(-1, 0, 1));
+        if (!approvalUrl.isEmpty() && approval.getVisibility() == View.VISIBLE) web.loadUrl(approvalUrl);
     }
 
     private void cancel() {

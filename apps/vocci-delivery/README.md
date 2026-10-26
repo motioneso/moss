@@ -100,7 +100,7 @@ Bluetooth state in `finally` after stopping Moss. Test this handoff on the devic
 the companion's Open Vocci app settings action supports this handoff without
 changing the binding.
 
-Start `ai.moss.android/.DeliveryActivity` (Hardware) from Moss Settings or ADB. Grant Bluetooth
+Open Hardware from Moss Settings, Connections, Hardware. The Hardware page is not exported, so ADB cannot start it directly; start `ai.moss.android/.MossActivity` and navigate. Grant Bluetooth
 and notifications. The ongoing notification reports record-derived progress and
 opens Home, with one state-appropriate action, account/ring identity and recent deliveries.
 Settings contains voice opt-in, account disconnection and permission help. To stop explicitly, launch the activity with action `stop`; physical
