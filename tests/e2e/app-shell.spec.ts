@@ -306,7 +306,7 @@ test("configures chat and email extraction models through settings", async ({ pa
   const emailBinding = page.getByLabel("Binding for Email reading");
   await expect(emailBinding).toHaveValue("");
   // Scoped to the row: Focus (#2570) is also unbound here and shows the same text.
-  await expect(emailBinding.locator("xpath=../..").getByText("Needs configuration")).toBeVisible();
+  await expect(emailBinding.locator("xpath=../..").getByText("Needs a model")).toBeVisible();
 
   await emailBinding.selectOption("model:ai-model-auto");
   await expect(emailBinding).toHaveValue("model:ai-model-auto");
@@ -349,7 +349,7 @@ test("shows missing AI credentials as email-extraction configuration", async ({ 
   await expect(page.getByText("API key needed", { exact: true })).toBeVisible();
   const emailBinding = page.getByLabel("Binding for Email reading");
   await expect(emailBinding).toHaveValue("");
-  await expect(emailBinding.locator("xpath=../..").getByText("Needs configuration")).toBeVisible();
+  await expect(emailBinding.locator("xpath=../..").getByText("Needs a model")).toBeVisible();
 });
 
 test("serves PWA metadata", async ({ page }) => {

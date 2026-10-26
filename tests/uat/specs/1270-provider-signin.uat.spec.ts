@@ -75,7 +75,7 @@ async function addProviderFromPicker(page: Page, label: string): Promise<void> {
   await addDialog.getByRole("radio", { name: label }).check();
   await addDialog.getByRole("button", { name: "Next" }).click();
   await addDialog.getByRole("button", { name: /^Add/ }).click();
-  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  const addedSignIn = page.getByRole("dialog", { name: /^Sign in to / });
   await addedSignIn.waitFor({ timeout: 10_000 }).then(
     () => addedSignIn.getByRole("button", { name: "Close" }).click(),
     () => undefined
@@ -163,7 +163,7 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   if (usesAutomatedLogin) {
     await automated.click();
     // settings-provider-login-dialog.tsx aria-label = `${displayName} sign-in`.
-    const loginDialog = page.getByRole("dialog", { name: "Claude sign-in" });
+    const loginDialog = page.getByRole("dialog", { name: "Sign in to Claude" });
     await expect(loginDialog).toBeVisible();
     await expect(loginDialog.getByText("Sign in to Claude")).toBeVisible();
     // The flow STARTS on open (beginLogin), so it lands in one of: awaiting-token (paste a code),

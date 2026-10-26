@@ -82,20 +82,31 @@ async function openAssistantAndAiSettings(page: Page): Promise<void> {
   await page.getByRole("button", { name: "AI providers" }).click();
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
-const gateButton = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
+const decisionDialog = (page: Page) =>
+  page.getByRole("dialog", { name: "Choose a decision model" });
+
+async function openDecisionDialog(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: /^(Choose a model|Change model)$/ }).click();
+  const dialog = decisionDialog(page);
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
 
 async function chooseClassifier(page: Page, label: string): Promise<void> {
+  // Wait for the binding save before navigating away, or the next screen can load before the
+  // choice has landed.
   const saved = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/ai/services/sorting/binding") &&
       response.request().method() === "PUT",
     { timeout: 30_000 }
   );
-  await classifierSelect(page).selectOption({ label });
+  const dialog = await openDecisionDialog(page);
+  await dialog.getByRole("radio", { name: label }).check();
+  await dialog.getByRole("button", { name: "Save" }).click();
   expect((await saved).status()).toBe(200);
-  await expect(classifierSelect(page)).toHaveValue(/^model:/);
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Change model" })).toBeVisible();
 }
 
 async function setGate(page: Page, name: string): Promise<void> {
@@ -106,9 +117,15 @@ async function setGate(page: Page, name: string): Promise<void> {
       ) && response.request().method() === "PUT",
     { timeout: 30_000 }
   );
-  await gateButton(page, name).click();
+  const dialog = await openDecisionDialog(page);
+  await dialog.getByRole("button", { name: /^Advanced/ }).click();
+  await dialog
+    .getByRole("group", { name: "Use in chat" })
+    .getByRole("button", { name, exact: true })
+    .click();
+  await dialog.getByRole("button", { name: "Save" }).click();
   expect((await saved).status()).toBe(200);
-  await expect(gateButton(page, name)).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog).toBeHidden();
 }
 
 async function openChat(page: Page): Promise<Locator> {
@@ -196,8 +213,8 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   // Fixture classifier plus Shadow gate through the real settings row.
   await openAssistantAndAiSettings(page);
   await chooseClassifier(page, "UAT Classifier Fixture Model");
-  await setGate(page, "Shadow");
-  await expect(page.getByRole("link", { name: "See shadow results" }).first()).toBeVisible();
+  await setGate(page, "Watch only");
+  await expect(page.getByRole("link", { name: "See watch-only results" }).first()).toBeVisible();
 
   // 1. Match: the fixture picks calendar.listVisibleEvents and the model calls it.
   await page.goto(requireBaseURL());
@@ -284,7 +301,7 @@ test("the shadow report counts real shadow records and lists the disagreement (#
 
   // Open the report from the Shadow note link and prove the numbers and the row on screen.
   await openAssistantAndAiSettings(page);
-  await page.getByRole("link", { name: "See shadow results" }).last().click();
+  await page.getByRole("link", { name: "See watch-only results" }).last().click();
   await expect(page).toHaveURL(/section=shadowreport/);
   await expect(page.getByRole("heading", { name: "Shadow report" })).toBeVisible();
   await expect(page.getByText("Messages checked")).toBeVisible();

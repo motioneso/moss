@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 // Classifier gate plan 1.3 (#2892), updated for Moss extensions phase 0. Proves the shipped
@@ -54,15 +54,56 @@ async function json(
   );
 }
 
-const classifierSelect = (page: Page) => page.getByLabel("Classifier model", { exact: true });
 const classifierHeading = (page: Page) =>
-  page.locator(".rt__name").filter({ hasText: "Classifier" }).first();
-const gateButton = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Gate state" }).getByRole("button", { name });
+  page.locator(".rt__name").filter({ hasText: "Decision model" }).first();
+
+const decisionDialog = (page: Page) =>
+  page.getByRole("dialog", { name: "Choose a decision model" });
+
+async function openDecisionDialog(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: /^(Choose a model|Change model)$/ }).click();
+  const dialog = decisionDialog(page);
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+async function openAdvanced(dialog: Locator): Promise<Locator> {
+  await dialog.getByRole("button", { name: /^Advanced/ }).click();
+  return dialog.getByRole("group", { name: "Use in chat" });
+}
 
 async function selectClassifier(page: Page): Promise<void> {
-  await classifierSelect(page).selectOption({ label: "UAT Classifier Model" });
-  await expect(classifierSelect(page)).toHaveValue(/^model:/);
+  const dialog = await openDecisionDialog(page);
+  await dialog.getByRole("radio", { name: "UAT Classifier Model" }).check();
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Change model" })).toBeVisible();
+}
+
+async function setGate(page: Page, name: string): Promise<void> {
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(
+        "/api/admin/runtime-config/chat.classifier_gate_mode"
+      ) && response.request().method() === "PUT",
+    { timeout: 30_000 }
+  );
+  const dialog = await openDecisionDialog(page);
+  await (await openAdvanced(dialog)).getByRole("button", { name, exact: true }).click();
+  await dialog.getByRole("button", { name: "Save" }).click();
+  expect((await saved).status()).toBe(200);
+  await expect(dialog).toBeHidden();
+}
+
+async function expectGate(page: Page, name: string): Promise<void> {
+  const dialog = await openDecisionDialog(page);
+  const group = await openAdvanced(dialog);
+  await expect(group.getByRole("button", { name, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
 }
 
 test("the Classifier settings row picks and clears a classifier and turns `on` straight away (#2892)", async ({
@@ -80,7 +121,7 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
   await addDialog.getByRole("button", { name: "Next" }).click();
   await addDialog.getByRole("button", { name: /^Add/ }).click();
   // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
-  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  const addedSignIn = page.getByRole("dialog", { name: /^Sign in to / });
   await addedSignIn.waitFor({ timeout: 10_000 }).then(
     () => addedSignIn.getByRole("button", { name: "Close" }).click(),
     () => undefined
@@ -96,57 +137,60 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
     timeout: 30_000
   });
 
-  // The row is renamed and shows the approved disclosure control.
+  // The row is named Decision model and starts empty, with no Use in chat control.
   await expect(classifierHeading(page)).toBeVisible();
   await expect(page.locator(".rt__name").filter({ hasText: "Sorting model" })).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
-  await expect(gateButton(page, "Off")).toHaveAttribute("aria-pressed", "true");
-  // No classifier chosen yet: the mockup keeps the gate unusable.
-  await expect(gateButton(page, "Shadow")).toBeDisabled();
+  await expect(page.getByText("Not chosen")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Use in chat" })).toHaveCount(0);
+  // The dialog lists the model with nothing preselected, so Save waits and Advanced is hidden.
+  const emptyDialog = await openDecisionDialog(page);
+  await expect(emptyDialog.getByRole("radio", { name: "UAT Classifier Model" })).not.toBeChecked();
+  await expect(emptyDialog.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(emptyDialog.getByRole("button", { name: /^Advanced/ })).toHaveCount(0);
+  await emptyDialog.getByRole("button", { name: "Cancel" }).click();
 
-  // Pick a classifier, reload, confirm it stuck from the saved record.
+  // Pick a decision model, reload, confirm it stuck from the saved record.
   await selectClassifier(page);
-  await expect(gateButton(page, "Shadow")).toBeEnabled();
+  await expectGate(page, "Off");
   await page.reload();
   await openAssistantAndAiSettings(page);
-  await expect(classifierSelect(page)).toHaveValue(/^model:/);
+  await expect(page.getByRole("button", { name: "Change model" })).toBeVisible();
 
   // Clear it, reload, confirm the saved record is cleared.
-  await classifierSelect(page).selectOption({ label: "Use main model" });
-  await expect(classifierSelect(page)).toHaveValue("");
+  await page.getByRole("button", { name: "Use main model" }).click();
+  await expect(page.getByText("Not chosen")).toBeVisible();
   await page.reload();
   await openAssistantAndAiSettings(page);
-  await expect(classifierSelect(page)).toHaveValue("");
+  await expect(page.getByText("Not chosen")).toBeVisible();
 
-  // Re-pick, then Shadow. On is open straight away, with no review step.
+  // Re-pick, then Watch only. On is open straight away, with no review step.
   await selectClassifier(page);
-  await gateButton(page, "Shadow").click();
-  await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");
-  await expect(gateButton(page, "On")).toBeEnabled();
+  await setGate(page, "Watch only");
+  await expect(page.getByText("Watch only").first()).toBeVisible();
   await expect(page.getByText("On opens after shadow review.")).toHaveCount(0);
   // Ruling 1: the row states the admin-wide reach of the gate.
-  await expect(page.getByText(/every user's eligible messages/)).toBeVisible();
+  await expect(page.getByText(/every user's eligible messages/).first()).toBeVisible();
   await page.reload();
   await openAssistantAndAiSettings(page);
-  await expect(gateButton(page, "Shadow")).toHaveAttribute("aria-pressed", "true");
+  await expectGate(page, "Watch only");
 
-  // Shadow to On through the row. The save lands and survives a reload.
-  const onSaved = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.endsWith(
-        "/api/admin/runtime-config/chat.classifier_gate_mode"
-      ) && response.request().method() === "PUT",
-    { timeout: 30_000 }
-  );
-  await gateButton(page, "On").click();
-  expect((await onSaved).status()).toBe(200);
-  await expect(gateButton(page, "On")).toHaveAttribute("aria-pressed", "true");
+  // Watch only to On through the dialog. The save lands and survives a reload.
+  await setGate(page, "On");
   const stored = await json(page, "/api/admin/runtime-config/chat.classifier_gate_mode");
   expect(stored.status).toBe(200);
   expect((stored.body.config as { value: string }).value).toBe("on");
   await page.reload();
   await openAssistantAndAiSettings(page);
-  await expect(gateButton(page, "On")).toHaveAttribute("aria-pressed", "true");
+  await expectGate(page, "On");
+
+  // An inherited On mode must disclose its instance-wide reach before Save, even with Advanced closed.
+  const inheritedDialog = await openDecisionDialog(page);
+  await expect(inheritedDialog.getByRole("status")).toContainText("Use in chat: On.");
+  await expect(inheritedDialog.getByRole("status")).toContainText(
+    "Eligible chat messages from everyone who uses this Moss go to Claude."
+  );
+  await expect(inheritedDialog.getByRole("group", { name: "Use in chat" })).toHaveCount(0);
+  await inheritedDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // The row reads in light, dark and one park theme.
   for (const theme of [
@@ -160,7 +204,7 @@ test("the Classifier settings row picks and clears a classifier and turns `on` s
       else document.documentElement.removeAttribute("data-theme");
     }, theme);
     await expect(classifierHeading(page)).toBeVisible();
-    await expect(page.getByRole("group", { name: "Gate state" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Change model" })).toBeVisible();
     if (process.env.MOSS_UAT_CAPTURE_OFF !== "1") {
       await page.screenshot({
         path: test.info().outputPath(`classifier-row-${theme.name}.png`),

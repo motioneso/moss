@@ -19,6 +19,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { loadPersonaSettings, useAssistantName } from "../api/use-assistant-name.js";
+import { ChatLockRows, useOwnAiPin } from "./settings-ai-chat-lock-group";
 import { useFeedback } from "./settings-feedback";
 import {
   applyGuidedPersonaText,
@@ -139,7 +140,7 @@ function Persona({ who }: { readonly who: string }) {
       setP(next);
       setSaved(result.persona);
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.persona });
-      toast("Persona saved. Your next briefing and replies will use this voice.", {
+      toast("Saved. Your next briefing and replies use this voice.", {
         icon: <GitCommitHorizontal size={17} />
       });
     },
@@ -353,6 +354,9 @@ function ChatModel({
     retry: false
   });
   const settings = settingsQuery.data?.settings;
+  const ownPin = useOwnAiPin(isAdmin).pinQuery.data?.pin;
+  const locked = Boolean(ownPin?.pinnedModelId || ownPin?.pinnedProviderId);
+  const unavailableLock = ownPin?.effectiveChatReason === "admin-pin-unavailable";
   const mutation = useMutation({
     mutationFn: (modelId: string | null) => putChatModelOverride({ modelId }),
     onSuccess: (result) => {
@@ -394,11 +398,15 @@ function ChatModel({
           {settings?.overrideEnabled ? (
             <Field
               label="Powering your chat"
-              hint="Defaults to the instance routing your admin set. Override it to a specific model for your own conversations."
+              hint={
+                locked
+                  ? "Your own AI lock is set below, so it decides the model and this picker is off."
+                  : "Starts with the model your admin chose. Pick another for your own chats."
+              }
             >
               <Select
                 value={value}
-                disabled={mutation.isPending || settingsQuery.isLoading}
+                disabled={mutation.isPending || settingsQuery.isLoading || locked}
                 onChange={(e) =>
                   mutation.mutate(e.target.value === "default" ? null : e.target.value)
                 }
@@ -433,14 +441,23 @@ function ChatModel({
             <GitCommitHorizontal size={20} aria-hidden="true" />
           </div>
           <div className="ai-empty__main">
-            <div className="ai-empty__t">No assistant configured yet</div>
+            <div className="ai-empty__t">
+              {unavailableLock ? "Your locked model is unavailable" : "No assistant configured yet"}
+            </div>
             <div className="ai-empty__d">
-              An admin needs to add an AI provider before {assistantName} can chat. Ask whoever set
-              up this instance. If that's you, add one under {providerSettingsLink}.
+              {unavailableLock ? (
+                "Clear your lock below, or ask an admin to turn the model back on."
+              ) : (
+                <>
+                  An admin needs to add an AI provider before {assistantName} can chat. Ask whoever
+                  set up this instance. If that's you, add one under {providerSettingsLink}.
+                </>
+              )}
             </div>
           </div>
         </div>
       )}
+      {isAdmin ? <ChatLockRows /> : null}
     </Group>
   );
 }
@@ -476,16 +493,16 @@ function YoloMode() {
   return (
     <Group
       title="Auto-approve actions"
-      desc="Your personal approval preference for interactive chat. The instance owner controls whether it can take effect."
+      desc="Your own setting for chat. The owner decides whether it applies."
     >
       <Row
         name="Auto-approve actions"
         desc={
           state.instanceEnabled && state.self.enabled
-            ? "Effective state: enabled for interactive chat. Background work still uses its own policy."
+            ? "On for chat. Background work still asks as usual."
             : state.instanceEnabled
-              ? "Effective state: inactive because your preference is off."
-              : "Effective state: inactive because the instance owner has turned auto-approve off. Your preference remains saved."
+              ? "Off, because you have it switched off."
+              : "Off, because the owner turned it off for everyone. Your choice is saved."
         }
         control={
           <Switch

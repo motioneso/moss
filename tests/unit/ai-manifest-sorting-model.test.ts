@@ -9,7 +9,7 @@ describe("app map: sorting model (#2594)", () => {
   );
 
   it("declares the classifier feature with its error and remediation", () => {
-    expect(feature?.description).toMatch(/Classifier/);
+    expect(feature?.description).toMatch(/Decision model/);
     expect(feature?.remediations).toEqual([
       {
         id: "ai.sorting_model.use_main_model",
@@ -29,7 +29,7 @@ describe("app map: sorting model (#2594)", () => {
 
   it("describes the row on the AI providers settings page", () => {
     const page = CORE_APP_SETTINGS.find((entry) => entry.id === "aiproviders");
-    expect(page?.description).toMatch(/Classifier row/);
+    expect(page?.description).toMatch(/Decision model row/);
     expect(page?.description).toMatch(/Use main model/);
     expect(page?.description).toMatch(/every user's eligible/);
   });

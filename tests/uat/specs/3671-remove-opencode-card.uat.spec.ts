@@ -58,7 +58,7 @@ test("OpenCode provider has no separate card or hardcoded model choice (#3671)",
   await addDialog.getByRole("button", { name: "Next" }).click();
   await addDialog.getByRole("button", { name: /^Add/ }).click();
   // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
-  const addedSignIn = page.getByRole("dialog", { name: /sign-in$/ });
+  const addedSignIn = page.getByRole("dialog", { name: /^Sign in to / });
   await addedSignIn.waitFor({ timeout: 10_000 }).then(
     () => addedSignIn.getByRole("button", { name: "Close" }).click(),
     () => undefined
@@ -67,7 +67,7 @@ test("OpenCode provider has no separate card or hardcoded model choice (#3671)",
   // The provider itself is still there as a normal provider card.
   const card = page.locator(".prov").filter({ has: page.getByLabel("Remove OpenCode") });
   await expect(card).toBeVisible({ timeout: 30_000 });
-  await expect(card).toContainText("Connected");
+  await expect(card).toContainText("Added");
 
   // No separate OpenCode ACP card and no hardcoded model dropdown.
   await expect(page.getByLabel("OpenCode ACP provider")).toHaveCount(0);

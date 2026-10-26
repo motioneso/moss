@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitCommitHorizontal, MinusCircle } from "lucide-react";
+import { useRef, useState } from "react";
 
-import { Badge, Field, FormLabel, InfoTip, Segmented, Select } from "@moss/ui";
+import { Badge, Button, InfoTip } from "@moss/ui";
 import {
   CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   CLASSIFIER_GATE_MODE_DEFAULT,
@@ -22,6 +23,8 @@ import {
   putAiServiceBinding
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
+import { useChatControls } from "../shell/chat-controls-context";
+import { DecisionModelDialog } from "./settings-ai-decision-dialog";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 
@@ -56,26 +59,30 @@ export const CLASSIFIER_API_DISCLOSURE =
   "API model: eligible chat messages also go to its provider. When the gate is on, every " +
   "user's eligible messages go to that provider.";
 
-// The same ruling, shown in the Chat gate help and asserted by the unit test.
+// The same ruling, shown in the Use in chat help and asserted by the unit test.
 export const CLASSIFIER_GATE_ON_NOTE =
-  "When the gate is on, every user's eligible messages go to the classifier's provider.";
+  "When Use in chat is on, every user's eligible messages go to the decision model's provider.";
 
-export const CLASSIFIER_HEADING = "Classifier";
-export const CLASSIFIER_HELP = "Optional model to handle classification requests.";
+export const CLASSIFIER_HEADING = "Decision model";
+export const CLASSIFIER_HELP = "Optional. A separate model for quick sorting and checking jobs.";
+
+/** Neutral starting draft for "Ask Moss to help". It names no model and no provider. */
+export const DECISION_MODEL_HELP_DRAFT =
+  "I want to choose a decision model for this instance. Explain what it does, what the Use in chat setting changes, and what I should think about. Do not pick or recommend a model for me.";
 
 const CLASSIFIER_TIP =
-  "Picks a tool and fills in simple values for quick chat requests, so they skip your default " +
+  "A decision model picks a tool and fills in simple values for quick chat requests, so they skip your default " +
   "model. Also used for yes/no and pick-one questions in the background.";
 
 const GATE_TIP = (
   <>
-    Lets the classifier answer quick chat requests before your default model sees them.
+    Lets the decision model answer quick chat requests before your default model sees them.
     <ul style={{ margin: "var(--space-2) 0 0", paddingLeft: "var(--space-4)" }}>
       <li>
         <b>Off</b>: not used.
       </li>
       <li>
-        <b>Shadow</b>: it guesses and logs, but your default model still answers.
+        <b>Watch only</b>: it guesses and logs, but your default model still answers.
       </li>
       <li>
         <b>On</b>: it answers requests it is sure about.
@@ -84,12 +91,6 @@ const GATE_TIP = (
     <p style={{ margin: "var(--space-2) 0 0" }}>{CLASSIFIER_GATE_ON_NOTE}</p>
   </>
 );
-
-const GATE_LABELS: Readonly<Record<ClassifierGateMode, string>> = {
-  off: "Off",
-  shadow: "Shadow",
-  on: "On"
-};
 
 // Models the Classifier may be: the model and its provider are active, it has the json
 // capability, and its provider kind is one generateStructured executes, or System One, which
@@ -116,7 +117,10 @@ export function SortingModelRow(props: {
   readonly providers: readonly AiProviderConfigDto[];
 }) {
   const { toast } = useFeedback();
+  const { openAssistantWithDraft } = useChatControls();
   const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const chooseButtonRef = useRef<HTMLButtonElement>(null);
   const mutation = useMutation({
     mutationFn: (modelId: string | null) =>
       modelId
@@ -135,21 +139,46 @@ export function SortingModelRow(props: {
     retry: false
   });
   const savedGateMode = readGateMode(gateQuery.data?.config.value);
-  const gateMutation = useMutation({
-    mutationFn: (mode: ClassifierGateMode) =>
-      putAdminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY, mode),
-    onSuccess: (data) => {
-      queryClient.setQueryData(
-        queryKeys.settings.adminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY),
-        data
-      );
-      toast("Classifier gate updated", { icon: <GitCommitHorizontal size={17} /> });
-    },
-    onError: (error) => toast(readError(error), { tone: "drift" })
-  });
 
   const eligible = eligibleSortingModels(props.models);
   const boundId = props.binding?.kind === "model" ? props.binding.modelId : null;
+  const saveMutation = useMutation({
+    mutationFn: async ({ modelId, mode }: { modelId: string; mode: ClassifierGateMode }) => {
+      let currentMode = savedGateMode;
+      const saveMode = async (nextMode: ClassifierGateMode) => {
+        const data = await putAdminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY, nextMode);
+        currentMode = nextMode;
+        queryClient.setQueryData(
+          queryKeys.settings.adminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY),
+          data
+        );
+      };
+      try {
+        // Stop forwarding before switching providers. A failed later write leaves chat off.
+        if (modelId !== boundId) {
+          if (currentMode !== "off") await saveMode("off");
+          await putAiServiceBinding(SORTING_SERVICE_KEY, { binding: { kind: "model", modelId } });
+        }
+        if (mode !== currentMode) await saveMode(mode);
+      } catch (error) {
+        throw new Error(
+          `Could not finish saving. Use in chat is ${currentMode === "shadow" ? "Watch only" : currentMode}. ${readError(error)}`,
+          { cause: error }
+        );
+      }
+    },
+    onSuccess: () => {
+      setDialogOpen(false);
+      toast("Decision model updated", { icon: <GitCommitHorizontal size={17} /> });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ai.serviceBindings });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.adminRuntimeConfig(CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY)
+      });
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
   const bound = boundId ? (eligible.find((model) => model.id === boundId) ?? null) : null;
   const boundProvider = bound
     ? (props.providers.find((provider) => provider.id === bound.providerConfigId) ?? null)
@@ -157,23 +186,12 @@ export function SortingModelRow(props: {
   const boundIsTypeSafe =
     bound?.providerKind === "system-one" &&
     isTypesafeDecisionBaseUrl(boundProvider?.baseUrl ?? null);
-  const unavailableName =
-    boundId && !bound
-      ? (props.models.find((model) => model.id === boundId)?.displayName ?? "Unavailable model")
-      : null;
-  const groups = new Map<string, AiConfiguredModelDto[]>();
-  for (const model of eligible) {
-    const list = groups.get(model.providerDisplayName) ?? [];
-    list.push(model);
-    groups.set(model.providerDisplayName, list);
-  }
-
   // The Shadow badge links to the report. The Shadow switch option only changes the mode.
   const shadowReportHref = "/settings?section=shadowreport";
   const badge =
     savedGateMode === "shadow" ? (
-      <a href={shadowReportHref} aria-label="See shadow results">
-        <Badge tone="amber">Shadow</Badge>
+      <a href={shadowReportHref} aria-label="See watch-only results">
+        <Badge tone="amber">Watch only</Badge>
       </a>
     ) : savedGateMode === "on" ? (
       <Badge tone="forest">On</Badge>
@@ -182,16 +200,13 @@ export function SortingModelRow(props: {
   // bindable classifier kind is a hosted provider, so it shows whenever a model is bound and the
   // gate is Shadow or On (the mockup's `api` pattern).
   const showApiDisclosure = bound != null && savedGateMode !== "off";
-  // The mockup keeps the gate unusable until a classifier is chosen (chdis/gdis on the no-model
-  // and unavailable views).
-  const gateDisabled = bound == null;
 
   return (
     <div className="rt">
       <div className="rt__main">
         <div className="rt__name">
           {CLASSIFIER_HEADING} {badge}{" "}
-          <InfoTip label="What the classifier does">{CLASSIFIER_TIP}</InfoTip>
+          <InfoTip label="What the decision model does">{CLASSIFIER_TIP}</InfoTip>
         </div>
         <div className="rt__desc">{CLASSIFIER_HELP}</div>
         {bound?.providerKind === "system-one" ? (
@@ -205,60 +220,66 @@ export function SortingModelRow(props: {
             {SORTING_DISCLOSURE} {TRAIL_MARKER_DISCLOSURE}
           </div>
         ) : null}
+        {gateQuery.isError ? (
+          <div className="rt__desc" role="alert">
+            Could not load Use in chat. Reload settings before choosing a model.
+          </div>
+        ) : null}
         {showApiDisclosure ? <div className="rt__desc">{CLASSIFIER_API_DISCLOSURE}</div> : null}
       </div>
       <div className="rt__pick">
-        <Field>
-          <FormLabel htmlFor="classifier-model">Classifier model</FormLabel>
-          <Select
-            id="classifier-model"
-            value={boundId ? `model:${boundId}` : ""}
-            aria-label="Classifier model"
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              const raw = event.target.value;
-              mutation.mutate(raw.startsWith("model:") ? raw.slice("model:".length) : null);
-            }}
-          >
-            <option value="">Use main model</option>
-            {unavailableName ? (
-              <option value={`model:${boundId}`} disabled>
-                {`${unavailableName} (unavailable)`}
-              </option>
-            ) : null}
-            {[...groups].map(([providerName, list]) => (
-              <optgroup key={providerName} label={providerName}>
-                {list.map((model) => (
-                  <option key={model.id} value={`model:${model.id}`}>
-                    {model.displayName}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </Select>
-        </Field>
+        <div className="rt__none">
+          {bound ? (
+            <>
+              {bound.displayName} <span className="rt__desc">{bound.providerDisplayName}</span>
+            </>
+          ) : (
+            "Not chosen"
+          )}
+        </div>
         {boundId && !bound ? (
           <span className="rt__none">
             <MinusCircle size={13} aria-hidden="true" />
             Chosen model is unavailable. Using your main model.
           </span>
         ) : null}
-        <Field>
-          <span className="jds-label">
-            Chat gate <InfoTip label="What the chat gate does">{GATE_TIP}</InfoTip>
-          </span>
-          <Segmented
-            value={savedGateMode}
-            ariaLabel="Gate state"
-            onChange={(mode) => gateMutation.mutate(mode)}
-            options={CLASSIFIER_GATE_MODES.map((mode) => ({
-              value: mode,
-              label: GATE_LABELS[mode],
-              disabled: gateMutation.isPending || gateDisabled
-            }))}
-          />
-        </Field>
+        <Button
+          ref={chooseButtonRef}
+          variant="secondary"
+          disabled={mutation.isPending || gateQuery.isPending || gateQuery.isError}
+          onClick={() => setDialogOpen(true)}
+        >
+          {bound ? "Change model" : "Choose a model"}
+        </Button>
+        {boundId ? (
+          <Button
+            variant="link"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate(null)}
+          >
+            Use main model
+          </Button>
+        ) : null}
+        <Button variant="link" onClick={() => openAssistantWithDraft(DECISION_MODEL_HELP_DRAFT)}>
+          Ask Moss to help
+        </Button>
       </div>
+      {dialogOpen ? (
+        <DecisionModelDialog
+          models={eligible}
+          initialModelId={bound ? bound.id : null}
+          initialGateMode={savedGateMode}
+          gateTip={GATE_TIP}
+          saving={saveMutation.isPending}
+          returnFocusRef={chooseButtonRef}
+          onClose={() => setDialogOpen(false)}
+          onAskMoss={() => {
+            setDialogOpen(false);
+            openAssistantWithDraft(DECISION_MODEL_HELP_DRAFT);
+          }}
+          onSave={(modelId, mode) => saveMutation.mutate({ modelId, mode })}
+        />
+      ) : null}
     </div>
   );
 }

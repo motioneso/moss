@@ -278,16 +278,12 @@ export const aiModuleManifest = {
     {
       id: "ai.classifier_gate_setting",
       description:
-        "Classifier gate: the Chat gate choice (Off, Shadow, On) in the Classifier row on Settings > " +
-        "AI providers, an instance-wide setting. Any of the three can be picked as soon as a " +
-        "classifier is chosen. On needs no Shadow run or review first."
+        "Use in chat (Off, Watch only, On) in the Decision model row on Settings > AI providers. Instance-wide. Shown once a decision model is chosen. On needs no Watch only run first."
     },
     {
       id: "ai.sorting_model",
       description:
-        "Classifier: a row under Services on Settings > AI providers. An admin picks a small, " +
-        "fast model for sorting, or Use main model. News and Sports ask it yes/no questions per " +
-        "story and preference, falling back to the main model.",
+        "Decision model: a row on Settings > AI providers. An admin picks a small, fast model for sorting, or Use main model. News and Sports ask it yes/no questions, falling back to the main model.",
       remediations: [
         {
           id: "ai.sorting_model.use_main_model",
