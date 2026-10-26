@@ -23,7 +23,7 @@ on 2026-10-25.
   `moss-android://hardware` address.
 - Keep the app map truthful in the same PR (`packages/shared/src/app-map-core.ts`, the Android entries).
 - Fill in the PR's Release note: Category Added, title "Moss for Android", one plain sentence.
-- Before pushing web changes, run `pnpm --filter @jarv1s/web typecheck`, eslint on changed files and the
+- Before pushing web changes, run `pnpm --filter @moss/web typecheck`, eslint on changed files and the
   settings unit tests. Do not run the full gate without the `verify-gate` skill.
 - Ask Ben nothing about the design unless the spec cannot answer it. Then message the session that
   spawned you, the Vocci-Coordinator pane `wB:pQ` in herdr, with the herdr-pane-message skill.
