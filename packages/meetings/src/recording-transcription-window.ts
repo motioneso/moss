@@ -1,3 +1,4 @@
+import { RecordingAttemptSupersededError } from "./recording-attempt-error.js";
 import type { VaultContext } from "@moss/vault";
 import type { MeetingRecordingUploadManifest } from "@moss/shared";
 import { RECORDING_SOURCE_LIMITS } from "./recording-source-validation.js";
@@ -75,4 +76,92 @@ export function normalizeWindowTranscript(
   )
     throw new Error("Invalid recording window transcript");
   return segments.map((segment) => ({ ...segment, endMs: Math.min(segment.endMs, durationMs) }));
+}
+
+type WindowSegment = { startMs: number; endMs: number; text: string };
+// <25% coverage or <2 non-whitespace characters/s catches early stops (including stretched timestamps);
+// -35 dBFS RMS excludes quiet PCM without altering noisy source audio.
+const THIN_COVERAGE_RATIO = 0.25;
+const THIN_CHARACTERS_PER_SECOND = 2;
+const AUDIBLE_RMS_DBFS = -35;
+const RETRY_HALF_MS = 15_000;
+
+function characterCount(segments: readonly WindowSegment[]) {
+  return segments.reduce((count, segment) => count + (segment.text.match(/\S/gu)?.length ?? 0), 0);
+}
+
+function coveredMs(segments: readonly WindowSegment[]) {
+  let end = 0,
+    covered = 0;
+  const speech = segments
+    .filter((segment) => segment.text.trim())
+    .sort((a, b) => a.startMs - b.startMs);
+  for (const segment of speech) {
+    covered += Math.max(0, segment.endMs - Math.max(end, segment.startMs));
+    end = Math.max(end, segment.endMs);
+  }
+  return covered;
+}
+
+function audiblePcm(audio: Buffer) {
+  let squares = 0;
+  for (let offset = 44; offset < audio.length; offset += 2) {
+    const sample = audio.readInt16LE(offset) / 32768;
+    squares += sample * sample;
+  }
+  return squares / ((audio.length - 44) / 2) >= 10 ** (AUDIBLE_RMS_DBFS / 10);
+}
+
+function sliceWindowAudio(audio: Buffer, startMs: number, endMs: number) {
+  const part = Buffer.alloc(44 + (endMs - startMs) * 32);
+  part.set(audio.subarray(0, 44));
+  part.set(audio.subarray(44 + startMs * 32, 44 + endMs * 32), 44);
+  part.writeUInt32LE(part.length - 8, 4);
+  part.writeUInt32LE(part.length - 44, 40);
+  return part;
+}
+
+/** One split retry within the existing checkpoint; every request uses the caller's admission guard. */
+export async function transcribeWindowWithRetry(
+  audio: Buffer,
+  durationMs: number,
+  transcribe: (audio: Buffer) => Promise<{ segments: readonly WindowSegment[] }>
+) {
+  const original = normalizeWindowTranscript((await transcribe(audio)).segments, durationMs);
+  const originalCharacters = characterCount(original);
+  if (
+    durationMs < 2 ||
+    (coveredMs(original) >= durationMs * THIN_COVERAGE_RATIO &&
+      originalCharacters >= (durationMs / 1000) * THIN_CHARACTERS_PER_SECOND) ||
+    !audiblePcm(audio)
+  )
+    return original;
+
+  try {
+    const splitMs = Math.min(RETRY_HALF_MS, Math.floor(durationMs / 2));
+    const first = normalizeWindowTranscript(
+      (await transcribe(sliceWindowAudio(audio, 0, splitMs))).segments,
+      splitMs
+    );
+    const second = normalizeWindowTranscript(
+      (await transcribe(sliceWindowAudio(audio, splitMs, durationMs))).segments,
+      durationMs - splitMs
+    );
+    const retry = normalizeWindowTranscript(
+      [
+        ...first,
+        ...second.map((segment) => ({
+          ...segment,
+          startMs: splitMs + segment.startMs,
+          endMs: splitMs + segment.endMs
+        }))
+      ],
+      durationMs
+    );
+    return characterCount(retry) > originalCharacters ? retry : original;
+  } catch (error) {
+    if (error instanceof RecordingAttemptSupersededError) throw error;
+    // The split is optional recovery: provider/timeout/validation failures must not lose good output.
+    return original;
+  }
 }
