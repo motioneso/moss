@@ -27,7 +27,9 @@ Focus lands on the first choice. Closing restores focus to the button.
 
 Step 1, Choose. Choices are grouped by how the provider connects. Each choice is a
 `RadioCardGroup`-style card with a name and one plain line. Every choice can be added any number
-of times, so a person with two Claude accounts adds Claude twice. No choice is ever disabled.
+of times for an API key or a compatible service. A subscription choice (Claude, Codex, Gemini,
+OpenCode) whose kind already has a provider is disabled, with the line "Already connected. Remove
+it to sign in with another account.", until per-account sign-in storage ships.
 
 | Group                       | Choices                                              |
 | --------------------------- | ---------------------------------------------------- |

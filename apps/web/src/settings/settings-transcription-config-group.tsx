@@ -82,7 +82,7 @@ export function TranscriptionConfigGroup() {
     <CollapsibleGroup
       title="Voice"
       storageKey="voice"
-      summary={saved || voiceConfigured ? "Configured" : "Not configured"}
+      summary={saved || voiceConfigured ? "Set up" : "Not set up (optional)"}
     >
       <Group
         title="Transcription"

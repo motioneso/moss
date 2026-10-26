@@ -179,11 +179,11 @@ describe("settings setup link crosses from personal to admin sections (PR 2220)"
 
     // The destination screen really drew itself: its own heading, and its own controls.
     expect(paneHeadings(renderer)).toEqual(["AI providers"]);
-    expect(paneText(renderer)).toContain("The AI providers this instance runs on");
+    expect(paneText(renderer)).toContain("The AI providers Moss uses");
     expect(buttonsWithText(renderer, "Add provider").length).toBeGreaterThan(0);
-    expect(
-      renderer.root.findAllByProps({ ariaLabel: "Allow users to override their chat model" }).length
-    ).toBeGreaterThan(0);
+    // With no provider yet, the chat model section tells the admin to add one first.
+    expect(paneText(renderer)).toContain("Who can choose the chat model");
+    expect(paneText(renderer)).toContain("Add a provider first");
 
     // And the screen the old, broken code fell back to is not the one on show.
     expect(paneHeadings(renderer)).not.toContain("Account & preferences");
@@ -219,7 +219,7 @@ describe("settings setup link crosses from personal to admin sections (PR 2220)"
     // The ordinary user stays in personal settings: the admin screen's heading and controls are
     // nowhere on the page, and the page never claims owner access.
     expect(paneHeadings(renderer)).toEqual(["Account & preferences"]);
-    expect(paneText(renderer)).not.toContain("The AI providers this instance runs on");
+    expect(paneText(renderer)).not.toContain("The AI providers Moss uses");
     expect(buttonsWithText(renderer, "Add provider")).toHaveLength(0);
     expect(
       renderer.root.findAllByProps({ ariaLabel: "Allow users to override their chat model" })

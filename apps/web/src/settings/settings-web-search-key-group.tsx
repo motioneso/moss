@@ -78,7 +78,7 @@ export function WebSearchKeyGroup() {
       />
       <Field
         label="Brave Search API key"
-        hint="Enhanced: consistent results for every model, including local ones. Stored encrypted. Never shown in chat, briefings or logs."
+        hint="Gives every model the same results, including local ones. Stored encrypted."
       >
         <input
           className="jds-input"

@@ -94,18 +94,21 @@ async function modelsOf(page: Page, providerName: string) {
 /** Chooses a model in the Classifier row's picker, through the screen. */
 async function bindClassifier(page: Page, providerName: string, modelLabel: RegExp) {
   await openProviders(page);
-  const picker = page.getByLabel("Classifier model");
-  const value = await picker
-    .locator(`optgroup[label="${providerName}"] option`)
+  await page.getByRole("button", { name: /^(Choose a model|Change model)$/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose a decision model" });
+  const option = dialog
+    .locator("label")
+    .filter({ hasText: providerName })
     .filter({ hasText: modelLabel })
     .first()
-    .getAttribute("value");
-  expect(
-    value,
-    `${providerName} has a model matching ${modelLabel} in the Classifier picker`
-  ).toBeTruthy();
-  await picker.selectOption(value!);
-  await expect(picker).toHaveValue(value!);
+    .getByRole("radio");
+  await expect(
+    option,
+    `${providerName} has a model matching ${modelLabel} in the decision model dialog`
+  ).toBeVisible();
+  await option.check();
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
   await page.waitForTimeout(1_000);
 }
 
@@ -246,7 +249,7 @@ test("Clef: add, test, bind to the Classifier row, sort, Activity names the mode
 
   await bindClassifier(page, "Clef (Cloudflare)", /clef-flash/i);
   await page
-    .getByLabel("Classifier model")
+    .getByLabel("Decision model")
     .locator("xpath=ancestor::div[@class='rt'][1]")
     .screenshot({
       path: shot("2-clef-flash-bound")
