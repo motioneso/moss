@@ -128,10 +128,14 @@ settings. Mail inherits that rule and does not weaken it. For other people to us
   carry actor id and job kind only.
 - Provider-agnostic AI. The step asks for a capability. No model name appears.
 - Vault writes go through `VaultContext` only.
-- Moss reads only. It never sends, deletes, moves, flags or marks mail unread.
-- Opening a message in Outlook marks it read (confirmed live, 2026-10-26). Users change no Outlook
-  setting. Moss accepts that messages it reads become read, and tells the user so in
-  settings. Moss never marks anything unread again, because that would be a mailbox write.
+- Moss reads only. It never sends, deletes, moves or flags mail.
+- Opening a message in Outlook marks it read (confirmed live, 2026-10-26). Moss leaves each
+  message in the state it found it. Before opening a message, Moss records whether it was unread.
+  After capturing the text, Moss marks the message unread again if it started unread, using
+  Outlook's own "Mark as unread" action. Messages that were already read stay read.
+- Restoring read state is the one mailbox change Moss makes, and it only undoes Moss's own open.
+  If Moss cannot restore a message, it leaves it as is, skips nothing else, and reports a partial
+  scrape. No setting or count of such messages is shown to the user unless restores keep failing.
 - Moss does not rely on read or unread state to find new mail. It tracks the last message it read
   (sender, subject, received time and a hash of them) and reads only messages newer than that
   marker. The dedupe list covers messages that arrive out of order.
