@@ -63,6 +63,14 @@ final class NativeTheme {
         view.setBackground(new RippleDrawable(ColorStateList.valueOf((accentText & 0x00ffffff) | 0x33000000), background, null));
         view.setElevation(0); view.setStateListAnimator(null); view.setOnClickListener(v -> action.run()); return view;
     }
+    TextView textLink(Runnable action) {
+        TextView view = text(15, false); view.setTextColor(accentText);
+        view.setPaintFlags(view.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+        view.setMinHeight(dp(48)); view.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        view.setFocusable(true); view.setClickable(true); view.setOnClickListener(v -> action.run());
+        view.setBackground(new RippleDrawable(ColorStateList.valueOf((accentText & 0xffffff) | 0x33000000), null, null));
+        return view;
+    }
     private GradientDrawable buttonGround(boolean primary, boolean focused) {
         GradientDrawable ground = new GradientDrawable(); ground.setColor(primary ? accent : surface); ground.setCornerRadius(dp(4));
         ground.setStroke(dp(focused ? 2 : 1), focused ? (primary ? onAccent : accentText) : (primary ? accent : line)); return ground;
