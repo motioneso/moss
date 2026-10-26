@@ -80,6 +80,7 @@ export function ChatLockRows() {
   return (
     <>
       <Row
+        className="ai-own-lock-row"
         name="Lock my own AI to one model"
         desc={`Only your account. A lock wins over the chat model picker and covers chat, voice and background work. ${effectiveDesc()}. To lock someone else, use People & access.`}
         control={
