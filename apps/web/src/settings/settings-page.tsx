@@ -31,6 +31,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-module-settings";
 
+import { HardwareNavLink } from "./settings-hardware-link";
 import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
 
 import { getFamilyKeys, getModules, getMyModules } from "../api/client";
@@ -721,6 +722,9 @@ export function SettingsPage({ me }: SettingsPageProps) {
                     </button>
                   );
                 })}
+                {group.label === "Connections" && !adminMode ? (
+                  <HardwareNavLink userAgent={navigator.userAgent} />
+                ) : null}
               </Fragment>
             ))}
             {adminMode ? (

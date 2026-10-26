@@ -148,7 +148,7 @@ describe("Trail Marker approval page copy", () => {
     });
     const html = renderRequest("/link/trail-marker#code=abc", client);
     expect(html).toContain("recognise this Android phone");
-    expect(html).toContain("upload completed ring recordings");
+    expect(html).toContain("upload completed recordings from your hardware");
     expect(html).toContain("opted-in hold recordings to Main");
     expect(html).not.toContain("focus block");
     expect(html).not.toContain("Record meetings when you choose Start");
