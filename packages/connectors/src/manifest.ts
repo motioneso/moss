@@ -397,6 +397,32 @@ export const connectorsModuleManifest = {
       description: "Checked new email for follow-ups"
     },
     {
+      id: "connectors.work_mail_processing",
+      description:
+        "Fixture-only mail processing uses memory preferences and sender context to append findings " +
+        "to non-private notes in the linked folder or private vault, keeping hashed last-read state. " +
+        "No mailbox reader is enabled.",
+      errors: [
+        {
+          code: "connectors.work_mail.processing_unavailable",
+          class: "prerequisite",
+          description: "Processing stops without advancing past an AI or vault failure.",
+          remediationRef: "connectors.work_mail.check_configuration"
+        }
+      ],
+      remediations: [
+        {
+          id: "connectors.work_mail.check_configuration",
+          description:
+            "Check the work-mail AI task binding and access to the selected notes folder before retrying."
+        }
+      ]
+    },
+    {
+      id: "structured.connectors.work-mail",
+      description: "Checked work mail for note context (shared processing only; no reader enabled)"
+    },
+    {
       id: "connectors.google_sync",
       description:
         "A connected Google account keeps its calendar and email in Moss: a background sync " +
