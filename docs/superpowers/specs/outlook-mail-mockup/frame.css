@@ -1,27 +1,43 @@
-/* Layout only for the Work mail mockup. Look comes from moss-ui.css. */
+/* Layout only for the Outlook mail mockup. Look comes from moss-ui.css. */
 
 .wm-state {
   display: flex;
   flex-direction: column;
-  margin-top: var(--space-7);
+  gap: var(--space-2);
 }
 
-.wm-state > .pane__card {
-  margin-top: var(--space-2);
+.wm-state + .wm-state {
+  margin-top: var(--space-5);
 }
 
-.wm-code {
+.wm-flowstatus {
+  margin: 0 0 var(--space-5);
+}
+
+.wm-stepact {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-3);
 }
 
-.wm-code__count {
+.wm-code {
   margin: 0;
 }
 
 .wm-alt {
-  margin: 0;
-  padding: var(--space-3) 0 0;
+  margin: var(--space-3) 0 0;
+}
+
+@media (max-width: 620px) {
+  .acct {
+    flex-wrap: wrap;
+  }
+
+  .acct__actions {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    padding-left: 54px;
+  }
 }

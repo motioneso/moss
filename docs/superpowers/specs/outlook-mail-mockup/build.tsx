@@ -1,12 +1,13 @@
-/** Design artifact only. Renders the Work mail settings section with shipped Moss primitives. */
+/** Design artifact only. Renders Outlook work mail inside the add-account flow with shipped Moss primitives. */
 import React, { type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { build } from "esbuild";
 import { Button, ButtonLink, Eyebrow, Indicator, Switch } from "@moss/ui";
-import { Group, PaneHead, Row } from "@moss/settings-ui";
+import { Group, PaneHead } from "@moss/settings-ui";
 import {
+  ArrowLeft,
   Bell,
   CalendarClock,
   ChevronDown,
@@ -15,9 +16,6 @@ import {
   FolderOpen,
   FolderSearch,
   Link2,
-  Mail,
-  MailCheck,
-  MailWarning,
   Palette,
   User
 } from "lucide-react";
@@ -37,7 +35,8 @@ const nav = [
   { label: "Connections", icon: Link2, active: true }
 ];
 
-function Shell({ children }: { children: ReactNode }) {
+/* An open flow hides the pane head, counts and other sections, as the app does. */
+function Shell({ flow = false, children }: { flow?: boolean; children: ReactNode }) {
   return (
     <div className="set2">
       <div className="set2__mast">
@@ -69,57 +68,39 @@ function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="set2__pane">
-          <PaneHead
-            title="Connections"
-            desc="Everything Moss can reach outside itself, and how each one is doing."
-          />
-          <dl className="conn__counts" aria-label="Connections at a glance">
-            <div className="conn__count">
-              <dd>0</dd>
-              <dt>Accounts</dt>
-            </div>
-            <div className="conn__count">
-              <dd>None</dd>
-              <dt>Notes folder</dt>
-            </div>
-            <div className="conn__count">
-              <dd>0</dd>
-              <dt>Services</dt>
-            </div>
-          </dl>
-          {children}
-          <AccountsNeighbour />
-          <NotesNeighbour />
+          {flow ? (
+            children
+          ) : (
+            <>
+              <PaneHead
+                title="Connections"
+                desc="Everything Moss can reach outside itself, and how each one is doing."
+              />
+              <dl className="conn__counts" aria-label="Connections at a glance">
+                <div className="conn__count">
+                  <dd>1</dd>
+                  <dt>Account</dt>
+                </div>
+                <div className="conn__count">
+                  <dd>None</dd>
+                  <dt>Notes folder</dt>
+                </div>
+                <div className="conn__count">
+                  <dd>0</dd>
+                  <dt>Services</dt>
+                </div>
+              </dl>
+              <Group title="Accounts">{children}</Group>
+              <NotesNeighbour />
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-/* Static copies of the shipped neighbouring sections, for comparison. */
-function AccountsNeighbour() {
-  return (
-    <Group title="Accounts">
-      <div className="provpick">
-        <div className="provpick__hd">Connect an account</div>
-        <div className="provpick__grid">
-          <button type="button" className="provpick__item">
-            <span className="provpick__dot" />
-            Google
-          </button>
-          <button type="button" className="provpick__item">
-            <span className="provpick__dot" />
-            Email (IMAP)
-          </button>
-        </div>
-        <div className="provpick__foot">
-          Connect Google or an email (IMAP) account using the credentials you provide.
-        </div>
-      </div>
-    </Group>
-  );
-}
-
+/* Static copy of the shipped Notes folder section, for comparison. */
 function NotesNeighbour() {
   return (
     <Group
@@ -146,44 +127,146 @@ function NotesNeighbour() {
   );
 }
 
-/* ---- The Work mail section ---- */
+/* ---- Add account: the shipped picker with Outlook added ---- */
 
-type Health = "ready" | "drift" | "error" | "idle";
-
-function WorkMail(props: { on: boolean; children: ReactNode }) {
+function Picker() {
   return (
-    <Group
-      title={<span className="src-title">Work mail</span>}
-      action={<Switch ariaLabel="Read work mail" checked={props.on} />}
-    >
-      {props.children}
-    </Group>
-  );
-}
-
-/* One status row in the Notes folder pattern: icon tile, one status line, small actions. */
-function StatusRow(props: {
-  icon: ReactNode;
-  status: string;
-  empty?: boolean;
-  health?: Health;
-  actions?: ReactNode;
-}) {
-  return (
-    <div className="vault">
-      <span className="vault__ic">{props.icon}</span>
-      <div className="vault__main" role="status">
-        <div className={`vault__path${props.empty ? " vault__path--empty" : ""}`}>
-          {props.health ? <Indicator status={props.health} label={props.status} /> : props.status}
-        </div>
+    <div className="provpick">
+      <div className="provpick__hd">Connect an account</div>
+      <div className="provpick__grid">
+        {["Google", "Outlook", "Email (IMAP)"].map((name) => (
+          <button key={name} type="button" className="provpick__item">
+            <span className="provpick__dot" />
+            {name}
+          </button>
+        ))}
       </div>
-      {props.actions ? <div className="vault__act">{props.actions}</div> : null}
     </div>
   );
 }
 
-const mail = <Mail size={18} aria-hidden="true" />;
-const warn = <MailWarning size={18} aria-hidden="true" />;
+/* ---- Connect Outlook: the shipped Google flow layout ---- */
+
+function Flow({ children }: { children: ReactNode }) {
+  return (
+    <div className="gflow">
+      <button type="button" className="gflow__back">
+        <ArrowLeft size={15} aria-hidden="true" />
+        All accounts
+      </button>
+      <div className="gflow__intro">
+        <span className="gflow__g">O</span>
+        <div className="gflow__introtx">
+          <div className="gflow__title">Connect Outlook</div>
+        </div>
+      </div>
+      <div className="gflow__card">{children}</div>
+    </div>
+  );
+}
+
+function SignIn() {
+  return (
+    <Flow>
+      <div className="onb-cred__actions">
+        <Button size="sm" icon={<ExternalLink size={15} />}>
+          Sign in with Microsoft
+        </Button>
+        <Button variant="quiet" size="sm">
+          Cancel
+        </Button>
+      </div>
+    </Flow>
+  );
+}
+
+function Step({ n, text, children }: { n: number; text: string; children?: ReactNode }) {
+  return (
+    <li className="onb-guide__step">
+      <span className="onb-guide__n">{n}</span>
+      <div className="onb-guide__body">
+        <div className="onb-guide__t">{text}</div>
+        {children ? <div className="wm-stepact">{children}</div> : null}
+      </div>
+    </li>
+  );
+}
+
+function Blocked() {
+  return (
+    <Flow>
+      <p className="wm-flowstatus" role="status">
+        <Indicator status="drift" label="Your organisation blocked this sign-in" />
+      </p>
+      <div className="onb-cred__hd">Use the browser add-on instead</div>
+      <ol className="onb-guide">
+        <Step n={1} text="Download the add-on">
+          <Button variant="secondary" size="sm" icon={<Download size={15} />}>
+            Download for Firefox
+          </Button>
+        </Step>
+        <Step n={2} text="Open it in Firefox and click Add" />
+        <Step n={3} text="Enter this code in the add-on">
+          <dl className="wm-code" aria-label="Pairing code">
+            <div className="conn__count">
+              <dd>K7Q 4MP</dd>
+            </div>
+          </dl>
+          <Button variant="quiet" size="sm">
+            New code
+          </Button>
+        </Step>
+      </ol>
+      <div className="onb-cred__actions">
+        <span className="onb-cred__hint">Waiting for the add-on</span>
+      </div>
+      <p className="wm-alt">
+        <Button variant="link" size="sm">
+          Use the server window
+        </Button>
+      </p>
+    </Flow>
+  );
+}
+
+/* ---- Connected: the shipped account row with a mail line ---- */
+
+function OutlookRow(props: {
+  health: "ready" | "drift" | "error";
+  label: string;
+  mail: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="acct">
+      <div className="acct__logo">O</div>
+      <div className="acct__main">
+        <div className="acct__name">Outlook</div>
+        <div className="acct__sub">
+          <span>Browser add-on</span>
+          <span className="acct__dot">·</span>
+          <Indicator status={props.health} label={props.label} />
+        </div>
+        <div className="acct__features">
+          <div className="acct-feature">
+            <div>
+              <div className="acct-feature__label">Email access</div>
+              <div className="acct-feature__desc">{props.mail}</div>
+            </div>
+            <Switch ariaLabel="Email access" checked />
+          </div>
+        </div>
+      </div>
+      <div className="acct__actions">
+        {props.actions}
+        <Button variant="quiet" size="sm">
+          Revoke
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 const openOutlook = (
   <ButtonLink
     variant="secondary"
@@ -194,143 +277,6 @@ const openOutlook = (
     Open Outlook
   </ButtonLink>
 );
-const openServer = (
-  <Button variant="secondary" size="sm" icon={<ExternalLink size={15} />}>
-    Open server window
-  </Button>
-);
-
-function Off() {
-  return (
-    <WorkMail on={false}>
-      <StatusRow icon={mail} status="Off" empty />
-    </WorkMail>
-  );
-}
-
-function TurningOn() {
-  return (
-    <WorkMail on>
-      <StatusRow icon={mail} status="Waiting for the add-on" empty />
-      <Row
-        className="set-row--stack-narrow"
-        name="1. Download the add-on"
-        control={
-          <Button variant="secondary" size="sm" icon={<Download size={15} />}>
-            Download for Firefox
-          </Button>
-        }
-      />
-      <Row name="2. Open it in Firefox and click Add" />
-      <Row
-        className="set-row--stack-narrow"
-        name="3. Enter this code in the add-on"
-        control={
-          <span className="wm-code">
-            <dl className="wm-code__count" aria-label="Pairing code">
-              <div className="conn__count">
-                <dd>K7Q 4MP</dd>
-              </div>
-            </dl>
-            <Button variant="quiet" size="sm">
-              New code
-            </Button>
-          </span>
-        }
-      />
-      <p className="wm-alt">
-        <Button variant="link" size="sm">
-          Use the server window instead
-        </Button>
-      </p>
-    </WorkMail>
-  );
-}
-
-function ServerWindow() {
-  return (
-    <WorkMail on>
-      <StatusRow
-        icon={mail}
-        status="Waiting for Outlook sign-in"
-        empty
-        actions={
-          <>
-            {openServer}
-            <Button variant="quiet" size="sm">
-              Use the add-on
-            </Button>
-          </>
-        }
-      />
-    </WorkMail>
-  );
-}
-
-function Connected() {
-  return (
-    <WorkMail on>
-      <StatusRow
-        icon={<MailCheck size={18} aria-hidden="true" />}
-        status="Last read 2:40 PM"
-        actions={
-          <Button variant="quiet" size="sm">
-            Revoke add-on
-          </Button>
-        }
-      />
-    </WorkMail>
-  );
-}
-
-function NotSeen() {
-  return (
-    <WorkMail on>
-      <StatusRow
-        icon={warn}
-        health="drift"
-        status="Add-on not seen since yesterday 5:12 PM"
-        actions={openOutlook}
-      />
-    </WorkMail>
-  );
-}
-
-function SignInAddOn() {
-  return (
-    <WorkMail on>
-      <StatusRow icon={warn} health="drift" status="Outlook sign-in needed" actions={openOutlook} />
-    </WorkMail>
-  );
-}
-
-function SignInServer() {
-  return (
-    <WorkMail on>
-      <StatusRow
-        icon={warn}
-        health="drift"
-        status="Outlook sign-in needed"
-        actions={
-          <>
-            {openServer}
-            <Button variant="secondary" size="sm">
-              Retry
-            </Button>
-          </>
-        }
-      />
-    </WorkMail>
-  );
-}
-
-function PageChanged() {
-  return (
-    <WorkMail on>
-      <StatusRow icon={warn} health="error" status="Paused: Outlook page changed" />
-    </WorkMail>
-  );
-}
 
 function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -343,44 +289,56 @@ function Labelled({ label, children }: { label: string; children: ReactNode }) {
 
 /* ---- Pages ---- */
 
-const pages: { file: string; title: string; content: ReactNode }[] = [
-  { file: "01-off", title: "Off", content: <Off /> },
-  { file: "02-turning-on", title: "Turning on: add-on", content: <TurningOn /> },
-  { file: "03-server-window", title: "Turning on: server window", content: <ServerWindow /> },
-  { file: "04-connected", title: "Connected", content: <Connected /> },
+const pages: { file: string; title: string; flow?: boolean; content: ReactNode }[] = [
+  { file: "01-add-account", title: "Add account", content: <Picker /> },
+  { file: "02-sign-in", title: "Connect Outlook", flow: true, content: <SignIn /> },
+  { file: "03-sign-in-blocked", title: "Sign-in blocked", flow: true, content: <Blocked /> },
+  {
+    file: "04-connected",
+    title: "Connected",
+    content: <OutlookRow health="ready" label="Connected" mail="Last read 2:40 PM" />
+  },
   {
     file: "05-problems",
     title: "Problem states",
     content: (
       <>
         <Labelled label="Mockup state: add-on not seen">
-          <NotSeen />
+          <OutlookRow
+            health="drift"
+            label="Add-on not seen"
+            mail="Last read yesterday 5:12 PM"
+            actions={openOutlook}
+          />
         </Labelled>
-        <Labelled label="Mockup state: sign-in needed, add-on route">
-          <SignInAddOn />
-        </Labelled>
-        <Labelled label="Mockup state: sign-in needed, server window route">
-          <SignInServer />
+        <Labelled label="Mockup state: Outlook sign-in needed">
+          <OutlookRow
+            health="drift"
+            label="Outlook sign-in needed"
+            mail="Last read 9:05 AM"
+            actions={openOutlook}
+          />
         </Labelled>
         <Labelled label="Mockup state: Outlook page changed">
-          <PageChanged />
+          <OutlookRow health="error" label="Outlook page changed" mail="Last read 11:20 AM" />
         </Labelled>
       </>
     )
   }
 ];
 
-function page(title: string, content: ReactNode) {
-  const body = renderToStaticMarkup(<Shell>{content}</Shell>);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Work mail mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="frame.css"></head><body>${body}</body></html>\n`;
+function page(title: string, flow: boolean, content: ReactNode) {
+  const body = renderToStaticMarkup(<Shell flow={flow}>{content}</Shell>);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Outlook mail mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="frame.css"></head><body>${body}</body></html>\n`;
 }
 
-for (const p of pages) writeFileSync(resolve(out, `${p.file}.html`), page(p.title, p.content));
+for (const p of pages)
+  writeFileSync(resolve(out, `${p.file}.html`), page(p.title, p.flow === true, p.content));
 
 const links = pages.map((p) => `<li><a href="${p.file}.html">${p.title}</a></li>`).join("");
 writeFileSync(
   resolve(out, "index.html"),
-  `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Work mail mockup</title><link rel="stylesheet" href="moss-ui.css"></head><body><main style="padding:var(--space-7)"><h1>Work mail settings section</h1><ul>${links}</ul></main></body></html>\n`
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Outlook mail mockup</title><link rel="stylesheet" href="moss-ui.css"></head><body><main style="padding:var(--space-7)"><h1>Outlook work mail mockups</h1><ul>${links}</ul></main></body></html>\n`
 );
 
 /* ---- Frozen stylesheet: the app's cascade plus the Settings sheets, fonts kept local ---- */
