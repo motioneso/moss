@@ -414,7 +414,8 @@ export const connectorsModuleManifest = {
         {
           id: "connectors.work_mail.check_configuration",
           description:
-            "Check the work-mail AI task binding and access to the selected notes folder before retrying."
+            "Check the work-mail AI task binding and access to the selected notes folder before retrying.",
+          path: "/settings?section=aiproviders"
         }
       ]
     },
