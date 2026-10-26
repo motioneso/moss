@@ -95,11 +95,13 @@ settings. Mail inherits that rule and does not weaken it. For other people to us
   carry actor id and job kind only.
 - Provider-agnostic AI. The step asks for a capability. No model name appears.
 - Vault writes go through `VaultContext` only.
-- Moss reads only. It never sends, deletes, moves, flags or marks mail read.
-- Opening a message in Outlook marks it read (confirmed on Ben's account, 2026-10-26). Moss reads
-  through the reading pane. Setup asks the user to set Outlook's "mark as read" option to never,
-  so Moss leaves read state untouched. If the user declines, a preference lets Moss mark the
-  messages it opened as read, and Moss tells the user it will.
+- Moss reads only. It never sends, deletes, moves, flags or marks mail unread.
+- Opening a message in Outlook marks it read (confirmed on Ben's account, 2026-10-26). Users change
+  no Outlook setting. Moss accepts that messages it reads become read, and tells the user so in
+  settings. Moss never marks anything unread again, because that would be a mailbox write.
+- Moss does not rely on read or unread state to find new mail. It tracks the last message it read
+  (sender, subject, received time and a hash of them) and reads only messages newer than that
+  marker. The dedupe list covers messages that arrive out of order.
 
 ## Failure behavior
 
@@ -116,8 +118,8 @@ states. Mockups still need Ben's agreement before building.
 
 ## Open questions
 
-1. Whether Outlook's "never mark as read" option stops the mark when Moss selects a message.
-   Check live before building.
+1. How Moss orders the inbox when the list is sorted by something other than received time.
+   Proposed, Moss sets the sort to newest first in its own window only.
 2. Where users set mail preferences. Proposed chat first, with the saved facts visible in the
    memory screen, and no separate settings form for them.
 3. Do shared or delegated mailboxes matter. Proposed no, the primary mailbox only.
