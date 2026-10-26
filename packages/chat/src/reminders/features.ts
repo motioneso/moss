@@ -1,10 +1,12 @@
 import { responsibilityAgreementFeature } from "../responsibility-agreements/feature.js";
 import { REMINDER_SETTINGS_FEATURE } from "./manifest.js";
 import type { ModuleFeatureManifest } from "@moss/module-sdk";
+import { reminderSummaryFeature } from "./summary/feature.js";
 import { quietHoursAllowanceFeature } from "./quiet-hours-feature.js";
 
 export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   responsibilityAgreementFeature,
+  reminderSummaryFeature,
   {
     id: "chat.scheduled_owner_read",
     description:

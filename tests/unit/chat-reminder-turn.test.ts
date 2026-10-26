@@ -550,9 +550,8 @@ describe("chat reminder turn (#3309)", () => {
   });
 });
 
-describe("chat reminder list and cancel turn (#3310)", () => {
+describe("chat reminder cancel turn (#3310)", () => {
   it.each([
-    ["list my reminders", { kind: "list" }],
     ["cancel the reminder to stretch", { kind: "cancel", target: "stretch" }],
     ["cancel my reminder", { kind: "cancel", target: null }]
   ])("answers %j from the raw words without the gate or the model", async (say, plan) => {
@@ -580,7 +579,7 @@ describe("chat reminder list and cancel turn (#3310)", () => {
 
   it("says nothing changed when the store fails", async () => {
     const { manager, engine } = setup({ record: vi.fn().mockRejectedValue(new Error("db down")) });
-    const result = await manager.submitTurn("u1", "Ben", "list my reminders");
+    const result = await manager.submitTurn("u1", "Ben", "cancel my reminder");
     expect(result.reply).toBe(REMINDER_MANAGE_FAILURE_MESSAGE);
     expect(engine.launchCount).toBe(0);
   });

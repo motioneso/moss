@@ -24,6 +24,7 @@ import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./cur
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
 import { chatReadAttachmentExecute } from "./attachment-tool.js";
 import { chatPresentTool } from "./visual/present-tool.js";
+import { reminderSummaryTemplate, reminderSummaryTool } from "./reminders/summary/surface.js";
 import {
   chatSetResponseStyleExecute,
   chatResponseStylePresentation,
@@ -187,6 +188,7 @@ export const chatModuleManifest = {
       ]
     }
   },
+  visualTemplates: [reminderSummaryTemplate],
   features: [
     {
       id: "chat.domain_read_resolution",
@@ -893,6 +895,7 @@ export const chatModuleManifest = {
   ],
   assistantTools: [
     chatPresentTool,
+    reminderSummaryTool,
     {
       name: "chat.listTodaysTurns",
       description: "List today's non-incognito chat turns for the active actor.",
