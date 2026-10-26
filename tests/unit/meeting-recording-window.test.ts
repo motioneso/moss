@@ -3,6 +3,7 @@ import {
   normalizeWindowTranscript,
   transcribeWindowWithRetry
 } from "../../packages/meetings/src/recording-transcription-window.js";
+import { RecordingAttemptSupersededError } from "../../packages/meetings/src/recording-attempt-error.js";
 
 describe("imported recording transcript bounds", () => {
   it("accepts the measured trailing drift without mutating the provider response", () => {
@@ -216,17 +217,14 @@ describe("thin audible recording pieces", () => {
       .mockResolvedValue({ segments: [{ startMs: 0, endMs: 15_000, text: "word ".repeat(600) }] });
     expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
   });
-  it.each(["TimeoutError", "AbortError"])(
-    "keeps the original on a half %s without a job abort",
-    async (name) => {
-      const transcribe = vi
-        .fn()
-        .mockResolvedValueOnce({ segments: thin })
-        .mockRejectedValue(new DOMException("Half request expired", name));
-      expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
-      expect(transcribe).toHaveBeenCalledTimes(2);
-    }
-  );
+  it.each(["TimeoutError", "AbortError"])("keeps the original on a half %s", async (name) => {
+    const transcribe = vi
+      .fn()
+      .mockResolvedValueOnce({ segments: thin })
+      .mockRejectedValue(new DOMException("Half request expired", name));
+    expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
+    expect(transcribe).toHaveBeenCalledTimes(2);
+  });
 
   it("keeps the original when merged halves exceed the segment budget", async () => {
     const transcribe = vi
@@ -249,25 +247,18 @@ describe("thin audible recording pieces", () => {
   });
 
   it("rethrows superseded admission instead of retaining a stale result", async () => {
-    const error = new Error("Recording attempt superseded");
+    const error = new RecordingAttemptSupersededError();
     const transcribe = vi.fn().mockResolvedValueOnce({ segments: thin }).mockRejectedValue(error);
     await expect(transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).rejects.toBe(error);
     expect(transcribe).toHaveBeenCalledTimes(2);
   });
 
-  it("rethrows a whole-job abort even if the half returns successfully", async () => {
-    const controller = new AbortController();
-    const reason = new DOMException("Whole job stopped", "AbortError");
+  it("keeps the original when a provider error has the supersession message", async () => {
     const transcribe = vi
       .fn()
       .mockResolvedValueOnce({ segments: thin })
-      .mockImplementationOnce(async () => {
-        controller.abort(reason);
-        return { segments: half };
-      });
-    await expect(
-      transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe, controller.signal)
-    ).rejects.toBe(reason);
+      .mockRejectedValue(new Error("Recording attempt superseded"));
+    expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
     expect(transcribe).toHaveBeenCalledTimes(2);
   });
 

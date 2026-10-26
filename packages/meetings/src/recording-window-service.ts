@@ -20,6 +20,9 @@ import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { MeetingPreferencesRepository } from "./preferences.js";
 
+import { RecordingAttemptSupersededError } from "./recording-attempt-error.js";
+export { RecordingAttemptSupersededError } from "./recording-attempt-error.js";
+
 /** One non-overlapping window per metadata-only job; commit + next job are atomic. */
 export class RecordingWindowService {
   private readonly imports = new RecordingImportRepository();
@@ -92,7 +95,7 @@ export class RecordingWindowService {
             dispatch: async (send, validate) => {
               const dispatch = await this.deps.dataContext.withDataContext(actor, async (db) => {
                 if (!(await this.current(db, row, attemptId)))
-                  throw new Error("Recording attempt superseded");
+                  throw new RecordingAttemptSupersededError();
                 await this.deps.assertAvailable(actor);
                 await validate?.(db);
                 const request = send();

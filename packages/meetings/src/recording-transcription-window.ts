@@ -1,3 +1,4 @@
+import { RecordingAttemptSupersededError } from "./recording-attempt-error.js";
 import type { VaultContext } from "@moss/vault";
 import type { MeetingRecordingUploadManifest } from "@moss/shared";
 import { RECORDING_SOURCE_LIMITS } from "./recording-source-validation.js";
@@ -124,12 +125,9 @@ function sliceWindowAudio(audio: Buffer, startMs: number, endMs: number) {
 export async function transcribeWindowWithRetry(
   audio: Buffer,
   durationMs: number,
-  transcribe: (audio: Buffer) => Promise<{ segments: readonly WindowSegment[] }>,
-  jobSignal?: AbortSignal
+  transcribe: (audio: Buffer) => Promise<{ segments: readonly WindowSegment[] }>
 ) {
-  jobSignal?.throwIfAborted();
   const original = normalizeWindowTranscript((await transcribe(audio)).segments, durationMs);
-  jobSignal?.throwIfAborted();
   const originalCharacters = characterCount(original);
   if (
     durationMs < 2 ||
@@ -145,12 +143,10 @@ export async function transcribeWindowWithRetry(
       (await transcribe(sliceWindowAudio(audio, 0, splitMs))).segments,
       splitMs
     );
-    jobSignal?.throwIfAborted();
     const second = normalizeWindowTranscript(
       (await transcribe(sliceWindowAudio(audio, splitMs, durationMs))).segments,
       durationMs - splitMs
     );
-    jobSignal?.throwIfAborted();
     const retry = normalizeWindowTranscript(
       [
         ...first,
@@ -164,8 +160,7 @@ export async function transcribeWindowWithRetry(
     );
     return characterCount(retry) > originalCharacters ? retry : original;
   } catch (error) {
-    jobSignal?.throwIfAborted();
-    if (error instanceof Error && error.message === "Recording attempt superseded") throw error;
+    if (error instanceof RecordingAttemptSupersededError) throw error;
     // The split is optional recovery: provider/timeout/validation failures must not lose good output.
     return original;
   }
