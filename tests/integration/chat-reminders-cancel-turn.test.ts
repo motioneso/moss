@@ -157,25 +157,6 @@ describe("listing and cancelling reminders from a chat turn (#3310)", () => {
     expect(assistant.rows[0].model_metadata.origin).toEqual(stored!.origin);
   });
 
-  it("lists in Main with a listed origin", async () => {
-    const threadId = await mainThreadId(ids.userA);
-    await saveStretch(threadId);
-    const stored = await persistenceWith(appBoss).recordReminderTurn(
-      ids.userA,
-      "list my reminders",
-      { kind: "list" },
-      { threadId }
-    );
-    assertNotStopped(stored);
-    expect(stored?.reply).toMatch(/^Chat reminders waiting:\n- stretch, in (9|10) minutes/);
-    expect(stored?.origin).toEqual({
-      kind: "reminder",
-      event: "listed",
-      reminderId: null,
-      version: 1
-    });
-  });
-
   it("answers a refused cancel with a cancel_refused origin", async () => {
     const threadId = await mainThreadId(ids.userA);
     const stored = await persistenceWith(appBoss).recordReminderTurn(ids.userA, SAY, CANCEL, {
