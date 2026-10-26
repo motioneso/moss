@@ -74,6 +74,7 @@ public final class DeliveryService extends Service {
         latestStartId = startId;
         DeliveryPreferences choices = new DeliveryPreferences(this);
         String action = intent == null ? null : intent.getAction();
+        if ("reminder-dismissed".equals(action)) { reminder.dismiss(); return choices.enabled() ? START_STICKY : START_NOT_STICKY; }
         boolean enabled = choices.applyAction(action);
         if (!enabled && !recordingCommand(action)) { stopSelf(); return START_NOT_STICKY; }
         if (intent != null && (recordingCommand(action) || Arrays.asList("voice-on", "voice-off", "clear-completed", "retry-transcription").contains(action))) commands.add(new Intent(intent));
@@ -210,12 +211,21 @@ public final class DeliveryService extends Service {
     private void remindRecording() {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (!manager.areNotificationsEnabled()) return;
-        manager.createNotificationChannel(new NotificationChannel("recording-reminder", "Long recordings", NotificationManager.IMPORTANCE_DEFAULT));
-        manager.notify(3551, new Notification.Builder(this, "recording-reminder")
+
+        // Channel importance is fixed at creation, so the heads-up alert needs a new channel id.
+        manager.deleteNotificationChannel("recording-reminder");
+        NotificationChannel channel = new NotificationChannel("recording-reminder-alert", "Long recordings", NotificationManager.IMPORTANCE_HIGH);
+        channel.enableVibration(true);
+        manager.createNotificationChannel(channel);
+        Intent seen = new Intent(this, HardwareActivity.class).putExtra("reminderSeen", true);
+        Intent dismissed = new Intent(this, DeliveryService.class).setAction("reminder-dismissed");
+        manager.notify(3551, new Notification.Builder(this, "recording-reminder-alert")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Still recording on your ring?")
-            .setContentText("Your ring has been observed recording for an hour. Double-click its button to finish if you’re done.")
-            .setStyle(new Notification.BigTextStyle().bigText("Your ring has been observed recording for an hour. Double-click its button to finish if you’re done. Moss never stops a recording for you."))
-            .setContentIntent(PendingIntent.getActivity(this, 3, new Intent(this, HardwareActivity.class), PendingIntent.FLAG_IMMUTABLE))
+            .setContentText("Your ring has been recording for over an hour. Double-click its button to finish if you’re done.")
+            .setStyle(new Notification.BigTextStyle().bigText("Your ring has been recording for over an hour. Double-click its button to finish if you’re done. Moss never stops a recording for you."))
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setContentIntent(PendingIntent.getActivity(this, 3, seen, PendingIntent.FLAG_IMMUTABLE))
+            .setDeleteIntent(PendingIntent.getService(this, 4, dismissed, PendingIntent.FLAG_IMMUTABLE))
             .setAutoCancel(true).build());
     }
     private void deliver(MossClient client) throws Exception {

@@ -49,6 +49,8 @@ public final class HardwareActivity extends Activity {
         body.setPadding(theme.dp(24), theme.dp(12), theme.dp(24), theme.dp(32)); scroll.addView(body);
         setContentView(scroll); scroll.requestApplyInsets();
         if ("connection".equals(getIntent().getStringExtra("page"))) page = "connection";
+        if (saved == null && getIntent().getBooleanExtra("reminderSeen", false))
+            startService(new Intent(this, DeliveryService.class).setAction("reminder-dismissed"));
         if (saved != null) {
             page = saved.getString("page", "hardware"); restoreY = saved.getInt("scrollY");
             selectedId = saved.getString("selectedId", ""); recordingPage = saved.getInt("recordingPage");
@@ -243,7 +245,7 @@ public final class HardwareActivity extends Activity {
                     voice.has("enablement") ? "Enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Off", 13, false);
                 rule("hold-rule");
                 toggle("reminder", "Remind me after an hour", choices.recordingReminder(), enabled -> choices.recordingReminder(enabled));
-                text("reminder-help", "A phone reminder, never an auto-stop. Requires delivery and notifications; restarts or gaps in ring status reset the observed hour.", 13, false);
+                text("reminder-help", "A phone alert that repeats every 30 minutes until dismissed, never an auto-stop. Requires delivery and notifications; restarts or gaps in ring status reset the observed hour.", 13, false);
                 rule("reminder-rule");
                 row("storage", "Ring storage", "Capacity and saved recordings", () -> show("storage"));
                 row("phone", "Phone audio", "Delivered copies and automatic cleanup", () -> show("phone"));
