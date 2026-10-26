@@ -9,7 +9,7 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 
-PACKAGE = "ai.moss.vocci.upgradeproof"
+PACKAGE = "ai.moss.android.upgradeproof"
 
 
 def sha(value):
@@ -54,7 +54,7 @@ def main():
 
     def instrument(mode):
         output = adb("shell", "am", "instrument", "-w", "-e", "mode", mode, "-e", "port", args.port,
-            PACKAGE + "/ai.moss.vocci.UpgradeFixture", timeout=60).decode()
+            PACKAGE + "/ai.moss.android.UpgradeFixture", timeout=60).decode()
         check("INSTRUMENTATION_CODE: -1" in output and "result=PASS" in output, "fixture_" + mode)
 
     def installed():
@@ -199,7 +199,7 @@ def main():
         check(not installed(), "owned_fixture_confirmed_absent")
         # Retain ownership across reinstall, including ambiguous installer timeouts.
         check("Success" in adb("install", args.candidate, timeout=90).decode(), "candidate_fresh_for_selection_contract")
-        output = adb("shell", "am", "instrument", "-w", PACKAGE + "/ai.moss.vocci.SetupSelectionChecks", timeout=60).decode()
+        output = adb("shell", "am", "instrument", "-w", PACKAGE + "/ai.moss.android.SetupSelectionChecks", timeout=60).decode()
         check("INSTRUMENTATION_CODE: -1" in output and "result=PASS" in output, "actual_choose_another_ring_retains_moss_and_reopens_lookup")
         result["result"] = "PASS"
     except BaseException as error:

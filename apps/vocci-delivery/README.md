@@ -16,7 +16,7 @@ API 33; tested devices/results belong on the PR.
 
 ## Set up an already-owned ring
 
-The launcher opens **Vocci ring** Home. A status card offers **Set up ring** when
+The Hardware page opens from Moss Settings. Its status card offers **Set up ring** when
 setup is needed, or the current delivery/account/permission action for configured
 installs. Updates keep the current ring, account, pending audio and hold choice.
 The new wizard is implemented; its complete setup-to-recording live acceptance is
@@ -56,7 +56,7 @@ command; do not operate on another attached device. Install
 `apps/vocci-delivery/build/moss-vocci-dev.apk` with `install -r`. Instrumentation:
 
 ```bash
-adb -s <serial> shell am instrument -w ai.moss.vocci/.DeviceChecks
+adb -s <serial> shell am instrument -w ai.moss.android/.DeviceChecks
 ```
 
 Require `INSTRUMENTATION_RESULT: result=PASS` and code `-1`; ADB can exit zero even
@@ -74,7 +74,7 @@ a form content type to an empty POST, which the receiver rejects with HTTP 415.
 
 Create the app-private `files/` directory with `run-as` on a fresh install.
 A developer provisions a one-use app-private `files/bootstrap.json` over stdin
-with `run-as ai.moss.vocci sh -c 'cat > files/bootstrap.json'`. Supply JSON fields:
+with `run-as ai.moss.android sh -c 'cat > files/bootstrap.json'`. Supply JSON fields:
 `address`, `sn`, `deviceId`, `bindKey` (existing owner binding), `origin` (plain
 HTTPS origin, no trailing slash), and `cookie` (normal signed-in Moss cookie).
 Read credentials from private owner-only files or the authorized diagnostic app's
@@ -100,7 +100,7 @@ Bluetooth state in `finally` after stopping Moss. Test this handoff on the devic
 the companion's Open Vocci app settings action supports this handoff without
 changing the binding.
 
-Start `ai.moss.vocci/.DeliveryActivity` from the launcher or ADB. Grant Bluetooth
+Start `ai.moss.android/.DeliveryActivity` (Hardware) from Moss Settings or ADB. Grant Bluetooth
 and notifications. The ongoing notification reports record-derived progress and
 opens Home, with one state-appropriate action, account/ring identity and recent deliveries.
 Settings contains voice opt-in, account disconnection and permission help. To stop explicitly, launch the activity with action `stop`; physical
@@ -120,36 +120,52 @@ HTTP is accepted only at loopback for isolated development using an owned ADB
 reverse on a claimed devport. Remote delivery requires HTTPS; redirects are
 rejected. Never reuse/remove another session's forward or server.
 
-## Native Home and Settings
+## Moss screen and Hardware page
 
-The launcher activity (`HardwareActivity`) routes to **Vocci ring** Home
-(`DeliveryActivity`). Home shows one status-card action chosen by the plain
-`HomeStatus` policy: setup/recovery, account connection, pending approval with a
-text Cancel link, competing Vocci access, missing permissions, background battery
-restriction, recovery message, then Start or Stop. An unreadable saved setup shows
-its recovery text without an action. Host tests cover combined blockers as well as
-healthy delivering and stopped states.
+The launcher (`MossActivity`) opens the Moss site full screen in a web view, at the
+connected address. With no Moss link it shows Connect to Moss (`ConnectActivity`):
+one address field, then Moss's own approval page inside the app, polled every few
+seconds until approved. The link is the staged `SetupLink`, so ring setup picks up
+at the Vocci account step and never disconnects Moss. With a link and no ring, no
+ring service runs and nothing outside Hardware mentions the ring. Pages
+on that address stay in the web view, and any other web address opens in the browser.
+Back goes back in web history, then leaves the app. The web view adds
+`MossAndroid/<version>` to its user agent, which makes Moss Settings show a
+**Hardware** entry under Connections. That entry links to `moss-android://hardware`,
+the only address the app intercepts. There is no JavaScript bridge, file and content
+access are off, mixed content is blocked and third-party cookies are off. Moss
+signs in inside the web view with its own cookies, separate from the ring's account
+link. Microphone and location are not offered to web pages. If Moss fails to load,
+a native message offers **Try again** and **Open Hardware**.
 
-**Recent** shows the latest three deliveries with source time, kind, retained
-length when known and outcome. Tap a row for delivery details, **Open meeting** or
-**Review in Moss**, and eligible **Retry transcription**. **All deliveries** keeps
-the previous 30-entry history available. **Recordings on ring** opens the inventory.
-Its list and detail Back actions return Home.
+**Hardware** (`DeliveryActivity`) is one native page styled like Moss Settings. Its
+back link **Settings** returns to the Moss screen. In order it holds:
 
-**Settings** (`HardwareActivity`, `page=settings`) holds each daily preference once:
-**Remind me after an hour**, **Voice messages**, account name/origin and connected
-account **Disconnect**, **Set up ring again**, **About this ring**, **How to use your
-ring**, **Clear delivered audio** with phone usage, and **Permissions and battery**.
-The storage subpage retains optional seven-day cleanup and confirmed manual cleanup;
-troubleshooting retains Bluetooth/notifications, Android battery/app settings and
-conditional Vocci app settings. The existing `page=connection` intent still opens it.
-About retains dated battery/recording observations and firmware. Settings subpages
-return Settings.
+- a status card with one action chosen by the plain `HomeStatus` policy: setup/recovery,
+  account connection, pending approval with a text Cancel link, competing Vocci access,
+  missing permissions, background battery restriction, recovery message, then Start or
+  Stop. Blocking states show an amber dot. An unreadable saved setup shows its recovery
+  text without an action.
+- **Recent**: the latest three deliveries with kind, retained length, source time and
+  outcome. Tap a row for details, **Open meeting** or **Review in Moss**, and eligible
+  **Retry transcription**. **All deliveries** keeps the 30-entry history.
+- **Ring**: **Remind me after an hour**, **Voice messages**, **Recordings on ring**,
+  **Set up ring again**, **About this ring**, **How to use your ring**.
+- **Phone storage**: **Clear delivered audio** with the phone size.
+- **Account**: name and origin, with **Disconnect** when connected.
+- **Troubleshooting**: **Permissions and battery**.
 
-The app is named **Moss** (development packages say **Moss (dev)**). Opening Home or
-Settings starts neither delivery nor hold enrollment. Existing service commands,
-intent actions and preference names are unchanged. This adds no embedded web shell
-or new web Hardware route.
+The subpages live in `HardwareActivity` (`page=storage|recording|phone|connection|guide|about`)
+and their back returns to Hardware.
+
+**Ring problems** notifications use a separate channel. While delivery is on and the
+status card shows a blocker (cannot reach the ring, permission needed, account not
+connected, setup could not be opened), one notification repeats the card's text and
+opens Hardware. It posts once per state and clears when the state resolves or delivery
+stops (`RingProblem` decides, with host tests).
+
+The app is named **Moss**, application id `ai.moss.android`. Opening Hardware starts neither delivery nor hold enrollment. Existing service commands,
+intent actions and preference names are unchanged. Hardware is native; the only web change is the Settings link.
 
 Battery, recording state, ring capacity and firmware are optional saved observations,
 with per-field times. A stale read never claims a current connection. Queries run on
