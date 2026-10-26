@@ -217,7 +217,8 @@ export interface WorkMailNoteCandidate {
 export interface WorkMailJudgement {
   readonly decision: "nothing" | "note";
   readonly target?:
-    { readonly kind: "candidate"; readonly index: number } | { readonly kind: "default" };
+    | { readonly kind: "candidate"; readonly index: number }
+    | { readonly kind: "default" };
   readonly entry?: string;
   readonly reason: string;
 }
