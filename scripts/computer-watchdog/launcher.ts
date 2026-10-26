@@ -2,7 +2,7 @@ import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:c
 import type { Socket } from "node:net";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { open, stat } from "node:fs/promises";
+import { lstat, open, stat } from "node:fs/promises";
 import { assertTrustedPath, boundedFile, processIdentity, supervisorError } from "./trust.js";
 import type { WatchdogProcessIdentity } from "./policy.js";
 
@@ -28,6 +28,8 @@ export interface LaunchOptions {
   readonly spawn?: (command: string, args: string[], options: SpawnOptions) => ChildProcess;
   readonly readIdentity?: (pid: number) => Promise<WatchdogProcessIdentity>;
   readonly assertTrusted?: (path: string) => Promise<void>;
+  /** Runs once per verified file, after its first chunk is read. Lets tests change a file mid-read. */
+  readonly onRead?: (path: string) => Promise<void>;
   readonly onSpawn?: (pid: number) => void;
 }
 
@@ -52,11 +54,26 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
   const args = [options.bundlePath, "hold", options.configPath];
   // Both files are checked before anything starts. Root owns every ancestor and no one else can
   // write them, so the checked file is the file spawn opens.
-  const nodeKey = await verifyFile(options.nodePath, options.nodeSha256, NODE_LIMIT_BYTES, trusted);
-  await verifyFile(options.bundlePath, options.bundleSha256, BUNDLE_LIMIT_BYTES, trusted);
+  const nodeKey = await verifyFile(
+    options.nodePath,
+    options.nodeSha256,
+    NODE_LIMIT_BYTES,
+    trusted,
+    options.onRead
+  );
+  await verifyFile(
+    options.bundlePath,
+    options.bundleSha256,
+    BUNDLE_LIMIT_BYTES,
+    trusted,
+    options.onRead
+  );
+  // The child gets no inherited environment and starts in the root folder.
   const child = spawn(options.nodePath, args, {
     detached: true,
-    stdio: ["ignore", "ignore", "ignore", "pipe"]
+    stdio: ["ignore", "ignore", "ignore", "pipe"],
+    env: {},
+    cwd: "/"
   });
   const pid = child.pid;
   if (pid === undefined) throw supervisorError();
@@ -73,6 +90,8 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
     // The launcher must own its end. Without one nothing here can read the child's byte.
     if (!channel || typeof channel.on !== "function") throw supervisorError();
     const before = await readIdentity(pid);
+    // spawn returns its pid only after the exec has completed, so this reads the new image and not
+    // the forked launcher copy. A runtime that returned earlier would make this check meaningless.
     await assertRunningImage(pid, nodeKey, [options.nodePath, ...args]);
     await receiveSignal(child, channel, options.ackTimeoutMs ?? ACK_TIMEOUT_MS);
     // Anything arriving after the signal, while the checks below run, refuses.
@@ -128,7 +147,8 @@ async function verifyFile(
   path: string,
   sha256: string,
   limit: number,
-  trusted: (path: string) => Promise<void>
+  trusted: (path: string) => Promise<void>,
+  onRead?: (path: string) => Promise<void>
 ): Promise<FileKey> {
   if (!SHA256.test(sha256)) throw supervisorError();
   await trusted(path);
@@ -139,13 +159,18 @@ async function verifyFile(
     const hash = createHash("sha256");
     let size = 0;
     for await (const chunk of file.createReadStream({ autoClose: false })) {
+      if (size === 0) await onRead?.(path);
       size += (chunk as Buffer).length;
       if (size > limit) throw supervisorError();
       hash.update(chunk as Buffer);
     }
     const after = await file.stat({ bigint: true });
+    // The path must still name the file that was hashed, so a swap during the read is refused.
+    const named = await lstat(path, { bigint: true });
     if (
       hash.digest("hex") !== sha256 ||
+      named.dev !== after.dev ||
+      named.ino !== after.ino ||
       before.dev !== after.dev ||
       before.ino !== after.ino ||
       before.size !== after.size ||

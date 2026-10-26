@@ -54,3 +54,14 @@ Independent Security and Standards/Spec acceptance of the exact final head. Full
 the verify-gate skill. Green CI on the PR. No live proof applies: nothing user-visible exists and
 there is no production caller. A real run against a root-owned install is part of installed
 delivery (item 5).
+
+## Review round 1 additions
+
+- The child starts with an empty environment and working folder `/`.
+- `launchHold` has its own tests for the first image check, the second image check and the
+  extra-byte check. Each was removed in turn and its test failed.
+- Tests cover both size limits, a file changing while read (modification time, and an identical
+  file swapped over the path) and a link at the path.
+- The open flag that refuses links and the path-name comparison cover each other. The link test
+  fails only when both are removed.
+- The first image check relies on spawn having completed the exec before it returns a pid.
