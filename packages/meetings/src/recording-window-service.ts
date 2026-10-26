@@ -14,7 +14,7 @@ import { RecordingUploadRepository } from "./recording-upload-repository.js";
 import { parseRecordingUpload } from "./recording-upload-manifest.js";
 import {
   readRecordingWindow,
-  normalizeWindowTranscript
+  transcribeWindowWithRetry
 } from "./recording-transcription-window.js";
 import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
@@ -61,6 +61,7 @@ export class RecordingWindowService {
       const selected = await this.deps.availability(actor);
       if (!selected.ready || !selected.modelRoute)
         throw new HttpError(503, "Transcription unavailable");
+      const modelRoute = selected.modelRoute;
       const input = parseRecordingUpload(JSON.parse(row.source_manifest_json!));
       if (input.fingerprint !== row.fingerprint)
         throw new Error("Retained recording manifest changed");
@@ -79,26 +80,30 @@ export class RecordingWindowService {
             new MeetingPreferencesRepository().getTranscriptionOptions(db)
           )
         : {};
-      const result = await this.deps.transcribe(actor, {
-        ...transcriptionOptions,
-        audio: window.audio,
-        signal: AbortSignal.timeout(35_000),
-        expectedModelRoute: selected.modelRoute,
-        dispatch: async (send, validate) => {
-          const dispatch = await this.deps.dataContext.withDataContext(actor, async (db) => {
-            if (!(await this.current(db, row, attemptId)))
-              throw new Error("Recording attempt superseded");
-            await this.deps.assertAvailable(actor);
-            await validate?.(db);
-            const request = send();
-            // Observe early rejection while admission commits; the caller still receives it below.
-            void request.catch(() => undefined);
-            return { request };
-          });
-          return dispatch.request;
-        }
-      });
-      const segments = normalizeWindowTranscript(result.segments, window.endMs - window.startMs);
+      const segments = await transcribeWindowWithRetry(
+        window.audio,
+        window.endMs - window.startMs,
+        (audio) =>
+          this.deps.transcribe(actor, {
+            ...transcriptionOptions,
+            audio,
+            signal: AbortSignal.timeout(35_000),
+            expectedModelRoute: modelRoute,
+            dispatch: async (send, validate) => {
+              const dispatch = await this.deps.dataContext.withDataContext(actor, async (db) => {
+                if (!(await this.current(db, row, attemptId)))
+                  throw new Error("Recording attempt superseded");
+                await this.deps.assertAvailable(actor);
+                await validate?.(db);
+                const request = send();
+                // Observe early rejection while admission commits; the caller still receives it below.
+                void request.catch(() => undefined);
+                return { request };
+              });
+              return dispatch.request;
+            }
+          })
+      );
       await this.deps.dataContext.withDataContext(actor, async (db) => {
         if (!(await this.current(db, row, attemptId))) return;
         await this.deps.assertAvailable(actor);
