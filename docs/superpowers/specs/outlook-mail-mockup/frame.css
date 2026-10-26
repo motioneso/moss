@@ -20,3 +20,8 @@
 .wm-code__count {
   margin: 0;
 }
+
+.wm-alt {
+  margin: 0;
+  padding: var(--space-3) 0 0;
+}

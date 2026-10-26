@@ -154,7 +154,6 @@ function WorkMail(props: { on: boolean; children: ReactNode }) {
   return (
     <Group
       title={<span className="src-title">Work mail</span>}
-      desc="Outlook on the web, read only."
       action={<Switch ariaLabel="Read work mail" checked={props.on} />}
     >
       {props.children}
@@ -162,13 +161,12 @@ function WorkMail(props: { on: boolean; children: ReactNode }) {
   );
 }
 
-/* One status row in the Notes folder pattern: icon tile, status, detail lines, small actions. */
+/* One status row in the Notes folder pattern: icon tile, one status line, small actions. */
 function StatusRow(props: {
   icon: ReactNode;
-  status: ReactNode;
+  status: string;
   empty?: boolean;
   health?: Health;
-  meta: ReactNode[];
   actions?: ReactNode;
 }) {
   return (
@@ -178,29 +176,34 @@ function StatusRow(props: {
         <div className={`vault__path${props.empty ? " vault__path--empty" : ""}`}>
           {props.health ? <Indicator status={props.health} label={props.status} /> : props.status}
         </div>
-        {props.meta.map((line, i) => (
-          <div className="vault__meta" key={i}>
-            {line}
-          </div>
-        ))}
       </div>
       {props.actions ? <div className="vault__act">{props.actions}</div> : null}
     </div>
   );
 }
 
-const READ_LINE = "Messages Moss opens show as read in Outlook.";
-const LAST_READ = (when: string) => `Last read ${when} · 214 messages read`;
+const mail = <Mail size={18} aria-hidden="true" />;
+const warn = <MailWarning size={18} aria-hidden="true" />;
+const openOutlook = (
+  <ButtonLink
+    variant="secondary"
+    size="sm"
+    href="https://outlook.office.com/mail/"
+    icon={<ExternalLink size={15} />}
+  >
+    Open Outlook
+  </ButtonLink>
+);
+const openServer = (
+  <Button variant="secondary" size="sm" icon={<ExternalLink size={15} />}>
+    Open server window
+  </Button>
+);
 
 function Off() {
   return (
     <WorkMail on={false}>
-      <StatusRow
-        icon={<Mail size={18} aria-hidden="true" />}
-        status="Not reading work mail"
-        empty
-        meta={["Switch on to pair the Moss add-on."]}
-      />
+      <StatusRow icon={mail} status="Off" empty />
     </WorkMail>
   );
 }
@@ -208,33 +211,25 @@ function Off() {
 function TurningOn() {
   return (
     <WorkMail on>
-      <StatusRow
-        icon={<Mail size={18} aria-hidden="true" />}
-        status="Waiting for the add-on"
-        empty
-        meta={["Pairing code expires at 2:55 PM."]}
-      />
+      <StatusRow icon={mail} status="Waiting for the add-on" empty />
       <Row
         className="set-row--stack-narrow"
         name="1. Download the add-on"
-        desc="Open the file in Firefox. Chrome and Edge come later."
         control={
           <Button variant="secondary" size="sm" icon={<Download size={15} />}>
             Download for Firefox
           </Button>
         }
       />
-      <Row name="2. Add it to Firefox" desc="Click Add when Firefox asks." />
+      <Row name="2. Open it in Firefox and click Add" />
       <Row
         className="set-row--stack-narrow"
-        name="3. Enter the pairing code"
-        desc="Open Outlook on the web, click the Moss add-on, and enter this code. It works once."
+        name="3. Enter this code in the add-on"
         control={
           <span className="wm-code">
-            <dl className="wm-code__count">
+            <dl className="wm-code__count" aria-label="Pairing code">
               <div className="conn__count">
                 <dd>K7Q 4MP</dd>
-                <dt>Pairing code</dt>
               </div>
             </dl>
             <Button variant="quiet" size="sm">
@@ -243,16 +238,11 @@ function TurningOn() {
           </span>
         }
       />
-      <Row
-        className="set-row--stack-narrow"
-        name="Cannot install add-ons?"
-        desc="Moss can read mail in a browser window on its server instead."
-        control={
-          <Button variant="secondary" size="sm">
-            Use the server window
-          </Button>
-        }
-      />
+      <p className="wm-alt">
+        <Button variant="link" size="sm">
+          Use the server window instead
+        </Button>
+      </p>
     </WorkMail>
   );
 }
@@ -261,15 +251,12 @@ function ServerWindow() {
   return (
     <WorkMail on>
       <StatusRow
-        icon={<Mail size={18} aria-hidden="true" />}
+        icon={mail}
         status="Waiting for Outlook sign-in"
         empty
-        meta={["Open the server window and sign in with your work account."]}
         actions={
           <>
-            <Button variant="secondary" size="sm" icon={<ExternalLink size={15} />}>
-              Open server window
-            </Button>
+            {openServer}
             <Button variant="quiet" size="sm">
               Use the add-on
             </Button>
@@ -285,8 +272,7 @@ function Connected() {
     <WorkMail on>
       <StatusRow
         icon={<MailCheck size={18} aria-hidden="true" />}
-        status="Reading through the Firefox add-on"
-        meta={[LAST_READ("today, 2:41 PM"), `Add-on paired 26 Oct 2026. ${READ_LINE}`]}
+        status="Last read 2:40 PM"
         actions={
           <Button variant="quiet" size="sm">
             Revoke add-on
@@ -301,28 +287,10 @@ function NotSeen() {
   return (
     <WorkMail on>
       <StatusRow
-        icon={<MailWarning size={18} aria-hidden="true" />}
+        icon={warn}
         health="drift"
-        status="Add-on not seen since yesterday, 5:12 PM"
-        meta={[
-          "Mail is read only while Outlook is open in Firefox.",
-          LAST_READ("yesterday, 5:12 PM")
-        ]}
-        actions={
-          <>
-            <ButtonLink
-              variant="secondary"
-              size="sm"
-              href="https://outlook.office.com/mail/"
-              icon={<ExternalLink size={15} />}
-            >
-              Open Outlook
-            </ButtonLink>
-            <Button variant="quiet" size="sm">
-              Revoke add-on
-            </Button>
-          </>
-        }
+        status="Add-on not seen since yesterday 5:12 PM"
+        actions={openOutlook}
       />
     </WorkMail>
   );
@@ -331,25 +299,7 @@ function NotSeen() {
 function SignInAddOn() {
   return (
     <WorkMail on>
-      <StatusRow
-        icon={<MailWarning size={18} aria-hidden="true" />}
-        health="drift"
-        status="Outlook sign-in required"
-        meta={[
-          "Work mail is not current. Sign in to Outlook in Firefox, then Moss carries on.",
-          LAST_READ("today, 9:05 AM")
-        ]}
-        actions={
-          <ButtonLink
-            variant="secondary"
-            size="sm"
-            href="https://outlook.office.com/mail/"
-            icon={<ExternalLink size={15} />}
-          >
-            Open Outlook
-          </ButtonLink>
-        }
-      />
+      <StatusRow icon={warn} health="drift" status="Outlook sign-in needed" actions={openOutlook} />
     </WorkMail>
   );
 }
@@ -358,18 +308,12 @@ function SignInServer() {
   return (
     <WorkMail on>
       <StatusRow
-        icon={<MailWarning size={18} aria-hidden="true" />}
+        icon={warn}
         health="drift"
-        status="Outlook sign-in required"
-        meta={[
-          "Work mail is not current. Open the server window and sign in, then retry.",
-          LAST_READ("today, 9:05 AM")
-        ]}
+        status="Outlook sign-in needed"
         actions={
           <>
-            <Button variant="secondary" size="sm" icon={<ExternalLink size={15} />}>
-              Open server window
-            </Button>
+            {openServer}
             <Button variant="secondary" size="sm">
               Retry
             </Button>
@@ -383,15 +327,7 @@ function SignInServer() {
 function PageChanged() {
   return (
     <WorkMail on>
-      <StatusRow
-        icon={<MailWarning size={18} aria-hidden="true" />}
-        health="error"
-        status="Paused: Outlook mail page changed"
-        meta={[
-          "Moss cannot read the new layout and needs an update.",
-          LAST_READ("today, 11:20 AM")
-        ]}
-      />
+      <StatusRow icon={warn} health="error" status="Paused: Outlook page changed" />
     </WorkMail>
   );
 }

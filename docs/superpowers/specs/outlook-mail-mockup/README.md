@@ -8,13 +8,13 @@ Open `index.html` locally. No network or build step is needed.
 
 ## Screens
 
-| File                    | State                                                                  |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `01-off.html`           | Off                                                                    |
-| `02-turning-on.html`    | Turning on with the add-on: download, steps, pairing code, second path |
-| `03-server-window.html` | Turning on with the server window                                      |
-| `04-connected.html`     | Connected: last read, count, switch, revoke, read-marking line         |
-| `05-problems.html`      | Add-on not seen, sign-in needed (both routes), Outlook page changed    |
+| File                    | State                                                                     |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `01-off.html`           | Off                                                                       |
+| `02-turning-on.html`    | Turning on with the add-on: three steps, pairing code, server window link |
+| `03-server-window.html` | Turning on with the server window                                         |
+| `04-connected.html`     | Connected: last read time, switch, revoke                                 |
+| `05-problems.html`      | Add-on not seen, sign-in needed (both routes), Outlook page changed       |
 
 `screens/` holds each state at 1280px and 390px. No screen overflows at 390px.
 
@@ -22,12 +22,13 @@ Open `index.html` locally. No network or build step is needed.
 
 - Work mail is a Settings section like its neighbours, Accounts and Notes folder, which the
   mockup renders below it for comparison. It has no tinted box.
-- The section head is the shared `Group`: display title, one-line description, and the on/off
-  `Switch` in the action slot where "Add connection" sits on Apps & services.
-- State shows in one status row in the Notes folder pattern: icon tile, status line, detail
-  lines, and small secondary or quiet buttons on the right.
+- Each state shows only the title, the on/off `Switch`, one status line and the buttons that
+  act. No description or detail lines.
+- The status line uses the Notes folder row pattern: icon tile, status, small secondary or quiet
+  buttons on the right.
 - Problem states put a shared `Indicator` dot in the status line, as account rows do.
-- Setup steps are ordinary settings rows. The pairing code reuses the Connections count style.
+- Setup steps are one-line settings rows. The pairing code reuses the Connections count style.
+  The server window route is one plain link.
 - The shipped Outlook calendar row still uses a practical `Note`. It is not shown here, and it
   would look different from this section unless it is restyled the same way.
 - The "Mockup state" labels on `05-problems.html` are review annotations, not product copy.
