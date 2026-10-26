@@ -4,7 +4,8 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 export JAVA_HOME="${JAVA_HOME:-$HOME/.local/opt/jdk-21.0.12.1+1}"
 export PATH="$JAVA_HOME/bin:$PATH"
 mkdir -p build/host-tests
-javac --release 11 -d build/host-tests src/ai/moss/vocci/{RingAuth,RingProtocol,RingTelemetry,RecordingReminder,RetryPolicy,PcmWavWriter,RetrievalGate,HoldWatcher}.java test/ai/moss/vocci/*.java
+javac --release 11 -d build/host-tests src/ai/moss/vocci/{HomeStatus,RingAuth,RingProtocol,RingTelemetry,RecordingReminder,RetryPolicy,PcmWavWriter,RetrievalGate,HoldWatcher}.java test/ai/moss/vocci/*.java
+java -cp build/host-tests ai.moss.vocci.HomeStatusTest
 java -cp build/host-tests ai.moss.vocci.RingAuthTest
 java -cp build/host-tests ai.moss.vocci.ProtocolTest
 java -cp build/host-tests ai.moss.vocci.RetrievalGateTest

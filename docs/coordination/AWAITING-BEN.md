@@ -4,6 +4,15 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
+## Vocci app layout phone proof — vocci-app-layout (2026-10-25)
+
+The signed layout update for #3757 is installed and delivery has resumed with all
+34 queue entries and preferences retained. Required Home and Settings screenshots
+are blocked by the physical phone's PIN lock (Android UI dump says Enter PIN).
+Please unlock the phone; no PIN needs to be shared. The Vocci coordinator is aware.
+This is a physical-device interaction request, not a missing product capability.
+
+
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the

@@ -11,7 +11,6 @@ import android.provider.Settings;
 import android.text.InputType;
 import android.view.*;
 import android.widget.*;
-import java.io.File;
 import java.util.*;
 import java.util.concurrent.*;
 import org.json.JSONObject;
@@ -30,11 +29,7 @@ public final class SetupActivity extends Activity {
     private SettingsRow savedRing;
     private EditText address, email, code;
     private TextView mossSummary, status, codeLabel, ringSummary, permissionSummary;
-    private TextView deliverySummary, voiceSummary;
-    private SettingsRow connection;
-    private Button startDelivery, stopDelivery;
-    private Switch hold;
-    private boolean updatingHold;
+    private TextView deliverySummary;
     private Button connect, check, cancel, send, verifyCode, resend, changeEmail, resumeLookup, select, changeRing, verifyRing, nearby, appSettings, handoff;
     private RadioGroup rings;
     private List<JSONObject> inventory = Collections.emptyList();
@@ -131,20 +126,10 @@ public final class SetupActivity extends Activity {
             link.verifyAndCommit(); return "Ring verified and setup saved. Delivery and hold-to-talk are still off.";
         }), true);
 
-        readySection = section("Delivery");
-        text(readySection, "Finished recordings go to Meetings. Start delivery when you’re ready; hold-to-talk is a separate choice.", 15, false);
-        connection = new SettingsRow(theme); add(readySection, connection);
-        startDelivery = button(readySection, "Start delivery", () -> status.setText(DeliveryActions.command(this, "start")), true);
-        stopDelivery = button(readySection, "Stop delivery", () -> { DeliveryActions.stop(this); render(); }, false);
+        readySection = section("Ready");
         deliverySummary = text(readySection, "", 15, false);
-        hold = new Switch(this); hold.setId(3105); theme.toggle(hold); hold.setText("Hold-to-talk in Main chat"); add(readySection, hold);
-        hold.setOnCheckedChangeListener((view, checked) -> {
-            if (!updatingHold) { status.setText(DeliveryActions.command(this, checked ? "voice-on" : "voice-off")); render(); }
-        });
-        text(readySection, "Start delivery before enabling hold-to-talk. Existing recordings keep their destination. Review new transcripts in Main and press Send for a text reply.", 15, false);
-        voiceSummary = text(readySection, "", 15, false);
-        button(readySection, "Continue to Hardware", () -> {
-            startActivity(new Intent(this, HardwareActivity.class)); finish();
+        button(readySection, "Continue to Vocci ring", () -> {
+            startActivity(new Intent(this, DeliveryActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)); finish();
         }, true);
         cancel = button(body, "Cancel setup", () -> perform(() -> {
             account.cleanup(); link.cancel(); inventory = Collections.emptyList(); lookedUp = false;
@@ -232,7 +217,7 @@ public final class SetupActivity extends Activity {
         mossSection.setVisibility(committed ? View.GONE : View.VISIBLE);
         savedRing.setVisibility(committed ? View.VISIBLE : View.GONE);
         if (committed) savedRing.update("Vocci ring · …" + snapshot.ringSuffix,
-            "Connected to " + snapshot.accountName, () -> startActivity(new Intent(this, HardwareActivity.class)));
+            "Connected to " + snapshot.accountName, () -> startActivity(new Intent(this, DeliveryActivity.class)));
 
         boolean enabled = !busy && account != null && snapshot != null;
         address.setEnabled(enabled && phase == SetupLink.Phase.EMPTY);
@@ -247,7 +232,7 @@ public final class SetupActivity extends Activity {
         vocciSection.setVisibility(linked && !selected ? View.VISIBLE : View.GONE);
         ringSection.setVisibility(linked ? View.VISIBLE : View.GONE);
         readySection.setVisibility(committed ? View.VISIBLE : View.GONE);
-        renderReady(enabled && committed);
+        renderReady();
         VocciAccount.Step step = account == null ? VocciAccount.Step.CLEANUP : account.step();
         boolean authEnabled = enabled && linked && !selected;
         email.setEnabled(authEnabled && step == VocciAccount.Step.EMAIL);
@@ -281,34 +266,9 @@ public final class SetupActivity extends Activity {
         cancel.setVisibility(committed ? View.GONE : View.VISIBLE);
         cancel.setEnabled(enabled && phase != SetupLink.Phase.RECOVERY && (phase != SetupLink.Phase.EMPTY || step != VocciAccount.Step.EMAIL));
     }
-    private void renderReady(boolean enabled) {
+    private void renderReady() {
         DeliveryPreferences choices = new DeliveryPreferences(this);
-        JSONObject state = new JSONObject();
-        boolean readable = true;
-        try {
-            File journal = new File(getNoBackupFilesDir(), "delivery/state.json");
-            if (journal.exists()) state = PrivateFiles.json(journal);
-        } catch (Exception unavailable) { readable = false; }
-        android.os.PowerManager power = getSystemService(android.os.PowerManager.class);
-        connection.update("Connection & permissions", "Nearby devices: " + (bluetoothAllowed() ? "allowed" : "needed") +
-            " · Bluetooth: " + (bluetoothOn() ? "on" : "off") +
-            "\nNotifications: " + (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ? "allowed" : "needed") +
-            " · Battery: " + (power != null && power.isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "restricted") +
-            (officialAllowed() ? "\nRemove Vocci’s Nearby devices access before delivery." : ""),
-            () -> startActivity(new Intent(this, HardwareActivity.class).putExtra("page", "connection")));
-        NativeTheme.update(deliverySummary, (choices.enabled() ? "Delivery enabled · " + state.optString("activity", "starting").replace('_', ' ') : "Delivery stopped. Start when you’re ready.") +
-            (choices.recovery().isEmpty() ? "" : "\n" + choices.recovery()));
-        JSONObject voice = state.optJSONObject("voice");
-        updatingHold = true;
-        try { hold.setChecked(voice != null && voice.optBoolean("desired")); } finally { updatingHold = false; }
-        hold.setEnabled(enabled && readable && choices.enabled());
-        NativeTheme.update(voiceSummary, !readable ? "Saved delivery status could not be read. Open the companion for recovery; your recordings are kept." :
-            voice == null ? "Hold-to-talk off" : voice.has("disableId") ? "Turning hold-to-talk off" : voice.has("snapshot") ? "Saving voice enrollment" :
-            voice.has("enablement") ? "Voice enrollment saved" : voice.optBoolean("desired") ? "Waiting for stable ring inventory" : "Hold-to-talk off");
-        startDelivery.setEnabled(enabled && readable);
-        stopDelivery.setEnabled(enabled && choices.enabled());
-        stopDelivery.setVisibility(choices.enabled() ? View.VISIBLE : View.GONE);
-        connection.setEnabled(enabled);
+        NativeTheme.update(deliverySummary, choices.enabled() ? "Delivery is on. Manage your choices in Settings." : "Setup saved. Start delivery from Vocci ring when you’re ready.");
     }
     private boolean bluetoothAllowed() { return checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED; }
     private boolean bluetoothOn() {
