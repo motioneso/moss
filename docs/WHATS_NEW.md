@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **More complete recording transcripts.** Noisy recordings no longer lose stretches of speech in their transcripts. [PR #3748](https://github.com/motioneso/moss/pull/3748)
 - **Clear replies when a task check cannot be scheduled.** When a one-time task check cannot be set, Moss now explains the problem without continuing into an unrelated chat response. [PR #3532](https://github.com/motioneso/moss/pull/3532)
 - **Ring recordings no longer get stuck without a transcript.** Recordings from your ring are now transcribed and summarized even when the ring's clock drifts from the audio. [PR #3740](https://github.com/motioneso/moss/pull/3740)
 - **Ring hold commands stay out of Meetings.** Short voice commands you hold the ring button for now go only to chat and no longer also show up as meetings. [PR #3717](https://github.com/motioneso/moss/pull/3717)
