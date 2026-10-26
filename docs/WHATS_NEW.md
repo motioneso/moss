@@ -41,6 +41,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Ring recording reminder is harder to miss.** The reminder for a ring recording that has run over an hour now pops up with sound and vibration and repeats every 30 minutes until you dismiss it. [PR #3756](https://github.com/motioneso/moss/pull/3756)
 - **Tidier AI providers settings.** You now choose the decision model in a simple dialog, and you can lock your own assistant to one model from your personal settings. [PR #3701](https://github.com/motioneso/moss/pull/3701)
 - **Better weather cards in chat.** Weather forecasts in chat now show a clear temperature curve, weather icons and easy-to-read hourly details. [PR #3739](https://github.com/motioneso/moss/pull/3739)
 - **Faster queued voice commands.** Voice commands waiting for Chat now continue as soon as the current answer or startup finishes. [PR #3709](https://github.com/motioneso/moss/pull/3709)
