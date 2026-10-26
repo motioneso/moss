@@ -421,7 +421,7 @@ export const connectorsModuleManifest = {
     },
     {
       id: "structured.connectors.work-mail",
-      description: "Checked work mail for note context (shared processing only; no reader enabled)"
+      description: "Checked work mail for note context"
     },
     {
       id: "connectors.google_sync",
