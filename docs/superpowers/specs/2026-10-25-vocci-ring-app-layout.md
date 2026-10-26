@@ -31,21 +31,21 @@ holds everything else, each control once. No change to delivery, setup, upload o
   - Coloured dot, one-line state, one or two lines of detail (ring serial, account, origin).
   - Exactly one button, chosen by state:
 
-| State | Card text | Button |
-| --- | --- | --- |
-| Delivering, healthy | Delivering | Stop delivery (secondary) |
-| Stopped | Stopped | Start delivery (primary) |
-| Setup not done or needs recovery | Set up your ring | Set up ring (primary) |
-| Account disconnected or developer session | Moss account not connected | Connect Moss in browser (primary) |
-| Connection request pending | Waiting for approval in browser | Reopen browser approval; Cancel as a text link |
-| Vocci app still holds Nearby devices | Can't reach the ring | Open Vocci app settings (primary) |
-| Bluetooth or notification permission missing | Permission needed | Allow Bluetooth and notifications (primary) |
-| Battery optimization active while delivering | Delivering, may pause in background | Open app settings |
-| Saved setup unreadable | Setup could not be opened | none; keep the existing recovery text |
-| Recovery message present | the message | Start delivery if stopped |
+| State                                        | Card text                           | Button                                         |
+| -------------------------------------------- | ----------------------------------- | ---------------------------------------------- |
+| Delivering, healthy                          | Delivering                          | Stop delivery (secondary)                      |
+| Stopped                                      | Stopped                             | Start delivery (primary)                       |
+| Setup not done or needs recovery             | Set up your ring                    | Set up ring (primary)                          |
+| Account disconnected or developer session    | Moss account not connected          | Connect Moss in browser (primary)              |
+| Connection request pending                   | Waiting for approval in browser     | Reopen browser approval; Cancel as a text link |
+| Vocci app still holds Nearby devices         | Can't reach the ring                | Open Vocci app settings (primary)              |
+| Bluetooth or notification permission missing | Permission needed                   | Allow Bluetooth and notifications (primary)    |
+| Battery optimization active while delivering | Delivering, may pause in background | Open app settings                              |
+| Saved setup unreadable                       | Setup could not be opened           | none; keep the existing recovery text          |
+| Recovery message present                     | the message                         | Start delivery if stopped                      |
 
-  - When several apply, show the one that blocks delivery first. Order follows the table, top to bottom
-    after the first two rows.
+- When several apply, show the one that blocks delivery first. Order follows the table, top to bottom
+  after the first two rows.
 - Recent: the latest few deliveries with time, kind (meeting or voice message), length, and outcome.
   Per-recording actions such as Retry transcription move to a recording detail screen opened by
   tapping the row.
