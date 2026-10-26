@@ -96,9 +96,9 @@ describe("thin audible recording pieces", () => {
       expect(part.readUInt32LE(4)).toBe(part.length - 8);
       expect(part.readUInt32LE(40)).toBe(part.length - 44);
     }
-    expect(first.subarray(44)).toEqual(audio.subarray(44, 44 + 15_000 * 32));
-    expect(second.subarray(44)).toEqual(audio.subarray(44 + 15_000 * 32));
-    expect(audio).toEqual(before);
+    expect(first.subarray(44).equals(audio.subarray(44, 44 + 15_000 * 32))).toBe(true);
+    expect(second.subarray(44).equals(audio.subarray(44 + 15_000 * 32))).toBe(true);
+    expect(audio.equals(before)).toBe(true);
   });
 
   it.each([0, 100, 580])(
