@@ -65,10 +65,10 @@ The Shape section below describes the server window route. The add-on route diff
 - The add-on grows out of `spikes/o365-firefox-preview-prototype`. The prototype is a throwaway
   that loads only as a temporary add-on and is blocked from any network request. The product
   add-on adds a connection to the user's own Moss and nothing else.
-- Moss offers the add-on for download from Settings, next to the "Work mail" row, with plain
+- Moss offers the add-on for download from the add-account flow, with plain
   install steps. Moss hosts a signed package so no store account is needed for Firefox.
-- Pairing. Settings shows a one-time pairing code. The user enters it in the add-on, which then
-  holds a per-user token that Moss can revoke from Settings. The add-on may call only the paired
+- Pairing. The add-account flow shows a one-time pairing code. The user enters it in the add-on, which then
+  holds a per-user token that Moss can revoke from the account's row. The add-on may call only the paired
   Moss address.
 - While the user has Outlook open, the add-on finds messages newer than the last-read marker,
   opens each, and sends the message text to Moss over HTTPS. Moss replies with the new marker.
@@ -149,9 +149,20 @@ settings. Mail inherits that rule and does not weaken it. For other people to us
 
 ## Screens
 
-Settings shows one new row under the Outlook connection, "Work mail", with an on/off switch, the
-time of the last scrape, and the count of messages read. It follows the calendar row's layout and
-states. Mockups need approval before building.
+There is no separate "Work mail" section. Mail is part of adding an Outlook account in the existing
+add-account flow.
+
+1. The user picks Outlook and tries the normal Microsoft sign-in first. If the organisation
+   allows it, the account connects with the real connector and none of the browser routes below
+   apply.
+2. If sign-in is blocked, the same screen offers "Use the browser add-on instead". That shows the
+   add-on download, the pairing code and the steps. A plain link underneath offers the server
+   window.
+3. A connected account shows its mail and calendar status in the account's own row, like any
+   other account. Mail adds one status line with the last-read time and, when relevant, one
+   problem line.
+
+Mockups need approval before building.
 
 ## Open questions
 
