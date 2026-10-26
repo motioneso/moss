@@ -3,7 +3,12 @@ import type { MeetingRecordingUploadManifest } from "@moss/shared";
 
 const chunkBytes = 1024 * 1024;
 /** Generated PCM/framing fixtures are transport evidence, never hardware or ASR proof. */
-export function recordingUpload(durationMs = 90_000, hold = false, elapsedDifferenceMs = 0) {
+export function recordingUpload(
+  durationMs = 90_000,
+  hold = false,
+  elapsedDifferenceMs = 0,
+  amplitude = 0
+) {
   const recordingId = `${hold ? "amsg_" : ""}1792470000_${randomUUID().slice(0, 8)}`;
   const packets = Buffer.alloc(Math.ceil(durationMs / 60) * 3);
   for (let i = 0; i < packets.length / 3; i++) {
@@ -37,6 +42,9 @@ export function recordingUpload(durationMs = 90_000, hold = false, elapsedDiffer
         chunk.write("data", 36);
         chunk.writeUInt32LE(length - 44, 40);
       }
+      if (amplitude)
+        for (let i = offset === 0 ? 44 : 0; i < chunk.length; i += 2)
+          chunk.writeInt16LE((i % 4 ? -1 : 1) * amplitude, i);
       yield chunk;
     }
   }
