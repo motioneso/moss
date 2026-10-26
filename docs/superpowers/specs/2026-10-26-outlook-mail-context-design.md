@@ -47,13 +47,46 @@ tokens, no mailbox sync.
 6. The job records a scrape marker and a small dedupe list (hash of message id and time). Nothing
    else about the mail is stored.
 
-## Vault updates (my call, Ben to confirm)
+## Mail preferences (per user, kept in Moss memory)
 
-- Moss appends a dated, sourced entry to the relevant existing note, or to a single "Work mail
-  notes" note when no better note exists.
-- Moss never edits or deletes text the user wrote.
-- Each entry names the sender and subject and the date, so Ben can check it.
-- Messages that ask nothing and say nothing new produce no entry.
+Each user tells Moss how to handle their mail in plain words, in chat or in settings. Moss saves
+each instruction as a preference fact in its memory, so it shows up in the memory screen, can be
+edited or forgotten there, and is read by the AI step on every scrape.
+
+- Examples. "Ignore newsletters." "Only note things from my manager and my direct reports."
+  "Keep a running note per client." "Never write anything about HR mail."
+- Preferences cover what counts as important, which senders to include or skip, where findings go
+  in the vault, how long entries stay, and how much of a message Moss may quote.
+- Defaults apply until the user says otherwise. Defaults are the values below, and the user can
+  change each one.
+
+| Setting                | Default                                                      |
+| ---------------------- | ------------------------------------------------------------ |
+| Messages per scrape    | Newest since the last scrape, capped at 25                   |
+| Scrape interval        | 30 minutes                                                   |
+| Read depth             | Full text, processed and dropped                             |
+| Vault destination      | The relevant existing note, else one "Work mail notes" note  |
+| Write style            | Append dated, sourced entries. Never edit the user's text    |
+| Entry for plain mail   | None when a message asks nothing and says nothing new        |
+
+Limits no preference can change. Moss stays read-only on the mailbox, keeps no mail copy, and
+never writes to a note the user marked private.
+
+## More than one user
+
+The calendar collector today binds one Chrome profile to exactly one Moss owner through operator
+settings. Mail inherits that rule and does not weaken it. For other people to use this:
+
+- Each user gets their own signed-in browser profile and their own mail grant. One user's
+  profile never reads another user's mailbox.
+- Setup is done in the app by the user, not by editing operator files. This depends on the
+  per-user Outlook setup work in issue 3570 and must not ship ahead of it.
+- Preferences, vault entries, scrape markers and health state are per user.
+- The reader is a per-provider adapter behind one shared job. Outlook on the web is the first
+  adapter. Gmail on the web or others can follow without changing the job, the preferences or the
+  vault rules. Providers with a real approved connector use that instead.
+- Pitch for others. This route needs no admin approval, which helps anyone whose employer blocks
+  third-party apps. It is not a replacement for a proper connector when one is allowed.
 
 ## Privacy and rules
 
@@ -83,10 +116,10 @@ states. Mockups still need Ben's agreement before building.
 
 1. Does opening a message mark it read in Ben's Outlook, and does he mind. Check live before
    building.
-2. How many messages can one scrape handle. Proposed cap 25 per run, oldest dropped with a
-   "skipped" count.
-3. How often to scrape mail. Proposed every 30 minutes, same as calendar.
-4. Do shared or delegated mailboxes matter. Proposed no, the primary mailbox only.
+2. Where users set mail preferences. Proposed chat first, with the saved facts visible in the
+   memory screen, and no separate settings form for them.
+3. Do shared or delegated mailboxes matter. Proposed no, the primary mailbox only.
+4. Whether per-user browser profiles are practical on a shared server. Depends on issue 3570.
 
 ## Not in scope
 
