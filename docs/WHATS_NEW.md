@@ -44,6 +44,10 @@ feature that is not present in the image you are running.
 - **Faster queued voice commands.** Voice commands waiting for Chat now continue as soon as the current answer or startup finishes. [PR #3709](https://github.com/motioneso/moss/pull/3709)
 - **Faster voice request pickup.** Moss starts processing uploaded recordings and recognized voice requests sooner. [PR #3707](https://github.com/motioneso/moss/pull/3707)
 
+#### Added
+
+- **Reminder summaries in chat.** Ask chat what reminders you have and it now shows them in a clear card with their times, repeats and status, without changing anything. [PR #3700](https://github.com/motioneso/moss/pull/3700)
+
 ### 2026-10-24
 
 #### Fixed
