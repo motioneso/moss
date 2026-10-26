@@ -232,7 +232,7 @@ function toDto(row: SessionRow, currentSessionId: string | null): MeSessionDto {
       row.source === "companion"
         ? {
             product:
-              row.companion_platform === "android" ? "Moss ring companion" : COMPANION_PRODUCT_NAME,
+              row.companion_platform === "android" ? "Moss for Android" : COMPANION_PRODUCT_NAME,
             displayName:
               row.display_name ?? (row.companion_platform === "android" ? "Android phone" : "Mac"),
             appVersion: row.app_version,

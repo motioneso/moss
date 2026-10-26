@@ -31,7 +31,7 @@ final class MossLink {
     }
     static JSONObject requestBody(JSONObject attempt) throws Exception {
         String hash = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(attempt.getString("verifier").getBytes(StandardCharsets.UTF_8)), Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
-        return new JSONObject().put("deviceName", "Moss ring · Android").put("platform", "android").put("appVersion", "1.0.0")
+        return new JSONObject().put("deviceName", "Moss for Android").put("platform", "android").put("appVersion", "1.0.0")
             .put("osVersion", Build.VERSION.RELEASE.substring(0, Math.min(32, Build.VERSION.RELEASE.length()))).put("verifierHash", hash);
     }
     static void acceptAttempt(JSONObject attempt, JSONObject response) throws Exception {

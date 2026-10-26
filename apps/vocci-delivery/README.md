@@ -304,7 +304,7 @@ never replace the local recording IDs. A different-account approval is rejected
 without moving the existing ring queue. The rejected device is cancelled too.
 
 In Moss, **Settings → Account & preferences → Active sessions** lists the phone
-as **Moss ring companion**. Sign it out there to revoke its connection. The
+as **Moss for Android**. Sign it out there to revoke its connection. The
 companion stops at the next rejected owner or upload request and asks you to
 reconnect. Credentials expire after 90 inactive days, with a one-year ceiling;
 normal owner checks refresh the inactivity window. **Disconnect Moss account**

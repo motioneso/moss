@@ -35,5 +35,13 @@ final class SetupMessages {
             default: return retry();
         }
     }
+    /** Connect to Moss mentions only Moss. Anything unexpected reads as a plain retry. */
+    static String connect(Exception error) {
+        String reason = error instanceof VocciHttp.Failure ? ((VocciHttp.Failure) error).code : error.getMessage();
+        if ("origin".equals(reason)) return explain(error);
+        if ("link_expired".equals(reason) || "owner_mismatch".equals(reason) || error instanceof MossClient.Rejected)
+            return "Moss did not approve this connection. Try connecting again.";
+        return "Could not connect to Moss. Check the address and your connection, then try again.";
+    }
     private static String retry() { return "Setup did not finish. Check the network, Bluetooth and selected ring, then retry. Unconfirmed cleanup stays pending."; }
 }

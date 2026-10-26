@@ -153,13 +153,13 @@ public final class ConnectActivity extends Activity {
         polling = false; handler.removeCallbacks(poll);
         worker.execute(() -> {
             try { link.cancel(); runOnUiThread(() -> show("")); }
-            catch (Exception failure) { runOnUiThread(() -> show(SetupMessages.explain(failure))); }
+            catch (Exception failure) { runOnUiThread(() -> show(SetupMessages.connect(failure))); }
         });
     }
 
     /** Drops the attempt and returns to the form with one line of explanation. */
     private void reset(Exception failure) {
-        String message = SetupMessages.explain(failure);
+        String message = SetupMessages.connect(failure);
         try { link.cancel(); } catch (Exception cleanup) { /* The line below still tells the user. */ }
         runOnUiThread(() -> show(message));
     }
