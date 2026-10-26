@@ -61,7 +61,7 @@ export const recordingDeliveryRoutes = [
 export const recordingUploadFeature = {
   id: "meetings.resumable_recordings",
   description:
-    "Android uploads resume for 24h. Meetings: 2h; hold: 120s to Main. Sparse audible windows retry once in halves; more words wins. End drift up to 500ms is clamped; larger drift fails with evidence retained.",
+    "Android uploads resume for 24h. Meetings: 2h; hold: 120s to Main. Sparse audible windows retry once in halves; more text wins; failed retries keep the original. End drift up to 500ms is clamped; larger drift fails with evidence retained.",
   errors: [
     {
       code: "recording_import_conflict",

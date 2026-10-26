@@ -112,23 +112,23 @@ describe("thin audible recording pieces", () => {
     }
   );
 
-  it("does not retry a full piece with enough words", async () => {
+  it("does not retry a full piece with enough characters", async () => {
     const full = [{ startMs: 0, endMs: 30_000, text: `${phrase} ${phrase}` }];
     const transcribe = vi.fn().mockResolvedValue({ segments: full });
     expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(full);
     expect(transcribe).toHaveBeenCalledTimes(1);
   });
 
-  it("retries a sparse segment stretched across the whole piece", async () => {
+  it("retries a segment with few characters stretched across the whole piece", async () => {
     const transcribe = vi
       .fn()
-      .mockResolvedValueOnce({ segments: [{ ...thin[0]!, endMs: 30_000 }] })
+      .mockResolvedValueOnce({ segments: [{ startMs: 0, endMs: 30_000, text: "这是短句" }] })
       .mockResolvedValue({ segments: half });
     expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toHaveLength(2);
     expect(transcribe).toHaveBeenCalledTimes(3);
   });
 
-  it("uses unique coverage even when overlapping segments have enough words", async () => {
+  it("uses unique coverage even when overlapping segments have enough characters", async () => {
     const original = Array.from({ length: 4 }, () => ({ startMs: 0, endMs: 2000, text: phrase }));
     const transcribe = vi
       .fn()
@@ -138,7 +138,7 @@ describe("thin audible recording pieces", () => {
     expect(transcribe).toHaveBeenCalledTimes(3);
   });
 
-  it("prefers more words even when retry timestamp coverage is smaller", async () => {
+  it("prefers more characters even when retry timestamp coverage is smaller", async () => {
     const transcribe = vi
       .fn()
       .mockResolvedValueOnce({ segments: [{ ...thin[0]!, endMs: 30_000 }] })
@@ -147,7 +147,7 @@ describe("thin audible recording pieces", () => {
     expect(result.map((s) => s.text)).toEqual([phrase, phrase]);
   });
 
-  it.each([{ segments: [] }, { segments: [{ startMs: 0, endMs: 15_000, text: "One" }] }])(
+  it.each([{ segments: [] }, { segments: [{ startMs: 0, endMs: 15_000, text: "Four" }] }])(
     "keeps the original for a weaker or tied retry: %j",
     async ({ segments }) => {
       const transcribe = vi
@@ -201,24 +201,94 @@ describe("thin audible recording pieces", () => {
     ]);
   });
 
-  it("propagates a rejected half request without dispatching the next half", async () => {
-    const transcribe = vi
-      .fn()
-      .mockResolvedValueOnce({ segments: thin })
-      .mockRejectedValue(new Error("Aborted"));
-    await expect(transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).rejects.toThrow(
-      "Aborted"
-    );
-    expect(transcribe).toHaveBeenCalledTimes(2);
+  it.each([1, 2])("keeps the original when half %s fails", async (failingHalf) => {
+    const transcribe = vi.fn().mockResolvedValueOnce({ segments: thin });
+    if (failingHalf === 2) transcribe.mockResolvedValueOnce({ segments: half });
+    transcribe.mockRejectedValue(new Error("Provider unavailable"));
+    expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
+    expect(transcribe).toHaveBeenCalledTimes(failingHalf + 1);
   });
 
-  it("enforces the original combined output budget on the retry", async () => {
+  it("keeps the original when merged halves exceed the character budget", async () => {
     const transcribe = vi
       .fn()
       .mockResolvedValueOnce({ segments: thin })
       .mockResolvedValue({ segments: [{ startMs: 0, endMs: 15_000, text: "word ".repeat(600) }] });
-    await expect(transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).rejects.toThrow(
-      "Invalid recording window transcript"
-    );
+    expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
+  });
+  it.each(["TimeoutError", "AbortError"])(
+    "keeps the original on a half %s without a job abort",
+    async (name) => {
+      const transcribe = vi
+        .fn()
+        .mockResolvedValueOnce({ segments: thin })
+        .mockRejectedValue(new DOMException("Half request expired", name));
+      expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
+      expect(transcribe).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it("keeps the original when merged halves exceed the segment budget", async () => {
+    const transcribe = vi
+      .fn()
+      .mockResolvedValueOnce({ segments: thin })
+      .mockResolvedValue({
+        segments: Array.from({ length: 41 }, () => ({ startMs: 0, endMs: 1000, text: "a" }))
+      });
+    expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
+  });
+
+  it("keeps the original when a half has invalid timestamps", async () => {
+    const transcribe = vi
+      .fn()
+      .mockResolvedValueOnce({ segments: thin })
+      .mockResolvedValue({
+        segments: [{ startMs: 0, endMs: 20_000, text: phrase }]
+      });
+    expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(thin);
+  });
+
+  it("rethrows superseded admission instead of retaining a stale result", async () => {
+    const error = new Error("Recording attempt superseded");
+    const transcribe = vi.fn().mockResolvedValueOnce({ segments: thin }).mockRejectedValue(error);
+    await expect(transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).rejects.toBe(error);
+    expect(transcribe).toHaveBeenCalledTimes(2);
+  });
+
+  it("rethrows a whole-job abort even if the half returns successfully", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("Whole job stopped", "AbortError");
+    const transcribe = vi
+      .fn()
+      .mockResolvedValueOnce({ segments: thin })
+      .mockImplementationOnce(async () => {
+        controller.abort(reason);
+        return { segments: half };
+      });
+    await expect(
+      transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe, controller.signal)
+    ).rejects.toBe(reason);
+    expect(transcribe).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["这是不需要空格分词的中文语音记录", "これは空白で単語を区切らない日本語の音声記録です"])(
+    "does not retry a full non-space-delimited transcript: %s",
+    async (text) => {
+      const full = [{ startMs: 0, endMs: 30_000, text: text.repeat(5) }];
+      const transcribe = vi.fn().mockResolvedValue({ segments: full });
+      expect(await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe)).toEqual(full);
+      expect(transcribe).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it("chooses more non-whitespace characters even with fewer words", async () => {
+    const original = [{ startMs: 0, endMs: 1000, text: "a b c d e f g h i j" }];
+    const retry = [{ startMs: 0, endMs: 15_000, text: "一段没有空格的完整语音" }];
+    const transcribe = vi
+      .fn()
+      .mockResolvedValueOnce({ segments: original })
+      .mockResolvedValue({ segments: retry });
+    const result = await transcribeWindowWithRetry(pcmWindow(), 30_000, transcribe);
+    expect(result.map((s) => s.text)).toEqual([retry[0]!.text, retry[0]!.text]);
   });
 });

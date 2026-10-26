@@ -256,6 +256,44 @@ describe("resumable recording transport and checkpointed transcription", () => {
     }
   });
 
+  it.each(["provider error", "half timeout", "combined budget"])(
+    "checkpoints the original transcript when the retry hits %s",
+    async (failure) => {
+      let calls = 0;
+      const { service } = setup({
+        transcribe: async (_actor, request) =>
+          request.dispatch(async () => {
+            calls++;
+            if (calls === 2 && failure === "provider error")
+              throw new Error("Provider unavailable");
+            if (calls === 3 && failure === "half timeout")
+              throw new DOMException("Half expired", "TimeoutError");
+            return {
+              segments: [
+                {
+                  startMs: 0,
+                  endMs: calls === 1 ? 1000 : 15_000,
+                  text: calls === 1 ? "Two words" : "text ".repeat(600)
+                }
+              ]
+            };
+          })
+      });
+      const uploaded = await upload(service, recordingUpload(30_000, false, 0, 12_000));
+      await service.uploads.finalize(actor, uploaded.id);
+      await service.process(actor, job(uploaded.id));
+      const row = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+      expect(row).toMatchObject({ state: "complete", next_window_ms: 30_000 });
+      const snapshot = await context.withDataContext(actor, (db) =>
+        transcripts.snapshot(db, row!.meeting_id!, { maxSegments: 500, maxCharacters: 100000 })
+      );
+      expect(
+        snapshot!.segments.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }))
+      ).toEqual([{ startMs: 0, endMs: 1000, text: "Two words" }]);
+      expect(calls).toBe(failure === "provider error" ? 2 : 3);
+    }
+  );
+
   it.each([1, 2])(
     "rechecks dispatch admission after request %s supersedes the piece",
     async (supersedeAfter) => {

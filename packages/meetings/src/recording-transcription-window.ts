@@ -78,18 +78,15 @@ export function normalizeWindowTranscript(
 }
 
 type WindowSegment = { startMs: number; endMs: number; text: string };
-// <25% coverage or <0.5 words/s catches early stops (including stretched timestamps);
+// <25% coverage or <2 non-whitespace characters/s catches early stops (including stretched timestamps);
 // -35 dBFS RMS excludes quiet PCM without altering noisy source audio.
 const THIN_COVERAGE_RATIO = 0.25;
-const THIN_WORDS_PER_SECOND = 0.5;
+const THIN_CHARACTERS_PER_SECOND = 2;
 const AUDIBLE_RMS_DBFS = -35;
 const RETRY_HALF_MS = 15_000;
 
-function wordCount(segments: readonly WindowSegment[]) {
-  return segments.reduce(
-    (count, segment) => count + (segment.text.trim().match(/\S+/gu)?.length ?? 0),
-    0
-  );
+function characterCount(segments: readonly WindowSegment[]) {
+  return segments.reduce((count, segment) => count + (segment.text.match(/\S/gu)?.length ?? 0), 0);
 }
 
 function coveredMs(segments: readonly WindowSegment[]) {
@@ -127,37 +124,49 @@ function sliceWindowAudio(audio: Buffer, startMs: number, endMs: number) {
 export async function transcribeWindowWithRetry(
   audio: Buffer,
   durationMs: number,
-  transcribe: (audio: Buffer) => Promise<{ segments: readonly WindowSegment[] }>
+  transcribe: (audio: Buffer) => Promise<{ segments: readonly WindowSegment[] }>,
+  jobSignal?: AbortSignal
 ) {
+  jobSignal?.throwIfAborted();
   const original = normalizeWindowTranscript((await transcribe(audio)).segments, durationMs);
-  const originalWords = wordCount(original);
+  jobSignal?.throwIfAborted();
+  const originalCharacters = characterCount(original);
   if (
     durationMs < 2 ||
     (coveredMs(original) >= durationMs * THIN_COVERAGE_RATIO &&
-      originalWords >= (durationMs / 1000) * THIN_WORDS_PER_SECOND) ||
+      originalCharacters >= (durationMs / 1000) * THIN_CHARACTERS_PER_SECOND) ||
     !audiblePcm(audio)
   )
     return original;
 
-  const splitMs = Math.min(RETRY_HALF_MS, Math.floor(durationMs / 2));
-  const first = normalizeWindowTranscript(
-    (await transcribe(sliceWindowAudio(audio, 0, splitMs))).segments,
-    splitMs
-  );
-  const second = normalizeWindowTranscript(
-    (await transcribe(sliceWindowAudio(audio, splitMs, durationMs))).segments,
-    durationMs - splitMs
-  );
-  const retry = normalizeWindowTranscript(
-    [
-      ...first,
-      ...second.map((segment) => ({
-        ...segment,
-        startMs: splitMs + segment.startMs,
-        endMs: splitMs + segment.endMs
-      }))
-    ],
-    durationMs
-  );
-  return wordCount(retry) > originalWords ? retry : original;
+  try {
+    const splitMs = Math.min(RETRY_HALF_MS, Math.floor(durationMs / 2));
+    const first = normalizeWindowTranscript(
+      (await transcribe(sliceWindowAudio(audio, 0, splitMs))).segments,
+      splitMs
+    );
+    jobSignal?.throwIfAborted();
+    const second = normalizeWindowTranscript(
+      (await transcribe(sliceWindowAudio(audio, splitMs, durationMs))).segments,
+      durationMs - splitMs
+    );
+    jobSignal?.throwIfAborted();
+    const retry = normalizeWindowTranscript(
+      [
+        ...first,
+        ...second.map((segment) => ({
+          ...segment,
+          startMs: splitMs + segment.startMs,
+          endMs: splitMs + segment.endMs
+        }))
+      ],
+      durationMs
+    );
+    return characterCount(retry) > originalCharacters ? retry : original;
+  } catch (error) {
+    jobSignal?.throwIfAborted();
+    if (error instanceof Error && error.message === "Recording attempt superseded") throw error;
+    // The split is optional recovery: provider/timeout/validation failures must not lose good output.
+    return original;
+  }
 }
