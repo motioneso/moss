@@ -2,42 +2,51 @@ package ai.moss.vocci;
 
 public final class HomeStatusTest {
     private static int assertions;
+    private static final int ACCOUNT = 1, PENDING = 2, VOCCI = 4, PERMISSIONS = 8, RESTRICTED = 16, RUNNING = 32;
+    private static final int ALL = ACCOUNT | PENDING | VOCCI | PERMISSIONS | RESTRICTED | RUNNING;
     private static void check(boolean value) { assertions++; if (!value) throw new AssertionError("Home status assertion " + assertions); }
     private static HomeStatus.Card card(HomeStatus.Setup setup, int flags, String recovery) {
-        return HomeStatus.choose(setup, (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0,
-            (flags & 8) != 0, (flags & 16) != 0, (flags & 32) != 0, recovery);
+        return HomeStatus.choose(setup, (flags & ACCOUNT) != 0, (flags & PENDING) != 0, (flags & VOCCI) != 0,
+            (flags & PERMISSIONS) != 0, (flags & RESTRICTED) != 0, (flags & RUNNING) != 0, recovery);
+    }
+    private static void expect(HomeStatus.Setup setup, int flags, String recovery, String title, String label, HomeStatus.Action action) {
+        HomeStatus.Card actual = card(setup, flags, recovery);
+        if (!actual.title.equals(title) || !actual.label.equals(label) || actual.action != action)
+            throw new AssertionError(title + ": got " + actual.title + " / " + actual.label + " / " + actual.action);
+        assertions++;
     }
     public static void main(String[] args) {
-        // Every combination: setup, approval/account, competing app, permissions, battery, recovery.
+        // Spec examples, including collisions: the blocking fix wins over Start/Stop.
+        expect(HomeStatus.Setup.READY, ACCOUNT | PERMISSIONS | RUNNING, "", "Delivering", "Stop delivery", HomeStatus.Action.STOP);
+        expect(HomeStatus.Setup.READY, ACCOUNT | PERMISSIONS | RESTRICTED, "", "Stopped", "Start delivery", HomeStatus.Action.START);
+        expect(HomeStatus.Setup.NEEDED, ALL, "", "Set up your ring", "Set up ring", HomeStatus.Action.SETUP);
+        expect(HomeStatus.Setup.RECOVERY, ALL, "", "Set up your ring", "Set up ring", HomeStatus.Action.SETUP);
+        expect(HomeStatus.Setup.UNREADABLE, ALL, "Recover", "Setup could not be opened", "", HomeStatus.Action.NONE);
+        expect(HomeStatus.Setup.READY, VOCCI | PERMISSIONS | RESTRICTED | RUNNING, "", "Moss account not connected", "Connect Moss in browser", HomeStatus.Action.CONNECT);
+        expect(HomeStatus.Setup.READY, PENDING | VOCCI | PERMISSIONS | RESTRICTED | RUNNING, "", "Waiting for approval in browser", "Reopen browser approval", HomeStatus.Action.APPROVAL);
+        expect(HomeStatus.Setup.READY, ALL, "", "Waiting for approval in browser", "Reopen browser approval", HomeStatus.Action.APPROVAL);
+        expect(HomeStatus.Setup.READY, ACCOUNT | VOCCI | RESTRICTED | RUNNING, "", "Can't reach the ring", "Open Vocci app settings", HomeStatus.Action.VOCCI_SETTINGS);
+        expect(HomeStatus.Setup.READY, ACCOUNT | RESTRICTED | RUNNING, "Recover", "Permission needed", "Allow Bluetooth and notifications", HomeStatus.Action.PERMISSIONS);
+        expect(HomeStatus.Setup.READY, ACCOUNT | PERMISSIONS | RESTRICTED | RUNNING, "Recover", "Delivering, may pause in background", "Open app settings", HomeStatus.Action.APP_SETTINGS);
+        expect(HomeStatus.Setup.READY, ACCOUNT | PERMISSIONS, "Restore original account", "Restore original account", "Start delivery", HomeStatus.Action.START);
+        expect(HomeStatus.Setup.READY, ACCOUNT | PERMISSIONS | RUNNING, "Restore original account", "Restore original account", "", HomeStatus.Action.NONE);
+        // Developer-session credentials are not a connected account.
+        expect(HomeStatus.Setup.READY, PERMISSIONS, "", "Moss account not connected", "Connect Moss in browser", HomeStatus.Action.CONNECT);
+        check(HomeStatus.choose(HomeStatus.Setup.READY, true, false, false, true, false, false, null).action == HomeStatus.Action.START);
+
+        // Rendering contract across every input combination, independent of priority ordering.
         for (HomeStatus.Setup setup : HomeStatus.Setup.values()) for (int flags = 0; flags < 64; flags++) {
             for (String recovery : new String[]{"", "Reconnect to resume"}) {
                 HomeStatus.Card actual = card(setup, flags, recovery);
-                boolean connected = (flags & 1) != 0, pending = (flags & 2) != 0;
-                boolean official = (flags & 4) != 0, permissions = (flags & 8) != 0;
-                boolean battery = (flags & 16) != 0, running = (flags & 32) != 0;
-                HomeStatus.Action expected;
-                if (setup == HomeStatus.Setup.UNREADABLE) expected = HomeStatus.Action.NONE;
-                else if (setup != HomeStatus.Setup.READY) expected = HomeStatus.Action.SETUP;
-                else if (pending) expected = HomeStatus.Action.APPROVAL;
-                else if (!connected) expected = HomeStatus.Action.CONNECT;
-                else if (official) expected = HomeStatus.Action.VOCCI_SETTINGS;
-                else if (!permissions) expected = HomeStatus.Action.PERMISSIONS;
-                else if (running && battery) expected = HomeStatus.Action.APP_SETTINGS;
-                else if (running && !recovery.isEmpty()) expected = HomeStatus.Action.NONE;
-                else expected = running ? HomeStatus.Action.STOP : HomeStatus.Action.START;
-                check(actual.action == expected);
-                check(actual.cancel == (expected == HomeStatus.Action.APPROVAL));
-                check(actual.primary == (expected != HomeStatus.Action.NONE && expected != HomeStatus.Action.STOP));
-                check(actual.label.isEmpty() == (expected == HomeStatus.Action.NONE));
+                check(!actual.title.isEmpty());
+                check(actual.label.isEmpty() == (actual.action == HomeStatus.Action.NONE));
+                check(actual.cancel == (actual.action == HomeStatus.Action.APPROVAL));
+                check(actual.primary == (actual.action != HomeStatus.Action.NONE && actual.action != HomeStatus.Action.STOP));
+                if (setup == HomeStatus.Setup.UNREADABLE) check(actual.action == HomeStatus.Action.NONE);
+                if (actual.action == HomeStatus.Action.STOP) check((flags & RUNNING) != 0);
+                if (actual.action == HomeStatus.Action.START) check((flags & RUNNING) == 0);
             }
         }
-        HomeStatus.Card running = card(HomeStatus.Setup.READY, 1 | 8 | 32, "");
-        check(running.title.equals("Delivering") && running.label.equals("Stop delivery"));
-        HomeStatus.Card stopped = card(HomeStatus.Setup.READY, 1 | 8 | 16, "");
-        check(stopped.title.equals("Stopped") && stopped.label.equals("Start delivery"));
-        check(card(HomeStatus.Setup.READY, 1 | 8, "Restore original account").title.equals("Restore original account"));
-        check(card(HomeStatus.Setup.READY, 8, "").title.equals("Moss account not connected")); // developer sessions count as disconnected
-        check(HomeStatus.choose(HomeStatus.Setup.READY, true, false, false, true, false, false, null).action == HomeStatus.Action.START);
-        System.out.println("PASS: Home status action, 512 state combinations, " + assertions + " assertions");
+        System.out.println("PASS: Home status spec/precedence cases and 512 state combinations, " + assertions + " assertions");
     }
 }
