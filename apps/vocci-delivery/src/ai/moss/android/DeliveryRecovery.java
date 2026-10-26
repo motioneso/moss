@@ -4,14 +4,14 @@ import android.Manifest;
 import android.content.*;
 import android.content.pm.PackageManager;
 
-/** Boot is delivered after credential storage unlock. Never starts a stopped companion. */
+/** Restarts delivery after boot or an app update, only if it was on before. */
 public final class DeliveryRecovery extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
-        if (!Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction()) &&
-            !Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) return;
         DeliveryPreferences choices = new DeliveryPreferences(context);
-        if (!choices.enabled()) return;
-        if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+        boolean granted = context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+        RecoveryPolicy.Step step = RecoveryPolicy.choose(intent.getAction(), choices.enabled(), granted);
+        if (step == RecoveryPolicy.Step.IGNORE) return;
+        if (step == RecoveryPolicy.Step.NEEDS_PERMISSION) {
             choices.recovery("Grant Nearby devices permission, then Start delivery."); return;
         }
         try {
