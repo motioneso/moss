@@ -75,7 +75,7 @@ The Shape section below describes the server window route. The add-on route diff
 - Message text is handled in the request that receives it and is dropped afterwards. It never
   goes into a job payload. If processing cannot finish in the request, Moss stores nothing and
   asks the add-on to resend (see open questions).
-- Mail only flows while the user's browser is open on Outlook. The settings row shows the time
+- Mail only flows while the user's browser is open on Outlook. The account's row shows the time
   of the last read so a gap is visible.
 - Chrome and Edge packaging needs a store listing or an enterprise install, and is a later step.
   Firefox ships first because the prototype already runs there.
