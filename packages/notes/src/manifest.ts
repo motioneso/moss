@@ -236,8 +236,27 @@ export const notesModuleManifest = {
     {
       id: "notes.assistant_authoring",
       description:
-        "Create, edit, or delete Markdown notes in your linked folder. Overwrite is named in approval. " +
-        "Deletion always asks, even with trusted note changes or Auto-approve, with red Approve and a warning that there is no trash or undo."
+        "Create, edit or delete Markdown notes in your linked folder. Overwrite is disclosed. Deletion always asks, including trusted changes and Auto-approve, with red Approve and a warning that there is no trash or undo."
+    },
+    {
+      id: "notes.coordinated_writes",
+      description:
+        "Concurrent Moss edits read the latest note before saving. An external edit detected during a save returns a conflict; review the current note before retrying.",
+      errors: [
+        {
+          code: "notes.write_conflict",
+          class: "transient",
+          description: "The note changed while Moss was preparing to save it."
+        }
+      ],
+      remediations: [
+        {
+          id: "notes.review_current_note",
+          description:
+            "Review the current note in your linked folder, then ask Moss to retry the intended change.",
+          path: "/settings?section=sources"
+        }
+      ]
     }
   ],
   proactiveMonitor: notesMonitorProvider

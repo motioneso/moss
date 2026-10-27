@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@moss/db": "workspace:*"
+    "@moss/db": "workspace:*",
+    "kysely": "^0.29.2"
   }
 }

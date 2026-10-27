@@ -132,6 +132,11 @@ export const peopleModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "people.coordinated_note_writes",
+      description:
+        "People note updates preserve unrelated concurrent Moss edits by reading the current note before saving. Creating a person chooses an unused filename without overwriting an existing note."
+    },
+    {
       id: "people.split_identity_approval",
       description:
         "Identity-split approval names the actual destination. An existing selection overrides a supplied name; otherwise Moss finds an exact-name match or creates one. Duplicate names require choosing a specific person."
