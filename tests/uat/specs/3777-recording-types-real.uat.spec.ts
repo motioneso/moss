@@ -16,14 +16,21 @@ async function configuration(page: Page): Promise<RecordingTypeConfiguration> {
   expect(response.status()).toBe(200);
   return response.json();
 }
-async function openChat(page: Page) {
+async function openChat(page: Page, fromRecording = false) {
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const drawer = page.locator("aside.chatd");
   await expect(drawer).toBeVisible();
   // Type configuration uses ordinary chat, including when opened from a recording.
   const removeContext = drawer.getByRole("button", { name: "Remove meeting context", exact: true });
-  if (await removeContext.isVisible()) await removeContext.click();
-  await expect(drawer.getByText("About this meeting", { exact: true })).toHaveCount(0);
+  if (fromRecording) {
+    await expect(removeContext).toBeVisible();
+    await removeContext.click();
+  }
+  await expect(removeContext).toHaveCount(0);
+  await expect(drawer.getByRole("textbox", { name: /^Message/ })).not.toHaveAttribute(
+    "placeholder",
+    "Ask about this meeting…"
+  );
   return drawer;
 }
 async function edit(page: Page, drawer: Locator, text: string, disclosures: readonly string[]) {
@@ -189,7 +196,7 @@ test("edit types through real chat, refresh mounted menus, classify with chosen 
   await page.getByRole("button", { name: "Meetings", exact: true }).click();
   const selected = await add(page, true);
   expect(selected.artifact.templateId).toBe("general");
-  drawer = await openChat(page);
+  drawer = await openChat(page, true);
   const retired = await edit(
     page,
     drawer,
