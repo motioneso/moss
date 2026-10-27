@@ -1,5 +1,4 @@
 import {
-  K,
   IGNORE_SHA256,
   SOURCE_FILES,
   BUNDLE,
@@ -61,13 +60,6 @@ const same = (a: unknown, b: unknown): boolean => {
     );
   }
   return false;
-};
-const json = (v: Buffer) => {
-  try {
-    return JSON.parse(v.toString()) as unknown;
-  } catch {
-    return red();
-  }
 };
 export interface BuildObservation {
   attach(child: ChildProcess): void;

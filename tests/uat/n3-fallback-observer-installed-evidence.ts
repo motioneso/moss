@@ -7,7 +7,6 @@ import type {
 } from "./n3-fallback-observer-runner.js";
 const hash = (v: string | Buffer) => createHash("sha256").update(v).digest("hex");
 const digest = (v: unknown) => hash(JSON.stringify(v));
-const hex = /^[a-f0-9]{64}$/;
 const red = (): never => {
   throw new Error("N3 installed: RED");
 };
@@ -18,7 +17,6 @@ function object(v: unknown): Record<string, unknown> {
   check(v && Object.getPrototypeOf(v) === Object.prototype);
   return v as Record<string, unknown>;
 }
-const same = (a: unknown, b: unknown) => digest(a) === digest(b);
 const json = (v: Buffer) => {
   try {
     return JSON.parse(v.toString()) as unknown;
