@@ -1,6 +1,9 @@
 # Meetings for any recording
 
-Status: draft for Ben's approval. No build task or front-end mockups yet.
+Status: design and all six mockups approved by Ben on 2026-10-26.
+See the [mockup index](mockups/meetings-any-recording/index.html).
+This change records the approved design only; no build plan or product
+implementation has started in this change.
 
 ## Intent
 
@@ -17,6 +20,8 @@ The module keeps the name Meetings. Ben expects meetings to stay about 90% of th
 - The user can change the type list through chat. A settings screen for it is optional.
 - One Meetings screen serves every type. Sections under the title change with the type.
 - The user can add a recording by hand, either by pasting or typing a transcript or by uploading an audio file for Moss to transcribe. Both go through the same type, title, label and filing steps as any other recording.
+- The Meetings list can be filtered by recording type.
+- A recorded or uploaded meeting links to its matching Calendar event. The event details offer a way to open that meeting.
 
 ## Non-goals
 
@@ -79,6 +84,22 @@ The module keeps the name Meetings. Ben expects meetings to stay about 90% of th
 - Every memory fact carries the personal or work label.
 - Meetings gains a declared way to write memory facts. Moss routes through the owning module's public surface, never its internals.
 
+### Filtering the Meetings list
+
+- A type filter sits beside search on the Meetings list. It starts at All types.
+- The options come from the user's current type list, including types added through chat.
+- Type and text search work together. Returning to All types clears the type filter without clearing the search.
+- A changed recording type is reflected in the filtered list.
+
+### Calendar links
+
+- After a meeting is recorded or uploaded, Moss looks for a matching event on the user's Calendar and links the recording when there is a clear match.
+- Clicking that Calendar event opens its existing details panel. An Open meeting action opens the associated recording in Meetings, with its transcript, notes and summary.
+- For uploads, use the original recording time when available, rather than treating the upload time as the meeting time. Missing or ambiguous evidence must not create an arbitrary link.
+- A recurring meeting links to the matching occurrence, not the whole series. Events without an accessible linked recording have no Open meeting action.
+- A Calendar link does not grant access to a private recording. Matching and navigation must respect the current user's access to both resources.
+- Calendar and Meetings communicate through declared public surfaces or host adapters, preserving module isolation. The matching method and thresholds are left to the builder.
+
 ### Screen
 
 - One layout. Under the title sits a type chip the user can change, then the type's sections.
@@ -101,6 +122,9 @@ The module keeps the name Meetings. Ben expects meetings to stay about 90% of th
 - Moss picks personal or work, flags uncertainty in the main chat, and the user can change it.
 - Nothing hardcoded. Moss discovers the filing method and stores it in memory.
 - Types are user-configurable, at least through chat.
+- The Meetings list can be filtered by type (2026-10-26).
+- Recorded and uploaded meetings link to matching Calendar events, and event details offer Open meeting (2026-10-26).
+- All six mockups are approved: recording type menu, What Moss took box, type configuration conversation, manual entry, Meetings type filter and Calendar event link (2026-10-26).
 
 ## Left to the builder
 
@@ -113,5 +137,5 @@ The module keeps the name Meetings. Ben expects meetings to stay about 90% of th
 
 ## Open items
 
-- A build task issue is needed.
-- Mockups for the type chip menu, the changed-by-Moss box, the type configuration conversation and the manual entry screen are needed.
+- Build planning and implementation are tracked in #3777.
+- All changed screens have approved [mockups](mockups/meetings-any-recording/index.html). Build planning and product implementation remain separate work.
