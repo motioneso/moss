@@ -42,7 +42,7 @@ export type ProducerBindings = Pick<
   | "volumes"
 >;
 const rounded = (n: number) => Math.ceil(n / 512) * 512;
-export const K = "c3a2bc237b70c8ced8d000978c1c70e016a86079";
+export const K = "df85689a14cef96618d71be00521a19733bdcd6d";
 export const IGNORE_SHA256 = "c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938";
 // Literal immutable K payload ceilings are installed below, never learned from Docker output.
 export const SOURCE_FILES: Readonly<Record<string, readonly [string, number]>> = Object.freeze({
@@ -51,8 +51,8 @@ export const SOURCE_FILES: Readonly<Record<string, readonly [string, number]>> =
     19140
   ],
   "/app/tests/uat/lifecycle-records.ts": [
-    "aaeed62a44bfd45c1767f7a0ecdb8198227562c22a913187fe2550430d4251e0",
-    26903
+    "f9ee634f867e2ba271d092fe9178b5f3257ac9c43dc74b10b95ac881e2cc38ad",
+    26974
   ],
   "/app/packages/chat/src/live/chat-session-manager.ts": [
     "84c4e754f13647c497d4f980a6aa729fc8e1bdc9735a55441b0d73c9dad013a3",

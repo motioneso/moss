@@ -295,9 +295,9 @@ describe("immutable installed source/context contract", () => {
         expect(include(path.split("/").slice(0, n).join("/"))).toBe(true);
     }
     expect(sourceSizes).toEqual([
-      19140, 26903, 24380, 20498, 11174, 11833, 5278, 6607, 6251, 29613, 13677, 12686, 20867
+      19140, 26974, 24380, 20498, 11174, 11833, 5278, 6607, 6251, 29613, 13677, 12686, 20867
     ]);
-    expect(sourceSizes.reduce((sum, size) => sum + size, 0)).toBe(208907);
+    expect(sourceSizes.reduce((sum, size) => sum + size, 0)).toBe(208978);
     const rounded = sourceSizes.map((size) => Math.ceil(size / 512) * 512);
     expect(rounded.reduce((sum, size) => sum + size, 0)).toBe(211968);
     const ceilings = [...rounded, 67108864].map((size) => 512 + size + 16384);
