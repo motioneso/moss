@@ -46,6 +46,13 @@ async function add(page: Page, explicit: boolean) {
   expect(artifact.content.recording?.side).toBe("personal");
   expect(artifact.content.recording?.title.length).toBeGreaterThan(3);
   expect(artifact.content.recording?.ideaGroups.length).toBeGreaterThan(0);
+  await expect(
+    page.getByRole("button", {
+      name: `Recording type: ${explicit ? "Idea" : "Brain dump"}`,
+      exact: true
+    })
+  ).toBeVisible();
+  await expect(page.getByText("Personal", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Summary", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "Summary and actions", exact: true })

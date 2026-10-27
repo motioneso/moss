@@ -21,6 +21,7 @@ import { CapturePanel } from "./capture-panel.js";
 import { captureKeys } from "./capture-client.js";
 import { getMeetingOutputs, outputKeys } from "./output-client.js";
 import { RecordingTypePicker } from "./recording-type-picker.js";
+import { recordingKeys } from "./recording-client.js";
 import { MeetingTitle } from "./meeting-title.js";
 import { MeetingNotesPane } from "./meeting-notes-pane.js";
 import { useMeetingNotesEditor } from "./use-meeting-notes.js";
@@ -126,6 +127,7 @@ export function MeetingNotes({
   useEffect(() => {
     if (outputs.data?.automaticSummary?.status !== "saved") return;
     void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id) });
+    void client.invalidateQueries({ queryKey: recordingKeys.record(meeting.id) });
     void client.invalidateQueries({ queryKey: meetingKeys.history });
   }, [client, meeting.id, outputs.data?.automaticSummary?.status]);
   const transcript = useMeetingTranscript(meeting.id);
