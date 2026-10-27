@@ -223,7 +223,7 @@ export function useChatStream(
               const main = threads.find(
                 (thread) => thread.isMain && thread.ownerUserId === ownerId
               );
-              if (main?.id !== record.actionThreadId) return;
+              if (!main || main.id !== record.actionThreadId) return;
               hydratedDrawerThread.current = main.id;
               knownDrawerReminders.current = readBackgroundMessageIds(main.id, surface);
               setRecords((current) => applyStreamRecord(current, record));
