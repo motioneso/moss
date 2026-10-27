@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { posix } from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { SendChatTurnResponse } from "@moss/shared";
@@ -44,7 +45,14 @@ function content(): string | null {
   return JSON.parse(result) as string | null;
 }
 
-async function turn(page: Page, drawer: Locator, text: string, expected: string | null) {
+async function turn(
+  page: Page,
+  drawer: Locator,
+  text: string,
+  expected: string | null,
+  approvalRequired = false
+) {
+  const before = content();
   const response = page.waitForResponse(
     (candidate) =>
       new URL(candidate.url()).pathname === "/api/chat/turn" &&
@@ -69,8 +77,11 @@ async function turn(page: Page, drawer: Locator, text: string, expected: string 
   await expect
     .poll(async () => settled || (await card.isVisible()), { timeout: deadline })
     .toBe(true);
+  if (approvalRequired) await expect(card).toBeVisible();
   if (await card.isVisible()) {
-    await expect(card).toContainText(path);
+    await expect(card.getByText(posix.basename(path), { exact: true })).toBeVisible();
+    await expect(card.getByRole("definition").filter({ hasText: /^uat$/ })).toBeVisible();
+    expect(content()).toBe(before);
     await card.getByRole("button", { name: "Approve", exact: true }).click();
   }
   const result = await response;
@@ -134,13 +145,15 @@ test("linked-folder authoring through real Settings and chat preserves current b
     page,
     drawer,
     `Overwrite the existing note ${path} using the Notes create action with overwrite true and content exactly FINAL CONTENT. Submit the overwrite approval.`,
-    "FINAL CONTENT"
+    "FINAL CONTENT",
+    true
   );
   await turn(
     page,
     drawer,
     `Delete the note ${path} using the Notes delete action. Submit the required permanent deletion approval.`,
-    null
+    null,
+    true
   );
   console.log(
     `MANAGED_VAULT_REAL_UAT model=${model.id} settingsFolder=true create=true edits=true overwrite=true delete=true actualFileBytes=true screenshots=off`
