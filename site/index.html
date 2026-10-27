@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moss - a self-hosted AI assistant for your everyday life</title>
+    <meta
+      name="description"
+      content="Moss brings your notes, tasks, calendar, email and personal context into one place. It runs on your own hardware and you bring your own AI."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="#top">Moss</a>
+      <nav>
+        <a href="#features">What it does</a>
+        <a href="#look">A look inside</a>
+        <a href="#install">Install</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a href="https://github.com/motioneso/moss">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <p class="eyebrow">Self-hosted · Alpha</p>
+        <h1>An AI assistant for your everyday life, running on your own hardware.</h1>
+        <p class="lede">
+          Moss brings your notes, tasks, calendar, email, and personal context into one place. Talk
+          to it to plan your day, find something you saved, keep track of commitments, or work
+          through a goal.
+        </p>
+        <p class="actions">
+          <a class="btn" href="#install">Install Moss</a>
+          <a class="btn ghost" href="https://github.com/motioneso/moss">View on GitHub</a>
+        </p>
+        <p class="note">
+          Moss is in active alpha. Features and installation details are still changing, so expect
+          rough edges.
+        </p>
+        <figure class="shot hero-shot">
+          <img
+            src="img/moss-today.jpg"
+            alt="Moss Today screen with work priorities, personal tasks, calendar, and wellness for a sample user"
+            width="1600"
+            height="1250"
+          />
+        </figure>
+      </section>
+
+      <section id="features">
+        <h2>What you can do with Moss</h2>
+        <ul class="grid">
+          <li>
+            <h3>Organize your life</h3>
+            <p>
+              Manage tasks, lists, goals, commitments, and people. Ask Moss to turn a conversation
+              into something you can follow through on.
+            </p>
+          </li>
+          <li>
+            <h3>Work with your notes</h3>
+            <p>
+              Search Markdown and Obsidian notes, create and update them, and optionally archive
+              conversations to your vault.
+            </p>
+          </li>
+          <li>
+            <h3>Bring in your accounts</h3>
+            <p>
+              Connect email and calendar so your assistant can use messages and upcoming events as
+              context.
+            </p>
+          </li>
+          <li>
+            <h3>See your day</h3>
+            <p>
+              Briefings, notifications, and proactive monitoring surface what needs attention.
+              Follow weather, news, and sports.
+            </p>
+          </li>
+          <li>
+            <h3>Track your wellbeing</h3>
+            <p>Record check-ins, manage medications, and review wellness trends.</p>
+          </li>
+          <li>
+            <h3>Build up context</h3>
+            <p>
+              Memory carries useful information across conversations, so you do not start from
+              scratch each time.
+            </p>
+          </li>
+          <li>
+            <h3>Make it your own</h3>
+            <p>
+              Turn modules on or off, install more through Settings, or plan and build a new one
+              with Moss.
+            </p>
+          </li>
+        </ul>
+        <p class="try">
+          Try asking: "What should I focus on today?", "Find my notes about the kitchen renovation,"
+          or "Create a task to follow up on this next week."
+        </p>
+      </section>
+
+      <section id="privacy">
+        <h2>Your assistant, your providers, your data</h2>
+        <p>
+          Moss stores its database and files on your hardware. Data is private by default and
+          sharing is explicit. Administrators cannot read other people's private data, and connector
+          and AI credentials are encrypted at rest.
+        </p>
+        <p>
+          You bring your own AI access. Moss works with Claude, Codex, and Gemini sign-in, plus
+          configurable providers for features that need them. Your provider accounts and usage are
+          separate from Moss.
+        </p>
+        <p>
+          Self-hosted storage does not mean all AI processing is local. When you use a hosted
+          provider, prompts and relevant context go to that provider, and connected services and web
+          tools make their own outside requests.
+        </p>
+      </section>
+
+      <section id="look">
+        <h2>A look inside</h2>
+        <p class="sub">
+          Sample data for a made-up user, Luke, who mixes research work with everyday life.
+        </p>
+        <div class="gallery">
+          <figure class="shot">
+            <img
+              src="img/moss-tasks.jpg"
+              alt="Moss Tasks with Work, Personal, and Home lists"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Tasks.</strong> Work, personal, and home lists side by side, with priorities
+              and due dates.
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <img
+              src="img/moss-news.jpg"
+              alt="Moss News front page with a lead story and source headlines"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>News.</strong> A reading desk for your sources, with summaries and links to
+              the original reporting.
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <img
+              src="img/moss-sports.jpg"
+              alt="Moss Sports with followed teams, scores, and upcoming games"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Sports.</strong> Results, upcoming games, and coverage for the teams you
+              follow.
+            </figcaption>
+          </figure>
+          <figure class="shot">
+            <img
+              src="img/moss-wellness.jpg"
+              alt="Moss Wellness with a mood check-in and recent trends"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Wellness.</strong> Daily check-ins and medication tracking, with patterns over
+              time.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="install">
+        <h2>Install with Docker Compose</h2>
+        <p>
+          You need Docker Engine or Docker Desktop, Docker Compose v2.24 or newer, and a terminal
+          with <code>curl</code>. The commands use a POSIX shell, so Linux, macOS, or WSL. You do
+          not need Node.js or the source code.
+        </p>
+
+        <h3>1. Download the deployment file</h3>
+        <div class="code">
+          <button type="button" class="copy">Copy</button>
+          <pre><code>mkdir moss
+cd moss
+curl -fL https://raw.githubusercontent.com/motioneso/moss/main/infra/docker-compose.prod.yml \
+  -o docker-compose.prod.yml</code></pre>
+        </div>
+
+        <h3>2. Generate your configuration and secrets</h3>
+        <div class="code">
+          <button type="button" class="copy">Copy</button>
+          <pre><code>JARVIS_IMAGE_TAG=stable POSTGRES_PASSWORD=setup JARVIS_CLI_RUNNER_RPC_SECRET=setup \
+  docker compose -p moss -f docker-compose.prod.yml --profile setup \
+  run --rm --no-deps --pull always --user "$(id -u):$(id -g)" setup</code></pre>
+        </div>
+        <p>
+          This writes <code>env.production.local</code> next to the Compose file. Back it up
+          somewhere safe, keep it out of Git, and run setup only once.
+        </p>
+        <p>Before starting, add this line to that file, using the email you will sign up with:</p>
+        <div class="code">
+          <button type="button" class="copy">Copy</button>
+          <pre><code>MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=you@example.com</code></pre>
+        </div>
+
+        <h3>3. Start Moss</h3>
+        <div class="code">
+          <button type="button" class="copy">Copy</button>
+          <pre><code>docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local \
+  up -d --no-build</code></pre>
+        </div>
+        <p>
+          Open <a href="http://localhost:1533">http://localhost:1533</a>, create your first account
+          with the email above, and follow the setup wizard to connect your AI provider. The first
+          start takes a few minutes while the database and modules set themselves up.
+        </p>
+
+        <p class="more">
+          Need remote access, HTTPS, backups, or upgrade steps? See the
+          <a href="https://github.com/motioneso/moss/blob/main/docs/operations/deploy.md"
+            >deployment guide</a
+          >, the
+          <a href="https://github.com/motioneso/moss/blob/main/docs/operations/self-hosted-tls.md"
+            >HTTPS guide</a
+          >, and the
+          <a href="https://github.com/motioneso/moss/blob/main/docs/WHATS_NEW.md">release notes</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Moss is open source.</p>
+      <p>
+        <a href="https://github.com/motioneso/moss">GitHub</a> ·
+        <a href="https://github.com/motioneso/moss/blob/main/docs/WHATS_NEW.md">What's new</a> ·
+        <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a> ·
+        <a href="https://github.com/motioneso/moss/issues">Report an issue</a>
+      </p>
+    </footer>
+
+    <script>
+      document.querySelectorAll(".copy").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var text = button.parentElement.querySelector("code").innerText;
+          navigator.clipboard.writeText(text).then(function () {
+            button.textContent = "Copied";
+            setTimeout(function () {
+              button.textContent = "Copy";
+            }, 1500);
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
