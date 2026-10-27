@@ -9,6 +9,7 @@ import {
   type MeetingCapturePreferences
 } from "@moss/shared";
 import { historyItem } from "./fixtures/meeting-history.js";
+import { recordingContext } from "../fixtures/meeting-recording.js";
 import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { MeetingNotes } from "../../packages/meetings/src/web/meeting-record.js";
@@ -153,10 +154,19 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ generationAvailability: "model-unavailable", templates: [] })
         );
+      if (path === "/api/meetings/recording-types")
+        return new Response(JSON.stringify(recordingContext(meeting.id).configuration));
       if (path === "/api/meetings/capture/devices")
         return new Response(JSON.stringify({ devices: [], processingReady: false }));
       if (!path.startsWith("/api/meetings/records/"))
         throw new Error(`Unexpected unit request: ${path}`);
+      if (path.endsWith("/recording"))
+        return new Response(
+          JSON.stringify({
+            metadata: null,
+            configuration: recordingContext(meeting.id).configuration
+          })
+        );
       if (path.endsWith("/capture"))
         return new Response(
           JSON.stringify({ pendingLinks: [], capture: null, processingReady: false })
