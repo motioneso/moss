@@ -316,10 +316,14 @@ export const chatModuleManifest = {
     },
     ...reminderFeatures,
     {
+      id: "chat.first_turn_approval",
+      description:
+        "The first request in a new account binds its approval card to the owner's Main conversation."
+    },
+    {
       id: "chat.pending_action_disclosure",
       description:
         "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +
-        "The first request in a new account binds its approval card to the owner's Main conversation. " +
         "Native permissions keep exact commands or paths. Missing details keep Reject only. Outside content adds one notice.",
       errors: [
         {
