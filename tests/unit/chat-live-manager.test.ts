@@ -466,6 +466,33 @@ describe("ChatSessionManager", () => {
     );
   });
 
+  it("carries the sent files on the live user record", async () => {
+    const { manager } = makeManager();
+    const seen: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (r) => seen.push(r));
+
+    await manager.submitTurn("user-1", "Ben", "look at this", {
+      attachments: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          fileName: "notes.txt",
+          mimeType: "text/plain",
+          sizeBytes: 16,
+          createdAt: "2026-10-27T00:00:00.000Z"
+        }
+      ]
+    });
+
+    expect(seen.find((r) => r.kind === "user")?.attachments).toEqual([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 16
+      }
+    ]);
+  });
+
   it("emits records to subscribers, returns the reply, and persists the turn", async () => {
     const { manager, persistence } = makeManager();
 
