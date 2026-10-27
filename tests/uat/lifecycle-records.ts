@@ -375,7 +375,8 @@ export async function createLifecycleRecorder(
     const rawLabels = raw.labels == null ? {} : object(raw.labels);
     for (const key of labelKeys) {
       const value = rawLabels[`com.docker.compose.${key}`];
-      if (value !== undefined) labels[`com.docker.compose.${key}`] = text(value);
+      if (value === "") labels[`com.docker.compose.${key}`] = "";
+      else if (value !== undefined) labels[`com.docker.compose.${key}`] = text(value);
     }
     const fixture = kind === "container" && fixtureNames(attempt.project).includes(name);
     if (!fixture && labels["com.docker.compose.project"] !== attempt.project)
