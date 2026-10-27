@@ -6,6 +6,7 @@ export * from "./env.js";
 export * from "./error-diagnostics.js";
 export * from "./gate-run-guard.js";
 export * from "./keyring.js";
+export * from "./managed-source-admission.js";
 export * from "./migrations/module-sql-runner.js";
 export * from "./migrations/pending.js";
 export * from "./migrations/sql-runner.js";

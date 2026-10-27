@@ -31,3 +31,6 @@ export {
 export type { VaultDirectoryEntry } from "./vault-ops.js";
 export { reserveVaultFileBytes, publishReservedVaultFileBytes } from "./vault-reserved-files.js";
 export { appendVaultFileBytes } from "./vault-append.js";
+export { canonicalizeAsFarAsExists } from "./vault-canonical-path.js";
+export { mutateVaultFiles, VaultMutationConflictError } from "./vault-mutation.js";
+export type { VaultMutationSnapshot, VaultMutationChange } from "./vault-mutation.js";
