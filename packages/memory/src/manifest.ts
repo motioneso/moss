@@ -105,7 +105,8 @@ export const memoryModuleManifest: MossModuleManifest = {
       "sql/0030_memory_index.sql",
       "sql/0032_memory_embedding_768.sql",
       "sql/0040_memory_chat_source.sql",
-      "sql/0041_memory_facts.sql"
+      "sql/0041_memory_facts.sql",
+      "sql/0338_memory_managed_note_snapshots.sql"
     ],
     migrationDirectories: ["packages/memory/sql"],
     ownedTables: [
@@ -452,9 +453,8 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.notes_ingest",
       description:
-        "Read your linked notes into Moss by splitting each note into passages and keeping them " +
-        "with an embedding model, so you can search your notes by meaning. A note you delete or " +
-        "move out of the folder is dropped from search on the next sync."
+        "Search linked notes by meaning. Deleted or moved notes leave search on the next sync. " +
+        "Managed passages retain their personal or work label and current source status; stale indexing cannot replace them."
     }
   ]
 };

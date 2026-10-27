@@ -88,8 +88,9 @@ it("invalidates snapshots for content, binding, side and represented source chan
     assert.notEqual(managedNoteSnapshotKey(variant), key);
   for (const bindingRevision of [-1, 0.5, NaN, Infinity, 2147483648])
     assert.throws(() => managedNoteSnapshotKey({ ...input, bindingRevision }));
-  assert.throws(() =>
-    managedNoteSnapshotKey({ ...input, lifecycle: { ...input.lifecycle, sources: [] } })
+  assert.notEqual(
+    managedNoteSnapshotKey({ ...input, lifecycle: { ...input.lifecycle, sources: [] } }),
+    key
   );
   assert.throws(() =>
     managedNoteSnapshotKey({

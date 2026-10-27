@@ -220,6 +220,40 @@ export class ManagedSourceLifecycle {
     expected: ManagedSourceSnapshot,
     work: (db: DataContextDb, admission: ManagedSourceAdmission) => Promise<T>
   ): Promise<T> {
+    return this.withAdmissionScoped(db, expected, "shared", work);
+  }
+
+  /** Short reservation serializes source receipt limits without changing semantic generation. */
+  async withReservation<T>(
+    access: AccessContext,
+    expected: ManagedSourceSnapshot,
+    work: (db: DataContextDb, admission: ManagedSourceAdmission) => Promise<T>
+  ): Promise<T> {
+    if (expected.sources.length !== 1) throw new ManagedSourceUnavailableError();
+    return this.runner.withDataContext(access, (db) =>
+      this.withAdmissionScoped(db, expected, "exclusive", work)
+    );
+  }
+
+  /** Actor-only admission is for a validated bound destination with no remaining sources. */
+  async withActorPublicationScoped<T>(
+    db: DataContextDb,
+    expected: Pick<ManagedSourceSnapshot, "ownerUserId" | "actorGeneration">,
+    work: (db: DataContextDb) => Promise<T>
+  ): Promise<T> {
+    const owner = await scopedOwner(db);
+    if (expected.ownerUserId.toLowerCase() !== owner) throw new ManagedSourceUnavailableError();
+    await lockManagedActor(db, owner, "shared");
+    requireActive(await readActor(db, owner), expected.actorGeneration);
+    return work(db);
+  }
+
+  private async withAdmissionScoped<T>(
+    db: DataContextDb,
+    expected: ManagedSourceSnapshot,
+    mode: "shared" | "exclusive",
+    work: (db: DataContextDb, admission: ManagedSourceAdmission) => Promise<T>
+  ): Promise<T> {
     const owner = await scopedOwner(db);
     if (expected.ownerUserId.toLowerCase() !== owner || expected.sources.length === 0)
       throw new ManagedSourceUnavailableError();
@@ -231,7 +265,7 @@ export class ManagedSourceLifecycle {
     await lockManagedSources(
       db,
       sources.map((entry) => entry.source),
-      "shared"
+      mode
     );
     requireActive(await readActor(db, owner), expected.actorGeneration);
     for (const entry of sources) {

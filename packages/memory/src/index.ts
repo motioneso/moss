@@ -132,3 +132,16 @@ export {
   configureMemoryApprovalReferences,
   type MemoryApprovalSourceResolver
 } from "./action-presentations.js";
+
+export {
+  ingestVaultDocument,
+  type VaultDocumentIngestOptions,
+  type VaultDocumentIngestResult
+} from "./ingest-document.js";
+export type {
+  VaultIndexSourceRevision,
+  VaultIndexSnapshot,
+  VaultIndexCapture,
+  VaultIndexPublicationResult,
+  VaultIndexPublicationPort
+} from "./vault-index-publication.js";

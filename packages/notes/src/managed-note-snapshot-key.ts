@@ -25,8 +25,8 @@ export function managedNoteSnapshotKey(input: ManagedNoteSnapshotIdentity): stri
   generation(input.lifecycle.actorGeneration);
   assertUuid(input.lifecycle.ownerUserId, "Managed snapshot owner");
   const owner = input.lifecycle.ownerUserId.toLowerCase();
-  if (!input.lifecycle.sources.length || input.lifecycle.sources.length > 2048)
-    throw new Error("A managed snapshot requires 1 to 2048 represented sources");
+  if (input.lifecycle.sources.length > 2048)
+    throw new Error("A managed snapshot permits at most 2048 represented sources");
   const sources = new Map<string, number>();
   for (const entry of input.lifecycle.sources) {
     if (entry.source.ownerUserId.toLowerCase() !== owner)

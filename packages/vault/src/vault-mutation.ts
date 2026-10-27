@@ -116,7 +116,7 @@ async function checkIdentity(
 
 async function readCurrent(path: string): Promise<string | null> {
   try {
-    return await readFile(path, "utf8");
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readFile(path));
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
     throw error;

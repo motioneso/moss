@@ -33,7 +33,14 @@ const MAX_SCANNED_ENTRIES = 8192;
  * does not claim atomicity against external edits. Owning services revalidate destinations
  * and read exact current bytes under their mutation lock before accepting changes.
  */
-export async function readBoundedVaultInventory(ctx: VaultContext): Promise<VaultInventoryResult> {
+export interface VaultInventoryReadPolicy {
+  readonly canReadMarkdown?: (canonicalPath: string) => Promise<boolean>;
+}
+
+export async function readBoundedVaultInventory(
+  ctx: VaultContext,
+  policy: VaultInventoryReadPolicy = {}
+): Promise<VaultInventoryResult> {
   assertVaultContext(ctx);
   const root = await canonicalizeAsFarAsExists(ctx.vaultRoot);
   const entries: VaultInventoryEntry[] = [{ path: ".", kind: "directory", excerpt: null }];
@@ -57,6 +64,14 @@ export async function readBoundedVaultInventory(ctx: VaultContext): Promise<Vaul
       const isMarkdown = entry.isFile() && entry.name.toLowerCase().endsWith(".md");
       if (!isDirectory && !isMarkdown) continue;
       const path = join(directory.path, entry.name);
+      if (
+        isMarkdown &&
+        policy.canReadMarkdown &&
+        !(await policy.canReadMarkdown(
+          await canonicalizeAsFarAsExists(resolveVaultPath(root, path))
+        ))
+      )
+        continue;
       if (Buffer.byteLength(path, "utf8") > MAX_PATH_BYTES) return overflow("path_bytes");
       if (entries.length === MAX_ENTRIES) return overflow("entries");
       if (isDirectory && directory.depth === MAX_DEPTH) return overflow("depth");

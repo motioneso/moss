@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,7 +17,11 @@ import {
   getBuiltInModuleManifests,
   getModuleDeletionTables
 } from "@moss/module-registry";
-import { ManagedSourceLifecycle, ManagedSourceUnavailableError } from "@moss/notes";
+import {
+  ManagedSourceLifecycle,
+  ManagedSourceUnavailableError,
+  RecordingContributionService
+} from "@moss/notes";
 import type { ManagedNotesExportSection } from "@moss/shared";
 import { HttpError } from "@moss/module-sdk";
 import type { IngestMeetingTranscriptInput, MeetingOutputArtifact } from "@moss/shared";
@@ -55,6 +60,7 @@ let bootstrapDb: Kysely<MossDatabase>;
 let appContext: DataContextRunner;
 let workerContext: DataContextRunner;
 let server: FastifyInstance;
+let notesVaultDirectory: string;
 
 beforeAll(async () => {
   // Hosted CI / the isolated verify-gate only. Never execute against an ambient database.
@@ -84,7 +90,33 @@ beforeAll(async () => {
       }
     }
   });
+  notesVaultDirectory = await mkdtemp(join(tmpdir(), "moss-notes-export-"));
+  const contributions = new RecordingContributionService({
+    runner: appContext,
+    lifecycle,
+    privateVault: new VaultContextRunner(notesVaultDirectory),
+    authority: {
+      async readCurrent() {
+        return { sourceVersion: 1, side: "work" };
+      }
+    },
+    index: { async invalidateScoped() {}, async enqueueScoped() {} }
+  });
   for (const actor of actors) {
+    const source = {
+      sourceModuleId: "meetings" as const,
+      sourceId: fixtures.get(actor.actorUserId)!.meetingId,
+      sourceVersion: 1,
+      itemKey: "export-fixture"
+    };
+    const proposal = await contributions.prepare(actor, {
+      kind: "apply",
+      requestId: randomUUID(),
+      source,
+      text: actor.marker,
+      destination: { kind: "fallback" }
+    });
+    await contributions.apply(actor, { proposalId: proposal.id, acceptBinding: false });
     await lifecycle.registerSource(actor, {
       ownerUserId: actor.actorUserId,
       sourceModuleId: "meetings",
@@ -110,6 +142,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server?.close();
+  if (notesVaultDirectory) await rm(notesVaultDirectory, { recursive: true, force: true });
   await Promise.all([appDb?.destroy(), workerDb?.destroy(), bootstrapDb?.destroy()]);
 });
 
@@ -134,7 +167,7 @@ function assertExportSection(section: MeetingsExportSection, actorUserId: string
 }
 
 function assertNotesExport(section: ManagedNotesExportSection, actorUserId: string) {
-  expect(section).toEqual({
+  expect({ actors: section.actors, sources: section.sources }).toEqual({
     actors: [{ ownerUserId: actorUserId, generation: 0, state: "active", operationId: null }],
     sources: [
       {
@@ -147,6 +180,49 @@ function assertNotesExport(section: ManagedNotesExportSection, actorUserId: stri
       }
     ]
   });
+  const actor = actors.find((entry) => entry.actorUserId === actorUserId)!;
+  expect(section.bindings).toHaveLength(1);
+  expect(section.contributions).toHaveLength(1);
+  expect(section.proposals).toHaveLength(1);
+  expect(section.operations).toHaveLength(1);
+  const contribution = section.contributions[0]!;
+  expect(contribution).toMatchObject({
+    sourceId: fixtures.get(actorUserId)!.meetingId,
+    sourceModuleId: "meetings",
+    sourceVersion: 1,
+    sourceGeneration: 0,
+    itemKey: "export-fixture",
+    state: "applied",
+    side: "work",
+    text: actor.marker
+  });
+  expect(contribution.blockBytes).toContain(actor.marker);
+  expect(section.bindings[0]).toMatchObject({
+    destinationId: contribution.destination.id,
+    side: "work"
+  });
+  expect(section.proposals[0]!.payload).toMatchObject({
+    text: actor.marker,
+    destination: contribution.destination,
+    review: { after: actor.marker, side: "work" }
+  });
+  expect(section.operations[0]!.payload).toMatchObject({
+    state: "applied",
+    receiptId: contribution.receiptId,
+    resultState: "applied",
+    legs: [
+      {
+        done: true,
+        side: "work",
+        operation: { before: null, after: { bytes: contribution.blockBytes } }
+      }
+    ]
+  });
+  const serialized = JSON.stringify(section);
+  for (const other of actors.filter((entry) => entry.actorUserId !== actorUserId)) {
+    expect(serialized).not.toContain(other.marker);
+    expect(serialized).not.toContain(fixtures.get(other.actorUserId)!.meetingId);
+  }
 }
 
 async function verifySettingsDownload(actorUserId: string) {

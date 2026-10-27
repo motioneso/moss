@@ -50,9 +50,19 @@ export const notesModuleManifest = {
     supportsUserDisable: true
   },
   database: {
-    migrations: ["sql/0336_notes_managed_source_lifecycle.sql"],
+    migrations: [
+      "sql/0336_notes_managed_source_lifecycle.sql",
+      "sql/0337_notes_recording_contributions.sql"
+    ],
     migrationDirectories: [notesModuleSqlMigrationDirectory],
-    ownedTables: ["app.notes_managed_actors", "app.notes_managed_sources"]
+    ownedTables: [
+      "app.notes_managed_actors",
+      "app.notes_managed_sources",
+      "app.notes_destination_bindings",
+      "app.notes_recording_contributions",
+      "app.notes_contribution_proposals",
+      "app.notes_contribution_operations"
+    ]
   },
   permissions: [
     {
@@ -196,7 +206,7 @@ export const notesModuleManifest = {
     {
       id: "notes.recording_source_export",
       description:
-        "Your account export includes saved recording-source status associated with managed notes."
+        "Your account export includes saved recording-source status, note destination labels and contribution review, change and undo receipts. Recording filing controls are not yet available."
     },
     {
       id: "notes.vault_sync",
@@ -272,6 +282,10 @@ export const notesModuleManifest = {
     deletion: {
       strategy: "cascade",
       tables: [
+        { table: "app.notes_contribution_operations", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_contribution_proposals", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_recording_contributions", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_destination_bindings", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.notes_managed_sources", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.notes_managed_actors", countPredicate: "owner_user_id = $1::uuid" }
       ]

@@ -66,3 +66,13 @@ export {
   type ManagedDeletionOperation
 } from "./managed-source-lifecycle.js";
 export { collectManagedNotesExportSection } from "./managed-source-export.js";
+
+export { RecordingContributionService } from "./recording-contributions.js";
+export {
+  NoteContributionConflictError,
+  NoteContributionUnavailableError,
+  type RecordingContributionAuthority,
+  type RecordingContributionIndexPort,
+  type StoredNoteDestination
+} from "./contribution-state.js";
+export { ManagedNoteSnapshotService } from "./managed-note-snapshots.js";

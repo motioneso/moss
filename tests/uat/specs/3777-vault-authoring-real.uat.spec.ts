@@ -177,7 +177,14 @@ test("linked-folder authoring through real Settings and chat preserves current b
   expect(archive.userId).toBe(UAT_ADMIN_ID);
   // This foundation does not yet register contributions through ordinary authoring.
   // Populated lifecycle rows are exercised through both assembled exporters in integration.
-  expect(archive.sections.notes).toEqual({ actors: [], sources: [] });
+  expect(archive.sections.notes).toEqual({
+    actors: [],
+    sources: [],
+    bindings: [],
+    contributions: [],
+    proposals: [],
+    operations: []
+  });
   console.log(
     `MANAGED_VAULT_REAL_UAT model=${model.id} settingsFolder=true create=true edits=true overwrite=true delete=true actualFileBytes=true settingsArchiveDownload=true notesLifecycleSection=true screenshots=off`
   );
