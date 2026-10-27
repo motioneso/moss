@@ -4,8 +4,9 @@ Plan only. No code, runtime, image, Docker, deployment or production operation.
 `unavailableAdmission` stays the only admission. Parents #3577, #3616, #3617, #3618 and #3619 stay
 open. Settles handover items 4 and the orphan part of item 5 from the
 [handover contract](2026-10-24-moss-computer-prelaunch-handover.md), as a proposal. Independent
-review rounds 1, 2 and 3 (all accept with changes) are folded in below. Round 3 changed the start
-order and added a go-gate for `manage`, so a fourth review is required. Nothing here is accepted until the
+review rounds 1 to 4 (all accept with changes) are folded in below. Round 3 changed the start
+order and added a go-gate for `manage`. Round 4 changes are mechanical hardening of the gate,
+cleanup and process lookup. Nothing here is accepted until the
 review of this revision. Limits stay as accepted: 1800s run, 90s heartbeat, 5s bootstrap bound,
 5s sample age, gap under 10s.
 
@@ -130,22 +131,44 @@ a path, not `pipe:[n]`. The launcher alone cannot make the pipe.
 Mechanism proposed:
 
 - The pinned runner is a small `pump` mode of the pinned bundle, not the launcher.
-- The launcher starts one root-owned shell pipeline from pinned absolute paths. The pump gets the
-  pipe write end on descriptor 3 (`3>&1`), descriptors 0, 1 and 2 on `/dev/null`, and one socket
-  pair end from the launcher on descriptor 4. The `manage` stage gets the pipe on descriptor 0
-  and `/dev/null` on 1 and 2. The loader's writer count then sees exactly one descriptor, 3.
-- The `manage` stage is `setsid sh -c 'read _ < GATE; exec manage ...'`, where GATE is a FIFO in
-  a root 0700 directory. `setsid` gives `manage` its own group, because `main.ts:129-133` refuses
-  a `manage` that shares a pid or group with the runner. The shell reads the gate by path and
-  does not leave it open across `exec`.
-- Go-gate. The pump starts and idles with no config. The launcher reads its pid, start ticks and
-  group, writes them into the second config, then writes one byte to the gate. `manage` does not
-  read its config until `exec`, so it cannot see a config without the runner identity. The gate
-  wait is before the `manage` process image starts, so it does not count against the 5s
-  bootstrap bound (which counts from `runWatchdog` start).
+- The launcher starts one root-owned shell pipeline. It resolves `sh`, `setsid` and the node
+  binary to real paths and runs the same `assertTrustedPath` check on each (no symlink, one hard
+  link, root-owned, not group or world writable). A usr-merge `/bin` link or a busybox build
+  fails that check, so the launcher uses only resolved paths that pass, and refuses when none do.
+- The pump gets the pipe write end on descriptor 3 (`3>&1`), descriptors 0, 1 and 2 on
+  `/dev/null`, and one socket pair end from the launcher on descriptor 4. The `manage` stage
+  gets the pipe on descriptor 0, `/dev/null` on 1 and 2, and descriptors 3 and 4 closed
+  (`3>&- 4>&-`), so it does not inherit the launcher's socket end. The loader's writer count then
+  sees exactly one descriptor, 3.
+- The `manage` stage is `setsid sh -c 'read -r line < "$GATE" || exit 1; [ "$line" = "$TOKEN" ]
+|| exit 1; unset TOKEN; exec manage ...'`. `GATE` is a FIFO the launcher creates fresh with an
+  exclusive `mkfifo` under a random name in a root 0700 directory, and checks is a FIFO (not a
+  file, link or other node) before use. `TOKEN` is a per-run random value the launcher also
+  holds, passed in the stage's environment, not its command line. `read` returns on a newline or
+  at end of file, so the `||` and the exact compare are what stop an open-and-close or a wrong
+  value from releasing the gate. `setsid` gives `manage` its own group, because `main.ts:129-133`
+  refuses a `manage` that shares a pid or group with the runner. The shell does not hold the
+  gate across `exec`.
+- Finding the processes. The pump and the `manage` stage are children of the outer shell. The
+  launcher lists the outer shell's children from `/proc` and identifies the pump by pinned exe,
+  exact command line, and a pump-sent message on the launcher's socket end that carries the
+  per-run token and the pump's own pid, which must equal the pid found. It identifies the
+  `manage` stage by the other child, with its group equal to its pid after `setsid`. It
+  records pid, start ticks and group for both before writing the config. Anything unexpected
+  (extra child, wrong exe, wrong command line, missing token) refuses.
+- Go-gate. The pump starts and idles with no config. The launcher writes the pump's pid, start
+  ticks and group into the second config, then writes the token and a newline to the gate.
+  `manage` does not read its config until `exec`, so it cannot see a config without the runner
+  identity. The gate wait is before the `manage` process image starts, so it does not count
+  against the 5s bootstrap bound (which counts from `runWatchdog` start).
 - The pump writes a frame only when the launcher sends one, and exits on socket close or
-  launcher change, so a dead launcher closes the pipe and `manage` fails closed. A gate that
-  never opens leaves the shell blocked; the launcher kills the pipeline on any failure.
+  launcher change, so a dead launcher closes the pipe and `manage` fails closed.
+- Failure cleanup reaches every stage. `setsid` puts the `manage` stage in its own group and
+  session, so killing the outer shell's group does not reach it. On every failure path the
+  launcher kills the pump, the `manage` stage and the outer shell each by recorded identity: it
+  re-reads pid, start ticks and group, and signals only on a match. A gate-waiter must not
+  survive, because anything that later releases it would start `manage`. Test: a failure with
+  the gate closed leaves no process from the pipeline.
 - The launcher sends one frame, `{"counter":n,"runId":...}` and a newline, per interval for the
   whole run, one frame per write, counter increasing by exactly one (`supervisor.ts` heartbeat
   handler). The interval is under the 90s limit with margin, set in the build.
@@ -153,11 +176,15 @@ Mechanism proposed:
 
 The loader's writer count covers only the runner's own descriptors. It cannot see an extra writer
 held by the shell or any other process. So the box-wide check is a new launcher-side check, not
-a loader property. After the pipeline starts, the launcher scans every `/proc/*/fd` and refuses
-if any process other than the pump holds the pipe's write end. On failure it kills the pipeline,
-leaves the gate closed, and keeps admission refused. Unverified until built: that the shell
-closes its own pipe copies after forking both stages. A test with a planted extra writer must
-make the launcher refuse.
+a loader property. The launcher scans every `/proc/*/fd` and refuses if any process other than
+the pump holds the pipe's write end. It runs the scan before the gate opens, and once more after
+`manage`'s first healthy sample. On failure it kills every stage by identity, leaves the gate
+closed (or stops the run, if past it), and keeps admission refused. This is a start-time check
+inside the root trust boundary and is not a standing guarantee. The running watchdog re-checks
+only that the runner process exists (`verifyRunner` is `readComputerProcess`), never the pipe,
+and root can open `/proc/<pump>/fd/3` later and become a writer. Unverified until built: that the
+shell closes its own pipe copies after forking both stages. A test with a planted extra writer
+must make the launcher refuse.
 
 No loader change is proposed.
 
@@ -171,8 +198,9 @@ Hold is a lifetime-free idler. It fences nothing and stops nothing.
    process is gone (pid, start ticks, boot ID) and that no process holds the lock path open. The
    lock check alone is racy, so neither suffices alone.
 2. Request gap. The host tool is also the request server for enable, disable and status.
-   Between its exit and `manage` serving, no server exists. The launcher refuses any such
-   request in that gap and admission stays refused. `manage` replaces the host tool as the
+   Between its exit and `manage` serving, nothing listens on the host socket, so a request fails
+   closed (the connection is refused) and the launcher does not listen. Admission stays refused.
+   The build must confirm the host tool leaves no live listener when it exits. `manage` replaces the host tool as the
    request server for the rest of the run.
 3. Start order is fixed by section 1 steps 6 to 8: pipeline held at the gate, config written,
    desktop up and its guest socket accepting, gateway up, gate opened. `manage` then runs its
@@ -265,36 +293,43 @@ fails, admission stays refused and nothing retries. `hold` keeps running until t
 
 Each is seen failing with its protection removed.
 
-| Rule                                | Test                                                                  |
-| ----------------------------------- | --------------------------------------------------------------------- |
-| Exactly two containers, none others | A third container with the labels, running and stopped                |
-| Lookalike                           | A container with the right label and name but created before the bump |
-| Pinned digest                       | Wrong image digest                                                    |
-| Mounts                              | Extra mount, extra device, privileged, host PID, host network         |
-| Command                             | Different command or entrypoint                                       |
-| Restart policy                      | Policy set                                                            |
-| Re-read                             | Container changed after `manage` started                              |
-| Config source                       | Host tool reports other IDs or generations                            |
-| Store against Docker                | Store IDs or generation labels disagree with Docker, refused          |
-| Secret delivery                     | Gateway and watchdog configs carry the same secret; a mismatch fails  |
-| Gateway window                      | Measured gateway start to active lifetime, against the 5s limit       |
-| Pipe writers                        | Extra write end held anywhere on the box makes the launcher refuse    |
-| Runner descriptors                  | Pipe on 1 or 2 of the pump is refused by the loader                   |
-| Go-gate                             | `manage` never reads a config lacking the runner identity             |
-| Start order                         | A sample before both containers run fails; the fixed order passes     |
-| Request gap                         | Enable, disable, status between host tool exit and `manage` refused   |
-| Gateway window cap                  | Window above the hard maximum or missing is refused or defaults       |
-| Desktop first                       | Gateway started before the guest socket accepts fails its connect     |
-| Pipe liveness                       | Launcher stops sending frames, or dies, and `manage` stops            |
-| Atomic acquire                      | Two launchers race for the record, one wins                           |
-| Manage never connects               | Both containers are stopped by ID and confirmed stopped               |
-| Host tool still running             | Lock held or host tool alive, `manage` is not started                 |
-| Pid reuse                           | Recorded pid reused by an unrelated root process, left alone          |
-| Group kill                          | Group leader is not the recorded process                              |
-| Run limit                           | Handover does not extend 1800s                                        |
-| Handover failure                    | `manage` exits early, no sample, stale sample, extra byte             |
-| Crash                               | Launcher dies at each step of handover                                |
-| Half start                          | Failed `manage` leaves the lock or journal behind                     |
+| Rule                                | Test                                                                   |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| Exactly two containers, none others | A third container with the labels, running and stopped                 |
+| Lookalike                           | A container with the right label and name but created before the bump  |
+| Pinned digest                       | Wrong image digest                                                     |
+| Mounts                              | Extra mount, extra device, privileged, host PID, host network          |
+| Command                             | Different command or entrypoint                                        |
+| Restart policy                      | Policy set                                                             |
+| Re-read                             | Container changed after `manage` started                               |
+| Config source                       | Host tool reports other IDs or generations                             |
+| Store against Docker                | Store IDs or generation labels disagree with Docker, refused           |
+| Secret delivery                     | Gateway and watchdog configs carry the same secret; a mismatch fails   |
+| Gateway window                      | Measured gateway start to active lifetime, against the 5s limit        |
+| Pipe writers                        | Extra write end held anywhere on the box makes the launcher refuse     |
+| Runner descriptors                  | Pipe on 1 or 2 of the pump is refused by the loader                    |
+| Go-gate                             | `manage` never reads a config lacking the runner identity              |
+| Gate release                        | Open-and-close, wrong token, no newline, regular file at path: refused |
+| Gate FIFO                           | Pre-existing path, non-FIFO node: refused                              |
+| Failure with gate closed            | No shell, pump or `manage` process remains                             |
+| Stage descriptors                   | `manage` has no descriptor 3 or 4                                      |
+| Process lookup                      | Wrong exe, command line, token or extra child: refused                 |
+| Pinned shell paths                  | Symlinked or multiply linked `sh` or `setsid` refused                  |
+| Scan timing                         | Extra writer after the first sample makes the launcher stop the run    |
+| Start order                         | A sample before both containers run fails; the fixed order passes      |
+| Request gap                         | Enable, disable, status between host tool exit and `manage` refused    |
+| Gateway window cap                  | Window above the hard maximum or missing is refused or defaults        |
+| Desktop first                       | Gateway started before the guest socket accepts fails its connect      |
+| Pipe liveness                       | Launcher stops sending frames, or dies, and `manage` stops             |
+| Atomic acquire                      | Two launchers race for the record, one wins                            |
+| Manage never connects               | Both containers are stopped by ID and confirmed stopped                |
+| Host tool still running             | Lock held or host tool alive, `manage` is not started                  |
+| Pid reuse                           | Recorded pid reused by an unrelated root process, left alone           |
+| Group kill                          | Group leader is not the recorded process                               |
+| Run limit                           | Handover does not extend 1800s                                         |
+| Handover failure                    | `manage` exits early, no sample, stale sample, extra byte              |
+| Crash                               | Launcher dies at each step of handover                                 |
+| Half start                          | Failed `manage` leaves the lock or journal behind                      |
 
 Verification commands when built: the launcher and bundle unit tests, `pnpm typecheck`, prettier
 and eslint on touched files, and the gate through `scripts/run-gate.sh`. Live proof on a real
