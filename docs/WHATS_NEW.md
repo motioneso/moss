@@ -40,6 +40,10 @@ feature that is not present in the image you are running.
 
 - **Simpler connection settings.** Outlook calendar uses a compact account row, and Connections and Notes settings have less repeated text. [PR #3773](https://github.com/motioneso/moss/pull/3773)
 
+#### Fixed
+
+- **Attached files stay visible while Moss replies.** A file you attach to a chat message now stays visible on your message while Moss writes the reply, instead of disappearing until the reply is done. [PR #3799](https://github.com/motioneso/moss/pull/3799)
+
 ### 2026-10-26
 
 #### Added
