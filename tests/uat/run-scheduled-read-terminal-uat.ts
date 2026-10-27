@@ -30,6 +30,12 @@ import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  EXPECTED_WINDOWS,
+  serveWindows,
+  verifyWindows,
+  type WindowServer
+} from "./n3-window-handshake.js";
 
 const SELF = fileURLToPath(import.meta.url);
 const BASE = "966527c413adc752def72f45ce0c54e660ca0615";
@@ -435,6 +441,7 @@ async function worker(): Promise<number> {
   });
   Object.assign(process.env, plan.lifecycleEnv);
   let consumer: ReturnType<typeof plan.collector.compose>["consumer"] | undefined;
+  let windows: WindowServer | undefined;
   let stopped = false;
   let browserChild: ChildProcess | undefined;
   const stop = () => {
@@ -460,6 +467,7 @@ async function worker(): Promise<number> {
     phase = "observer-open";
     consumer = plan.collector.compose().consumer;
     await consumer.open();
+    windows = serveWindows(evidence, consumer);
     phase = "installed-source-correspondence";
     const image = `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`;
     const imageId = capture("docker", ["image", "inspect", "--format", "{{.Id}}", image]);
@@ -526,12 +534,15 @@ async function worker(): Promise<number> {
     );
     result = await boundedChild(browserChild);
     if (stopped) result = 1;
+    phase = "observer-windows";
+    verifyWindows(await windows.stop(), EXPECTED_WINDOWS);
   } catch (error) {
     console.error(error); // Quarantined worker-raw.log only; never relay this output.
     result = 1;
   } finally {
     cleanup = await cleanupAll([
       async () => {
+        await windows?.stop(); // Idempotent; a window still open makes close() fail below.
         const closed = await consumer?.close();
         check(!consumer || closed?.disposed, "observer bridge not closed; retain resources");
       },
@@ -857,6 +868,21 @@ async function launch(destination: string): Promise<number> {
 }
 async function selfTest(): Promise<void> {
   let controls = 0;
+  const windowLog = (modes: readonly ("positive" | "terminal")[], extra = {}) => ({
+    completed: modes.map((mode, i) => ({ seq: i + 1, mode, window: i + 1, delta: {} })),
+    failure: null,
+    open: false,
+    ...extra
+  });
+  verifyWindows(windowLog(EXPECTED_WINDOWS), EXPECTED_WINDOWS);
+  for (const bad of [
+    windowLog(["positive", "terminal"]),
+    windowLog(["terminal", "terminal", "positive"]),
+    windowLog(EXPECTED_WINDOWS, { open: true }),
+    windowLog(EXPECTED_WINDOWS, { failure: "x" })
+  ])
+    assert.throws(() => verifyWindows(bad, EXPECTED_WINDOWS));
+  controls += 5;
   for (const value of [undefined, "", "5173", "1533", "5300", "5180x"]) {
     assert.throws(() => claimedPort(value));
     controls++;
