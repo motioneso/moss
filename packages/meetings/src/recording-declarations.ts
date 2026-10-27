@@ -43,6 +43,13 @@ export const recordingIdentityFeature = {
         "This submission key belongs to different input. Review the saved recording before submitting a new entry."
     },
     {
+      code: "recording_entry_failed",
+      class: "transient",
+      remediationRef: "meetings.retry_recording_identity",
+      description:
+        "The pasted transcript could not be saved. Keep it and retry the same submission."
+    },
+    {
       code: "recording_type_unavailable",
       class: "validation",
       description: "The type is no longer active. Refresh the list and choose an active type."

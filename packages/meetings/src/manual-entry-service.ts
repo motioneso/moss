@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { assertDataContextDb, isUuid, type AccessContext, type DataContextDb } from "@moss/db";
 import type { ManualTranscriptInput } from "@moss/shared";
-import { sql } from "kysely";
 import { MeetingRecordsRepository } from "./repository.js";
+import { ManualEntryRepository } from "./manual-entry-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { RecordingMetadataRepository } from "./recording-metadata.js";
 import {
@@ -64,15 +64,10 @@ export class ManualEntryService {
     });
     const meetingId = created.meeting.id;
     await records.get(db, meetingId, { forUpdate: true });
-    const previous = (
-      await sql<{
-        input_hash: string;
-      }>`SELECT input_hash FROM app.meeting_manual_entries WHERE meeting_id=${meetingId}::uuid`.execute(
-        db.db
-      )
-    ).rows[0];
-    if (previous) {
-      if (previous.input_hash !== hash)
+    const entries = new ManualEntryRepository();
+    const previousHash = await entries.inputHash(db, meetingId);
+    if (previousHash !== undefined) {
+      if (previousHash !== hash)
         throw new RecordingIdentityError("recording_request_conflict", 409);
       return { meetingId, replayed: true };
     }
@@ -121,10 +116,12 @@ export class ManualEntryService {
     });
     if (ingested.status !== "saved")
       throw new RecordingIdentityError("recording_entry_failed", 409);
-    await sql`INSERT INTO app.meeting_manual_entries(meeting_id,request_key,input_hash,transcript_revision)
-      VALUES(${meetingId}::uuid,${input.requestKey}::uuid,${hash},${ingested.receipt.transcriptRevision})`.execute(
-      db.db
-    );
+    await entries.create(db, {
+      meetingId,
+      requestKey: input.requestKey,
+      inputHash: hash,
+      transcriptRevision: ingested.receipt.transcriptRevision
+    });
     await new MeetingStopSummaryRepository().scheduleManual(
       db,
       actor,
