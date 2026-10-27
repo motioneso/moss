@@ -30,3 +30,4 @@ export {
 } from "./vault-ops.js";
 export type { VaultDirectoryEntry } from "./vault-ops.js";
 export { reserveVaultFileBytes, publishReservedVaultFileBytes } from "./vault-reserved-files.js";
+export { appendVaultFileBytes } from "./vault-append.js";

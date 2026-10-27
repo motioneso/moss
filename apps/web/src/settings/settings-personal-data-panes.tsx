@@ -500,7 +500,6 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
             {embedded ? "Notes folder" : "Notes & documents"}
           </span>
         }
-        desc="Choose a folder of Markdown notes on this server."
       >
         <div className="vault">
           <span className="vault__ic">
