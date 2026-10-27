@@ -3,7 +3,9 @@ import { prepareN3Observer, type UatProvisionOptions } from "./provisioner-optio
 export type { UatProvisionOptions } from "./provisioner-options.js";
 import { createLifecycleRecorder, type LifecycleAttempt } from "./lifecycle-records.js";
 import { buildUatComposeArgs } from "./compose-args.js";
+import { assertNoLeakedResources, cleanupUatAttempt, runCapture } from "./provisioner-cleanup.js";
 export { buildUatComposeArgs } from "./compose-args.js";
+export { assertNoLeakedResources, cleanupUatAttempt } from "./provisioner-cleanup.js";
 import * as newsFeedbackFixture from "./fixtures/news-feedback-fixture-container.js";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -393,24 +395,6 @@ export function expectedUatVolumeNames(projectName: string): readonly string[] {
   ].map((volume) => `${projectName}_${volume}`);
 }
 
-function runCapture(command: string, args: readonly string[]): Promise<string> {
-  return new Promise((resolvePromise, reject) => {
-    let stdout = "";
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "inherit"] });
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
-    });
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolvePromise(stdout);
-        return;
-      }
-      reject(new Error(`${command} ${args.join(" ")} exited with status ${code ?? "unknown"}`));
-    });
-  });
-}
-
 /**
  * #2173: retains bounded app evidence (one health read) plus the 3 newest Claude print-engine
  * transcripts under the chat engine's configured CLI home base, `$HOME` as fallback — #2164 r17)
@@ -464,78 +448,6 @@ export async function captureFailureEvidence(projectName: string, reason: string
   console.error(health);
   console.error(transcripts);
   console.error(postgresLogs);
-}
-
-/**
- * #1024/#1000: positive proof that `down -v` actually left nothing behind — the Phase 1
- * acceptance criterion is "tears down clean (no leftover containers/volumes/networks)", not just
- * "the down command exited 0". Throws with the leaked names so a failed run is loud, not a silent
- * resource leak discovered later by `docker system df` creeping up.
- */
-export async function assertNoLeakedResources(projectName: string): Promise<void> {
-  const [containers, volumes, networks] = await Promise.all([
-    runCapture("docker", ["ps", "-a", "--filter", `name=${projectName}`, "--format", "{{.Names}}"]),
-    runCapture("docker", [
-      "volume",
-      "ls",
-      "--filter",
-      `name=${projectName}`,
-      "--format",
-      "{{.Name}}"
-    ]),
-    runCapture("docker", [
-      "network",
-      "ls",
-      "--filter",
-      `label=com.docker.compose.project=${projectName}`,
-      "--format",
-      "{{.Name}}"
-    ])
-  ]);
-  const leakedContainers = containers.split("\n").filter(Boolean);
-  const leakedVolumes = volumes.split("\n").filter(Boolean);
-  const leakedNetworks = networks.split("\n").filter(Boolean);
-  if (leakedContainers.length > 0 || leakedVolumes.length > 0 || leakedNetworks.length > 0) {
-    throw new Error(
-      `UAT teardown leaked resources for ${projectName}: containers=${JSON.stringify(
-        leakedContainers
-      )} volumes=${JSON.stringify(leakedVolumes)} networks=${JSON.stringify(leakedNetworks)}`
-    );
-  }
-}
-
-export async function cleanupUatAttempt(input: {
-  readonly teardownCompose: () => Promise<void>;
-  readonly assertNoLeaks: () => Promise<void>;
-  readonly cleanupEnvFile: () => void;
-  readonly beforeTeardown?: () => Promise<void>;
-  readonly afterTeardown?: (failed: boolean) => Promise<void>;
-  readonly error?: unknown;
-}): Promise<void> {
-  const errors: unknown[] = Object.hasOwn(input, "error") ? [input.error] : [];
-  try {
-    for (const cleanup of [
-      input.beforeTeardown,
-      input.teardownCompose,
-      input.assertNoLeaks,
-      input.afterTeardown && (() => input.afterTeardown!(errors.length > 0))
-    ]) {
-      if (!cleanup) continue;
-      try {
-        await cleanup();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-  } finally {
-    try {
-      input.cleanupEnvFile();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  if (errors.length === 1) throw errors[0];
-  if (errors.length > 1) throw new AggregateError(errors, "UAT teardown and cleanup failed");
 }
 
 // #1024/#1000: thrown only when a command's failure looks like a lost port-bind race (see

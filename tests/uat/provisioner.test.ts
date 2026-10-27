@@ -901,6 +901,32 @@ describe("N3 provisioner integration with fake Docker/ports/auth/health", () => 
       }
     );
   });
+  it("uses a caller-chosen project name for exactly one attempt and removes credentials before volumes", async () => {
+    const run = await provisionForUat("bare", undefined, {
+      runId: { projectName: "uat-777_deadbeef", suffix: "777_deadbeef" },
+      listLiveSubnets: async () => [],
+      installRealChatAuth: () => ({
+        cleanup: async () => {
+          events.push("credentials");
+        }
+      })
+    });
+    expect(run.projectName).toBe("uat-777_deadbeef");
+    await run.teardown();
+    expect(events.indexOf("credentials")).toBeLessThan(events.indexOf("delete-resources"));
+  });
+  it("fails closed instead of retrying under the same caller-chosen name after a port race", async () => {
+    conflict = true;
+    await expect(
+      provisionForUat("bare", undefined, {
+        runId: { projectName: "uat-777_deadbeef", suffix: "777_deadbeef" },
+        listLiveSubnets: async () => [],
+        installRealChatAuth: () => ({ cleanup: async () => {} })
+      })
+    ).rejects.toThrow("caller-chosen run id allows one attempt");
+    expect(appStarts).toBe(1);
+    expect(events).toContain("delete-resources");
+  });
   it("publishes after-teardown even on credential cleanup error and marks it incomplete", async () => {
     cleanupFails = true;
     const run = await provision();

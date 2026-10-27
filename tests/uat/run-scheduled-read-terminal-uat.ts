@@ -10,16 +10,14 @@
  * --self-test: fake/local scratch only; no Docker/DB/browser/port/auth/network/provider.
  */
 import assert from "node:assert/strict";
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
-  closeSync,
   copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -30,6 +28,17 @@ import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { orderedTeardown } from "./n3-teardown.js";
+import { DOCKER_HOST, rejectOverrides } from "./n3-launch-checks.js";
+import {
+  groupClosed,
+  validateProcess,
+  type ProcessIdentity,
+  processIdentity,
+  settled,
+  signalOwned,
+  startChild
+} from "./n3-process-control.js";
 import {
   EXPECTED_WINDOWS,
   serveWindows,
@@ -54,7 +63,8 @@ const LEASE = [
   ".claude/skills/coordinate/uat-trigger-map.tsv"
 ];
 const RUN_MS = 12 * 60_000;
-const TOTAL_MS = RUN_MS + 120_000; // Includes teardown; +30m due retains >10m margin.
+const CLEANUP_MS = 120_000;
+const TOTAL_MS = RUN_MS + CLEANUP_MS; // Includes teardown; +30m due retains >10m margin.
 let protocolEnd = Infinity;
 function remaining(max = 120_000): number {
   const left = protocolEnd - Date.now();
@@ -81,7 +91,6 @@ async function protectedLifecycle(body: () => Promise<void>, cleanup: () => Prom
   }
   return { failed, cleanup: errors };
 }
-const DOCKER_HOST = "unix:///var/run/docker.sock";
 const uid = process.getuid?.();
 function check(value: unknown, label: string): asserts value {
   if (!value) throw new Error(label);
@@ -109,10 +118,10 @@ function record(directory: string, name: string, data: unknown): void {
     flag: "wx"
   });
 }
-async function beforeDeadline<T>(operation: () => Promise<T>): Promise<T> {
+async function beforeDeadline<T>(operation: () => Promise<T>, until = Infinity): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const budget = remaining(Infinity);
+    const budget = Math.min(remaining(Infinity), Math.max(1, until - Date.now()));
     if (!Number.isFinite(budget)) return operation(); // Fake controls have no live protocol.
     return await Promise.race([
       operation(),
@@ -180,68 +189,9 @@ export async function cleanupAll(
   }
   return errors;
 }
-function rejectOverrides(env: NodeJS.ProcessEnv): void {
-  check(!env.DOCKER_HOST || env.DOCKER_HOST === DOCKER_HOST, "local Docker daemon required");
-  for (const key of [
-    "DOCKER_CONTEXT",
-    "DOCKER_TLS_VERIFY",
-    "DOCKER_CERT_PATH",
-    "DOCKER_CONFIG",
-    "MOSS_UAT_REAL_CHAT_MODEL",
-    "JARVIS_UAT_SEED_CHAT_SCRIPT",
-    "MOSS_UAT_SEED_CHAT_SCRIPT",
-    "MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF",
-    "UAT_DOCKER_SUBNET",
-    "MOSS_NATIVE_SANDBOX",
-    "MOSS_UAT_NODE_ENV",
-    "MOSS_TEST_GOOGLE_CALENDAR_BASE_URL",
-    "JARVIS_ENV_FILE",
-    "COMPOSE_FILE",
-    "COMPOSE_PROJECT_NAME",
-    "NODE_OPTIONS",
-    "MOSS_UAT_REAL_CHAT_PROVIDER"
-  ])
-    check(!env[key], `override rejected: ${key}`);
-  check(
-    !env.JARVIS_UAT_REAL_CHAT_PROVIDER || env.JARVIS_UAT_REAL_CHAT_PROVIDER === "codex",
-    "Codex required"
-  );
-  check(env.JARVIS_UAT_BUILD !== "0" && env.MOSS_UAT_BUILD !== "0", "fresh build required");
-}
-function startChild(
-  args: string[],
-  env: NodeJS.ProcessEnv,
-  log: string,
-  detached = false
-): ChildProcess {
-  const fd = openSync(log, "wx", 0o600);
-  let child: ChildProcess | undefined;
+async function boundedChild(child: ChildProcess, until = Infinity): Promise<number> {
   try {
-    child = spawn(args[0]!, args.slice(1), { env, stdio: ["ignore", fd, fd], detached });
-    // No post-spawn exception may lose the child. Unknown birth stays uncertain.
-    try {
-      if (child.pid) births.set(child, processIdentity(child.pid));
-    } catch {
-      /* Missing birth remains uncertain. */
-    }
-    return child;
-  } finally {
-    try {
-      closeSync(fd);
-    } catch {
-      if (child) births.delete(child); // Preserve ownership, mark closure uncertain.
-    }
-  }
-}
-function settled(child: ChildProcess): Promise<number> {
-  return new Promise((resolveResult) => {
-    child.once("error", () => resolveResult(1));
-    child.once("close", (code) => resolveResult(code ?? 1));
-  });
-}
-async function boundedChild(child: ChildProcess): Promise<number> {
-  try {
-    return await beforeDeadline(() => settled(child));
+    return await beforeDeadline(() => settled(child), until);
   } catch {
     try {
       signalOwned(child, "SIGKILL");
@@ -250,48 +200,6 @@ async function boundedChild(child: ChildProcess): Promise<number> {
     }
     return 1;
   }
-}
-interface ProcessIdentity {
-  pid: number;
-  start: string;
-  group: number;
-  session: number;
-}
-const births = new WeakMap<ChildProcess, ProcessIdentity | undefined>();
-function processIdentity(pid: number): ProcessIdentity | undefined {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-    return { pid, start: fields[19]!, group: Number(fields[2]), session: Number(fields[3]) };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
-}
-function validateProcess(expected: ProcessIdentity | undefined, actual: ProcessIdentity): void {
-  check(
-    expected && JSON.stringify(expected) === JSON.stringify(actual),
-    "process identity changed"
-  );
-}
-function signalOwned(child: ChildProcess, signal: NodeJS.Signals, group = false): void {
-  if (!child.pid) return;
-  const current = processIdentity(child.pid);
-  if (!current) return;
-  validateProcess(births.get(child), current); // Revalidate before EVERY TERM/KILL.
-  if (group) check(current.group === child.pid && current.session === child.pid, "unowned group");
-  try {
-    process.kill(group ? -child.pid : child.pid, signal);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-  }
-}
-function groupClosed(child: ChildProcess): boolean {
-  if (!child.pid) return true;
-  if (!births.get(child)) return false;
-  return !readdirSync("/proc")
-    .filter((name) => /^\d+$/.test(name))
-    .some((name) => processIdentity(Number(name))?.group === child.pid);
 }
 function projectsInLog(raw: string, pid: number): string[] {
   return [
@@ -337,7 +245,7 @@ async function gateMain(): Promise<number> {
         join(evidence, "worker-raw.log"),
         true
       ),
-    remaining(Math.max(1, protocolEnd - 120_000 - Date.now()))
+    remaining(Math.max(1, protocolEnd - CLEANUP_MS - Date.now()))
   );
 }
 async function supervisedWorker(
@@ -432,12 +340,14 @@ async function worker(): Promise<number> {
       delete process.env[`${prefix}_${role}_DATABASE_URL`];
   const { provisionForUat } = await import("./provisioner.js");
   const { planWorkerObserver } = await import("./n3-worker-wiring.js");
+  const { listOwnedResources } = await import("./provisioner-cleanup.js");
+  const runEnd = protocolEnd - CLEANUP_MS; // The run time box; cleanup keeps the rest.
   const plan = planWorkerObserver({
     evidenceDir: evidence,
     repoRoot: process.cwd(),
     claimedPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),
     imageTag: process.env.JARVIS_IMAGE_TAG!,
-    deadline: protocolEnd - 120_000
+    deadline: runEnd
   });
   Object.assign(process.env, plan.lifecycleEnv);
   let consumer: ReturnType<typeof plan.collector.compose>["consumer"] | undefined;
@@ -454,6 +364,7 @@ async function worker(): Promise<number> {
   let result = 1;
   let phase = "provision";
   let cleanup: number;
+  let teardown: Awaited<ReturnType<typeof orderedTeardown>>;
   try {
     stack = await provisionForUat(
       "solo-admin",
@@ -532,25 +443,33 @@ async function worker(): Promise<number> {
       env,
       join(evidence, "playwright-raw.log")
     );
-    result = await boundedChild(browserChild);
+    result = await boundedChild(browserChild, runEnd);
     if (stopped) result = 1;
+    if (result && Date.now() >= runEnd) phase = "time-box";
     phase = "observer-windows";
     verifyWindows(await windows.stop(), EXPECTED_WINDOWS);
   } catch (error) {
     console.error(error); // Quarantined worker-raw.log only; never relay this output.
     result = 1;
   } finally {
-    cleanup = await cleanupAll([
-      async () => {
-        await windows?.stop(); // Idempotent; a window still open makes close() fail below.
-        const closed = await consumer?.close();
-        check(!consumer || closed?.disposed, "observer bridge not closed; retain resources");
-      },
-      () => stack?.teardown()
-    ]);
+    teardown = await orderedTeardown({
+      project: plan.runId.projectName,
+      stopWindows: async () => windows?.stop(),
+      closeObserver: async () => consumer?.close(),
+      removeStack: async () => stack?.teardown(),
+      listOwned: listOwnedResources,
+      beforeStep: () => void remaining()
+    });
+    cleanup = teardown.errors;
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
-    await terminalRecord(evidence, "stack-exit.json", { result, cleanup, stopped, phase });
+    await terminalRecord(evidence, "stack-exit.json", {
+      result,
+      cleanup,
+      stopped,
+      phase,
+      teardown
+    });
   }
   return result || cleanup ? 1 : 0;
 }
