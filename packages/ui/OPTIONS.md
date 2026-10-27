@@ -156,7 +156,7 @@ _No enum or boolean props._
 
 ## menu
 
-- **triggerVariant** (optional): `icon`, `content`
+- **triggerVariant** (optional): `icon`, `content`, `chip`
 - **placement** (optional): `bottom`, `top`
 
 ## month-chip

@@ -28,6 +28,7 @@ import {
   RecordingVoiceIneligibleError
 } from "./recording-voice-enablement.js";
 import { MeetingRecordsRepository } from "./repository.js";
+import { RecordingMetadataRepository } from "./recording-metadata.js";
 
 export class RecordingUploadService {
   private readonly imports = new RecordingImportRepository();
@@ -77,6 +78,13 @@ export class RecordingUploadService {
               })
             ).meeting
           : null;
+      if (meeting)
+        await new RecordingMetadataRepository().create(db, meeting.id, {
+          titleSource: "automatic",
+          typeId: null,
+          source: "recording",
+          recordedAt: null
+        });
       await this.uploads.insert(db, id, meeting?.id ?? null, input);
       await this.deps.schedule(
         db,

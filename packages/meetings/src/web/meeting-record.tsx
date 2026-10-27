@@ -9,6 +9,7 @@ import type {
   MeetingOutputsResponse
 } from "@moss/shared";
 import {
+  meetingKeys,
   discardMeetingPrivateState,
   isMeetingAccessDenied,
   meetingRecordQueryOptions
@@ -18,7 +19,8 @@ import { MeetingSummary, type SummaryTool } from "./meeting-summary.js";
 import { DeleteMeetingDialog } from "./delete-meeting-dialog.js";
 import { CapturePanel } from "./capture-panel.js";
 import { captureKeys } from "./capture-client.js";
-import { outputKeys } from "./output-client.js";
+import { getMeetingOutputs, outputKeys } from "./output-client.js";
+import { RecordingTypePicker } from "./recording-type-picker.js";
 import { MeetingTitle } from "./meeting-title.js";
 import { MeetingNotesPane } from "./meeting-notes-pane.js";
 import { useMeetingNotesEditor } from "./use-meeting-notes.js";
@@ -91,6 +93,7 @@ export function MeetingNotes({
   readonly onDeleted: () => void;
   readonly onBack?: () => void;
 }) {
+  const client = useQueryClient();
   const [captureActive, setCaptureActive] = useState(false);
   const [tab, setTab] = useState<"transcript" | "notes" | "summary">("notes");
   const [tool, setTool] = useState<SummaryTool | null>(null);
@@ -113,14 +116,25 @@ export function MeetingNotes({
   });
   const outputs = useQuery<MeetingOutputsResponse>({
     queryKey: outputKeys.list(meeting.id),
-    enabled: false
+    queryFn: ({ signal }) => getMeetingOutputs(meeting.id, signal),
+    retry: false,
+    refetchInterval: (query) =>
+      ["waiting", "pending"].includes(query.state.data?.automaticSummary?.status ?? "")
+        ? 3000
+        : false
   });
+  useEffect(() => {
+    if (outputs.data?.automaticSummary?.status !== "saved") return;
+    void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id) });
+    void client.invalidateQueries({ queryKey: meetingKeys.history });
+  }, [client, meeting.id, outputs.data?.automaticSummary?.status]);
+  const transcript = useMeetingTranscript(meeting.id);
   const showSummary =
+    !!transcript.data?.snapshot.segments.length ||
     capture.data?.capture?.desired === "stopped" ||
     !!outputs.data?.headVersion ||
     tool !== null ||
     tab === "summary";
-  const transcript = useMeetingTranscript(meeting.id);
   const editor = useMeetingNotesEditor(meeting);
   const date = useMeetingDate({
     month: "short",
@@ -207,6 +221,7 @@ export function MeetingNotes({
         heading={
           <>
             <MeetingTitle meeting={meeting} />
+            <RecordingTypePicker meetingId={meeting.id} />
             {meeting.title !== "Untitled meeting" ? (
               <p className="jds-hint">{date(meeting.createdAt)}</p>
             ) : null}

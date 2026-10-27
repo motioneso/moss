@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { randomUuid } from "@moss/module-web-sdk";
 import { Button, SectionHead, buttonLinkClassName } from "@moss/ui";
+import { ManualEntry } from "./manual-entry.js";
 import { MeetingNotLinked } from "./meeting-not-linked.js";
 import { useMeetingConnection } from "./meeting-connection.js";
 import { MeetingHistory } from "./meeting-history.js";
@@ -70,7 +71,9 @@ export function MeetingsPage() {
   }
   return (
     <div className="meetings-page">
-      {id ? (
+      {params.get("entry") === "new" ? (
+        <ManualEntry onBack={() => setParams({})} onSaved={open} />
+      ) : id ? (
         <MeetingRecord
           key={id}
           id={id}
@@ -87,6 +90,7 @@ export function MeetingsPage() {
             >
               Settings
             </Link>
+            <Button onClick={() => setParams({ entry: "new" })}>Add recording</Button>
             {connection.linked.length ? (
               <Button
                 disabled={

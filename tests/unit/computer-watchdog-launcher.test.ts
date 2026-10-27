@@ -76,6 +76,31 @@ describe("launchHold", () => {
     expect(await gone(pid)).toBe(true);
   });
 
+  it("refuses extra bytes even when the socket delivers each byte separately", async () => {
+    const options = await stub(`fs.writeSync(3,Buffer.from([1,1]));${idle}`, {
+      ackTimeoutMs: 600,
+      spawn(command, args, spawnOptions) {
+        const child = spawn(command, args, spawnOptions);
+        const channel = child.stdio[3];
+        if (channel) {
+          const emit = channel.emit.bind(channel);
+          channel.emit = (event: string | symbol, ...args: unknown[]) => {
+            const chunk = args[0];
+            if (event !== "data" || !Buffer.isBuffer(chunk)) return emit(event, ...args);
+            for (const byte of chunk) emit("data", Buffer.from([byte]));
+            return true;
+          };
+        }
+        return child;
+      }
+    });
+    let pid = 0;
+    await expect(
+      launchHold({ ...options, onSpawn: (p) => ((pid = p), pids.push(p)) })
+    ).rejects.toThrow();
+    expect(await gone(pid)).toBe(true);
+  });
+
   it("starts the child in its own process group", async () => {
     const options = await stub(`fs.writeSync(3,Buffer.from([1]));${idle}`);
     const hold = await launchHold(options);

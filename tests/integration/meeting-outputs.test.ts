@@ -1,3 +1,4 @@
+import { recordingInterpretation } from "../fixtures/meeting-recording.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
@@ -37,8 +38,9 @@ async function fixture() {
       expectedRevision: 0,
       personalNotes: "Prepare report tomorrow"
     });
-    const inputs = await outputs.inputs(db, meeting.id);
+    const inputs = await outputs.inputs(db, meeting.id, true);
     const content: MeetingOutputContent = {
+      recording: recordingInterpretation(),
       overview: "A report was discussed",
       decisions: [],
       openQuestions: [],

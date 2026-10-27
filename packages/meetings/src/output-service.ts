@@ -1,5 +1,3 @@
-import { projectMeetingOverview } from "./history-projection.js";
-import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
@@ -51,7 +49,7 @@ export class MeetingOutputService {
     const reservation = await this.dataContext.withDataContext(actor, (db) =>
       this.reserve(db, meetingId, input)
     );
-    return this.complete(actor, meetingId, input, reservation, "manual");
+    return this.complete(actor, meetingId, input, reservation);
   }
 
   async generateOnStop(actor: AccessContext, meetingId: string, requestKey: string) {
@@ -80,9 +78,7 @@ export class MeetingOutputService {
       if (!input) return null;
       return { input, reservation: await this.reserve(db, meetingId, input) };
     });
-    return admitted
-      ? this.complete(actor, meetingId, admitted.input, admitted.reservation, "automatic")
-      : null;
+    return admitted ? this.complete(actor, meetingId, admitted.input, admitted.reservation) : null;
   }
 
   private async reserve(db: DataContextDb, meetingId: string, input: GenerateMeetingOutputInput) {
@@ -98,7 +94,7 @@ export class MeetingOutputService {
     const pendingKey = await this.repository.pendingGeneration(db, meetingId);
     if (pendingKey) throw new MeetingOutputError("meeting_output_busy", 409);
     const head = await this.repository.head(db, meetingId);
-    const inputs = await this.repository.inputs(db, meetingId);
+    const inputs = await this.repository.inputs(db, meetingId, true);
     if (
       (head?.version ?? 0) !== input.expectedOutputVersion ||
       inputs.notesRevision !== input.expectedNotesRevision ||
@@ -119,10 +115,15 @@ export class MeetingOutputService {
     actor: AccessContext,
     meetingId: string,
     input: GenerateMeetingOutputInput,
-    reservation: Awaited<ReturnType<MeetingOutputService["reserve"]>>,
-    trigger: "manual" | "automatic"
+    reservation: Awaited<ReturnType<MeetingOutputService["reserve"]>>
   ): Promise<MeetingOutputResult> {
-    const template = getMeetingOutputTemplate(input.templateId, input.templateVersion)!;
+    const selectedType = reservation.inputs?.recording?.configuration.types.find(
+      (type) => type.id === reservation.inputs?.recording?.metadata.typeId
+    );
+    const template = getMeetingOutputTemplate(
+      selectedType?.templateId ?? input.templateId,
+      input.templateVersion
+    )!;
     const encoded = JSON.stringify({ kind: "generate", ...input });
     if (reservation.result)
       return reservation.result.status === "saved"
@@ -148,6 +149,8 @@ export class MeetingOutputService {
         if (rejectAbort) signal.removeEventListener("abort", rejectAbort);
       }
       const validated = validateMeetingOutput(generated.content, inputs);
+      if (inputs.recording && !validated.recording)
+        throw new MeetingOutputValidationError("schema_invalid");
       if (!generated.modelRoute || generated.modelRoute.length > 1024)
         throw new Error("Invalid route receipt");
       const warnings = [...validated.warnings.slice(0, 47)];
@@ -159,7 +162,7 @@ export class MeetingOutputService {
         "Capture gaps and participant attribution have not been independently verified."
       );
       const result = await this.dataContext.withDataContext(actor, async (db) => {
-        const currentMeeting = await this.repository.lock(db, meetingId);
+        await this.repository.lock(db, meetingId);
         const current = await this.repository.inputs(db, meetingId);
         const receipt = await this.repository.request(db, meetingId, input.requestKey, encoded);
         if (!receipt) throw new MeetingOutputError("meeting_output_interrupted");
@@ -168,6 +171,8 @@ export class MeetingOutputService {
         const stale =
           (head?.version ?? 0) !== input.expectedOutputVersion ||
           current.notesRevision !== inputs.notesRevision ||
+          current.recording?.metadata.revision !== inputs.recording?.metadata.revision ||
+          current.recording?.configuration.revision !== inputs.recording?.configuration.revision ||
           (current.transcript?.transcriptRevision ?? 0) !==
             (inputs.transcript?.transcriptRevision ?? 0);
         const artifact = await this.repository.save(db, {
@@ -180,22 +185,8 @@ export class MeetingOutputService {
           origin: "generated",
           stale
         });
-        if (
-          trigger === "automatic" &&
-          !stale &&
-          currentMeeting.title === "Untitled meeting" &&
-          validated.overview.trim()
-        ) {
-          let title = projectMeetingOverview(
-            validated.overview.trim().split(/\n|(?<=[.!?])\s/u)[0]!
-          );
-          while (Buffer.byteLength(title) > 240) title = [...title].slice(0, -1).join("");
-          if (title && Buffer.byteLength(title) <= 240)
-            await new MeetingRecordsRepository().putTitle(db, {
-              meetingId,
-              expectedTitle: "Untitled meeting",
-              title
-            });
+        if (!stale && inputs.recording && validated.recording) {
+          await this.repository.applyRecording(db, inputs, validated.recording, artifact.version);
         }
         const outcome = { status: "saved" as const, artifact, replayed: false };
         await this.repository.finish(db, meetingId, input.requestKey, outcome);

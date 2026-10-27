@@ -104,3 +104,5 @@ export * from "./visual-chat.js";
 export * from "./visual-chat-catalog.js";
 
 export * from "./sports-results-api.js";
+
+export * from "./meeting-recording-api.js";

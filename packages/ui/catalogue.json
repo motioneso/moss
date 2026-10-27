@@ -460,7 +460,7 @@
         {
           "prop": "triggerVariant",
           "kind": "enum",
-          "values": ["icon", "content"],
+          "values": ["icon", "content", "chip"],
           "optional": true,
           "default": null
         },

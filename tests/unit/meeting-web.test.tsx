@@ -82,7 +82,7 @@ describe("Meetings screen", () => {
         pageParams: [undefined]
       })
     );
-    expect(empty).toContain("No meetings yet. Start with New meeting.");
+    expect(empty).toContain("No meetings yet. Start with Add recording or New meeting.");
     expect(empty).not.toContain("Loading meetings");
   });
   it("shows factual history columns and server search", () => {

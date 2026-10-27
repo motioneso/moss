@@ -701,6 +701,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(Object.keys(exported).sort()).toEqual(
         [
           "recording_imports",
+          "recording_metadata",
+          "recording_types",
+          "manual_entries",
           "voice_enablements",
           "records",
           "note_writes",
@@ -724,11 +727,18 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(exported.capture_start_cancellations).toEqual([]);
       expect(exported.capture_start_limits).toEqual([]);
       expect(exported.recording_imports).toEqual([]);
+      expect(exported.recording_types).toEqual([]);
+      expect(exported.manual_entries).toEqual([]);
+      expect(exported.recording_metadata).toEqual([
+        expect.objectContaining({ meetingId, ownerUserId: UAT_ADMIN_ID, source: "recording" })
+      ]);
       for (const [name, rows] of Object.entries(exported)) {
         if (
           ![
             "recording_imports",
             "voice_enablements",
+            "recording_types",
+            "manual_entries",
             "stop_summaries",
             "capture_grants",
             "capture_connections",
@@ -763,7 +773,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(exported.export_receipts).toHaveLength(2);
       await page.getByRole("button", { name: "Prepare a new export", exact: true }).click();
       console.log(
-        "MEETINGS_ACCOUNT_EXPORT_UAT real Settings prepare/download; worker-built owner archive; 13 collections (recording and stop-summary collections empty in notes-only path); retained note revisions, transcript, generated/manual outputs, accepted Task reference and vault receipts"
+        "MEETINGS_ACCOUNT_EXPORT_UAT real Settings prepare/download; worker-built owner archive; 18 collections (imports, type configuration, manual entries and stop-summary collections empty in notes-only path); retained note revisions, transcript, generated/manual outputs, recording metadata, accepted Task reference and vault receipts"
       );
     });
     // Meeting deletion removes provenance, never independently accepted Tasks/private copies.
