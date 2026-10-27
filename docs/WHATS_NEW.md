@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **More kinds of recordings.** Paste a transcript into Meetings and let Moss name it, choose its type and label it personal or work, then change or filter the type yourself. [PR #3785](https://github.com/motioneso/moss/pull/3785)
 
+#### Changed
+
+- **Simpler connection settings.** Outlook calendar uses a compact account row, and Connections and Notes settings have less repeated text. [PR #3773](https://github.com/motioneso/moss/pull/3773)
+
 ### 2026-10-26
 
 #### Added
