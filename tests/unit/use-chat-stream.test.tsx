@@ -221,6 +221,22 @@ describe("parseRecord", () => {
     });
   });
 
+  it("keeps the files on a streamed user record and drops malformed entries", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "user",
+        text: "look",
+        attachments: [
+          { id: "a1", fileName: "notes.txt", mimeType: "text/plain", sizeBytes: 16, extra: 1 },
+          { id: "a2", fileName: "broken" }
+        ]
+      })
+    );
+    expect(record?.attachments).toEqual([
+      { id: "a1", fileName: "notes.txt", mimeType: "text/plain", sizeBytes: 16 }
+    ]);
+  });
+
   it("parses an action_request record with all optional fields", () => {
     const data = JSON.stringify({
       kind: "action_request",
