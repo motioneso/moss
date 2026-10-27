@@ -251,7 +251,21 @@ export async function runChatTurn(
     if (engineText.locale) session.locale = engineText.locale;
     const currentProvider = await host.deps.persistence.resolveActiveProvider(actorUserId);
     await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
-    host.emit(actorUserId, surface, { kind: "user", text, turnId });
+    host.emit(actorUserId, surface, {
+      kind: "user",
+      text,
+      turnId,
+      ...(attachments.length > 0
+        ? {
+            attachments: attachments.map((meta) => ({
+              id: meta.id,
+              fileName: meta.fileName,
+              mimeType: meta.mimeType,
+              sizeBytes: meta.sizeBytes
+            }))
+          }
+        : {})
+    });
     // #3157 — an over-budget session hands off to a fresh one for this exact conversation.
     const servingThreadId = session.threadId;
     let rollover: Awaited<ReturnType<typeof rollOverSessionIfDue>>;

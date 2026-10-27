@@ -2,6 +2,7 @@ import { DEFAULT_CHAT_SURFACE, readStoredVisual } from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
+  ChatAttachmentDto,
   ChatMessageDto,
   ChatSurface,
   SourceFreshnessV1,
@@ -544,6 +545,7 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
+      attachments: parsed.kind === "user" ? parseAttachments(parsed.attachments) : undefined,
       voiceThreadId: typeof parsed.voiceThreadId === "string" ? parsed.voiceThreadId : undefined,
       actionThreadId: typeof parsed.actionThreadId === "string" ? parsed.actionThreadId : undefined,
       background: parsed.background === true ? true : undefined,
@@ -604,6 +606,21 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
   } catch {
     return null;
   }
+}
+
+function parseAttachments(value: unknown): ChatAttachmentDto[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const attachments = value.flatMap((item): ChatAttachmentDto[] => {
+    if (!item || typeof item !== "object") return [];
+    const { id, fileName, mimeType, sizeBytes } = item as Record<string, unknown>;
+    return typeof id === "string" &&
+      typeof fileName === "string" &&
+      typeof mimeType === "string" &&
+      typeof sizeBytes === "number"
+      ? [{ id, fileName, mimeType, sizeBytes }]
+      : [];
+  });
+  return attachments.length > 0 ? attachments : undefined;
 }
 
 function parseUsage(value: unknown): TranscriptRecord["usage"] {
