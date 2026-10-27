@@ -103,8 +103,8 @@ test("linked-folder authoring through real Settings and chat preserves current b
   await page.getByRole("button", { name: "Personal", exact: true }).click();
   await page.getByRole("button", { name: "Connections", exact: true }).click();
   await page.getByRole("button", { name: /^(Browse…|Change folder)$/ }).click();
-  await page.locator(".vroot").filter({ hasText: "/data/vaults" }).click();
-  await page.getByRole("button", { name: UAT_ADMIN_ID, exact: true }).click();
+  await page.locator(".vroot").filter({ hasText: root }).click();
+  await expect(page.locator(".vselect__path")).toHaveText(root);
   await page.getByRole("button", { name: "Use this folder", exact: true }).click();
   await expect(page.locator(".vault__path")).toHaveText(root);
   await page.getByRole("link", { name: "Today", exact: true }).click();
