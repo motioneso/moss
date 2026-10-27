@@ -129,6 +129,9 @@ test("edit types through real chat, refresh mounted menus, classify with chosen 
   const model = await bringUpRealChatModel(page);
   installPromotedMeetingCodex(requireUatProjectName());
   await page.getByRole("link", { name: "Meetings", exact: true }).click();
+  // Empty history is hidden without a linked Mac. Create through the real entry flow first.
+  await add(page, false);
+  await page.getByRole("button", { name: "Meetings", exact: true }).click();
   const filter = page.getByLabel("Recording type", { exact: true });
   await expect(filter.locator("option", { hasText: "Brain dump" })).toHaveCount(1);
   let drawer = await openChat(page);
