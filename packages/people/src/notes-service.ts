@@ -11,8 +11,7 @@ import {
   listVaultFilesRecursive,
   readVaultFile,
   VaultPathError,
-  vaultFileExists,
-  writeVaultFile,
+  mutateVaultFiles,
   type VaultContext
 } from "@moss/vault";
 
@@ -245,7 +244,6 @@ export class PeopleNotesService {
     input: CreatePersonNoteInput
   ): Promise<PeopleNoteWriteResult> {
     const personId = randomUUID();
-    const notePath = await this.nextNotePath(vaultCtx, input.displayName, personId);
     const body = replaceMossManagedSection(
       `# ${input.displayName}\n`,
       managedSummary({
@@ -266,7 +264,13 @@ export class PeopleNotesService {
       },
       body
     });
-    await writeVaultFile(vaultCtx, notePath, content);
+    const base = slugName(input.displayName);
+    const candidates = [`${base}.md`, `${base}-${personId.slice(0, 8)}.md`];
+    const notePath = await mutateVaultFiles(scopedDb, vaultCtx, candidates, async (current) => {
+      const available = current.find(({ content }) => content === null);
+      if (!available) throw new Error("People note destination already exists");
+      return { changes: [{ path: available.path, content }], result: available.path };
+    });
     if (this.boss) {
       await scheduleVaultIngestNudge(this.boss, {
         actorUserId: ownerUserId,
@@ -290,26 +294,32 @@ export class PeopleNotesService {
     patch: UpdatePersonNoteInput
   ): Promise<PeopleNoteWriteResult> {
     const note = await this.findCanonicalNote(vaultCtx, personId);
-    const frontmatter = {
-      ...note.parsed.frontmatter,
-      jarvisPersonId: personId,
-      displayName: patch.displayName ?? note.parsed.frontmatter.displayName,
-      aliases: patch.aliases ?? note.parsed.frontmatter.aliases,
-      emails: patch.emails ?? note.parsed.frontmatter.emails,
-      phones: patch.phones ?? note.parsed.frontmatter.phones,
-      status: patch.status ?? note.parsed.frontmatter.status
-    };
-    const body = replaceMossManagedSection(
-      note.parsed.body,
-      managedSummary({
-        displayName: frontmatter.displayName,
-        emails: frontmatter.emails,
-        phones: frontmatter.phones
-      })
-    );
-    const content = formatPeopleNote({ frontmatter, body });
+    const content = await mutateVaultFiles(scopedDb, vaultCtx, [note.path], async ([current]) => {
+      const parsed = current!.content === null ? null : parsePeopleNote(current!.content);
+      if (!parsed || parsed.frontmatter.jarvisPersonId !== personId) {
+        throw new CanonicalNoteNotFoundError(personId);
+      }
+      const frontmatter = {
+        ...parsed.frontmatter,
+        jarvisPersonId: personId,
+        displayName: patch.displayName ?? parsed.frontmatter.displayName,
+        aliases: patch.aliases ?? parsed.frontmatter.aliases,
+        emails: patch.emails ?? parsed.frontmatter.emails,
+        phones: patch.phones ?? parsed.frontmatter.phones,
+        status: patch.status ?? parsed.frontmatter.status
+      };
+      const body = replaceMossManagedSection(
+        parsed.body,
+        managedSummary({
+          displayName: frontmatter.displayName,
+          emails: frontmatter.emails,
+          phones: frontmatter.phones
+        })
+      );
+      const content = formatPeopleNote({ frontmatter, body });
 
-    await writeVaultFile(vaultCtx, note.path, content);
+      return { changes: [{ path: note.path, content }], result: content };
+    });
     if (this.boss) {
       await scheduleVaultIngestNudge(this.boss, {
         actorUserId: ownerUserId,
@@ -456,16 +466,5 @@ export class PeopleNotesService {
       candidates += 1;
     }
     return candidates;
-  }
-
-  private async nextNotePath(
-    vaultCtx: VaultContext,
-    displayName: string,
-    personId: string
-  ): Promise<string> {
-    const base = slugName(displayName);
-    const first = `${base}.md`;
-    if (!(await vaultFileExists(vaultCtx, first))) return first;
-    return `${base}-${personId.slice(0, 8)}.md`;
   }
 }

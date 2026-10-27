@@ -1,14 +1,4 @@
-import {
-  mkdir,
-  lstat,
-  open,
-  readFile,
-  realpath,
-  rm,
-  unlink,
-  writeFile,
-  type FileHandle
-} from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -22,6 +12,9 @@ import {
 } from "@moss/module-sdk";
 import { NOTES_SOURCE_PREFERENCE_KEY, resolveNotesRoots } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
+import { makeVaultDir, mutateVaultFiles, readVaultFile } from "@moss/vault";
+
+import { withNotesVault } from "./notes-vault-context.js";
 
 import { assertWithinRoot, recheckWithinRoot, NotesPathError } from "./path-guard.js";
 
@@ -149,7 +142,7 @@ export async function resolveNoteApprovalTarget(
   try {
     const file = await resolveExistingFile(root, relative);
     await recheckInside(root, file);
-    content = await readFile(file, "utf-8");
+    content = await withNotesVault(scopedDb, root, (ctx) => readVaultFile(ctx, relative));
   } catch (error) {
     if (!allowNew || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     content = null;
@@ -177,31 +170,6 @@ async function rejectSymlinkParent(root: string, rel: string): Promise<void> {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
       throw error;
-    }
-  }
-}
-
-const pathLocks = new Map<string, Promise<void>>();
-
-// ponytail: in-process FIFO mutex only — serializes concurrent edits to the same resolved file
-// path within a single API process. Multiple API replicas would each hold their own independent
-// lock map, so this stops being sufficient the moment the API scales beyond one process; replace
-// with a cross-process file/advisory lock if that becomes the deployment shape.
-async function withPathLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  let release!: () => void;
-  const ourLock = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const previous = pathLocks.get(key) ?? Promise.resolve();
-  const ourTail = previous.then(() => ourLock);
-  pathLocks.set(key, ourTail);
-  await previous;
-  try {
-    return await fn();
-  } finally {
-    release();
-    if (pathLocks.get(key) === ourTail) {
-      pathLocks.delete(key);
     }
   }
 }
@@ -237,39 +205,35 @@ export const notesCreateExecute: ToolExecute = async (
   const root = await resolveSource(scopedDb);
   const rel = requireMarkdownPath(coerceToRelativePath(raw.path, root));
   const file = join(root, rel);
-  await rejectSymlinkParent(root, rel);
-  await mkdir(dirname(file), { recursive: true });
-  const resolvedParent = await realpath(dirname(file));
-  assertInside(root, resolvedParent);
-
-  if (raw.overwrite === true) {
-    try {
-      await resolveExistingFile(root, rel);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  const content = raw.content;
+  await withNotesVault(scopedDb, root, async (vault) => {
+    await rejectSymlinkParent(root, rel);
+    await makeVaultDir(vault, dirname(rel));
+    const resolvedParent = await realpath(dirname(file));
+    assertInside(root, resolvedParent);
+    if (raw.overwrite === true) {
+      try {
+        await resolveExistingFile(root, rel);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
     }
     await recheckInside(root, file);
-    await writeFile(file, raw.content, "utf-8");
-  } else {
-    let handle: FileHandle;
-    await recheckInside(root, file);
-    try {
-      handle = await open(file, "wx");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+    if (raw.overwrite !== true) {
+      try {
+        await lstat(file);
+        throw new HttpError(409, "Note already exists");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
+    await mutateVaultFiles(scopedDb, vault, [rel], async ([current]) => {
+      if (raw.overwrite !== true && current!.content !== null) {
         throw new HttpError(409, "Note already exists");
       }
-      throw error;
-    }
-    try {
-      await handle.writeFile(raw.content, "utf-8");
-    } catch (error) {
-      await rm(file, { force: true });
-      throw error;
-    } finally {
-      await handle.close();
-    }
-  }
+      return { changes: [{ path: rel, content }], result: undefined };
+    });
+  });
 
   return sync(services, ctx.actorUserId, root, rel);
 };
@@ -298,13 +262,17 @@ export const notesEditExecute: ToolExecute = async (
   const root = await resolveSource(scopedDb);
   const rel = requireMarkdownPath(coerceToRelativePath(raw.path, root));
   const file = await resolveExistingFile(root, rel);
-  await withPathLock(file, async () => {
+  await withNotesVault(scopedDb, root, async (vault) => {
     await recheckInside(root, file);
-    const content = await readFile(file, "utf-8");
-    const count = content.split(oldText).length - 1;
-    if (count !== 1) throw new HttpError(409, `oldText appears ${count} times`);
-    await recheckInside(root, file);
-    await writeFile(file, content.replace(oldText, newText), "utf-8");
+    await mutateVaultFiles(scopedDb, vault, [rel], async ([current]) => {
+      if (current!.content === null) throw new HttpError(409, "Note no longer exists");
+      const count = current!.content.split(oldText).length - 1;
+      if (count !== 1) throw new HttpError(409, `oldText appears ${count} times`);
+      return {
+        changes: [{ path: rel, content: current!.content.replace(oldText, newText) }],
+        result: undefined
+      };
+    });
   });
   return sync(services, ctx.actorUserId, root, rel);
 };
@@ -321,7 +289,12 @@ export const notesDeleteExecute: ToolExecute = async (
   const root = await resolveSource(scopedDb);
   const rel = requireMarkdownPath(coerceToRelativePath(raw.path, root));
   const file = await resolveExistingFile(root, rel);
-  await recheckInside(root, file);
-  await unlink(file);
+  await withNotesVault(scopedDb, root, async (vault) => {
+    await recheckInside(root, file);
+    await mutateVaultFiles(scopedDb, vault, [rel], async ([current]) => {
+      if (current!.content === null) throw new HttpError(409, "Note no longer exists");
+      return { changes: [{ path: rel, content: null }], result: undefined };
+    });
+  });
   return sync(services, ctx.actorUserId, root, rel);
 };
