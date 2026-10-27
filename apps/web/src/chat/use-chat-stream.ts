@@ -226,7 +226,11 @@ export function useChatStream(
               if (!main || main.id !== record.actionThreadId) return;
               hydratedDrawerThread.current = main.id;
               knownDrawerReminders.current = readBackgroundMessageIds(main.id, surface);
-              setRecords((current) => applyStreamRecord(current, record));
+              setRecords((current) =>
+                isCurrent() && hydratedDrawerThread.current === main.id
+                  ? applyStreamRecord(current, record)
+                  : current
+              );
             })
             .catch(() => undefined);
           return;
