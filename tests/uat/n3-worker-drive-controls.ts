@@ -21,7 +21,8 @@ function windowLog(modes: readonly WindowMode[], extra: Partial<WindowLog> = {})
 /** A fully fake worker run. Every call lands in `events`, in order. */
 function scenario(
   overrides: Partial<DriveInput> = {},
-  log: WindowLog = windowLog(EXPECTED_WINDOWS)
+  log: WindowLog = windowLog(EXPECTED_WINDOWS),
+  teardownFails = false
 ) {
   const events: string[] = [];
   const seen: Record<string, unknown> = {};
@@ -52,7 +53,10 @@ function scenario(
       return {
         projectName: plan.runId.projectName,
         baseURL: "http://x",
-        teardown: async () => void events.push("stack.remove")
+        teardown: async () => {
+          if (teardownFails) throw new Error("synthetic leak");
+          events.push("stack.remove");
+        }
       };
     }) as never,
     serveWindows: (dir) => {
@@ -61,13 +65,16 @@ function scenario(
       return { stop: async () => (events.push("windows.stop"), log) };
     },
     verifyWindows,
-    verifyInstalled: async () => void events.push("installed"),
+    verifyInstalled: async (stack) => {
+      events.push("installed");
+      seen.installedFor = stack.projectName;
+    },
     runBrowser: async (childEnv, deadline) => {
       events.push("browser");
       Object.assign(seen, { childEnv, deadline });
       return 0;
     },
-    listOwned: async () => ({ containers: [], volumes: [], networks: [] }),
+    listOwned: async () => ({ containers: ["owned-1"], volumes: [], networks: [] }),
     beforeStep: () => undefined,
     onError: () => undefined,
     ...overrides
@@ -105,6 +112,7 @@ export async function driveControls(): Promise<number> {
 
     // The browser runs under the time box.
     assert.equal(ok.seen.deadline, RUN_END);
+    assert.equal(ok.seen.windowsDir, "/evidence");
     n++;
 
     // Observer opens before the window server, windows stop before the observer closes, and
@@ -141,6 +149,101 @@ export async function driveControls(): Promise<number> {
     assert.equal(lateOut.result, 1);
     assert.equal(lateOut.phase, "time-box");
     n++;
+
+    // Cleanup errors turn a passing run red.
+    const leak = scenario({}, windowLog(EXPECTED_WINDOWS), true);
+    const leaked = await driveWorker(leak.input);
+    assert.equal(leaked.result, 0);
+    assert.ok(leaked.cleanup > 0);
+    assert.equal(leaked.exitCode, 1);
+    assert.equal(out.exitCode, 0);
+    n++;
+
+    // The installed-source check runs for this project, before the browser, and a failure
+    // stops the run before any browser starts.
+    assert.equal(ok.seen.installedFor, ok.plan.runId.projectName);
+    assert.ok(ok.events.indexOf("installed") < ok.events.indexOf("browser"));
+    const mismatch = scenario({
+      verifyInstalled: async () => {
+        throw new Error("installed bytes mismatch");
+      }
+    });
+    const mismatched = await driveWorker(mismatch.input);
+    assert.equal(mismatched.result, 1);
+    assert.equal(mismatched.exitCode, 1);
+    assert.ok(!mismatch.events.includes("browser"));
+    n++;
+
+    // A window left open (or failed) keeps the stack and reads what the project still owns.
+    for (const bad of [
+      windowLog(EXPECTED_WINDOWS, { open: true }),
+      windowLog(EXPECTED_WINDOWS, { failure: "x" })
+    ]) {
+      const kept = scenario({}, bad);
+      const keptOut = await driveWorker(kept.input);
+      assert.ok(!kept.events.includes("stack.remove"));
+      assert.equal(keptOut.teardown.retained, true);
+      assert.deepEqual(keptOut.teardown.left?.containers, ["owned-1"]);
+      n++;
+    }
+    assert.ok(ok.events.includes("stack.remove"));
+    assert.equal(out.teardown.retained, false);
+    n++;
+
+    // An interrupt before or after the browser run fails the run; the browser never starts
+    // when the interrupt came first.
+    const before = scenario({ isStopped: () => true });
+    assert.equal((await driveWorker(before.input)).result, 1);
+    assert.ok(!before.events.includes("browser"));
+    let polls = 0;
+    const after = scenario({ isStopped: () => ++polls > 1 });
+    assert.equal((await driveWorker(after.input)).result, 1);
+    assert.ok(after.events.includes("browser"));
+    n++;
+
+    // Every teardown step consults the cleanup deadline.
+    let steps = 0;
+    const timed = scenario({ beforeStep: () => void steps++ });
+    await driveWorker(timed.input);
+    assert.ok(steps >= 3);
+    const expired = scenario({
+      beforeStep: () => {
+        throw new Error("deadline passed");
+      }
+    });
+    const expiredOut = await driveWorker(expired.input);
+    assert.ok(expiredOut.cleanup > 0);
+    assert.equal(expiredOut.exitCode, 1);
+    assert.ok(!expired.events.includes("stack.remove"));
+    n++;
   })();
   return n;
+}
+
+/**
+ * Source-text controls for the runner's own call into the join. Each line below is a piece that
+ * can be removed or swapped without any other test noticing, so the call must contain it verbatim.
+ */
+export function runnerCallControls(source: string): number {
+  const start = source.indexOf("driveWorker({");
+  const call = source.slice(start, source.indexOf("terminalRecord(", start));
+  assert.ok(call.length > 0, "runner calls the join");
+  const required = [
+    "evidence,\n      claimedPort:",
+    "claimedPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),",
+    "runEnd,",
+    "plan,",
+    "env: process.env,",
+    "now: Date.now,",
+    "provision: provisionForUat,",
+    "serveWindows,",
+    "verifyWindows,",
+    "verifyInstalled: (stack) => verifyInstalled(evidence, stack.projectName),",
+    "return boundedChild(browserChild, deadline);",
+    "listOwned: listOwnedResources,",
+    "beforeStep: () => void remaining(),"
+  ];
+  for (const line of required) assert.ok(call.includes(line), `runner call keeps: ${line}`);
+  assert.ok(source.includes("return outcome.exitCode;"), "exit code comes from the join");
+  return required.length + 1;
 }

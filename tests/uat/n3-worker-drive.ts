@@ -52,6 +52,8 @@ export interface DriveInput {
 export interface DriveOutcome {
   readonly result: number;
   readonly cleanup: number;
+  /** Zero only when the run passed and cleanup reported no errors. */
+  readonly exitCode: number;
   readonly phase: string;
   readonly teardown: TeardownReport;
 }
@@ -108,5 +110,11 @@ export async function driveWorker(input: DriveInput): Promise<DriveOutcome> {
     listOwned: input.listOwned,
     beforeStep: input.beforeStep
   });
-  return { result, cleanup: teardown.errors, phase, teardown };
+  return {
+    result,
+    cleanup: teardown.errors,
+    exitCode: result || teardown.errors ? 1 : 0,
+    phase,
+    teardown
+  };
 }

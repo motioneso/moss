@@ -40,7 +40,7 @@ import {
   startChild
 } from "./n3-process-control.js";
 import { driveWorker } from "./n3-worker-drive.js";
-import { driveControls } from "./n3-worker-drive-controls.js";
+import { driveControls, runnerCallControls } from "./n3-worker-drive-controls.js";
 import { EXPECTED_WINDOWS, serveWindows, verifyWindows } from "./n3-window-handshake.js";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -407,7 +407,7 @@ async function worker(): Promise<number> {
     phase: outcome.phase,
     teardown: outcome.teardown
   });
-  return outcome.result || outcome.cleanup ? 1 : 0;
+  return outcome.exitCode;
 }
 async function verifyInstalled(evidence: string, projectName: string): Promise<void> {
   const image = `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`;
@@ -841,6 +841,7 @@ async function selfTest(): Promise<void> {
     assert.throws(() => record(root, "receipt.json", { replaced: true }));
     controls++;
     controls += await driveControls();
+    controls += runnerCallControls(readFileSync(SELF, "utf8"));
     for (const failAt of [0, 1, 2]) {
       let partial: string | undefined;
       const disposition = await protectedLifecycle(
