@@ -13,7 +13,11 @@ import {
   ManualEntryService,
   RecordingMetadataRepository
 } from "@moss/meetings";
-import type { RecordingInterpretation, ManualTranscriptInput } from "@moss/shared";
+import type {
+  RecordingInterpretation,
+  ManualTranscriptInput,
+  MeetingRecordCursor
+} from "@moss/shared";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const app = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
@@ -242,7 +246,7 @@ describe("recording identity and pasted transcript admission (#3777)", () => {
     }
     const actual: string[] = [];
     await context.withDataContext(owner, async (db) => {
-      let before: import("@moss/shared").MeetingRecordCursor | undefined;
+      let before: MeetingRecordCursor | undefined;
       for (let i = 0; i < 4; i++) {
         const page = await new MeetingHistoryRepository().search(db, {
           query: marker,
