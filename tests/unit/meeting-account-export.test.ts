@@ -30,6 +30,9 @@ const ctx = {
 };
 const collections = [
   "recording_imports",
+  "recording_types",
+  "recording_metadata",
+  "manual_entries",
   "voice_enablements",
   "records",
   "note_writes",
@@ -142,7 +145,7 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly fifteen source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads all eighteen source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
@@ -314,10 +317,18 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0329_meeting_recording_uploads.sql", import.meta.url),
       "utf8"
     );
+    const identityMigration = await readFile(
+      new URL("../../packages/meetings/sql/0335_meeting_recording_identity.sql", import.meta.url),
+      "utf8"
+    );
     const summarySelectGrants = [
-      ...(minimalMigration + importSummaryMigration + voiceMigration + uploadMigration).matchAll(
-        /GRANT SELECT\s*\([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g
-      )
+      ...(
+        minimalMigration +
+        importSummaryMigration +
+        voiceMigration +
+        uploadMigration +
+        identityMigration
+      ).matchAll(/GRANT SELECT\s*\([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g)
     ]
       .map((match) => match[0])
       .join("\n");
@@ -344,6 +355,18 @@ describe("Meetings account-export collector", () => {
             )
           )
         ];
+        if (
+          [
+            "meeting_recording_types",
+            "meeting_recording_metadata",
+            "meeting_manual_entries"
+          ].includes(table!)
+        ) {
+          expect(identityMigration).toContain(
+            `GRANT SELECT${table === "meeting_recording_metadata" ? ",INSERT,UPDATE" : ""} ON app.${table} TO jarvis_worker_runtime;`
+          );
+          continue;
+        }
         expect(grants.length).toBeGreaterThan(0);
         expect(
           grants

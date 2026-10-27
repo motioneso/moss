@@ -85,19 +85,19 @@ export async function collectMeetingsExportSection(
       scopedDb,
       sql<
         Record<string, unknown>
-      >`SELECT owner_user_id,revision,types_json FROM app.meeting_recording_types WHERE owner_user_id=${ownerUserId}::uuid ORDER BY owner_user_id`
+      >`SELECT owner_user_id::text AS "ownerUserId", revision, types_json AS "typesJson" FROM app.meeting_recording_types WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY owner_user_id`
     ),
     recording_metadata: await readRows(
       scopedDb,
       sql<
         Record<string, unknown>
-      >`SELECT * FROM app.meeting_recording_metadata WHERE owner_user_id=${ownerUserId}::uuid ORDER BY meeting_id`
+      >`SELECT meeting_id::text AS "meetingId", owner_user_id::text AS "ownerUserId", revision, type_id AS "typeId", type_source AS "typeSource", title_source AS "titleSource", side, confidence, reason, recorded_at AS "recordedAt", source, output_version AS "outputVersion" FROM app.meeting_recording_metadata WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY meeting_id`
     ),
     manual_entries: await readRows(
       scopedDb,
       sql<
         Record<string, unknown>
-      >`SELECT * FROM app.meeting_manual_entries WHERE owner_user_id=${ownerUserId}::uuid ORDER BY meeting_id`
+      >`SELECT meeting_id::text AS "meetingId", owner_user_id::text AS "ownerUserId", request_key::text AS "requestKey", input_hash AS "inputHash", transcript_revision AS "transcriptRevision" FROM app.meeting_manual_entries WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY meeting_id`
     ),
     voice_enablements: await readRows(
       scopedDb,
