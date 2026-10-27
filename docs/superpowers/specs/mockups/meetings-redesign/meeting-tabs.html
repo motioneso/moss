@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tabs — Meetings design review</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-chat.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/texture.css" />
+    <link rel="stylesheet" href="mockups.css" />
+    <script defer src="mockups.js"></script>
+  </head>
+  <body>
+    <div class="mock-shell">
+      <aside class="mock-sidebar">
+        <div class="brand">
+          <svg
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.6"
+            viewbox="0 0 24 24"
+          >
+            <path d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"></path></svg
+          ><span>Moss</span>
+        </div>
+        <nav aria-label="Main">
+          <a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1Z"></path></svg
+            ><span>Today</span></a
+          ><a class="mock-nav-item" href="../meetings-any-recording/calendar-event.html"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <rect height="16" rx="2" width="18" x="3" y="5"></rect>
+              <path d="M16 3v4M8 3v4M3 11h18"></path></svg
+            ><span>Calendar</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <path d="m5 12 4 4L19 6"></path></svg
+            ><span>Tasks</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path>
+              <path d="M14 2v6h6M8 13h8m-8 4h6"></path></svg
+            ><span>Notes</span></a
+          ><a class="mock-nav-item selected" href="home-table.html"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <rect height="12" rx="3" width="6" x="9" y="2"></rect>
+              <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"></path></svg
+            ><span>Meetings</span></a
+          >
+        </nav>
+        <div class="sidebar-foot"><span class="avatar">J</span><span>Jamie</span></div>
+      </aside>
+      <div class="mock-workspace">
+        <header class="mock-topbar">
+          <div class="topbar-title">
+            <span>Meetings</span
+            ><button
+              aria-label="Meetings settings"
+              class="jds-iconbtn"
+              data-settings=""
+              title="Meetings settings"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.6"
+                viewbox="0 0 24 24"
+              >
+                <path
+                  d="m9.7 4.3.5-2.3h3.6l.5 2.3 1.8 1 2.2-.7 1.8 3.1-1.7 1.6v2.1l1.7 1.6-1.8 3.1-2.2-.7-1.8 1-.5 2.3h-3.6l-.5-2.3-1.8-1-2.2.7-1.8-3.1 1.7-1.6V9.3L4.4 7.7l1.8-3.1 2.2.7Z"
+                ></path>
+                <circle cx="12" cy="10.4" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <div class="topbar-actions">
+            <button
+              aria-label="Chat with Moss"
+              class="jds-iconbtn"
+              data-chat-toggle=""
+              title="Chat with Moss"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.6"
+                viewbox="0 0 24 24"
+              >
+                <path
+                  d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"
+                ></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div class="mock-body">
+          <main class="meeting-page mode-tabs" data-meeting>
+            <header class="meeting-heading">
+              <a class="jds-btn jds-btn--link" href="home-table.html"
+                ><svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m15 18-6-6 6-6" /></svg
+                >All recordings</a
+              >
+              <div class="meeting-title-row">
+                <h1>Website launch review</h1>
+                <div class="meeting-controls">
+                  <button class="jds-btn jds-btn--quiet" data-sensitive>
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="5" y="10" width="14" height="11" rx="2" />
+                      <path d="M8 10V6a4 4 0 0 1 8 0v4" /></svg
+                    >Mark as sensitive
+                  </button>
+                </div>
+              </div>
+              <div class="record-meta">
+                <span class="jds-badge jds-badge--neutral">Work meeting</span
+                ><span>Oct 27 · 10:00 AM</span><span>32 min</span><span>You, Alex, Morgan</span>
+              </div>
+            </header>
+            <div class="audio-bar" role="group" aria-label="Recording playback">
+              <button class="jds-iconbtn" data-play aria-label="Play recording">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 5 11 7-11 7Z" />
+                </svg></button
+              ><output class="audio-time" data-audio-time aria-live="polite">00:00</output
+              ><label class="sr-only" for="audio-position">Recording position</label
+              ><input id="audio-position" type="range" min="0" max="1920" value="0" /><span
+                class="audio-time"
+                >32:00</span
+              ><select class="jds-select playback-speed" aria-label="Playback speed">
+                <option>1×</option>
+                <option>1.5×</option>
+                <option>2×</option>
+              </select>
+            </div>
+            <div class="jds-tabs__list view-tabs" role="tablist" aria-label="Meeting view">
+              <button
+                class="jds-tabs__tab"
+                role="tab"
+                id="transcript-tab"
+                aria-controls="transcript-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-view="transcript"
+              >
+                Transcript</button
+              ><button
+                class="jds-tabs__tab"
+                role="tab"
+                id="notes-tab"
+                aria-controls="notes-panel"
+                aria-selected="true"
+                tabindex="0"
+                data-view="notes"
+              >
+                Summary
+              </button>
+            </div>
+            <div class="tab-layout">
+              <div class="meeting-panes" data-active="notes">
+                <section
+                  class="transcript-pane"
+                  id="transcript-panel"
+                  aria-labelledby="transcript-heading"
+                >
+                  <div class="pane-head">
+                    <h2 id="transcript-heading">Transcript</h2>
+                    <button
+                      class="jds-iconbtn"
+                      data-search-transcript
+                      aria-label="Search transcript"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="10" cy="10" r="7" />
+                        <path d="m15 15 6 6" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="transcript-lines">
+                    <button class="jds-rowbtn transcript-line" data-seek="0">
+                      <span class="line-time">00:00</span
+                      ><span class="speaker-copy"
+                        ><strong>You</strong
+                        ><span
+                          >Let’s make sure the launch page is ready for Thursday. The copy is
+                          approved; the remaining piece is the mobile layout.</span
+                        ></span
+                      ></button
+                    ><button class="jds-rowbtn transcript-line" data-seek="198">
+                      <span class="line-time">03:18</span
+                      ><span class="speaker-copy"
+                        ><strong>You</strong
+                        ><span
+                          >I’ll finish the mobile layout tomorrow. The navigation should stay
+                          visible without taking over the screen.</span
+                        ></span
+                      ></button
+                    ><button class="jds-rowbtn transcript-line" data-seek="522">
+                      <span class="line-time">08:42</span
+                      ><span class="speaker-copy"
+                        ><strong>Morgan</strong
+                        ><span
+                          >The contrast checks need another pass before launch. Let’s include the
+                          small text and the form labels.</span
+                        ></span
+                      ></button
+                    ><button class="jds-rowbtn transcript-line" data-seek="760">
+                      <span class="line-time">12:40</span
+                      ><span class="speaker-copy"
+                        ><strong>Alex</strong
+                        ><span
+                          >Can we run the final review on Wednesday? We should check the signup flow
+                          and the confirmation email together.</span
+                        ></span
+                      ></button
+                    ><button class="jds-rowbtn transcript-line" data-seek="1325">
+                      <span class="line-time">22:05</span
+                      ><span class="speaker-copy"
+                        ><strong>You</strong
+                        ><span
+                          >Yes. Alex will own the signup checks. I’ll review the page and send the
+                          launch checklist after this.</span
+                        ></span
+                      ></button
+                    ><button class="jds-rowbtn transcript-line" data-seek="1816">
+                      <span class="line-time">30:16</span
+                      ><span class="speaker-copy"
+                        ><strong>Morgan</strong
+                        ><span
+                          >Thursday is still the target. If anything blocks signup during the
+                          review, we’ll move the date.</span
+                        ></span
+                      >
+                    </button>
+                  </div>
+                </section>
+                <section class="notes-pane" id="notes-panel" aria-labelledby="notes-heading">
+                  <div class="pane-head">
+                    <h2 id="notes-heading">Notes</h2>
+                    <div class="row-actions">
+                      <span class="jds-badge jds-badge--neutral" data-edited hidden>Edited</span
+                      ><button class="jds-btn jds-btn--link" data-edit-summary>Edit</button
+                      ><button class="jds-btn jds-btn--link" data-regenerate>Regenerate</button>
+                    </div>
+                  </div>
+                  <div class="note-document">
+                    <h3>Summary</h3>
+                    <div class="summary-lines">
+                      <button class="jds-rowbtn summary-line" data-seek="0">
+                        <span
+                          >The team kept Thursday as the launch target, with a final review on
+                          Wednesday.</span
+                        ><span class="line-time">00:00</span></button
+                      ><button class="jds-rowbtn summary-line" data-seek="198">
+                        <span>Jamie will finish the mobile layout tomorrow.</span
+                        ><span class="line-time">03:18</span></button
+                      ><button class="jds-rowbtn summary-line" data-seek="522">
+                        <span>Check contrast on small text and form labels.</span
+                        ><span class="line-time">08:42</span></button
+                      ><button class="jds-rowbtn summary-line" data-seek="760">
+                        <span>Alex will check signup and confirmation emails on Wednesday.</span
+                        ><span class="line-time">12:40</span></button
+                      ><button class="jds-rowbtn summary-line" data-seek="1816">
+                        <span>Move the launch if the final review finds a signup blocker.</span
+                        ><span class="line-time">30:16</span>
+                      </button>
+                    </div>
+                    <h3>Your notes</h3>
+                    <label class="sr-only" for="personal-notes">Your notes</label
+                    ><textarea
+                      class="jds-textarea personal-notes"
+                      id="personal-notes"
+                      placeholder="Add a note…"
+                    >
+Check the signup flow on a phone.
+Bring the contrast checklist to Wednesday’s review.</textarea
+                    >
+                  </div>
+                </section>
+              </div>
+              <aside class="people-panel">
+                <h2>People</h2>
+                <div class="person"><span class="avatar">Y</span>You</div>
+                <div class="person"><span class="avatar">A</span>Alex</div>
+                <div class="person"><span class="avatar">M</span>Morgan</div>
+                <h2>Related</h2>
+                <a href="home-table.html">Launch checklist</a
+                ><span class="jds-hint">Today · 2:00 PM</span>
+              </aside>
+            </div>
+          </main>
+          <aside class="chatd chatd--docked" aria-label="Chat with Moss" hidden>
+            <header class="chatd__head">
+              <div class="chatd__mark">M</div>
+              <div class="chatd__id">
+                <div class="chatd__name">Moss</div>
+                <div class="chatd__status">Website launch review</div>
+              </div>
+              <button class="jds-iconbtn" data-chat-toggle aria-label="Close chat">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 6 12 12M6 18 18 6" />
+                </svg>
+              </button>
+            </header>
+            <div class="chatd__body-wrap">
+              <div class="chatd__body">
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">What is left before launch?</div>
+                </div>
+                <div class="chatd-msg">
+                  <div class="chatd-msg__av">M</div>
+                  <div class="chatd-bubble">
+                    <p>
+                      Jamie has the mobile layout. Alex is checking signup and confirmation emails
+                      on Wednesday.
+                    </p>
+                    <button class="jds-btn jds-btn--link" data-seek="760">12:40</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <form class="chatd__composer" data-chat-form>
+              <label class="sr-only" for="chat-input">Message Moss</label
+              ><textarea
+                id="chat-input"
+                class="jds-textarea chat-input"
+                rows="2"
+                placeholder="Message Moss…"
+              ></textarea>
+              <div class="composer-actions">
+                <button class="jds-iconbtn" type="button" disabled aria-label="Attach file">
+                  +</button
+                ><button class="jds-btn jds-btn--primary" aria-label="Send message">↑</button>
+              </div>
+            </form>
+          </aside>
+        </div>
+      </div>
+    </div>
+    <nav class="review-nav" aria-label="Mockup screens">
+      <a href="index.html">Mockups</a><span aria-hidden="true">/</span
+      ><a href="home-table.html">Table</a><a href="home-cards.html">Cards</a
+      ><a href="home-split.html">Split</a><a href="meeting-side-by-side.html">Side by side</a
+      ><a href="meeting-single-note.html">Single note</a
+      ><a href="meeting-tabs.html" aria-current="page">Tabs</a
+      ><a href="sensitive-lock.html">Password</a><a href="sensitive-error.html">Wrong password</a
+      ><a href="sensitive-unlocked.html">Unlocked</a
+      ><a href="regenerate-warning.html">Regenerate warning</a>
+      <div class="review-theme">
+        <button class="jds-btn jds-btn--quiet" data-theme-toggle>Dark</button
+        ><button class="jds-btn jds-btn--quiet" data-park-toggle>Forest</button>
+      </div>
+    </nav>
+    <div class="mock-status" role="status" aria-live="polite"></div>
+    <dialog class="jds-dialog fixture-dialog" id="edit-summary" aria-labelledby="edit-title">
+      <form method="dialog">
+        <div class="jds-dialog__head">
+          <h2 class="jds-dialog__title" id="edit-title">Edit summary</h2>
+        </div>
+        <div class="jds-dialog__body">
+          <label class="jds-label" for="summary-edit">Summary</label
+          ><textarea class="jds-textarea" id="summary-edit" rows="10"></textarea>
+        </div>
+        <div class="jds-dialog__foot">
+          <button class="jds-btn jds-btn--quiet" value="cancel">Cancel</button
+          ><button class="jds-btn jds-btn--primary" value="save">Save changes</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog
+      class="jds-dialog fixture-dialog"
+      id="regenerate-dialog"
+      aria-labelledby="regenerate-title"
+    >
+      <form method="dialog">
+        <div class="jds-dialog__head">
+          <h2 class="jds-dialog__title" id="regenerate-title">Replace your summary edits?</h2>
+        </div>
+        <div class="jds-dialog__body">
+          <p>Regenerating will replace your edited summary. Your notes will stay.</p>
+        </div>
+        <div class="jds-dialog__foot">
+          <button class="jds-btn jds-btn--quiet" value="cancel" autofocus>Keep edits</button
+          ><button class="jds-btn jds-btn--primary" value="replace">Replace summary</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog
+      class="jds-dialog fixture-dialog"
+      id="sensitive-dialog"
+      aria-labelledby="sensitive-title"
+    >
+      <form method="dialog">
+        <div class="jds-dialog__head">
+          <h2 class="jds-dialog__title" id="sensitive-title">Mark as sensitive?</h2>
+        </div>
+        <div class="jds-dialog__body">
+          <p>Opening this meeting will require your app password.</p>
+        </div>
+        <div class="jds-dialog__foot">
+          <button class="jds-btn jds-btn--quiet" value="cancel" autofocus>Cancel</button
+          ><button class="jds-btn jds-btn--primary" value="mark">Mark as sensitive</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
