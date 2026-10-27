@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { notesMonitorProvider } from "./monitor-provider.js";
+import { collectManagedNotesExportSection } from "./managed-source-export.js";
 import {
   notesCreateInputSchema,
   notesDeleteInputSchema,
@@ -49,9 +50,9 @@ export const notesModuleManifest = {
     supportsUserDisable: true
   },
   database: {
-    migrations: [],
+    migrations: ["sql/0336_notes_managed_source_lifecycle.sql"],
     migrationDirectories: [notesModuleSqlMigrationDirectory],
-    ownedTables: []
+    ownedTables: ["app.notes_managed_actors", "app.notes_managed_sources"]
   },
   permissions: [
     {
@@ -193,6 +194,11 @@ export const notesModuleManifest = {
   ],
   features: [
     {
+      id: "notes.recording_source_export",
+      description:
+        "Your account export includes saved recording-source status associated with managed notes."
+    },
+    {
       id: "notes.vault_sync",
       description:
         "Sync Markdown notes from the folder in Settings, Connections while keeping files on disk. " +
@@ -259,5 +265,17 @@ export const notesModuleManifest = {
       ]
     }
   ],
+  dataLifecycle: {
+    exportSections: [
+      { key: "notes", displayName: "Notes", collect: collectManagedNotesExportSection }
+    ],
+    deletion: {
+      strategy: "cascade",
+      tables: [
+        { table: "app.notes_managed_sources", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_managed_actors", countPredicate: "owner_user_id = $1::uuid" }
+      ]
+    }
+  },
   proactiveMonitor: notesMonitorProvider
 } satisfies MossModuleManifest;

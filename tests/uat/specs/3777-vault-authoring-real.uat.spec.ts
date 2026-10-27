@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { posix } from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
@@ -155,7 +156,29 @@ test("linked-folder authoring through real Settings and chat preserves current b
     null,
     true
   );
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Account & preferences", exact: true }).click();
+  await page.getByRole("button", { name: "Prepare export", exact: true }).click();
+  const download = page.getByRole("link", { name: "Download", exact: true });
+  await expect(download).toBeVisible({ timeout: 120000 });
+  const received = page.waitForEvent("download");
+  await download.click();
+  const archiveDownload = await received;
+  expect(await archiveDownload.failure()).toBeNull();
+  const archivePath = await archiveDownload.path();
+  expect(archivePath).toBeTruthy();
+  const archive = JSON.parse(await readFile(archivePath!, "utf8")) as {
+    format: string;
+    userId: string;
+    sections: { notes: { actors: unknown[]; sources: unknown[] } };
+  };
+  expect(archive.format).toBe("jarvis-archive/v1");
+  expect(archive.userId).toBe(UAT_ADMIN_ID);
+  // This foundation does not yet register contributions through ordinary authoring.
+  // Populated lifecycle rows are exercised through both assembled exporters in integration.
+  expect(archive.sections.notes).toEqual({ actors: [], sources: [] });
   console.log(
-    `MANAGED_VAULT_REAL_UAT model=${model.id} settingsFolder=true create=true edits=true overwrite=true delete=true actualFileBytes=true screenshots=off`
+    `MANAGED_VAULT_REAL_UAT model=${model.id} settingsFolder=true create=true edits=true overwrite=true delete=true actualFileBytes=true settingsArchiveDownload=true notesLifecycleSection=true screenshots=off`
   );
 });

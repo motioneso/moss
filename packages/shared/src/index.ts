@@ -106,3 +106,10 @@ export * from "./visual-chat-catalog.js";
 export * from "./sports-results-api.js";
 
 export * from "./meeting-recording-api.js";
+
+export type {
+  RecordingNoteSource,
+  ManagedNoteActorExport,
+  ManagedNoteSourceExport,
+  ManagedNotesExportSection
+} from "./note-contribution-api.js";

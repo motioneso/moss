@@ -6,12 +6,18 @@ import { fastify, type FastifyInstance } from "fastify";
 import { sql, type Kysely } from "kysely";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import type { Job } from "@moss/jobs";
-import { collectMeetingsExportSection, type MeetingsExportSection } from "@moss/meetings";
+import {
+  collectMeetingsExportSection,
+  MeetingRecordsRepository,
+  type MeetingsExportSection
+} from "@moss/meetings";
 import {
   createActiveModulesResolver,
   getBuiltInModuleManifests,
   getModuleDeletionTables
 } from "@moss/module-registry";
+import { ManagedSourceLifecycle, ManagedSourceUnavailableError } from "@moss/notes";
+import type { ManagedNotesExportSection } from "@moss/shared";
 import { HttpError } from "@moss/module-sdk";
 import type { IngestMeetingTranscriptInput, MeetingOutputArtifact } from "@moss/shared";
 import { readVaultFile, VaultContextRunner } from "@moss/vault";
@@ -70,6 +76,21 @@ beforeAll(async () => {
       )
     );
   }
+  const records = new MeetingRecordsRepository();
+  const lifecycle = new ManagedSourceLifecycle(appContext, {
+    async assertExists(db, source) {
+      if (source.sourceModuleId !== "meetings" || !(await records.get(db, source.sourceId))) {
+        throw new ManagedSourceUnavailableError();
+      }
+    }
+  });
+  for (const actor of actors) {
+    await lifecycle.registerSource(actor, {
+      ownerUserId: actor.actorUserId,
+      sourceModuleId: "meetings",
+      sourceId: fixtures.get(actor.actorUserId)!.meetingId
+    });
+  }
   server = fastify();
   registerSettingsRoutes(server, {
     rootDb: appDb,
@@ -112,6 +133,22 @@ function assertExportSection(section: MeetingsExportSection, actorUserId: string
   expect(serialized).not.toContain("meeting_history_segments");
 }
 
+function assertNotesExport(section: ManagedNotesExportSection, actorUserId: string) {
+  expect(section).toEqual({
+    actors: [{ ownerUserId: actorUserId, generation: 0, state: "active", operationId: null }],
+    sources: [
+      {
+        ownerUserId: actorUserId,
+        sourceModuleId: "meetings",
+        sourceId: fixtures.get(actorUserId)!.meetingId,
+        generation: 0,
+        state: "active",
+        operationId: null
+      }
+    ]
+  });
+}
+
 async function verifySettingsDownload(actorUserId: string) {
   const response = await server.inject({
     method: "GET",
@@ -122,10 +159,15 @@ async function verifySettingsDownload(actorUserId: string) {
   expect(response.headers["content-disposition"]).toContain("attachment;");
   const body = response.json<{
     userId: string;
-    tables: { meetings: MeetingsExportSection; tasks: { id: string }[] };
+    tables: {
+      meetings: MeetingsExportSection;
+      notes: ManagedNotesExportSection;
+      tasks: { id: string }[];
+    };
   }>();
   expect(body.userId).toBe(actorUserId);
   assertExportSection(body.tables.meetings, actorUserId);
+  assertNotesExport(body.tables.notes, actorUserId);
   expect(body.tables.tasks.map((task) => task.id)).toContain(
     fixtures.get(actorUserId)!.acceptedTaskId
   );
@@ -160,11 +202,16 @@ async function verifyWorkerArchive(actorUserId: string) {
     const archive = JSON.parse(archiveJson) as {
       format: string;
       userId: string;
-      sections: { meetings: MeetingsExportSection; tasks: { id: string }[] };
+      sections: {
+        meetings: MeetingsExportSection;
+        notes: ManagedNotesExportSection;
+        tasks: { id: string }[];
+      };
     };
     expect(archive.format).toBe("jarvis-archive/v1");
     expect(archive.userId).toBe(actorUserId);
     assertExportSection(archive.sections.meetings, actorUserId);
+    assertNotesExport(archive.sections.notes, actorUserId);
     expect(archive.sections.tasks.map((task) => task.id)).toContain(
       fixtures.get(actorUserId)!.acceptedTaskId
     );
