@@ -232,11 +232,13 @@ export interface WorkMailPorts {
   };
   readonly notes: {
     candidates(
+      db: DataContextDb,
       access: AccessContext,
       query: string,
       limit: number
     ): Promise<readonly WorkMailNoteCandidate[]>;
     append(
+      db: DataContextDb,
       access: AccessContext,
       path: string | "default",
       entry: string
@@ -284,6 +286,13 @@ export async function ingestWorkMail(
 - Messages are sorted oldest first. The cursor advances after each message that finishes.
 - On an AI failure the batch stops, and the cursor stays at the last finished message.
 - A vault write that returns `changed` (the user edited the note mid-write) re-reads once, then counts as `vault-unavailable`.
+- Notes adapters receive the current `DataContextDb` alongside `AccessContext`; they do not
+  open nested database transactions while the cursor lock is held.
+- Vault entries carry a deterministic, content-free receipt so a database rollback after an
+  append can retry without duplicating that entry at the same destination.
+- The VaultContext append primitive compares original bytes and file identity before appending,
+  and serializes in-process writers. It detects observed external edits, but is not a filesystem
+  transaction with non-cooperating external writers. No live reader is enabled in this slice.
 - The default note is `Work mail notes.md` at the notes-folder root. With no notes folder linked, it is `Work mail notes.md` in the private Moss vault (ruling B7).
 
 **Tests (behaviour, and why a broken build fails them)**
