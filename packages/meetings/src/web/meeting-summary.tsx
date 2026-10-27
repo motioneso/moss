@@ -19,7 +19,7 @@ import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
 import { summaryGenerationFailure, SummaryModelRecovery } from "./summary-generation-error.js";
-import { recordingKeys } from "./recording-client.js";
+import { type getRecording, recordingKeys } from "./recording-client.js";
 export type SummaryTool = "rewrite" | "versions" | "vault" | "copy";
 interface SummaryState {
   readonly generatedVersion?: number;
@@ -99,7 +99,7 @@ export function MeetingSummary({
     queryFn: getMeetingPreferences,
     retry: false
   });
-  const recording = useQuery<{ metadata: { typeId: string | null } | null }>({
+  const recording = useQuery<Awaited<ReturnType<typeof getRecording>>>({
     queryKey: recordingKeys.record(meeting.id),
     enabled: false
   });
@@ -187,9 +187,14 @@ export function MeetingSummary({
         ? "check-failed"
         : (data?.generationAvailability ?? "check-failed");
   const generationBlocked = generationAvailability !== "available";
+  const recordingType = recording.data?.configuration.types.find(
+    (type) => type.id === recording.data?.metadata?.typeId
+  );
+  const template = data?.templates.find(
+    (item) => item.id === (recordingType?.templateId ?? state.templateId)
+  );
   async function generate() {
     if (busy || !session.authorized() || !data || (!retry && generationBlocked)) return;
-    const template = data.templates.find((item) => item.id === state.templateId);
     if (!retry && !template) return;
     const input = retry
       ? state.operation!.input
@@ -336,32 +341,37 @@ export function MeetingSummary({
           {tool === "rewrite" ? (
             <>
               <div className="meetings-actions">
-                <Field>
-                  <FormLabel htmlFor="meeting-template">Summary style</FormLabel>
-                  <Select
-                    id="meeting-template"
-                    value={state.templateId}
-                    disabled={busy || retry}
-                    onChange={(event) =>
-                      update((current) => ({
-                        ...current,
-                        templateId: event.target.value as SummaryState["templateId"]
-                      }))
-                    }
-                  >
-                    <option value="">Choose a style</option>
-                    {data.templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                {recordingType ? (
+                  <p className="jds-hint">
+                    Summary style follows the recording type: {recordingType.name}.
+                  </p>
+                ) : (
+                  <Field>
+                    <FormLabel htmlFor="meeting-template">Summary style</FormLabel>
+                    <Select
+                      id="meeting-template"
+                      value={state.templateId}
+                      disabled={busy || retry}
+                      onChange={(event) =>
+                        update((current) => ({
+                          ...current,
+                          templateId: event.target.value as SummaryState["templateId"]
+                        }))
+                      }
+                    >
+                      <option value="">Choose a style</option>
+                      {data.templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
                 <Button
                   disabled={
                     busy ||
-                    (!retry &&
-                      (generationBlocked || !state.templateId || sourceLoading || unsavedNotes))
+                    (!retry && (generationBlocked || !template || sourceLoading || unsavedNotes))
                   }
                   onClick={() => void generate()}
                 >

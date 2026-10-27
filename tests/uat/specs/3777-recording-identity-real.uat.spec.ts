@@ -126,6 +126,31 @@ test("paste a recording, classify with the real default model, change type, filt
   await page.getByRole("searchbox", { name: "Search meetings", exact: true }).fill("");
   const second = await add(page, true);
   expect(JSON.parse(second.artifact.modelRoute).modelId).toBe(model.id);
+  await page.getByRole("button", { name: "Meeting actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Rewrite summary", exact: true }).click();
+  await expect(
+    page.getByText("Summary style follows the recording type: Idea.", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByLabel("Summary style", { exact: true })).toHaveCount(0);
+  const rewrite = page.getByRole("button", { name: "Rewrite summary", exact: true });
+  await expect(rewrite).toBeEnabled();
+  const rewritten = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/meetings/records/${second.meetingId}/outputs`) &&
+      response.request().method() === "POST",
+    { timeout: 150000 }
+  );
+  await rewrite.click();
+  const rewriteResponse = await rewritten;
+  expect(rewriteResponse.status()).toBe(200);
+  const rewriteResult = await rewriteResponse.json();
+  expect(rewriteResult.status).toBe("saved");
+  expect(rewriteResult.artifact.version).toBe(2);
+  expect(rewriteResult.artifact.templateId).toBe("general");
+  expect(JSON.parse(rewriteResult.artifact.modelRoute).modelId).toBe(model.id);
+  await expect(
+    page.getByText("Version 2 saved. Earlier versions remain available.", { exact: true })
+  ).toBeVisible();
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(
@@ -148,6 +173,6 @@ test("paste a recording, classify with the real default model, change type, filt
     ).toBeVisible();
   }
   console.log(
-    `RECORDING_IDENTITY_REAL_UAT model=${model.id} providerModel=${model.providerModelId} manualEntry=true classification=true title=true ownerChoicesPreserved=true menuKeyboard=true combinedFilter=true reload=true widths=390,1280 screenshots=off`
+    `RECORDING_IDENTITY_REAL_UAT model=${model.id} providerModel=${model.providerModelId} manualEntry=true classification=true title=true ownerChoicesPreserved=true menuKeyboard=true combinedFilter=true reload=true typedRewrite=true widths=390,1280 screenshots=off`
   );
 });

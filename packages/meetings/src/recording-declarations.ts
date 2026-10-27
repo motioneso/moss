@@ -28,7 +28,7 @@ export const recordingIdentityRoutes = [
 export const recordingIdentityFeature = {
   id: "meetings.recording_identity",
   description:
-    "Add recording accepts pasted transcripts without a Mac. Your summary model chooses title, type and personal/work label, keeping user choices. Change type below the title; filter beside search. Brain dumps show grouped ideas.",
+    "Paste transcripts; infer title, type and personal/work while keeping user choices. Change type below the title; filter beside search. Brain dumps group ideas. Rewrite style follows the type; untyped recordings offer a style selector.",
   errors: [
     {
       code: "recording_invalid_input",
