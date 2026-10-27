@@ -54,7 +54,7 @@ export function RecordingTypePicker({ meetingId }: { readonly meetingId: string 
     <div className="meetings-section">
       <div className="meetings-actions">
         <Menu
-          triggerVariant="content"
+          triggerVariant="chip"
           triggerLabel={`Recording type: ${current?.name ?? "Automatic"}`}
           triggerContent={current?.name ?? "Automatic"}
           items={data.configuration.types

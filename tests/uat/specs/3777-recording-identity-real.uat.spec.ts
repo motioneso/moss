@@ -89,6 +89,10 @@ test("paste a recording, classify with the real default model, change type, filt
     providerKind: "openai-compatible"
   });
   const picker = page.getByRole("button", { name: "Recording type: Brain dump", exact: true });
+  await expect(picker).toHaveClass(/jds-btn--chip/);
+  expect(await picker.evaluate((element) => element.getBoundingClientRect().width)).toBeLessThan(
+    200
+  );
   await picker.focus();
   await page.keyboard.press("ArrowDown");
   await expect(
