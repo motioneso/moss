@@ -75,6 +75,13 @@ afterEach(() => {
 });
 
 describe("CORE01 Connections source summary truth", () => {
+  it("opens with the title and summary without an introductory sentence", async () => {
+    mocks.getNotesSource.mockResolvedValue({ path: null });
+    const renderer = await renderConnections(null);
+    expect(textOf(renderer.root)).not.toContain("Everything Moss can reach outside itself");
+    expect(summaryOf(renderer)).toContain("Accounts");
+  });
+
   it.each(["/synthetic/previous", null, undefined])(
     "reports unknown after a mounted failed source read even with cached path %s",
     async (path) => {

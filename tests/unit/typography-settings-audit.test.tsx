@@ -10,6 +10,7 @@ import { SectionHead } from "@moss/ui";
 import type { ApprovedActionScopeDto, ScheduledTaskDto } from "@moss/shared";
 
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
+import { OutlookCalendarStatusPanel } from "../../apps/web/src/calendar/outlook-calendar-status.js";
 import type { MemoryDashboardItem } from "../../apps/web/src/api/memory-client.js";
 import { ApprovedActionScopeDetail } from "../../apps/web/src/settings/approved-action-scopes.js";
 import { IntegrationToolsSection } from "../../apps/web/src/settings/integration-tool-groups.js";
@@ -360,7 +361,56 @@ describe("settings copy preserves the underlying controls", () => {
     client.setQueryData(queryKeys.settings.notesSource, { path: "/notes" });
     client.setQueryData(queryKeys.settings.notesLastSync, { lastSync: null });
     await render(<SourcesPane embedded />);
-    expect(host.textContent).toContain("Choose a folder of Markdown notes on this server.");
+    expect(host.textContent).not.toContain("Choose a folder of Markdown notes on this server.");
     expect(host.textContent).toContain("Folder linked. Choose Sync now to sync its notes.");
+  });
+
+  it("gives an unlinked Notes folder one explanation", async () => {
+    client.setQueryData(queryKeys.settings.notesSource, { path: null });
+    client.setQueryData(queryKeys.settings.notesLastSync, { lastSync: null });
+    await render(<SourcesPane embedded />);
+    expect(host.textContent?.match(/Choose a folder/g)).toHaveLength(1);
+    expect(host.textContent).toContain(
+      "Choose a folder on the server to include your notes as context."
+    );
+  });
+
+  it("keeps Outlook repair status visible beside compact account actions", async () => {
+    client.setQueryData(["outlook-calendar-status"], {
+      available: true,
+      connected: true,
+      state: "source-changed",
+      lastCompleteAt: null,
+      windowStart: null,
+      windowEnd: null,
+      unconfirmed: 0
+    });
+    await render(<OutlookCalendarStatusPanel settings />);
+    const status = host.querySelector('[role="status"]');
+    expect(status?.textContent).toContain("Needs repair");
+    expect(status?.querySelector(".jds-indicator__dot")).not.toBeNull();
+    expect(host.querySelector(".jds-note")).toBeNull();
+    const buttons = [...host.querySelectorAll("button")];
+    expect(buttons.map((button) => button.textContent)).toEqual(["Sync now", "Disconnect"]);
+    for (const button of buttons) expect(button.classList.contains("jds-btn--sm")).toBe(true);
+  });
+
+  it("keeps the Calendar notice independent of the settings account layout", async () => {
+    client.setQueryData(["outlook-calendar-status"], {
+      available: true,
+      connected: true,
+      state: "partial",
+      lastCompleteAt: "2026-10-26T17:00:00Z",
+      windowStart: "2026-10-26",
+      windowEnd: "2026-11-02",
+      unconfirmed: 1
+    });
+    await render(<OutlookCalendarStatusPanel />);
+    expect(host.querySelector(".jds-note")).not.toBeNull();
+    expect(host.querySelector(".acct")).toBeNull();
+    expect(host.textContent).toContain("Incomplete refresh");
+    expect(host.textContent).toContain("2026-10-26 through 2026-11-02");
+    expect(host.textContent).toContain("1 previously seen meeting needs verification in Outlook");
+    expect(host.querySelector("button")).toBeNull();
   });
 });
