@@ -20,6 +20,10 @@ async function openChat(page: Page) {
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const drawer = page.locator("aside.chatd");
   await expect(drawer).toBeVisible();
+  // Type configuration uses ordinary chat, including when opened from a recording.
+  const removeContext = drawer.getByRole("button", { name: "Remove meeting context", exact: true });
+  if (await removeContext.isVisible()) await removeContext.click();
+  await expect(drawer.getByText("About this meeting", { exact: true })).toHaveCount(0);
   return drawer;
 }
 async function edit(page: Page, drawer: Locator, text: string, disclosures: readonly string[]) {
