@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-27
+
+#### Added
+
+- **More kinds of recordings.** Paste a transcript into Meetings and let Moss name it, choose its type and label it personal or work, then change or filter the type yourself. [PR #3785](https://github.com/motioneso/moss/pull/3785)
+
 ### 2026-10-26
 
 #### Added
