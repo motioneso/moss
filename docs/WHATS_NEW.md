@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Moss for Android.** Moss now has an Android app that opens Moss full screen, with ring settings under Settings, Connections, Hardware. [PR #3764](https://github.com/motioneso/moss/pull/3764)
 
+#### Fixed
+
+- **Chat stays at the latest message while Moss replies.** The chat now keeps following Moss's reply as it is written, instead of leaving you scrolled up. [PR #3779](https://github.com/motioneso/moss/pull/3779)
+
 ### 2026-10-25
 
 #### Fixed
