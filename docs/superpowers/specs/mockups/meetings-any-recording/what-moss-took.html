@@ -1,0 +1,582 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title>What Moss took — Meetings mockups</title>
+    <link href="../../../../../apps/web/src/styles/tokens.css" rel="stylesheet" />
+    <link href="../../../../../packages/ui/src/styles.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/kit-chat.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/texture.css" rel="stylesheet" />
+    <link href="mockups.css" rel="stylesheet" />
+    <script defer="" src="mockups.js"></script>
+  </head>
+  <body>
+    <div class="mock-shell">
+      <aside class="mock-sidebar">
+        <div class="brand">
+          <svg
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.6"
+            viewbox="0 0 24 24"
+          >
+            <path d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"></path></svg
+          ><span>Moss</span>
+        </div>
+        <nav aria-label="Main">
+          <a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1Z"></path></svg
+            ><span>Today</span></a
+          ><a class="mock-nav-item" href="calendar-event.html"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <rect height="16" rx="2" width="18" x="3" y="5"></rect>
+              <path d="M16 3v4M8 3v4M3 11h18"></path></svg
+            ><span>Calendar</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <path d="m5 12 4 4L19 6"></path></svg
+            ><span>Tasks</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path>
+              <path d="M14 2v6h6M8 13h8m-8 4h6"></path></svg
+            ><span>Notes</span></a
+          ><a class="mock-nav-item selected" href="meetings-list.html"
+            ><svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewbox="0 0 24 24"
+            >
+              <rect height="12" rx="3" width="6" x="9" y="2"></rect>
+              <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"></path></svg
+            ><span>Meetings</span></a
+          >
+        </nav>
+        <div class="sidebar-foot"><span class="avatar">J</span><span>Jamie</span></div>
+      </aside>
+      <div class="mock-workspace">
+        <header class="mock-topbar">
+          <div class="topbar-title">
+            <span>Meetings</span
+            ><button
+              aria-label="Meetings settings"
+              class="jds-iconbtn"
+              data-settings=""
+              title="Meetings settings"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.6"
+                viewbox="0 0 24 24"
+              >
+                <path
+                  d="m9.7 4.3.5-2.3h3.6l.5 2.3 1.8 1 2.2-.7 1.8 3.1-1.7 1.6v2.1l1.7 1.6-1.8 3.1-2.2-.7-1.8 1-.5 2.3h-3.6l-.5-2.3-1.8-1-2.2.7-1.8-3.1 1.7-1.6V9.3L4.4 7.7l1.8-3.1 2.2.7Z"
+                ></path>
+                <circle cx="12" cy="10.4" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <div class="topbar-actions">
+            <button
+              aria-label="Chat with Moss"
+              class="jds-iconbtn"
+              data-chat-toggle=""
+              title="Chat with Moss"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.6"
+                viewbox="0 0 24 24"
+              >
+                <path
+                  d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"
+                ></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div class="mock-body">
+          <main>
+            <div class="record-back">
+              <a class="jds-btn jds-btn--link" href="type-conversation.html"
+                ><svg
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.6"
+                  viewbox="0 0 24 24"
+                >
+                  <path d="m15 18-6-6 6-6"></path></svg
+                >Meetings</a
+              >
+            </div>
+            <header class="record-title">
+              <h1>Wind, grass and a quieter world</h1>
+              <div class="record-meta">
+                <div class="jds-menu type-picker">
+                  <button
+                    aria-controls="type-options"
+                    aria-expanded="false"
+                    aria-haspopup="menu"
+                    aria-label="Recording type: Brain dump"
+                    class="jds-btn jds-btn--chip"
+                    data-type-trigger=""
+                  >
+                    <span data-type-label="">Brain dump</span
+                    ><svg
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.6"
+                      viewbox="0 0 24 24"
+                    >
+                      <path d="m6 9 6 6 6-6"></path>
+                    </svg>
+                  </button>
+                  <div
+                    aria-label="Recording type"
+                    class="jds-menu__list"
+                    hidden=""
+                    id="type-options"
+                    role="menu"
+                  >
+                    <button aria-checked="false" data-type="Work meeting" role="menuitemradio">
+                      <span aria-hidden="true" class="menu-check"></span>Work meeting</button
+                    ><button aria-checked="false" data-type="Appointment" role="menuitemradio">
+                      <span aria-hidden="true" class="menu-check"></span>Appointment</button
+                    ><button aria-checked="true" data-type="Brain dump" role="menuitemradio">
+                      <span aria-hidden="true" class="menu-check"
+                        ><svg
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewbox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6"></path></svg></span
+                      >Brain dump</button
+                    ><button aria-checked="false" data-type="Conversation" role="menuitemradio">
+                      <span aria-hidden="true" class="menu-check"></span>Conversation</button
+                    ><button aria-checked="false" data-type="Idea" role="menuitemradio">
+                      <span aria-hidden="true" class="menu-check"></span>Idea</button
+                    ><button aria-checked="false" data-type="Other" role="menuitemradio">
+                      <span aria-hidden="true" class="menu-check"></span>Other
+                    </button>
+                  </div>
+                </div>
+                <span class="jds-badge jds-badge--neutral jds-badge--pill" data-record-label=""
+                  >Personal</span
+                ><span class="jds-hint">Oct 26 · 10:42 AM · 6 min</span>
+              </div>
+            </header>
+            <div class="record-grid">
+              <section class="transcript">
+                <div class="pane-head">
+                  <h2>Transcript</h2>
+                  <button
+                    aria-label="Search transcript"
+                    class="jds-iconbtn"
+                    data-search-transcript=""
+                    title="Search transcript"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.6"
+                      viewbox="0 0 24 24"
+                    >
+                      <circle cx="10.5" cy="10.5" r="7.5"></circle>
+                      <path d="m16 16 5 5"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div class="transcript-content">
+                  <div class="transcript-turn">
+                    <span class="time">00:00</span>
+                    <p>
+                      I keep coming back to the grass. It should feel like the world is moving even
+                      when the player is standing still.
+                    </p>
+                  </div>
+                  <div class="transcript-turn">
+                    <span class="time">00:38</span>
+                    <p>
+                      What if the wind arrives in little waves? You see it across the clearing
+                      before you feel it where you’re standing.
+                    </p>
+                  </div>
+                  <div class="transcript-turn">
+                    <span class="time">01:12</span>
+                    <p>
+                      I don’t want to build a whole weather system yet. Just one patch of grass and
+                      a few gusts. See if it feels alive.
+                    </p>
+                  </div>
+                  <div class="transcript-turn">
+                    <span class="time">02:06</span>
+                    <p>
+                      And sound could be the other half of that. When you stop, the footsteps
+                      disappear and you start hearing the smaller things.
+                    </p>
+                  </div>
+                  <div class="transcript-turn">
+                    <span class="time">03:21</span>
+                    <p>
+                      Maybe birds go quiet just before a strong gust. Or you hear leaves moving
+                      behind you. Something that makes you look around.
+                    </p>
+                  </div>
+                  <div class="transcript-turn">
+                    <span class="time">04:10</span>
+                    <p>
+                      The question is how much of this needs to be simulated. I should try the
+                      simplest version first.
+                    </p>
+                  </div>
+                  <div class="transcript-turn">
+                    <span class="time">05:03</span>
+                    <p>
+                      Let’s make a tiny clearing. Wind in the grass, a few trees, and sound that
+                      changes when you stand still. That’s enough for a first test.
+                    </p>
+                  </div>
+                </div>
+              </section>
+              <section class="notes-summary">
+                <div aria-label="Recording sections" class="jds-tabs__list" role="tablist">
+                  <button
+                    aria-controls="summary-panel"
+                    aria-selected="true"
+                    class="jds-tabs__tab"
+                    data-record-tab="summary"
+                    id="summary-tab"
+                    role="tab"
+                  >
+                    Summary</button
+                  ><button
+                    aria-controls="notes-panel"
+                    aria-selected="false"
+                    class="jds-tabs__tab"
+                    data-record-tab="notes"
+                    id="notes-tab"
+                    role="tab"
+                    tabindex="-1"
+                  >
+                    Notes
+                  </button>
+                </div>
+                <div aria-labelledby="summary-tab" id="summary-panel" role="tabpanel">
+                  <div class="summary-prose">
+                    <p>
+                      A small game scene built around wind in the grass and the sounds that emerge
+                      when the player stands still.
+                    </p>
+                    <h3>Ideas</h3>
+                    <ul>
+                      <li>Gusts travel visibly across a clearing.</li>
+                      <li>Birds go quiet before stronger wind.</li>
+                      <li>Stillness reveals leaves and distant sounds.</li>
+                    </ul>
+                    <h3>Open questions</h3>
+                    <ul>
+                      <li>How little simulation makes the scene feel alive?</li>
+                      <li>Should the player hear wind before feeling it?</li>
+                    </ul>
+                  </div>
+                  <section aria-label="What Moss took" class="taken-box jds-card">
+                    <div class="taken-heading">
+                      <div>
+                        <h2>What Moss took</h2>
+                        <span class="jds-hint" data-changes-count="">1 note · 2 memories</span>
+                      </div>
+                      <button class="jds-btn jds-btn--link" data-undo-all="">Undo all</button>
+                    </div>
+                    <div class="change-row" data-change="note">
+                      <div class="change-kind">
+                        <svg
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewbox="0 0 24 24"
+                        >
+                          <path
+                            d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"
+                          ></path>
+                          <path d="M14 2v6h6M8 13h8m-8 4h6"></path></svg
+                        ><span>Notes</span
+                        ><span class="jds-badge jds-badge--neutral jds-badge--pill">Personal</span>
+                      </div>
+                      <p>Added wind, grass and sound ideas to <strong>Game prototype</strong>.</p>
+                      <div class="destination">Projects / Game prototype</div>
+                      <div class="row-actions">
+                        <button
+                          aria-controls="note-changes"
+                          aria-expanded="true"
+                          class="jds-btn jds-btn--link"
+                          data-review-note=""
+                        >
+                          Hide changes</button
+                        ><button class="jds-btn jds-btn--link" data-change-note="">Change</button
+                        ><button class="jds-btn jds-btn--link" data-undo="note">Undo</button>
+                      </div>
+                      <div class="note-diff" id="note-changes">
+                        <div class="diff-label jds-eyebrow">Added to Game prototype</div>
+                        <div class="added-copy">
+                          <p><strong>Wind &amp; grass</strong></p>
+                          <p>
+                            Prototype gusts crossing a small clearing. Keep the first test separate
+                            from a full weather system.
+                          </p>
+                          <p><strong>Sound &amp; stillness</strong></p>
+                          <p>
+                            Try quieter birds before gusts, moving leaves and more detail when the
+                            player stops.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="change-row" data-change="memory-1">
+                      <div class="change-kind">
+                        <svg
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewbox="0 0 24 24"
+                        >
+                          <path
+                            d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                          ></path></svg
+                        ><span>Memory</span
+                        ><span class="jds-badge jds-badge--neutral jds-badge--pill">Personal</span>
+                      </div>
+                      <p>Jamie is prototyping wind and grass for a game.</p>
+                      <div class="row-actions">
+                        <button class="jds-btn jds-btn--link" data-edit-memory="memory-1">
+                          Change</button
+                        ><button class="jds-btn jds-btn--link" data-undo="memory-1">Undo</button>
+                      </div>
+                    </div>
+                    <div class="change-row" data-change="memory-2">
+                      <div class="change-kind">
+                        <svg
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewbox="0 0 24 24"
+                        >
+                          <path
+                            d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                          ></path></svg
+                        ><span>Memory</span
+                        ><span class="jds-badge jds-badge--neutral jds-badge--pill">Personal</span>
+                      </div>
+                      <p>Jamie wants to test small scenes before building larger systems.</p>
+                      <div class="row-actions">
+                        <button class="jds-btn jds-btn--link" data-edit-memory="memory-2">
+                          Change</button
+                        ><button class="jds-btn jds-btn--link" data-undo="memory-2">Undo</button>
+                      </div>
+                    </div>
+                    <div class="taken-foot">
+                      <button class="jds-btn jds-btn--link" data-flip-label="">
+                        Change to work
+                      </button>
+                    </div>
+                  </section>
+                </div>
+                <div aria-labelledby="notes-tab" hidden="" id="notes-panel" role="tabpanel">
+                  <label class="sr-only" for="personal-notes">Notes</label
+                  ><textarea
+                    class="jds-textarea notes-input"
+                    id="personal-notes"
+                    placeholder="Add a note…"
+                  >
+Try the clearing before expanding the map.</textarea
+                  >
+                </div>
+              </section>
+            </div>
+          </main>
+          <aside aria-label="Chat with Moss" class="chatd chatd--docked" hidden="">
+            <header class="chatd__head">
+              <div class="chatd__mark">
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.6"
+                  viewbox="0 0 24 24"
+                >
+                  <path d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"></path>
+                </svg>
+              </div>
+              <div class="chatd__id">
+                <div class="chatd__name">Moss</div>
+                <div class="chatd__status">Wind, grass and a quieter world</div>
+              </div>
+              <button
+                aria-label="Close chat"
+                class="jds-iconbtn"
+                data-chat-toggle=""
+                title="Close chat"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.6"
+                  viewbox="0 0 24 24"
+                >
+                  <path d="m6 6 12 12M6 18 18 6"></path>
+                </svg>
+              </button>
+            </header>
+            <div class="chatd__body-wrap">
+              <div class="chatd__body">
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">Pull out the ideas I should try next.</div>
+                </div>
+                <div class="chatd-msg">
+                  <div class="chatd-msg__av">M</div>
+                  <div class="chatd-bubble">
+                    <p>
+                      Start with wind moving through the grass. Keep the first test small: one
+                      clearing, a few gusts, no weather system yet.
+                    </p>
+                    <p>Then try making the world quieter when the player stops moving.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <form class="chatd__composer" data-chat-form="">
+              <label class="sr-only" for="chat-input">Message Moss</label
+              ><textarea
+                class="jds-textarea chat-input"
+                id="chat-input"
+                placeholder="Message Moss…"
+                rows="2"
+              ></textarea>
+              <div class="composer-actions">
+                <button
+                  aria-label="Attach file"
+                  class="jds-iconbtn"
+                  disabled=""
+                  title="Attach file"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.6"
+                    viewbox="0 0 24 24"
+                  >
+                    <path d="M12 5v14M5 12h14"></path>
+                  </svg></button
+                ><button aria-label="Send message" class="jds-btn jds-btn--primary" type="submit">
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.6"
+                    viewbox="0 0 24 24"
+                  >
+                    <path d="M12 19V5m-6 6 6-6 6 6"></path>
+                  </svg>
+                </button>
+              </div>
+            </form>
+          </aside>
+        </div>
+      </div>
+    </div>
+    <nav aria-label="Mockup screens" class="review-nav">
+      <a href="index.html">Mockups</a><span aria-hidden="true">/</span
+      ><a href="type-menu.html">01 Recording type</a
+      ><a aria-current="page" href="what-moss-took.html">02 What Moss took</a
+      ><a href="type-conversation.html">03 Type conversation</a
+      ><a href="manual-entry.html">04 Manual entry</a><a href="meetings-list.html">05 Type filter</a
+      ><a href="calendar-event.html">06 Calendar link</a>
+      <div class="review-theme">
+        <button class="jds-btn jds-btn--quiet jds-btn--sm" data-theme-toggle="">Dark</button
+        ><button class="jds-btn jds-btn--quiet jds-btn--sm" data-park-toggle="">Forest</button>
+      </div>
+    </nav>
+    <div aria-live="polite" class="mock-status" role="status"></div>
+  </body>
+</html>
