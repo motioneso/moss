@@ -17,7 +17,8 @@ describe("meetings composition", () => {
     const native = meeting.features!.find((item) => item.id === "meetings.native_capture")!;
     const profile = CORE_APP_SETTINGS.find((item) => item.id === "profile")!.description;
     const link = CORE_APP_SCREENS.find((item) => item.id === "link-trail-marker")!.description;
-    expect(meeting.navigation![0]!.description).toContain("authorized by initial linking");
+    expect(meeting.navigation![0]!.description).toContain("pasted recording without a Mac");
+    expect(meeting.navigation![0]!.description).toContain("Live recording needs a linked Mac");
     expect(native.description).toContain("nav dot");
     expect(native.remediations![0]!.description).toContain("relink through Trail Marker");
     expect(JSON.stringify(native)).not.toMatch(/one-time recording|recording upgrade/);
@@ -99,10 +100,10 @@ describe("meetings composition", () => {
     );
     const automatic = description("meetings.automatic_summary");
     expect(automatic).toContain("Automatic summaries default on");
-    expect(automatic).toContain("use your default model without fallback");
-    expect(automatic).toContain("Summarize automatically after Stop in Settings → Meetings");
-    expect(automatic).toContain("Only these rename Untitled meeting");
-    expect(automatic).toContain("Rewrite summary stays available");
+    expect(automatic).toContain("use your default model");
+    expect(automatic).toContain("Turn off in Settings → Meetings");
+    expect(automatic).toContain("user titles stay unchanged");
+    expect(automatic).toContain("Rewrite summary remains available");
   });
 
   it("explains export and history failures, including the Notes prerequisite", () => {
@@ -133,6 +134,9 @@ describe("meetings composition", () => {
       supportsUserDisable: true
     });
     expect(meeting?.database?.ownedTables).toEqual([
+      "app.meeting_recording_metadata",
+      "app.meeting_recording_types",
+      "app.meeting_manual_entries",
       "app.meeting_recording_imports",
       "app.meeting_recording_chunks",
       "app.meeting_recording_voice_enablements",
@@ -169,6 +173,10 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "GET /api/meetings/recording-types",
+      "GET /api/meetings/records/:id/recording",
+      "PUT /api/meetings/records/:id/recording/type",
+      "POST /api/meetings/manual-transcripts",
       "POST /api/meetings/recording-uploads",
       "GET /api/meetings/recording-uploads/:id",
       "PUT /api/meetings/recording-uploads/:id/:kind/:index",
@@ -248,7 +256,8 @@ describe("meetings composition", () => {
       "meetings.capture_default",
       "meetings.notes_recovery",
       "meetings.delete_draft",
-      "meetings.draft_records"
+      "meetings.draft_records",
+      "meetings.recording_identity"
     ]);
   });
 });

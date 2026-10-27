@@ -47,6 +47,14 @@ export function fixtureOutput(body: Record<string, unknown>): {
   return {
     content: {
       overview: OUTPUT_FIXTURE_OVERVIEW,
+      recording: {
+        title: OUTPUT_FIXTURE_OVERVIEW,
+        typeId: "work-meeting",
+        side: "work",
+        confidence: 0.95,
+        reason: "The team makes a project decision.",
+        ideaGroups: []
+      },
       decisions: [{ text: OUTPUT_FIXTURE_DECISION, evidence }],
       actions: [
         { text: OUTPUT_FIXTURE_ACTION, evidence, ownerPhrase: "Alex", duePhrase: "tomorrow" }

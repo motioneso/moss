@@ -1,3 +1,4 @@
+import { RecordingMetadataRepository } from "./recording-metadata.js";
 import {
   assertDataContextDb,
   assertUuid,
@@ -154,7 +155,11 @@ export class MeetingRecordsRepository {
     ).map(record);
   }
 
-  async putTitle(db: DataContextDb, input: PutMeetingTitleInput): Promise<PutMeetingTitleResult> {
+  async putTitle(
+    db: DataContextDb,
+    input: PutMeetingTitleInput,
+    source: "user" | "automatic" = "user"
+  ): Promise<PutMeetingTitleResult> {
     assertDataContextDb(db);
     assertUuid(input.meetingId, "Meeting id");
     const title = text(input.title, 240, true).trim();
@@ -163,6 +168,8 @@ export class MeetingRecordsRepository {
     if (!current) return { status: "not-found" };
     if (current.title !== input.expectedTitle && current.title !== title)
       return { status: "conflict", meeting: current };
+    if (source === "user")
+      await new RecordingMetadataRepository().markUserTitle(db, input.meetingId);
     if (current.title === title) return { status: "saved", meeting: current };
     const updated = await db.db
       .updateTable("app.meeting_records")

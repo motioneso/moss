@@ -74,6 +74,7 @@ export async function launchHold(options: LaunchOptions): Promise<HeldWatchdog> 
 function receiveSignal(child: ChildProcess, channel: Socket, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     let done = false;
+    let received = false;
     const finish = (error?: Error): void => {
       if (done) return;
       done = true;
@@ -82,10 +83,12 @@ function receiveSignal(child: ChildProcess, channel: Socket, timeoutMs: number):
       if (error) reject(error);
       else resolve();
     };
-    const timer = setTimeout(() => finish(supervisorError()), timeoutMs);
+    // A socket data event is not a message boundary. Observe the whole acknowledgement
+    // window so a second byte cannot be hidden in a later event after the first resolves.
+    const timer = setTimeout(() => finish(received ? undefined : supervisorError()), timeoutMs);
     channel.on("data", (chunk: Buffer) => {
-      if (chunk.length === 1 && chunk[0] === 1) finish();
-      else finish(supervisorError());
+      if (received || chunk.length !== 1 || chunk[0] !== 1) finish(supervisorError());
+      else received = true;
     });
     channel.on("error", () => finish(supervisorError()));
     channel.on("close", () => finish(supervisorError()));

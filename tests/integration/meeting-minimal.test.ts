@@ -1,3 +1,4 @@
+import { recordingInterpretation } from "../fixtures/meeting-recording.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
@@ -123,6 +124,7 @@ async function fixture(
 function generator() {
   return vi.fn<MeetingOutputGenerator>(async (_actor, { inputs }) => {
     const content: MeetingOutputContent = {
+      recording: recordingInterpretation(),
       overview: "Project notes and next steps.",
       decisions: [],
       openQuestions: [],

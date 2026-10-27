@@ -1,3 +1,5 @@
+import { registerRecordingRoutes } from "./recording-routes.js";
+import type { MeetingStopSummaryEnqueue } from "./stop-summary-repository.js";
 import {
   registerMeetingHistoryRoutes,
   type MeetingHistoryRoutesDependencies
@@ -34,6 +36,7 @@ export interface MeetingRecordRoutesDependencies extends MeetingHistoryRoutesDep
     meetingId: string,
     actor: AccessContext
   ) => Promise<void>;
+  readonly manualSummaryEnqueue?: MeetingStopSummaryEnqueue;
   readonly preferences?: MeetingPreferenceStore;
   readonly repository?: Pick<
     MeetingRecordsRepository,
@@ -47,6 +50,7 @@ export function registerMeetingRecordRoutes(
   dependencies: MeetingRecordRoutesDependencies
 ): void {
   const repository = dependencies.repository ?? new MeetingRecordsRepository();
+  registerRecordingRoutes(server, dependencies);
   registerMeetingHistoryRoutes(server, dependencies);
   registerMeetingPreferenceRoutes(server, dependencies);
   registerMeetingTranscriptRoutes(server, dependencies);

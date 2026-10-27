@@ -172,6 +172,10 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         // #2981 meeting drafts and immutable note receipts cascade with their owner.
         "app.meeting_recording_imports",
         "app.meeting_records",
+        // #3777 recording identity and manual entry retain the same owner-deletion chain.
+        "app.meeting_recording_types",
+        "app.meeting_recording_metadata",
+        "app.meeting_manual_entries",
         "app.meeting_note_writes",
         "app.meeting_transcript_batches",
         "app.meeting_history_segments",

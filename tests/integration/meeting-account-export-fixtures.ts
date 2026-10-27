@@ -9,6 +9,7 @@ import {
 import type { IngestMeetingTranscriptInput, MeetingOutputContent } from "@moss/shared";
 import { TasksRepository } from "@moss/tasks";
 import { sql } from "kysely";
+import { DEFAULT_RECORDING_TYPES } from "../../packages/meetings/src/recording-types.js";
 import { MeetingExportsRepository } from "../../packages/meetings/src/export-repository.js";
 
 /** Independent export contract: original columns only, never the history search projection. */
@@ -204,7 +205,8 @@ export const meetingExportTables = [
       "early_enqueued",
       "input_json",
       "recording_import_id",
-      "transcript_revision"
+      "transcript_revision",
+      "manual_entry"
     ],
     derived: []
   },
@@ -236,7 +238,42 @@ export const meetingExportTables = [
   }
 ] as const;
 
-export type MeetingExportGroup = (typeof meetingExportTables)[number]["key"];
+// Identity tables have a different worker write contract; legacy grant tests stay scoped above.
+export const allMeetingExportTables = [
+  ...meetingExportTables,
+  {
+    key: "recording_types",
+    table: "meeting_recording_types",
+    columns: ["owner_user_id", "revision", "types_json"],
+    derived: []
+  },
+  {
+    key: "recording_metadata",
+    table: "meeting_recording_metadata",
+    columns: [
+      "meeting_id",
+      "owner_user_id",
+      "revision",
+      "type_id",
+      "type_source",
+      "title_source",
+      "side",
+      "confidence",
+      "reason",
+      "recorded_at",
+      "source",
+      "output_version"
+    ],
+    derived: []
+  },
+  {
+    key: "manual_entries",
+    table: "meeting_manual_entries",
+    columns: ["meeting_id", "owner_user_id", "request_key", "input_hash", "transcript_revision"],
+    derived: []
+  }
+] as const;
+export type MeetingExportGroup = (typeof allMeetingExportTables)[number]["key"];
 export type StoredMeetingExport = Record<MeetingExportGroup, Record<string, unknown>[]>;
 
 export function camelCase(column: string): string {
@@ -266,7 +303,7 @@ export function sortExportRows(rows: readonly Record<string, unknown>[]) {
 
 export async function readStoredMeetingExport(db: DataContextDb): Promise<StoredMeetingExport> {
   const entries = [];
-  for (const { key, table, columns } of meetingExportTables) {
+  for (const { key, table, columns } of allMeetingExportTables) {
     const { rows } = await sql<Record<string, unknown>>`
       SELECT ${sql.join(columns.map((column) => sql.ref(column)))}
       FROM ${sql.table(`app.${table}`)}
@@ -554,6 +591,15 @@ export async function seedMeetingAccountExport(
       ${new Date("2026-01-01T00:00:00Z")})`.execute(db.db);
   await sql`INSERT INTO app.meeting_stop_summaries (meeting_id,grant_id,request_key,template_id,status,code,due_at)
     SELECT ${meeting.id}::uuid,id,${randomUUID()}::uuid,'general','skipped','no-meaningful-transcript',now() FROM app.meeting_capture_grants WHERE meeting_id=${meeting.id}::uuid LIMIT 1`.execute(
+    db.db
+  );
+  await sql`INSERT INTO app.meeting_recording_types (revision, types_json) VALUES (1, ${JSON.stringify(DEFAULT_RECORDING_TYPES)})`.execute(
+    db.db
+  );
+  await sql`INSERT INTO app.meeting_recording_metadata (meeting_id, type_id, title_source, side, recorded_at) VALUES (${meeting.id}::uuid, 'work-meeting', 'user', 'work', ${new Date("2026-10-01T10:00:00Z")}) ON CONFLICT (meeting_id) DO NOTHING`.execute(
+    db.db
+  );
+  await sql`INSERT INTO app.meeting_manual_entries (meeting_id, request_key, input_hash, transcript_revision) VALUES (${meeting.id}::uuid, ${randomUUID()}::uuid, ${"a".repeat(64)}, 1)`.execute(
     db.db
   );
   return {

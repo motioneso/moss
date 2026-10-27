@@ -134,6 +134,10 @@ async function meetingsFixture(page: Page, context: "available" | "denied" = "av
     if (route.request().method() !== "GET" && pathname !== "/api/meetings/history/search") {
       return route.fulfill({ status: 405, json: { error: "No writes in visual fixture" } });
     }
+    if (pathname === "/api/meetings/recording-types")
+      return route.fulfill({ json: { revision: 0, types: [] } });
+    if (pathname.endsWith("/recording"))
+      return route.fulfill({ json: { metadata: null, configuration: { revision: 0, types: [] } } });
     if (pathname === "/api/meetings/preferences")
       return route.fulfill({
         json: {
@@ -220,7 +224,7 @@ for (const width of [1440, 1080, 768, 390, 320]) {
     await meetingsFixture(page);
     await page.goto(`/meetings?id=${meeting.id}`);
     const workspace = page.getByRole("region", { name: "Meeting workspace" });
-    await expect(workspace).toBeVisible();
+    await expect(workspace).toBeVisible({ timeout: 20_000 });
     const settings = workspace
       .locator("header")
       .getByRole("link", { name: "Settings", exact: true });

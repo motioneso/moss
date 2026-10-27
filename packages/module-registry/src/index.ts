@@ -46,6 +46,7 @@ import {
   MEETING_STOP_SUMMARY_QUEUES,
   MEETING_CAPTURE_MAINTENANCE_QUEUES,
   createMeetingStopSummaryScheduler,
+  createManualMeetingSummaryEnqueue,
   registerMeetingStopSummaryWorker
 } from "@moss/meetings";
 import {
@@ -3024,6 +3025,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveRingRecordingAccessContext ?? deps.resolveAccessContext
       });
       registerMeetingRecordRoutes(server, {
+        manualSummaryEnqueue: createManualMeetingSummaryEnqueue(deps.boss),
         beforeRemove: async (db, id, actor) => {
           await recordingImports.beforeRemove(db, actor, id);
           await deleteMeetingChatThreads(db, id);

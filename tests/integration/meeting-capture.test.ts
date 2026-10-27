@@ -206,6 +206,14 @@ describe("shared meeting recording protocol (isolated gate only)", () => {
     Object.assign(f.deps, { scheduleSummary: createMeetingStopSummaryScheduler(enqueueBoss) });
     const generate = vi.fn(async () => ({
       content: {
+        recording: {
+          title: "Synthetic captured meeting",
+          typeId: "work-meeting",
+          side: "work",
+          confidence: 1,
+          reason: "A synthetic work meeting.",
+          ideaGroups: []
+        },
         overview: "Synthetic captured meeting summary.",
         decisions: [],
         openQuestions: [],

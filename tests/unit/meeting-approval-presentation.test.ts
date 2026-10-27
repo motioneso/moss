@@ -264,6 +264,8 @@ describe("Meetings authored action disclosures", () => {
     expect(
       routes.filter((route) => route.chat.access === "blocked").map((route) => route.path)
     ).toEqual([
+      "/api/meetings/records/:id/recording/type",
+      "/api/meetings/manual-transcripts",
       "/api/meetings/recording-uploads",
       "/api/meetings/recording-uploads/:id",
       "/api/meetings/recording-uploads/:id/:kind/:index",

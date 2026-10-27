@@ -24,7 +24,8 @@ import { registerSettingsRoutes } from "../../packages/settings/src/routes.js";
 import { SettingsRepository } from "../../packages/settings/src/repository.js";
 import {
   camelCase,
-  meetingExportTables,
+  meetingExportTables as legacyMeetingExportTables,
+  allMeetingExportTables as meetingExportTables,
   normalizeStoredRow,
   seedMeetingAccountExport,
   sortExportRows
@@ -361,7 +362,7 @@ describe("Meetings export worker grants and owner RLS", () => {
     }
   );
 
-  it.each(meetingExportTables)(
+  it.each(legacyMeetingExportTables)(
     "$table grants only the original SELECT columns and no write columns",
     async ({ table, columns, derived }) => {
       const qualified = `app.${table}`;
@@ -412,7 +413,7 @@ describe("Meetings export worker grants and owner RLS", () => {
     }
   );
 
-  for (const { table, columns, derived } of meetingExportTables) {
+  for (const { table, columns, derived } of legacyMeetingExportTables) {
     it.each(["INSERT", "UPDATE", "DELETE"] as const)(
       `worker cannot perform unsafe %s on ${table} (UPDATE targets owner_user_id)`,
       async (operation) => {

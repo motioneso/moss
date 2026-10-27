@@ -26,6 +26,7 @@ function fixture() {
     owner_user_id: meetingId,
     grant_id: grantId,
     recording_import_id: null,
+    manual_entry: false,
     transcript_revision: null,
     request_key: requestKey,
     template_id: "general",
