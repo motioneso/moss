@@ -690,6 +690,8 @@ export async function provisionForUat(
   opts?: UatProvisionOptions,
   dependencies: {
     readonly n3BuildEvidence?: N3BuildEvidence;
+    /** Caller-chosen project name for one attempt; a retry after it fails closed. */
+    readonly runId?: UatRunId;
     readonly listLiveSubnets?: typeof listLiveDockerSubnets;
     readonly installRealChatAuth?: typeof installUatRealChatAuth;
   } = {}
@@ -708,12 +710,15 @@ export async function provisionForUat(
       ? Array.from({ length: UAT_PORT_RANGE_SIZE }, (_, i) => UAT_PORT_RANGE_START + i)
       : [opts.claimedWebPort];
   let remainingSubnetCandidates = [...UAT_SUBNET_CANDIDATES];
+  let runIdUsed = false;
   let imageBuilt = false; // build once; a port-bind retry shouldn't rebuild the image
   // #2732: install the Codex credential copy per attempt, after its app container starts.
   // There is no stored-token setup before the loop.
   delete process.env[REAL_CHAT_CONFIGURED_ENV];
   while (remainingCandidates.length > 0) {
-    const { projectName } = generateUatRunId();
+    if (dependencies.runId && runIdUsed) throw new Error("caller-chosen run id allows one attempt");
+    const { projectName } = dependencies.runId ?? generateUatRunId();
+    runIdUsed = true;
     const webPort: number = await findAvailablePort(remainingCandidates);
     const liveSubnets: Awaited<ReturnType<typeof listLiveDockerSubnets>> = await (
       dependencies.listLiveSubnets ?? listLiveDockerSubnets

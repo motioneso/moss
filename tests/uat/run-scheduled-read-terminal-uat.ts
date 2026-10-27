@@ -425,6 +425,16 @@ async function worker(): Promise<number> {
     for (const role of ["BOOTSTRAP", "MIGRATION", "APP", "AUTH", "WORKER"])
       delete process.env[`${prefix}_${role}_DATABASE_URL`];
   const { provisionForUat } = await import("./provisioner.js");
+  const { planWorkerObserver } = await import("./n3-worker-wiring.js");
+  const plan = planWorkerObserver({
+    evidenceDir: evidence,
+    repoRoot: process.cwd(),
+    claimedPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),
+    imageTag: process.env.JARVIS_IMAGE_TAG!,
+    deadline: protocolEnd - 120_000
+  });
+  Object.assign(process.env, plan.lifecycleEnv);
+  let consumer: ReturnType<typeof plan.collector.compose>["consumer"] | undefined;
   let stopped = false;
   let browserChild: ChildProcess | undefined;
   const stop = () => {
@@ -438,10 +448,18 @@ async function worker(): Promise<number> {
   let phase = "provision";
   let cleanup: number;
   try {
-    stack = await provisionForUat("solo-admin", {
-      claimedWebPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT)
-    });
+    stack = await provisionForUat(
+      "solo-admin",
+      {
+        claimedWebPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),
+        n3Observer: plan.option
+      },
+      { n3BuildEvidence: plan.collector, runId: plan.runId }
+    );
     check(!stopped, "interrupted during provisioning");
+    phase = "observer-open";
+    consumer = plan.collector.compose().consumer;
+    await consumer.open();
     phase = "installed-source-correspondence";
     const image = `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`;
     const imageId = capture("docker", ["image", "inspect", "--format", "{{.Id}}", image]);
@@ -512,7 +530,13 @@ async function worker(): Promise<number> {
     console.error(error); // Quarantined worker-raw.log only; never relay this output.
     result = 1;
   } finally {
-    cleanup = await cleanupAll([() => stack?.teardown()]);
+    cleanup = await cleanupAll([
+      async () => {
+        const closed = await consumer?.close();
+        check(!consumer || closed?.disposed, "observer bridge not closed; retain resources");
+      },
+      () => stack?.teardown()
+    ]);
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
     await terminalRecord(evidence, "stack-exit.json", { result, cleanup, stopped, phase });
