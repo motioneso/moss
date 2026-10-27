@@ -104,6 +104,8 @@ are agreed before the build.
 - Scope covers MCP and API connections together.
 - Moss must be able to set up a connection from a link.
 - Moss asks before adding a connection.
+- Prod has a secure (https) address, so sign-in is expected to work there. The callback address
+  is derived from the deployment's public address.
 - Testing does not need to work on the dev copy. A secure test copy is needed for the live proof.
 
 ## Calls made while drafting (Claude, not yet confirmed by Ben)
