@@ -159,7 +159,6 @@ export function MeetingSummary({
     refreshedAutomaticTitle.current = identity;
     // The worker may rename an untouched default title along with its saved artifact.
     void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id) });
-    void client.invalidateQueries({ queryKey: recordingKeys.record(meeting.id) });
     void client.invalidateQueries({ queryKey: meetingKeys.history });
   }, [automatic?.status, automatic?.requestKey, client, meeting.id, session]);
   const [selected, setSelected] = useState<number | undefined>(
@@ -243,7 +242,6 @@ export function MeetingSummary({
       }
       if (result.status === "saved") {
         void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id) });
-        void client.invalidateQueries({ queryKey: recordingKeys.record(meeting.id) });
         void client.invalidateQueries({ queryKey: meetingKeys.history });
       }
       void client.invalidateQueries({ queryKey: outputKeys.list(meeting.id) });

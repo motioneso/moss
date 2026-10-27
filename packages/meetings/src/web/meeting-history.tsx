@@ -148,12 +148,20 @@ export function MeetingHistory({
                     <span className="jds-hint">{date(meeting.createdAt)}</span>
                     <span className="meetings-history-heading">
                       <span className="jds-label">{meeting.title}</span>
-                      {meeting.recording?.typeId ? (
-                        <span>
-                          <Badge tone="neutral" pill>
-                            {types.data?.types.find((type) => type.id === meeting.recording?.typeId)
-                              ?.name ?? meeting.recording.typeId}
-                          </Badge>
+                      {meeting.recording?.typeId || meeting.recording?.side ? (
+                        <span className="meetings-actions">
+                          {meeting.recording.typeId ? (
+                            <Badge tone="neutral" pill>
+                              {types.data?.types.find(
+                                (type) => type.id === meeting.recording?.typeId
+                              )?.name ?? meeting.recording.typeId}
+                            </Badge>
+                          ) : null}
+                          {meeting.recording.side ? (
+                            <span className="jds-hint">
+                              {meeting.recording.side === "personal" ? "Personal" : "Work"}
+                            </span>
+                          ) : null}
                         </span>
                       ) : null}
                       <span className="jds-hint meetings-history-gist">

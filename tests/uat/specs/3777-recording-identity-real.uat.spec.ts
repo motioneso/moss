@@ -112,6 +112,10 @@ test("paste a recording, classify with the real default model, change type, filt
   await page.getByRole("searchbox", { name: "Search meetings", exact: true }).fill("Fernworld");
   await page.getByLabel("Recording type", { exact: true }).selectOption("conversation");
   await expect(page.getByRole("button").filter({ hasText: first.title })).toHaveCount(1);
+  await expect(page.getByRole("button").filter({ hasText: first.title })).toContainText(
+    "Conversation"
+  );
+  await expect(page.getByRole("button").filter({ hasText: first.title })).toContainText("Personal");
   await page.getByLabel("Recording type", { exact: true }).selectOption("brain-dump");
   await expect(page.getByText("No meetings match this search.", { exact: true })).toBeVisible();
   await page.getByLabel("Recording type", { exact: true }).selectOption("");
