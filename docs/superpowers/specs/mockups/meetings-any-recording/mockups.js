@@ -1,3 +1,4 @@
+/* global document */
 // Local fixture interactions only. No API calls or persistent changes.
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];

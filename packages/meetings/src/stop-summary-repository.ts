@@ -11,6 +11,7 @@ export interface MeetingStopSummaryRow {
   owner_user_id: string;
   grant_id: string | null;
   recording_import_id: string | null;
+  manual_entry: boolean;
   transcript_revision: number | null;
   request_key: string;
   template_id: string;
@@ -173,6 +174,35 @@ export class MeetingStopSummaryRepository {
         enqueue
       );
   }
+  async scheduleManual(
+    db: DataContextDb,
+    actor: AccessContext,
+    input: {
+      meetingId: string;
+      transcriptRevision: number;
+      templateId: GenerateMeetingOutputInput["templateId"];
+    },
+    enqueue: MeetingStopSummaryEnqueue
+  ): Promise<void> {
+    assertDataContextDb(db);
+    const row = (
+      await sql<MeetingStopSummaryRow>`INSERT INTO app.meeting_stop_summaries
+      (meeting_id,manual_entry,transcript_revision,request_key,template_id,status,due_at)
+      VALUES(${input.meetingId}::uuid,true,${input.transcriptRevision},${randomUUID()}::uuid,${input.templateId},'waiting',clock_timestamp())
+      RETURNING *`.execute(db.db)
+    ).rows[0]!;
+    // Queue admission failure rolls back this explicit user submission, allowing a safe retry.
+    await enqueue(
+      db,
+      {
+        actorUserId: actor.actorUserId,
+        resourceId: row.meeting_id,
+        idempotencyKey: row.request_key
+      },
+      row.due_at,
+      false
+    );
+  }
   private async skip(db: DataContextDb, meetingId: string, code: string): Promise<null> {
     await sql`UPDATE app.meeting_stop_summaries SET status='skipped',code=${code} WHERE meeting_id=${meetingId}::uuid`.execute(
       db.db
@@ -188,7 +218,11 @@ export class MeetingStopSummaryRepository {
     const row = await this.row(db, meetingId);
     if (!row || row.request_key !== requestKey || row.status === "skipped") return null;
     if (row.input_json) return JSON.parse(row.input_json) as GenerateMeetingOutputInput;
-    if (row.due_at.getTime() + (row.recording_import_id ? 1_209_600_000 : 300000) <= Date.now())
+    if (
+      row.due_at.getTime() +
+        (row.recording_import_id || row.manual_entry ? 1_209_600_000 : 300000) <=
+      Date.now()
+    )
       return this.skip(db, meetingId, "meeting_output_interrupted");
     if (row.recording_import_id) {
       const imported = (
@@ -198,6 +232,16 @@ export class MeetingStopSummaryRepository {
         )
       ).rows[0];
       if (imported?.state !== "complete") return this.skip(db, meetingId, "import-interrupted");
+    } else if (row.manual_entry) {
+      const manual = (
+        await sql<{
+          transcript_revision: number;
+        }>`SELECT transcript_revision FROM app.meeting_manual_entries WHERE meeting_id=${meetingId}::uuid`.execute(
+          db.db
+        )
+      ).rows[0];
+      if (!manual || manual.transcript_revision !== row.transcript_revision)
+        return this.skip(db, meetingId, "manual-entry-interrupted");
     } else {
       const capture = (
         await sql<{
@@ -228,14 +272,14 @@ export class MeetingStopSummaryRepository {
       )
         throw new Error("Meeting finalization is still pending");
     }
-    if (!(await this.preferences.get(db)).summarizeOnStop)
+    if (!row.manual_entry && !(await this.preferences.get(db)).summarizeOnStop)
       return this.skip(db, meetingId, "setting-off");
     if (await this.outputs.head(db, meetingId)) return this.skip(db, meetingId, "existing-output");
     if (await this.outputs.pendingGeneration(db, meetingId))
       return this.skip(db, meetingId, "existing-request");
     const inputs = await this.outputs.inputs(db, meetingId);
     if (
-      row.recording_import_id &&
+      (row.recording_import_id || row.manual_entry) &&
       row.transcript_revision !== (inputs.transcript?.transcriptRevision ?? 0)
     )
       return this.skip(db, meetingId, "transcript-changed");
@@ -282,7 +326,8 @@ export class MeetingStopSummaryRepository {
     ).rows[0];
     if (!request) {
       const expiresAt = new Date(
-        row.due_at.getTime() + (row.recording_import_id ? 1_209_600_000 : 300000)
+        row.due_at.getTime() +
+          (row.recording_import_id || row.manual_entry ? 1_209_600_000 : 300000)
       );
       return {
         status: expiresAt.getTime() <= Date.now() ? "failed" : "waiting",

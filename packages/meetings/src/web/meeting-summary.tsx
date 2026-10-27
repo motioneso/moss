@@ -19,6 +19,7 @@ import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
 import { summaryGenerationFailure, SummaryModelRecovery } from "./summary-generation-error.js";
+import { recordingKeys } from "./recording-client.js";
 export type SummaryTool = "rewrite" | "versions" | "vault" | "copy";
 interface SummaryState {
   readonly generatedVersion?: number;
@@ -28,10 +29,31 @@ interface SummaryState {
     readonly remediation?: "ai-providers";
   };
 }
-export function ArtifactContent({ artifact }: { readonly artifact: MeetingOutputArtifact }) {
+export function ArtifactContent({
+  artifact,
+  typeId = artifact.content.recording?.typeId
+}: {
+  readonly artifact: MeetingOutputArtifact;
+  readonly typeId?: string;
+}) {
+  const groupHeading = typeId === "brain-dump" || typeId === "idea" ? "Ideas" : "Topics";
   return (
     <div className="meetings-section">
       <p className="meetings-transcript-text">{artifact.content.overview}</p>
+      {artifact.content.recording?.ideaGroups.length ? (
+        <Eyebrow as="h3">{groupHeading}</Eyebrow>
+      ) : null}
+      {artifact.content.recording?.ideaGroups.map((group, index) => (
+        <section key={index} className="meetings-section">
+          <p className="jds-label">{group.title}</p>
+          <ul>
+            {group.ideas.map((idea, index) => (
+              <li key={index}>{idea}</li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {artifact.content.decisions.length ? <Eyebrow as="h3">Decisions</Eyebrow> : null}
       {artifact.content.decisions.map((claim, index) => (
         <article className="meetings-section" key={index}>
           <Divider />
@@ -76,6 +98,10 @@ export function MeetingSummary({
     queryKey: meetingKeys.preferences,
     queryFn: getMeetingPreferences,
     retry: false
+  });
+  const recording = useQuery<{ metadata: { typeId: string | null } | null }>({
+    queryKey: recordingKeys.record(meeting.id),
+    enabled: false
   });
   const active = useRef(true);
   useEffect(() => {
@@ -453,7 +479,10 @@ export function MeetingSummary({
                   segments omitted.
                 </Note>
               ) : null}
-              <ArtifactContent artifact={artifact} />
+              <ArtifactContent
+                artifact={artifact}
+                typeId={recording.data?.metadata?.typeId ?? undefined}
+              />
               <div className="meetings-actions">
                 <Button
                   variant="secondary"

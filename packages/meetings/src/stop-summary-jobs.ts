@@ -50,6 +50,20 @@ export function createImportedMeetingSummaryScheduler(boss: Pick<PgBoss, "send">
       if (!id) throw new Error("Imported meeting analysis scheduling unavailable");
     });
 }
+export function createManualMeetingSummaryEnqueue(boss: Pick<PgBoss, "send">) {
+  return async (
+    db: Parameters<MeetingStopSummaryRepository["schedule"]>[0],
+    payload: MeetingStopSummaryPayload,
+    at: Date
+  ) => {
+    const id = await sendJob(boss, MEETING_STOP_SUMMARY_QUEUE, payload, {
+      db: scopedJobDatabase(db),
+      startAfter: at,
+      singletonKey: payload.idempotencyKey
+    });
+    if (!id) throw new Error("Manual recording analysis scheduling unavailable");
+  };
+}
 export async function registerMeetingStopSummaryWorker(
   boss: PgBoss,
   dataContext: DataContextRunner,

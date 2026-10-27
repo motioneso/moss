@@ -11,6 +11,9 @@ type JsonValue = boolean | null | number | string | JsonValue[] | { [key: string
 type ExportRow = Record<string, JsonValue>;
 
 export interface MeetingsExportSection {
+  readonly recording_types: readonly ExportRow[];
+  readonly recording_metadata: readonly ExportRow[];
+  readonly manual_entries: readonly ExportRow[];
   readonly voice_enablements: readonly ExportRow[];
   readonly recording_imports: readonly ExportRow[];
   readonly records: readonly ExportRow[];
@@ -78,6 +81,24 @@ export async function collectMeetingsExportSection(
       })
     : imports;
   return {
+    recording_types: await readRows(
+      scopedDb,
+      sql<
+        Record<string, unknown>
+      >`SELECT owner_user_id,revision,types_json FROM app.meeting_recording_types WHERE owner_user_id=${ownerUserId}::uuid ORDER BY owner_user_id`
+    ),
+    recording_metadata: await readRows(
+      scopedDb,
+      sql<
+        Record<string, unknown>
+      >`SELECT * FROM app.meeting_recording_metadata WHERE owner_user_id=${ownerUserId}::uuid ORDER BY meeting_id`
+    ),
+    manual_entries: await readRows(
+      scopedDb,
+      sql<
+        Record<string, unknown>
+      >`SELECT * FROM app.meeting_manual_entries WHERE owner_user_id=${ownerUserId}::uuid ORDER BY meeting_id`
+    ),
     voice_enablements: await readRows(
       scopedDb,
       sql<Record<string, unknown>>`
@@ -202,7 +223,7 @@ export async function collectMeetingsExportSection(
     stop_summaries: await readRows(
       scopedDb,
       sql<Record<string, unknown>>`
-      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId", recording_import_id::text AS "recordingImportId",transcript_revision AS "transcriptRevision",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
+      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId", recording_import_id::text AS "recordingImportId",manual_entry AS "manualEntry",transcript_revision AS "transcriptRevision",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
       FROM app.meeting_stop_summaries WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,meeting_id
     `
     ),

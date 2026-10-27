@@ -4,6 +4,8 @@ import type {
   MeetingOutputInputs
 } from "@moss/shared";
 
+import { validateRecordingInterpretation } from "./recording-validation.js";
+
 const MAX_OVERVIEW_CHARACTERS = 4_000;
 const MAX_ITEM_CHARACTERS = 2_000;
 const MAX_PHRASE_CHARACTERS = 300;
@@ -253,7 +255,25 @@ export function validateMeetingOutput(
       segmentIds.add(segment.segmentId);
     }
   }
-  const output = record(value, ["overview", "decisions", "openQuestions", "actions", "warnings"]);
+  const hasRecording =
+    typeof value === "object" && value !== null && Object.hasOwn(value, "recording");
+  const output = record(value, [
+    "overview",
+    "decisions",
+    "openQuestions",
+    "actions",
+    "warnings",
+    ...(hasRecording ? ["recording"] : [])
+  ]);
+  let recording: MeetingOutputContent["recording"];
+  if (hasRecording) {
+    if (!inputs.recording) invalid("inputs_invalid");
+    try {
+      recording = validateRecordingInterpretation(output.recording, inputs.recording);
+    } catch {
+      invalid("schema_invalid");
+    }
+  }
   let characters = 0;
   const boundedText = (value: unknown, maximum = MAX_ITEM_CHARACTERS): string => {
     const result = text(value, maximum);
@@ -296,6 +316,7 @@ export function validateMeetingOutput(
     return result;
   };
   return {
+    ...(recording ? { recording } : {}),
     overview: boundedText(output.overview, MAX_OVERVIEW_CHARACTERS),
     decisions: list(output.decisions).map((value) => {
       const result = claim(value, false);

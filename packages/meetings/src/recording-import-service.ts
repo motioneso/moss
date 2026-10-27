@@ -21,6 +21,7 @@ import {
   voiceRecordingImportStatus
 } from "./recording-import-repository.js";
 import { MeetingRecordsRepository } from "./repository.js";
+import { RecordingMetadataRepository } from "./recording-metadata.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { RecordingUploadRepository } from "./recording-upload-repository.js";
 import { RecordingUploadService } from "./recording-upload-service.js";
@@ -166,6 +167,13 @@ export class RecordingImportService {
                 bundle.mode === "voice-request" ? "Imported voice request" : "Imported recording"
             })
           ).meeting;
+      if (meeting)
+        await new RecordingMetadataRepository().create(db, meeting.id, {
+          titleSource: "automatic",
+          typeId: null,
+          source: "recording",
+          recordedAt: null
+        });
       const row = await this.imports.insert(db, id, meeting?.id ?? null, bundle, policy);
       await this.deps.schedule(
         db,
