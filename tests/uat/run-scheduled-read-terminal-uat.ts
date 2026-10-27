@@ -1,8 +1,9 @@
 /**
  * #3529 supplemental seeded-owner proof: signup, nine blocking UATs, N1,
  * cancellation/unsaved/fault/due-worker and routine activation remain OUTSTANDING.
- * BLOCKED: no complete correlated fallback observer. All live entries fail closed.
- * After seam repair/executable review: --launch <NEW-private-evidence-directory> (read verify-gate).
+ * The worker drives the correlated fallback observer: chosen run id, observer windows around
+ * each chat turn, 12-minute browser box, ordered teardown. The self-test fails if any join is cut.
+ * Live: --launch <NEW-private-evidence-directory> (read verify-gate).
  * One no-sweep test:uat:3529-real gate/wait; local Docker, pre-import private roots/source/image/DB.
  * Birth/group/session checked before signals/stop; uncertainty retains roots/port/resources (RED).
  * Aggregate 14m includes cleanup. RAW evidence is 0700/0600, without a zero-capture/erasure claim.
@@ -39,6 +40,8 @@ import {
   signalOwned,
   startChild
 } from "./n3-process-control.js";
+import { driveWorker } from "./n3-worker-drive.js";
+import { driveControls } from "./n3-worker-drive-controls.js";
 import {
   EXPECTED_WINDOWS,
   serveWindows,
@@ -81,11 +84,6 @@ function remaining(max = 120_000): number {
   const left = protocolEnd - Date.now();
   check(left > 0, "aggregate protocol deadline exhausted; retain owned resources");
   return Math.max(1, Math.min(max, left));
-}
-export function requireFallbackObserver(): void {
-  throw new Error(
-    "N3_FALLBACK_OBSERVER_UNAVAILABLE: launch/submission/classifier attempts unobservable"
-  );
 }
 async function protectedLifecycle(body: () => Promise<void>, cleanup: () => Promise<number>) {
   let failed = false;
@@ -225,7 +223,6 @@ function projectsInLog(raw: string, pid: number): string[] {
 }
 
 async function gateMain(): Promise<number> {
-  requireFallbackObserver();
   check(process.env.JARVIS_GATE_RUN === "1", "verify-gate launcher required");
   const root = process.env.N3_UAT_ROOT!;
   const evidence = process.env.N3_UAT_EVIDENCE!;
@@ -337,7 +334,6 @@ function requireWorkerClosure(evidence: string): number {
   return pid;
 }
 async function worker(): Promise<number> {
-  requireFallbackObserver();
   check(
     process.env.JARVIS_GATE_RUN === "1" && process.env.N3_UAT_ROOT,
     "worker requires owned gate"
@@ -360,9 +356,6 @@ async function worker(): Promise<number> {
     imageTag: process.env.JARVIS_IMAGE_TAG!,
     deadline: runEnd
   });
-  Object.assign(process.env, plan.lifecycleEnv);
-  let consumer: ReturnType<typeof plan.collector.compose>["consumer"] | undefined;
-  let windows: WindowServer | undefined;
   let stopped = false;
   let browserChild: ChildProcess | undefined;
   const stop = () => {
@@ -371,118 +364,96 @@ async function worker(): Promise<number> {
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  let stack: Awaited<ReturnType<typeof provisionForUat>> | undefined;
-  let result = 1;
-  let phase = "provision";
-  let cleanup: number;
-  let teardown: Awaited<ReturnType<typeof orderedTeardown>>;
+  let outcome: Awaited<ReturnType<typeof driveWorker>>;
   try {
-    stack = await provisionForUat(
-      "solo-admin",
-      {
-        claimedWebPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),
-        n3Observer: plan.option
+    outcome = await driveWorker({
+      evidence,
+      claimedPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),
+      runEnd,
+      plan,
+      env: process.env,
+      now: Date.now,
+      isStopped: () => stopped,
+      provision: provisionForUat,
+      serveWindows,
+      verifyWindows,
+      verifyInstalled: (stack) => verifyInstalled(evidence, stack.projectName),
+      runBrowser: async (env, deadline) => {
+        browserChild = startChild(
+          [
+            process.execPath,
+            "node_modules/@playwright/test/cli.js",
+            "test",
+            "--config",
+            "tests/uat/playwright.uat.config.ts",
+            "--workers=1",
+            "--retries=0",
+            "--reporter=line",
+            "--output",
+            join(process.env.N3_UAT_ROOT!, "playwright"),
+            SPEC
+          ],
+          env,
+          join(evidence, "playwright-raw.log")
+        );
+        return boundedChild(browserChild, deadline);
       },
-      { n3BuildEvidence: plan.collector, runId: plan.runId }
-    );
-    check(!stopped, "interrupted during provisioning");
-    phase = "observer-open";
-    consumer = plan.collector.compose().consumer;
-    await consumer.open();
-    windows = serveWindows(evidence, consumer);
-    phase = "installed-source-correspondence";
-    const image = `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`;
-    const imageId = capture("docker", ["image", "inspect", "--format", "{{.Id}}", image]);
-    check(/^sha256:[a-f0-9]{64}$/.test(imageId), "immutable image missing");
-    const container = `${stack.projectName}-jarv1s-1`;
-    check(
-      capture("docker", ["inspect", "--format", "{{.Image}}", container]) === imageId,
-      "installed image mismatch"
-    );
-    const databaseBoundary = capture("docker", [
-      "exec",
-      container,
-      "node",
-      "-e",
-      "const roles=['BOOTSTRAP','MIGRATION','APP','AUTH','WORKER'];" +
-        "for(const role of roles){const u=new URL(process.env['MOSS_'+role+'_DATABASE_URL']??process.env['JARVIS_'+role+'_DATABASE_URL']);" +
-        "if(u.hostname!=='postgres'||u.port!=='5432'||u.pathname!=='/jarv1s')process.exit(1)};console.log('owned-compose-postgres')"
-    ]);
-    check(databaseBoundary === "owned-compose-postgres", "UAT DB endpoint mismatch");
-    const installed: Record<string, string> = {};
-    for (const path of PRODUCT) {
-      const hash = capture("docker", ["exec", container, "sha256sum", `/app/${path}`]).split(
-        /\s+/
-      )[0]!;
-      check(hash === digest(readFileSync(path)), "installed product bytes mismatch");
-      installed[path] = hash;
-    }
-    const input = JSON.parse(readFileSync(join(evidence, "inputs.json"), "utf8")) as {
-      head: string;
-    };
-    check(sourceReceipt().head === input.head, "source freeze changed during build");
-    record(evidence, "installed.json", {
-      project: stack.projectName,
-      imageId,
-      databaseBoundary,
-      installed,
-      callerRoot: process.env.N3_UAT_ROOT,
-      fixtureRoots: ["/data/cli-auth", `/data/vaults/00000000-0000-4000-8000-000000000001`]
-    });
-    const env = {
-      ...process.env,
-      JARVIS_UAT_BASE_URL: stack.baseURL,
-      JARVIS_UAT_PROJECT_NAME: stack.projectName,
-      MOSS_UAT_CAPTURE_OFF: "1",
-      MOSS_UAT_BROWSER: "chromium"
-    };
-    phase = "playwright";
-    browserChild = startChild(
-      [
-        process.execPath,
-        "node_modules/@playwright/test/cli.js",
-        "test",
-        "--config",
-        "tests/uat/playwright.uat.config.ts",
-        "--workers=1",
-        "--retries=0",
-        "--reporter=line",
-        "--output",
-        join(process.env.N3_UAT_ROOT!, "playwright"),
-        SPEC
-      ],
-      env,
-      join(evidence, "playwright-raw.log")
-    );
-    result = await boundedChild(browserChild, runEnd);
-    if (stopped) result = 1;
-    if (result && Date.now() >= runEnd) phase = "time-box";
-    phase = "observer-windows";
-    verifyWindows(await windows.stop(), EXPECTED_WINDOWS);
-  } catch (error) {
-    console.error(error); // Quarantined worker-raw.log only; never relay this output.
-    result = 1;
-  } finally {
-    teardown = await orderedTeardown({
-      project: plan.runId.projectName,
-      stopWindows: async () => windows?.stop(),
-      closeObserver: async () => consumer?.close(),
-      removeStack: async () => stack?.teardown(),
       listOwned: listOwnedResources,
-      beforeStep: () => void remaining()
+      beforeStep: () => void remaining(),
+      onError: (error) => console.error(error) // Quarantined worker-raw.log only; never relay.
     });
-    cleanup = teardown.errors;
+  } finally {
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
-    await terminalRecord(evidence, "stack-exit.json", {
-      result,
-      cleanup,
-      stopped,
-      phase,
-      teardown
-    });
   }
-  return result || cleanup ? 1 : 0;
+  await terminalRecord(evidence, "stack-exit.json", {
+    result: outcome.result,
+    cleanup: outcome.cleanup,
+    stopped,
+    phase: outcome.phase,
+    teardown: outcome.teardown
+  });
+  return outcome.result || outcome.cleanup ? 1 : 0;
+}
+async function verifyInstalled(evidence: string, projectName: string): Promise<void> {
+  const image = `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`;
+  const imageId = capture("docker", ["image", "inspect", "--format", "{{.Id}}", image]);
+  check(/^sha256:[a-f0-9]{64}$/.test(imageId), "immutable image missing");
+  const container = `${projectName}-jarv1s-1`;
+  check(
+    capture("docker", ["inspect", "--format", "{{.Image}}", container]) === imageId,
+    "installed image mismatch"
+  );
+  const databaseBoundary = capture("docker", [
+    "exec",
+    container,
+    "node",
+    "-e",
+    "const roles=['BOOTSTRAP','MIGRATION','APP','AUTH','WORKER'];" +
+      "for(const role of roles){const u=new URL(process.env['MOSS_'+role+'_DATABASE_URL']??process.env['JARVIS_'+role+'_DATABASE_URL']);" +
+      "if(u.hostname!=='postgres'||u.port!=='5432'||u.pathname!=='/jarv1s')process.exit(1)};console.log('owned-compose-postgres')"
+  ]);
+  check(databaseBoundary === "owned-compose-postgres", "UAT DB endpoint mismatch");
+  const installed: Record<string, string> = {};
+  for (const path of PRODUCT) {
+    const hash = capture("docker", ["exec", container, "sha256sum", `/app/${path}`]).split(
+      /\s+/
+    )[0]!;
+    check(hash === digest(readFileSync(path)), "installed product bytes mismatch");
+    installed[path] = hash;
+  }
+  const input = JSON.parse(readFileSync(join(evidence, "inputs.json"), "utf8")) as {
+    head: string;
+  };
+  check(sourceReceipt().head === input.head, "source freeze changed during build");
+  record(evidence, "installed.json", {
+    project: projectName,
+    imageId,
+    databaseBoundary,
+    installed,
+    callerRoot: process.env.N3_UAT_ROOT,
+    fixtureRoots: ["/data/cli-auth", `/data/vaults/00000000-0000-4000-8000-000000000001`]
+  });
 }
 async function removeDocker(list: string[], remove: string[], valid = (_id: string) => true) {
   const ids = capture("docker", list).split("\n").filter(Boolean);
@@ -506,7 +477,6 @@ async function cleanupProject(project: string): Promise<void> {
   check(errors === 0, "project cleanup incomplete");
 }
 async function launch(destination: string): Promise<number> {
-  requireFallbackObserver();
   process.umask(0o077);
   rejectOverrides(process.env);
   // All launch, observation, fixture, spec and cleanup calls inherit one endpoint.
@@ -876,8 +846,7 @@ async function selfTest(): Promise<void> {
     assert.equal(lstatSync(join(root, "receipt.json")).mode & 0o777, 0o600);
     assert.throws(() => record(root, "receipt.json", { replaced: true }));
     controls++;
-    assert.throws(requireFallbackObserver, /N3_FALLBACK_OBSERVER_UNAVAILABLE/);
-    controls++;
+    controls += await driveControls();
     for (const failAt of [0, 1, 2]) {
       let partial: string | undefined;
       const disposition = await protectedLifecycle(

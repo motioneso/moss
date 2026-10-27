@@ -10,7 +10,6 @@ import {
   type ListScheduledTasksResponse,
   type LocaleSettingsDto
 } from "@moss/shared";
-import { requireFallbackObserver } from "../run-scheduled-read-terminal-uat.js";
 import {
   completeWindow,
   receiptSha256,
@@ -265,7 +264,6 @@ else
   test("#3529 admitted missing-task refusal and one saved owned check stay terminal", async ({
     page
   }) => {
-    requireFallbackObserver(); // Fail closed until correlated attempt coverage exists.
     test.setTimeout(8 * 60_000);
     expect(process.env.JARVIS_GATE_RUN).toBe("1");
     expect(process.env.N3_UAT_EVIDENCE).toBeTruthy();

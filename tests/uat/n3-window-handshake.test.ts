@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  EXPECTED_WINDOWS,
   completeWindow,
   receiptSha256,
   requestWindow,
@@ -175,5 +176,28 @@ describe("N3 window handshake", () => {
     expect(() =>
       verifyWindows(log(full, { failure: "x" }), ["positive", "terminal", "terminal"])
     ).toThrow("failed");
+  });
+});
+
+describe("expected window list", () => {
+  const SPEC = "tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts";
+  const order = (source: string) =>
+    [
+      ...source
+        .replace(/async function sendInMain[^\n]*\n/, "")
+        .matchAll(/sendInMain\(\s*page,[\s\S]*?,\s*"(positive|terminal)"\s*\)/g)
+    ].map((match) => match[1]);
+
+  it("is one harmless reply and then two terminal turns", () => {
+    expect(EXPECTED_WINDOWS).toEqual(["positive", "terminal", "terminal"]);
+  });
+
+  it("matches the order the real-UI spec sends its turns", () => {
+    const source = readFileSync(SPEC, "utf8");
+    expect(order(source)).toEqual([...EXPECTED_WINDOWS]);
+    const swapped = source
+      .replace('"positive")', '"terminal")')
+      .replace(/(\n\s*)"terminal"(\n\s*\);)/, '$1"positive"$2');
+    expect(order(swapped)).not.toEqual([...EXPECTED_WINDOWS]);
   });
 });
