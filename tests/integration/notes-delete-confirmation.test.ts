@@ -1,20 +1,27 @@
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dataContextBrand, type DataContextDb } from "@moss/db";
+import { createDatabase, DataContextRunner } from "@moss/db";
+import { NOTES_SOURCE_PREFERENCE_KEY } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { notesModuleManifest } from "../../packages/notes/src/manifest.js";
-import { admissionFixture } from "./helpers/gateway-admission-fixture.js";
+import { admissionFixture } from "../unit/helpers/gateway-admission-fixture.js";
+import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
-const db = { [dataContextBrand]: true, db: {} } as DataContextDb;
+const db = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+const runner = new DataContextRunner(db);
+beforeAll(resetFoundationDatabase);
+afterAll(() => db.destroy());
 const content = "A note that must survive a rejected deletion.";
 let root: string;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "moss-note-delete-confirmation-"));
   vi.stubEnv("MOSS_NOTES_ROOTS", root);
   vi.stubEnv("JARVIS_NOTES_ROOTS", root);
-  vi.spyOn(PreferencesRepository.prototype, "get").mockResolvedValue(root);
+  await runner.withDataContext({ actorUserId: ids.userA, requestId: "seed" }, (scopedDb) =>
+    new PreferencesRepository().upsert(scopedDb, NOTES_SOURCE_PREFERENCE_KEY, root)
+  );
   await writeFile(join(root, "Keep.md"), content);
 });
 afterEach(async () => {
@@ -32,7 +39,7 @@ describe.each(["trusted_auto", "auto-approve", "both"] as const)(
         const declared = notesModuleManifest.assistantTools.find(
           (tool) => tool.name === "notes.delete"
         )!;
-        // Use the real manifest, presentation, and file deletion; only persistence ports are fake.
+        // Real scoped persistence, manifest, presentation, and deletion; action notifications stay in memory.
         const execute = vi.fn(declared.execute);
         const tool = { ...declared, isExternal: false, execute };
         const family = notesModuleManifest.assistantActionFamilies.find(
@@ -40,11 +47,10 @@ describe.each(["trusted_auto", "auto-approve", "both"] as const)(
         )!;
         const enqueue = vi.fn(async () => null);
         const h = admissionFixture([tool], {
+          actorUserId: ids.userA,
           deps: {
             resolveActiveModules: async () => [{ ...notesModuleManifest, assistantTools: [tool] }],
-            runner: {
-              withDataContext: async (_access: unknown, run: (value: unknown) => unknown) => run(db)
-            } as never,
+            runner,
             toolServices: { notesSync: { enqueue } },
             actionPolicy: () => ({
               getFamilyTier: async () =>
@@ -102,9 +108,9 @@ describe.each(["trusted_auto", "auto-approve", "both"] as const)(
           } else {
             expect(result.ok).toBe(true);
             expect(execute).toHaveBeenCalledExactlyOnceWith(
-              db,
+              expect.objectContaining({ db: expect.anything() }),
               { path: "Keep.md" },
-              expect.objectContaining({ actorUserId: "actor-a" }),
+              expect.objectContaining({ actorUserId: ids.userA }),
               { notesSync: { enqueue } }
             );
             expect(enqueue).toHaveBeenCalledTimes(1);
