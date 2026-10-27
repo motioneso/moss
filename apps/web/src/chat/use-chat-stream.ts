@@ -133,6 +133,8 @@ export function useChatStream(
   const hydrationGeneration = useRef(0);
   // The exact owned drawer thread this browser shows, for background arrival and catch-up.
   const hydratedDrawerThread = useRef<string | undefined>(undefined);
+  // An empty account can create Main during its first turn, before that turn can finish.
+  const emptyDrawerOwner = useRef<string | undefined>(undefined);
   // Private and module chats do not accept reminder arrivals.
   const hydratedSideThread = useRef(false);
   // Messages already hydrated at selection are not re-added by catch-up.
@@ -142,6 +144,7 @@ export function useChatStream(
 
   // Bind a confirmed drawer selection before accepting arrivals or catch-up.
   const clearRecords = useCallback((threadId?: string) => {
+    emptyDrawerOwner.current = undefined;
     const onDrawer =
       threadId !== undefined &&
       (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
@@ -211,6 +214,27 @@ export function useChatStream(
         // #1135 — reset error count on successful message so transient errors don't lock private chat
         setStreamErrorCount(0);
         const record = parseRecord(event.data);
+        if (record?.actionThreadId && !hydratedDrawerThread.current && emptyDrawerOwner.current) {
+          const ownerId = emptyDrawerOwner.current;
+          // Verify Main through the owner-scoped API; an incoming event cannot select a thread.
+          void listChatThreads(surface)
+            .then(({ threads }) => {
+              if (!isCurrent() || emptyDrawerOwner.current !== ownerId) return;
+              const main = threads.find(
+                (thread) => thread.isMain && thread.ownerUserId === ownerId
+              );
+              if (!main || main.id !== record.actionThreadId) return;
+              hydratedDrawerThread.current = main.id;
+              knownDrawerReminders.current = readBackgroundMessageIds(main.id, surface);
+              setRecords((current) =>
+                isCurrent() && hydratedDrawerThread.current === main.id
+                  ? applyStreamRecord(current, record)
+                  : current
+              );
+            })
+            .catch(() => undefined);
+          return;
+        }
         if (
           record &&
           (!record.actionThreadId || record.actionThreadId === hydratedDrawerThread.current) &&
@@ -248,6 +272,7 @@ export function useChatStream(
   useEffect(() => {
     setHydratedSurface(undefined);
     hydratedDrawerThread.current = undefined;
+    emptyDrawerOwner.current = undefined;
     hydratedSideThread.current = false;
     knownDrawerReminders.current = Promise.resolve(new Set());
     if (!surface || !enabled) return;
@@ -282,6 +307,7 @@ export function useChatStream(
           ? (ownedThreads.find((candidate) => candidate.isMain) ?? ownedThreads[0])
           : threads[0];
         if (!thread) {
+          if (isDrawer) emptyDrawerOwner.current = viewer?.user.id;
           setRecords((current) => (current.length === 0 ? workflowRecords : current));
           return;
         }

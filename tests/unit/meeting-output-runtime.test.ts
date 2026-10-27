@@ -265,7 +265,19 @@ describe("meeting output composition HTTP boundary", () => {
   it("uses exactly the effective default route with bounded schema and no executable tools", async () => {
     assertBoundedStructuredSchema(MEETING_OUTPUT_SCHEMA);
     const h = setup();
-    const result = await h.generator(actor, input());
+    const base = input();
+    const configuration = {
+      revision: 1,
+      types: base.inputs.recording.configuration.types.map((type) => ({
+        ...type,
+        templateId: type.id === "work-meeting" ? ("project-review" as const) : type.templateId
+      }))
+    };
+    const request = {
+      ...base,
+      inputs: { ...base.inputs, recording: { ...base.inputs.recording, configuration } }
+    };
+    const result = await h.generator(actor, request);
     expect(result.content).toEqual(content);
     expect(JSON.parse(result.modelRoute)).toEqual({
       capability: "summarization",
@@ -288,6 +300,8 @@ describe("meeting output composition HTTP boundary", () => {
     expect(body).not.toHaveProperty("tool_choice");
     expect(body.response_format.json_schema.schema).toEqual(MEETING_OUTPUT_SCHEMA);
     expect(body.messages[0].content).toContain("\\u003c/externalData\\u003e");
+    expect(body.messages[0].content).toContain("project-review: Progress, risks, blockers");
+    expect(body.messages[0].content).toContain('"templateId":"project-review"');
     expect(body.messages[0].content).toContain("not necessarily the full meeting");
   });
   it.each([

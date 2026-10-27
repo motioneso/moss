@@ -1,16 +1,28 @@
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { recordingTypeConfigurationPresentation } from "./recording-type-presentations.js";
 export const recordingIdentityRoutes = [
   {
     method: "GET",
     path: "/api/meetings/recording-types",
     permissionId: "meetings.read",
-    chat: { access: "read" }
+    chat: { access: "read", content: "user_authored" }
+  },
+  {
+    method: "PUT",
+    path: "/api/meetings/recording-types",
+    permissionId: "meetings.write",
+    chat: {
+      access: "write",
+      content: "user_authored",
+      title: "Add, rename, describe, restyle or retire recording types",
+      presentation: recordingTypeConfigurationPresentation
+    }
   },
   {
     method: "GET",
     path: "/api/meetings/records/:id/recording",
     permissionId: "meetings.read",
-    chat: { access: "read" }
+    chat: { access: "read", content: "user_authored" }
   },
   {
     method: "PUT",
@@ -76,6 +88,46 @@ export const recordingIdentityFeature = {
       path: "/meetings",
       description:
         "Keep the submitted transcript while retrying. For retained recordings with failed analysis, open Meeting actions → Rewrite summary after configuring the default model in Settings → AI providers."
+    }
+  ]
+} satisfies NonNullable<MossModuleManifest["features"]>[number];
+
+export const recordingTypeConfigurationFeature = {
+  id: "meetings.recording_type_configuration",
+  description:
+    "Edit recording types, descriptions and summary styles through chat approval. Retire or restore types without losing old identity or history filters. Limit: 32 retained types and bounded total description space, including retired entries.",
+  errors: [
+    {
+      code: "recording_type_configuration_invalid",
+      class: "validation",
+      description:
+        "Keep all existing IDs, unique names up to 80 characters, nonempty descriptions up to 500, a supported summary style and at least one active type. Retire old types; add new types as active."
+    },
+    {
+      code: "recording_type_configuration_conflict",
+      class: "transient",
+      description:
+        "Recording types changed elsewhere. Ask Moss to read the current list and propose the edit again."
+    },
+    {
+      code: "recording_type_limit",
+      class: "validation",
+      description:
+        "The limit is 32 total types, including retired types. Restore or edit an existing type; retirement does not free a slot."
+    },
+    {
+      code: "recording_type_configuration_too_large",
+      class: "validation",
+      description:
+        "The complete configuration is too large. Shorten names or descriptions; retired entries still consume space."
+    }
+  ],
+  remediations: [
+    {
+      id: "meetings.edit_recording_types",
+      path: "/meetings",
+      description:
+        "Ask in chat to edit or restore recording types and summary styles. Review before/after fields before approval. Read the latest list after a conflict. Shorten descriptions for size errors; retired types still count toward the 32-type limit."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];

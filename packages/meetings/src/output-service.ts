@@ -117,9 +117,11 @@ export class MeetingOutputService {
     input: GenerateMeetingOutputInput,
     reservation: Awaited<ReturnType<MeetingOutputService["reserve"]>>
   ): Promise<MeetingOutputResult> {
-    const selectedType = reservation.inputs?.recording?.configuration.types.find(
-      (type) => type.id === reservation.inputs?.recording?.metadata.typeId
-    );
+    const context = reservation.inputs?.recording;
+    const selectedType =
+      context?.metadata.typeSource === "user"
+        ? context.configuration.types.find((type) => type.id === context.metadata.typeId)
+        : undefined;
     const template = getMeetingOutputTemplate(
       selectedType?.templateId ?? input.templateId,
       input.templateVersion
@@ -151,6 +153,13 @@ export class MeetingOutputService {
       const validated = validateMeetingOutput(generated.content, inputs);
       if (inputs.recording && !validated.recording)
         throw new MeetingOutputValidationError("schema_invalid");
+      const effectiveType =
+        selectedType ??
+        context?.configuration.types.find((type) => type.id === validated.recording?.typeId);
+      const effectiveTemplate = effectiveType
+        ? getMeetingOutputTemplate(effectiveType.templateId, 1)
+        : template;
+      if (!effectiveTemplate) throw new MeetingOutputValidationError("schema_invalid");
       if (!generated.modelRoute || generated.modelRoute.length > 1024)
         throw new Error("Invalid route receipt");
       const warnings = [...validated.warnings.slice(0, 47)];
@@ -178,8 +187,8 @@ export class MeetingOutputService {
         const artifact = await this.repository.save(db, {
           meetingId,
           inputs,
-          templateId: template.id,
-          templateVersion: template.version,
+          templateId: effectiveTemplate.id,
+          templateVersion: effectiveTemplate.version,
           modelRoute: generated.modelRoute,
           content: validateMeetingOutput({ ...validated, warnings }, inputs),
           origin: "generated",

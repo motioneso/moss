@@ -90,13 +90,11 @@ export function MeetingHistory({
             onChange={(event) => setTypeId(event.target.value)}
           >
             <option value="">All types</option>
-            {types.data?.types
-              .filter((type) => !type.retired)
-              .map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
+            {types.data?.types.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
           </Select>
         </Field>
       </div>
