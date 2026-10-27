@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-27
 
-**Status:** Draft for Ben's review. Not approved. No build issue exists yet; one `task` issue is
+**Status:** Draft for Ben's review. Not approved. Two decisions are recorded (see Decided). No build issue exists yet; one `task` issue is
 opened per slice after approval.
 
 **Grounded on:** `origin/main` = `936eee87a`, `docs/operations/self-hosted-tls.md`,
@@ -138,14 +138,14 @@ registration service". Releasing deletes the public records and the stored insta
 
 ### Where the registration service runs
 
-Two options.
+Ben chose the Worker on 2026-10-27. The comparison that led there.
 
 | Option                                          | For                                                                                          | Against                                                                                                                                             |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Worker on the existing Cloudflare account       | No box to keep alive; tokens held as Worker secrets; free plan allows 100,000 requests a day | 10 ms CPU limit per request on the free plan (waiting on outbound calls is expected not to count; not verified); storage product limits not checked |
 | Process on Ben's box behind the existing tunnel | Plain Node/Fastify like the rest of the repo; easy to debug                                  | A home machine that also runs agents holds the DNS tokens; outage there stops registration and renewals                                             |
 
-**Recommendation: Worker.** The service is small (a few endpoints, a small database), it needs high
+**Decided: Worker.** The service is small (a few endpoints, a small database), it needs high
 availability for renewals, and a home box is a poor place to keep a token that can edit public DNS.
 Slice 2 starts with a spike that confirms the free plan's CPU limit and storage fit; if the spike
 fails, the paid Workers plan is the fallback before the home box is.
@@ -493,41 +493,45 @@ Same PR as each slice.
 - Moss's self-knowledge needs to know that traffic never passes through the Moss project and that
   names are public; both go in the feature descriptions.
 
+## Decided
+
+Decided by Ben on 2026-10-27.
+
+1. **The registration service runs as a Cloudflare Worker** on the account that owns meetmoss.com.
+   The home-box option is dropped. The slice 2 spike still checks the free plan's CPU limit and
+   storage fit, with the paid Workers plan as the fallback.
+2. **User names stay under `meetmoss.com`.** No separate user-content domain. This requires the
+   Public Suffix List entry for `meetmoss.com`, and the marketing site at the apex shares no cookies
+   with names.
+
 ## Open questions for Ben (most important first)
 
-1. **Is a separate user-content domain better than meetmoss.com itself?** User content on the
-   marketing domain forces a Public Suffix List entry for the whole domain and makes the apex a
-   separate site from every name. A different domain for names (as GitHub, Heroku and others do)
-   keeps meetmoss.com clean and removes the entanglement. _Recommendation: keep `meetmoss.com`
-   (the name is the product), list it, and accept that the marketing site shares nothing with
-   subdomains._ This is the cheapest option to start but the hardest to reverse once names exist.
-2. **What if the Public Suffix List declines or delays the entry?** The list says small projects
+1. **What if the Public Suffix List declines or delays the entry?** The list says small projects
    (under thousands of users) are likely declined and gives no time promise. _Recommendation: launch
    as an invite-limited beta under 50 new names a week, file Let's Encrypt's rate limit form
    in parallel, and keep plain Tailscale the headline feature._
-3. **Account sign-in method for the registration service.** Email link, GitHub or Google sign-in,
+2. **Account sign-in method for the registration service.** Email link, GitHub or Google sign-in,
    or a Moss-project account that also serves other things later. _Recommendation: email link only
    at launch (no passwords, no third-party identity), with abuse limits per email domain._
-4. **Which Tailscale DNS setting do you keep off on the server?** The tailnet-wide MagicDNS
+3. **Which Tailscale DNS setting do you keep off on the server?** The tailnet-wide MagicDNS
    setting, or only the server's own "use Tailscale DNS" setting. The first disables Tailscale's
    HTTPS names entirely; the second may not. _Recommendation: tell me which, and I will test it in
    slice 1; either way the meetmoss name path stays independent of it._
-5. **Cloudflare plan and record cap.** What per-zone record limit does your zone show, and are you
+4. **Cloudflare plan and record cap.** What per-zone record limit does your zone show, and are you
    willing to move to a paid plan or run your own DNS if the beta grows past it? _Recommendation:
    check the dashboard now; plan the beta size from the number; keep the DNS backend swappable._
-6. **Where the service runs.** Worker or your box. _Recommendation: Worker._
-7. **Who watches the abuse address and approves takedowns?** _Recommendation: you, with a short
+5. **Who watches the abuse address and approves takedowns?** _Recommendation: you, with a short
    written policy (what gets a name removed), and an automated first pass on names that match the
    reserved patterns._
-8. **Name limits.** One name per account, 3 to 30 characters, released after 90 days without an
+6. **Name limits.** One name per account, 3 to 30 characters, released after 90 days without an
    address refresh, 30-day hold before reuse. _Recommendation: exactly that._
-9. **Second domain for challenge records.** A cheap unrelated-looking domain, or one named for
+7. **Second domain for challenge records.** A cheap unrelated-looking domain, or one named for
    the project. _Recommendation: a project-named domain in its own zone with its own token, never
    shown to users._
-10. **Default vs optional.** Plain Tailscale is the default and the name is optional, as you asked.
-    Given that Tailscale's HTTPS needs the tailnet's DNS feature, an owner with it off gets no HTTPS
-    from plain Tailscale at all. _Recommendation: keep your ordering, but when HTTPS is
-    unavailable, present the name as the recommended fix instead of a side option._
+8. **Default vs optional.** Plain Tailscale is the default and the name is optional, as you asked.
+   Given that Tailscale's HTTPS needs the tailnet's DNS feature, an owner with it off gets no HTTPS
+   from plain Tailscale at all. _Recommendation: keep your ordering, but when HTTPS is
+   unavailable, present the name as the recommended fix instead of a side option._
 
 ## Not verified
 
