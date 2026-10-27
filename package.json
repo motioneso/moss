@@ -73,7 +73,7 @@
     "start:worker": "pnpm --filter @moss/worker start",
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
-    "test:integration:3777": "tsx scripts/test-integration.ts tests/integration/meeting-account-export.test.ts tests/integration/meeting-capture.test.ts tests/integration/meeting-recording-identity.test.ts tests/integration/meeting-recording-imports.test.ts tests/integration/meeting-recording-uploads.test.ts tests/integration/meeting-minimal.test.ts tests/integration/meeting-outputs.test.ts",
+    "test:integration:3777": "tsx scripts/test-integration.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/meeting-account-export.test.ts tests/integration/meeting-capture.test.ts tests/integration/meeting-recording-identity.test.ts tests/integration/meeting-recording-imports.test.ts tests/integration/meeting-recording-uploads.test.ts tests/integration/meeting-minimal.test.ts tests/integration/meeting-outputs.test.ts",
     "test:integration:ring-hold": "tsx scripts/test-integration.ts tests/integration/meeting-recording-imports.test.ts tests/integration/meeting-recording-uploads.test.ts tests/integration/meeting-voice-recordings.test.ts",
     "test:integration:3601": "tsx scripts/test-integration.ts tests/integration/ai-voice-endpoint.test.ts tests/integration/ai-capability-routes.test.ts tests/integration/ai-transcription.test.ts",
     "test:integration": "tsx scripts/test-integration.ts",
