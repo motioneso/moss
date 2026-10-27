@@ -4,8 +4,11 @@ import {
   getMeetingRecordSchema,
   manualTranscriptSchema,
   putRecordingTypeSchema,
+  putRecordingTypeConfigurationSchema,
+  type PutRecordingTypeConfigurationInput,
   type ManualTranscriptInput
 } from "@moss/shared";
+import { validateRecordingTypeConfiguration } from "./recording-type-config.js";
 import type { MeetingRecordRoutesDependencies } from "./routes.js";
 import { ManualEntryService, validateManualTranscript } from "./manual-entry-service.js";
 import { RecordingIdentityError, RecordingTypesRepository } from "./recording-types.js";
@@ -41,6 +44,29 @@ export function registerRecordingRoutes(
       return failure(error, reply);
     }
   });
+  server.put<{ Body: PutRecordingTypeConfigurationInput }>(
+    "/api/meetings/recording-types",
+    {
+      schema: putRecordingTypeConfigurationSchema,
+      bodyLimit: 65536,
+      preValidation: async (request, reply) => {
+        try {
+          validateRecordingTypeConfiguration(request.body);
+        } catch (error) {
+          return failure(error, reply);
+        }
+      }
+    },
+    async (request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      try {
+        const actor = await deps.resolveAccessContext(request);
+        return await deps.dataContext.withDataContext(actor, (db) => types.put(db, request.body));
+      } catch (error) {
+        return failure(error, reply);
+      }
+    }
+  );
   server.get<{ Params: { id: string } }>(
     "/api/meetings/records/:id/recording",
     { schema: getMeetingRecordSchema },

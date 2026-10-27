@@ -174,6 +174,7 @@ describe("meetings composition", () => {
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
       "GET /api/meetings/recording-types",
+      "PUT /api/meetings/recording-types",
       "GET /api/meetings/records/:id/recording",
       "PUT /api/meetings/records/:id/recording/type",
       "POST /api/meetings/manual-transcripts",
@@ -257,7 +258,8 @@ describe("meetings composition", () => {
       "meetings.notes_recovery",
       "meetings.delete_draft",
       "meetings.draft_records",
-      "meetings.recording_identity"
+      "meetings.recording_identity",
+      "meetings.recording_type_configuration"
     ]);
   });
 });

@@ -253,10 +253,10 @@ function noInternalIds(result: Awaited<ReturnType<RouteApprovalPresentation>>) {
 }
 
 describe("Meetings authored action disclosures", () => {
-  it("covers all seven callable mutations and preserves blocked routes", () => {
+  it("covers all eight callable mutations and preserves blocked routes", () => {
     const routes = meetingsModuleManifest.routes;
     const writable = routes.filter((route) => ["write", "destructive"].includes(route.chat.access));
-    expect(writable).toHaveLength(7);
+    expect(writable).toHaveLength(8);
     for (const route of writable) {
       expect(route.chat).toHaveProperty("title", expect.any(String));
       expect(route.chat).toHaveProperty("presentation", expect.any(Function));

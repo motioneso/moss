@@ -1,5 +1,14 @@
 import type { RecordingInterpretation, RecordingOutputContext } from "@moss/shared";
 
+/** The retained explicit choice is authoritative even after retirement. */
+export function recordingOutputTypes(context: RecordingOutputContext) {
+  return context.configuration.types.filter(
+    (type) =>
+      !type.retired ||
+      (context.metadata.typeSource === "user" && context.metadata.typeId === type.id)
+  );
+}
+
 /** Values describe evidence; they never select a tool, destination path or permission. */
 export function validateRecordingInterpretation(
   value: unknown,
@@ -22,7 +31,7 @@ export function validateRecordingInterpretation(
   if (Buffer.byteLength(title) > 240) return fail();
   const typeId = text(row.typeId, 64);
   if (
-    !context.configuration.types.some((type) => type.id === typeId && !type.retired) ||
+    !recordingOutputTypes(context).some((type) => type.id === typeId) ||
     (row.side !== "personal" && row.side !== "work") ||
     typeof row.confidence !== "number" ||
     !Number.isFinite(row.confidence) ||

@@ -1,6 +1,10 @@
 import { recordingDeliveryRoutes } from "./recording-delivery-declarations.js";
 import { meetingFeatures } from "./features.js";
-import { recordingIdentityFeature, recordingIdentityRoutes } from "./recording-declarations.js";
+import {
+  recordingIdentityFeature,
+  recordingIdentityRoutes,
+  recordingTypeConfigurationFeature
+} from "./recording-declarations.js";
 import { meetingRecordTarget } from "./chat-targets.js";
 import {
   createMeetingPresentation,
@@ -350,7 +354,7 @@ export const meetingsModuleManifest = {
       permissionId: "meetings.write"
     }
   ],
-  features: [...meetingFeatures, recordingIdentityFeature],
+  features: [...meetingFeatures, recordingIdentityFeature, recordingTypeConfigurationFeature],
   dataLifecycle: {
     exportSections: [
       { key: "meetings", displayName: "Meetings", collect: collectMeetingsExportSection }

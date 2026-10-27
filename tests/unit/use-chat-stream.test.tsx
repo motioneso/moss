@@ -115,6 +115,104 @@ function StreamProbe(props: { surface: ChatSurface }) {
   return createElement("div", null, records.map((record) => record.text).join("|"));
 }
 
+describe("first-turn approval delivery", () => {
+  it.each([
+    { actionThreadId: "new-main", ownerUserId: "user-1", isMain: true, accepted: true },
+    { actionThreadId: "another-thread", ownerUserId: "user-1", isMain: true, accepted: false },
+    { actionThreadId: "new-main", ownerUserId: "other-owner", isMain: true, accepted: false },
+    { actionThreadId: "new-main", ownerUserId: "user-1", isMain: false, accepted: false }
+  ])(
+    "binds an empty drawer only to its owner Main: %j",
+    async ({ actionThreadId, ownerUserId, isMain, accepted }) => {
+      let receive: ((event: { data: string }) => void) | null = null;
+      vi.stubGlobal(
+        "EventSource",
+        class {
+          set onmessage(handler: (event: { data: string }) => void) {
+            receive = handler;
+          }
+          close() {}
+        }
+      );
+      vi.mocked(listChatThreads).mockResolvedValueOnce({ threads: [] });
+      vi.mocked(listChatThreads).mockResolvedValue({
+        threads: [{ ...thread("new-main", isMain), ownerUserId }]
+      });
+      let renderer!: ReactTestRenderer;
+      try {
+        await act(async () => {
+          renderer = create(createElement(StreamProbe, { surface: "drawer" as ChatSurface }));
+        });
+        await act(async () => {
+          receive?.({
+            data: JSON.stringify({
+              kind: "action_request",
+              text: "Approve first edit",
+              actionRequestId: "request-1",
+              actionThreadId,
+              toolName: "app.callAction"
+            })
+          });
+        });
+        expect(JSON.stringify(renderer.toJSON()).includes("Approve first edit")).toBe(accepted);
+      } finally {
+        await act(async () => renderer.unmount());
+      }
+    }
+  );
+
+  it("ignores verification that finishes after a new selection", async () => {
+    let receive: ((event: { data: string }) => void) | null = null;
+    vi.stubGlobal(
+      "EventSource",
+      class {
+        set onmessage(handler: (event: { data: string }) => void) {
+          receive = handler;
+        }
+        close() {}
+      }
+    );
+    let finish!: (value: { threads: ChatThreadDto[] }) => void;
+    const verification = new Promise<{ threads: ChatThreadDto[] }>((resolve) => {
+      finish = resolve;
+    });
+    vi.mocked(listChatThreads).mockResolvedValueOnce({ threads: [] });
+    vi.mocked(listChatThreads).mockReturnValueOnce(verification);
+    let select!: (threadId?: string) => void;
+    function SelectingProbe() {
+      const stream = useChatStream("drawer" as ChatSurface);
+      select = stream.clearRecords;
+      return createElement("div", null, stream.records.map((record) => record.text).join("|"));
+    }
+    let renderer!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        renderer = create(createElement(SelectingProbe));
+      });
+      await act(async () => {
+        receive?.({
+          data: JSON.stringify({
+            kind: "action_request",
+            text: "Old approval",
+            actionRequestId: "request-1",
+            actionThreadId: "new-main",
+            toolName: "app.callAction"
+          })
+        });
+      });
+      await act(async () => {
+        select("side-thread");
+      });
+      await act(async () => {
+        finish({ threads: [thread("new-main", true)] });
+      });
+      expect(JSON.stringify(renderer.toJSON())).not.toContain("Old approval");
+    } finally {
+      await act(async () => renderer.unmount());
+    }
+  });
+});
+
 describe("parseRecord", () => {
   it("parses a plain reply record", () => {
     expect(parseRecord(JSON.stringify({ kind: "reply", text: "Hello" }))).toMatchObject({
