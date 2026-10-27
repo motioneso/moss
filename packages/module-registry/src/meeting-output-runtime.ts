@@ -70,7 +70,8 @@ export const MEETING_OUTPUT_SCHEMA = object({
     },
     typeId: {
       ...string(64),
-      description: "ID of one active type from recording.configuration.types."
+      description:
+        "A permitted type ID from recording.configuration.types. Preserve the exact user-selected type ID even when retired; otherwise choose an active type."
     },
     side: {
       type: "string",
