@@ -110,8 +110,12 @@ function pendingAction(id: string, summaryText: string): AiAssistantActionDto {
   };
 }
 
-function StreamProbe(props: { surface: ChatSurface }) {
-  const { records } = useChatStream(props.surface);
+function StreamProbe(props: {
+  surface: ChatSurface;
+  onClear?: (clear: (id?: string) => void) => void;
+}) {
+  const { records, clearRecords } = useChatStream(props.surface);
+  props.onClear?.(clearRecords);
   return createElement("div", null, records.map((record) => record.text).join("|"));
 }
 
@@ -262,6 +266,40 @@ describe("useChatStream", () => {
     const switched = JSON.stringify(renderer!.toJSON());
     expect(switched).toContain("Second transcript");
     expect(switched).not.toContain("First transcript");
+  });
+
+  it("keeps the hydrated transcript when the drawer rebinds the thread it already shows", async () => {
+    vi.stubGlobal(
+      "EventSource",
+      class {
+        onmessage = null;
+        onerror = null;
+        close() {}
+      }
+    );
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [thread("main-thread", true)] });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({
+      messages: [message("main-thread", "Earlier history")]
+    });
+    let clear: (id?: string) => void = () => undefined;
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(StreamProbe, {
+          surface: "drawer" as ChatSurface,
+          onClear: (fn: (id?: string) => void) => {
+            clear = fn;
+          }
+        })
+      );
+    });
+    await vi.waitFor(() => expect(JSON.stringify(renderer!.toJSON())).toContain("Earlier history"));
+
+    await act(async () => {
+      clear("main-thread");
+    });
+
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Earlier history");
   });
 
   it("hydrates Main and rebinds the drawer before reading a warmer side transcript", async () => {

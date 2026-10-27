@@ -145,6 +145,8 @@ export function useChatStream(
     const onDrawer =
       threadId !== undefined &&
       (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
+    // Rebinding the thread this drawer already shows must keep its history on screen.
+    if (onDrawer && hydratedDrawerThread.current === threadId) return;
     hydratedDrawerThread.current = onDrawer ? threadId : undefined;
     hydratedSideThread.current = !onDrawer;
     knownDrawerReminders.current = onDrawer
