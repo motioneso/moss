@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Edit recording types in chat.** Ask Moss to add, rename or retire recording types and choose how each type is summarized, while keeping older recordings easy to find. [PR #3790](https://github.com/motioneso/moss/pull/3790)
 - **More kinds of recordings.** Paste a transcript into Meetings and let Moss name it, choose its type and label it personal or work, then change or filter the type yourself. [PR #3785](https://github.com/motioneso/moss/pull/3785)
 
 #### Changed
