@@ -1,6 +1,15 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
-import type { RecordingType, RecordingTypeConfiguration } from "@moss/shared";
+import type {
+  RecordingType,
+  RecordingTypeConfiguration,
+  PutRecordingTypeConfigurationInput
+} from "@moss/shared";
 import { sql } from "kysely";
+import { RecordingIdentityError } from "./recording-identity-error.js";
+import {
+  validateRecordingTypeConfiguration,
+  prepareRecordingTypeConfiguration
+} from "./recording-type-config.js";
 
 export const DEFAULT_RECORDING_TYPES: readonly RecordingType[] = [
   {
@@ -46,14 +55,7 @@ export const DEFAULT_RECORDING_TYPES: readonly RecordingType[] = [
     retired: false
   }
 ];
-export class RecordingIdentityError extends Error {
-  constructor(
-    readonly code: string,
-    readonly statusCode = 400
-  ) {
-    super(code);
-  }
-}
+export { RecordingIdentityError } from "./recording-identity-error.js";
 export function requireRecordingType(configuration: RecordingTypeConfiguration, id: string) {
   const type = configuration.types.find((type) => type.id === id && !type.retired);
   if (!type) throw new RecordingIdentityError("recording_type_unavailable");
@@ -62,6 +64,32 @@ export function requireRecordingType(configuration: RecordingTypeConfiguration, 
 export class RecordingTypesRepository {
   async get(db: DataContextDb): Promise<RecordingTypeConfiguration> {
     assertDataContextDb(db);
+    await sql`SELECT pg_advisory_xact_lock_shared(hashtextextended('meetings:recording-types:' || app.current_actor_user_id(),0))`.execute(
+      db.db
+    );
+    return this.read(db);
+  }
+  async put(
+    db: DataContextDb,
+    raw: PutRecordingTypeConfigurationInput
+  ): Promise<RecordingTypeConfiguration> {
+    assertDataContextDb(db);
+    const input = validateRecordingTypeConfiguration(raw);
+    // Lock before reading, including when the owner has no row yet. Never upgrade a shared lock.
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended('meetings:recording-types:' || app.current_actor_user_id(),0))`.execute(
+      db.db
+    );
+    const current = await this.read(db);
+    const next = prepareRecordingTypeConfiguration(current, input);
+    if (JSON.stringify(current.types) === JSON.stringify(next.types)) return current;
+    await sql`INSERT INTO app.meeting_recording_types (revision,types_json)
+      VALUES (${next.revision},${JSON.stringify(next.types)})
+      ON CONFLICT (owner_user_id) DO UPDATE SET revision=EXCLUDED.revision,types_json=EXCLUDED.types_json`.execute(
+      db.db
+    );
+    return next;
+  }
+  private async read(db: DataContextDb): Promise<RecordingTypeConfiguration> {
     const row = (
       await sql<{
         revision: number;

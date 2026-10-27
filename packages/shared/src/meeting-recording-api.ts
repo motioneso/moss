@@ -70,3 +70,63 @@ export const putRecordingTypeSchema = {
     }
   }
 } as const;
+
+export interface PutRecordingTypeConfigurationInput {
+  readonly expectedRevision: number;
+  readonly types: readonly RecordingType[];
+}
+export const putRecordingTypeConfigurationSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["expectedRevision", "types"],
+    properties: {
+      expectedRevision: {
+        type: "integer",
+        minimum: 0,
+        maximum: 2147483646,
+        description: "Revision from the complete current recording-type configuration."
+      },
+      types: {
+        type: "array",
+        minItems: 1,
+        maxItems: 32,
+        description:
+          "Complete type list, retaining all existing IDs. Remove a type by retiring it; new types use general style unless requested otherwise.",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "name", "description", "templateId", "retired"],
+          properties: {
+            id: {
+              ...recordingTypeIdSchema,
+              description: "Stable ID; never change or reuse an existing ID."
+            },
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 80,
+              description: "User-facing unique type name."
+            },
+            description: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              description: "Short classification description based on the user's request."
+            },
+            templateId: {
+              type: "string",
+              enum: ["general", "one-to-one", "project-review", "interview"],
+              description: "Summary style; general for a new type unless the user chooses another."
+            },
+            retired: {
+              type: "boolean",
+              description:
+                "True removes the type from new selection while preserving old recordings."
+            }
+          }
+        }
+      }
+    }
+  }
+} as const;
