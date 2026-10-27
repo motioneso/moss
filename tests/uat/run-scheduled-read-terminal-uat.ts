@@ -29,7 +29,6 @@ import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { orderedTeardown } from "./n3-teardown.js";
 import { DOCKER_HOST, rejectOverrides } from "./n3-launch-checks.js";
 import {
   groupClosed,
@@ -42,12 +41,7 @@ import {
 } from "./n3-process-control.js";
 import { driveWorker } from "./n3-worker-drive.js";
 import { driveControls } from "./n3-worker-drive-controls.js";
-import {
-  EXPECTED_WINDOWS,
-  serveWindows,
-  verifyWindows,
-  type WindowServer
-} from "./n3-window-handshake.js";
+import { EXPECTED_WINDOWS, serveWindows, verifyWindows } from "./n3-window-handshake.js";
 
 const SELF = fileURLToPath(import.meta.url);
 const BASE = "e4cf4c969a20f6b98d6145b900a913aa086f4aa7";

@@ -67,7 +67,7 @@ export async function driveWorker(input: DriveInput): Promise<DriveOutcome> {
   let consumer: DriveConsumer | undefined;
   let windows: WindowServer | undefined;
   let stack: DriveStack | undefined;
-  let result = 1;
+  let result: number;
   let phase = "provision";
   try {
     stack = await input.provision(
