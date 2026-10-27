@@ -74,6 +74,21 @@ public final class ProtocolTest {
         check(RetryPolicy.connectionDelayMs(0) == 30000);
         check(!RetryPolicy.due(8, 0, Long.MAX_VALUE));
         check(!RetryPolicy.due(1, 100, 99) && RetryPolicy.due(1, 100, 100));
+        // Long recordings arrive as name.opus plus name_001.opus, name_002.opus; a packet can straddle the cut.
+        java.util.Map<String, Integer> listing = new java.util.HashMap<>();
+        for (String partName : new String[]{"1700000000_mono.opus", "1700000000_mono_001.opus", "1700000000_mono_002.opus", "1700000000_mono_004.opus", "1700000001_mono.opus"}) listing.put(partName, 1);
+        check(RingProtocol.continuations("1700000000_mono.opus", listing).equals(java.util.Arrays.asList("1700000000_mono_001.opus", "1700000000_mono_002.opus")));
+        check(RingProtocol.continuations("1700000001_mono.opus", listing).isEmpty());
+        check(RingProtocol.isContinuation("1700000000_mono_001.opus", listing) && !RingProtocol.isContinuation("1700000000_mono.opus", listing));
+        check(!RingProtocol.isContinuation("1700000009_mono_001.opus", listing));
+        byte[] stream = new byte[2 + 98 + 2 + 98];
+        stream[0] = 7; stream[1] = 98; stream[100] = 8; stream[101] = 98;
+        byte[] head = java.util.Arrays.copyOf(stream, 2 + 94), tailBytes = java.util.Arrays.copyOfRange(stream, 2 + 94, stream.length);
+        rejects(() -> { RingProtocol.PacketReader r = new RingProtocol.PacketReader(new java.io.ByteArrayInputStream(head)); r.next(new byte[255]); });
+        java.io.ByteArrayOutputStream joined = new java.io.ByteArrayOutputStream();
+        joined.write(head, 0, head.length); joined.write(tailBytes, 0, tailBytes.length);
+        RingProtocol.PacketReader whole = new RingProtocol.PacketReader(new java.io.ByteArrayInputStream(joined.toByteArray()));
+        check(whole.next(new byte[255]) == 98 && whole.next(new byte[255]) == 98 && whole.next(new byte[255]) == 0);
         System.out.println("PASS: strict transfer, incomplete restart, packet continuity, safe reads and bounded retries");
     }
 }
