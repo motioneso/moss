@@ -135,7 +135,7 @@ test("edit types through real chat, refresh mounted menus, classify with chosen 
   const updated = await edit(
     page,
     drawer,
-    'Please read my recording types and make these changes together: add a type named Field notes with description "Personal observations outdoors" and the general summary style. Rename Brain dump to Thinking aloud, change its description to "Loose thoughts and ideas spoken aloud", and choose the Project review summary style for it. Retire Other. Keep every existing type ID and all other fields unchanged. Present the complete before and after changes for approval.',
+    'Please read my recording types and save these changes together: add a type named Field notes with description "Personal observations outdoors" and the general summary style. Rename Brain dump to Thinking aloud, change its description to "Loose thoughts and ideas spoken aloud", and choose the Project review summary style for it. Retire Other. Keep every existing type ID and all other fields unchanged. Use the app’s approval flow to save the changes.',
     [
       "Add Field notes",
       "Personal observations outdoors",
@@ -186,7 +186,7 @@ test("edit types through real chat, refresh mounted menus, classify with chosen 
   const retired = await edit(
     page,
     drawer,
-    "Please read the current recording types. Retire Field notes and change its summary style to One-to-one. Keep its ID, name and description, and all other recording types unchanged. Show the before and after fields for approval.",
+    "Please read the current recording types. Retire Field notes and change its summary style to One-to-one. Keep its ID, name and description, and all other recording types unchanged. Use the app’s approval flow to save the changes.",
     ["Retire Field notes", "General meeting", "One-to-one", "Status: Active", "Status: Retired"]
   );
   expect(retired.types.find((type) => type.id === "field-notes")).toMatchObject({
