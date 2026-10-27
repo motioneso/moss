@@ -47,7 +47,7 @@ import {
 } from "./n3-window-handshake.js";
 
 const SELF = fileURLToPath(import.meta.url);
-const BASE = "966527c413adc752def72f45ce0c54e660ca0615";
+const BASE = "e4cf4c969a20f6b98d6145b900a913aa086f4aa7";
 const SPEC = "tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts";
 const PRODUCT = [
   "packages/chat/src/live/chat-session-ports.ts",
@@ -56,12 +56,23 @@ const PRODUCT = [
   "packages/chat/src/scheduled-reads/generation.ts",
   "packages/chat/src/scheduled-reads/request.ts"
 ];
-const LEASE = [
+// Paths the branch may change relative to BASE: the N3 tooling, the passive observer
+// instrumentation, and the lease files. Anything else is unreviewed drift.
+const CHANGE_FILES = new Set([
   "package.json",
-  "tests/uat/run-scheduled-read-terminal-uat.ts",
-  SPEC,
-  ".claude/skills/coordinate/uat-trigger-map.tsv"
-];
+  ".dockerignore",
+  ".claude/skills/coordinate/uat-trigger-map.tsv",
+  "packages/chat/src/live/chat-attempt-observer.ts",
+  "packages/chat/src/live/chat-session-launch.ts",
+  "packages/chat/src/live/chat-session-turn.ts",
+  "packages/chat/src/live/classifier-gate-lifecycle.ts",
+  "packages/chat/src/live/classifier-gate-shadow.ts",
+  "tests/unit/chat-attempt-observer.test.ts"
+]);
+const CHANGE_PREFIXES = ["tests/uat/", "docs/superpowers/"];
+export function sourceChangeAllowed(path: string): boolean {
+  return CHANGE_FILES.has(path) || CHANGE_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
 const RUN_MS = 12 * 60_000;
 const CLEANUP_MS = 120_000;
 const TOTAL_MS = RUN_MS + CLEANUP_MS; // Includes teardown; +30m due retains >10m margin.
@@ -166,8 +177,8 @@ function sourceReceipt() {
   );
   const changed = capture("git", ["diff", "--name-only", BASE, head]).split("\n").filter(Boolean);
   check(
-    changed.length === 4 && changed.every((path) => LEASE.includes(path)),
-    "four-path lease mismatch"
+    changed.length > 0 && changed.every(sourceChangeAllowed),
+    "source change outside the allowed set"
   );
   const hashes: Record<string, string> = {};
   for (const path of capture("git", ["ls-files", "apps", "packages"]).split("\n").filter(Boolean)) {
@@ -809,6 +820,19 @@ async function selfTest(): Promise<void> {
   assert.equal(claimedPort("5180"), 5180);
   assert.equal(claimedPort("5299"), 5299);
   controls += 2;
+  for (const path of [
+    "tests/uat/n3-teardown.ts",
+    "packages/chat/src/live/chat-session-turn.ts",
+    "docs/superpowers/specs/x.md"
+  ])
+    assert.equal(sourceChangeAllowed(path), true);
+  for (const path of [
+    "packages/chat/src/live/chat-session-manager.ts",
+    "apps/api/src/server.ts",
+    "tests/uat-other/x.ts"
+  ])
+    assert.equal(sourceChangeAllowed(path), false);
+  controls += 6;
   assert.deepEqual(
     projectsInLog(
       "[uat] provisioning uat-123_abcd1234 on port 5180 subnet x\n" +
