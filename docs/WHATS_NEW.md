@@ -44,6 +44,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Long ring recordings now upload.** Recordings longer than about 45 minutes from your ring now reach Moss instead of failing. [PR #3797](https://github.com/motioneso/moss/pull/3797)
 - **Preserve concurrent note edits.** Moss preserves separate note changes when two updates save together and reports conflicts when it detects an outside edit during a save. [PR #3796](https://github.com/motioneso/moss/pull/3796)
 - **Attached files stay visible while Moss replies.** A file you attach to a chat message now stays visible on your message while Moss writes the reply, instead of disappearing until the reply is done. [PR #3799](https://github.com/motioneso/moss/pull/3799)
 
