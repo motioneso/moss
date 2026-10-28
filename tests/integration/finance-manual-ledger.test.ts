@@ -15,6 +15,9 @@ import type { Kysely } from "kysely";
 import { installModule } from "../../scripts/module-install.js";
 import {
   sqlStore,
+  DEFAULT_CATEGORIES,
+  type BudgetChange,
+  type BudgetReview,
   type FinanceDb,
   type ManualAccountCreate,
   type ReconciliationFinish,
@@ -561,14 +564,11 @@ describe("atomic CSV imports through installed SQL", () => {
 
 describe("reviewed budget currency through owner-scoped installed storage", () => {
   it("requires acknowledgement before replacing an open untyped draft", async () => {
-    await owner(
-      (s) =>
-        s.createDraft(
-          { basisFrom: "2026-09-01", basisTo: "2026-09-30", monthlyIncomeCents: 10000, lines: [] },
-          "2026-10-01T00:00:00Z"
-        ),
-      ids.adminUser
-    );
+    await runner.withDataContext({ actorUserId: ids.adminUser }, async (scope) => {
+      await createModuleStorageRpc(scope, "finance").query(
+        "INSERT INTO app.finance_budget_drafts (owner_user_id, id, status, basis_from, basis_to, monthly_income_cents, created_at) VALUES (app.current_actor_user_id(), gen_random_uuid(), 'open', '2026-09-01', '2026-09-30', 10000, '2026-10-01T00:00:00Z')"
+      );
+    });
     expect(
       await owner(
         (s) => s.budgetPolicy!.configure("CAD", false, "2026-10-28T00:00:00Z"),
@@ -618,5 +618,244 @@ describe("reviewed budget currency through owner-scoped installed storage", () =
       ids.userB
     );
     expect(logs.filter((row) => row.kind === "budget.configure")).toHaveLength(1);
+  });
+});
+
+describe("reviewed atomic budget writes through installed SQL", () => {
+  const c = <T>(fn: (s: ReturnType<typeof store>) => Promise<T>) => owner(fn, ids.userC);
+  const d = <T>(fn: (s: ReturnType<typeof store>) => Promise<T>) => owner(fn, ids.userD);
+  const cash = account();
+  const change = (expected: BudgetReview, amountCents: number): BudgetChange => ({
+    expected,
+    month: "2026-10",
+    assignments: [{ categoryId: "groceries", amountCents }],
+    activity: [
+      {
+        actor: "user",
+        kind: "budget.assign",
+        params: { month: "2026-10", categoryId: "groceries", amountCents },
+        undo: { month: "2026-10", categoryId: "groceries", amountCents: 0 }
+      }
+    ]
+  });
+  beforeAll(async () => {
+    await c((s) => s.budgetPolicy!.configure("USD", false, "2026-10-28T00:00:00Z"));
+    await d((s) => s.budgetPolicy!.configure("USD", false, "2026-10-28T00:00:00Z"));
+    await c((s) => s.manual!.createAccount(cash));
+  });
+  it("admits one of two simultaneous assignments and one matching activity row", async () => {
+    const review = (await c((s) => s.budgetPolicy!.get()))!;
+    const results = await Promise.all([
+      c((s) => s.commitBudgetChange(change(review, 1000))),
+      c((s) => s.commitBudgetChange(change(review, 2000)))
+    ]);
+    expect(results.sort()).toEqual([false, true]);
+    const stored = (await c((s) => s.getLedger("2026-10")))!.assignments.groceries;
+    expect([1000, 2000]).toContain(stored);
+    const rows = await c((s) => s.listActivity("2020-01-01", "2030-01-01", 200));
+    expect(rows.filter((r) => r.kind === "budget.assign")).toHaveLength(1);
+    expect(rows.find((r) => r.kind === "budget.assign")?.params.amountCents).toBe(stored);
+    expect((await c((s) => s.budgetPolicy!.get()))!.revision).toBe(review.revision + 1);
+    expect(await c((s) => s.commitBudgetChange(change(review, 9999)))).toBe(false);
+    expect((await c((s) => s.getLedger("2026-10")))!.assignments.groceries).toBe(stored);
+  });
+  it("invalidates reviewed funds after a posted entry, split, snapshot, import and provider correction", async () => {
+    const purchase = entry(cash.accountId, { amountCents: 123 });
+    let review = (await c((s) => s.budgetPolicy!.get()))!;
+    expect(await c((s) => s.manual!.createEntry(purchase))).toBe("created");
+    expect(await c((s) => s.commitBudgetChange(change(review, 9999)))).toBe(false);
+    review = (await c((s) => s.budgetPolicy!.get()))!;
+    expect(
+      await c((s) =>
+        s.setTransactionSplits({
+          transactionId: purchase.id,
+          accountId: cash.accountId,
+          month: "2026-10",
+          expectedAmountCents: 123,
+          expectedCurrency: "USD",
+          expectedRevision: 0,
+          splits: [
+            { categoryId: "groceries", amountCents: 100 },
+            { categoryId: "dining", amountCents: 23 }
+          ]
+        })
+      )
+    ).toBe(true);
+    expect(await c((s) => s.commitBudgetChange(change(review, 9999)))).toBe(false);
+    review = (await c((s) => s.budgetPolicy!.get()))!;
+    await c((s) => s.putSnapshotChunk(cash.accountId, "2026-09", { "2026-09-30": 99999 }));
+    expect(await c((s) => s.commitBudgetChange(change(review, 9999)))).toBe(false);
+    review = (await c((s) => s.budgetPolicy!.get()))!;
+    const revision = (await c((s) => s.getAccount(cash.accountId)))!.ledgerRevision!;
+    expect(
+      await c((s) =>
+        s.imports!.apply({
+          id: `manual:${randomUUID()}`,
+          accountId: cash.accountId,
+          isoCurrency: "USD",
+          expectedRevision: revision,
+          rows: [
+            {
+              sourceRow: 1,
+              date: "2026-10-04",
+              name: "Synthetic imported bill",
+              amountCents: 99,
+              notes: "",
+              allowDuplicate: false
+            }
+          ],
+          cleared: false,
+          digest: "2".repeat(64),
+          at: "2026-10-28T00:00:00Z"
+        })
+      )
+    ).toBe("created");
+    expect(await c((s) => s.commitBudgetChange(change(review, 9999)))).toBe(false);
+    const provider = {
+      accountId: "provider:budget-proof",
+      itemId: null,
+      name: "Synthetic bank",
+      officialName: null,
+      type: "depository",
+      subtype: "checking",
+      mask: null,
+      balanceCents: 10000,
+      isoCurrency: "USD",
+      updatedAt: "2026-10-28T00:00:00Z"
+    };
+    await c((s) => s.putAccount(provider));
+    review = (await c((s) => s.budgetPolicy!.get()))!;
+    await c((s) => s.putAccount({ ...provider, balanceCents: 9000 }));
+    expect(await c((s) => s.commitBudgetChange(change(review, 9999)))).toBe(false);
+  });
+  it("rolls back the revision, totals and activity when any statement part violates a constraint", async () => {
+    const review = (await c((s) => s.budgetPolicy!.get()))!;
+    const before = await c((s) => s.getLedger("2026-10"));
+    const invalid = change(review, 3000);
+    invalid.assignments.push({ categoryId: "groceries", amountCents: 4000 });
+    await expect(c((s) => s.commitBudgetChange(invalid))).rejects.toThrow();
+    expect(await c((s) => s.getLedger("2026-10"))).toEqual(before);
+    expect(await c((s) => s.budgetPolicy!.get())).toEqual(review);
+  });
+  it("does not undo a row or start a draft when the shared guard fails", async () => {
+    const review = (await d((s) => s.budgetPolicy!.get()))!;
+    const draftId = await d((s) =>
+      s.createDraft(
+        {
+          basisFrom: "2026-09-01",
+          basisTo: "2026-09-30",
+          monthlyIncomeCents: 100000,
+          lines: [
+            {
+              categoryKey: "new-goal",
+              categoryName: "Synthetic goal",
+              groupName: "Savings",
+              basisMonthlyCents: 1000,
+              proposedCents: 1000
+            }
+          ]
+        },
+        "2026-10-28T00:00:00Z",
+        review
+      )
+    );
+    expect(draftId).toBeTruthy();
+    await d((s) =>
+      s.appendActivity({ actor: "user", kind: "budget.assign", params: { amountCents: 0 } })
+    );
+    const log = (await d((s) => s.listActivity("2020-01-01", "2030-01-01", 200))).find(
+      (r) => r.kind === "budget.assign"
+    )!;
+    const stale = (await d((s) => s.budgetPolicy!.get()))!;
+    await d((s) => s.manual!.createAccount(account()));
+    expect(
+      await d((s) =>
+        s.commitBudgetChange({
+          ...change(stale, 1000),
+          categories: [
+            { id: "new-goal", group: "savings-goals", name: "Synthetic goal", archived: false }
+          ],
+          startDraft: { draftId: draftId!, at: "2026-10-28T00:00:00Z" },
+          markUndone: { activityId: log.id, at: "2026-10-28T00:00:00Z" }
+        })
+      )
+    ).toBe(false);
+    expect((await d((s) => s.getLatestDraft()))!.status).toBe("open");
+    expect(await d((s) => s.getLedger("2026-10"))).toBeNull();
+    expect((await d((s) => s.getActivity(log.id)))!.undoneAt).toBeNull();
+    expect((await d((s) => s.budgetPolicy!.categories()))!.some((x) => x.id === "new-goal")).toBe(
+      false
+    );
+  });
+  it("serializes draft edits with start and preserves the exact accepted plan", async () => {
+    const draft = (await d((s) => s.getLatestDraft()))!;
+    const review = (await d((s) => s.budgetPolicy!.get()))!;
+    const line = draft.lines[0]!;
+    const start = (expected: BudgetReview, cents: number): BudgetChange => ({
+      ...change(expected, cents),
+      assignments: [{ categoryId: line.categoryKey, amountCents: cents }],
+      categories: [
+        { id: line.categoryKey, name: line.categoryName, group: "savings-goals", archived: false }
+      ],
+      startDraft: { draftId: draft.id, at: "2026-10-28T00:00:00Z" }
+    });
+    const outcomes = await Promise.all([
+      d((s) =>
+        s.saveDraftLine(draft.id, { ...line, adjustedCents: 2000, adjustedBy: "user" }, review)
+      ),
+      d((s) => s.commitBudgetChange(start(review, 1000)))
+    ]);
+    expect(outcomes.sort()).toEqual([false, true]);
+    const current = (await d((s) => s.getLatestDraft()))!;
+    if (current.status === "open") {
+      expect(current.lines[0]!.adjustedCents).toBe(2000);
+      expect(await d((s) => s.getLedger("2026-10"))).toBeNull();
+      const fresh = (await d((s) => s.budgetPolicy!.get()))!;
+      expect(await d((s) => s.commitBudgetChange(start(fresh, 2000)))).toBe(true);
+    }
+    const saved = (await d((s) => s.getLatestDraft()))!;
+    const amount = saved.lines[0]!.adjustedCents ?? saved.lines[0]!.proposedCents;
+    expect((await d((s) => s.getLedger("2026-10")))!.assignments[line.categoryKey]).toBe(amount);
+    const fresh = (await d((s) => s.budgetPolicy!.get()))!;
+    expect(await d((s) => s.saveDraftLine(draft.id, { ...line, adjustedCents: 9999 }, fresh))).toBe(
+      false
+    );
+    expect((await d((s) => s.budgetPolicy!.get()))!.revision).toBe(fresh.revision);
+  });
+  it("copies the authoritative taxonomy once without renaming it on a later migration replay", async () => {
+    await runner.withDataContext({ actorUserId: ids.adminUser }, (scope) =>
+      createModuleStorageRpc(scope, "finance").query(
+        "UPDATE app.finance_budget_policy SET taxonomy_ready = false"
+      )
+    );
+    const categories = [
+      ...DEFAULT_CATEGORIES.map((x) =>
+        x.id === "groceries" ? { ...x, name: "Synthetic custom groceries" } : x
+      ),
+      { id: "custom-legacy", name: "Synthetic legacy category", group: "personal", archived: true }
+    ];
+    const outcomes = await Promise.all([
+      owner(
+        (s) => s.budgetPolicy!.initializeCategories(categories, "2026-10-28T00:00:00Z"),
+        ids.adminUser
+      ),
+      owner(
+        (s) => s.budgetPolicy!.initializeCategories(categories, "2026-10-28T00:00:00Z"),
+        ids.adminUser
+      )
+    ]);
+    expect(outcomes.sort()).toEqual([false, true]);
+    expect(await owner((s) => s.budgetPolicy!.categories(), ids.adminUser)).toEqual(categories);
+    expect(
+      await owner(
+        (s) => s.budgetPolicy!.initializeCategories(DEFAULT_CATEGORIES, "2026-10-28T00:00:00Z"),
+        ids.adminUser
+      )
+    ).toBe(false);
+    expect(
+      (await owner((s) => s.budgetPolicy!.categories(), ids.adminUser))!.find(
+        (x) => x.id === "groceries"
+      )!.name
+    ).toBe("Synthetic custom groceries");
   });
 });

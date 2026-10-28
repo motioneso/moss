@@ -13,6 +13,8 @@ import type {
 } from "./records.js";
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
+import { commitBudgetSql } from "./store-budget-change-sql.js";
+import { createBudgetDraftSql, saveBudgetDraftLineSql } from "./store-draft-sql.js";
 import { budgetSqlStore } from "./store-budget-sql.js";
 import { manualSqlStore } from "./store-manual-sql.js";
 import { importSqlStore } from "./store-import-sql.js";
@@ -536,72 +538,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
     },
 
-    async commitBudgetChange(change) {
-      const params: unknown[] = [
-        change.month,
-        JSON.stringify(
-          change.assignments.map((a) => ({
-            category_id: a.categoryId,
-            assigned_cents: a.amountCents
-          }))
-        ),
-        JSON.stringify(
-          change.activity.map((a) => ({
-            actor: a.actor,
-            kind: a.kind,
-            params: a.params,
-            undo: a.undo ?? null
-          }))
-        )
-      ];
-      const guards: string[] = [];
-      let draftIndex = 0;
-      let undoneIndex = 0;
-      if (change.startDraft) {
-        params.push(change.startDraft.draftId, change.startDraft.at);
-        draftIndex = params.length - 1;
-        guards.push(
-          `EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $${draftIndex} AND status = 'open')`
-        );
-      }
-      if (change.markUndone) {
-        params.push(change.markUndone.activityId, change.markUndone.at);
-        undoneIndex = params.length - 1;
-        guards.push(
-          `EXISTS (SELECT 1 FROM app.finance_activity WHERE id = $${undoneIndex} AND undone_at IS NULL)`
-        );
-      }
-      const guard = guards.length > 0 ? guards.join(" AND ") : "true";
-      const draftCte =
-        draftIndex > 0
-          ? `, d AS (UPDATE app.finance_budget_drafts SET status = 'started', started_at = $${draftIndex + 1} ` +
-            `WHERE id = $${draftIndex} AND status = 'open' RETURNING 1)`
-          : ", d AS (SELECT 1 WHERE false)";
-      const undoneCte =
-        undoneIndex > 0
-          ? `, u AS (UPDATE app.finance_activity SET undone_at = $${undoneIndex + 1} ` +
-            `WHERE id = $${undoneIndex} AND undone_at IS NULL RETURNING 1)`
-          : ", u AS (SELECT 1 WHERE false)";
-      // One statement, so the host runs it as a single implicit transaction.
-      const result = await db.query<{ applied: boolean }>(
-        "WITH a AS (INSERT INTO app.finance_budget_assignments (owner_user_id, month, category_id, assigned_cents) " +
-          "SELECT app.current_actor_user_id(), $1, x.category_id, x.assigned_cents " +
-          "FROM jsonb_to_recordset($2::jsonb) AS x(category_id text, assigned_cents bigint) " +
-          `WHERE ${guard} ` +
-          "ON CONFLICT (owner_user_id, month, category_id) DO UPDATE SET assigned_cents = EXCLUDED.assigned_cents " +
-          "RETURNING 1), " +
-          "l AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +
-          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), x.actor, x.kind, x.params, x.undo " +
-          "FROM jsonb_to_recordset($3::jsonb) AS x(actor text, kind text, params jsonb, undo jsonb) " +
-          `WHERE ${guard} RETURNING 1)` +
-          draftCte +
-          undoneCte +
-          " SELECT ((SELECT count(*) FROM a) + (SELECT count(*) FROM l) + (SELECT count(*) FROM d) + " +
-          "(SELECT count(*) FROM u)) > 0 AS applied",
-        params
-      );
-      return result.rows[0]?.applied === true;
-    },
+    commitBudgetChange: (change) => commitBudgetSql(db, change),
 
     async appendActivity(entry) {
       await db.query(
@@ -670,39 +607,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       return rowToDraft(row, lines.rows.map(rowToDraftLine));
     },
 
-    // The draft goes in as 'discarded' and flips to 'open' last, so a worker that dies
-    // part-way leaves no half-written draft for the screen to read.
-    async createDraft(build, createdAt) {
-      await db.query(
-        "UPDATE app.finance_budget_drafts SET status = 'discarded' WHERE status = 'open'"
-      );
-      const created = await db.query<{ id: string }>(
-        "INSERT INTO app.finance_budget_drafts (owner_user_id, id, status, basis_from, basis_to, " +
-          "monthly_income_cents, created_at) " +
-          "VALUES (app.current_actor_user_id(), gen_random_uuid(), 'discarded', $1, $2, $3, $4) RETURNING id",
-        [build.basisFrom, build.basisTo, build.monthlyIncomeCents, createdAt]
-      );
-      const draftId = created.rows[0]!.id;
-      for (const line of build.lines) {
-        await db.query(
-          "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
-            "group_name, category_name, basis_monthly_cents, proposed_cents) " +
-            "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6)",
-          [
-            draftId,
-            line.categoryKey,
-            line.groupName,
-            line.categoryName,
-            line.basisMonthlyCents,
-            line.proposedCents
-          ]
-        );
-      }
-      await db.query("UPDATE app.finance_budget_drafts SET status = 'open' WHERE id = $1", [
-        draftId
-      ]);
-      return draftId;
-    },
+    createDraft: (build, at, expected) => createBudgetDraftSql(db, build, at, expected),
 
     async markDraftStarted(draftId, startedAt) {
       await db.query(
@@ -712,29 +617,6 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
     },
 
-    async saveDraftLine(draftId, line) {
-      await db.query(
-        "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
-          "group_name, category_name, basis_monthly_cents, proposed_cents, adjusted_cents, " +
-          "adjusted_by, dropped) " +
-          "SELECT app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9 " +
-          "WHERE EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $1 AND status = 'open') " +
-          "ON CONFLICT (owner_user_id, draft_id, category_key) DO UPDATE SET " +
-          "group_name = EXCLUDED.group_name, category_name = EXCLUDED.category_name, " +
-          "adjusted_cents = EXCLUDED.adjusted_cents, adjusted_by = EXCLUDED.adjusted_by, " +
-          "dropped = EXCLUDED.dropped",
-        [
-          draftId,
-          line.categoryKey,
-          line.groupName,
-          line.categoryName,
-          line.basisMonthlyCents,
-          line.proposedCents,
-          line.adjustedCents,
-          line.adjustedBy,
-          line.dropped
-        ]
-      );
-    }
+    saveDraftLine: (draftId, line, expected) => saveBudgetDraftLineSql(db, draftId, line, expected)
   } satisfies FinanceStore;
 }

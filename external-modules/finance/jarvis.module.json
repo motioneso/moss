@@ -102,7 +102,7 @@
       },
       {
         "id": "finance.budget-typing",
-        "description": "On Budget, type a dollar amount into a category's Assigned box and press Enter or click away to save it. Saving never asks for approval, and Available updates. If the save fails the box goes back to its old amount with an error. Every change is logged with who made it, and the log keeps only ids and amounts."
+        "description": "On Budget, edit Assigned and press Enter or Save. Totals update only after persistence. Writes use the reviewed budget and ledger revision; a stale review preserves typed input and requires refresh. Changes above the configured limit open host confirmation. Cancellation preserves input; uncertain saves require checking saved records. Assignments and metadata activity commit together. Archived categories retain historical amounts."
       },
       {
         "id": "finance.getting-started",
@@ -110,7 +110,7 @@
       },
       {
         "id": "finance.first-budget",
-        "description": "After a bank has synced, Getting started builds a first budget from up to three months of history without asking Moss: each category's monthly average rounded up to the next five dollars, the middle monthly income, and merchants that charge about the same every month under Bills. It shows the plan total and how much income is still unplanned. Start this budget on that screen creates any missing categories and sets this month's amounts, then opens Budget. Only the button starts a budget; Moss in chat cannot. You can type a plan amount on any line, and Moss in chat can change, add or drop lines; the plan total and the unplanned amount always add up from the lines."
+        "description": "After connected or manual account history exists, Getting started builds a stored draft in the chosen budget currency. Edit amounts with Enter or Save; totals change only after persistence. Starting requires an explicit host confirmation and commits categories, assignments and draft status together. Stale reviews keep typed input for review; ambiguous outcomes require checking saved records. No bank connection is required."
       },
       {
         "id": "finance.needs-a-look",
@@ -164,7 +164,7 @@
   },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
   "assistantOnboarding": {
-    "guidance": "Finance holds the user's budget. Read before you write: call finance.budget.status or finance.transactions.query first. Amounts are integer cents. To move money, call finance.budget.move with both category ids; use \"ready_to_assign\" as the source when the money is unassigned. To set a category's total, call finance.budget.assign with previousCents, the total it has now. Example: \"move 50 to groceries\" with 80 ready to assign becomes finance.budget.move { fromCategoryId: \"ready_to_assign\", toCategoryId: \"groceries\", amountCents: 5000 }. Moves above the user's dollar limit ask for approval first. Report the before and after the tool returns. Never guess a category id; list categories first. While a first-budget draft is open, change it with finance.budget.draft.update after reading finance.budget.draft.get, and quote the totals it returns. Never start the budget; the user does that."
+    "guidance": "Read before writing. Budget amounts are integer cents in one reviewed currency. Use finance.budget.status for assigned totals, ready-to-assign, revision and fingerprint; pass these tokens as expectedRevision and expectedFingerprint on every assignment or move. budget.assign also needs the displayed previousCents. Never guess categories. A changed review rejects the write: show the conflict and ask for a new review, never silently retry. Moves above the configured limit require confirmation. Quote returned before/after amounts. Drafts build from stored history without assigning money. Read finance.budget.draft.get before editing or starting, passing its current tokens. Start only when explicitly requested and confirmed. No bank transfers or payments occur."
   },
   "preferences": [
     {
@@ -283,7 +283,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": { "accountId": { "type": "string" }, "statementDate": { "type": "string" } },
+        "properties": {
+          "accountId": { "type": "string" },
+          "statementDate": { "type": "string" }
+        },
         "required": ["accountId"]
       },
       "handler": "reconciliation.read"
@@ -434,7 +437,9 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": { "environment": { "type": "string", "enum": ["production", "sandbox"] } }
+        "properties": {
+          "environment": { "type": "string", "enum": ["production", "sandbox"] }
+        }
       },
       "handler": "connect.start"
     },
@@ -466,7 +471,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
           "accountId": { "type": "string" },
           "categoryId": { "type": "string" },
           "search": { "type": "string" },
@@ -494,7 +502,10 @@
         "properties": {
           "transactionId": { "type": "string" },
           "accountId": { "type": "string" },
-          "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
           "expectedAmountCents": { "type": "integer" },
           "expectedCurrency": { "type": "string" },
           "expectedRevision": { "type": "integer", "minimum": 0 },
@@ -546,7 +557,10 @@
         "properties": {
           "transactionId": { "type": "string" },
           "accountId": { "type": "string" },
-          "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
           "categoryId": { "type": "string" },
           "amountCents": { "type": "integer" },
           "notes": { "type": "string", "maxLength": 500 }
@@ -568,7 +582,10 @@
         "properties": {
           "transactionId": { "type": "string" },
           "accountId": { "type": "string" },
-          "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
           "categoryId": { "type": "string" },
           "amountCents": { "type": "integer" },
           "notes": { "type": "string", "maxLength": 500 }
@@ -622,10 +639,25 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": { "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" } },
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          }
+        },
         "required": ["month"]
       },
       "handler": "budget.status"
+    },
+    {
+      "name": "finance.budget.draft.build",
+      "permissionId": "finance.budget.draft.build",
+      "description": "Build a first-budget draft from posted history in the selected budget currency. Does not assign money or overwrite an existing draft or budget. Returns a persisted draft outcome or explains missing history.",
+      "risk": "write",
+      "executionPolicy": "auto",
+      "handler": "budget.draft.build",
+      "inputSchema": { "type": "object", "additionalProperties": false },
+      "actionFamilyId": "drafting"
     },
     {
       "name": "finance.budget.draft.get",
@@ -638,7 +670,7 @@
     {
       "name": "finance.budget.draft.update",
       "permissionId": "finance.budget.draft.update",
-      "description": "Change one line of the first-budget draft: set its plan amount, rename it, move it to another group, or drop it. Read the draft first with finance.budget.draft.get for the draft id and category keys. To add a line that is not in the draft, give a new lowercase categoryKey with categoryName, groupName (Bills, Everyday, Fun or Savings) and amountCents. Returns the line and the draft total before and after; quote those numbers instead of adding them up. It cannot start the budget.",
+      "description": "Change one line of the first-budget draft: set its plan amount, rename it, move it to another group, or drop it. Read the draft first with finance.budget.draft.get for the draft id and category keys. To add a line that is not in the draft, give a new lowercase categoryKey with categoryName, groupName (Bills, Everyday, Fun or Savings) and amountCents. Returns the line and the draft total before and after; quote those numbers instead of adding them up. It cannot start the budget. Pass expectedRevision and expectedFingerprint exactly from the latest matching budget or draft read. A stale review is rejected; refresh and review again before retrying.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
@@ -660,18 +692,46 @@
           },
           "categoryName": { "type": "string", "maxLength": 80 },
           "groupName": { "type": "string", "enum": ["Bills", "Everyday", "Fun", "Savings"] },
-          "dropped": { "type": "boolean", "description": "True takes the line out of the budget." }
+          "dropped": { "type": "boolean", "description": "True takes the line out of the budget." },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
         },
-        "required": ["draftId", "categoryKey"]
+        "required": ["draftId", "categoryKey", "expectedRevision", "expectedFingerprint"]
       },
       "handler": "budget.draft.update",
       "actionFamilyId": "drafting",
       "executionPolicy": "auto"
     },
     {
+      "name": "finance.budget.draft.start",
+      "permissionId": "finance.budget.draft.start",
+      "description": "Start the reviewed first budget. All planned categories, amounts, activity and draft status commit together. Use the current draft id and review tokens; changed data rejects the whole start. Requires explicit confirmation.",
+      "actionLabel": "Start this budget",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["draftId"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draftId": { "type": "string", "format": "uuid" },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["draftId", "expectedRevision", "expectedFingerprint"]
+      },
+      "handler": "budget.draft.start"
+    },
+    {
       "name": "finance.budget.assign",
       "permissionId": "finance.budget.assign",
-      "description": "Set a category's assigned total for a month. Pass the total it has now as previousCents (read it from finance.budget.status); a wrong value is rejected. Returns the before and after totals.",
+      "description": "Set a category's assigned total for a month. Pass the total it has now as previousCents (read it from finance.budget.status); a wrong value is rejected. Returns the before and after totals. Pass expectedRevision and expectedFingerprint exactly from the latest matching budget or draft read. A stale review is rejected; refresh and review again before retrying.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
@@ -697,9 +757,21 @@
             "minimum": -100000000,
             "maximum": 100000000,
             "description": "The category's assigned total right now, in integer cents."
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
           }
         },
-        "required": ["month", "categoryId", "amountCents", "previousCents"]
+        "required": [
+          "month",
+          "categoryId",
+          "amountCents",
+          "previousCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
       },
       "handler": "budget.assign",
       "actionFamilyId": "moving_money",
@@ -714,7 +786,7 @@
     {
       "name": "finance.budget.move",
       "permissionId": "finance.budget.move",
-      "description": "Move money between two categories for a month. Use fromCategoryId ready_to_assign to take unassigned money. Returns the before and after assigned totals.",
+      "description": "Move money between two categories for a month. Use fromCategoryId ready_to_assign to take unassigned money. Returns the before and after assigned totals. Pass expectedRevision and expectedFingerprint exactly from the latest matching budget or draft read. A stale review is rejected; refresh and review again before retrying.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
@@ -738,9 +810,21 @@
             "minimum": 1,
             "maximum": 100000000,
             "description": "Amount to move, positive integer cents (50 dollars is 5000)."
+          },
+          "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
           }
         },
-        "required": ["month", "fromCategoryId", "toCategoryId", "amountCents"]
+        "required": [
+          "month",
+          "fromCategoryId",
+          "toCategoryId",
+          "amountCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
       },
       "handler": "budget.move",
       "actionFamilyId": "moving_money",
@@ -824,7 +908,10 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": { "accountId": { "type": "string" }, "shared": { "type": "boolean" } },
+        "properties": {
+          "accountId": { "type": "string" },
+          "shared": { "type": "boolean" }
+        },
         "required": ["accountId", "shared"]
       },
       "actionFamilyId": "sharing",
@@ -840,7 +927,10 @@
         "additionalProperties": false,
         "properties": {
           "months": { "type": "integer", "minimum": 1, "maximum": 24 },
-          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
         }
       },
       "handler": "reports.spending"
@@ -855,7 +945,10 @@
         "additionalProperties": false,
         "properties": {
           "months": { "type": "integer", "minimum": 1, "maximum": 24 },
-          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
         }
       },
       "handler": "reports.net-worth"
@@ -988,8 +1081,20 @@
             "month": { "type": "identifier" },
             "categoryId": { "type": "identifier" },
             "amountCents": { "type": "integer", "min": -100000000, "max": 100000000 },
-            "categoryIds": { "type": "array", "maxItems": 20, "items": { "type": "identifier" } },
+            "categoryIds": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "identifier" }
+            },
             "amountsCents": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "integer", "min": -100000000, "max": 100000000 }
+            },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 9007199254740991 },
+            "expectedFingerprint": { "type": "identifier" },
+            "previousCents": { "type": "integer", "min": -100000000, "max": 100000000 },
+            "previousAmountsCents": {
               "type": "array",
               "maxItems": 20,
               "items": { "type": "integer", "min": -100000000, "max": 100000000 }
@@ -1004,7 +1109,10 @@
         "allowManualRun": true,
         "paramsSchema": {
           "type": "object",
-          "fields": { "accountId": { "type": "identifier" }, "shared": { "type": "boolean" } }
+          "fields": {
+            "accountId": { "type": "identifier" },
+            "shared": { "type": "boolean" }
+          }
         }
       },
       {
@@ -1024,7 +1132,14 @@
         "handler": "draft.start",
         "retryLimit": 1,
         "allowManualRun": true,
-        "paramsSchema": { "type": "object", "fields": { "draftId": { "type": "uuid" } } }
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "draftId": { "type": "uuid" },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 9007199254740991 },
+            "expectedFingerprint": { "type": "identifier" }
+          }
+        }
       },
       {
         "name": "finance.draft-set",
@@ -1036,7 +1151,9 @@
           "fields": {
             "draftId": { "type": "uuid" },
             "categoryKey": { "type": "identifier" },
-            "amountCents": { "type": "integer", "min": 0, "max": 100000000 }
+            "amountCents": { "type": "integer", "min": 0, "max": 100000000 },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 9007199254740991 },
+            "expectedFingerprint": { "type": "identifier" }
           }
         }
       },
@@ -1053,9 +1170,21 @@
               "maxItems": 200,
               "items": { "type": "identifier" }
             },
-            "accountIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
-            "months": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
-            "categoryIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "accountIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
+            "months": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
+            "categoryIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
             "createRule": { "type": "boolean" }
           }
         }
@@ -1065,7 +1194,12 @@
         "handler": "activity.undo",
         "retryLimit": 1,
         "allowManualRun": true,
-        "paramsSchema": { "type": "object", "fields": { "activityId": { "type": "uuid" } } }
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "activityId": { "type": "uuid" }
+          }
+        }
       },
       {
         "name": "finance.split-apply",
@@ -1081,7 +1215,11 @@
             "expectedAmountCents": { "type": "integer", "min": -2000000000, "max": 2000000000 },
             "expectedCurrency": { "type": "identifier" },
             "expectedRevision": { "type": "integer", "min": 0, "max": 2147483646 },
-            "categoryIds": { "type": "array", "maxItems": 20, "items": { "type": "identifier" } },
+            "categoryIds": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "identifier" }
+            },
             "amountsCents": {
               "type": "array",
               "maxItems": 20,

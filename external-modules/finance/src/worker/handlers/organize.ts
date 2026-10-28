@@ -4,11 +4,10 @@
 // the category list. Each returns a before-and-after block and logs an activity row
 // holding ids and enum values only (never a merchant or category name).
 
-import type { Category } from "../../domain/index.js";
+import type { Category, ActivityInput, BudgetReview } from "../../domain/index.js";
 import {
   CATEGORY_GROUP_NAMES,
   contentHash,
-  DEFAULT_CATEGORIES,
   legacyRuleKey,
   normalizePayee,
   NS,
@@ -19,6 +18,8 @@ import {
 import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
 import { InputError, readEnum, readString } from "../validate.js";
+import { requireBudgetPolicy, staleBudget, budgetContext } from "./budget-context.js";
+import { today } from "./manual-ledger.js";
 import { loadCategories } from "./feed.js";
 
 /** Group name shown on screens to the legacy group id the stored list uses. */
@@ -87,8 +88,24 @@ export const ruleSetHandler: ToolFactory = (ports) => async (input) => {
   };
 };
 
-async function saveCategories(ports: WorkerPorts, categories: Category[]): Promise<void> {
-  await ports.kv.set(NS.categories, "taxonomy", { categories });
+async function saveCategory(
+  ports: WorkerPorts,
+  category: Category,
+  expected: BudgetReview,
+  activity: ActivityInput[]
+): Promise<void> {
+  if (
+    !(await (
+      await ports.store()
+    ).commitBudgetChange({
+      expected,
+      month: today(ports).slice(0, 7),
+      assignments: [],
+      categories: [category],
+      activity
+    }))
+  )
+    throw staleBudget();
 }
 
 function slugFor(name: string, taken: ReadonlySet<string>): string {
@@ -108,10 +125,9 @@ export const categoryUpsertHandler: ToolFactory = (ports) => async (input) => {
   const name = readName(input);
   const groupName = readEnum(input, "groupName", CATEGORY_GROUP_NAMES, { required: true });
 
-  const stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
-    categories?: Category[];
-  } | null;
-  const all = stored?.categories ?? [...DEFAULT_CATEGORIES];
+  const store = await ports.store();
+  const expected = await requireBudgetPolicy(store);
+  const all = await loadCategories(ports);
   const duplicate = all.find(
     (entry) => !entry.archived && entry.id !== id && entry.name.toLowerCase() === name.toLowerCase()
   );
@@ -119,7 +135,6 @@ export const categoryUpsertHandler: ToolFactory = (ports) => async (input) => {
     throw new InputError("duplicate_name", "a live category already has that name");
   }
 
-  const store = await ports.store();
   if (id === undefined) {
     const created: Category = {
       id: slugFor(name, new Set(all.map((entry) => entry.id))),
@@ -127,13 +142,14 @@ export const categoryUpsertHandler: ToolFactory = (ports) => async (input) => {
       name,
       archived: false
     };
-    await saveCategories(ports, [...all, created]);
-    await store.appendActivity({
-      actor: "moss",
-      kind: "category.add",
-      params: { categoryId: created.id, groupName },
-      undo: { categoryId: created.id }
-    });
+    await saveCategory(ports, created, expected, [
+      {
+        actor: "moss",
+        kind: "category.add",
+        params: { categoryId: created.id, groupName },
+        undo: { categoryId: created.id }
+      }
+    ]);
     return {
       status: "ok",
       categoryId: created.id,
@@ -147,17 +163,20 @@ export const categoryUpsertHandler: ToolFactory = (ports) => async (input) => {
     throw new InputError("invalid_category", "id is not a live category");
   }
   const before = { name: current.name, groupName: tableGroupFor(current.group) };
-  const updated = all.map((entry) =>
-    entry.id === id ? { ...entry, name, group: LEGACY_GROUP[groupName] } : entry
+  await saveCategory(
+    ports,
+    { ...current, name, group: LEGACY_GROUP[groupName] },
+    expected,
+    before.name !== name || before.groupName !== groupName
+      ? [
+          {
+            actor: "moss",
+            kind: "category.edit",
+            params: { categoryId: id, groupName, previousGroupName: before.groupName }
+          }
+        ]
+      : []
   );
-  await saveCategories(ports, updated);
-  if (before.name !== name || before.groupName !== groupName) {
-    await store.appendActivity({
-      actor: "moss",
-      kind: "category.edit",
-      params: { categoryId: id, groupName, previousGroupName: before.groupName }
-    });
-  }
   return { status: "ok", categoryId: id, before, after: { name, groupName } };
 };
 
@@ -167,13 +186,14 @@ export const categoryArchiveHandler: ToolFactory = (ports) => async (input) => {
   if (PROTECTED_IDS.has(id)) {
     throw new InputError("protected_category", "this category cannot be archived");
   }
+  const store = await ports.store();
+  const expected = await requireBudgetPolicy(store);
   const all = await loadCategories(ports);
   const current = all.find((entry) => entry.id === id);
   if (!current || current.archived) {
     throw new InputError("invalid_category", "id is not a live category");
   }
-  const store = await ports.store();
-  const month = ports.now().toISOString().slice(0, 7);
+  const month = today(ports).slice(0, 7);
   const assigned = (await store.getLedger(month))?.assignments[id] ?? 0;
   if (assigned !== 0) {
     throw new InputError(
@@ -181,16 +201,27 @@ export const categoryArchiveHandler: ToolFactory = (ports) => async (input) => {
       "this category has money assigned this month; move it first"
     );
   }
-  await saveCategories(
-    ports,
-    all.map((entry) => (entry.id === id ? { ...entry, archived: true } : entry))
-  );
-  await store.appendActivity({
-    actor: "moss",
-    kind: "category.archive",
-    params: { categoryId: id },
-    undo: { categoryId: id }
-  });
+  const context = await budgetContext(ports, store, month);
+  if (!context.setupRequired && (context.state.categories[id]?.availableCents ?? 0) !== 0)
+    throw new InputError(
+      "has_assignments",
+      "This category has money available or overspending; resolve it before archiving"
+    );
+  for (const future of (await store.listAssignmentMonths()).filter((m) => m > month)) {
+    if (((await store.getLedger(future))?.assignments[id] ?? 0) !== 0)
+      throw new InputError(
+        "has_assignments",
+        "This category has future assignments; move them before archiving"
+      );
+  }
+  await saveCategory(ports, { ...current, archived: true }, expected, [
+    {
+      actor: "moss",
+      kind: "category.archive",
+      params: { categoryId: id },
+      undo: { categoryId: id }
+    }
+  ]);
   return {
     status: "ok",
     categoryId: id,

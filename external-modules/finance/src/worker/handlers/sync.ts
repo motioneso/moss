@@ -30,7 +30,6 @@ import type {
 import {
   categorize,
   cursorKey,
-  DEFAULT_CATEGORIES,
   monthKey,
   normalizePayee,
   NS,
@@ -47,6 +46,7 @@ import { buildCategorizeAi } from "../ai-port.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readString } from "../validate.js";
+import { loadCategories } from "./feed.js";
 import { buildPlaid, loadItems } from "./connect.js";
 
 // Plaid pages are capped at count:100 (adapter), so 100 pages = 10000
@@ -112,13 +112,9 @@ async function loadSeenPayeeKeys(store: FinanceStore): Promise<Set<string>> {
  * edits) keeps the read path elsewhere side-effect free.
  */
 async function loadCategorizeCtx(ports: WorkerPorts, store: FinanceStore): Promise<CategorizeCtx> {
-  let stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
-    categories: Category[];
-  } | null;
-  if (stored === null) {
-    stored = { categories: [...DEFAULT_CATEGORIES] };
-    await ports.kv.set(NS.categories, "taxonomy", stored);
-  }
+  const categories = await loadCategories(ports);
+  if (!store.budgetPolicy && (await ports.kv.get(NS.categories, "taxonomy")) === null)
+    await ports.kv.set(NS.categories, "taxonomy", { categories });
   // Old-format and new-format keys both load. If one merchant ever holds two
   // rules, the newest wins so load order cannot pick the loser.
   const newest = new Map<string, Rule>();
@@ -131,7 +127,7 @@ async function loadCategorizeCtx(ports: WorkerPorts, store: FinanceStore): Promi
   const rules = [...newest.values()];
   return {
     rules,
-    categories: stored.categories,
+    categories,
     ai: buildCategorizeAi(ports.ai),
     review: {
       sortingTier: await readTier(ports, "sorting"),

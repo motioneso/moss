@@ -6,7 +6,8 @@
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
 import type { BudgetDraft, DraftBuild, DraftLine } from "./draft.js";
-import type { BudgetPolicyStore } from "./budget-context.js";
+import type { Category } from "./taxonomy.js";
+import type { BudgetReview, BudgetPolicyStore } from "./budget-context.js";
 import type { ManualLedgerStore } from "./manual-ledger.js";
 import type { ImportStore } from "./csv-import.js";
 import type { ReconciliationStore } from "./reconciliation.js";
@@ -29,6 +30,8 @@ export interface ActivityInput {
  * unit. Either every part lands or none does.
  */
 export interface BudgetChange {
+  expected: BudgetReview;
+  categories?: Category[];
   month: string;
   assignments: { categoryId: string; amountCents: number }[];
   activity: ActivityInput[];
@@ -105,7 +108,7 @@ export interface FinanceStore {
   /**
    * Writes every assignment total, every activity row and the optional draft start or undo mark
    * in one atomic step. Returns false (and writes nothing) when a guard fails: the draft is no
-   * longer open or the row was already undone.
+   * longer open, the row was already undone, or the reviewed revision/ledger changed.
    */
   commitBudgetChange(change: BudgetChange): Promise<boolean>;
 
@@ -124,16 +127,15 @@ export interface FinanceStore {
   /** The newest draft that is open or started; null when none was ever built. */
   getLatestDraft(): Promise<BudgetDraft | null>;
   /**
-   * Store a freshly built draft as the open one and discard any older open
-   * draft. A draft becomes visible only after all its lines are written.
-   * Returns the new draft id.
+   * Store a fresh draft only when the review still matches and no open/started draft or
+   * assignments exist. All lines commit together. Returns null when the guard rejects.
    */
-  createDraft(build: DraftBuild, createdAt: string): Promise<string>;
+  createDraft(build: DraftBuild, createdAt: string, expected: BudgetReview): Promise<string | null>;
   /** Mark an open draft started. A draft that is not open is left alone. */
   markDraftStarted(draftId: string, startedAt: string): Promise<void>;
   /**
    * Insert or replace one line of an open draft. A draft that is not open (started,
    * discarded or unknown) is left alone, so a late edit cannot change a started budget.
    */
-  saveDraftLine(draftId: string, line: DraftLine): Promise<void>;
+  saveDraftLine(draftId: string, line: DraftLine, expected: BudgetReview): Promise<boolean>;
 }

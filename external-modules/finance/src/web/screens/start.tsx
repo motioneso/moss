@@ -12,6 +12,7 @@ import {
   SectionHead,
   useEffect,
   useState,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { fetchIsAdmin } from "../api";
@@ -88,10 +89,15 @@ export function StartView(props: StartViewProps): ReactNodeLike {
   );
 }
 
-export function StartScreen(props: { hostActions: HostActions }): ReactNodeLike {
-  const status = useToolQuery<{ keysConfigured?: boolean; hasBank?: boolean }>(
-    "finance.setup.status"
-  );
+export function StartScreen(props: {
+  hostActions: HostActions;
+  tools?: ExternalModuleToolsHandleV1;
+}): ReactNodeLike {
+  const status = useToolQuery<{
+    keysConfigured?: boolean;
+    hasBank?: boolean;
+    hasManualAccount?: boolean;
+  }>("finance.setup.status");
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   useEffect(() => {
     let live = true;
@@ -114,10 +120,9 @@ export function StartScreen(props: { hostActions: HostActions }): ReactNodeLike 
           hostActions={props.hostActions}
         />
       );
-      // With a bank connected, the screen shows the first-budget draft; the steps view
-      // stays as the fallback until the first sync lands.
-      return result.hasBank === true ? (
-        <FirstBudget hostActions={props.hostActions} fallback={view} />
+      // Manual history and connected-bank history can both build a first budget.
+      return result.hasBank === true || result.hasManualAccount === true ? (
+        <FirstBudget tools={props.tools} hostActions={props.hostActions} fallback={view} />
       ) : (
         view
       );

@@ -53,6 +53,8 @@ function readMonth(input: Record<string, unknown>, ports: WorkerPorts): string {
  * defaults. Keeping reads side-effect free also keeps query safe to retry.
  */
 export async function loadCategories(ports: WorkerPorts): Promise<Category[]> {
+  const canonical = await (await ports.store()).budgetPolicy?.categories();
+  if (canonical) return canonical;
   const stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
     categories: Category[];
   } | null;

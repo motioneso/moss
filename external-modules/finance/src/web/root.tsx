@@ -74,7 +74,7 @@ export function Root(props: {
         />
       </div>
       {path === "/start" ? (
-        <StartScreen hostActions={props.hostActions} />
+        <StartScreen tools={props.tools} hostActions={props.hostActions} />
       ) : path === "/" ? (
         <BudgetScreen tools={props.tools} />
       ) : path === "/transactions" ? (

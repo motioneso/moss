@@ -1,4 +1,4 @@
-import { usdBudgetPolicy } from "./helpers/finance-budget-policy.js";
+import { configuredBudgetStore, budgetReviewInput } from "./helpers/finance-budget-policy.js";
 // tests/unit/external-module-finance-chat-actions.test.ts
 import { describe, expect, it } from "vitest";
 
@@ -62,8 +62,7 @@ function fakePorts(kv: FinanceKv, activity: ActivityInput[]): WorkerPorts {
     now: () => NOW,
     localTimezone: "Etc/UTC",
     store: async () => ({
-      ...kvStore(kv),
-      budgetPolicy: usdBudgetPolicy,
+      ...configuredBudgetStore(kv),
       appendActivity: async (entry: ActivityInput) => {
         activity.push(entry);
       }
@@ -93,6 +92,7 @@ describe("finance.budget.assign previousCents (#3185)", () => {
     const activity: ActivityInput[] = [];
     await expect(
       budgetAssignHandler(fakePorts(kv, activity))({
+        ...budgetReviewInput,
         month: "2026-07",
         categoryId: "groceries",
         amountCents: 51_000,
@@ -109,6 +109,7 @@ describe("finance.budget.assign previousCents (#3185)", () => {
     const kv = fakeKv();
     await expect(
       budgetAssignHandler(fakePorts(kv, []))({
+        ...budgetReviewInput,
         month: "2026-07",
         categoryId: "groceries",
         amountCents: 100
@@ -123,6 +124,7 @@ describe("finance.budget.move (#3185)", () => {
     await seedBank(kv, 8_000);
     const activity: ActivityInput[] = [];
     const result = await budgetMoveHandler(fakePorts(kv, activity))({
+      ...budgetReviewInput,
       month: "2026-07",
       fromCategoryId: "ready_to_assign",
       toCategoryId: "groceries",
@@ -155,6 +157,7 @@ describe("finance.budget.move (#3185)", () => {
     const activity: ActivityInput[] = [];
     await expect(
       budgetMoveHandler(fakePorts(kv, activity))({
+        ...budgetReviewInput,
         month: "2026-07",
         fromCategoryId: "ready_to_assign",
         toCategoryId: "groceries",
@@ -170,6 +173,7 @@ describe("finance.budget.move (#3185)", () => {
     await kv.set(NS.budgets, "ledger:2026-07", { assignments: { dining: 20_000, travel: 1_000 } });
     const activity: ActivityInput[] = [];
     const result = await budgetMoveHandler(fakePorts(kv, activity))({
+      ...budgetReviewInput,
       month: "2026-07",
       fromCategoryId: "dining",
       toCategoryId: "travel",
@@ -191,6 +195,7 @@ describe("finance.budget.move (#3185)", () => {
     await kv.set(NS.budgets, "ledger:2026-07", { assignments: { dining: 2_000 } });
     await expect(
       budgetMoveHandler(fakePorts(kv, []))({
+        ...budgetReviewInput,
         month: "2026-07",
         fromCategoryId: "dining",
         toCategoryId: "travel",
@@ -203,7 +208,7 @@ describe("finance.budget.move (#3185)", () => {
     const kv = fakeKv();
     await seedBank(kv, 20_000);
     const move = budgetMoveHandler(fakePorts(kv, []));
-    const base = { month: "2026-07", amountCents: 100 };
+    const base = { ...budgetReviewInput, month: "2026-07", amountCents: 100 };
     await expect(
       move({ ...base, fromCategoryId: "ready_to_assign", toCategoryId: "yachts" })
     ).rejects.toThrow("not a live category");
@@ -243,6 +248,7 @@ describe("money moves are all-or-nothing (#3160 review)", () => {
     });
     await expect(
       budgetMoveHandler(ports)({
+        ...budgetReviewInput,
         month: "2026-07",
         fromCategoryId: "dining",
         toCategoryId: "travel",
@@ -267,6 +273,7 @@ describe("money moves are all-or-nothing (#3160 review)", () => {
     await categoryArchiveHandler(ports)({ id: pets });
     await expect(
       budgetAssignHandler(ports)({
+        ...budgetReviewInput,
         month: "2026-07",
         categoryId: pets,
         amountCents: 1_000,
@@ -275,6 +282,7 @@ describe("money moves are all-or-nothing (#3160 review)", () => {
     ).rejects.toThrow();
     await expect(
       budgetMoveHandler(ports)({
+        ...budgetReviewInput,
         month: "2026-07",
         fromCategoryId: "ready_to_assign",
         toCategoryId: pets,

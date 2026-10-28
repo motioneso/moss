@@ -9,8 +9,6 @@
 import {
   budgetRows,
   CATEGORY_GROUP_NAMES,
-  DEFAULT_CATEGORIES,
-  NS,
   DRAFT_AMOUNT_MAX_CENTS,
   DRAFT_CATEGORY_KEY_RE,
   DRAFT_LINE_GROUPS,
@@ -20,16 +18,21 @@ import {
   draftUnplannedCents,
   linePlanCents,
   pickBasisMonths,
-  tableGroupFor,
   type ActivityInput,
   type BudgetDraft,
+  type BudgetReview,
   type Category,
   type TransactionRecord
 } from "../../domain/index.js";
 import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
 import { InputError, readBool, readInt, readString } from "../validate.js";
-import { requireBudgetPolicy } from "./budget-context.js";
+import {
+  readBudgetReview,
+  requireBudgetPolicy,
+  requireSameReview,
+  staleBudget
+} from "./budget-context.js";
 import { today } from "./manual-ledger.js";
 import { loadCategories } from "./feed.js";
 
@@ -104,16 +107,21 @@ export const draftGetHandler: ToolFactory = (ports) => async () => {
   const store = await ports.store();
   const policy = await store.budgetPolicy?.get();
   if (!policy) return { setupRequired: true, hasSynced: false, hasBudget: false, draft: null };
+  if (!policy.taxonomyReady) await requireBudgetPolicy(store);
   const latest = await store.getLatestDraft();
   const items = await store.listItems();
   const hasBudget = (await store.listAssignmentMonths()).length > 0;
+  const hasSynced =
+    items.some((item) => item.lastSyncAt !== undefined) ||
+    (await store.listAccounts()).some((account) => account.source === "manual");
+  requireSameReview(policy, await requireBudgetPolicy(store));
   return {
-    hasSynced:
-      items.some((item) => item.lastSyncAt !== undefined) ||
-      (await store.listAccounts()).some((account) => account.source === "manual"),
+    hasSynced,
     hasBudget,
+    revision: policy.revision,
+    fingerprint: policy.fingerprint,
     isoCurrency: policy.isoCurrency,
-    draft: latest ? draftView(latest, policy.isoCurrency) : null
+    draft: latest && latest.status !== "discarded" ? draftView(latest, policy.isoCurrency) : null
   };
 };
 
@@ -143,10 +151,11 @@ async function editDraftLine(
     categoryKey: string;
     edit: Parameters<typeof applyLineEdit>[2];
     by: "user" | "moss";
+    expected: BudgetReview;
   }
 ): Promise<DraftEditResult> {
   const store = await ports.store();
-  await requireBudgetPolicy(store);
+  requireSameReview(args.expected, await requireBudgetPolicy(store));
   const draft = await store.getLatestDraft();
   if (draft === null || draft.id !== args.draftId) {
     throw new InputError("draft_not_found", "draftId does not name the current draft");
@@ -188,7 +197,7 @@ async function editDraftLine(
 
   const line = applyLineEdit(args.categoryKey, existing, args.edit, args.by);
   const totalBeforeCents = draftTotalCents(draft.lines);
-  await store.saveDraftLine(draft.id, line);
+  if (!(await store.saveDraftLine(draft.id, line, args.expected))) throw staleBudget();
 
   const after = await store.getLatestDraft();
   if (after === null || after.id !== draft.id || after.status !== "open") {
@@ -233,7 +242,8 @@ export const draftUpdateHandler: ToolFactory = (ports) => async (input) => {
       ...(groupName !== undefined ? { groupName } : {}),
       ...(dropped !== undefined ? { dropped } : {})
     },
-    by: "moss"
+    by: "moss",
+    expected: readBudgetReview(input)
   });
 };
 
@@ -247,7 +257,13 @@ export const draftSetHandler: ToolFactory = (ports) => async (input) => {
     min: 0,
     max: DRAFT_AMOUNT_MAX_CENTS
   });
-  return editDraftLine(ports, { draftId, categoryKey, edit: { amountCents }, by: "user" });
+  return editDraftLine(ports, {
+    draftId,
+    categoryKey,
+    edit: { amountCents },
+    by: "user",
+    expected: readBudgetReview(params)
+  });
 };
 
 function readEnvelopeParams(
@@ -270,7 +286,8 @@ export const draftBuildHandler: ToolFactory = (ports) => async (input) => {
   readEnvelopeParams(input, QUEUE_BUILD);
   const store = await ports.store();
   const policy = await requireBudgetPolicy(store);
-  if ((await store.getLatestDraft()) !== null) return { status: "ok", built: false };
+  const previous = await store.getLatestDraft();
+  if (previous && previous.status !== "discarded") return { status: "ok", built: false };
   if ((await store.listAssignmentMonths()).length > 0) {
     return { status: "ok", built: false, reason: "has-budget" };
   }
@@ -294,9 +311,12 @@ export const draftBuildHandler: ToolFactory = (ports) => async (input) => {
   });
   if (build === null) return { status: "ok", built: false, reason: "no-history" };
 
-  await store.createDraft(build, ports.now().toISOString());
+  if (!(await store.createDraft(build, ports.now().toISOString(), policy))) throw staleBudget();
   return { status: "ok", built: true, lines: build.lines.length };
 };
+
+export const draftBuildToolHandler: ToolFactory = (ports) => async () =>
+  draftBuildHandler(ports)({ jobKind: QUEUE_BUILD });
 
 // Table group name to the legacy group id the stored taxonomy uses.
 const LEGACY_GROUP: Readonly<Record<string, string>> = {
@@ -312,82 +332,48 @@ const LEGACY_GROUP: Readonly<Record<string, string>> = {
  * missing (for example one added while adjusting the draft) is created in the
  * stored taxonomy and in the categories table; existing categories are untouched.
  */
-async function ensureCategories(ports: WorkerPorts, draft: BudgetDraft): Promise<void> {
+async function plannedCategories(ports: WorkerPorts, draft: BudgetDraft): Promise<Category[]> {
   const live = await loadCategories(ports);
   const byId = new Map(live.map((category) => [category.id, category]));
-  const planned = draft.lines.filter((line) => !line.dropped && linePlanCents(line) > 0);
-
-  for (const line of planned) {
-    if (PROTECTED_KEYS.has(line.categoryKey)) {
-      throw new InputError("protected_category", "income and transfers cannot be budgeted");
-    }
-    if (byId.get(line.categoryKey)?.archived) {
-      throw new InputError(
-        "archived_category",
-        "a planned line points at an archived category; drop the line or unarchive the category"
+  return draft.lines
+    .filter((line) => !line.dropped && linePlanCents(line) > 0)
+    .map((line) => {
+      if (PROTECTED_KEYS.has(line.categoryKey))
+        throw new InputError("protected_category", "income and transfers cannot be budgeted");
+      const existing = byId.get(line.categoryKey);
+      if (existing?.archived)
+        throw new InputError(
+          "archived_category",
+          "a planned line points at an archived category; drop the line or unarchive the category"
+        );
+      return (
+        existing ?? {
+          id: line.categoryKey,
+          name: line.categoryName,
+          group: LEGACY_GROUP[line.groupName] ?? "everyday",
+          archived: false
+        }
       );
-    }
-  }
-
-  const missing = draft.lines.filter((line) => !line.dropped && !byId.has(line.categoryKey));
-  const renamed = planned.filter((line) => {
-    const existing = byId.get(line.categoryKey);
-    return existing !== undefined && existing.name !== line.categoryName;
-  });
-  if (missing.length === 0 && renamed.length === 0) return;
-
-  const created: Category[] = missing.map((line) => ({
-    id: line.categoryKey,
-    group: LEGACY_GROUP[line.groupName] ?? "everyday",
-    name: line.categoryName,
-    archived: false
-  }));
-  const renames = new Map(renamed.map((line) => [line.categoryKey, line.categoryName]));
-  const base = (live.length > 0 ? live : DEFAULT_CATEGORIES).map((category) =>
-    renames.has(category.id) ? { ...category, name: renames.get(category.id)! } : category
-  );
-  const taxonomy = [...base, ...created];
-  await ports.kv.set(NS.categories, "taxonomy", {
-    categories: taxonomy
-  } as unknown as Record<string, unknown>);
-
-  if (ports.db) {
-    for (const line of renamed) {
-      await ports.db.query(
-        "UPDATE app.finance_categories SET name = $2 WHERE id = $1 AND archived_at IS NULL",
-        [line.categoryKey, line.categoryName]
-      );
-    }
-    for (const [offset, category] of created.entries()) {
-      await ports.db.query(
-        "INSERT INTO app.finance_categories (owner_user_id, id, group_name, name, sort_order, " +
-          "is_income, archived_at) " +
-          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, false, NULL) " +
-          "ON CONFLICT (owner_user_id, id) DO NOTHING",
-        [category.id, tableGroupFor(category.group), category.name, live.length + offset]
-      );
-    }
-  }
+    });
 }
 
 /**
- * Queue handler behind the screen's "Start this budget" button. Creates any
- * missing categories, sets this month's assignment for every planned line, logs
- * each change, and marks the draft started last. Assignments are set totals and
- * the mark is the final write, so a retry after a crash converges.
+ * Starts a reviewed draft through one SQL revision gate. Missing categories,
+ * assignment totals, activity and the started state commit together. A stale
+ * review or competing edit leaves every dependent row unchanged.
  */
-export const draftStartHandler: ToolFactory = (ports) => async (input) => {
-  const params = readEnvelopeParams(input, QUEUE_START);
+async function startDraft(ports: WorkerPorts, params: Record<string, unknown>) {
   const draftId = readString(params, "draftId", { required: true });
   const store = await ports.store();
-  await requireBudgetPolicy(store);
+  const expected = readBudgetReview(params);
+  requireSameReview(expected, await requireBudgetPolicy(store));
   const draft = await store.getLatestDraft();
   if (draft === null || draft.id !== draftId) {
     throw new InputError("draft_not_found", "draftId does not name the current draft");
   }
   if (draft.status === "started") return { status: "ok", started: true, alreadyStarted: true };
 
-  await ensureCategories(ports, draft);
+  const categories = await plannedCategories(ports, draft);
 
   // Every line's total, its activity row and the started mark land in one atomic write. A
   // failure part-way changes nothing, and a retry reads the same inputs and writes the same rows.
@@ -411,11 +397,17 @@ export const draftStartHandler: ToolFactory = (ports) => async (input) => {
   }
 
   const applied = await store.commitBudgetChange({
+    expected,
+    categories,
     month,
     assignments,
     activity,
     startDraft: { draftId: draft.id, at: ports.now().toISOString() }
   });
-  if (!applied) return { status: "ok", started: true, alreadyStarted: true };
+  if (!applied) throw staleBudget();
   return { status: "ok", started: true, assigned: assignments.length };
-};
+}
+export const draftStartHandler: ToolFactory = (ports) => async (input) =>
+  startDraft(ports, readEnvelopeParams(input, QUEUE_START));
+export const draftStartToolHandler: ToolFactory = (ports) => async (input) =>
+  startDraft(ports, input);

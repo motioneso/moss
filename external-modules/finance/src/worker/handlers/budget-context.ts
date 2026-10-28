@@ -15,7 +15,8 @@ import {
 } from "../../domain/index.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { InputError, readBool } from "../validate.js";
+import { loadCategories } from "./feed.js";
+import { InputError, readBool, readInt, readString } from "../validate.js";
 import { currency, today } from "./manual-ledger.js";
 
 export async function requireBudgetPolicy(store: FinanceStore): Promise<BudgetPolicy> {
@@ -30,7 +31,35 @@ export async function requireBudgetPolicy(store: FinanceStore): Promise<BudgetPo
       "budget_currency_required",
       "Choose and review the working currency on Budget first"
     );
+  if (!policy.taxonomyReady)
+    throw new InputError(
+      "storage_upgrade_required",
+      "Finish Finance category migration before budgeting"
+    );
   return policy;
+}
+export const staleBudget = () =>
+  new InputError(
+    "stale_budget",
+    "The budget or ledger changed. Refresh and review the amounts again before saving."
+  );
+export function readBudgetReview(input: Record<string, unknown>) {
+  const revision = readInt(input, "expectedRevision", {
+    required: true,
+    min: 0,
+    max: Number.MAX_SAFE_INTEGER
+  });
+  const fingerprint = readString(input, "expectedFingerprint", { required: true });
+  if (!/^[a-f0-9]{32}$/.test(fingerprint))
+    throw new InputError("Refresh the budget to get a valid review token");
+  return { revision, fingerprint };
+}
+export function requireSameReview(
+  expected: { revision: number; fingerprint: string },
+  actual: { revision: number; fingerprint: string }
+) {
+  if (expected.revision !== actual.revision || expected.fingerprint !== actual.fingerprint)
+    throw staleBudget();
 }
 export const budgetConfigureHandler: ToolFactory = (ports) => async (input) => {
   const store = await ports.store();
@@ -44,7 +73,8 @@ export const budgetConfigureHandler: ToolFactory = (ports) => async (input) => {
   const outcome = await store.budgetPolicy.configure(
     code,
     acknowledgeLegacy,
-    ports.now().toISOString()
+    ports.now().toISOString(),
+    await loadCategories(ports)
   );
   if (outcome === "legacy_review_required")
     throw new InputError(
@@ -60,9 +90,9 @@ export const budgetConfigureHandler: ToolFactory = (ports) => async (input) => {
 };
 
 export async function budgetContext(ports: WorkerPorts, store: FinanceStore, month: string) {
+  const policy = await store.budgetPolicy?.get();
   const accounts = await store.listAccounts();
   const assignmentMonths = await store.listAssignmentMonths();
-  const policy = await store.budgetPolicy?.get();
   if (!policy) {
     const legacyMonths = [];
     for (const month of assignmentMonths) {
@@ -88,6 +118,11 @@ export async function budgetContext(ports: WorkerPorts, store: FinanceStore, mon
       currentMonth: today(ports).slice(0, 7)
     };
   }
+  if (!policy.taxonomyReady)
+    throw new InputError(
+      "storage_upgrade_required",
+      "Finish Finance category migration before budgeting"
+    );
   const date = today(ports);
   const fundingAccounts = accounts.filter((account) => budgetAccount(account, policy.isoCurrency));
   const ledgers: Record<string, BudgetLedger> = {};
@@ -148,10 +183,12 @@ export async function budgetContext(ports: WorkerPorts, store: FinanceStore, mon
       staleIds.add(account.accountId);
   }
   const ids = new Set(fundingAccounts.map((a) => a.accountId));
+  requireSameReview(policy, await requireBudgetPolicy(store));
   return {
     setupRequired: false as const,
     isoCurrency: policy.isoCurrency,
     revision: policy.revision,
+    fingerprint: policy.fingerprint,
     currentMonth: date.slice(0, 7),
     hasBank: accounts.length > 0,
     hasBudget: assignmentMonths.length > 0,

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { loadModuleMigrationFiles } from "@moss/db";
 
 describe("finance module sql directory", () => {
-  it("loads all twenty-five migration files through the module-sql-runner validator", async () => {
+  it("loads all twenty-six migration files through the module-sql-runner validator", async () => {
     const files = await loadModuleMigrationFiles("external-modules/finance/sql");
     expect(files.map((file) => file.name.replace(/\.sql$/, ""))).toEqual([
       "0001_create_finance_items",
@@ -34,7 +34,8 @@ describe("finance module sql directory", () => {
       "0022_add_finance_statement_baseline",
       "0023_create_finance_reconciliations",
       "0024_create_finance_imports",
-      "0025_create_finance_budget_policy"
+      "0025_create_finance_budget_policy",
+      "0026_add_finance_taxonomy_cutover"
     ]);
   });
 });

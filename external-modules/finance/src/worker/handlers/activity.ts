@@ -18,6 +18,8 @@ import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
 import { InputError, readInt, readString } from "../validate.js";
 import { READY_TO_ASSIGN } from "./budget.js";
+import { budgetContext, staleBudget } from "./budget-context.js";
+import { today } from "./manual-ledger.js";
 import { loadCategories } from "./feed.js";
 
 const QUEUE_UNDO = "finance.activity-undo";
@@ -333,15 +335,11 @@ async function undoRule(ports: WorkerPorts, row: ActivityRecord): Promise<Activi
   return reversal;
 }
 
-async function saveCategories(ports: WorkerPorts, categories: Category[]): Promise<void> {
-  await ports.kv.set(NS.categories, "taxonomy", { categories });
-}
-
 async function undoCategory(
   ports: WorkerPorts,
   store: FinanceStore,
   row: ActivityRecord
-): Promise<ActivityInput> {
+): Promise<{ category: Category; reversal: ActivityInput }> {
   const categoryId = str(row.params.categoryId);
   if (categoryId === null) throw new InputError("not_undoable", "this row has no usable undo data");
   const all = await loadCategories(ports);
@@ -349,20 +347,24 @@ async function undoCategory(
   if (!current) throw new InputError("not_found", "the category is no longer on record");
   if (row.kind === "category.add") {
     if (current.archived) throw CHANGED();
-    const month = ports.now().toISOString().slice(0, 7);
+    const month = today(ports).slice(0, 7);
     if ((await currentAssignment(store, month, categoryId)) !== 0) throw CHANGED();
-    await saveCategories(
-      ports,
-      all.map((entry) => (entry.id === categoryId ? { ...entry, archived: true } : entry))
-    );
-    return { actor: "user", kind: "category.archive", params: { categoryId } };
+    const context = await budgetContext(ports, store, month);
+    if (!context.setupRequired && (context.state.categories[categoryId]?.availableCents ?? 0) !== 0)
+      throw CHANGED();
+    for (const future of (await store.listAssignmentMonths()).filter((m) => m > month)) {
+      if ((await currentAssignment(store, future, categoryId)) !== 0) throw CHANGED();
+    }
+    return {
+      category: { ...current, archived: true },
+      reversal: { actor: "user", kind: "category.archive", params: { categoryId } }
+    };
   }
   if (!current.archived) throw CHANGED();
-  await saveCategories(
-    ports,
-    all.map((entry) => (entry.id === categoryId ? { ...entry, archived: false } : entry))
-  );
-  return { actor: "user", kind: "category.add", params: { categoryId } };
+  return {
+    category: { ...current, archived: false },
+    reversal: { actor: "user", kind: "category.add", params: { categoryId } }
+  };
 }
 
 /** Queue handler. Reverses one activity row, or throws when the data moved on since. */
@@ -370,6 +372,7 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
   const params = readEnvelopeParams(input);
   const activityId = readString(params, "activityId", { required: true });
   const store = await ports.store();
+  const expected = await store.budgetPolicy?.get();
   const row = await store.getActivity(activityId);
   if (row === null) throw new InputError("not_found", "no activity row matches the given id");
   if (row.undoneAt !== null) return { status: "ok", undone: true, alreadyUndone: true };
@@ -379,6 +382,8 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
 
   const at = ports.now().toISOString();
   if (row.kind === "budget.assign" || row.kind === "budget.move") {
+    if (!expected?.taxonomyReady)
+      throw new InputError("budget_currency_required", "Choose your budget currency first");
     // Totals, the reversal row and the undone mark land together, and a second undo of the
     // same row writes nothing.
     const plan =
@@ -386,15 +391,37 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
         ? await planUndoAssign(store, row)
         : await planUndoMove(store, row);
     const applied = await store.commitBudgetChange({
+      expected,
       month: plan.month,
       assignments: plan.assignments,
       activity: [plan.reversal],
       markUndone: { activityId, at }
     });
-    if (!applied) return { status: "ok", undone: true, alreadyUndone: true };
+    if (!applied) {
+      if ((await store.getActivity(activityId))?.undoneAt)
+        return { status: "ok", undone: true, alreadyUndone: true };
+      throw staleBudget();
+    }
     return { status: "ok", undone: true };
   }
 
+  if (row.kind === "category.add" || row.kind === "category.archive") {
+    if (!expected?.taxonomyReady)
+      throw new InputError("budget_currency_required", "Choose your budget currency first");
+    const plan = await undoCategory(ports, store, row);
+    if (
+      !(await store.commitBudgetChange({
+        expected,
+        month: today(ports).slice(0, 7),
+        assignments: [],
+        categories: [plan.category],
+        activity: [plan.reversal],
+        markUndone: { activityId, at }
+      }))
+    )
+      throw staleBudget();
+    return { status: "ok", undone: true };
+  }
   let reversal: ActivityInput;
   switch (row.kind) {
     case "transaction.categorize":
@@ -404,7 +431,7 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
       reversal = await undoRule(ports, row);
       break;
     default:
-      reversal = await undoCategory(ports, store, row);
+      throw new InputError("not_undoable", "this action cannot be undone");
   }
   await store.appendActivity(reversal);
   await store.markActivityUndone(activityId, at);

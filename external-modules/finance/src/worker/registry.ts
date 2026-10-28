@@ -40,9 +40,11 @@ import {
 } from "./handlers/feed.js";
 import {
   draftBuildHandler,
+  draftBuildToolHandler,
   draftGetHandler,
   draftSetHandler,
   draftStartHandler,
+  draftStartToolHandler,
   draftUpdateHandler
 } from "./handlers/draft.js";
 import { storageMigrateHandler } from "./handlers/migrate.js";
@@ -86,10 +88,12 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "budget.configure": budgetConfigureHandler,
   "budget.assign": budgetAssignHandler,
   "budget.apply": budgetApplyHandler,
-  // #3180: the first-budget draft. Starting is queue-only, never a tool.
+  // First-budget edits and start use reviewed host tools; legacy queues require the same review.
   "budget.draft.get": draftGetHandler,
   "draft.build": draftBuildHandler,
+  "budget.draft.build": draftBuildToolHandler,
   "draft.start": draftStartHandler,
+  "budget.draft.start": draftStartToolHandler,
   "budget.draft.update": draftUpdateHandler,
   "draft.set": draftSetHandler,
   // #3185: chat money and category actions.

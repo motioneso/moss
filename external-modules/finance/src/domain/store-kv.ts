@@ -261,7 +261,7 @@ export function kvStore(kv: FinanceKv): FinanceStore {
 
     async saveDraftLine(draftId, line) {
       const stored = (await kv.get(NS.budgets, DRAFT_KEY)) as unknown as BudgetDraft | null;
-      if (!stored || stored.id !== draftId || stored.status !== "open") return;
+      if (!stored || stored.id !== draftId || stored.status !== "open") return false;
       const exists = stored.lines.some((existing) => existing.categoryKey === line.categoryKey);
       const lines = exists
         ? stored.lines.map((existing) =>
@@ -272,6 +272,7 @@ export function kvStore(kv: FinanceKv): FinanceStore {
         string,
         unknown
       >);
+      return true;
     }
   };
 }

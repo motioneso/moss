@@ -248,8 +248,8 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     const db = fakeDb();
     const result = await callHandler(kv, db);
     expect(result).toEqual({ status: "already-migrated" });
-    expect(db.calls).toHaveLength(16);
-    for (const call of db.calls) {
+    expect(db.calls.filter((c) => c.text.startsWith("INSERT"))).toHaveLength(16);
+    for (const call of db.calls.filter((c) => c.text.startsWith("INSERT"))) {
       expect(call.text).toContain("app.finance_categories");
       expect(call.text).toContain("DO NOTHING");
     }
@@ -270,7 +270,7 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     });
     const db = fakeDb();
     await callHandler(kv, db);
-    expect(db.calls.map((call) => call.params)).toEqual([
+    expect(db.calls.filter((c) => c.text.startsWith("INSERT")).map((call) => call.params)).toEqual([
       ["rent-mortgage", "Bills", "Rent & mortgage", 0, false, null],
       ["income", "Income", "Income", 1, true, null],
       ["my-pets", "Everyday", "Pets", 2, false, "2026-07-18T12:00:00.000Z"]
@@ -285,7 +285,9 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     });
     const db = fakeDb();
     await callHandler(kv, db);
-    const groups = new Set(db.calls.map((call) => call.params?.[1]));
+    const groups = new Set(
+      db.calls.filter((c) => c.text.startsWith("INSERT")).map((call) => call.params?.[1])
+    );
     expect([...groups].sort()).toEqual(["Bills", "Everyday", "Fun", "Income", "Savings"]);
     expect(db.calls.filter((call) => call.params?.[4] === true)).toHaveLength(1);
   });

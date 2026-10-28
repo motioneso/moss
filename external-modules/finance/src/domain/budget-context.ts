@@ -1,20 +1,28 @@
 import type { AccountRecord, TransactionRecord } from "./records.js";
+import type { Category } from "./taxonomy.js";
 import type { FinanceStore } from "./store-port.js";
 import { countsTowardReady } from "./ready-to-assign.js";
 import { balanceSign } from "./account-sign.js";
 import { safeCents } from "./values.js";
 
-export interface BudgetPolicy {
+export interface BudgetReview {
+  revision: number;
+  fingerprint: string;
+}
+export interface BudgetPolicy extends BudgetReview {
   isoCurrency: string;
   createdAt: string;
-  revision: number;
+  taxonomyReady: boolean;
 }
 export interface BudgetPolicyStore {
   get(): Promise<BudgetPolicy | null>;
+  categories(): Promise<Category[] | null>;
+  initializeCategories(categories: readonly Category[], at: string): Promise<boolean>;
   configure(
     isoCurrency: string,
     acknowledgeLegacy: boolean,
-    at: string
+    at: string,
+    categories?: readonly Category[]
   ): Promise<"created" | "unchanged" | "conflict" | "legacy_review_required">;
 }
 export const budgetAccount = (account: AccountRecord, currency: string): boolean =>

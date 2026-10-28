@@ -7,18 +7,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { chromium, type Browser, type BrowserContext } from "playwright-core";
-import { sql, type Kysely } from "kysely";
-import {
-  createDatabase,
-  createModuleStorageRpc,
-  DataContextRunner,
-  type MossDatabase
-} from "@moss/db";
-import { setModuleKvValue } from "@moss/settings";
+import { type Kysely } from "kysely";
+import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { createApiServer } from "../../apps/api/src/server.js";
 import { buildExternalModule } from "../../scripts/build-external-module.js";
 import { installModule } from "../../scripts/module-install.js";
-import { NS, sqlStore, type FinanceDb } from "../../external-modules/finance/src/domain/index.js";
+import { seedFinanceLive, seedFirstBudget } from "./helpers/finance-live-fixtures.js";
+import { exerciseBudgetWrites, exerciseFirstBudget } from "./helpers/finance-live-budget.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
 describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
@@ -130,101 +125,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       member = await signUp("member@finance-page.test", "Synthetic member");
       expect((await post(`/api/admin/users/${member.userId}/approve`, {})).statusCode).toBe(200);
       expect((await post("/api/onboarding/skip", {}, member.cookie)).statusCode).toBe(200);
-      await new DataContextRunner(workerDb).withDataContext(
-        { actorUserId: owner.userId },
-        async (scope) => {
-          await sql`select set_config('app.current_module_id', 'finance', true)`.execute(scope.db);
-          const rpc = createModuleStorageRpc(scope, "finance");
-          const db: FinanceDb = {
-            query: async (text, params) => {
-              const result = await rpc.query(text, params);
-              return { rows: [...result.rows] } as never;
-            }
-          };
-          const store = sqlStore(db);
-          await store.putItem({
-            itemId: "synthetic-bank",
-            institutionId: null,
-            institutionName: "Synthetic bank",
-            connectedAt: `${month}-01T00:00:00Z`,
-            status: "connected"
-          });
-          await store.putAccount({
-            accountId: "synthetic-cash",
-            itemId: "synthetic-bank",
-            name: "Synthetic checking",
-            officialName: null,
-            type: "depository",
-            subtype: "checking",
-            mask: "0000",
-            balanceCents: 100000,
-            isoCurrency: "USD",
-            updatedAt: `${month}-01T00:00:00Z`
-          });
-          await store.putTransaction({
-            id: "synthetic-market",
-            accountId: "synthetic-cash",
-            date: `${month}-01`,
-            name: "Synthetic weekend market",
-            amountCents: 8243,
-            isoCurrency: "USD",
-            merchant: null,
-            plaidCategory: null,
-            categoryId: "groceries",
-            pending: false,
-            pendingTransactionId: null,
-            categorizedBy: "user"
-          });
-          await setModuleKvValue(
-            scope,
-            {
-              moduleId: "finance",
-              namespace: NS.meta,
-              scope: "user",
-              ownerUserId: owner.userId,
-              key: "storage:migrated"
-            },
-            { at: new Date().toISOString() }
-          );
-        }
-      );
-      // A second synthetic owner has legacy assignments and two currencies; no real bank is used.
-      await new DataContextRunner(appDb).withDataContext(
-        { actorUserId: member.userId },
-        async (scope) => {
-          const rpc = createModuleStorageRpc(scope, "finance");
-          const store = sqlStore({
-            query: async (text, params) => ({
-              rows: [...(await rpc.query(text, params)).rows] as never[]
-            })
-          });
-          for (const isoCurrency of ["EUR", "USD"]) {
-            await store.manual!.createAccount({
-              accountId: `manual:synthetic-${isoCurrency}`,
-              name: `Synthetic ${isoCurrency} cash`,
-              type: "other",
-              subtype: "cash",
-              isoCurrency,
-              openingDate: `${month}-01`,
-              openingBalanceCents: isoCurrency === "EUR" ? 123450 : 999999,
-              digest: "a".repeat(64),
-              at: `${month}-01T00:00:00Z`
-            });
-          }
-          await store.setAssignment(month, "groceries", 2000);
-          await setModuleKvValue(
-            scope,
-            {
-              moduleId: "finance",
-              namespace: NS.meta,
-              scope: "user",
-              ownerUserId: member.userId,
-              key: "storage:migrated"
-            },
-            { at: new Date().toISOString() }
-          );
-        }
-      );
+      await seedFinanceLive(workerDb, appDb, owner, member, month);
       if (artifacts) await mkdir(artifacts, { recursive: true });
       browser = await chromium.launch({
         executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium",
@@ -396,8 +297,48 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
               });
           }
         }
+        await exerciseBudgetWrites(page, readTool, month, artifacts);
       } finally {
         await page.close();
+      }
+    }, 90_000);
+
+    it("builds and starts a reviewed budget from manual history without a bank", async () => {
+      const person = await signUp("first-budget@finance-page.test", "Synthetic first budget");
+      expect((await post(`/api/admin/users/${person.userId}/approve`, {})).statusCode).toBe(200);
+      expect((await post("/api/onboarding/skip", {}, person.cookie)).statusCode).toBe(200);
+      await seedFirstBudget(appDb, person.userId, month);
+      const other = await browser.newContext({
+        viewport: { width: 1440, height: 900 },
+        reducedMotion: "reduce"
+      });
+      await other.addCookies(
+        person.cookie.split("; ").map((cookie) => {
+          const at = cookie.indexOf("=");
+          return { name: cookie.slice(0, at), value: cookie.slice(at + 1), url: base };
+        })
+      );
+      await other.route("**/*", (route) =>
+        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
+      );
+      const page = await other.newPage();
+      try {
+        await exerciseFirstBudget(
+          page,
+          base,
+          (name, input) => readTool(name, input, person.cookie),
+          month,
+          artifacts
+        );
+      } catch (error) {
+        if (artifacts)
+          await page.screenshot({
+            path: join(resolve(artifacts), "finance-first-budget-debug.png"),
+            fullPage: true
+          });
+        throw error;
+      } finally {
+        await other.close();
       }
     }, 90_000);
 

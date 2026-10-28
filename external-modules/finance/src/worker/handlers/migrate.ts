@@ -23,6 +23,7 @@ import type {
 } from "../../domain/index.js";
 import type { Category } from "../../domain/index.js";
 import { DEFAULT_CATEGORIES, FinanceKvError, NS, tableGroupFor } from "../../domain/index.js";
+import { budgetSqlStore } from "../../domain/store-budget-sql.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
 import { MIGRATED_MARKER_KEY } from "../store.js";
@@ -137,14 +138,21 @@ async function insertIgnoreAssignment(
 /**
  * Copies the KV category taxonomy (or the 16 defaults when none is stored yet)
  * into app.finance_categories. Insert-ignore, so it is safe to run on every
- * reconcile, including for owners whose main migration already finished. The
- * KV taxonomy is left in place; it stays the read path until later tickets.
+ * reconcile, including owners whose main migration already finished. Once a
+ * currency policy exists, atomically cut over once and preserve SQL edits on replay.
  */
 export async function copyCategoriesToTable(ports: WorkerPorts, db: FinanceDb): Promise<void> {
   const stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
     categories: Category[];
   } | null;
   const categories = stored?.categories ?? [...DEFAULT_CATEGORIES];
+  const policy = budgetSqlStore(db);
+  const configured = await policy.get();
+  if (configured) {
+    if (!configured.taxonomyReady)
+      await policy.initializeCategories(categories, ports.now().toISOString());
+    return;
+  }
   const nowIso = ports.now().toISOString();
   for (const [index, category] of categories.entries()) {
     await db.query(

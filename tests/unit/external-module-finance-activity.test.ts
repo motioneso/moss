@@ -1,8 +1,7 @@
-import { usdBudgetPolicy } from "./helpers/finance-budget-policy.js";
+import { configuredBudgetStore } from "./helpers/finance-budget-policy.js";
 // tests/unit/external-module-finance-activity.test.ts
 import { describe, expect, it } from "vitest";
 
-import { kvStore } from "../../external-modules/finance/src/domain/index.js";
 import type { FinanceKv } from "../../external-modules/finance/src/domain/index.js";
 import type { ActivityRecord } from "../../external-modules/finance/src/domain/store-port.js";
 import {
@@ -37,7 +36,7 @@ function fakeKv(): FinanceKv {
 
 function setup(rows: ActivityRecord[]) {
   const kv = fakeKv();
-  const base = kvStore(kv);
+  const base = configuredBudgetStore(kv);
   const appended: unknown[] = [];
   const ports = {
     kv,
@@ -47,7 +46,6 @@ function setup(rows: ActivityRecord[]) {
     now: () => NOW,
     store: async () => ({
       ...base,
-      budgetPolicy: usdBudgetPolicy,
       appendActivity: async (entry: unknown) => {
         appended.push(entry);
       },

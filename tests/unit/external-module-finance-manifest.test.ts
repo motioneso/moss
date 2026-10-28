@@ -69,18 +69,20 @@ describe("finance manifest app map (#3177)", () => {
     );
   });
 
-  it("declares the history-built first budget and no assistant tool that starts one (#3180)", () => {
+  it("declares a history-built draft and requires confirmation to start it", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       appMap: { features: { id: string }[] };
       assistantTools: { name: string; handler?: string }[];
     };
     expect(manifest.appMap.features.map((f) => f.id)).toContain("finance.first-budget");
     expect(manifest.assistantTools.map((t) => t.name)).toContain("finance.budget.draft.get");
-    expect(manifest.assistantTools.filter((t) => t.handler === "draft.start")).toEqual([]);
+    expect(
+      manifest.assistantTools.find((t) => t.name === "finance.budget.draft.start")
+    ).toMatchObject({ executionPolicy: "confirm", confirmWhenKeys: ["draftId"] });
     expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
   });
 
-  it("lets chat adjust the draft through the drafting family, never start it (#3181)", () => {
+  it("lets chat adjust a draft through the drafting family", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       assistantTools: { name: string; handler?: string; risk: string; actionFamilyId?: string }[];
       assistantActionFamilies: { id: string }[];
@@ -141,8 +143,10 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.transaction.categorize-new", "transaction.categorize-new"],
         ["finance.budget.configure", "budget.configure"],
         ["finance.budget.status", "budget.status"],
+        ["finance.budget.draft.build", "budget.draft.build"],
         ["finance.budget.draft.get", "budget.draft.get"],
         ["finance.budget.draft.update", "budget.draft.update"],
+        ["finance.budget.draft.start", "budget.draft.start"],
         ["finance.budget.assign", "budget.assign"],
         ["finance.budget.move", "budget.move"],
         ["finance.rule.set", "rule.set"],
@@ -335,6 +339,14 @@ describe("finance manifest contract (#1146)", () => {
         paramsSchema: {
           type: "object",
           fields: {
+            expectedRevision: { type: "integer", min: 0, max: 9007199254740991 },
+            expectedFingerprint: { type: "identifier" },
+            previousCents: { type: "integer", min: -100000000, max: 100000000 },
+            previousAmountsCents: {
+              type: "array",
+              maxItems: 20,
+              items: { type: "integer", min: -100000000, max: 100000000 }
+            },
             month: { type: "identifier" },
             categoryId: { type: "identifier" },
             // The bounded-integer param type (module-params.ts) is what makes
@@ -388,7 +400,14 @@ describe("finance manifest contract (#1146)", () => {
         handler: "draft.start",
         retryLimit: 1,
         allowManualRun: true,
-        paramsSchema: { type: "object", fields: { draftId: { type: "uuid" } } }
+        paramsSchema: {
+          type: "object",
+          fields: {
+            draftId: { type: "uuid" },
+            expectedRevision: { type: "integer", min: 0, max: 9007199254740991 },
+            expectedFingerprint: { type: "identifier" }
+          }
+        }
       },
       {
         // #3181: a plan amount typed on the draft screen.
@@ -399,6 +418,8 @@ describe("finance manifest contract (#1146)", () => {
         paramsSchema: {
           type: "object",
           fields: {
+            expectedRevision: { type: "integer", min: 0, max: 9007199254740991 },
+            expectedFingerprint: { type: "identifier" },
             draftId: { type: "uuid" },
             categoryKey: { type: "identifier" },
             amountCents: { type: "integer", min: 0, max: 100000000 }

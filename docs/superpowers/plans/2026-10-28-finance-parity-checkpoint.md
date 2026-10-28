@@ -301,15 +301,61 @@ post-save button selector, and a checkbox test that expected optimistic state be
 These were harness mistakes; each was fixed before the final green run. The actual split save
 and owner isolation had already succeeded before the stale selector timed out.
 
+## Reviewed concurrent budgets and first-budget flow (Stage C)
+
+All assignment/move commands now require the reviewed budget revision, an opaque ledger
+fingerprint and explicit previous totals. The SQL policy update is the common gate for assignments,
+activity, draft/category creation, draft status and undo marks. A failed gate leaves those rows
+unchanged. Concurrent budget writers serialize through that policy row. Ledger changes committed
+before the statement snapshot invalidate an old review; later ledger events can still change
+funding. This is optimistic concurrency, not universal serializable bank synchronization.
+
+Migration 0026 records the one-time authoritative category cutover. Existing KV custom ids/names
+are copied, absent stale SQL copies are archived, and later migration replays preserve SQL edits.
+Category archive and undo refuse to strand current/future assigned or available money. Archived
+history remains visible. First-budget edits/start use awaited host tools; manual history can open
+Getting started without credentials. Starting always requires host confirmation. Exact draft
+arithmetic uses bigint intermediates. Budget and draft forms retain rejected typed amounts, show
+only saved totals and require checking records after an ambiguous response.
+
+Verification on local base `5ac7d98c`:
+
+- **52 files / 552 unit tests pass**, including cancelled/stale/ambiguous UI state. Unit server
+  fixtures are labeled stand-ins; concurrency is proved by real SQL tests below.
+- **26 installed SQL tests pass**, `moss_finance-20261028-111538-hknuL7.log`, input
+  `155dfc596f33`, rc 0. Competing assignments, changed entries/splits/snapshots/import/provider
+  corrections, constraint rollback, shared draft/undo guard and draft edit/start race are covered.
+- Negative control: removing only revision/fingerprint predicates caused **4 failures / 22 passes**,
+  `moss_finance-20261028-111459-gNKrGk.log`, input `18e5abed3752`, rc 1. Competing assignments
+  both wrote and stale changes applied; the fourth failure followed the deliberately started draft.
+  Predicates were restored before the 26-test green run. No disabled guard remains.
+- **3 files / 11 install/backfill tests pass**, `moss_finance-20261028-111540-XqjCxQ.log`, same
+  `155dfc596f33` input, rc 0; all 26 migrations install and replay.
+- **7 installed browser flows pass**, `moss_finance-20261028-111539-kGzzhI.log`, same input, rc 0.
+  A second tab changes an amount while the first awaits confirmation; approving the old review
+  rejects without overwriting the second tab. A separate manual-only owner builds, edits, cancels,
+  confirms and reloads a first budget. Existing split/statement/CSV/platform flows still pass.
+- Screenshot review covered 320/390/768/1440 widths, light/dark and Sage. It caught an amount-focus
+  replacement bug, now fixed, plus clipped error wording and an inaccurate chat-edit label. The
+  final polish rerun passed **7/7** (`moss_finance-20261028-111912-XkfMr4.log`, rc 0); updated
+  phone/desktop screenshots were inspected again. Screenshots are synthetic, task-local artifacts.
+
+Static verification passed (lint, formatting, design/layout, file sizes, dependencies, migrations,
+all TypeScript programs and app-map build); final visual-only edits also passed scoped lint and
+52 files / 552 unit tests. The next frozen foundation will retest the committed snapshot.
+
+The previous platform confirmation/owner guard receipts remain recorded above; no platform guard
+was bypassed for these Finance flows. Next: targets, recurring plans and flexible budget semantics
+under the [planning spec](../specs/2026-10-28-finance-targets-bills-flex.md).
+
 ## Aggregate limitations and recoverable prerequisites
 
-Latest **completed** frozen foundation: clean committed `e6f831f4`,
-`moss_finance_verify-20261028-095917-1eDZFx.log`, input `42279264a260`, **rc 1**, ended
-10:17:27 UTC and removed its container. Static passed. Unit phase: **1,602 files / 19,415 tests
-passed, 21 files / 277 tests failed, 3 skipped**. This includes CSV, exact-budget math and the
-three recovered parity-browser suites, before the currency/history changes. Compared with the
-previous `209a4e72` receipt (`094009-rgShgW`), there are **zero added failure identifiers** and
-four removed failure entries belonging to the three recovered browser suites.
+Latest **completed** frozen foundation: clean committed `5152c880`,
+`moss_finance_verify-20261028-104418-lQ4O7G.log`, input `9d3149446bbb`, **rc 1**, ended
+11:02:07 UTC and removed its container. Static passed. Unit phase: **1,604 files / 19,428 tests
+passed, 21 files / 277 tests failed, 3 skipped**. This includes the committed currency/history
+slice. All 277 failed test identifiers exactly match the prior clean `e6f831f4` receipt
+(`moss_finance_verify-20261028-095917-1eDZFx.log`, input `42279264a260`): zero additions or removals.
 
 Remaining failures are outside Finance: Computer ancestor ownership/IPC (including auth-session
 fixture), unmappable native ACL IDs and the Sports bundled browser. The container maps only
@@ -339,10 +385,9 @@ full foundation must be rerun after the next substantive slice with available pr
 ## Next actions
 
 1. Currency/history is committed as `5152c880`, locale forwarding as `7f147700`, and the
-   concurrency plan as `4107c130`. A new frozen foundation is running on clean `5152c880`
+   concurrency plan as `4107c130`. The frozen foundation completed on clean `5152c880` with the limitations above
    (`moss_finance_verify-20261028-104418-lQ4O7G.log`); continue the [concurrent-write plan](2026-10-28-finance-budget-concurrency.md).
-2. Bind assignments, moves, draft start and undo to the reviewed ledger and budget revision. Keep
-   failed changes atomic and preserve typed input; move Budget forms to awaited host tools.
+2. Preserve the tested concurrent-budget slice and finish its final visual/static receipts.
 3. Implement monthly/date-bound targets, recurring bills and flexible budgeting as tested vertical
    slices, with the evidence matrix reflecting actual end-to-end capability.
 4. Keep provider reconciliation, larger imports/statements, explicit transfers/archive and household
@@ -360,7 +405,7 @@ completion is claimed; those need separately authorized configuration and agreem
 
 ## Exact continuation point
 
-The original checkout is clean. The isolated task checkout preserves the currency/history slice locally. Final static verification passed; a frozen full foundation is running on `5152c880`; all work is local. The previous full gate completed with the limitations
+The original checkout is clean. The isolated task checkout preserves the currency/history slice locally. Final static verification passed; the frozen full foundation completed on `5152c880`; all work is local. The previous full gate completed with the limitations
 above. Installed harnesses close their API/browser instances and remove temporary bundles.
 Continue Stage C of the budget correctness spec after preserving Stage B. The focused concurrency
 plan describes the revision/fingerprint boundary and taxonomy cutover needed for atomic draft start.
