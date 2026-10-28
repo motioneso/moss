@@ -45,7 +45,7 @@
   <div id="mocks"></div>
 
   <section class="mock" id="qs">
-    <div class="mock__head"><h2 class="mock__title">Questions for you</h2></div>
+    <div class="mock__head"><h2 class="mock__title">Your answers, 27 October</h2></div>
     <ol class="qs" id="qlist"></ol>
   </section>
 </div>
@@ -406,6 +406,38 @@ function certScreen(f) {
   return setup("cert", body, { addrs: "tsname", nameDone: s === "done" });
 }
 
+/* ---------- Screen 12: move a name from another Moss ---------- */
+
+function moveScreen(f) {
+  const s = f.dataset.s || "offer";
+  const where = `<dl class="kv2"><dt>Points to</dt><dd>Another Moss, last seen 3 days ago</dd><dt>Signed in as</dt><dd>jordan-k on GitHub</dd></dl>`;
+  const step = (t, m, st) => `<div class="row">${mark(m)}<div><b>${t}</b></div><span class="row__state">${st}</span><span></span></div>`;
+  const steps = (k) => `<div class="rows">
+      ${step("Point the name at this computer", "ok", "Done")}
+      ${step("Check each device can find it", k === "moving" ? "wait" : "ok", k === "moving" ? "Checking" : "Done")}
+      ${step("Get a certificate for this Moss", k === "moving" ? "todo" : "ok", k === "moving" ? "" : "Done")}
+      ${step("Open it on another device", k === "moving" ? "todo" : "ok", k === "moving" ? "" : "iPhone at 14:52")}
+    </div>`;
+  const body = {
+    offer: `${head("meetmoss.com name", "Your account already has a name")}
+      <p class="bigname">${NAME}<span>.meetmoss.com</span></p>${where}
+      ${acts(btn("Move it to this Moss", "primary"), btn("Not now", "quiet"))}`,
+    confirm: `${head("meetmoss.com name", "Your account already has a name")}
+      <p class="bigname">${NAME}<span>.meetmoss.com</span></p>${where}
+      <div class="inlineconfirm" style="background:var(--amber-soft);color:var(--amber-ink)"><p><b>Move ${FULL} to this Moss?</b> It stops opening the other Moss straight away.</p>
+        <div class="acts">${btn("Move name", "primary sm")}${btn("Cancel", "quiet sm")}</div></div>`,
+    moving: `${head("meetmoss.com name", `Moving ${FULL}`)}${steps("moving")}
+      ${acts(`<span class="btn btn--primary" style="opacity:.45">Finish</span>`)}`,
+    done: `${head("meetmoss.com name", `${FULL} now opens this Moss`)}${steps("done")}
+      <dl class="kv2"><dt>Certificate until</dt><dd>25 January</dd><dt>Renews on</dt><dd>26 December</dd></dl>
+      ${acts(btn("Finish", "primary"))}`,
+    failed: `${head("meetmoss.com name", "The name didn't move")}
+      <div class="status status--bad">${pill("Not moved", "bad")}<span>meetmoss.com didn't answer. ${FULL} still points to the other Moss.</span>${btn("Try again", "sm", "refresh")}</div>
+      ${acts(btn("Back", "quiet"))}`,
+  }[s];
+  return setup("name", body, { addrs: "tsname", nameDone: s === "done" });
+}
+
 /* ---------- Screen 10: Settings > Remote access ---------- */
 
 function statusScreen(f) {
@@ -474,7 +506,7 @@ function bannerScreen(f) {
 const MOCKS = [
   { id: "m1", title: "1. Where you start", fn: entry,
     states: [["ready", "Ready screen"], ["readydone", "Ready, set up"], ["settings", "Settings, not set up"], ["choose", "Choose where from"]],
-    note: `<p><b>Entry.</b> The installer's Ready screen keeps its access row. Its button opens the guided setup, as does the empty Remote access section in Settings. Remote access is a core Settings section in the Moss group, so it sits in the Settings list, not behind a module cog.</p><p><b>Choice.</b> "From anywhere" is new and marked Recommended. The installer's current third option, "HTTPS", is gone from this list. See question 1.</p>` },
+    note: `<p><b>Entry.</b> The installer's Ready screen keeps its access row. Its button opens the guided setup, as does the empty Remote access section in Settings. Remote access is a core Settings section in the Moss group, so it sits in the Settings list, not behind a module cog.</p><p><b>Choice.</b> "From anywhere" is new and marked Recommended. It replaces the installer's "HTTPS" option, as you decided.</p>` },
   { id: "m2", title: "2. Tailscale on this computer", fn: tsScreen,
     states: [["missing", "Not installed"], ["signedout", "Signed out"], ["expired", "Sign-in expired"], ["running", "Running"]],
     note: `<p><b>Layout.</b> Setup is its own full-width screen with a back link, like a connection's screen. Steps on the left, the current step in the middle, and the addresses that work right now on the right. The phone swaps the step list for a progress line and puts the addresses below.</p><p><b>Detection.</b> Moss watches for Tailscale and moves on by itself. The install command is for Linux because the sample computer runs Linux; other systems get their own link.</p>` },
@@ -488,7 +520,7 @@ const MOCKS = [
     note: `<p><b>What it says.</b> What goes public and what stays private, side by side, plus cost and sign-in. No longer explanation. "Not now" returns to Settings with Tailscale fully set up.</p>` },
   { id: "m6", title: "6. Sign in to meetmoss.com", fn: signinScreen,
     states: [["choose", "Choose"], ["waiting", "Waiting for browser"], ["invite", "Not invited yet"], ["down", "Service down"], ["done", "Signed in"]],
-    note: `<p><b>Changed from the spec's list.</b> The spec's screen list still says email entry. This uses GitHub or Google, per your ruling. The code on the waiting screen matches the one on the sign-in page, so the owner knows it's the right page.</p><p><b>Beta.</b> The invite step is a guess at how the beta gate works. See question 2.</p>` },
+    note: `<p><b>Changed from the spec's list.</b> The spec's screen list still says email entry. This uses GitHub or Google, per your ruling. The code on the waiting screen matches the one on the sign-in page, so the owner knows it's the right page.</p><p><b>Beta.</b> An invite code typed after sign-in, with an "Ask for an invite" link, as you decided.</p>` },
   { id: "m7", title: "7. Pick a name", fn: nameScreen,
     states: [["empty", "Empty"], ["checking", "Checking"], ["free", "Free"], ["taken", "Taken"], ["reserved", "Reserved"], ["short", "Too short"], ["chars", "Bad characters"]],
     note: `<p><b>Live check.</b> One box with the suffix fixed beside it. The message under the box changes as you type. Taken names get three suggestions you can click.</p><p><b>Public logs.</b> The one fixed line under the box is the public-log notice the spec requires.</p>` },
@@ -504,13 +536,16 @@ const MOCKS = [
   { id: "m11", title: "11. Banners and notifications", fn: bannerScreen,
     states: [["signedout", "Tailscale signed out"], ["addr", "Address changed"], ["renew", "Renewal failing"], ["expired", "Certificate ran out"]],
     note: `<p><b>Two places.</b> A banner across the top of every screen until fixed or dismissed, and a matching notification. The buttons open Remote access at the right step.</p>` },
+  { id: "m12", title: "12. Moving a name from another Moss", fn: moveScreen,
+    states: [["offer", "Already has a name"], ["confirm", "Confirm"], ["moving", "Moving"], ["done", "Done"], ["failed", "Failed"]],
+    note: `<p><b>When.</b> Right after sign-in, in place of Pick a name, when the account already has a name on another Moss. One name per account, so moving is the only way to use it here.</p><p><b>Moving.</b> The name points at this computer first, then the usual device check and certificate run. A failed move leaves the name on the other Moss.</p>` },
 ];
 
 const QUESTIONS = [
-  `<b>Does "From anywhere" replace the installer's "HTTPS" option?</b> The installer mockup offers Only this computer, Home network and HTTPS. Screen 1 swaps HTTPS for From anywhere. A public domain with open ports would then only be set up by hand.`,
-  `<b>How does the invite-only beta work?</b> Screen 6 assumes an invite code typed after sign-in, plus an "Ask for an invite" link. Other options are a waiting list you join from Moss, or GitHub and Google accounts you approve by hand.`,
-  `<b>What if the account already has a name on another Moss?</b> With one name per account, someone who reinstalls hits this. The simplest answer is a "Move it to this Moss" button on screen 7. Not drawn yet.`,
-  `<b>Should the plain Tailscale address stay listed once a secure one works?</b> Screen 10 lists all three addresses. Hiding the plain one would be tidier but it is the fallback when a certificate runs out.`,
+  `<b>"From anywhere" replaces the installer's "HTTPS" option.</b> Screen 1 shows the new list.`,
+  `<b>The beta uses an invite code typed after sign-in</b>, with an "Ask for an invite" link. Screen 6, "Not invited yet".`,
+  `<b>An account that already has a name can move it to this Moss.</b> Screen 12 draws the offer, the confirm, the move, done, and a failed move.`,
+  `<b>The plain Tailscale address stays listed</b> once a secure one works. Screen 10.`,
 ];
 
 const mocksEl = document.getElementById("mocks");
@@ -524,7 +559,7 @@ mocksEl.innerHTML = MOCKS.map((m) => `
       <div class="frame-wrap"><p class="frame-cap">Phone, 390</p><div class="frame frame--phone" data-m="${m.id}" data-s="${m.states[0]?.[0] || ""}"></div></div>
     </div>
   </section>`).join("");
-document.getElementById("toc").innerHTML = MOCKS.map((m) => `<a href="#${m.id}">${m.title}</a>`).join("") + `<a href="#qs">Questions for you</a>`;
+document.getElementById("toc").innerHTML = MOCKS.map((m) => `<a href="#${m.id}">${m.title}</a>`).join("") + `<a href="#qs">Your answers</a>`;
 document.getElementById("qlist").innerHTML = QUESTIONS.map((q) => `<li>${q}</li>`).join("");
 
 const FN = Object.fromEntries(MOCKS.map((m) => [m.id, m.fn]));

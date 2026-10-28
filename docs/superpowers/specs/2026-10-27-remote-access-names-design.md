@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-27
 
-**Status:** Draft for Ben's review. Not approved. Two decisions are recorded (see Decided). No build issue exists yet; one `task` issue is
+**Status:** Draft for Ben's review. Not approved. Seven decisions are recorded (see Decided); the screens are not signed off. No build issue exists yet; one `task` issue is
 opened per slice after approval.
 
 **Grounded on:** `origin/main` = `936eee87a`, `docs/operations/self-hosted-tls.md`,
@@ -434,6 +434,9 @@ working. Registration, address updates and renewals pause.
   on Cloudflare's per-zone limit for the free plan (1,000 or 200 for newer zones; 3,500 on a paid
   plan). None is from Cloudflare's own documentation, and the page that should state it does not.
   Treat this as a hard cap on beta size until Ben confirms the plan limit in the dashboard.
+  Finding (2026-10-27): the free-plan limit is still unconfirmed. Documentation suggests 1,000
+  records for zones created before 2024-09-01 and possibly 200 for newer zones; Pro and Business
+  plans allow 3,500. So the beta starts capped well under 200 names.
   Beyond that the choices are a paid plan or the service running its own authoritative DNS. The
   service keeps its DNS writes behind one interface so the backend can be swapped.
 - **Email for sign-in links.** An outbound email provider is needed; free tiers exist, not
@@ -463,7 +466,8 @@ Public Suffix List decision (see Open questions) is made.
 
 Mockups: `docs/superpowers/mockups/remote-access/index.html` (open from disk, no server). Each
 screen shows the wide window and the phone, with a button per state. Status: awaiting Ben's
-review; the questions at the bottom of the mockup page need his ruling.
+review. Ben answered the four questions the mockups raised (see Decided); he has not signed off
+the screens themselves.
 
 | #   | Screen                     | States drawn                                                                           |
 | --- | -------------------------- | -------------------------------------------------------------------------------------- |
@@ -478,6 +482,7 @@ review; the questions at the bottom of the mockup page need his ruling.
 | 9   | Certificate and switch on  | In progress, failed, rate limited, service down, open on a device, ready               |
 | 10  | Settings, once set up      | Name and Tailscale, Tailscale only, changing name, releasing                           |
 | 11  | Banners and notifications  | Tailscale signed out, address changed, renewal failing, certificate ran out            |
+| 12  | Moving a name              | Already has a name, confirm, moving, done, failed                                      |
 
 The phone layout (item 12 below) is drawn beside every screen. Sign-in uses GitHub or Google per
 the Decided list, so item 6's email wording below is superseded.
@@ -532,6 +537,21 @@ Decided by Ben on 2026-10-27.
 2. **User names stay under `meetmoss.com`.** No separate user-content domain. This requires the
    Public Suffix List entry for `meetmoss.com`, and the marketing site at the apex shares no cookies
    with names.
+3. **"From anywhere" replaces the installer's "HTTPS" access option.** The access choice becomes
+   Only this computer, Your home network, From anywhere. The installer spec and its mockup still
+   show "HTTPS" and need the same change.
+4. **The beta gate is an invite code typed after sign-in**, with an "Ask for an invite" link on the
+   same screen (mockup screen 6, "Not invited yet").
+5. **An account that already has a name can move it to this Moss.** Right after sign-in, in place of
+   picking a name, Moss offers "Move it to this Moss". After a confirm, the service points the name
+   at this install's Tailscale address and the install runs the usual device check and certificate
+   steps. The name stops opening the other install at once. A failed move leaves the name on the
+   other install (mockup screen 12).
+6. **The plain Tailscale address stays listed** in Settings once a secure address works, because it
+   is the fallback when a certificate runs out.
+7. **The test case is Ben's own server.** Tailscale's tailnet-wide MagicDNS is on, and the machine's
+   own "use Tailscale DNS" setting is off. Slice 1 tests whether a Tailscale certificate and the
+   `ts.net` name still work in that state.
 
 ## Open questions for Ben (most important first)
 
@@ -545,10 +565,13 @@ Decided by Ben on 2026-10-27.
 3. **Which Tailscale DNS setting do you keep off on the server?** The tailnet-wide MagicDNS
    setting, or only the server's own "use Tailscale DNS" setting. The first disables Tailscale's
    HTTPS names entirely; the second may not. _Recommendation: tell me which, and I will test it in
-   slice 1; either way the meetmoss name path stays independent of it._
+   slice 1; either way the meetmoss name path stays independent of it._ **Answered: the second;
+   see Decided 7.**
 4. **Cloudflare plan and record cap.** What per-zone record limit does your zone show, and are you
    willing to move to a paid plan or run your own DNS if the beta grows past it? _Recommendation:
    check the dashboard now; plan the beta size from the number; keep the DNS backend swappable._
+   **Interim: the limit is unconfirmed, so the beta starts well under 200 names (see Hosting and
+   cost).**
 5. **Who watches the abuse address and approves takedowns?** _Recommendation: you, with a short
    written policy (what gets a name removed), and an automated first pass on names that match the
    reserved patterns._
@@ -569,7 +592,8 @@ Decided by Ben on 2026-10-27.
 - Whether Cloudflare allows delegating a subdomain to a second zone below Enterprise.
 - Tailscale's IPv6 address range for devices; confirm against Tailscale's docs.
 - The default rebind behavior of Pi-hole, FritzBox, Unbound and AdGuard Home.
-- Whether per-device Tailscale DNS off still allows certificates and name resolution.
+- Whether per-device Tailscale DNS off still allows certificates and name resolution (tested on
+  Ben's server in slice 1; see Decided 7).
 - How the installer's host-operation contract can read Tailscale state.
 - Whether browsers and safe-browsing lists treat one name's abuse as site-wide once the suffix
   entry is live.
