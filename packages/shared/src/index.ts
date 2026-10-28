@@ -133,3 +133,4 @@ export type {
 } from "./note-contribution-api.js";
 
 export * from "./recording-memory-api.js";
+export * from "./heartbeat-source-api.js";

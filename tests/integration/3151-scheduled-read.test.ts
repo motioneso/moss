@@ -294,7 +294,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(
       await gateway().runBackgroundReadForActor(ids.userA, {
         operation: "tasks.get",
-        itemId: task.id,
+        input: { taskId: task.id },
         runId: "foreign"
       })
     ).toMatchObject({ ok: false });

@@ -1,3 +1,4 @@
+import { authorizeTasksHeartbeatRead, tasksHeartbeatWindowExecute } from "./heartbeat.js";
 import {
   taskItemsToolOutputSchema,
   taskFocusToolOutputSchema,
@@ -54,6 +55,7 @@ import {
   deleteTaskTagRouteSchema,
   focusTasksResponseSchema,
   getTaskResponseSchema,
+  heartbeatSourceReadInputSchema,
   interpretTaskSearchRequestSchema,
   interpretTaskSearchResponseSchema,
   listTaskListsResponseSchema,
@@ -512,6 +514,17 @@ export const tasksModuleManifest = {
       },
       outputSchema: taskItemsToolOutputSchema,
       execute: taskListExecute
+    },
+    {
+      name: "tasks.heartbeatWindow",
+      description:
+        "Background heartbeat read. Lists the actor's open tasks that are overdue or due soon, with a change revision. Reads only; never advances recurring tasks.",
+      permissionId: "tasks.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeTasksHeartbeatRead,
+      execute: tasksHeartbeatWindowExecute
     },
     {
       name: "tasks.get",

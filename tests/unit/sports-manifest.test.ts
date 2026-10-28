@@ -68,7 +68,7 @@ describe("sports manifest", () => {
   });
 
   it("exposes follows plus bounded actor-scoped source tools", () => {
-    expect(sportsModuleManifest.assistantTools).toHaveLength(13);
+    expect(sportsModuleManifest.assistantTools).toHaveLength(14);
     const byName = Object.fromEntries(
       sportsModuleManifest.assistantTools.map((tool) => [tool.name, tool])
     );

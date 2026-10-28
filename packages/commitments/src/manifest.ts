@@ -1,3 +1,6 @@
+import { heartbeatSourceReadInputSchema } from "@moss/shared";
+
+import { authorizeCommitmentsHeartbeatRead, commitmentsHeartbeatOpenExecute } from "./heartbeat.js";
 import { commitmentPresentation, commitmentRoutePresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -123,6 +126,17 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     }
   ],
   assistantTools: [
+    {
+      name: "commitments.heartbeatOpen",
+      description:
+        "Background heartbeat read. Lists the actor's accepted commitments that are due soon or recently overdue, with a change revision.",
+      permissionId: "commitments.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeCommitmentsHeartbeatRead,
+      execute: commitmentsHeartbeatOpenExecute
+    },
     {
       name: "commitments.list",
       description: "List commitment candidates extracted from your chats, notes, and email.",

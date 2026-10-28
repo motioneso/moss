@@ -121,7 +121,7 @@ export async function runScheduledReadJob(
       try {
         return await deps.gateway.runBackgroundReadForActor(payload.actorUserId, {
           operation: snapshot.operation.operation,
-          itemId: snapshot.operation.item_id,
+          input: { taskId: snapshot.operation.item_id },
           runId: access.requestId
         });
       } catch {
