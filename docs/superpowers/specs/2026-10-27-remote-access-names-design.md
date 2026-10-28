@@ -28,6 +28,14 @@ replace the bundled Caddy proxy or the internal-CA path.
 5. `meetmoss.com` goes on the Public Suffix List before launch, so one owner's name cannot touch
    cookies on another owner's name or on the marketing site, and so Let's Encrypt counts each name
    separately.
+6. Launch is an invite-limited beta under 50 new names a week, with plain Tailscale as the headline
+   feature (Ben, 2026-10-27).
+7. Sign-in to the registration service is GitHub or Google (Ben, 2026-10-27). This replaces the
+   earlier email-link recommendation. Abuse limits still apply per account.
+8. Ben handles the abuse address and takedowns under a short written policy, with an automatic
+   first pass on reserved name patterns (Ben, 2026-10-27).
+9. Name rules: one name per account, 3 to 30 characters, released after 90 days without an address
+   refresh, held 30 days before reuse (Ben, 2026-10-27).
 
 ## Problem
 
