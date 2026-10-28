@@ -210,10 +210,7 @@ function capResultText(text: string): string {
 }
 
 /** Text blocks of a tool response shaped `{ result: { content: [{ type: "text", text }] } }`. */
-function nestedToolResponseText(raw: Record<string, unknown>): string | null {
-  const result = raw.result;
-  if (!result || typeof result !== "object") return null;
-  const content = (result as { content?: unknown }).content;
+function contentBlocksText(content: unknown): string | null {
   if (!Array.isArray(content)) return null;
   const texts = content.flatMap((item) =>
     item && typeof item === "object" && typeof (item as { text?: unknown }).text === "string"
@@ -221,6 +218,12 @@ function nestedToolResponseText(raw: Record<string, unknown>): string | null {
       : []
   );
   return texts.length > 0 ? texts.join("\n").trim() : null;
+}
+
+function nestedToolResponseText(raw: Record<string, unknown>): string | null {
+  const result = raw.result;
+  if (!result || typeof result !== "object") return null;
+  return contentBlocksText((result as { content?: unknown }).content);
 }
 
 function extractResultText(update: {
@@ -231,6 +234,9 @@ function extractResultText(update: {
   let text = "";
   if (typeof update.rawOutput === "string") {
     text = update.rawOutput.trim();
+  } else if (Array.isArray(update.rawOutput)) {
+    // The Claude agent sends an MCP tool answer as a bare list of content blocks.
+    text = contentBlocksText(update.rawOutput) ?? JSON.stringify(update.rawOutput);
   } else if (update.rawOutput && typeof update.rawOutput === "object") {
     const raw = update.rawOutput as Record<string, unknown>;
     if (typeof raw.text === "string") text = raw.text.trim();

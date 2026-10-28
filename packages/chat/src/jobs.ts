@@ -1,4 +1,8 @@
-import { CHAT_SCHEDULED_READ_QUEUE_DEFINITION } from "./scheduled-reads/queue.js";
+import { registerScheduledReadBookkeepingWorker } from "./scheduled-reads/bookkeeping.js";
+import {
+  CHAT_SCHEDULED_READ_QUEUE_DEFINITION,
+  CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE_DEFINITION
+} from "./scheduled-reads/queue.js";
 import { CHAT_VOICE_REQUEST_QUEUE_DEFINITION } from "./voice-request-jobs.js";
 import {
   registerScheduledReadWorker,
@@ -100,6 +104,7 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   },
   CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
   CHAT_SCHEDULED_READ_QUEUE_DEFINITION,
+  CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE_DEFINITION,
   CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION
 ];
 
@@ -622,6 +627,12 @@ export async function registerChatJobWorkers(
     options.workOptions
   );
 
+  const bookkeepingWorkId = await registerScheduledReadBookkeepingWorker(
+    boss,
+    { dataContext },
+    options.workOptions
+  );
+
   const readWorkId =
     options.scheduledReadGateway && options.scheduledReportGenerator
       ? await registerScheduledReadWorker(
@@ -636,6 +647,7 @@ export async function registerChatJobWorkers(
       : null;
 
   const workIds = [
+    bookkeepingWorkId,
     ...(readWorkId ? [readWorkId] : []),
     embedWorkId,
     extractWorkId,

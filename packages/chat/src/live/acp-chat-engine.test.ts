@@ -630,6 +630,16 @@ describe("AcpChatEngine", () => {
       expect(record?.text).toBe('{\n  "state": "not_found"\n}');
     });
 
+    it("reads the wrapped text out of a bare content list, as the Claude agent sends it (#3343)", () => {
+      const text =
+        '<tool_result source="chat.readAttachment">\n{&quot;fileName&quot;: &quot;a.txt&quot;}\n</tool_result>';
+      const record = formatResultRecord({
+        toolCallId: "call-a",
+        rawOutput: [{ type: "text", text }]
+      });
+      expect(record?.text).toBe('{"fileName": "a.txt"}');
+    });
+
     it("peels the envelope before the display cap, so long results are still plain (#2816)", () => {
       const body = "&quot;".repeat(300);
       const wrapped = `<tool_result source="t.tool">\n${body}\n</tool_result>`;

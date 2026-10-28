@@ -47,6 +47,7 @@ describe("registered queue definitions", () => {
       "chat.summarize-conversation",
       "chat.deliver-reminder",
       "chat.scheduled-read",
+      "chat.scheduled-read-bookkeeping",
       "chat.notify-reminder",
       "briefings-run",
       "memory.vault-ingest-sweep",
