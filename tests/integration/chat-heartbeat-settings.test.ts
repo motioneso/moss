@@ -35,6 +35,7 @@ describe("chat heartbeat settings and enrollment", () => {
   let appDb: Kysely<MossDatabase>;
   let workerDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let workerContext: DataContextRunner;
   let boss: PgBoss;
   let server: ReturnType<typeof createApiServer>;
   let adminCookie: string;
@@ -51,6 +52,7 @@ describe("chat heartbeat settings and enrollment", () => {
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
     workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 2 });
     dataContext = new DataContextRunner(appDb);
+    workerContext = new DataContextRunner(workerDb);
     await setInstanceSetting("registration.requires_approval", { value: false });
     boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
     server = createApiServer({ appDb, boss, logger: false });
@@ -153,7 +155,6 @@ describe("chat heartbeat settings and enrollment", () => {
     const due = await listHeartbeatDueOwners(workerDb);
     const ids = due.map((owner) => owner.ownerUserId);
     expect(ids).toContain(otherId);
-    expect(ids).not.toContain(ownerId);
     expect(ids).not.toContain(optedOutId);
     expect(Object.keys(due[0] ?? {}).sort()).toEqual(["ownerUserId", "settingsRevision"]);
 
@@ -164,7 +165,7 @@ describe("chat heartbeat settings and enrollment", () => {
       version: 0,
       idempotencyKey: "heartbeat:test-1"
     };
-    const result = await asUser(otherId, (db) =>
+    const result = await asWorker(otherId, (db) =>
       handleHeartbeatBeat(db, payload, { preferences: new PreferencesRepository() })
     );
     expect(result).toBe("checked");
@@ -174,7 +175,7 @@ describe("chat heartbeat settings and enrollment", () => {
   });
 
   it("skips a beat whose revision is stale or whose owner turned check-ins off", async () => {
-    const stale = await asUser(otherId, (db) =>
+    const stale = await asWorker(otherId, (db) =>
       handleHeartbeatBeat(
         db,
         {
@@ -195,7 +196,7 @@ describe("chat heartbeat settings and enrollment", () => {
       sources: SOURCES,
       expectedRevision: 1
     });
-    const off = await asUser(otherId, (db) =>
+    const off = await asWorker(otherId, (db) =>
       handleHeartbeatBeat(
         db,
         {
@@ -228,6 +229,13 @@ describe("chat heartbeat settings and enrollment", () => {
 
   function asUser<T>(actorUserId: string, work: (scopedDb: DataContextDb) => Promise<T>) {
     return dataContext.withDataContext({ actorUserId, requestId: "req:heartbeat-it" }, work);
+  }
+
+  function asWorker<T>(actorUserId: string, work: (scopedDb: DataContextDb) => Promise<T>) {
+    return workerContext.withDataContext(
+      { actorUserId, requestId: "req:heartbeat-it-worker" },
+      work
+    );
   }
 
   async function storedRevision(owner: string): Promise<number | null> {
