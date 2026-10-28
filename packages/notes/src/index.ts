@@ -76,3 +76,5 @@ export {
   type StoredNoteDestination
 } from "./contribution-state.js";
 export { ManagedNoteSnapshotService } from "./managed-note-snapshots.js";
+
+export { RecordingContributionCleanupService } from "./recording-contribution-cleanup.js";

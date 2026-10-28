@@ -653,6 +653,8 @@ describe("Meetings authored action disclosures", () => {
     const result = await deleteMeetingPresentation(db, call(), ctx);
     expect(result?.target).toBe(meeting.title);
     expect(result?.fields[0]?.value).toContain("linked Moss chats");
+    expect(result?.fields[0]?.value).toContain("source-linked note contributions");
+    expect(result?.fields[0]?.value).toContain("unsupported recording memories");
     expect(result?.version).toMatch(/^[a-f0-9]{64}$/);
     noInternalIds(result);
   });

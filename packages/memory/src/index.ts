@@ -157,3 +157,9 @@ export {
   RecordingMemoryUnavailableError
 } from "./recording-fact-identity.js";
 export { collectRecordingMemoryExport } from "./recording-memory-export.js";
+
+export {
+  RecordingMemoryCleanupService,
+  type RecordingMemoryCleanupAuthority,
+  type RecordingMemoryCleanupOperation
+} from "./recording-memory-cleanup.js";

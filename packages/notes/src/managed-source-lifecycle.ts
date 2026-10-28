@@ -445,6 +445,27 @@ export class ManagedSourceLifecycle {
     });
   }
 
+  async assertSealedScoped(db: DataContextDb, operation: ManagedDeletionOperation): Promise<void> {
+    const owner = await this.lockDeletion(db, operation);
+    const row = operation.source
+      ? await readSource(db, ownedSource(owner, operation.source))
+      : await readActor(db, owner);
+    requireDeletion(row, operation);
+    if (row.state !== "sealed") throw new ManagedSourceFencedError();
+  }
+
+  /** Final removal shares the sealed source admission with the record's own transaction. */
+  async withSealedDeletion<T>(
+    access: AccessContext,
+    operation: ManagedDeletionOperation,
+    work: (db: DataContextDb) => Promise<T>
+  ): Promise<T> {
+    return this.runner.withDataContext(access, async (db) => {
+      await this.assertSealedScoped(db, operation);
+      return work(db);
+    });
+  }
+
   private async lockDeletion(
     db: DataContextDb,
     operation: ManagedDeletionOperation

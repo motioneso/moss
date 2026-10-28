@@ -24,7 +24,7 @@ export async function collectRecordingMemoryExport(
     await sql<RecordingMemoryReceiptExport>`SELECT owner_user_id::text AS "ownerUserId",
     receipt_id AS "receiptId",source_module_id AS "sourceModuleId",source_id::text AS "sourceId",
     source_version AS "sourceVersion",item_key AS "itemKey",source_generation AS "sourceGeneration",revision,
-    side,state,fact_id::text AS "factId",episode_id::text AS "episodeId"
+    side,state,fact_id::text AS "factId",episode_id::text AS "episodeId",cleanup_operation_id::text AS "cleanupOperationId"
     FROM app.memory_recording_receipts WHERE owner_user_id = ${owner}::uuid ORDER BY receipt_id`.execute(
       db.db
     );

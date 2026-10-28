@@ -127,7 +127,8 @@ export const memoryModuleManifest: MossModuleManifest = {
       "sql/0040_memory_chat_source.sql",
       "sql/0041_memory_facts.sql",
       "sql/0338_memory_managed_note_snapshots.sql",
-      "sql/0339_memory_recording_lineage.sql"
+      "sql/0339_memory_recording_lineage.sql",
+      "sql/0341_memory_recording_cleanup.sql"
     ],
     migrationDirectories: ["packages/memory/sql"],
     ownedTables: memoryOwnedTables
@@ -445,7 +446,7 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.recording_lineage",
       description:
-        "Recording memory keeps source history and personal or work labels through corrections. Undo and restore affect the reviewed source; forgotten facts stay forgotten. Account exports include this history.",
+        "Recording memories keep labels and source history through correction. Deletion removes one source and unsupported derivatives; other recording support and corrected text remain. Exports include cleanup progress.",
       errors: [
         {
           code: "recording_memory_conflict",

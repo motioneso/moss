@@ -1,3 +1,7 @@
+import {
+  createManagedDeletionPreparation,
+  createMeetingDeletionPort
+} from "./managed-deletion-runtime.js";
 import { createRecordingFactAuthority } from "./recording-memory-runtime.js";
 import { installBuiltInVisualTemplates } from "@moss/shared";
 import { createRecordingImportRuntime } from "./recording-import-runtime.js";
@@ -33,6 +37,7 @@ import type { PgBoss } from "pg-boss";
 import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
+  MeetingDeletionService,
   RecordingImportService,
   type RecordingImportDependencies,
   RECORDING_IMPORT_QUEUES,
@@ -1825,6 +1830,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     queueDefinitions: [...EXPORT_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
       registerSettingsRoutes(server, {
+        prepareManagedDeletion: createManagedDeletionPreparation({
+          dataContext: deps.dataContext,
+          privateVault: new VaultContextRunner(getVaultBaseDir())
+        }),
         rootDb: deps.rootDb,
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
@@ -3037,10 +3046,18 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       });
       registerMeetingRecordRoutes(server, {
         manualSummaryEnqueue: createManualMeetingSummaryEnqueue(deps.boss),
-        beforeRemove: async (db, id, actor) => {
-          await recordingImports.beforeRemove(db, actor, id);
-          await deleteMeetingChatThreads(db, id);
-        },
+        deletion: new MeetingDeletionService({
+          dataContext: deps.dataContext,
+          cleanup: createMeetingDeletionPort({
+            dataContext: deps.dataContext,
+            privateVault: new VaultContextRunner(getVaultBaseDir()),
+            boss: deps.boss
+          }),
+          beforeRemove: async (db, id, actor) => {
+            await recordingImports.beforeRemove(db, actor, id);
+            await deleteMeetingChatThreads(db, id);
+          }
+        }),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
@@ -4142,3 +4159,8 @@ export async function registerBuiltInModuleWorkers(
 export { createManagedNoteSnapshotPort } from "./managed-note-runtime.js";
 
 export { createRecordingFactAuthority } from "./recording-memory-runtime.js";
+
+export {
+  createManagedDeletionPreparation,
+  createMeetingDeletionPort
+} from "./managed-deletion-runtime.js";

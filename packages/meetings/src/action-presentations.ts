@@ -343,7 +343,7 @@ export const deleteMeetingPresentation: RouteApprovalPresentation = async (db, i
           {
             label: "Delete",
             value:
-              "This meeting, its retained notes, transcript, summaries, action reviews and export receipts, and its linked Moss chats"
+              "This meeting, its retained notes, transcript, summaries, action reviews and export receipts, its linked Moss chats, exact source-linked note contributions and unsupported recording memories. Accepted Tasks and independent saved vault copies remain."
           }
         ],
         version: version(meeting)

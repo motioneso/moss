@@ -9,7 +9,7 @@ import {
   type ManualTranscriptInput
 } from "@moss/shared";
 import { validateRecordingTypeConfiguration } from "./recording-type-config.js";
-import type { MeetingRecordRoutesDependencies } from "./routes.js";
+import type { MeetingContentRoutesDependencies } from "./routes.js";
 import { ManualEntryService, validateManualTranscript } from "./manual-entry-service.js";
 import { RecordingIdentityError, RecordingTypesRepository } from "./recording-types.js";
 import { RecordingMetadataRepository } from "./recording-metadata.js";
@@ -31,7 +31,7 @@ function failure(error: unknown, reply: FastifyReply) {
 }
 export function registerRecordingRoutes(
   server: FastifyInstance,
-  deps: MeetingRecordRoutesDependencies
+  deps: MeetingContentRoutesDependencies
 ) {
   const types = new RecordingTypesRepository();
   const metadata = new RecordingMetadataRepository();

@@ -36,6 +36,7 @@ function isConflict(error: unknown): boolean {
 /** Every leg commits separately. Exact pending bytes distinguish recovery from ordinary replay. */
 export async function executeContributionOperation(deps: PublicationDependencies): Promise<void> {
   const { access, operation, lifecycle, repository, destinations, authority, index } = deps;
+  if (operation.state === "cancelled") throw new NoteContributionUnavailableError();
   if (operation.state === "applied") return;
   for (let offset = 0; offset < operation.legs.length; offset++) {
     const leg = operation.legs[offset]!;
@@ -59,6 +60,7 @@ export async function executeContributionOperation(deps: PublicationDependencies
             if (!file || noteDestinationId(file.canonicalPath) !== leg.destination.id)
               throw new NoteContributionConflictError();
             const active = await repository.lockOperation(db, operation.id);
+            if (active.state === "cancelled") throw new NoteContributionUnavailableError();
             if (active.state === "applied" || active.legs[offset]?.done)
               return { changes: [], result: undefined };
             const step = active.legs[offset];
@@ -112,6 +114,7 @@ export async function executeContributionOperation(deps: PublicationDependencies
           operation.legs.map(({ destination }) => destination),
           async () => {
             const active = await repository.lockOperation(db, operation.id);
+            if (active.state === "cancelled") throw new NoteContributionUnavailableError();
             if (active.state === "applied") return;
             await repository.saveOperation(db, { ...active, state: "conflict" });
             const receipt = await repository.receipt(db, active.receiptId);

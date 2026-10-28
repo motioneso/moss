@@ -194,7 +194,9 @@
     "test:integration:3567": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-mirror.test.ts tests/integration/connectors.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/apply-writer-transaction.test.ts tests/integration/calendar-email.test.ts",
     "test:integration:3567:ui": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/outlook-calendar-ui.test.ts",
     "test:integration:3659": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/task-summary.test.ts tests/integration/tasks.test.ts",
-    "test:integration:3667": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/reminder-summary.test.ts tests/integration/chat-reminders-save.test.ts tests/integration/chat-reminders-cancel.test.ts"
+    "test:integration:3667": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/reminder-summary.test.ts tests/integration/chat-reminders-save.test.ts tests/integration/chat-reminders-cancel.test.ts",
+    "test:recording-deletion": "tsx scripts/test-integration.ts tests/integration/recording-managed-deletion.test.ts tests/integration/meeting-chat-delete.test.ts tests/integration/auth-settings.test.ts tests/integration/memory-graph-export-delete.test.ts tests/integration/release-hardening.test.ts tests/integration/account-self-deletion.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/recording-deletion-process-race.test.ts",
+    "test:recording-cleanup": "tsx scripts/test-integration.ts tests/integration/recording-managed-deletion.test.ts tests/integration/recording-deletion-process-race.test.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

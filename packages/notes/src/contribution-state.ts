@@ -61,7 +61,7 @@ export interface ContributionOperationRow {
   readonly receiptId: string;
   readonly source: RecordingNoteSource;
   readonly lifecycle: ManagedSourceSnapshot;
-  readonly state: "pending" | "conflict" | "applied";
+  readonly state: "pending" | "conflict" | "applied" | "cancelled";
   readonly resultState: "applied" | "undone";
   readonly legs: readonly ContributionLeg[];
 }

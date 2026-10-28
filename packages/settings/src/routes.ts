@@ -32,7 +32,11 @@ import { HttpError } from "@moss/module-sdk";
 
 import type { PgBoss } from "@moss/jobs";
 
-import { deleteUserData, LastActiveAdminError } from "../../../scripts/delete-user-data.js";
+import {
+  deleteUserData,
+  LastActiveAdminError,
+  type PrepareManagedDeletion
+} from "../../../scripts/delete-user-data.js";
 import { BootstrapHelper } from "./bootstrap.js";
 import { registerDataExportRoutes } from "./data-export-routes.js";
 import { registerDataExportAsyncRoutes } from "./data-export-async-routes.js";
@@ -142,6 +146,7 @@ export interface SettingsRoutesDependencies {
    * hardcoded `userScopedCountQueries` list.
    */
   readonly moduleDeletionTables: readonly { table: string; countPredicate: string }[];
+  readonly prepareManagedDeletion?: PrepareManagedDeletion;
   readonly preferencesRepository?: QuietHoursPreferencesPort;
   readonly personaPreview?: (input: PersonaPreviewInput) => Promise<string>;
   readonly repository?: SettingsRepository;
@@ -278,6 +283,7 @@ export function registerSettingsRoutes(
     bootstrapConnectionString: dependencies.bootstrapConnectionString,
     verifySelfPassword: dependencies.verifySelfPassword,
     hasPasswordCredential: dependencies.hasPasswordCredential,
+    prepareManagedDeletion: dependencies.prepareManagedDeletion,
     moduleDeletionTables: dependencies.moduleDeletionTables,
     reconcileExternalModuleJobs: dependencies.reconcileExternalModuleJobs
   });
@@ -682,6 +688,7 @@ export function registerSettingsRoutes(
         requestId: requireRequestId(accessContext),
         bootstrapConnectionString: dependencies.bootstrapConnectionString,
         dryRun: false,
+        prepareManagedDeletion: dependencies.prepareManagedDeletion,
         moduleDeletionTables: dependencies.moduleDeletionTables
       });
     } catch (error) {
