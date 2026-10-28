@@ -139,6 +139,7 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.transaction.split", "transaction.split"],
         ["finance.transaction.categorize", "transaction.categorize"],
         ["finance.transaction.categorize-new", "transaction.categorize-new"],
+        ["finance.budget.configure", "budget.configure"],
         ["finance.budget.status", "budget.status"],
         ["finance.budget.draft.get", "budget.draft.get"],
         ["finance.budget.draft.update", "budget.draft.update"],

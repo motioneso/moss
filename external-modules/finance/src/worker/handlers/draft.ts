@@ -7,6 +7,7 @@
 // There is deliberately no assistant tool that starts a draft. Starting runs only
 // from the screen's button, through the queue (spec: First budget, step 7).
 import {
+  budgetRows,
   CATEGORY_GROUP_NAMES,
   DEFAULT_CATEGORIES,
   NS,
@@ -28,6 +29,8 @@ import {
 import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
 import { InputError, readBool, readInt, readString } from "../validate.js";
+import { requireBudgetPolicy } from "./budget-context.js";
+import { today } from "./manual-ledger.js";
 import { loadCategories } from "./feed.js";
 
 const QUEUE_BUILD = "finance.draft-build";
@@ -39,6 +42,7 @@ const PROTECTED_KEYS: ReadonlySet<string> = new Set(["income", "transfers"]);
 
 export interface DraftViewLine {
   categoryKey: string;
+  isoCurrency?: string;
   categoryName: string;
   basisMonthlyCents: number;
   planCents: number;
@@ -49,6 +53,7 @@ export interface DraftViewLine {
 }
 
 export interface DraftView {
+  isoCurrency?: string;
   id: string;
   status: BudgetDraft["status"];
   basisFrom: string;
@@ -60,7 +65,7 @@ export interface DraftView {
 }
 
 /** Render a stored draft for the screen. Totals come from the lines, never from a second source. */
-export function draftView(draft: BudgetDraft): DraftView {
+export function draftView(draft: BudgetDraft, isoCurrency?: string): DraftView {
   const order = (name: string): number => {
     const index = (CATEGORY_GROUP_NAMES as readonly string[]).indexOf(name);
     return index === -1 ? CATEGORY_GROUP_NAMES.length : index;
@@ -70,6 +75,7 @@ export function draftView(draft: BudgetDraft): DraftView {
     const lines = groups.get(line.groupName) ?? [];
     lines.push({
       categoryKey: line.categoryKey,
+      isoCurrency,
       categoryName: line.categoryName,
       basisMonthlyCents: line.basisMonthlyCents,
       planCents: linePlanCents(line),
@@ -81,6 +87,7 @@ export function draftView(draft: BudgetDraft): DraftView {
   }
   return {
     id: draft.id,
+    isoCurrency,
     status: draft.status,
     basisFrom: draft.basisFrom,
     basisTo: draft.basisTo,
@@ -95,13 +102,18 @@ export function draftView(draft: BudgetDraft): DraftView {
 
 export const draftGetHandler: ToolFactory = (ports) => async () => {
   const store = await ports.store();
+  const policy = await store.budgetPolicy?.get();
+  if (!policy) return { setupRequired: true, hasSynced: false, hasBudget: false, draft: null };
   const latest = await store.getLatestDraft();
   const items = await store.listItems();
   const hasBudget = (await store.listAssignmentMonths()).length > 0;
   return {
-    hasSynced: items.some((item) => item.lastSyncAt !== undefined),
+    hasSynced:
+      items.some((item) => item.lastSyncAt !== undefined) ||
+      (await store.listAccounts()).some((account) => account.source === "manual"),
     hasBudget,
-    draft: latest ? draftView(latest) : null
+    isoCurrency: policy.isoCurrency,
+    draft: latest ? draftView(latest, policy.isoCurrency) : null
   };
 };
 
@@ -134,6 +146,7 @@ async function editDraftLine(
   }
 ): Promise<DraftEditResult> {
   const store = await ports.store();
+  await requireBudgetPolicy(store);
   const draft = await store.getLatestDraft();
   if (draft === null || draft.id !== args.draftId) {
     throw new InputError("draft_not_found", "draftId does not name the current draft");
@@ -256,15 +269,23 @@ function readEnvelopeParams(
 export const draftBuildHandler: ToolFactory = (ports) => async (input) => {
   readEnvelopeParams(input, QUEUE_BUILD);
   const store = await ports.store();
+  const policy = await requireBudgetPolicy(store);
   if ((await store.getLatestDraft()) !== null) return { status: "ok", built: false };
   if ((await store.listAssignmentMonths()).length > 0) {
     return { status: "ok", built: false, reason: "has-budget" };
   }
 
-  const currentMonth = ports.now().toISOString().slice(0, 7);
+  const currentDate = today(ports);
+  const currentMonth = currentDate.slice(0, 7);
+  const accounts = await store.listAccounts();
   const transactionsByMonth: Record<string, TransactionRecord[]> = {};
   for (const month of pickBasisMonths(await store.listTransactionMonths(), currentMonth)) {
-    transactionsByMonth[month] = await store.listMonthTransactions(month);
+    transactionsByMonth[month] = budgetRows(
+      accounts,
+      policy.isoCurrency,
+      await store.listMonthTransactions(month),
+      currentDate
+    );
   }
   const build = buildDraft({
     transactionsByMonth,
@@ -359,6 +380,7 @@ export const draftStartHandler: ToolFactory = (ports) => async (input) => {
   const params = readEnvelopeParams(input, QUEUE_START);
   const draftId = readString(params, "draftId", { required: true });
   const store = await ports.store();
+  await requireBudgetPolicy(store);
   const draft = await store.getLatestDraft();
   if (draft === null || draft.id !== draftId) {
     throw new InputError("draft_not_found", "draftId does not name the current draft");
@@ -369,7 +391,7 @@ export const draftStartHandler: ToolFactory = (ports) => async (input) => {
 
   // Every line's total, its activity row and the started mark land in one atomic write. A
   // failure part-way changes nothing, and a retry reads the same inputs and writes the same rows.
-  const month = ports.now().toISOString().slice(0, 7);
+  const month = today(ports).slice(0, 7);
   const ledger = (await store.getLedger(month))?.assignments ?? {};
   const assignments: { categoryId: string; amountCents: number }[] = [];
   const activity: ActivityInput[] = [];

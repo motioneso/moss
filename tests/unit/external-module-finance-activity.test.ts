@@ -1,3 +1,4 @@
+import { usdBudgetPolicy } from "./helpers/finance-budget-policy.js";
 // tests/unit/external-module-finance-activity.test.ts
 import { describe, expect, it } from "vitest";
 
@@ -46,6 +47,7 @@ function setup(rows: ActivityRecord[]) {
     now: () => NOW,
     store: async () => ({
       ...base,
+      budgetPolicy: usdBudgetPolicy,
       appendActivity: async (entry: unknown) => {
         appended.push(entry);
       },

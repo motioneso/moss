@@ -54,10 +54,15 @@ type Params = ActivityRecord["params"];
 const str = (value: unknown): string | null => (typeof value === "string" ? value : null);
 const num = (value: unknown): number | null => (typeof value === "number" ? value : null);
 
-function money(cents: number): string {
-  const abs = Math.abs(cents);
-  const text = `$${Math.floor(abs / 100).toLocaleString("en-US")}.${String(abs % 100).padStart(2, "0")}`;
-  return cents < 0 ? `-${text}` : text;
+function money(cents: number, currency: string | null): string {
+  const formatter = new Intl.NumberFormat(
+    "en-US",
+    currency
+      ? { style: "currency", currency }
+      : { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  );
+  const format = formatter.format as (value: string | number) => string;
+  return format(`${cents}E-2`) + (currency ? "" : " (currency not set)");
 }
 
 function monthLabel(month: string | null): string {
@@ -71,6 +76,7 @@ function titleCase(text: string): string {
 }
 
 interface Names {
+  currency: string | null;
   category(id: string | null): string;
   merchantForRule(ruleId: string | null): Promise<string>;
   transaction(params: Params): Promise<TransactionRecord | null>;
@@ -95,6 +101,7 @@ async function namesFor(ports: WorkerPorts, store: FinanceStore): Promise<Names>
   const byId = new Map(categories.map((category) => [category.id, category.name]));
   const chunks = new Map<string, TransactionRecord[] | null>();
   return {
+    currency: (await store.budgetPolicy?.get())?.isoCurrency ?? null,
     category: (id) => (id === null ? "no category" : (byId.get(id) ?? "a category")),
     merchantForRule: async (ruleId) => {
       const rule = ruleId === null ? null : await readRule(ports, ruleId);
@@ -123,17 +130,19 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return "Reconciled a manual statement";
     case "transaction.import":
       return `Imported ${num(p.entryCount) ?? 0} manual transaction${p.entryCount === 1 ? "" : "s"}`;
+    case "budget.configure":
+      return `Chose ${str(p.isoCurrency) ?? "a"} budget currency`;
     case "budget.assign":
-      return `Set ${names.category(str(p.categoryId))} to ${money(num(p.amountCents) ?? 0)} for ${monthLabel(str(p.month))}`;
+      return `Set ${names.category(str(p.categoryId))} to ${money(num(p.amountCents) ?? 0, names.currency)} for ${monthLabel(str(p.month))}`;
     case "budget.move": {
       const from = str(p.fromCategoryId);
       const fromName = from === READY_TO_ASSIGN ? READY_LABEL : names.category(from);
-      return `Moved ${money(num(p.amountCents) ?? 0)} from ${fromName} to ${names.category(str(p.toCategoryId))}`;
+      return `Moved ${money(num(p.amountCents) ?? 0, names.currency)} from ${fromName} to ${names.category(str(p.toCategoryId))}`;
     }
     case "transaction.categorize":
     case "transaction.confirm": {
       const tx = await names.transaction(p);
-      const what = tx ? `${tx.name}, ${money(tx.amountCents)}` : "a purchase";
+      const what = tx ? `${tx.name}, ${money(tx.amountCents, tx.isoCurrency)}` : "a purchase";
       const category = names.category(str(p.categoryId));
       if (row.kind === "transaction.confirm") return `Confirmed ${what} as ${category}`;
       return p.previousCategoryId === null || p.previousCategoryId === undefined

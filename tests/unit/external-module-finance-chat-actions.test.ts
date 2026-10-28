@@ -1,3 +1,4 @@
+import { usdBudgetPolicy } from "./helpers/finance-budget-policy.js";
 // tests/unit/external-module-finance-chat-actions.test.ts
 import { describe, expect, it } from "vitest";
 
@@ -59,8 +60,10 @@ function fakePorts(kv: FinanceKv, activity: ActivityInput[]): WorkerPorts {
     settings: { getEnvironment: refuse("settings") },
     isAdmin: false,
     now: () => NOW,
+    localTimezone: "Etc/UTC",
     store: async () => ({
       ...kvStore(kv),
+      budgetPolicy: usdBudgetPolicy,
       appendActivity: async (entry: ActivityInput) => {
         activity.push(entry);
       }

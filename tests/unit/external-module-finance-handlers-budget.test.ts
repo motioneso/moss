@@ -1,3 +1,4 @@
+import { usdBudgetPolicy, budgetAccountFixture } from "./helpers/finance-budget-policy.js";
 // tests/unit/external-module-finance-handlers-budget.test.ts
 import { describe, expect, it } from "vitest";
 
@@ -36,6 +37,8 @@ function fakeKv(): FinanceKv {
     }
     return bucket;
   };
+  ns(NS.accounts).set("acc-1", budgetAccountFixture("acc-1"));
+  ns(NS.accounts).set("acc-2", budgetAccountFixture("acc-2"));
   return {
     get: async (namespace, key) => structuredClone(ns(namespace).get(key) ?? null),
     set: async (namespace, key, value) => {
@@ -89,10 +92,12 @@ function fakePorts(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
     },
     isAdmin: false,
     now: () => NOW,
+    localTimezone: "Etc/UTC",
     // FIN-06b (#1166): pre-cutover handler tests stay on kvStore — the
     // FIN-06c cutover (Tasks 8-10) is what makes handlers actually call this.
     store: async () => ({
       ...kvStore(kv),
+      budgetPolicy: usdBudgetPolicy,
       appendActivity: async (entry) => {
         activity.push(entry);
       },

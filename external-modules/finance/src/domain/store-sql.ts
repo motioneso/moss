@@ -13,6 +13,7 @@ import type {
 } from "./records.js";
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
+import { budgetSqlStore } from "./store-budget-sql.js";
 import { manualSqlStore } from "./store-manual-sql.js";
 import { importSqlStore } from "./store-import-sql.js";
 import { reconciliationSqlStore } from "./store-reconciliation-sql.js";
@@ -305,6 +306,7 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     supportsSplits: true,
+    budgetPolicy: budgetSqlStore(db),
     manual: manualSqlStore(db),
     reconciliation: reconciliationSqlStore(db),
     imports: importSqlStore(db),

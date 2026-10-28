@@ -558,3 +558,65 @@ describe("atomic CSV imports through installed SQL", () => {
     expect(await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"), ids.userB)).toBeNull();
   });
 });
+
+describe("reviewed budget currency through owner-scoped installed storage", () => {
+  it("requires acknowledgement before replacing an open untyped draft", async () => {
+    await owner(
+      (s) =>
+        s.createDraft(
+          { basisFrom: "2026-09-01", basisTo: "2026-09-30", monthlyIncomeCents: 10000, lines: [] },
+          "2026-10-01T00:00:00Z"
+        ),
+      ids.adminUser
+    );
+    expect(
+      await owner(
+        (s) => s.budgetPolicy!.configure("CAD", false, "2026-10-28T00:00:00Z"),
+        ids.adminUser
+      )
+    ).toBe("legacy_review_required");
+    expect((await owner((s) => s.getLatestDraft(), ids.adminUser))?.status).toBe("open");
+    expect(
+      await owner(
+        (s) => s.budgetPolicy!.configure("CAD", true, "2026-10-28T00:00:00Z"),
+        ids.adminUser
+      )
+    ).toBe("created");
+    expect(await owner((s) => s.getLatestDraft(), ids.adminUser)).toBeNull();
+  });
+
+  it("requires legacy acknowledgement and preserves assignments exactly", async () => {
+    await owner((s) => s.setAssignment("2026-01", "groceries", 12345));
+    expect(await owner((s) => s.budgetPolicy!.get())).toBeNull();
+    expect(
+      await owner((s) => s.budgetPolicy!.configure("USD", false, "2026-10-28T00:00:00Z"))
+    ).toBe("legacy_review_required");
+    expect(await owner((s) => s.budgetPolicy!.get())).toBeNull();
+    expect(await owner((s) => s.budgetPolicy!.configure("USD", true, "2026-10-28T00:00:00Z"))).toBe(
+      "created"
+    );
+    expect(await owner((s) => s.getLedger("2026-01"))).toEqual({
+      assignments: { groceries: 12345 }
+    });
+    expect(await owner((s) => s.budgetPolicy!.configure("USD", true, "2026-10-28T00:00:00Z"))).toBe(
+      "unchanged"
+    );
+    expect(await owner((s) => s.budgetPolicy!.configure("EUR", true, "2026-10-28T00:00:00Z"))).toBe(
+      "conflict"
+    );
+  });
+  it("keeps another owner's currency private and serializes competing setup choices", async () => {
+    expect(await owner((s) => s.budgetPolicy!.get(), ids.userB)).toBeNull();
+    const results = await Promise.all([
+      owner((s) => s.budgetPolicy!.configure("EUR", false, "2026-10-28T00:00:00Z"), ids.userB),
+      owner((s) => s.budgetPolicy!.configure("GBP", false, "2026-10-28T00:00:00Z"), ids.userB)
+    ]);
+    expect(results.sort()).toEqual(["conflict", "created"]);
+    expect((await owner((s) => s.budgetPolicy!.get()))?.isoCurrency).toBe("USD");
+    const logs = await owner(
+      (s) => s.listActivity("2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z", 200),
+      ids.userB
+    );
+    expect(logs.filter((row) => row.kind === "budget.configure")).toHaveLength(1);
+  });
+});

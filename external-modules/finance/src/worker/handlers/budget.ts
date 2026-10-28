@@ -18,22 +18,12 @@
 // idempotencyKey, params} — command fields ride in params, never flat
 // (the a6023cb7 regression from FIN-02).
 
-import {
-  deriveBudgetMonths,
-  isCalendarMonth,
-  effectiveTransferIds,
-  type BudgetLedger,
-  type BudgetMonthState,
-  type FinanceStore,
-  readyToAssignCents,
-  signedBalanceCents,
-  tableGroupFor,
-  type TransactionRecord
-} from "../../domain/index.js";
+import { isCalendarMonth, tableGroupFor } from "../../domain/index.js";
 import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
 import { InputError, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
+import { budgetContext, requireBudgetPolicy } from "./budget-context.js";
 
 // Mirrors the manifest bound on finance.budget-apply's amountCents param —
 // ±$1M in cents. The manifest gate runs host-side; this re-check covers the
@@ -51,112 +41,14 @@ function readMonth(input: Record<string, unknown>): string {
   return month;
 }
 
-/**
- * Load the full derivation input: every assignment ledger plus every
- * transaction chunk, grouped by the chunk key's month suffix
- * (`{accountId}:{YYYY-MM}` — the reducer files each txn under its date's
- * month, so the key month IS the txn month).
- */
-async function loadDerivationInput(store: FinanceStore): Promise<{
-  ledgers: Record<string, BudgetLedger>;
-  transactionsByMonth: Record<string, TransactionRecord[]>;
-  /** Rows by month, before transfer rows are dropped. */
-  allRowsByMonth: Record<string, TransactionRecord[]>;
-  assignmentMonthCount: number;
-}> {
-  const ledgers: Record<string, BudgetLedger> = {};
-  const assignmentMonths = await store.listAssignmentMonths();
-  for (const month of assignmentMonths) {
-    const ledger = await store.getLedger(month);
-    if (ledger) ledgers[month] = ledger;
-  }
-
-  const transactionsByMonth: Record<string, TransactionRecord[]> = {};
-  for (const month of await store.listTransactionMonths()) {
-    const records = await store.listMonthTransactions(month);
-    if (records.length) transactionsByMonth[month] = records;
-  }
-  // FIN-05 (#1150): drop the effective transfer set (auto-paired rows ∪
-  // transfers-categorized) BEFORE derivation. Pairing needs the full
-  // cross-month set, so it runs over the flattened months here, not per
-  // month. deriveBudgetMonths keeps its own transfers/null skip as defense
-  // in depth — this filter only ever removes MORE rows (paired legs whose
-  // category is not "transfers", e.g. a transfer-in miscategorized as
-  // income inflating TBB).
-  const allRowsByMonth = { ...transactionsByMonth };
-  const excluded = effectiveTransferIds(Object.values(transactionsByMonth).flat());
-  for (const month of Object.keys(transactionsByMonth)) {
-    transactionsByMonth[month] = transactionsByMonth[month]!.filter((txn) => !excluded.has(txn.id));
-  }
-  return {
-    ledgers,
-    transactionsByMonth,
-    allRowsByMonth,
-    assignmentMonthCount: assignmentMonths.length
-  };
-}
-
-async function computeMonthState(
-  ports: WorkerPorts,
-  store: FinanceStore,
-  month: string
-): Promise<{
-  state: BudgetMonthState;
-  monthRows: TransactionRecord[];
-  assignmentMonthCount: number;
-}> {
-  const { allRowsByMonth, assignmentMonthCount, ...input } = await loadDerivationInput(store);
-  // Inject the requested month into the derivation union when it has no data
-  // of its own: the derivation then rolls carry/TBB forward into it (or
-  // yields the all-zero state when there is no data at all).
-  if (!input.ledgers[month] && !input.transactionsByMonth[month]) {
-    input.ledgers[month] = { assignments: {} };
-  }
-  const core = deriveBudgetMonths(input)[month]!;
-  return {
-    state: { computedAt: ports.now().toISOString(), ...core },
-    monthRows: allRowsByMonth[month] ?? [],
-    assignmentMonthCount
-  };
-}
-
 export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
-  const store = await ports.store();
-  const { state, monthRows, assignmentMonthCount } = await computeMonthState(ports, store, month);
-  const accounts = await store.listAccounts();
-  const itemStatus = new Map<string, string>();
-  for (const account of accounts) {
-    if (account.itemId && !itemStatus.has(account.itemId)) {
-      itemStatus.set(account.itemId, (await store.getItem(account.itemId))?.status ?? "error");
-    }
-  }
-  // The same rows the Transactions screen counts under Needs a look.
-  const needsLookCount = monthRows.filter((txn) => txn.reviewState === "needs_look").length;
-  // Taxonomy rides along so the web budget screen renders names and group
-  // order from a single call (same shape transactions.query ships).
+  const context = await budgetContext(ports, await ports.store(), month);
   const categories = (await loadCategories(ports)).map((category) => ({
     ...category,
     tableGroup: tableGroupFor(category.group)
   }));
-  return {
-    month,
-    state,
-    categories,
-    hasBank: accounts.length > 0,
-    hasBudget: assignmentMonthCount > 0,
-    readyToAssignCents: readyToAssignCents(accounts, state.categories),
-    needsLookCount,
-    accounts: accounts.map((account) => ({
-      accountId: account.accountId,
-      name: account.name,
-      balanceCents: signedBalanceCents(account),
-      asOf: account.updatedAt,
-      stale:
-        account.source !== "manual" &&
-        (!account.itemId || itemStatus.get(account.itemId) !== "connected")
-    }))
-  };
+  return { month, ...context, categories };
 };
 
 /**
@@ -179,6 +71,7 @@ async function applyAssignment(
   }
 
   const store = await ports.store();
+  await requireBudgetPolicy(store);
   const previousCents = (await store.getLedger(args.month))?.assignments[args.categoryId] ?? 0;
   await store.setAssignment(args.month, args.categoryId, args.amountCents);
 
@@ -221,6 +114,7 @@ export const budgetAssignHandler: ToolFactory = (ports) => async (input) => {
     max: AMOUNT_BOUND
   });
   const store = await ports.store();
+  await requireBudgetPolicy(store);
   const stored = (await store.getLedger(month))?.assignments[categoryId] ?? 0;
   if (stored !== previousCents) {
     throw new InputError(
@@ -265,12 +159,18 @@ export const budgetMoveHandler: ToolFactory = (ports) => async (input) => {
   }
 
   const store = await ports.store();
-  const { state } = await computeMonthState(ports, store, month);
+  await requireBudgetPolicy(store);
+  const context = await budgetContext(ports, store, month);
+  if (context.setupRequired)
+    throw new InputError("budget_currency_required", "Choose your budget currency first");
+  const { state } = context;
   const assigned = (await store.getLedger(month))?.assignments ?? {};
   const toBefore = assigned[toCategoryId] ?? 0;
   let fromBefore: number | null = null;
   if (fromCategoryId === READY_TO_ASSIGN) {
-    const ready = readyToAssignCents(await store.listAccounts(), state.categories);
+    const ready = context.readyToAssignCents;
+    if (ready === null)
+      throw new InputError("funding_unavailable", "Ready to assign is unavailable for this month");
     if (amountCents > ready) {
       throw new InputError("not_enough_ready", "amountCents is more than is ready to assign");
     }
@@ -364,6 +264,7 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
       assignments.push({ categoryId, amountCents });
     }
     const store = await ports.store();
+    await requireBudgetPolicy(store);
     const before = (await store.getLedger(month))?.assignments ?? {};
     await store.commitBudgetChange({
       month,

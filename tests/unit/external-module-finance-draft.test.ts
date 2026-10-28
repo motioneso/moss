@@ -1,3 +1,4 @@
+import { usdBudgetPolicy, budgetAccountFixture } from "./helpers/finance-budget-policy.js";
 // tests/unit/external-module-finance-draft.test.ts
 //
 // #3180: the first-budget draft. The builder is deterministic (numbers come only from the
@@ -228,8 +229,10 @@ function ports(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
     kv,
     db: null,
     now: () => NOW,
+    localTimezone: "Etc/UTC",
     store: async () => ({
       ...kvStore(kv),
+      budgetPolicy: usdBudgetPolicy,
       appendActivity: async (entry: ActivityInput) => {
         activity.push(entry);
       }
@@ -239,6 +242,7 @@ function ports(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
 
 async function seedHistory(kv: FinanceKv): Promise<void> {
   const store = kvStore(kv);
+  await store.putAccount(budgetAccountFixture("acc1"));
   await store.putTransactionChunk("acc1", "2026-08", [
     tx({ id: "g1", date: "2026-08-04", amountCents: 20000 })
   ]);

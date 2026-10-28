@@ -6,6 +6,7 @@
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
 import type { BudgetDraft, DraftBuild, DraftLine } from "./draft.js";
+import type { BudgetPolicyStore } from "./budget-context.js";
 import type { ManualLedgerStore } from "./manual-ledger.js";
 import type { ImportStore } from "./csv-import.js";
 import type { ReconciliationStore } from "./reconciliation.js";
@@ -50,6 +51,7 @@ export interface ActivityRecord {
 
 export interface FinanceStore {
   readonly supportsSplits: boolean;
+  readonly budgetPolicy?: BudgetPolicyStore;
   /** SQL-only ledger; legacy KV must migrate before manual entry. */
   readonly manual?: ManualLedgerStore;
   readonly reconciliation?: ReconciliationStore;

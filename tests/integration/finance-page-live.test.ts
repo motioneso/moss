@@ -129,6 +129,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       expect((await post("/api/onboarding/skip", {})).statusCode).toBe(200);
       member = await signUp("member@finance-page.test", "Synthetic member");
       expect((await post(`/api/admin/users/${member.userId}/approve`, {})).statusCode).toBe(200);
+      expect((await post("/api/onboarding/skip", {}, member.cookie)).statusCode).toBe(200);
       await new DataContextRunner(workerDb).withDataContext(
         { actorUserId: owner.userId },
         async (scope) => {
@@ -181,6 +182,43 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
               namespace: NS.meta,
               scope: "user",
               ownerUserId: owner.userId,
+              key: "storage:migrated"
+            },
+            { at: new Date().toISOString() }
+          );
+        }
+      );
+      // A second synthetic owner has legacy assignments and two currencies; no real bank is used.
+      await new DataContextRunner(appDb).withDataContext(
+        { actorUserId: member.userId },
+        async (scope) => {
+          const rpc = createModuleStorageRpc(scope, "finance");
+          const store = sqlStore({
+            query: async (text, params) => ({
+              rows: [...(await rpc.query(text, params)).rows] as never[]
+            })
+          });
+          for (const isoCurrency of ["EUR", "USD"]) {
+            await store.manual!.createAccount({
+              accountId: `manual:synthetic-${isoCurrency}`,
+              name: `Synthetic ${isoCurrency} cash`,
+              type: "other",
+              subtype: "cash",
+              isoCurrency,
+              openingDate: `${month}-01`,
+              openingBalanceCents: isoCurrency === "EUR" ? 123450 : 999999,
+              digest: "a".repeat(64),
+              at: `${month}-01T00:00:00Z`
+            });
+          }
+          await store.setAssignment(month, "groceries", 2000);
+          await setModuleKvValue(
+            scope,
+            {
+              moduleId: "finance",
+              namespace: NS.meta,
+              scope: "user",
+              ownerUserId: member.userId,
               key: "storage:migrated"
             },
             { at: new Date().toISOString() }
@@ -285,6 +323,176 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       }
     }, 90_000);
 
+    it("reviews and confirms the working currency through the real host before showing budget amounts", async () => {
+      const page = await context.newPage();
+      try {
+        await page.goto(`${base}/m/finance`);
+        await page
+          .getByRole("heading", { name: "Give your budget a currency", exact: true })
+          .waitFor();
+        const choose = page.getByRole("button", { name: "Review currency choice", exact: true });
+        expect(await choose.isDisabled()).toBe(true);
+        await page.getByLabel("Budget currency", { exact: true }).selectOption("USD");
+        for (const mode of ["light", "dark"]) {
+          await page.evaluate((mode) => {
+            document.documentElement.dataset.theme = mode;
+          }, mode);
+          for (const width of [320, 390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+            ).toBe(false);
+            if (artifacts)
+              await page.screenshot({
+                path: join(resolve(artifacts), `finance-budget-setup-${mode}-${width}.png`),
+                fullPage: true
+              });
+          }
+        }
+        await choose.click();
+        const confirm = page.getByRole("dialog", {
+          name: "Confirm Finance action",
+          exact: true
+        });
+        await confirm.waitFor();
+        expect(await readTool("finance.budget.status", { month })).toMatchObject({
+          setupRequired: true,
+          isoCurrency: null
+        });
+        await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+        await page
+          .getByText("Cancelled. Your currency choice is kept for review.", { exact: true })
+          .waitFor();
+        expect(await page.getByLabel("Budget currency", { exact: true }).inputValue()).toBe("USD");
+        await choose.click();
+        await confirm.getByRole("button", { name: "Confirm action", exact: true }).click();
+        await page
+          .getByLabel("Assigned to Groceries", { exact: true })
+          .filter({ visible: true })
+          .waitFor();
+        expect(await readTool("finance.budget.status", { month })).toMatchObject({
+          setupRequired: false,
+          isoCurrency: "USD"
+        });
+        expect(await readTool("finance.budget.status", { month }, member.cookie)).toMatchObject({
+          setupRequired: true,
+          isoCurrency: null
+        });
+        for (const mode of ["light", "dark"]) {
+          await page.evaluate((mode) => {
+            document.documentElement.dataset.theme = mode;
+          }, mode);
+          for (const width of [320, 390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+            ).toBe(false);
+            if (artifacts)
+              await page.screenshot({
+                path: join(resolve(artifacts), `finance-budget-currency-${mode}-${width}.png`),
+                fullPage: true
+              });
+          }
+        }
+      } finally {
+        await page.close();
+      }
+    }, 90_000);
+
+    it("reviews unchanged legacy amounts in EUR and excludes the other currency in the actual page", async () => {
+      const other = await browser.newContext({
+        viewport: { width: 390, height: 900 },
+        reducedMotion: "reduce"
+      });
+      await other.addCookies(
+        member.cookie.split("; ").map((cookie) => {
+          const at = cookie.indexOf("=");
+          return { name: cookie.slice(0, at), value: cookie.slice(at + 1), url: base };
+        })
+      );
+      await other.route("**/*", (route) =>
+        new URL(route.request().url()).origin === base ? route.continue() : route.abort()
+      );
+      const page = await other.newPage();
+      try {
+        await page.goto(`${base}/m/finance`);
+        await page.getByLabel("Budget currency", { exact: true }).selectOption("EUR");
+        const review = page.getByRole("button", { name: "Review currency choice", exact: true });
+        expect(await review.isDisabled()).toBe(true);
+        await page
+          .getByRole("region", { name: "Existing monthly assignments" })
+          .getByText("20.00", { exact: true })
+          .waitFor();
+        await page
+          .getByText("Interpret my existing assignment amounts as EUR", { exact: true })
+          .click();
+        expect(await review.isEnabled()).toBe(true);
+        for (const mode of ["light", "dark"]) {
+          await page.evaluate((mode) => {
+            document.documentElement.dataset.theme = mode;
+          }, mode);
+          for (const width of [320, 390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+            ).toBe(false);
+            if (artifacts)
+              await page.screenshot({
+                path: join(resolve(artifacts), `finance-budget-legacy-${mode}-${width}.png`),
+                fullPage: true
+              });
+          }
+        }
+        await review.click();
+        await page
+          .getByRole("dialog", { name: "Confirm Finance action", exact: true })
+          .getByRole("button", { name: "Confirm action", exact: true })
+          .click();
+        await page
+          .getByLabel("Assigned to Groceries", { exact: true })
+          .filter({ visible: true })
+          .waitFor();
+        expect(await readTool("finance.budget.status", { month }, member.cookie)).toMatchObject({
+          isoCurrency: "EUR",
+          readyToAssignCents: 121450,
+          excludedAccountCount: 1,
+          state: { categories: { groceries: { assignedCents: 2000 } } }
+        });
+        expect(
+          await page
+            .getByLabel("Assigned to Groceries", { exact: true })
+            .filter({ visible: true })
+            .inputValue()
+        ).toBe("€20.00");
+        await page.getByText("€1,214.50", { exact: true }).waitFor();
+        expect(await readTool("finance.budget.status", { month })).toMatchObject({
+          isoCurrency: "USD"
+        });
+        for (const mode of ["light", "dark"]) {
+          await page.evaluate((mode) => {
+            document.documentElement.dataset.theme = mode;
+          }, mode);
+          for (const width of [320, 390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+            ).toBe(false);
+            if (artifacts)
+              await page.screenshot({
+                path: join(resolve(artifacts), `finance-budget-eur-${mode}-${width}.png`),
+                fullPage: true
+              });
+          }
+        }
+      } finally {
+        await other.close();
+      }
+    }, 90_000);
+
     it("creates a manual account and a cleared transaction through the installed Finance page", async () => {
       const page = await context.newPage();
       try {
@@ -334,6 +542,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           }, mode);
           for (const width of [320, 390, 768, 1440]) {
             await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
             expect(
               await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
             ).toBe(false);
@@ -417,6 +626,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           }, mode);
           for (const width of [320, 390, 768, 1440]) {
             await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
             await finish.scrollIntoViewIfNeeded();
             expect(
               await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
@@ -498,6 +708,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           }, mode);
           for (const width of [320, 390, 768, 1440]) {
             await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
             await preview.scrollIntoViewIfNeeded();
             expect(
               await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
@@ -538,6 +749,7 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           }, mode);
           for (const width of [320, 390, 768, 1440]) {
             await page.setViewportSize({ width, height: 900 });
+            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
             await apply.scrollIntoViewIfNeeded();
             expect(
               await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)

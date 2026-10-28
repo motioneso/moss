@@ -17,6 +17,7 @@ import {
   Eyebrow,
   Indicator,
   Masthead,
+  Note,
   RowIndex,
   RowIndexItem,
   SectionHead,
@@ -24,8 +25,10 @@ import {
   useEffect,
   useRef,
   useState,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
+import { BudgetSetup } from "../budget-setup";
 import { runWrite } from "../api";
 import {
   applyPending,
@@ -63,25 +66,36 @@ interface CategoryState {
 interface BudgetAccount {
   accountId: string;
   name: string;
-  balanceCents: number;
-  asOf: string;
+  balanceCents: number | null;
+  isoCurrency: string;
+  asOf: string | null;
   stale: boolean;
 }
 
 interface BudgetStatusResult extends Record<string, unknown> {
   month: string;
+  isoCurrency?: string | null;
+  setupRequired?: boolean;
+  storageReady?: boolean;
+  legacyMonthCount?: number;
+  legacyDraft?: boolean;
+  legacyMonths?: { month: string; totalCents: string }[];
+  currencies?: string[];
+  accountCurrencies?: string[];
+  readyUnavailable?: string | null;
+  pendingCount?: number;
+  excludedAccountCount?: number;
+  futureReservedCents?: number;
   state?: { categories: Record<string, CategoryState> };
   categories?: BudgetCategory[];
   accounts?: BudgetAccount[];
   hasBank?: boolean;
   hasBudget?: boolean;
-  readyToAssignCents?: number;
+  readyToAssignCents?: number | null;
   needsLookCount?: number;
 }
 
-// Amounts render in the module's single working currency; ledgers merge accounts.
-const CURRENCY = "USD";
-const money = (cents: number): string => formatCents(cents, CURRENCY);
+const money = (cents: number, currency: string): string => formatCents(cents, currency);
 
 // Display order. Income and Transfers are not envelopes.
 const GROUPS = ["Bills", "Everyday", "Fun", "Savings"] as const;
@@ -89,6 +103,7 @@ const NOT_ENVELOPES: ReadonlySet<string> = new Set(["income", "transfers"]);
 const ZERO: CategoryState = { assignedCents: 0, activityCents: 0, availableCents: 0 };
 
 interface Line {
+  currency: string;
   id: string;
   name: string;
   assigned: number;
@@ -119,6 +134,7 @@ function buildGroups(result: BudgetStatusResult, pending: PendingAssignments): G
         );
         return {
           id: category.id,
+          currency: result.isoCurrency ?? "",
           name: category.name,
           assigned: shown.assigned,
           spent: row.activityCents,
@@ -143,21 +159,25 @@ function Meter(props: { line: Line }): ReactNodeLike {
   );
 }
 
-function AvailableCell(props: { cents: number; labelled?: boolean }): ReactNodeLike {
-  if (props.cents < 0) return <Badge tone="red">{money(-props.cents)} over</Badge>;
+function AvailableCell(props: {
+  cents: number;
+  currency: string;
+  labelled?: boolean;
+}): ReactNodeLike {
+  if (props.cents < 0) return <Badge tone="red">{money(-props.cents, props.currency)} over</Badge>;
   return (
     <strong>
-      {money(props.cents)}
+      {money(props.cents, props.currency)}
       {props.labelled ? " left" : ""}
     </strong>
   );
 }
 
-function CarriedBadge(props: { cents: number }): ReactNodeLike {
+function CarriedBadge(props: { cents: number; currency: string }): ReactNodeLike {
   if (props.cents <= 0) return null;
   return (
     <div>
-      <Badge>{money(props.cents)} carried over</Badge>
+      <Badge>{money(props.cents, props.currency)} carried over</Badge>
     </div>
   );
 }
@@ -187,7 +207,7 @@ function AssignCell(props: { line: Line } & AssignProps): ReactNodeLike {
         aria-label={`Assigned to ${line.name}`}
         aria-invalid={error ? "true" : undefined}
         inputMode="decimal"
-        value={draft ?? money(line.assigned)}
+        value={draft ?? money(line.assigned, line.currency)}
         onFocus={(event: { currentTarget: { select: () => void } }) => {
           setDraft(centsToAmountInput(line.assigned));
           event.currentTarget.select();
@@ -211,7 +231,11 @@ function GroupTable(props: { group: Group; head: boolean } & AssignProps): React
   const assigned = group.lines.reduce((sum, line) => sum + line.assigned, 0);
   return (
     <section className="fnm-block fnm-block--tight">
-      <SectionHead title={group.name} meta={`${money(assigned)} assigned`} rule />
+      <SectionHead
+        title={group.name}
+        meta={`${money(assigned, group.lines[0]!.currency)} assigned`}
+        rule
+      />
       <table className="jds-table fnm-fixed">
         <colgroup>
           <col className="fnm-col-name" />
@@ -235,7 +259,7 @@ function GroupTable(props: { group: Group; head: boolean } & AssignProps): React
               <td>
                 <div className="fnm-block fnm-block--tight">
                   <span>{line.name}</span>
-                  <CarriedBadge cents={line.carried} />
+                  <CarriedBadge currency={line.currency} cents={line.carried} />
                 </div>
               </td>
               <td className="jds-table__num">
@@ -248,14 +272,14 @@ function GroupTable(props: { group: Group; head: boolean } & AssignProps): React
               </td>
               <td className="jds-table__num">
                 <div className="fnm-cell-stack">
-                  <span>{money(line.spent)}</span>
+                  <span>{money(line.spent, line.currency)}</span>
                   <div className="fnm-cell-meter">
                     <Meter line={line} />
                   </div>
                 </div>
               </td>
               <td className="jds-table__num">
-                <AvailableCell cents={line.available} />
+                <AvailableCell currency={line.currency} cents={line.available} />
               </td>
             </tr>
           ))}
@@ -276,8 +300,8 @@ function GroupRows(props: { group: Group } & AssignProps): ReactNodeLike {
             title={line.name}
             excerpt={
               <div className="fnm-block fnm-block--tight">
-                <CarriedBadge cents={line.carried} />
-                <span>{money(line.spent)} spent of</span>
+                <CarriedBadge currency={line.currency} cents={line.carried} />
+                <span>{money(line.spent, line.currency)} spent of</span>
                 <AssignCell
                   line={line}
                   errors={props.errors}
@@ -287,7 +311,7 @@ function GroupRows(props: { group: Group } & AssignProps): ReactNodeLike {
                 <Meter line={line} />
               </div>
             }
-            meta={<AvailableCell cents={line.available} labelled />}
+            meta={<AvailableCell currency={line.currency} cents={line.available} labelled />}
           />
         ))}
       </RowIndex>
@@ -295,8 +319,8 @@ function GroupRows(props: { group: Group } & AssignProps): ReactNodeLike {
   );
 }
 
-function asOfLabel(iso: string): string {
-  const date = new Date(iso);
+function asOfLabel(iso: string | null): string {
+  const date = new Date(iso ?? "");
   if (Number.isNaN(date.getTime())) return "Sign-in expired";
   return `As of ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 }
@@ -308,14 +332,21 @@ function BalanceList(props: { accounts: BudgetAccount[] }): ReactNodeLike {
         <RowIndexItem
           key={account.accountId}
           title={account.name}
+          excerpt={account.asOf ? asOfLabel(account.asOf) : "No balance recorded for this period"}
           meta={
             account.stale ? (
               <div className="fnm-block fnm-block--tight fnm-end">
-                <span>{money(account.balanceCents)}</span>
+                <span>
+                  {account.balanceCents === null
+                    ? "No recorded balance"
+                    : money(account.balanceCents, account.isoCurrency)}
+                </span>
                 <Indicator status="error" label={asOfLabel(account.asOf)} />
               </div>
+            ) : account.balanceCents === null ? (
+              "No recorded balance"
             ) : (
-              money(account.balanceCents)
+              money(account.balanceCents, account.isoCurrency)
             )
           }
         />
@@ -364,20 +395,26 @@ function NeedsYou(props: { needsLook: number; overspent: number }): ReactNodeLik
 
 function CollapsedBalances(props: { accounts: BudgetAccount[] }): ReactNodeLike {
   const [open, setOpen] = useState(false);
-  const total = props.accounts.reduce((sum, account) => sum + account.balanceCents, 0);
+  const total = props.accounts.some((account) => account.balanceCents === null)
+    ? null
+    : props.accounts.reduce((sum, account) => sum + BigInt(account.balanceCents!), 0n);
   const stale = props.accounts.some((account) => account.stale);
   return (
     <section className="fnm-block fnm-block--tight">
       <SectionHead
         title={
           <DisclosureToggle expanded={open} controls="fnm-balances" onClick={() => setOpen(!open)}>
-            Net worth
+            Budget accounts
           </DisclosureToggle>
         }
         meta={
           <span className="fnm-inline">
             {stale ? <Indicator status="error" label="Sign-in expired" /> : null}
-            {money(total)}
+            {total === null ||
+            total > BigInt(Number.MAX_SAFE_INTEGER) ||
+            total < BigInt(Number.MIN_SAFE_INTEGER)
+              ? "Unavailable"
+              : money(Number(total), props.accounts[0]?.isoCurrency ?? "USD")}
           </span>
         }
         rule
@@ -394,14 +431,25 @@ function CollapsedBalances(props: { accounts: BudgetAccount[] }): ReactNodeLike 
 function Hero(props: {
   month: string;
   readyCents: number | null;
+  currency: string | null;
+  unavailable: boolean;
+  setupRequired: boolean;
   onMonth: (delta: number) => void;
 }): ReactNodeLike {
   return (
     <div className="fnm-hero">
       <Masthead
         tone="field"
-        eyebrow="Ready to assign"
-        title={props.readyCents === null ? "…" : money(props.readyCents)}
+        eyebrow={props.setupRequired ? "Your budget" : "Ready to assign"}
+        title={
+          props.setupRequired
+            ? "Choose a currency"
+            : props.readyCents === null
+              ? props.unavailable
+                ? "Unavailable"
+                : "…"
+              : money(props.readyCents, props.currency!)
+        }
         aside={
           <div className="fnm-month-step">
             <Button
@@ -412,7 +460,10 @@ function Hero(props: {
             >
               ←
             </Button>
-            <span>{monthLabel(props.month)}</span>
+            <span>
+              {monthLabel(props.month)}
+              {props.currency ? ` · ${props.currency}` : ""}
+            </span>
             <Button
               variant="field"
               size="sm"
@@ -447,6 +498,31 @@ function BudgetBody(
   return (
     <div className="fnm-page">
       <main className="fnm-block">
+        {result.readyUnavailable === "missing_history" ? (
+          <Note variant="practical">
+            Ready to assign is unavailable because a budget account has no recorded balance for this
+            period. Today's balance is not used for past months.
+          </Note>
+        ) : result.readyUnavailable === "future_month" ? (
+          <Note variant="practical">
+            This is a future plan. Its assigned amounts reserve today's cash; ready to assign is
+            shown in the current month.
+          </Note>
+        ) : null}
+        {(result.futureReservedCents ?? 0) > 0 ? (
+          <Note variant="practical">
+            {money(result.futureReservedCents!, result.isoCurrency!)} is reserved for future
+            assignments.
+          </Note>
+        ) : null}
+        <p className="jds-hint">
+          {result.isoCurrency} budget · Posted entries only
+          {result.pendingCount ? ` · ${result.pendingCount} pending entries excluded` : ""}
+          {result.excludedAccountCount
+            ? ` · ${result.excludedAccountCount} other-currency or tracking accounts excluded`
+            : ""}
+          . Positive category balances carry forward.
+        </p>
         <div className="fnm-phone-only">
           <NeedsYou needsLook={needsLook} overspent={overspent} />
         </div>
@@ -485,7 +561,7 @@ function BudgetBody(
   );
 }
 
-export function BudgetScreen(): ReactNodeLike {
+export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth);
   const [pending, setPending] = useState<PendingAssignments>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -567,7 +643,15 @@ export function BudgetScreen(): ReactNodeLike {
       const names = new Map((result.categories ?? []).map((c) => [c.id, c.name]));
       for (const id of step.giveUp) {
         fail(
-          { id, name: names.get(id) ?? id, assigned: 0, spent: 0, available: 0, carried: 0 },
+          {
+            id,
+            currency: result.isoCurrency ?? "",
+            name: names.get(id) ?? id,
+            assigned: 0,
+            spent: 0,
+            available: 0,
+            carried: 0
+          },
           "Couldn't confirm the save. Put back to the old amount."
         );
       }
@@ -584,21 +668,35 @@ export function BudgetScreen(): ReactNodeLike {
     <section aria-label="Budget">
       <Hero
         month={month}
+        currency={result?.isoCurrency ?? null}
+        unavailable={Boolean(result?.readyUnavailable)}
+        setupRequired={result?.setupRequired === true}
         readyCents={ready}
         onMonth={(delta) => setMonth(shiftMonth(month, delta))}
       />
       <div className="fnm-pad">
         {outcomeGate(
           status,
-          (body) => (
-            <BudgetBody
-              result={body}
-              pending={pending}
-              errors={errors}
-              onAssign={onAssign}
-              onBadAmount={onBadAmount}
-            />
-          ),
+          (body) =>
+            body.setupRequired ? (
+              <BudgetSetup
+                tools={props.tools}
+                storageReady={body.storageReady ?? false}
+                legacyMonthCount={body.legacyMonthCount ?? 0}
+                legacyMonths={body.legacyMonths}
+                legacyDraft={body.legacyDraft}
+                currencies={body.currencies ?? []}
+                accountCurrencies={body.accountCurrencies ?? []}
+              />
+            ) : (
+              <BudgetBody
+                result={body}
+                pending={pending}
+                errors={errors}
+                onAssign={onAssign}
+                onBadAmount={onBadAmount}
+              />
+            ),
           {
             loadingLabel: "Loading budget"
           }

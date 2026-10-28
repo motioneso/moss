@@ -21,13 +21,28 @@ const category = (id: string, name: string, tableGroup: string) => ({
 function status(over: Record<string, unknown> = {}) {
   return {
     month: "2026-10",
+    isoCurrency: "USD",
     hasBank: true,
     hasBudget: true,
     readyToAssignCents: 123_456,
     needsLookCount: 2,
     accounts: [
-      { accountId: "a", name: "Checking", balanceCents: 500_000, asOf: "2026-10-05", stale: false },
-      { accountId: "b", name: "Savings", balanceCents: 90_000, asOf: "2026-10-05", stale: true }
+      {
+        isoCurrency: "USD",
+        accountId: "a",
+        name: "Checking",
+        balanceCents: 500_000,
+        asOf: "2026-10-05",
+        stale: false
+      },
+      {
+        isoCurrency: "USD",
+        accountId: "b",
+        name: "Savings",
+        balanceCents: 90_000,
+        asOf: "2026-10-05",
+        stale: true
+      }
     ],
     categories: [
       category("groceries", "Groceries", "Everyday"),

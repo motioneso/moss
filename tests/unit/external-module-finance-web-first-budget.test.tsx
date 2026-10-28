@@ -18,6 +18,7 @@ function draftBody(planCents: number): Record<string, unknown> {
     hasSynced: true,
     hasBudget: false,
     draft: {
+      isoCurrency: "USD",
       id: "d1",
       status: "open",
       basisFrom: "2026-07-01",
@@ -31,6 +32,7 @@ function draftBody(planCents: number): Record<string, unknown> {
           lines: [
             {
               categoryKey: "groceries",
+              isoCurrency: "USD",
               categoryName: "Groceries",
               basisMonthlyCents: 25000,
               planCents,

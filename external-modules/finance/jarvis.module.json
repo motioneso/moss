@@ -51,7 +51,8 @@
       "app.finance_budget_drafts",
       "app.finance_budget_draft_lines",
       "app.finance_reconciliations",
-      "app.finance_imports"
+      "app.finance_imports",
+      "app.finance_budget_policy"
     ]
   },
   "settingsPath": "/settings",
@@ -60,7 +61,7 @@
       {
         "id": "finance.budget",
         "label": "Budget",
-        "description": "This month's budget: money ready to assign, and each category's assigned, spent and available amounts. Manual cash, depository accounts and credit cards fund ready-to-assign; other assets, loans and investments do not. Exact integer calculations refuse unsafe totals. Currency and historical funding policy remain limited.",
+        "description": "Choose one fixed working currency through reviewed setup; existing assignment amounts require acknowledgement and stay unchanged. Only accounts and posted activity in that currency fund the budget. Tracking accounts and pending entries are excluded. Past manual balances use the opening ledger; connected balances use recorded snapshots at or before month end. Missing history makes ready-to-assign unavailable. Future months show the plan without claiming spendable cash; future assignments reserve current cash. Exact integer calculations refuse unsafe totals.",
         "path": "/"
       },
       {
@@ -577,6 +578,41 @@
       "handler": "transaction.categorize-new",
       "actionFamilyId": "sorting_new",
       "executionPolicy": "auto"
+    },
+    {
+      "name": "finance.budget.configure",
+      "permissionId": "finance.budget.configure",
+      "actionLabel": "Choose a fixed budget currency",
+      "description": "Choose the budget's immutable working currency. Existing assignment amounts are preserved and require explicit acknowledgement. Open legacy drafts are discarded for a fresh currency-scoped build. No currency conversion occurs.",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isoCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "CAD",
+              "AUD",
+              "NZD",
+              "CHF",
+              "CNY",
+              "HKD",
+              "SGD",
+              "INR",
+              "MXN"
+            ]
+          },
+          "acknowledgeLegacy": { "type": "boolean" }
+        },
+        "required": ["isoCurrency", "acknowledgeLegacy"]
+      },
+      "handler": "budget.configure",
+      "confirmWhenKeys": ["isoCurrency"]
     },
     {
       "name": "finance.budget.status",

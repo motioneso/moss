@@ -32,6 +32,7 @@ import { invalidateQueries, useToolQuery } from "../store";
 import type { HostActions } from "../root";
 
 export interface DraftLineView {
+  isoCurrency?: string;
   categoryKey: string;
   categoryName: string;
   basisMonthlyCents: number;
@@ -42,6 +43,7 @@ export interface DraftLineView {
 }
 
 export interface DraftBody {
+  isoCurrency?: string;
   id: string;
   status: "open" | "started" | "discarded";
   basisFrom: string;
@@ -53,13 +55,14 @@ export interface DraftBody {
 }
 
 export interface DraftResult extends Record<string, unknown> {
+  setupRequired?: boolean;
   hasSynced?: boolean;
   hasBudget?: boolean;
   draft?: DraftBody | null;
 }
 
-const CURRENCY = "USD";
-const money = (cents: number): string => formatCents(cents, CURRENCY);
+const money = (cents: number, currency?: string): string =>
+  currency ? formatCents(cents, currency) : "Unavailable";
 
 /** "2026-07-01" to "2026-09-30" reads as "July to September" (or one month). */
 export function basisLabel(basisFrom: string, basisTo: string): string {
@@ -75,11 +78,11 @@ export function isShortHistory(basisFrom: string, basisTo: string): boolean {
 
 function unplannedLede(draft: DraftBody): string {
   const span = `Planned from ${basisLabel(draft.basisFrom, draft.basisTo)}.`;
-  const income = money(draft.monthlyIncomeCents);
+  const income = money(draft.monthlyIncomeCents, draft.isoCurrency);
   if (draft.unplannedCents < 0) {
-    return `${span} The plan is ${money(-draft.unplannedCents)} over your ${income} monthly income.`;
+    return `${span} The plan is ${money(-draft.unplannedCents, draft.isoCurrency)} over your ${income} monthly income.`;
   }
-  return `${span} ${money(draft.unplannedCents)} of your ${income} monthly income is still unplanned.`;
+  return `${span} ${money(draft.unplannedCents, draft.isoCurrency)} of your ${income} monthly income is still unplanned.`;
 }
 
 interface EditProps {
@@ -107,7 +110,7 @@ function PlanCell(props: { line: DraftLineView } & EditProps): ReactNodeLike {
         aria-label={`Plan for ${line.categoryName}`}
         aria-invalid={error ? "true" : undefined}
         inputMode="decimal"
-        value={typed ?? (line.dropped ? "" : money(line.planCents))}
+        value={typed ?? (line.dropped ? "" : money(line.planCents, line.isoCurrency))}
         placeholder={line.dropped ? "Not in budget" : undefined}
         onFocus={(event: { currentTarget: { select: () => void } }) => {
           setTyped(line.dropped ? "" : centsToAmountInput(line.planCents));
@@ -134,7 +137,7 @@ function ChatChange(props: { line: DraftLineView }): ReactNodeLike {
       <Badge tone="forest">
         {props.line.dropped
           ? "Dropped in chat"
-          : `Changed in chat, was ${money(props.line.proposedCents)}`}
+          : `Changed in chat, was ${money(props.line.proposedCents, props.line.isoCurrency)}`}
       </Badge>
     </div>
   );
@@ -170,7 +173,9 @@ function DraftTable(
                   <ChatChange line={line} />
                 </div>
               </td>
-              <td className="jds-table__num jds-hint">{money(line.basisMonthlyCents)}</td>
+              <td className="jds-table__num jds-hint">
+                {money(line.basisMonthlyCents, line.isoCurrency)}
+              </td>
               <td className="jds-table__num">
                 <PlanCell
                   line={line}
@@ -199,7 +204,7 @@ function DraftRows(props: { group: DraftBody["groups"][number] } & EditProps): R
             excerpt={
               <div className="fnm-block fnm-block--tight">
                 <ChatChange line={line} />
-                <span>Average {money(line.basisMonthlyCents)}</span>
+                <span>Average {money(line.basisMonthlyCents, line.isoCurrency)}</span>
               </div>
             }
             meta={
@@ -235,7 +240,7 @@ export function FirstBudgetView(props: FirstBudgetViewProps): ReactNodeLike {
       <Masthead
         tone="field"
         eyebrow="Your first budget"
-        title={`${money(draft.totalCents)} a month`}
+        title={`${money(draft.totalCents, draft.isoCurrency)} a month`}
         lede={unplannedLede(draft)}
         aside={
           <div className="fnm-block fnm-block--tight">
@@ -306,7 +311,12 @@ export function FirstBudget(props: {
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
   const draft = result?.draft ?? null;
-  const needsBuild = result !== null && result.hasSynced === true && !result.hasBudget && !draft;
+  const needsBuild =
+    result !== null &&
+    !result.setupRequired &&
+    result.hasSynced === true &&
+    !result.hasBudget &&
+    !draft;
 
   const [polls, setPolls] = useState(0);
   const [tick, setTick] = useState(0);
@@ -464,6 +474,15 @@ export function FirstBudget(props: {
   return outcomeGate(
     query,
     (body) => {
+      if (body.setupRequired)
+        return (
+          <div className="fnm-block">
+            <Note variant="practical">
+              Choose your budget currency before building a plan from your history.
+            </Note>
+            <Button onClick={() => navigate("/")}>Choose budget currency</Button>
+          </div>
+        );
       if (done) return <LoadingState label="Opening your budget" />;
       if (body.draft?.status === "open") {
         return (

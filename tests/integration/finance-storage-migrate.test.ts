@@ -79,7 +79,8 @@ const ownedTables = [
   "app.finance_budget_drafts",
   "app.finance_budget_draft_lines",
   "app.finance_reconciliations",
-  "app.finance_imports"
+  "app.finance_imports",
+  "app.finance_budget_policy"
 ];
 
 const NOW_1 = "2026-07-18T12:00:00.000Z";

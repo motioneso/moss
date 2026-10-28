@@ -76,7 +76,7 @@ export function Root(props: {
       {path === "/start" ? (
         <StartScreen hostActions={props.hostActions} />
       ) : path === "/" ? (
-        <BudgetScreen />
+        <BudgetScreen tools={props.tools} />
       ) : path === "/transactions" ? (
         <TransactionsScreen tools={props.tools} />
       ) : path === "/accounts" ? (
