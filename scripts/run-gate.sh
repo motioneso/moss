@@ -365,7 +365,10 @@ cmd_start() {
   gatedb="jarvis_gate_${slug}"
 
   mkdir -p "$STATE_DIR"
-  log="$STATE_DIR/${slug}-$(date +%Y%m%d-%H%M%S).log"
+  # Same-checkout starts may share a second. Reserve a unique file atomically so
+  # their output and terminal sentinels cannot overwrite each other's receipts.
+  log="$(mktemp --suffix=.log "$STATE_DIR/${slug}-$(date +%Y%m%d-%H%M%S)-XXXXXX")" \
+    || die "could not reserve a gate log"
 
   # Early pointer (#2473). The pointer names the latest log before anything
   # else that can fail — including the receipt checks, the container checks
