@@ -1,3 +1,4 @@
+import { readActorLocale } from "@moss/settings";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
@@ -1024,25 +1025,31 @@ export function registerAiRoutes(
         // services (calendarWrite, notesSync, etc.). Any service-backed write tool must be invoked
         // via the gateway/CLI path, which threads per-tool ToolServices only after an Approve.
         const readServices = dependencies.readToolServices ?? {};
-        const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          manifestTool.execute!(
-            scopedDb,
-            validatedInput,
-            {
-              actorUserId: accessContext.actorUserId,
-              requestId: accessContext.requestId ?? "",
-              chatSessionId: ""
-            },
-            readServices
-          ).then((rawResult): Record<string, unknown> => {
-            const toolResult: ToolResult = { ...rawResult, data: rawResult.data ?? {} };
-            const sanitized = sanitizeAssistantToolResult(manifestTool.outputSchema, toolResult);
-            const data = screenToolResultData(sanitized);
-            if (data === null) {
-              throw new HttpError(413, "The tool result is too large to show.");
-            }
-            return data;
-          })
+        const result = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const locale = await readActorLocale(scopedDb);
+            return manifestTool.execute!(
+              scopedDb,
+              validatedInput,
+              {
+                actorUserId: accessContext.actorUserId,
+                requestId: accessContext.requestId ?? "",
+                chatSessionId: "",
+                locale,
+                localTimezone: locale.timezone
+              },
+              readServices
+            ).then((rawResult): Record<string, unknown> => {
+              const toolResult: ToolResult = { ...rawResult, data: rawResult.data ?? {} };
+              const sanitized = sanitizeAssistantToolResult(manifestTool.outputSchema, toolResult);
+              const data = screenToolResultData(sanitized);
+              if (data === null) {
+                throw new HttpError(413, "The tool result is too large to show.");
+              }
+              return data;
+            });
+          }
         );
 
         return {
