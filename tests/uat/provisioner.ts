@@ -1,3 +1,7 @@
+import type { N3BuildEvidence } from "./n3-fallback-observer-installed.js";
+import { prepareN3Observer, type UatProvisionOptions } from "./provisioner-options.js";
+export type { UatProvisionOptions } from "./provisioner-options.js";
+import { createLifecycleRecorder, type LifecycleAttempt } from "./lifecycle-records.js";
 import { buildUatComposeArgs } from "./compose-args.js";
 export { buildUatComposeArgs } from "./compose-args.js";
 import * as newsFeedbackFixture from "./fixtures/news-feedback-fixture-container.js";
@@ -504,11 +508,19 @@ export async function cleanupUatAttempt(input: {
   readonly teardownCompose: () => Promise<void>;
   readonly assertNoLeaks: () => Promise<void>;
   readonly cleanupEnvFile: () => void;
+  readonly beforeTeardown?: () => Promise<void>;
+  readonly afterTeardown?: (failed: boolean) => Promise<void>;
   readonly error?: unknown;
 }): Promise<void> {
   const errors: unknown[] = Object.hasOwn(input, "error") ? [input.error] : [];
   try {
-    for (const cleanup of [input.teardownCompose, input.assertNoLeaks]) {
+    for (const cleanup of [
+      input.beforeTeardown,
+      input.teardownCompose,
+      input.assertNoLeaks,
+      input.afterTeardown && (() => input.afterTeardown!(errors.length > 0))
+    ]) {
+      if (!cleanup) continue;
       try {
         await cleanup();
       } catch (error) {
@@ -535,17 +547,20 @@ class SubnetOverlapConflictError extends Error {}
 const PORT_BIND_CONFLICT_PATTERN = /port is already allocated|address already in use|bind.*failed/i;
 const SUBNET_OVERLAP_CONFLICT_PATTERN = /pool overlaps with other one on this address space/i;
 
-function runCommand(
+async function runCommand(
   command: string,
   args: readonly string[],
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  evidence?: N3BuildEvidence
 ): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
+  const observation = evidence && (await evidence.observeBuild(command, args, process.cwd()));
+  const exited = new Promise<void>((resolvePromise, reject) => {
     let stderr = "";
     // #1024/#1000: stdout stays "inherit" for live operator visibility; stderr is piped so we can
     // inspect it for the port-bind-conflict signature, but every chunk is still forwarded to the
     // real stderr as it arrives so nothing is lost from the operator's view.
     const child = spawn(command, args, { stdio: ["inherit", "inherit", "pipe"], env });
+    observation?.attach(child);
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       stderr += text;
@@ -572,6 +587,7 @@ function runCommand(
       reject(new Error(`${command} ${args.join(" ")} exited with status ${code ?? "unknown"}`));
     });
   });
+  await (observation ? Promise.all([exited, observation.closed]) : exited);
 }
 
 async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
@@ -602,40 +618,6 @@ async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_000));
   }
   throw new Error(`Timed out waiting for ${url}: ${String(lastError ?? "health check failed")}`);
-}
-
-export interface UatProvisionOptions {
-  /** A port reserved by devports for this isolated live run. */
-  readonly claimedWebPort?: number;
-  readonly excludeChunks?: readonly string[];
-  readonly withoutNewsJsonBinding?: boolean;
-  // #1306 Task 22: opt-in, absent by default, same shape as the Codex credential copy's own
-  // "no-op unless the host has a login" trigger. Job Search enables both the fixture origin and
-  // its scoring provider; ESPN enables only the shared origin for deterministic ESPN responses.
-  readonly withJobSearchFixture?: boolean;
-  readonly withEspnFixture?: boolean;
-  // [task:p8-briefing-writer-unreachable]: opt-in, absent by default. Enables the writer
-  // fixture origin and its synthesis provider, so briefing cards render fixed prose.
-  readonly withBriefingWriterFixture?: boolean;
-  readonly withClassifierFixture?: boolean;
-  readonly withClassifierMcpFixture?: boolean;
-  /** #3410: seed the API-key chat provider from the MOSS_UAT_CHAT_PROVIDER_* host variables. */
-  readonly withApiKeyChatProvider?: boolean;
-  readonly withNewsFeedbackFixture?: boolean;
-  /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
-  readonly withSportsPublicSourceFixtures?: boolean;
-  /** #2015: opt-in pending workflow approval used only by its live-path spec. */
-  readonly withWorkflowApprovalFixture?: boolean;
-  /** #2175: opt-in seeded audit-log rows used only by the Activity outcomes live-path spec. */
-  readonly withActivityOutcomeFixture?: boolean;
-  /** #2267: opt-in trusted owner-draft fixture used only by the Workshop storage proof. */
-  readonly withWorkshopStorageFixture?: boolean;
-  /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS (tests/uat/seed/types.ts). Threads to
-   *  composeSeedHook's chatScript ctx field, and (when set) writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN
-   *  (#1659 defect 4) so the container's profile.d script puts the scripted-provider fixture's
-   *  own bin/ ahead of the real tools bin on PATH — never JARVIS_CLI_TOOLS_PREFIX, which the
-   *  production installer also owns. */
-  readonly chatScript?: string;
 }
 
 export function buildSeedHookInput(
@@ -707,29 +689,29 @@ export async function provisionForUat(
   level: UatSeedLevel,
   opts?: UatProvisionOptions,
   dependencies: {
+    readonly n3BuildEvidence?: N3BuildEvidence;
     readonly listLiveSubnets?: typeof listLiveDockerSubnets;
     readonly installRealChatAuth?: typeof installUatRealChatAuth;
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
+  const observer = await prepareN3Observer(opts?.n3Observer, opts?.chatScript);
+  dependencies.n3BuildEvidence?.validateObserver(opts?.n3Observer, observer);
+  const recordLifecycle = await createLifecycleRecorder();
+  const lifecycleEnabled = process.env.JARVIS_UAT_LIFECYCLE_DIR !== undefined;
   const overallStart = Date.now();
   const apiKeyChatSeed = opts?.withApiKeyChatProvider
     ? await apiKeyChatEnv.readApiKeyChatUatProvider(process.env)
     : undefined;
-  // #1024/#1000: bounded by the reserved range itself (100 candidates) — never an unbounded
-  // retry. Each failed-on-bind attempt removes its port from the pool; exhausting the pool means
-  // the whole reserved range is hostile, which should fail loudly, not spin forever.
+  // #1024/#1000: retry each candidate once; fail when the reserved port range is exhausted.
   let remainingCandidates =
     opts?.claimedWebPort === undefined
       ? Array.from({ length: UAT_PORT_RANGE_SIZE }, (_, i) => UAT_PORT_RANGE_START + i)
       : [opts.claimedWebPort];
   let remainingSubnetCandidates = [...UAT_SUBNET_CANDIDATES];
   let imageBuilt = false; // build once; a port-bind retry shouldn't rebuild the image
-
-  // #2732: unlike the retired stored-token path this replaces, there is nothing to set up before
-  // the loop — the Codex credential copy needs a running `jarv1s` container (docker exec), so it
-  // happens per-attempt, right after that container comes up, not before the first attempt.
+  // #2732: install the Codex credential copy per attempt, after its app container starts.
+  // There is no stored-token setup before the loop.
   delete process.env[REAL_CHAT_CONFIGURED_ENV];
-
   while (remainingCandidates.length > 0) {
     const { projectName } = generateUatRunId();
     const webPort: number = await findAvailablePort(remainingCandidates);
@@ -771,7 +753,8 @@ export async function provisionForUat(
       webPort,
       subnet: subnet.subnet,
       jobSearchFixtureBaseUrl,
-      chatScript: opts?.chatScript
+      chatScript: opts?.chatScript,
+      n3Observer: opts?.n3Observer
     });
     process.env.JARVIS_ENV_FILE = envFile.path;
     process.env.JARVIS_IMAGE_TAG ??= "uat-smoke";
@@ -779,22 +762,22 @@ export async function provisionForUat(
     // port-bind retry picks a new webPort, and JARVIS_WEB_PORT must track it or compose would
     // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
     Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
-
-    // #2732: set once `jarv1s` is up and the Codex credential copy (if any) has run — read by
-    // teardownCompose below, so declared before it.
+    const attempt: LifecycleAttempt & { failed: boolean } = {
+      projectName,
+      webPort,
+      composeArgs: buildUatComposeArgs(projectName, []),
+      failed: false
+    };
     let realChatAuth: UatRealChatAuth | undefined;
-
-    // #1306: the fixture container is removed FIRST — an outside container still attached to the
-    // Compose network blocks `down -v` from removing that network, and the leak assertion that
-    // follows would then fail on an otherwise clean run.
+    // #1306: remove owned fixtures before down so they cannot block network removal.
     const teardownCompose = async () => {
-      // #2732: must run before `down -v` below — it needs the still-running `jarv1s` container to
-      // remove the copied credential; the container going down destroys it anyway, but doing this
-      // first keeps the security property (removed at teardown) true even if `down -v` itself
-      // fails partway through. A failed credential cleanup is now loud (real-chat-env.ts throws),
-      // so it is caught here and rethrown at the end — `down -v` and the network cleanup below
-      // must still run either way, or a failed credential wipe would also leak the whole stack.
+      // Credential cleanup must precede down; retain its error while attempting resource cleanup.
       let realChatCleanupError: unknown;
+      const cleanupErrors: unknown[] = [];
+      const retainFailure = (code: string) => {
+        if (lifecycleEnabled)
+          cleanupErrors.push(new Error(`UAT lifecycle cleanup: ${code}-failed`));
+      };
       if (realChatAuth !== undefined) {
         try {
           await realChatAuth.cleanup();
@@ -816,8 +799,7 @@ export async function provisionForUat(
         });
       await mcpFixture.removeClassifierMcpFixtureContainer(projectName, runCommand);
       if (jobSearchFixtureBaseUrl !== undefined) await removeJobSearchFixtureContainer(projectName);
-      // The meeting-chat spec starts this third-party stand-in itself. Remove its exact
-      // project-scoped container even if Playwright was interrupted before its finally block.
+      // Remove exact project-scoped meeting fixtures even after interrupted Playwright.
       await runCommand("docker", ["rm", "--force", `${projectName}-meeting-chat-fixture`]).catch(
         () => {}
       );
@@ -827,6 +809,7 @@ export async function provisionForUat(
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
           console.error(`teardown failed for ${projectName}:`, error);
+          retainFailure("compose-down");
         }
       );
       const ownedNetworks = await runCapture("docker", [
@@ -836,9 +819,18 @@ export async function provisionForUat(
         `label=com.docker.compose.project=${projectName}`,
         "--format",
         "{{.ID}}"
-      ]).catch(() => "");
+      ]).catch(() => {
+        retainFailure("network-discovery");
+        return "";
+      });
       for (const networkId of ownedNetworks.split("\n").filter(Boolean)) {
-        await runCommand("docker", ["network", "rm", networkId]).catch(() => {});
+        await runCommand("docker", ["network", "rm", networkId]).catch(() =>
+          retainFailure("network-removal")
+        );
+      }
+      if (cleanupErrors.length) {
+        if (realChatCleanupError !== undefined) cleanupErrors.push(realChatCleanupError);
+        throw new AggregateError(cleanupErrors, "UAT owned cleanup failed");
       }
       if (realChatCleanupError !== undefined) throw realChatCleanupError;
     };
@@ -847,35 +839,56 @@ export async function provisionForUat(
         teardownCompose,
         assertNoLeaks: () => assertNoLeakedResources(projectName),
         cleanupEnvFile: envFile.cleanup,
+        beforeTeardown: () => recordLifecycle("before-teardown", attempt),
+        afterTeardown: (failed) =>
+          recordLifecycle("after-teardown", { ...attempt, failed: failed || attempt.failed }),
         ...options
       });
-
     try {
+      await recordLifecycle("attempt-created", attempt);
       console.log(
         `[uat] provisioning ${projectName} on port ${webPort} subnet ${subnet.subnet} (${subnet.source})`
       );
       if (resolveMossEnv(process.env, "JARVIS_UAT_BUILD") !== "0" && !imageBuilt) {
-        await runCommand("docker", [
-          "build",
-          "-t",
-          `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`,
-          "-f",
-          "Dockerfile",
-          "."
-        ]);
+        await runCommand(
+          "docker",
+          [
+            "build",
+            "-t",
+            `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`,
+            "-f",
+            "Dockerfile",
+            "."
+          ],
+          undefined,
+          dependencies.n3BuildEvidence
+        );
         imageBuilt = true;
       }
+      await recordLifecycle("image-built", attempt);
       const plan = createUatProvisionPlan({ projectName, seedHook: bareSeedHook });
       for (const step of plan.slice(0, -1)) {
-        // #1024/#1000: the plan's LAST entry is always `down -v` (Task 4) — deliberately excluded
-        // from this loop and run once, in the catch/return paths below. Running it here too would
-        // double-run teardown on the success path.
+        // The final down step belongs to cleanupAttempt, including failed creation.
         console.log(`[uat] ${step.description}`);
-        await runCommand(step.command, step.args);
+        observer?.checkDeadline();
+        if (observer && step.args.includes("up") && step.args.includes("jarv1s"))
+          await observer.beforeInitialStart({
+            projectName,
+            envPath: envFile.path,
+            recordCreated: () => recordLifecycle("resources-created", attempt)
+          });
+        if (observer && step.args.includes("up") && step.args.includes("jarv1s"))
+          await dependencies.n3BuildEvidence?.beforeInitialStart({ projectName });
+        await runCommand(
+          step.command,
+          observer && step.args.includes("up") && step.args.includes("jarv1s")
+            ? [...step.args, "--no-recreate"]
+            : step.args
+        );
+        observer?.checkDeadline();
+        await recordLifecycle("resources-created", attempt);
       }
-      // #2732: after the plan loop, because it needs the now-running `jarv1s` container for its
-      // docker exec calls. Codex (default): a no-op unless the operator's own machine has a
-      // signed-in Codex CLI. Claude (#3361): selected explicitly; the spec signs in through Moss.
+      // Auth copy needs the running app; Claude sign-in remains explicit in its spec.
       realChatAuth = (dependencies.installRealChatAuth ?? installUatRealChatAuth)(
         projectName,
         UAT_ADMIN_ID,
@@ -934,27 +947,29 @@ export async function provisionForUat(
           apiKeyChatSeed
         )
       );
+      await recordLifecycle("resources-created", { ...attempt, requireApp: true });
       const baseURL = `http://127.0.0.1:${webPort}`;
       await waitForReady(`${baseURL}/health/ready`);
       console.log(`[uat] reachable at ${baseURL} after ${Date.now() - overallStart}ms`);
       return {
         baseURL,
         projectName,
-        // #1026: deferred, not auto-run — a caller running Playwright against this stack needs it
-        // alive between provision and its own explicit teardown() call, so this can no longer live
-        // in a `finally` here. SIGINT/SIGTERM handling moves to the caller (tests/uat/run-uat.ts),
-        // which is the one that knows when a long-running Playwright child should be interrupted.
+        // #1026: caller tears down after Playwright and owns SIGINT/SIGTERM handling.
         teardown: async () => {
           await cleanupAttempt();
         }
       };
-    } catch (error) {
+    } catch (caught) {
+      attempt.failed = true;
+      let error = caught;
+      try {
+        await recordLifecycle("resources-created", attempt);
+      } catch (metadataError) {
+        error = new AggregateError([error, metadataError], "UAT provisioning and lifecycle failed");
+      }
       if (error instanceof PortBindConflictError) {
         await cleanupAttempt();
-        // #1024/#1000: Coordinator condition 1 — findAvailablePort (Task 2) only proved this port
-        // free at probe time; docker just told us another process won the bind race. Retry with
-        // the next untried candidate instead of flaking the whole gate. The fixture container (if
-        // any) went down with teardownCompose above and is recreated under the next project name.
+        // A successful probe cannot prevent a later bind race; retry only after owned cleanup.
         console.warn(
           `[uat] port ${webPort} lost the bind race after probing free; retrying with next candidate (#1024)`
         );
