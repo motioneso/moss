@@ -18,6 +18,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { runWrite, type RunOutcome } from "../api";
@@ -410,7 +411,9 @@ function TransactionsBody(props: {
   );
 }
 
-export function TransactionsScreen(): ReactNodeLike {
+export function TransactionsScreen(
+  props: { tools?: ExternalModuleToolsHandleV1 } = {}
+): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth);
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
@@ -651,6 +654,7 @@ export function TransactionsScreen(): ReactNodeLike {
       {editing ? (
         <SplitEditor
           transaction={editing}
+          tools={props.tools}
           categories={filterOptions.categories}
           onClose={() => setEditing(null)}
           onSaved={() => {

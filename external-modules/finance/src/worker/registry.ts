@@ -39,7 +39,7 @@ import { reportsNetWorthHandler, reportsSpendingHandler } from "./handlers/repor
 import { accountSetSharedHandler, shareApplyHandler } from "./handlers/shared.js";
 import { setupStatusHandler } from "./handlers/setup.js";
 import { syncRunHandler } from "./handlers/sync.js";
-import { splitApplyHandler } from "./handlers/split.js";
+import { splitApplyHandler, transactionSplitHandler } from "./handlers/split.js";
 import type { WorkerPorts } from "./ports.js";
 import type { ToolHandler } from "./wrap.js";
 
@@ -62,6 +62,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   // #3176: confirm or change rows from the Transactions screen.
   "review.apply": reviewApplyHandler,
   "split.apply": splitApplyHandler,
+  "transaction.split": transactionSplitHandler,
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,
   "budget.assign": budgetAssignHandler,

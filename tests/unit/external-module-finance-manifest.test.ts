@@ -129,6 +129,7 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.connect.poll", "connect.poll"],
         ["finance.sync.run-now", "sync.run"],
         ["finance.transactions.query", "transactions.query"],
+        ["finance.transaction.split", "transaction.split"],
         ["finance.transaction.categorize", "transaction.categorize"],
         ["finance.transaction.categorize-new", "transaction.categorize-new"],
         ["finance.budget.status", "budget.status"],

@@ -1,6 +1,12 @@
-import { Button, Dialog, Select, useState, type ReactNodeLike } from "@moss/module-web-sdk";
+import {
+  Button,
+  Dialog,
+  Select,
+  useState,
+  type ExternalModuleToolsHandleV1,
+  type ReactNodeLike
+} from "@moss/module-web-sdk";
 import type { TransactionSplit } from "../domain/records";
-import { invokeTool, runWrite } from "./api";
 import { centsToAmountInput, formatCents, parseAmountToCents } from "./format";
 
 export interface SplitTransaction {
@@ -16,19 +22,15 @@ export interface SplitTransaction {
   shared?: boolean;
 }
 
-function matches(row: SplitTransaction, parts: TransactionSplit[]): boolean {
-  const actual = row.splits?.length
-    ? row.splits
-    : [{ categoryId: row.categoryId, amountCents: row.amountCents }];
-  return JSON.stringify(actual) === JSON.stringify(parts);
-}
-
-/** Queue admission is not success: confirm the actual owner record before closing the editor. */
+/** Success is the committed tool result, never queue admission or an optimistic local edit. */
 export async function saveSplit(
   row: SplitTransaction,
-  parts: TransactionSplit[]
+  parts: TransactionSplit[],
+  tools?: ExternalModuleToolsHandleV1
 ): Promise<string | null> {
-  const outcome = await runWrite("finance.split-apply", "finance.split-apply", {
+  if (!tools)
+    return "This version of Moss cannot save splits from the page. Update Moss to continue; your entries are kept.";
+  const outcome = await tools.invoke("finance.transaction.split", {
     transactionId: row.id,
     accountId: row.accountId,
     month: row.date.slice(0, 7),
@@ -38,35 +40,29 @@ export async function saveSplit(
     categoryIds: parts.map((p) => p.categoryId),
     amountsCents: parts.map((p) => p.amountCents)
   });
-  if (outcome.kind !== "queued")
-    return "The split could not be queued. Your entries are kept; try again.";
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const result = await invokeTool<{ transactions?: SplitTransaction[] }>(
-      "finance.transactions.query",
-      {
-        month: row.date.slice(0, 7),
-        accountId: row.accountId,
-        transactionId: row.id,
-        limit: 1
-      }
-    );
-    if (result.kind !== "ok") continue;
-    const saved = result.result.transactions?.find((t) => t.id === row.id && !t.shared);
-    if (!saved) continue;
-    if (saved.amountCents !== row.amountCents)
-      return "The bank amount changed. Close this editor, refresh transactions, then review the split.";
-    if (saved.isoCurrency !== row.isoCurrency)
-      return "The transaction currency changed. Close this editor, refresh transactions, then review the split.";
-    if (matches(saved, parts)) return null;
-    if ((saved.splitRevision ?? 0) !== (row.splitRevision ?? 0))
-      return "Another edit changed this transaction. Close this editor and reopen the split before saving.";
+  if (outcome.status === "succeeded" && outcome.result.status === "ok") return null;
+  if (outcome.status === "cancelled") return "The split was cancelled. Your entries are kept.";
+  if (outcome.status === "rejected") {
+    if (outcome.moduleCode === "stale_transaction")
+      return "The transaction amount, currency or allocation changed. Close this editor, refresh transactions, then review the split.";
+    if (outcome.moduleCode === "storage_upgrade_required")
+      return "Finance storage needs an update before you can save splits. Your entries are kept.";
+    if (outcome.moduleCode === "pending_transaction")
+      return "Wait until the transaction posts before splitting it.";
+    if (outcome.moduleCode === "invalid_category")
+      return "A category is no longer available. Refresh transactions and choose a current category.";
   }
-  return "Saving is not confirmed yet. Your entries are kept. Refresh transactions before retrying; the request may still complete.";
+  if (
+    outcome.status === "invalid_input" ||
+    (outcome.status === "rejected" && outcome.moduleCode === "split_total_mismatch")
+  )
+    return "Check the categories and amounts. Every cent must match the transaction total.";
+  return "Saving could not be confirmed. Your entries are kept. Refresh transactions and check the result before retrying.";
 }
 
 export function SplitEditor(props: {
   transaction: SplitTransaction;
+  tools?: ExternalModuleToolsHandleV1;
   categories: { id: string; name: string; archived?: boolean }[];
   onClose: () => void;
   onSaved: () => void;
@@ -119,7 +115,8 @@ export function SplitEditor(props: {
               setError(null);
               void saveSplit(
                 tx,
-                parts.map((p, i) => ({ categoryId: p.categoryId, amountCents: amounts[i]! }))
+                parts.map((p, i) => ({ categoryId: p.categoryId, amountCents: amounts[i]! })),
+                props.tools
               )
                 .then((message) => {
                   setBusy(false);

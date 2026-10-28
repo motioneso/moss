@@ -80,7 +80,7 @@ export function RegisterFilterBar(props: {
             update("postingState", event.target.value)
           }
         >
-          <option value="">Pending &amp; posted</option>
+          <option value="">All statuses</option>
           <option value="pending">Pending</option>
           <option value="posted">Posted</option>
         </Select>
@@ -94,7 +94,7 @@ export function RegisterFilterBar(props: {
             update("direction", event.target.value)
           }
         >
-          <option value="">Money in &amp; out</option>
+          <option value="">All directions</option>
           <option value="inflow">Money in</option>
           <option value="outflow">Money out</option>
         </Select>

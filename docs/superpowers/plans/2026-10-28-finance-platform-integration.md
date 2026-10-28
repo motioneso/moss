@@ -92,3 +92,30 @@ Migration 0342 adds module-page activity attribution; no applied migration chang
 confirmation migration 0334 and public AI APIs are reused. Synchronous module preferences reuse
 an already-open actor context to avoid acquiring a second connection from a one-slot pool.
 No bank service, production database, publication or deployment was used.
+
+### Host and Finance continuation (07:56 UTC)
+
+The optional host bridge and synchronous Finance split consumer are now implemented. The actual
+shell supplies the handle, snapshots input, owns shared confirmation and failure dialogs, and
+abandons pending UI on module/actor change. The old split queue remains for existing jobs; the new
+editor awaits a direct persisted result. Activity details use the recorded source, not hardcoded
+Chat. Module author usage/compatibility is documented in `docs/module-page-actions.md`.
+
+Expanded route/auth gate: seven files, 63 tests passed (`074638`, input `ce47ce22aedd`, rc 0).
+Finance/platform focused unit suite: 51 files, 510 tests passed. Host input-copy negative control
+failed on mutated identity/nested values; restored host controller passed 21 tests. No mutation
+remains. Host browser fixture passed eight viewport/theme scenarios with explicit HTTP stand-ins.
+
+Actual installed app gate `075421`, base `1b10a374`, input `de3aea9bf64a`, rc 0: two broad tests
+passed through real signup/enablement, production host, installed modules, API, worker and owner
+SQL/KV. Split save survives reload; foreign owner sees no Finance rows. A synthetic list entry is
+saved, cancelled deletion preserves it and confirmed deletion removes it once. Outbound confirm
+and cancel are exercised with an explicitly synthetic external-recipient receipt; no real message
+is sent. Real audit rows and actual Settings Activity details show Module page. No application
+responses are intercepted. This supplies local installed Finance/platform proof, not production,
+provider integration or the separate Meals consumer's acceptance. Both test containers and all
+browser/server processes are closed by the harness.
+
+The current [parity checkpoint](2026-10-28-finance-parity-checkpoint.md) contains the matrix,
+artifact names, historical full-gate failure and remaining aggregate work. Manual account/ledger
+implementation follows its separately committed spec; no manual capability is claimed yet.

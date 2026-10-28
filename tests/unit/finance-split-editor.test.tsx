@@ -62,54 +62,47 @@ describe("split editor", () => {
     await act(async () => renderer.unmount());
   });
 
-  it("does not call queue admission a successful save", async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) =>
-        url.includes("/queues/")
-          ? { ok: true, status: 202, json: async () => ({ jobId: "synthetic-job" }) }
-          : {
-              ok: true,
-              status: 200,
-              json: async () => ({
-                invocation: { status: "succeeded", result: { transactions: [transaction] } }
-              })
-            }
-      )
-    );
-    const pending = saveSplit(transaction, parts);
-    await vi.advanceTimersByTimeAsync(9000);
-    expect(await pending).toContain("not confirmed yet");
+  it("fails closed on an older host and never submits a legacy queue job", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    expect(await saveSplit(transaction, parts)).toContain("Update Moss");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("confirms the persisted allocation, and detects a concurrent bank correction", async () => {
-    vi.useFakeTimers();
-    let saved = { ...transaction, splits: parts, splitRevision: 1 };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) =>
-        url.includes("/queues/")
-          ? { ok: true, status: 202, json: async () => ({ jobId: "synthetic-job" }) }
-          : {
-              ok: true,
-              status: 200,
-              json: async () => ({
-                invocation: { status: "succeeded", result: { transactions: [saved] } }
-              })
-            }
-      )
-    );
-    const success = saveSplit(transaction, parts);
-    await vi.advanceTimersByTimeAsync(7000);
-    expect(await success).toBeNull();
-    saved = { ...saved, amountCents: 1200 };
-    const conflict = saveSplit(transaction, parts);
-    await vi.advanceTimersByTimeAsync(7000);
-    expect(await conflict).toContain("bank amount changed");
-    saved = { ...saved, amountCents: transaction.amountCents, isoCurrency: "EUR" };
-    const currencyConflict = saveSplit(transaction, parts);
-    await vi.advanceTimersByTimeAsync(7000);
-    expect(await currencyConflict).toContain("currency changed");
+  it("awaits the committed tool result with the exact optimistic concurrency fields", async () => {
+    const invoke = vi.fn(async () => ({
+      status: "succeeded" as const,
+      result: { status: "ok", parts: 2 }
+    }));
+    expect(await saveSplit(transaction, parts, { invoke })).toBeNull();
+    expect(invoke).toHaveBeenCalledWith("finance.transaction.split", {
+      transactionId: "synthetic",
+      accountId: "cash",
+      month: "2026-10",
+      expectedAmountCents: 1001,
+      expectedCurrency: "USD",
+      expectedRevision: 0,
+      categoryIds: ["groceries", "dining"],
+      amountsCents: [700, 301]
+    });
+  });
+
+  it("keeps the editor draft on a conflict, cancellation or uncertain result", async () => {
+    expect(
+      await saveSplit(transaction, parts, {
+        invoke: async () => ({ status: "rejected", moduleCode: "stale_transaction" })
+      })
+    ).toContain("currency or allocation changed");
+    expect(
+      await saveSplit(transaction, parts, { invoke: async () => ({ status: "cancelled" }) })
+    ).toContain("cancelled");
+    expect(
+      await saveSplit(transaction, parts, { invoke: async () => ({ status: "failed" }) })
+    ).toContain("check the result before retrying");
+    expect(
+      await saveSplit(transaction, parts, {
+        invoke: async () => ({ status: "succeeded", result: { status: "queued" } })
+      })
+    ).toContain("could not be confirmed");
   });
 });

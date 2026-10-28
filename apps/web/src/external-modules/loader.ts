@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import * as React from "react";
 import * as ReactDOMClient from "react-dom/client";
+import type { ExternalModuleToolsHandleV1 } from "@moss/module-web-sdk";
 
 import type { AssistantSurfaceHandleV1 } from "../chat/assistant-surface";
 import type { ExternalModuleHostActionsV1 } from "./host-actions";
@@ -18,6 +19,8 @@ export interface ExternalWebContributionProps {
   readonly assistantSurface?: AssistantSurfaceHandleV1;
   /** Counts chat writes that changed this module's data; a change tells the module to reload. */
   readonly refreshKey?: number;
+  /** Host-owned page writes and confirmation UI; optional for older-host compatibility. */
+  readonly tools?: ExternalModuleToolsHandleV1;
 }
 
 /** Contract v2: the default export of an external module's web entrypoint. */

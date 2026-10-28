@@ -3,13 +3,8 @@ import type { ToolFactory } from "../registry.js";
 import { InputError, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
 
-/** Metadata-only queue. A split allocates an existing transaction; it cannot move bank money. */
-export const splitApplyHandler: ToolFactory = (ports) => async (input) => {
-  if (input.jobKind !== "finance.split-apply") throw new InputError("jobKind is not supported");
-  if (!input.params || typeof input.params !== "object" || Array.isArray(input.params)) {
-    throw new InputError("params must be an object");
-  }
-  const params = input.params as Record<string, unknown>;
+/** Direct page/chat tool; same owner-scoped compare-and-set as the legacy queue. */
+export const transactionSplitHandler: ToolFactory = (ports) => async (params) => {
   const transactionId = readString(params, "transactionId", { required: true });
   const accountId = readString(params, "accountId", { required: true });
   const month = readString(params, "month", { required: true });
@@ -90,4 +85,13 @@ export const splitApplyHandler: ToolFactory = (ports) => async (input) => {
     throw new InputError("stale_transaction", "The transaction changed; reload before saving");
   }
   return { status: "ok", parts: splits.length };
+};
+
+/** Metadata-only queued jobs retained for already enqueued operations and older clients. */
+export const splitApplyHandler: ToolFactory = (ports) => async (input) => {
+  if (input.jobKind !== "finance.split-apply") throw new InputError("jobKind is not supported");
+  if (!input.params || typeof input.params !== "object" || Array.isArray(input.params)) {
+    throw new InputError("params must be an object");
+  }
+  return transactionSplitHandler(ports)(input.params as Record<string, unknown>);
 };

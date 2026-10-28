@@ -5,6 +5,7 @@ import {
   Segmented,
   useEffect,
   useSyncExternalStore,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { navigate, useModulePath } from "./router";
@@ -47,7 +48,10 @@ function tabFor(path: string): Tab | "none" {
   return "none";
 }
 
-export function Root(props: { hostActions: HostActions }): ReactNodeLike {
+export function Root(props: {
+  hostActions: HostActions;
+  tools?: ExternalModuleToolsHandleV1;
+}): ReactNodeLike {
   const path = useModulePath();
   // The old Feed and Budget paths now live at Transactions and the Budget home.
   useEffect(() => {
@@ -74,7 +78,7 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
       ) : path === "/" ? (
         <BudgetScreen />
       ) : path === "/transactions" ? (
-        <TransactionsScreen />
+        <TransactionsScreen tools={props.tools} />
       ) : path === "/accounts" ? (
         <AccountsScreen hostActions={props.hostActions} />
       ) : path === "/reports" ? (
