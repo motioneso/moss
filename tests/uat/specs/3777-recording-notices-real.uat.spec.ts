@@ -108,6 +108,9 @@ test("an uncertain real classification reaches Main once and survives reload (#3
   const opener = page.getByRole("button", { name: /^(Chat with |Open chat$)/ });
   await expect(opener.or(drawer).first()).toBeVisible();
   if (!(await drawer.isVisible())) await opener.click();
+  // Reopening from a recording selects its meeting conversation; explicitly return to Main.
+  await drawer.getByRole("button", { name: "Open conversations", exact: true }).click();
+  await drawer.getByRole("button", { name: "Main chat", exact: true }).click();
   await expect(drawer).toContainText(`as ${artifact.content.recording!.side}.`);
   await expect(drawer.getByRole("link", { name: "recording", exact: true })).toHaveCount(1);
   expect((await notices()).map((message) => message.id)).toEqual([notice!.id]);
