@@ -83,7 +83,8 @@ export class MemoryGraphDashboardRepository {
     }
   ): Promise<MemoryFactRecord | undefined> {
     assertDataContextDb(scopedDb);
-    const result = await sql<FactRow>`
+    return this.graphRepo.withFactMutation(scopedDb, ownerUserId, [factId], async () => {
+      const result = await sql<FactRow>`
       UPDATE app.memory_facts
       SET
         valid_from  = CASE WHEN ${patch.validFrom !== undefined}  THEN ${patch.validFrom ?? null}::timestamptz ELSE valid_from  END,
@@ -96,14 +97,21 @@ export class MemoryGraphDashboardRepository {
       RETURNING *
     `.execute(scopedDb.db);
 
-    const row = result.rows[0];
-    if (!row) return undefined;
+      const row = result.rows[0];
+      if (!row) return undefined;
 
-    const newStatus: "active" | "inactive" =
-      patch.validTo != null && new Date(patch.validTo) <= new Date() ? "inactive" : "active";
-    await this.graphRepo.setSearchDocumentStatus(scopedDb, ownerUserId, "fact", factId, newStatus);
+      const newStatus: "active" | "inactive" =
+        patch.validTo != null && new Date(patch.validTo) <= new Date() ? "inactive" : "active";
+      await this.graphRepo.setSearchDocumentStatus(
+        scopedDb,
+        ownerUserId,
+        "fact",
+        factId,
+        newStatus
+      );
 
-    return mapFact(row, await listSourcesForFact(scopedDb, ownerUserId, row.id));
+      return mapFact(row, await listSourcesForFact(scopedDb, ownerUserId, row.id));
+    });
   }
 
   async updateEntity(
@@ -193,34 +201,35 @@ export class MemoryGraphDashboardRepository {
     factId: string
   ): Promise<{ deleted: boolean }> {
     assertDataContextDb(scopedDb);
-
-    const existingResult = await sql<{ id: string; conflict_group_id: string | null }>`
+    return this.graphRepo.withFactMutation(scopedDb, ownerUserId, [factId], async () => {
+      const existingResult = await sql<{ id: string; conflict_group_id: string | null }>`
       SELECT id, conflict_group_id
       FROM app.memory_facts
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND id = ${factId}::uuid
     `.execute(scopedDb.db);
-    const existing = existingResult.rows[0];
-    if (!existing) return { deleted: false };
+      const existing = existingResult.rows[0];
+      if (!existing) return { deleted: false };
 
-    if (existing.conflict_group_id) {
-      await this.releaseSoleConflictSibling(
-        scopedDb,
-        ownerUserId,
-        factId,
-        existing.conflict_group_id,
-        { nowait: false }
-      );
-    }
+      if (existing.conflict_group_id) {
+        await this.releaseSoleConflictSibling(
+          scopedDb,
+          ownerUserId,
+          factId,
+          existing.conflict_group_id,
+          { nowait: false }
+        );
+      }
 
-    await this.graphRepo.deactivateSearchDocument(scopedDb, ownerUserId, "fact", factId);
-    const result = await sql<{ id: string }>`
+      await this.graphRepo.deactivateSearchDocument(scopedDb, ownerUserId, "fact", factId);
+      const result = await sql<{ id: string }>`
       DELETE FROM app.memory_facts
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND id = ${factId}::uuid
       RETURNING id
     `.execute(scopedDb.db);
-    return { deleted: result.rows.length > 0 };
+      return { deleted: result.rows.length > 0 };
+    });
   }
 
   /**
@@ -236,8 +245,16 @@ export class MemoryGraphDashboardRepository {
     opts: { readonly nowait: boolean }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
-    const lock = opts.nowait ? sql`FOR UPDATE NOWAIT` : sql``;
-    const siblings = await sql<{ id: string }>`
+    const affected = await sql<{ id: string }>`SELECT id FROM app.memory_facts
+      WHERE owner_user_id = ${ownerUserId}::uuid AND conflict_group_id = ${conflictGroupId}::uuid
+      ORDER BY id`.execute(scopedDb.db);
+    return this.graphRepo.withFactMutation(
+      scopedDb,
+      ownerUserId,
+      affected.rows.map((row) => row.id),
+      async () => {
+        const lock = opts.nowait ? sql`FOR UPDATE NOWAIT` : sql``;
+        const siblings = await sql<{ id: string }>`
       SELECT id
       FROM app.memory_facts
       WHERE owner_user_id = ${ownerUserId}::uuid
@@ -246,23 +263,23 @@ export class MemoryGraphDashboardRepository {
         AND status = 'conflicting'
       ${lock}
     `.execute(scopedDb.db);
-    const sibling = siblings.rows.length === 1 ? siblings.rows[0] : undefined;
-    if (!sibling) return;
+        const sibling = siblings.rows.length === 1 ? siblings.rows[0] : undefined;
+        if (!sibling) return;
 
-    if (opts.nowait) {
-      await sql`
+        if (opts.nowait) {
+          await sql`
         SELECT id FROM app.memory_conflict_groups
         WHERE owner_user_id = ${ownerUserId}::uuid AND id = ${conflictGroupId}::uuid
         FOR UPDATE NOWAIT
       `.execute(scopedDb.db);
-      await sql`
+          await sql`
         SELECT id FROM app.memory_search_documents
         WHERE owner_user_id = ${ownerUserId}::uuid AND target_kind = 'fact'
           AND target_id = ${sibling.id}::uuid
         FOR UPDATE NOWAIT
       `.execute(scopedDb.db);
-    }
-    await sql`
+        }
+        await sql`
       UPDATE app.memory_facts
       SET conflict_group_id = NULL,
           status = 'active',
@@ -270,18 +287,20 @@ export class MemoryGraphDashboardRepository {
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND id = ${sibling.id}::uuid
     `.execute(scopedDb.db);
-    await sql`
+        await sql`
       UPDATE app.memory_conflict_groups
       SET status = 'resolved', resolved_at = now()
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND id = ${conflictGroupId}::uuid
     `.execute(scopedDb.db);
-    await this.graphRepo.setSearchDocumentStatus(
-      scopedDb,
-      ownerUserId,
-      "fact",
-      sibling.id,
-      "active"
+        await this.graphRepo.setSearchDocumentStatus(
+          scopedDb,
+          ownerUserId,
+          "fact",
+          sibling.id,
+          "active"
+        );
+      }
     );
   }
 }

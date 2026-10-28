@@ -131,3 +131,5 @@ export type {
   ReviseRecordingNoteInput,
   RecordingNoteResult
 } from "./note-contribution-api.js";
+
+export * from "./recording-memory-api.js";

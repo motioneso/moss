@@ -1,3 +1,4 @@
+import { createRecordingFactAuthority } from "./recording-memory-runtime.js";
 import { installBuiltInVisualTemplates } from "@moss/shared";
 import { createRecordingImportRuntime } from "./recording-import-runtime.js";
 export { createRecordingImportWorkerRuntime } from "./recording-import-runtime.js";
@@ -2061,7 +2062,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     },
     registerWorkers: async (boss, deps) => {
       const repository = new GoalsRepository();
-      const memoryGraphRepo = new MemoryGraphRepository();
+      const memoryGraphRepo = new MemoryGraphRepository(
+        createRecordingFactAuthority(deps.dataContext)
+      );
       return [
         await registerGoalsMemorySyncWorker(boss, deps.dataContext, repository, memoryGraphRepo),
         await registerGoalsMemorySyncReconcileWorker(boss, deps.dataContext, repository)
@@ -2353,6 +2356,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerRoutes: (server, deps) =>
       registerChatRoutes(server, {
         meetingChat: createMeetingChatData(deps),
+        memoryGraphRepository: new MemoryGraphRepository(
+          createRecordingFactAuthority(deps.dataContext)
+        ),
         rootDb: deps.rootDb,
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
@@ -2444,7 +2450,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           aiRepository: new AiRepository(),
           cipher: createAiSecretCipher(),
           candidatesRepository: new MemoryCandidatesRepository(),
-          graphRepository: new MemoryGraphRepository()
+          graphRepository: new MemoryGraphRepository(createRecordingFactAuthority(deps.dataContext))
         },
         createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
         probeConstrainedCli: deps.probeConstrainedCli,
@@ -2587,10 +2593,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         createApprovalSourceReferences({ manifests: deps.listModuleManifests })
       );
       registerMemoryGraphRoutes(server, {
+        graphRepository: new MemoryGraphRepository(createRecordingFactAuthority(deps.dataContext)),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
       registerMemoryDashboardRoutes(server, {
+        graphRepository: new MemoryGraphRepository(createRecordingFactAuthority(deps.dataContext)),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
@@ -4132,3 +4140,5 @@ export async function registerBuiltInModuleWorkers(
 }
 
 export { createManagedNoteSnapshotPort } from "./managed-note-runtime.js";
+
+export { createRecordingFactAuthority } from "./recording-memory-runtime.js";

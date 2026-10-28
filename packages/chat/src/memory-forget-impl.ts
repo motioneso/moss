@@ -11,6 +11,7 @@ import type {
 } from "@moss/ai";
 import {
   MemoryForgetService,
+  type MemoryGraphRepository,
   memoryForgetExecute,
   type MemoryForgetToolService
 } from "@moss/memory";
@@ -35,8 +36,9 @@ class MemoryForgetRefusal extends HttpError {
 export function createMemoryForgetBoundary(deps: {
   runner: Pick<DataContextRunner, "withDataContext">;
   resolveActiveModules: ActiveModulesResolver;
+  memoryGraphRepository?: MemoryGraphRepository;
 }) {
-  const memory = new MemoryForgetService();
+  const memory = new MemoryForgetService(deps.memoryGraphRepository);
   const activeMemory = async (ctx: ToolContext) =>
     (await deps.resolveActiveModules(ctx.actorUserId)).find((module) => module.id === "memory");
   const consentGranted = async (

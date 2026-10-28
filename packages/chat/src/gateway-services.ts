@@ -1,3 +1,4 @@
+import type { MemoryGraphRepository } from "@moss/memory";
 import { sql } from "kysely";
 import type { PgBoss } from "pg-boss";
 
@@ -160,6 +161,7 @@ export function buildChatGatewayDependencies(args: {
   appActions?: AppActionsService;
   conversationProvenance?: ConversationProvenancePort;
   platformDiagnostics?: PlatformDiagnosticsService;
+  memoryGraphRepository?: MemoryGraphRepository;
   /** Shared with the current-turn lifecycle; the tool cannot create a binding itself. */
   visualPresentation?: VisualPresentationService;
   collaborators: {

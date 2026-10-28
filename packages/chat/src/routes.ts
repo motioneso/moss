@@ -1,3 +1,4 @@
+import type { MemoryGraphRepository } from "@moss/memory";
 import { createScheduledReadResolver } from "./scheduled-reads/generation.js";
 import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -176,6 +177,7 @@ export interface ChatRoutesDependencies {
   readonly appMapService?: AppMapReadService;
   /** Read-only platform diagnostics service; never exposed in the write service bag. */
   readonly platformDiagnostics?: PlatformDiagnosticsService;
+  readonly memoryGraphRepository?: MemoryGraphRepository;
   /** Injected by the composition root; settings.notificationPreference.setEnabled tool service. */
   readonly listModuleManifests?: () => readonly MossModuleManifest[];
   /**
@@ -363,6 +365,7 @@ export function registerChatRoutes(
               },
               appMapService: dependencies.appMapService,
               platformDiagnostics: dependencies.platformDiagnostics,
+              memoryGraphRepository: dependencies.memoryGraphRepository,
               agencyPreferences: dependencies.agencyPreferences,
               localePreferences: dependencies.localePreferences,
               webSearchEngineForActor: dependencies.webSearchEngineForActor
