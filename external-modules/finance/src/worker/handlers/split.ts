@@ -15,6 +15,7 @@ export const splitApplyHandler: ToolFactory = (ports) => async (input) => {
   const month = readString(params, "month", { required: true });
   if (!isCalendarMonth(month)) throw new InputError("month must be a valid YYYY-MM");
   const expectedAmountCents = readInt(params, "expectedAmountCents", { required: true });
+  const expectedCurrency = readString(params, "expectedCurrency", { required: true });
   const expectedRevision = readInt(params, "expectedRevision", { required: true, min: 0 });
   const ids = params.categoryIds;
   const amounts = params.amountsCents;
@@ -64,10 +65,10 @@ export const splitApplyHandler: ToolFactory = (ports) => async (input) => {
       "pending_transaction",
       "Wait until the transaction posts before splitting it"
     );
-  if (row.amountCents !== expectedAmountCents)
+  if (row.amountCents !== expectedAmountCents || row.isoCurrency !== expectedCurrency)
     throw new InputError(
       "stale_transaction",
-      "The transaction amount changed; reload before saving"
+      "The transaction amount or currency changed; reload before saving"
     );
   const actual = row.splits?.length
     ? row.splits
@@ -81,6 +82,7 @@ export const splitApplyHandler: ToolFactory = (ports) => async (input) => {
       accountId,
       month,
       expectedAmountCents,
+      expectedCurrency,
       expectedRevision,
       splits
     }))

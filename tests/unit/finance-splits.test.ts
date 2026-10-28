@@ -66,13 +66,16 @@ describe("split ledger math", () => {
       uncategorized: 1200
     });
   });
-  it("sync preserves allocations and flags a bank correction", () => {
+  it.each([
+    { amount: 12, currency: "USD", cents: 1200 },
+    { amount: 10.01, currency: "EUR", cents: 1001 }
+  ])("sync preserves allocations and flags a bank correction: %s", (correction) => {
     const incoming: PlaidTx = {
       transaction_id: row.id,
       account_id: row.accountId,
       date: row.date,
-      amount: 12,
-      iso_currency_code: "USD",
+      amount: correction.amount,
+      iso_currency_code: correction.currency,
       name: row.name,
       merchant_name: null,
       personal_finance_category: null,
@@ -84,7 +87,8 @@ describe("split ledger math", () => {
       { added: [], modified: [incoming], removed: [] }
     );
     expect(result.chunks["cash:2026-10"]!.transactions[0]).toMatchObject({
-      amountCents: 1200,
+      amountCents: correction.cents,
+      isoCurrency: correction.currency,
       splits: row.splits,
       splitRevision: 1,
       reviewState: "needs_look"
@@ -125,6 +129,7 @@ describe("split command validation", () => {
       accountId: row.accountId,
       month: "2026-10",
       expectedAmountCents: 1001,
+      expectedCurrency: "USD",
       expectedRevision: 1,
       categoryIds: ["groceries", "dining"],
       amountsCents: [501, 500]
@@ -144,6 +149,7 @@ describe("split command validation", () => {
     { categoryIds: ["transfers", "dining"] },
     { categoryIds: ["missing", "dining"] },
     { expectedRevision: 0 },
+    { expectedCurrency: "EUR" },
     { expectedAmountCents: 1002, amountsCents: [502, 500] },
     { month: "2026-13" }
   ])("rejects invalid or stale edits before writing: %s", async (over) => {

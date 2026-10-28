@@ -107,5 +107,9 @@ describe("split editor", () => {
     const conflict = saveSplit(transaction, parts);
     await vi.advanceTimersByTimeAsync(7000);
     expect(await conflict).toContain("bank amount changed");
+    saved = { ...saved, amountCents: transaction.amountCents, isoCurrency: "EUR" };
+    const currencyConflict = saveSplit(transaction, parts);
+    await vi.advanceTimersByTimeAsync(7000);
+    expect(await currencyConflict).toContain("currency changed");
   });
 });

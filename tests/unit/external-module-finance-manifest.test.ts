@@ -435,6 +435,7 @@ describe("finance manifest contract (#1146)", () => {
             accountId: { type: "identifier" },
             month: { type: "identifier" },
             expectedAmountCents: { type: "integer", min: -2000000000, max: 2000000000 },
+            expectedCurrency: { type: "identifier" },
             expectedRevision: { type: "integer", min: 0, max: 2147483646 },
             categoryIds: { type: "array", maxItems: 20, items: { type: "identifier" } },
             amountsCents: {

@@ -29,6 +29,7 @@ export interface SplitChange {
   accountId: string;
   month: string;
   expectedAmountCents: number;
+  expectedCurrency: string;
   expectedRevision: number;
   splits: TransactionSplit[];
 }

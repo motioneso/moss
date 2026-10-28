@@ -104,7 +104,7 @@ describe("Finance review empty state scope", () => {
     const renderer = await mount(createElement(TransactionsScreen));
     await selectReview(renderer);
     await act(async () => {
-      renderer.root.findByProps({ "aria-label": "Search payees" }).props.onChange({
+      renderer.root.findByProps({ "aria-label": "Search payees or notes" }).props.onChange({
         target: { value: "Coffee" }
       });
       renderer.root

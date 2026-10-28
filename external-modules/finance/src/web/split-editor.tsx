@@ -33,6 +33,7 @@ export async function saveSplit(
     accountId: row.accountId,
     month: row.date.slice(0, 7),
     expectedAmountCents: row.amountCents,
+    expectedCurrency: row.isoCurrency,
     expectedRevision: row.splitRevision ?? 0,
     categoryIds: parts.map((p) => p.categoryId),
     amountsCents: parts.map((p) => p.amountCents)
@@ -55,6 +56,8 @@ export async function saveSplit(
     if (!saved) continue;
     if (saved.amountCents !== row.amountCents)
       return "The bank amount changed. Close this editor, refresh transactions, then review the split.";
+    if (saved.isoCurrency !== row.isoCurrency)
+      return "The transaction currency changed. Close this editor, refresh transactions, then review the split.";
     if (matches(saved, parts)) return null;
     if ((saved.splitRevision ?? 0) !== (row.splitRevision ?? 0))
       return "Another edit changed this transaction. Close this editor and reopen the split before saving.";

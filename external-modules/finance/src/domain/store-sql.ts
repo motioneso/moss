@@ -92,7 +92,7 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
       "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
       "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
-      "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents THEN 'needs_look' ELSE finance_transactions.review_state END " +
+      "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
       "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence",
     [
       record.id,
@@ -268,9 +268,9 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           "category_id = $2, categorized_by = 'user', review_state = 'confirmed', " +
           "split_revision = split_revision + 1 " +
           "WHERE id = $3 AND account_id = $4 AND date >= $5 AND date < $6 " +
-          "AND amount_cents = $7 AND split_revision = $8 AND pending = false RETURNING id), " +
+          "AND amount_cents = $7 AND split_revision = $8 AND iso_currency = $9 AND pending = false RETURNING id), " +
           "logged AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params) " +
-          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), 'user', 'transaction.split', $9::jsonb " +
+          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), 'user', 'transaction.split', $10::jsonb " +
           "FROM changed RETURNING id) SELECT id FROM changed",
         [
           JSON.stringify(change.splits.length === 1 ? [] : change.splits),
@@ -281,6 +281,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           to,
           change.expectedAmountCents,
           change.expectedRevision,
+          change.expectedCurrency,
           JSON.stringify({
             transactionId: change.transactionId,
             accountId: change.accountId,

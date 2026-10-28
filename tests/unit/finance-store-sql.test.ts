@@ -146,7 +146,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
           "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
           "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
           "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
-          "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents THEN 'needs_look' ELSE finance_transactions.review_state END " +
+          "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
           "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence"
       );
     }
@@ -256,7 +256,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
         "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
         "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
         "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
-        "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents THEN 'needs_look' ELSE finance_transactions.review_state END " +
+        "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
         "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence"
     );
     expect(db.calls[0]!.params).toEqual([

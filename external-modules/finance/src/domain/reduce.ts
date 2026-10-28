@@ -72,7 +72,8 @@ function carryUserFields(from: TransactionRecord, onto: TransactionRecord): void
   if (from.splits !== undefined) {
     onto.splits = from.splits.map((split) => ({ ...split }));
     onto.splitRevision = from.splitRevision;
-    if (onto.splits.length && !splitsBalance(onto)) onto.reviewState = "needs_look";
+    if (onto.splits.length && (!splitsBalance(onto) || from.isoCurrency !== onto.isoCurrency))
+      onto.reviewState = "needs_look";
   }
 }
 

@@ -554,12 +554,18 @@ describe("Finance split storage through the module RPC", () => {
       accountId: original.accountId,
       month: "2026-06",
       expectedAmountCents: 1001,
+      expectedCurrency: "USD",
       expectedRevision: 0,
       splits: [
         { categoryId: "groceries", amountCents: 700 },
         { categoryId: "dining", amountCents: 301 }
       ]
     };
+    expect(
+      await withStore(ids.userA, (store) =>
+        store.setTransactionSplits({ ...change, expectedCurrency: "EUR" })
+      )
+    ).toBe(false);
     expect(await withStore(ids.userA, (store) => store.setTransactionSplits(change))).toBe(true);
     expect(await withStore(ids.userA, (store) => store.setTransactionSplits(change))).toBe(false);
     expect(
@@ -605,6 +611,7 @@ describe("Finance split storage through the module RPC", () => {
       accountId: original.accountId,
       month: "2026-06",
       expectedAmountCents: 1000,
+      expectedCurrency: "USD",
       expectedRevision: 0,
       splits: [
         { categoryId: "groceries", amountCents: 700 },

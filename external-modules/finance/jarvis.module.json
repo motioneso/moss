@@ -145,7 +145,7 @@
       },
       {
         "id": "finance.transaction-splits",
-        "description": "Split a posted transaction across up to 20 non-transfer category allocations. Signed amounts must equal the original amount exactly. Saving checks the bank amount and allocation revision, and confirms only after a read sees the saved allocation. Reduce to one part to remove the split. Provider corrections preserve allocations for repair and mark an unbalanced split for review; reports count its bank amount once as uncategorized until repaired. Split editing requires migrated SQL storage. Household rows are read only. Splitting does not move bank money."
+        "description": "Split a posted transaction across up to 20 non-transfer category allocations. Signed amounts must equal the original amount exactly. Saving checks the bank amount, currency and allocation revision, and confirms only after a read sees the saved allocation. Reduce to one part to remove the split. Provider corrections preserve allocations for repair and mark an unbalanced split for review; reports count its bank amount once as uncategorized until repaired. Split editing requires migrated SQL storage. Household rows are read only. Splitting does not move bank money."
       }
     ]
   },
@@ -792,6 +792,7 @@
             "accountId": { "type": "identifier" },
             "month": { "type": "identifier" },
             "expectedAmountCents": { "type": "integer", "min": -2000000000, "max": 2000000000 },
+            "expectedCurrency": { "type": "identifier" },
             "expectedRevision": { "type": "integer", "min": 0, "max": 2147483646 },
             "categoryIds": { "type": "array", "maxItems": 20, "items": { "type": "identifier" } },
             "amountsCents": {
