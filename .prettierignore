@@ -81,3 +81,6 @@ docs/superpowers/mockups/moss-android-hardware/
 # Outlook work mail settings row mockups: generated pages and a frozen copy of the shipped CSS.
 docs/superpowers/specs/outlook-mail-mockup/*.html
 docs/superpowers/specs/outlook-mail-mockup/moss-ui.css
+
+# Byte-identical copy of the reviewed stage 4 runner protocol (#3538)
+scripts/uat-campaign/PROTOCOL.md
