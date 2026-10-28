@@ -3,8 +3,8 @@
 // and banks; accounts-view.ts turns them into sections. Own accounts only:
 // household balances are context, not the user's net worth.
 //
-// Reconnect and Add a bank hand off to the assistant, because connecting is a
-// write tool and the REST invoke route only runs reads.
+// Reconnect and Add a bank retain the assistant's connection flow. Manual
+// ledger forms use the optional host-mediated page tools handle.
 import {
   Button,
   Indicator,
@@ -12,12 +12,16 @@ import {
   RowIndex,
   RowIndexItem,
   SectionHead,
+  useState,
+  type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { formatCents } from "../format";
 import { buildAccountsView, type AccountsBank, type AccountsRow } from "../accounts-view";
 import { EmptyState, outcomeGate } from "../states";
-import { useToolQuery } from "../store";
+import { ManualEntryDialog, type ManualAccountChoice } from "../manual-entry";
+import { announce } from "../states";
+import { invalidateQueries, useToolQuery } from "../store";
 // Structural copy of root.tsx HostActions; importing root would pull every screen into this graph.
 type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
 
@@ -44,15 +48,19 @@ function BankStatus(props: {
   );
 }
 
-function AccountsBody(props: { result: AccountsResult; hostActions: HostActions }): ReactNodeLike {
+function AccountsBody(props: {
+  result: AccountsResult;
+  hostActions: HostActions;
+  onAddEntry: (account: ManualAccountChoice) => void;
+}): ReactNodeLike {
   const own = (props.result.accounts ?? []).filter((account) => !account.shared);
   const addBank = (): void =>
     props.hostActions.openAssistant({ starterPrompt: "Connect my bank account" });
   if (own.length === 0) {
     return (
       <EmptyState
-        title="Connect a bank"
-        body="Balances and net worth appear here once a bank is connected."
+        title="Give your accounts a home"
+        body="Add a manual account to start recording money, or connect a bank. Balances stay separate for each currency."
         action={
           <Button variant="primary" size="sm" onClick={addBank}>
             Add a bank
@@ -77,8 +85,8 @@ function AccountsBody(props: { result: AccountsResult; hostActions: HostActions 
         ))}
       </div>
       <p className="jds-caption">
-        Latest account balances, with debts subtracted. Each currency is kept separate; no
-        exchange-rate conversion is applied.
+        Current manual ledger and latest bank balances, with debts subtracted. Each currency is kept
+        separate; no exchange-rate conversion is applied.
       </p>
       {view.netWorthByCurrency.some((total) => total.netWorthCents === null) ? (
         <p className="jds-hint" role="status">
@@ -120,6 +128,21 @@ function AccountsBody(props: { result: AccountsResult; hostActions: HostActions 
                     <div className="fnm-bal">
                       <strong>{formatCents(account.balanceCents, account.isoCurrency)}</strong>
                       <span className="jds-hint">{account.isoCurrency}</span>
+                      {own.find((row) => row.accountId === account.accountId)?.source ===
+                      "manual" ? (
+                        <Button
+                          variant="link"
+                          aria-label={`Add transaction to ${account.name}`}
+                          onClick={() => {
+                            const original = own.find(
+                              (row) => row.accountId === account.accountId
+                            )!;
+                            props.onAddEntry(original);
+                          }}
+                        >
+                          Add transaction
+                        </Button>
+                      ) : null}
                       {bank.asOf ? <span className="jds-hint">{`As of ${bank.asOf}`}</span> : null}
                     </div>
                   }
@@ -138,17 +161,42 @@ function AccountsBody(props: { result: AccountsResult; hostActions: HostActions 
   );
 }
 
-export function AccountsScreen(props: { hostActions: HostActions }): ReactNodeLike {
+export function AccountsScreen(props: {
+  hostActions: HostActions;
+  tools?: ExternalModuleToolsHandleV1;
+}): ReactNodeLike {
+  const [editing, setEditing] = useState<ManualAccountChoice | null | undefined>(undefined);
   const accounts = useToolQuery<AccountsResult>("finance.accounts.list");
   return (
-    <section aria-label="Accounts">
+    <section aria-label="Accounts" className="fnm-stack">
+      <SectionHead
+        title="Accounts"
+        meta={
+          <Button variant="secondary" onClick={() => setEditing(null)}>
+            Add manual account
+          </Button>
+        }
+        rule
+      />
       {outcomeGate(
         accounts,
         (result) => (
-          <AccountsBody result={result} hostActions={props.hostActions} />
+          <AccountsBody result={result} hostActions={props.hostActions} onAddEntry={setEditing} />
         ),
         { loadingLabel: "Loading accounts" }
       )}
+      {editing !== undefined ? (
+        <ManualEntryDialog
+          tools={props.tools}
+          account={editing ?? undefined}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => {
+            setEditing(undefined);
+            invalidateQueries();
+            announce(editing ? "Transaction saved." : "Manual account added.");
+          }}
+        />
+      ) : null}
     </section>
   );
 }

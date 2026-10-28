@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { sql, type Kysely } from "kysely";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { PreferencesRepository } from "@moss/structured-state";
 import { AiRepository, createModulePageConfirmation } from "@moss/ai";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import type { ModuleAssistantToolManifest, MossModuleManifest } from "@moss/module-sdk";
@@ -144,6 +145,28 @@ function action(id: string) {
 }
 
 describe("guarded module-page invoke route", () => {
+  it("supplies the authenticated owner's timezone rather than caller input", async () => {
+    await runner.withDataContext({ actorUserId: ids.userA }, (scope) =>
+      new PreferencesRepository().upsert(scope, "locale", {
+        timezone: "Pacific/Kiritimati",
+        region: "en-US",
+        dateFormat: "24"
+      })
+    );
+    let observed: string | undefined;
+    tool = fixtureTool({
+      execute: async (_scope, _input, ctx) => {
+        observed = ctx.localTimezone;
+        return { data: { saved: "yes" } };
+      }
+    });
+    expect(
+      (await invoke({ input: { id: "synthetic", localTimezone: "America/Los_Angeles" } })).response
+        .statusCode
+    ).toBe(200);
+    expect(observed).toBe("Pacific/Kiritimati");
+  });
+
   it("runs a direct write, projects output and records only metadata under its owner", async () => {
     const { response, body, requestId } = await invoke({
       input: { id: "synthetic-row", note: "PRIVATE-SYNTHETIC-NOTE" }

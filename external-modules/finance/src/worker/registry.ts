@@ -6,6 +6,11 @@
 // keys) without triggering that side effect. index.ts stays a thin dispatch
 // shell over this table. All four FIN-01 manifest handler keys are real as
 // of Task 7 (#1146); notImplemented stays exported for FIN-02's Task 8 keys.
+import {
+  manualContextHandler,
+  manualAccountCreateHandler,
+  manualEntryCreateHandler
+} from "./handlers/manual-ledger.js";
 import { activityListHandler, activityUndoHandler } from "./handlers/activity.js";
 import { accountsListHandler } from "./handlers/accounts.js";
 import {
@@ -49,6 +54,9 @@ export const notImplemented: ToolFactory = () => async () => ({ status: "not-imp
 
 export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "accounts.list": accountsListHandler,
+  "manual.context": manualContextHandler,
+  "manual.account-create": manualAccountCreateHandler,
+  "manual.entry-create": manualEntryCreateHandler,
   // Getting started (#3178): bank keys present, bank linked.
   "setup.status": setupStatusHandler,
   "connect.start": connectStartHandler,

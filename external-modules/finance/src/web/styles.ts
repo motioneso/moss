@@ -27,6 +27,10 @@ export const MODULE_STYLES = `
    .jds-progress (packages/ui), .jds-progress--current making the fill inherit
    currentColor at reduced opacity so no raw color enters the module. */
 .fnm-report-grid { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); align-items: start; }
+.fnm-manual-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.fnm-manual-columns > * { min-width: 0; }
+.fnm-manual-form { display: flex; flex-direction: column; gap: var(--space-4); }
+@media (max-width: 480px) { .fnm-manual-columns { grid-template-columns: minmax(0, 1fr); } }
 .fnm-account-totals { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
 .fnm-account-totals > * { margin: 0; min-width: 0; }
 .fnm-report-bar { grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; }

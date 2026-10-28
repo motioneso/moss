@@ -86,7 +86,9 @@ implemented form, error and prerequisite. Do not advertise later slices before t
   writes are unavailable under the actual runtime role. Observe owner enforcement fail when the
   corresponding protection is removed in an isolated test, then restore it before acceptance.
 - No partial ledger, balance or activity on a rejected category/date/amount/currency/state.
-  Provider sync cannot overwrite manual rows. Sharing is explicit; notes never enter the mirror.
+  Provider sync cannot overwrite manual rows. Manual accounts remain private in the first slice: refuse enabling household sharing until
+  its projection updates alongside manual ledger writes. Existing provider sharing remains.
+  Allow unsharing to remove any stale projection; notes never enter the mirror.
 - Frontend tests cover exact money input, required fields, older host, pending, cancelled, rejected
   and uncertain saves. Actual Chromium checks cover 320/390/768/1440, light/dark, focus and overflow.
 - Extend the opt-in installed Finance browser test: create an account and entry via actual UI,
@@ -94,3 +96,22 @@ implemented form, error and prerequisite. Do not advertise later slices before t
   responses. Synthetic identities and entries only, throwaway verify-gate database, clean teardown.
 - Run focused tests, relevant database gates and repository aggregate checks after significant
   edits. Separate fixture evidence, assembled live proof, unrun CI and remaining parity gaps.
+
+## Reconciliation implementation decisions
+
+A statement review uses the opening baseline (or last reconciled statement balance), the
+statement civil date and up to 500 unreconciled entries through that date. Preselect cleared
+entries; let the user include/exclude entries locally before one atomic finish. Show recorded
+balance as of the statement date, cleared selection, statement amount and exact difference.
+A zero difference is required; no adjustment is invented. Larger reviews explicitly require a
+earlier statement cutoff rather than silently truncating financial totals.
+
+Finish carries the account ledger revision, stable operation UUID, exact statement amount and
+selected entry IDs. Under the account lock, validate revision, current owner, date, currency,
+full selected-ID membership/count and exact sum. Insert the immutable reconciliation receipt,
+mark selected entries reconciled, clear unchecked entries in that review window, update the
+last statement/date and append metadata activity together. Replay compares the original digest.
+New postings on/before the last reconciled statement date are rejected so a completed statement
+cannot silently drift; existing outstanding entries may clear on a later statement. Reconciled
+amounts/dates remain immutable. Categories/splits are reporting metadata, separate from balance
+reconciliation. A stale review keeps its inputs and requires refresh, never a forced adjustment.

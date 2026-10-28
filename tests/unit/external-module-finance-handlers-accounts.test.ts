@@ -137,7 +137,7 @@ describe("finance.accounts.list (#1146)", () => {
     expect(result).toEqual({
       accounts: [],
       banks: [],
-      nextStep: "connect a bank with finance.connect.start"
+      nextStep: "Add a manual account or connect a bank"
     });
   });
 
@@ -330,7 +330,7 @@ describe("finance.accounts.list household merge (#1149)", () => {
       "acc-x"
     ]);
     // nextStep keys off OWN accounts: this member still hasn't connected a bank.
-    expect(result.nextStep).toBe("connect a bank with finance.connect.start");
+    expect(result.nextStep).toBe("Add a manual account or connect a bank");
   });
 
   it("tolerates malformed mirror keys and non-record meta values", async () => {

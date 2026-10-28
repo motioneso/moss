@@ -13,6 +13,7 @@ import type {
 } from "./records.js";
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
+import { manualSqlStore } from "./store-manual-sql.js";
 import { safeCents } from "./values.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
@@ -34,7 +35,7 @@ function monthWindow(month: string): { from: string; to: string } {
 
 const TXN_COLUMNS =
   "id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision";
+  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at";
 
 type TransactionRow = {
   id: string;
@@ -54,6 +55,9 @@ type TransactionRow = {
   ai_confidence: number | null;
   splits?: TransactionRecord["splits"];
   split_revision?: number;
+  source?: string;
+  cleared?: boolean;
+  reconciled_at?: string | null;
 };
 
 function rowToTransaction(row: TransactionRow): TransactionRecord {
@@ -73,6 +77,13 @@ function rowToTransaction(row: TransactionRow): TransactionRecord {
     notes: row.notes ?? undefined,
     reviewState: row.review_state,
     aiConfidence: row.ai_confidence,
+    ...(row.source === "manual"
+      ? {
+          source: "manual" as const,
+          cleared: row.cleared ?? false,
+          reconciledAt: row.reconciled_at ?? null
+        }
+      : {}),
     ...(row.splits?.length || row.split_revision
       ? { splits: row.splits ?? [], splitRevision: row.split_revision ?? 0 }
       : {})
@@ -80,6 +91,23 @@ function rowToTransaction(row: TransactionRow): TransactionRecord {
 }
 
 async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Promise<void> {
+  if (record.source === "manual") {
+    // Legacy categorization/note paths may change metadata, never ledger movement.
+    await db.query(
+      "UPDATE app.finance_transactions SET category_id = CASE WHEN splits = '[]'::jsonb THEN $2 ELSE category_id END, " +
+        "categorized_by = CASE WHEN splits = '[]'::jsonb THEN $3 ELSE categorized_by END, notes = $4, " +
+        "review_state = CASE WHEN splits = '[]'::jsonb THEN $5 ELSE review_state END " +
+        "WHERE id = $1 AND source = 'manual' AND reconciled_at IS NULL",
+      [
+        record.id,
+        record.categoryId,
+        record.categorizedBy,
+        record.notes ?? null,
+        record.reviewState ?? "confirmed"
+      ]
+    );
+    return;
+  }
   await db.query(
     "INSERT INTO app.finance_transactions (owner_user_id, id, account_id, date, amount_cents, " +
       "iso_currency, name, merchant, plaid_category, category_id, pending, " +
@@ -93,7 +121,7 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
       "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
       "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
-      "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence",
+      "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence WHERE finance_transactions.source = 'provider'",
     [
       record.id,
       record.accountId,
@@ -154,11 +182,16 @@ function rowToItem(row: ItemRow): ItemRecord {
 
 const ACCOUNT_COLUMNS =
   "account_id, item_id, name, official_name, type, subtype, mask, balance_cents, " +
-  "iso_currency, updated_at, shared_to_household";
+  "iso_currency, updated_at, shared_to_household, source, opening_date::text AS opening_date, opening_balance_cents, ledger_revision, archived_at";
 
 type AccountRow = {
   account_id: string;
-  item_id: string;
+  item_id: string | null;
+  source?: string;
+  opening_date?: string;
+  opening_balance_cents?: string | number;
+  ledger_revision?: number;
+  archived_at?: string | null;
   name: string;
   official_name: string | null;
   type: string;
@@ -182,7 +215,16 @@ function rowToAccount(row: AccountRow): AccountRecord {
     balanceCents: safeCents(row.balance_cents),
     isoCurrency: row.iso_currency,
     updatedAt: row.updated_at,
-    sharedToHousehold: row.shared_to_household
+    sharedToHousehold: row.shared_to_household,
+    ...(row.source === "manual"
+      ? {
+          source: "manual" as const,
+          openingDate: row.opening_date!,
+          openingBalanceCents: safeCents(row.opening_balance_cents!),
+          ledgerRevision: row.ledger_revision ?? 0,
+          archivedAt: row.archived_at ?? null
+        }
+      : {})
   };
 }
 
@@ -261,6 +303,7 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     supportsSplits: true,
+    manual: manualSqlStore(db),
     async setTransactionSplits(change) {
       const { from, to } = monthWindow(change.month);
       const result = await db.query<{ id: string }>(
@@ -344,6 +387,14 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     },
 
     async putAccount(record) {
+      if (record.source === "manual") {
+        // Sharing a stale account read cannot restore an older ledger balance.
+        await db.query(
+          "UPDATE app.finance_accounts SET shared_to_household = $2 WHERE account_id = $1 AND source = 'manual'",
+          [record.accountId, record.sharedToHousehold ?? false]
+        );
+        return;
+      }
       await db.query(
         "INSERT INTO app.finance_accounts (owner_user_id, account_id, item_id, name, official_name, " +
           "type, subtype, mask, balance_cents, iso_currency, updated_at, shared_to_household) " +
@@ -352,7 +403,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           "name = EXCLUDED.name, official_name = EXCLUDED.official_name, type = EXCLUDED.type, " +
           "subtype = EXCLUDED.subtype, mask = EXCLUDED.mask, balance_cents = EXCLUDED.balance_cents, " +
           "iso_currency = EXCLUDED.iso_currency, updated_at = EXCLUDED.updated_at, " +
-          "shared_to_household = EXCLUDED.shared_to_household",
+          "shared_to_household = EXCLUDED.shared_to_household WHERE finance_accounts.source = 'provider'",
         [
           record.accountId,
           record.itemId,
@@ -410,7 +461,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       }
       const { from, to } = monthWindow(month);
       await db.query(
-        "DELETE FROM app.finance_transactions WHERE account_id = $1 AND date >= $2 AND date < $3 " +
+        "DELETE FROM app.finance_transactions WHERE source = 'provider' AND account_id = $1 AND date >= $2 AND date < $3 " +
           "AND NOT (id = ANY($4::text[]))",
         [accountId, from, to, records.map((record) => record.id)]
       );

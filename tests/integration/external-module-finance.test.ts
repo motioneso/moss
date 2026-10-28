@@ -168,7 +168,7 @@ describe("finance module surface (#1146)", () => {
       blockedReason: null,
       result: {
         accounts: [],
-        nextStep: "connect a bank with finance.connect.start"
+        nextStep: "Add a manual account or connect a bank"
       }
     });
   });

@@ -22,7 +22,11 @@ import { readActiveUserIds, readString } from "../validate.js";
 
 type AccountView = {
   accountId: string;
-  itemId: string;
+  itemId: string | null;
+  source?: "manual";
+  openingDate?: string;
+  openingBalanceCents?: number;
+  archivedAt?: string | null;
   name: string;
   mask: string | null;
   type: string;
@@ -30,7 +34,7 @@ type AccountView = {
   balanceCents: number;
   isoCurrency: string;
   institutionId: string | null;
-  itemStatus: ItemRecord["status"];
+  itemStatus: ItemRecord["status"] | "manual";
   updatedAt: string;
   // FIN-04 (#1149): the web share toggle renders off this flag.
   sharedToHousehold: boolean;
@@ -138,7 +142,7 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
 
   const own: AccountView[] = [];
   for (const account of accountRecords) {
-    const item = await loadItem(account.itemId);
+    const item = account.itemId ? await loadItem(account.itemId) : null;
     own.push({
       accountId: account.accountId,
       itemId: account.itemId,
@@ -151,9 +155,17 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
       // Orphaned account (item record gone) is surfaced as an error rather
       // than hidden — hiding money is worse than showing a broken link.
       institutionId: item?.institutionId ?? null,
-      itemStatus: item?.status ?? "error",
+      itemStatus: account.source === "manual" ? "manual" : (item?.status ?? "error"),
       updatedAt: account.updatedAt,
-      sharedToHousehold: account.sharedToHousehold === true
+      sharedToHousehold: account.sharedToHousehold === true,
+      ...(account.source === "manual"
+        ? {
+            source: "manual" as const,
+            openingDate: account.openingDate,
+            openingBalanceCents: account.openingBalanceCents,
+            archivedAt: account.archivedAt
+          }
+        : {})
     });
   }
   // store.listAccounts() order is storage-dependent; pin a stable order.
@@ -161,7 +173,11 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
 
   // One entry per bank that holds an own account, ordered by itemId. An
   // orphaned account (no item record) reports status "error" like its row.
-  const banks: BankView[] = [...new Set(own.map((account) => account.itemId))]
+  const banks: BankView[] = [
+    ...new Set(
+      own.map((account) => account.itemId).filter((itemId): itemId is string => itemId !== null)
+    )
+  ]
     .sort()
     .map((itemId) => {
       const item = itemCache.get(itemId) ?? null;
@@ -182,6 +198,6 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
   // nextStep keys off OWN accounts: a member seeing only shared accounts
   // still hasn't connected a bank of their own.
   return own.length === 0
-    ? { accounts, banks, nextStep: "connect a bank with finance.connect.start" }
+    ? { accounts, banks, nextStep: "Add a manual account or connect a bank" }
     : { accounts, banks };
 };

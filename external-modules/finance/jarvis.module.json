@@ -6,7 +6,7 @@
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
-  "description": "Bank accounts, transactions, and budgets via Plaid.",
+  "description": "Manual and connected accounts, transactions, and budgets.",
   "auth": [
     {
       "id": "finance.plaid-client-id",
@@ -152,6 +152,10 @@
       {
         "id": "finance.transaction-splits",
         "description": "Split a posted transaction across up to 20 non-transfer category allocations. Signed amounts must equal the original amount exactly. Saving checks the bank amount, currency and allocation revision, and awaits the committed result through the host page-tool bridge. Older hosts without that bridge explain the required update and keep the draft. Reduce to one part to remove the split. Provider corrections preserve allocations for repair and mark an unbalanced split for review; reports count its bank amount once as uncategorized until repaired. Split editing requires migrated SQL storage. Household rows are read only. Splitting does not move bank money."
+      },
+      {
+        "id": "finance.manual-ledger",
+        "description": "Add manual cash, checking, savings, credit, loan or asset accounts without bank credentials. Record an explicit opening balance/date and supported two-decimal currency. Posted manual transactions update the account balance atomically, retain exact cents and use stable replay identities. Money out reduces assets and increases debt; money in does the reverse. Future dates follow your Moss timezone. Older hosts or unmigrated storage require an update. Rejected or uncertain saves retain entries; check saved records before retrying. Manual accounts remain private; household sharing is unavailable until the mirror supports ledger updates. Reconciliation, file import and linked transfers are separate work."
       }
     ]
   },
@@ -174,10 +178,111 @@
     {
       "name": "finance.accounts.list",
       "permissionId": "finance.accounts.list",
-      "description": "List connected bank accounts with live balances.",
+      "description": "List own and explicitly shared accounts, currencies, current balances and bank sync status. Manual account balances come from the ledger.",
       "risk": "read",
       "inputSchema": { "type": "object", "additionalProperties": false },
       "handler": "accounts.list"
+    },
+    {
+      "name": "finance.manual.context",
+      "permissionId": "finance.manual.context",
+      "actionLabel": "Read manual entry setup",
+      "description": "Read manual entry setup. Manual records only; no bank money is moved.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "handler": "manual.context"
+    },
+    {
+      "name": "finance.manual.account-create",
+      "permissionId": "finance.manual.account-create",
+      "actionLabel": "Add a manual account",
+      "description": "Add a manual account. Manual records only; no bank money is moved.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 320
+          },
+          "accountType": {
+            "type": "string",
+            "enum": ["checking", "savings", "cash", "credit", "loan", "asset"]
+          },
+          "isoCurrency": { "type": "string" },
+          "openingDate": { "type": "string" },
+          "openingBalanceCents": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "operationId",
+          "name",
+          "accountType",
+          "isoCurrency",
+          "openingDate",
+          "openingBalanceCents"
+        ]
+      },
+      "handler": "manual.account-create",
+      "executionPolicy": "confirm"
+    },
+    {
+      "name": "finance.manual.entry-create",
+      "permissionId": "finance.manual.entry-create",
+      "actionLabel": "Add a manual transaction",
+      "description": "Add a manual transaction. Manual records only; no bank money is moved.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "accountId": { "type": "string" },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 640
+          },
+          "date": { "type": "string" },
+          "amountCents": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "isoCurrency": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "notes": { "type": "string", "maxLength": 4000 },
+          "cleared": { "type": "boolean" }
+        },
+        "required": [
+          "operationId",
+          "accountId",
+          "name",
+          "date",
+          "amountCents",
+          "isoCurrency",
+          "cleared"
+        ]
+      },
+      "handler": "manual.entry-create",
+      "executionPolicy": "confirm"
     },
     {
       "name": "finance.setup.status",
@@ -254,41 +359,26 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "transactionId": {
-            "type": "string"
-          },
-          "accountId": {
-            "type": "string"
-          },
+          "transactionId": { "type": "string" },
+          "accountId": { "type": "string" },
           "month": {
             "type": "string",
             "pattern": "^[0-9]{4}-[0-9]{2}$"
           },
-          "expectedAmountCents": {
-            "type": "integer"
-          },
-          "expectedCurrency": {
-            "type": "string"
-          },
-          "expectedRevision": {
-            "type": "integer",
-            "minimum": 0
-          },
+          "expectedAmountCents": { "type": "integer" },
+          "expectedCurrency": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
           "categoryIds": {
             "type": "array",
             "minItems": 1,
             "maxItems": 20,
-            "items": {
-              "type": "string"
-            }
+            "items": { "type": "string" }
           },
           "amountsCents": {
             "type": "array",
             "minItems": 1,
             "maxItems": 20,
-            "items": {
-              "type": "integer"
-            }
+            "items": { "type": "integer" }
           }
         },
         "required": [
@@ -305,15 +395,9 @@
       "outputSchema": {
         "type": "object",
         "properties": {
-          "status": {
-            "type": "string"
-          },
-          "parts": {
-            "type": "integer"
-          },
-          "unchanged": {
-            "type": "boolean"
-          }
+          "status": { "type": "string" },
+          "parts": { "type": "integer" },
+          "unchanged": { "type": "boolean" }
         },
         "required": ["status"]
       },
@@ -330,26 +414,15 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "transactionId": {
-            "type": "string"
-          },
-          "accountId": {
-            "type": "string"
-          },
+          "transactionId": { "type": "string" },
+          "accountId": { "type": "string" },
           "month": {
             "type": "string",
             "pattern": "^[0-9]{4}-[0-9]{2}$"
           },
-          "categoryId": {
-            "type": "string"
-          },
-          "amountCents": {
-            "type": "integer"
-          },
-          "notes": {
-            "type": "string",
-            "maxLength": 500
-          }
+          "categoryId": { "type": "string" },
+          "amountCents": { "type": "integer" },
+          "notes": { "type": "string", "maxLength": 500 }
         },
         "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"]
       },
@@ -366,26 +439,15 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "transactionId": {
-            "type": "string"
-          },
-          "accountId": {
-            "type": "string"
-          },
+          "transactionId": { "type": "string" },
+          "accountId": { "type": "string" },
           "month": {
             "type": "string",
             "pattern": "^[0-9]{4}-[0-9]{2}$"
           },
-          "categoryId": {
-            "type": "string"
-          },
-          "amountCents": {
-            "type": "integer"
-          },
-          "notes": {
-            "type": "string",
-            "maxLength": 500
-          }
+          "categoryId": { "type": "string" },
+          "amountCents": { "type": "integer" },
+          "notes": { "type": "string", "maxLength": 500 }
         },
         "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"]
       },

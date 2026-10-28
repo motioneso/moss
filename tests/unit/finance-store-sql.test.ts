@@ -79,7 +79,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls).toHaveLength(1);
     expect(db.calls[0]!.text).toBe(
       "SELECT id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision " +
+        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at " +
         "FROM app.finance_transactions " +
         "WHERE account_id = $1 AND date >= $2 AND date < $3 ORDER BY date DESC, id ASC"
     );
@@ -147,7 +147,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
           "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
           "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
           "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
-          "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence"
+          "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence WHERE finance_transactions.source = 'provider'"
       );
     }
     expect(db.calls[0]!.params).toEqual([
@@ -187,7 +187,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
       "[]"
     ]);
     expect(db.calls[2]!.text).toBe(
-      "DELETE FROM app.finance_transactions WHERE account_id = $1 AND date >= $2 AND date < $3 " +
+      "DELETE FROM app.finance_transactions WHERE source = 'provider' AND account_id = $1 AND date >= $2 AND date < $3 " +
         "AND NOT (id = ANY($4::text[]))"
     );
     expect(db.calls[2]!.params).toEqual(["acc1", "2026-07-01", "2026-08-01", ["a", "b"]]);
@@ -220,7 +220,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
 
     expect(db.calls[0]!.text).toBe(
       "SELECT id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision " +
+        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at " +
         "FROM app.finance_transactions " +
         "WHERE date >= $1 AND date < $2 ORDER BY date DESC, id ASC"
     );
@@ -257,7 +257,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
         "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
         "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
         "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents OR finance_transactions.iso_currency <> EXCLUDED.iso_currency THEN 'needs_look' ELSE finance_transactions.review_state END " +
-        "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence"
+        "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence WHERE finance_transactions.source = 'provider'"
     );
     expect(db.calls[0]!.params).toEqual([
       "a",
@@ -505,7 +505,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
         "name = EXCLUDED.name, official_name = EXCLUDED.official_name, type = EXCLUDED.type, " +
         "subtype = EXCLUDED.subtype, mask = EXCLUDED.mask, balance_cents = EXCLUDED.balance_cents, " +
         "iso_currency = EXCLUDED.iso_currency, updated_at = EXCLUDED.updated_at, " +
-        "shared_to_household = EXCLUDED.shared_to_household"
+        "shared_to_household = EXCLUDED.shared_to_household WHERE finance_accounts.source = 'provider'"
     );
     expect(db.calls[0]!.params).toEqual([
       "acc1",
@@ -545,7 +545,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     const result = await store.getAccount("acc1");
     expect(db.calls[0]!.text).toBe(
       "SELECT account_id, item_id, name, official_name, type, subtype, mask, balance_cents, " +
-        "iso_currency, updated_at, shared_to_household FROM app.finance_accounts WHERE account_id = $1"
+        "iso_currency, updated_at, shared_to_household, source, opening_date::text AS opening_date, opening_balance_cents, ledger_revision, archived_at FROM app.finance_accounts WHERE account_id = $1"
     );
     expect(result).toEqual({
       accountId: "acc1",
@@ -569,7 +569,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     await store.listAccounts();
     expect(db.calls[0]!.text).toBe(
       "SELECT account_id, item_id, name, official_name, type, subtype, mask, balance_cents, " +
-        "iso_currency, updated_at, shared_to_household FROM app.finance_accounts"
+        "iso_currency, updated_at, shared_to_household, source, opening_date::text AS opening_date, opening_balance_cents, ledger_revision, archived_at FROM app.finance_accounts"
     );
   });
 

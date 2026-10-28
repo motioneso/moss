@@ -127,7 +127,7 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
   const accounts = await store.listAccounts();
   const itemStatus = new Map<string, string>();
   for (const account of accounts) {
-    if (!itemStatus.has(account.itemId)) {
+    if (account.itemId && !itemStatus.has(account.itemId)) {
       itemStatus.set(account.itemId, (await store.getItem(account.itemId))?.status ?? "error");
     }
   }
@@ -152,7 +152,9 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
       name: account.name,
       balanceCents: signedBalanceCents(account),
       asOf: account.updatedAt,
-      stale: itemStatus.get(account.itemId) !== "connected"
+      stale:
+        account.source !== "manual" &&
+        (!account.itemId || itemStatus.get(account.itemId) !== "connected")
     }))
   };
 };

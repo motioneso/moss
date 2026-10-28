@@ -55,6 +55,9 @@ interface Tx extends SplitTransaction {
   shared?: boolean;
   pending?: boolean;
   possibleDuplicate?: boolean;
+  source?: "manual";
+  cleared?: boolean;
+  reconciledAt?: string | null;
 }
 
 interface TxResult extends Record<string, unknown> {
@@ -109,6 +112,11 @@ function TransactionStatus(props: { tx: Tx }): ReactNodeLike {
   return (
     <div className="fnm-chips">
       {props.tx.pending ? <Badge tone="steel">Pending</Badge> : null}
+      {props.tx.source === "manual" ? (
+        <Badge tone="steel">
+          {props.tx.reconciledAt ? "Reconciled" : props.tx.cleared ? "Cleared" : "Uncleared"}
+        </Badge>
+      ) : null}
       {props.tx.shared ? <Badge tone="steel">Household · read only</Badge> : null}
       {props.tx.possibleDuplicate ? <Badge tone="amber">Possible duplicate</Badge> : null}
       {props.tx.splits?.length && !splitsBalance(props.tx) ? (

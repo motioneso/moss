@@ -285,6 +285,123 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       }
     }, 90_000);
 
+    it("creates a manual account and a cleared transaction through the installed Finance page", async () => {
+      const page = await context.newPage();
+      try {
+        await page.goto(`${base}/m/finance/accounts`);
+        await page.getByRole("button", { name: "Add manual account", exact: true }).click();
+        const accountDialog = page.getByRole("dialog", { name: "Add manual account", exact: true });
+        await accountDialog.getByLabel("Account name", { exact: true }).fill("Synthetic wallet");
+        await accountDialog.getByLabel("Account type", { exact: true }).selectOption("cash");
+        await accountDialog.getByLabel("Opening balance", { exact: true }).fill("123.45");
+        await accountDialog.getByLabel("Opening balance date", { exact: true }).fill(`${month}-01`);
+        await accountDialog.getByRole("button", { name: "Add account", exact: true }).click();
+        await accountDialog.waitFor({ state: "detached" });
+        const accountResult = await readTool("finance.accounts.list");
+        const rows = accountResult.accounts as Array<{
+          accountId: string;
+          name: string;
+          source?: string;
+          balanceCents: number;
+        }>;
+        const account = rows.find((row) => row.name === "Synthetic wallet")!;
+        expect(account).toMatchObject({ source: "manual", balanceCents: 12345 });
+        await page
+          .getByRole("button", { name: "Add transaction to Synthetic wallet", exact: true })
+          .click();
+        const entryDialog = page.getByRole("dialog", { name: "Add transaction", exact: true });
+        await entryDialog.getByLabel("Payee", { exact: true }).fill("Synthetic manual market");
+        await entryDialog.getByLabel("Transaction amount", { exact: true }).fill("1.234");
+        expect(
+          await entryDialog
+            .getByRole("button", { name: "Save transaction", exact: true })
+            .isDisabled()
+        ).toBe(true);
+        await entryDialog.getByLabel("Transaction amount", { exact: true }).fill("1.23");
+        await entryDialog
+          .getByLabel("Transaction category", { exact: true })
+          .selectOption("groceries");
+        await entryDialog
+          .getByLabel("Private note", { exact: true })
+          .fill("Synthetic owner-only note");
+        await entryDialog.getByText("Cleared on your statement", { exact: true }).click();
+        expect(
+          await entryDialog.getByLabel("Cleared on your statement", { exact: true }).isChecked()
+        ).toBe(true);
+        for (const mode of ["light", "dark"]) {
+          await page.evaluate((mode) => {
+            document.documentElement.dataset.theme = mode;
+          }, mode);
+          for (const width of [320, 390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+            ).toBe(false);
+            await entryDialog
+              .getByRole("button", { name: "Save transaction", exact: true })
+              .scrollIntoViewIfNeeded();
+            if (artifacts)
+              await page.screenshot({
+                path: join(resolve(artifacts), `finance-manual-entry-${mode}-${width}.png`),
+                fullPage: true
+              });
+          }
+        }
+        await page.evaluate(() => {
+          document.documentElement.dataset.theme = "light";
+        });
+        await page.setViewportSize({ width: 390, height: 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+          false
+        );
+        await entryDialog.getByRole("button", { name: "Save transaction", exact: true }).click();
+        await entryDialog.waitFor({ state: "detached" });
+        const saved = (await readTool("finance.accounts.list")).accounts as typeof rows;
+        expect(saved.find((row) => row.accountId === account.accountId)?.balanceCents).toBe(12222);
+        const records = (
+          await readTool("finance.transactions.query", { month, accountId: account.accountId })
+        ).transactions;
+        expect(records).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              name: "Synthetic manual market",
+              amountCents: 123,
+              notes: "Synthetic owner-only note",
+              source: "manual",
+              cleared: true
+            })
+          ])
+        );
+        expect(
+          (
+            await readTool(
+              "finance.transactions.query",
+              { month, accountId: account.accountId },
+              member.cookie
+            )
+          ).transactions
+        ).toEqual([]);
+        await page.reload();
+        await page
+          .getByRole("button", { name: "Add transaction to Synthetic wallet", exact: true })
+          .waitFor();
+        if (artifacts)
+          await page.screenshot({
+            path: join(resolve(artifacts), "finance-manual-accounts-phone.png"),
+            fullPage: true
+          });
+      } catch (error) {
+        if (artifacts)
+          await page.screenshot({
+            path: join(resolve(artifacts), "finance-manual-debug.png"),
+            fullPage: true
+          });
+        throw error;
+      } finally {
+        await page.close();
+      }
+    }, 90_000);
+
     it("confirms and cancels real worker deletion through the actual host dialog", async () => {
       const page = await context.newPage();
       try {

@@ -41,6 +41,9 @@ export type TransactionRecord = {
   splits?: TransactionSplit[];
   /** Optimistic concurrency token for the allocation editor. */
   splitRevision?: number;
+  source?: "provider" | "manual";
+  cleared?: boolean;
+  reconciledAt?: string | null;
 };
 
 /** One month-chunk value at monthKey(); sorted date desc, then id asc. */
@@ -48,7 +51,12 @@ export type TransactionChunk = { transactions: TransactionRecord[] };
 
 export type AccountRecord = {
   accountId: string;
-  itemId: string;
+  itemId: string | null;
+  source?: "provider" | "manual";
+  openingDate?: string;
+  openingBalanceCents?: number;
+  ledgerRevision?: number;
+  archivedAt?: string | null;
   name: string;
   officialName: string | null;
   type: string;

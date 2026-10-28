@@ -116,7 +116,7 @@ describe("finance bundle hygiene (#1146)", () => {
     );
     expect(messages.at(-1)).toMatchObject({
       id: "t1",
-      result: { accounts: [], nextStep: "connect a bank with finance.connect.start" }
+      result: { accounts: [], nextStep: "Add a manual account or connect a bank" }
     });
   });
 

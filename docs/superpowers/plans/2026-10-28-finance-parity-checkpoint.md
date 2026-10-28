@@ -1,6 +1,6 @@
 # Finance parity checkpoint
 
-Updated 2026-10-28, 07:56 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
+Updated 2026-10-28, 08:33 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
 The original checkout is separate. Nothing has been pushed, published, merged or deployed.
 The [source-linked parity matrix](../specs/2026-10-28-finance-parity.md) records the audited
 baseline and testable acceptance criteria; this document records current implementation.
@@ -36,33 +36,77 @@ baseline and testable acceptance criteria; this document records current impleme
    Old hosts fail explicitly. Cancellation, unmount and actor changes abandon pending UI. The
    Finance split tool uses this path. Activity details now label page writes as Module page.
 
+7. **Manual accounts and posted entries.** Additive migrations 0020–0021; explicit opening
+   balance/date, asset/debt signs and immutable supported two-decimal currency. Atomic entry,
+   balance and metadata activity; stable identity/digest replay; concurrent distinct entries
+   accumulate exactly once. Provider updates preserve manual rows. User timezone comes from
+   authenticated preferences. Accounts forms use the guarded page bridge and await persistence;
+   ambiguous saves freeze the draft for a records check. Manual rows show cleared/uncleared.
+   Manual household sharing is explicitly unavailable until its projection supports ledger
+   writes; existing bank sharing is preserved. Statement reconciliation and import remain next.
+
 Current Park Press/Park Pass foundations supply Archivo, semantic colors, shared controls and
 modal behavior, warm paper, tabular amounts and responsive layouts. Module styles add layout.
 The Finance manifest is 0.7.0; app-map entries describe the bounded capability and remediations.
 
 ## Current capability matrix
 
-| Area                        | Status now                                                                | Remaining acceptance                                                                      |
-| --------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Accounts                    | Partial: provider rows, per-currency totals and exact display             | Manual accounts/entries, opening balances, archive and reconciled ledger                  |
-| Import/reconciliation       | Missing manual/file import and statement reconciliation                   | Atomic preview/apply, stable replay identity, cleared/reconciled records                  |
-| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV      | Full-history export, atomic bulk editing, explicit transfer linking                       |
-| Splits                      | Supported posted own SQL category splits; installed UI persistence proven | Split transfers, line notes/payees and pending edits                                      |
-| Categories/rules            | Partial existing categorization and merchant rules                        | Management/preview and ordinary-write concurrency                                         |
-| Envelope budget/rollover    | Partial existing envelopes; validated atomic assignment batches           | Currency/history policy, credit-card reserves, configurable carry                         |
-| Flexible budget             | Missing                                                                   | Fixed/non-monthly/flex model without double counting                                      |
-| Targets/goals               | Missing                                                                   | Monthly/date-bound targets, exact remaining funds                                         |
-| Recurring bills             | Missing                                                                   | Cadence, occurrences and one-time import matching                                         |
-| Cash flow/reports/net worth | Partial: currency-safe spending/cash flow/snapshots                       | Ledger valuations, drill-through, saved/custom views                                      |
-| Household                   | Partial existing opt-in shared reads                                      | Explicit co-edit and joint-account policy; preserve private notes                         |
-| Investments                 | Partial balances only                                                     | Provider-dependent holdings/performance; trading out of scope                             |
-| Long-range forecasts        | Out of scope for initial roadmap                                          | Separate assumptions/uncertainty design                                                   |
-| Platform page writes        | Implemented; actual installed Finance and synthetic-module proof passed   | Independent review, CI and release/deployment acceptance; Meals consumer remains separate |
+| Area                        | Status now                                                                   | Remaining acceptance                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Accounts                    | Partial: manual/provider accounts, exact opening balances and posted entries | Archive, reconciled statements and broader currency model                                 |
+| Import/reconciliation       | Manual entry supported; file import and statement reconciliation missing     | Atomic preview/apply, stable replay identity, cleared/reconciled records                  |
+| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV         | Full-history export, atomic bulk editing, explicit transfer linking                       |
+| Splits                      | Supported posted own SQL category splits; installed UI persistence proven    | Split transfers, line notes/payees and pending edits                                      |
+| Categories/rules            | Partial existing categorization and merchant rules                           | Management/preview and ordinary-write concurrency                                         |
+| Envelope budget/rollover    | Partial existing envelopes; validated atomic assignment batches              | Currency/history policy, credit-card reserves, configurable carry                         |
+| Flexible budget             | Missing                                                                      | Fixed/non-monthly/flex model without double counting                                      |
+| Targets/goals               | Missing                                                                      | Monthly/date-bound targets, exact remaining funds                                         |
+| Recurring bills             | Missing                                                                      | Cadence, occurrences and one-time import matching                                         |
+| Cash flow/reports/net worth | Partial: currency-safe spending/cash flow/snapshots                          | Ledger valuations, drill-through, saved/custom views                                      |
+| Household                   | Partial existing opt-in shared reads                                         | Explicit co-edit and joint-account policy; preserve private notes                         |
+| Investments                 | Partial balances only                                                        | Provider-dependent holdings/performance; trading out of scope                             |
+| Long-range forecasts        | Out of scope for initial roadmap                                             | Separate assumptions/uncertainty design                                                   |
+| Platform page writes        | Implemented; actual installed Finance and synthetic-module proof passed      | Independent review, CI and release/deployment acceptance; Meals consumer remains separate |
 
-No manual-ledger capability is hidden behind a mocked form. Its
-[committed design](../specs/2026-10-28-finance-manual-ledger.md) is the next implementation slice.
+Manual account/entry persistence is exercised through the installed app. The remaining
+[manual-ledger design](../specs/2026-10-28-finance-manual-ledger.md) covers reconciliation,
+previewed CSV, explicit transfers and archive; none is advertised as complete.
 
-## Current verification
+## Current manual-ledger verification
+
+- **52 files / 532 focused unit tests passed** in `moss-finance-manual-assembled-unit.log`,
+  plus **4 form-state tests** in `moss-finance-manual-form-unit.log` (old host, rejected draft,
+  stable identity, uncertain save and exact successful entry).
+- **5 database tests passed** after the owner negative control was restored:
+  `moss_finance-20261028-082201.log`, base `2e3bddbd`, input `c8e8f5f08777`, rc 0. Identical
+  and distinct races, refund/debt/overflow, owner isolation, opening baseline and provider-write
+  preservation use the installed module and runtime role. Disabling account/transaction RLS
+  in the disposable test setup produced `created` instead of `unavailable` (`082118`, input
+  `6f38ed744d76`, rc 1); no disabled protection remains.
+- **7 platform files / 64 tests passed**, `082502`, base `2e3bddbd`, input `fa3b7c25e949`, rc 0.
+  Forcing the host timezone to UTC made the new authenticated-preferences test fail (`082335`,
+  input `09d60c8ded00`, rc 1); correct forwarding was restored before the green run.
+- **3 Finance install/backfill files / 11 tests passed**, `082505`, input `fa3b7c25e949`, rc 0,
+  now installing 21 additive migrations.
+- **3 installed-app tests passed**, `082503`, same input, rc 0. Real signup/approval, production
+  web build, installed worker/store and signed-in page: split save, manual account + cleared
+  entry + reload, owner isolation, and host confirmation/audit. Manual entry was inspected at
+  320/390/768/1440 in light/dark. Screenshots exposed native date-widget contrast in dark mode;
+  the shared theme now declares the browser color scheme. The cleared control uses shared Switch.
+  Final installed run **3/3 passed**: `083038`, input `ab03eaf09a9e`, rc 0, including the
+  shared Switch and corrected native date contrast. The first Switch harness attempt clicked its
+  intentionally hidden input and timed out; clicking the visible label passed. Final visual/form
+  regression rerun: **3 files / 23 tests passed**, `moss-finance-manual-visual-unit.log`.
+- First manual DB attempts correctly failed on the module installer's one-statement migration
+  contract, then a SQL bigint/numeric parameter conflict. Both were fixed before green runs.
+  The first static attempt caught a manifest over 1,000 lines. Preserving its existing compact
+  declarations fixed this without removing schema validation. **Aggregate static passed** in
+  `moss-finance-manual-static-final.log`: lint, format, file size, token/classes/catalogue, ambient
+  dates, package dependencies, migrations, all TypeScript projects and app-map generation. The
+  final browser-test selector and documentation edits were formatted after that run; the frozen
+  foundation rerun will validate their final committed form.
+
+## Earlier platform verification
 
 Node 24.19.0, pinned pnpm 10.6.2, throwaway PostgreSQL 17.11 and system Chromium. Every DB run
 used `scripts/run-gate.sh` and removed its container. Records and accounts are synthetic.
@@ -114,14 +158,18 @@ and owner isolation had already succeeded before the stale selector timed out.
 
 ## Aggregate limitations and recoverable prerequisites
 
-Historical full foundation at old pre-rebase product commit `09205a7c`:
-`moss_finance-20261028-062710.log`, input `353683ec32d5`, **rc 1**. Static passed; unit phase
-reported **1,590 files / 19,272 tests passed, 24 files / 279 tests failed, 16 skipped**. Failures
-were outside Finance: Computer ancestor ownership/IPC, missing ACL utilities/bundled browser,
-auth-session invalidation and a missing parity fixture. Later migration/UAT/full-integration
-phases did not run. There was no separate whole-baseline gate, so not every failure is proven
-pre-existing. A later old gate `064739` was deliberately stopped with rc 143 before tests to
-include the CSV fix; its container was removed. No final full-gate or CI pass is claimed.
+Latest frozen full foundation: clean committed `2e3bddbd`,
+`moss_finance_verify-20261028-075738.log`, input `8f3b7f7f4867`, **rc 1**, ended 08:15:38 UTC
+and removed its container. Static passed. Unit phase: **1,593 files / 19,314 tests passed,
+24 files / 277 tests failed, 16 skipped**. Manual-ledger work was not part of this frozen run.
+Failures are outside Finance: Computer ancestor ownership/IPC (including the auth-session
+invalidation fixture), unmappable native ACL IDs, and four bundled-browser suites. The
+container maps only UID/GID 1000, so `/` appears owned by 65534 and ACL user 100001 is invalid.
+Changing the temp directory cannot satisfy an ancestry check that reaches `/`. Guards were
+not weakened. Later foundation migration/UAT/full-integration phases did not run; the separately
+listed narrow gates did. No separate whole-baseline gate or CI was run, so this is not a claim
+that every failed assertion is independently proven pre-existing. Historical receipts remain
+in the earlier committed checkpoint. A new frozen aggregate run follows this manual slice.
 
 `getfacl` and `setfacl` have now been recovered from Debian's official signed package repository
 into task-local tooling. Playwright's official Chromium download failed with HTTP 403 Domain
@@ -135,9 +183,7 @@ full foundation must be rerun after the next substantive slice with available pr
 
 ## Next actions
 
-1. Implement the committed manual-account/entry design through the existing Finance store and
-   guarded page bridge. Preserve provider snapshots, legacy backfill, owner RLS and exact replay.
-   Resolve actual host timezone before enforcing future-entry boundaries. Add installed UI proof.
+1. Preserve the manual-account/entry checkpoint and run its final frozen aggregate checks.
 2. Add statement reconciliation and CSV preview/atomic import, then explicit transfers/archive.
 3. Define a budget currency migration before filtering historical assignments; current historical
    ready-to-assign uses today's balances. Fix ordinary assignment/category concurrency before

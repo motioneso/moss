@@ -8,7 +8,9 @@ import { safeCents } from "../domain/values.js";
 
 export interface AccountsRow {
   accountId: string;
-  itemId: string;
+  itemId: string | null;
+  source?: "manual" | "provider";
+  openingDate?: string;
   name: string;
   mask: string | null;
   type: string;
@@ -86,9 +88,11 @@ export function buildAccountsView(
 ): AccountsView {
   const byItem = new Map<string, AccountsRow[]>();
   for (const account of accounts) {
-    const list = byItem.get(account.itemId) ?? [];
+    const key =
+      account.source === "manual" ? "manual-account-group" : (account.itemId ?? "missing-item");
+    const list = byItem.get(key) ?? [];
     list.push(account);
-    byItem.set(account.itemId, list);
+    byItem.set(key, list);
   }
   const bankFor = new Map(banks.map((bank) => [bank.itemId, bank]));
   // Keep the host's bank order, then any account whose bank record is missing.
@@ -114,6 +118,17 @@ export function buildAccountsView(
         isoCurrency: account.isoCurrency
       };
     });
+    if (itemId === "manual-account-group")
+      return {
+        itemId,
+        name: "Manual accounts",
+        status: "ready",
+        statusLabel: "Recorded in Moss",
+        asOf: null,
+        message: null,
+        reconnect: false,
+        accounts: lines
+      };
     const status = bank?.status ?? "error";
     const known = bank?.institutionName?.trim();
     const name = known ? known : itemIds.length === 1 ? "Connected bank" : `Bank ${index + 1}`;

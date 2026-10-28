@@ -80,7 +80,7 @@ export function Root(props: {
       ) : path === "/transactions" ? (
         <TransactionsScreen tools={props.tools} />
       ) : path === "/accounts" ? (
-        <AccountsScreen hostActions={props.hostActions} />
+        <AccountsScreen hostActions={props.hostActions} tools={props.tools} />
       ) : path === "/reports" ? (
         <ReportsScreen />
       ) : path === "/settings" ? (

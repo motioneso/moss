@@ -98,6 +98,8 @@ export interface WorkerPorts {
   readonly actionPolicy?: {
     get(familyId: string): Promise<"ask_each_time" | "trusted_auto" | "always_confirm">;
   };
+  /** User timezone from the host tool context, never caller input. */
+  readonly localTimezone?: string;
   now(): Date;
   /**
    * FIN-06b (#1166 F6-D4): the per-owner storage selector — async, memoized

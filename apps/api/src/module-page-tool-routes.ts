@@ -11,6 +11,7 @@ import {
   type InsertAuditLogInput
 } from "@moss/ai";
 import { resolveMossEnv, type AccessContext, type DataContextRunner } from "@moss/db";
+import { readActorLocale } from "@moss/settings";
 import type { MossModuleManifest, ToolContext } from "@moss/module-sdk";
 import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import { ExternalModuleReportedError } from "./external-module-tools.js";
@@ -79,7 +80,10 @@ export function registerModulePageToolRoutes(server: FastifyInstance, deps: Depe
         } catch {
           return reply.code(400).send({ error: "Invalid input" });
         }
+        const locale = await deps.runner.withDataContext(access, readActorLocale);
         const ctx: ToolContext = {
+          locale,
+          localTimezone: locale.timezone,
           actorUserId: access.actorUserId,
           requestId: access.requestId ?? request.id,
           chatSessionId: ""
