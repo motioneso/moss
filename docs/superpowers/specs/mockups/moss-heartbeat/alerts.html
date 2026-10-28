@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title>Settings - Moss check-ins mockups</title>
+    <link href="../../../../../apps/web/src/styles/tokens.css" rel="stylesheet" />
+    <link href="../../../../../packages/ui/src/styles.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/components-forms.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/kit-chat.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/settings.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/texture.css" rel="stylesheet" />
+    <link href="mockups.css" rel="stylesheet" />
+    <script defer src="mockups.js"></script>
+  </head>
+  <body data-defaults='{"state":"default"}' class="">
+    <div class="mock-shell">
+      <aside class="mock-sidebar">
+        <div class="brand">
+          <svg
+            aria-hidden="true"
+            class=""
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.6"
+            viewBox="0 0 24 24"
+          >
+            <path d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10" /></svg
+          ><span>Moss</span>
+        </div>
+        <nav aria-label="Main">
+          <a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1Z" /></svg
+            ><span>Today</span></a
+          ><a class="mock-nav-item" href="main.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"
+              /></svg
+            ><span>Main</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <rect height="16" rx="2" width="18" x="3" y="5" />
+              <path d="M16 3v4M8 3v4M3 11h18" /></svg
+            ><span>Calendar</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="m5 12 4 4L19 6" /></svg
+            ><span>Tasks</span></a
+          ><a class="mock-nav-item" href="notifications.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+              <path d="M10 20a2 2 0 0 0 4 0" /></svg
+            ><span>Notifications</span></a
+          ><a class="mock-nav-item selected" href="alerts.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"
+              /></svg
+            ><span>Settings</span></a
+          >
+        </nav>
+        <div class="sidebar-foot"><span class="avatar">J</span><span>Jamie</span></div>
+      </aside>
+      <div class="mock-workspace">
+        <header class="mock-topbar">
+          <div class="topbar-title"><span>Settings</span></div>
+        </header>
+        <div class="mock-body">
+          <main class="settings-main">
+            <div class="set-layout">
+              <nav class="sub-nav" aria-label="Settings sections">
+                <a href="#">Profile</a><a href="#">Appearance</a
+                ><a href="#" aria-current="page">Alerts & quiet hours</a><a href="#">Connections</a
+                ><a href="#">AI</a><a href="#">Memory</a><a href="#">Modules</a>
+              </nav>
+              <div class="set-pane">
+                <div class="pane__head">
+                  <h2 class="pane__title">Alerts &amp; quiet hours</h2>
+                  <p class="pane__desc">
+                    Choose which automatic updates Moss may check, and when interruptions wait.
+                  </p>
+                </div>
+                <div class="hb-grid">
+                  <div class="hb-col">
+                    <section class="pane__card">
+                      <header class="pane__cardhead">
+                        <div class="pane__cardheadmain">
+                          <h3 class="pane__cardtitle">Moss check-ins</h3>
+                        </div>
+                        <div class="pane__cardaction">
+                          <span data-state="off legacy-off"
+                            ><span class="jds-badge jds-badge--neutral">Off</span></span
+                          ><span data-state="malformed"
+                            ><span class="jds-badge jds-badge--red">On hold</span></span
+                          >
+                        </div>
+                      </header>
+                      <div class="pane__cardbody">
+                        <div data-state="loading">
+                          <div class="skeleton" aria-busy="true" role="status">
+                            <span class="sr-only">Loading check-in settings</span>
+                            <div class="sk-row"><i></i><i></i></div>
+                            <div class="sk-row"><i></i><i></i></div>
+                            <div class="sk-row"><i></i><i></i></div>
+                            <div class="sk-row"><i></i><i></i></div>
+                          </div>
+                        </div>
+                        <div data-state="load-error">
+                          <div class="hb-note hb-note--danger" role="alert">
+                            Could not load check-in settings.
+                            <button type="button" class="jds-btn jds-btn--link">Try again</button>
+                          </div>
+                        </div>
+                        <div data-state="ai-missing">
+                          <div class="hb-note hb-note--warn" role="status">
+                            No AI model is set up, so check-ins cannot run.
+                            <button type="button" class="jds-btn jds-btn--link">
+                              Open AI settings
+                            </button>
+                          </div>
+                        </div>
+                        <div data-state="legacy-off">
+                          <div class="hb-note hb-note--info" role="status">
+                            Proactive updates were turned off earlier. Check-ins stay off until you
+                            turn them on.
+                            <button type="button" class="jds-btn jds-btn--secondary jds-btn--sm">
+                              Turn on
+                            </button>
+                          </div>
+                        </div>
+                        <div data-state="malformed">
+                          <div class="hb-note hb-note--danger" role="alert">
+                            The saved check-in choice could not be read. Check-ins are on hold and
+                            the saved choice is kept.
+                            <button type="button" class="jds-btn jds-btn--link">Try again</button>
+                          </div>
+                        </div>
+                        <div data-state="conflict">
+                          <div class="hb-note hb-note--warn" role="status">
+                            Check-in settings were changed in another window. Your edit is kept
+                            below.
+                            <button type="button" class="jds-btn jds-btn--link">
+                              Use current settings
+                            </button>
+                            <button type="button" class="jds-btn jds-btn--link">
+                              Save my edit
+                            </button>
+                          </div>
+                        </div>
+                        <div data-state="save-error">
+                          <div class="hb-note hb-note--danger" role="alert">
+                            Could not save. The settings in effect are unchanged.
+                            <button type="button" class="jds-btn jds-btn--link">Try again</button>
+                          </div>
+                        </div>
+                        <div
+                          data-state="default draft saving saved conflict save-error off legacy-off malformed ai-missing source-down"
+                        >
+                          <div class="rows">
+                            <div
+                              data-state="default draft saving saved conflict save-error ai-missing source-down"
+                            >
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Check in automatically</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Check in automatically"
+                                      checked /><span class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                            </div>
+                            <div data-state="off legacy-off malformed">
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Check in automatically</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Check in automatically" /><span
+                                      class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                            </div>
+                            <div data-state="default saved ai-missing source-down">
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Frequency</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <div class="jds-segmented" role="group" aria-label="Frequency">
+                                    <button
+                                      type="button"
+                                      class="jds-segmented__opt"
+                                      aria-pressed="false"
+                                    >
+                                      Every 30 minutes</button
+                                    ><button
+                                      type="button"
+                                      class="jds-segmented__opt"
+                                      aria-pressed="true"
+                                    >
+                                      Every hour
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div data-state="draft saving conflict save-error">
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Frequency</div>
+                                  <div class="set-row__desc">Saved choice: every hour</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <div class="jds-segmented" role="group" aria-label="Frequency">
+                                    <button
+                                      type="button"
+                                      class="jds-segmented__opt"
+                                      aria-pressed="true"
+                                    >
+                                      Every 30 minutes</button
+                                    ><button
+                                      type="button"
+                                      class="jds-segmented__opt"
+                                      aria-pressed="false"
+                                    >
+                                      Every hour
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div data-state="off legacy-off malformed">
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Frequency</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <div class="jds-segmented" role="group" aria-label="Frequency">
+                                    <button
+                                      type="button"
+                                      class="jds-segmented__opt"
+                                      aria-pressed="false"
+                                      disabled
+                                    >
+                                      Every 30 minutes</button
+                                    ><button
+                                      type="button"
+                                      class="jds-segmented__opt"
+                                      aria-pressed="true"
+                                      disabled
+                                    >
+                                      Every hour
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div
+                              data-state="default draft saving saved conflict save-error ai-missing source-down"
+                            >
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Time zone</div>
+                                  <div class="set-row__desc">
+                                    <span class="nowrap">America/Chicago</span> from your profile
+                                  </div>
+                                </div>
+                                <div class="set-row__control">
+                                  <button type="button" class="jds-btn jds-btn--link">
+                                    Change in Profile
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            <div data-state="off legacy-off malformed">
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Time zone</div>
+                                  <div class="set-row__desc">America/Chicago from your profile</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <button type="button" class="jds-btn jds-btn--link">
+                                    Change in Profile
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            class="sources"
+                            data-state="default draft saving saved conflict save-error off legacy-off malformed ai-missing source-down"
+                          >
+                            <h4 class="group-label">Sources</h4>
+                            <div
+                              data-state="default draft saving saved conflict save-error ai-missing"
+                            >
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Calendar</div>
+                                  <div class="set-row__desc">Events and appointments</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Use Calendar"
+                                      checked /><span class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Tasks</div>
+                                  <div class="set-row__desc">Open tasks and due dates</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input type="checkbox" aria-label="Use Tasks" checked /><span
+                                      class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Memory</div>
+                                  <div class="set-row__desc">
+                                    Notes, commitments and conversations
+                                  </div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input type="checkbox" aria-label="Use Memory" checked /><span
+                                      class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Sports</div>
+                                  <div class="set-row__desc">Followed teams and next fixtures</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input type="checkbox" aria-label="Use Sports" checked /><span
+                                      class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                            </div>
+                            <div data-state="source-down">
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Calendar</div>
+                                  <div class="set-row__desc">
+                                    Google Calendar was disconnected.
+                                    <button type="button" class="jds-btn jds-btn--link">
+                                      Open connections
+                                    </button>
+                                  </div>
+                                </div>
+                                <div class="set-row__control">
+                                  <span class="jds-badge jds-badge--amber">Unavailable</span
+                                  ><label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Use Calendar"
+                                      checked
+                                      disabled /><span class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Tasks</div>
+                                  <div class="set-row__desc">Open tasks and due dates</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input type="checkbox" aria-label="Use Tasks" checked /><span
+                                      class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Memory</div>
+                                  <div class="set-row__desc">
+                                    Notes, commitments and conversations
+                                  </div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input type="checkbox" aria-label="Use Memory" checked /><span
+                                      class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Sports</div>
+                                  <div class="set-row__desc">Followed teams and next fixtures</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input type="checkbox" aria-label="Use Sports" checked /><span
+                                      class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                            </div>
+                            <div data-state="off legacy-off malformed">
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Calendar</div>
+                                  <div class="set-row__desc">Events and appointments</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Use Calendar"
+                                      checked
+                                      disabled /><span class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Tasks</div>
+                                  <div class="set-row__desc">Open tasks and due dates</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Use Tasks"
+                                      checked
+                                      disabled /><span class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Memory</div>
+                                  <div class="set-row__desc">
+                                    Notes, commitments and conversations
+                                  </div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Use Memory"
+                                      checked
+                                      disabled /><span class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                              <div class="set-row">
+                                <div class="set-row__main">
+                                  <div class="set-row__name">Sports</div>
+                                  <div class="set-row__desc">Followed teams and next fixtures</div>
+                                </div>
+                                <div class="set-row__control">
+                                  <label class="jds-switch"
+                                    ><input
+                                      type="checkbox"
+                                      aria-label="Use Sports"
+                                      checked
+                                      disabled /><span class="jds-switch__track"
+                                      ><span class="jds-switch__thumb"></span></span
+                                  ></label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="savebar">
+                            <div data-state="draft conflict save-error">
+                              <button type="button" class="jds-btn jds-btn--primary jds-btn--sm">
+                                Save
+                              </button>
+                              <button type="button" class="jds-btn jds-btn--quiet jds-btn--sm">
+                                Discard
+                              </button>
+                            </div>
+                            <div data-state="saving">
+                              <button
+                                type="button"
+                                class="jds-btn jds-btn--primary jds-btn--sm"
+                                disabled
+                                aria-busy="true"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  class="spin"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="1.6"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M21 12a9 9 0 1 1-6.2-8.6" /></svg
+                                >Saving
+                              </button>
+                            </div>
+                            <div data-state="saved" class="saved-line" role="status">
+                              <svg
+                                aria-hidden="true"
+                                class=""
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.6"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="m5 12 4 4L19 6" /></svg
+                              ><span>Saved</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="pane__card">
+                      <header class="pane__cardhead">
+                        <div class="pane__cardheadmain">
+                          <h3 class="pane__cardtitle">Automatic email alerts</h3>
+                        </div>
+                      </header>
+                      <div class="pane__cardbody">
+                        <div class="set-row">
+                          <div class="set-row__main">
+                            <div class="set-row__name">Automatic email alerts</div>
+                          </div>
+                          <div class="set-row__control">
+                            <label class="jds-switch"
+                              ><input
+                                type="checkbox"
+                                aria-label="Automatic email alerts"
+                                checked /><span class="jds-switch__track"
+                                ><span class="jds-switch__thumb"></span></span
+                            ></label>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="pane__card">
+                      <header class="pane__cardhead">
+                        <div class="pane__cardheadmain">
+                          <h3 class="pane__cardtitle">Delivery</h3>
+                        </div>
+                      </header>
+                      <div class="pane__cardbody">
+                        <div class="set-row">
+                          <div class="set-row__main">
+                            <div class="set-row__name">Notifications and email digest</div>
+                          </div>
+                          <div class="set-row__control">
+                            <button type="button" class="jds-btn jds-btn--link">Manage</button>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                  <span class="hb-rule"></span>
+                  <div class="hb-col">
+                    <section class="pane__card">
+                      <header class="pane__cardhead">
+                        <div class="pane__cardheadmain">
+                          <h3 class="pane__cardtitle">Quiet hours</h3>
+                        </div>
+                      </header>
+                      <div class="pane__cardbody">
+                        <div class="quiet-times">
+                          <label class="jds-field"
+                            ><span class="jds-label">From</span
+                            ><input class="jds-input" value="10:00 PM"
+                          /></label>
+                          <label class="jds-field"
+                            ><span class="jds-label">Until</span
+                            ><input class="jds-input" value="7:00 AM"
+                          /></label>
+                        </div>
+                        <div class="quiet-actions">
+                          <button type="button" class="jds-btn jds-btn--secondary jds-btn--sm">
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="pane__card">
+                      <header class="pane__cardhead">
+                        <div class="pane__cardheadmain">
+                          <h3 class="pane__cardtitle">Allowed during quiet hours</h3>
+                        </div>
+                      </header>
+                      <div class="pane__cardbody">
+                        <div class="set-row">
+                          <div class="set-row__main">
+                            <div class="set-row__name">Requested reminders</div>
+                          </div>
+                          <div class="set-row__control">
+                            <label class="jds-switch"
+                              ><input
+                                type="checkbox"
+                                aria-label="Requested reminders"
+                                checked /><span class="jds-switch__track"
+                                ><span class="jds-switch__thumb"></span></span
+                            ></label>
+                          </div>
+                        </div>
+                        <div class="set-row">
+                          <div class="set-row__main">
+                            <div class="set-row__name">Urgent alerts</div>
+                          </div>
+                          <div class="set-row__control">
+                            <label class="jds-switch"
+                              ><input type="checkbox" aria-label="Urgent alerts" /><span
+                                class="jds-switch__track"
+                                ><span class="jds-switch__thumb"></span></span
+                            ></label>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <nav aria-label="Mockup screens" class="review-nav">
+      <a href="index.html">Mockups</a><span aria-hidden="true">/</span
+      ><a href="alerts.html" aria-current="page">01 Check-in controls</a
+      ><a href="checkins.html">02 Status and lists</a><a href="main.html">03 Main message</a
+      ><a href="notifications.html">04 Notifications</a>
+      <div class="review-theme">
+        <label class="state-pick"
+          ><span>State</span
+          ><select class="jds-select" data-group="state">
+            <option value="default">On, hourly</option>
+            <option value="draft">Edited, not saved</option>
+            <option value="saving">Saving</option>
+            <option value="saved">Saved</option>
+            <option value="conflict">Changed elsewhere</option>
+            <option value="save-error">Save failed</option>
+            <option value="off">Saved off</option>
+            <option value="legacy-off">Earlier proactive-off</option>
+            <option value="malformed">Unreadable saved choice</option>
+            <option value="ai-missing">No AI model</option>
+            <option value="source-down">Source unavailable</option>
+            <option value="loading">Loading</option>
+            <option value="load-error">Load failed</option>
+          </select></label
+        ><a
+          class="jds-btn jds-btn--quiet jds-btn--sm"
+          data-phone-link
+          href="phone.html?page=alerts.html"
+          >Phone</a
+        ><button class="jds-btn jds-btn--quiet jds-btn--sm" data-theme-toggle>Dark</button
+        ><button class="jds-btn jds-btn--quiet jds-btn--sm" data-park-toggle>Forest</button>
+      </div>
+    </nav>
+    <div aria-live="polite" class="mock-status" role="status"></div>
+  </body>
+</html>

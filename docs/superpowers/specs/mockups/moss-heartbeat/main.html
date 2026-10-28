@@ -1,0 +1,1538 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title>Main - Moss check-ins mockups</title>
+    <link href="../../../../../apps/web/src/styles/tokens.css" rel="stylesheet" />
+    <link href="../../../../../packages/ui/src/styles.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/components-forms.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/kit-chat.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/settings.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/texture.css" rel="stylesheet" />
+    <link href="mockups.css" rel="stylesheet" />
+    <script defer src="mockups.js"></script>
+  </head>
+  <body data-defaults='{"scene":"timecard","rating":"none"}' class="">
+    <div class="mock-shell">
+      <aside class="mock-sidebar">
+        <div class="brand">
+          <svg
+            aria-hidden="true"
+            class=""
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.6"
+            viewBox="0 0 24 24"
+          >
+            <path d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10" /></svg
+          ><span>Moss</span>
+        </div>
+        <nav aria-label="Main">
+          <a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1Z" /></svg
+            ><span>Today</span></a
+          ><a class="mock-nav-item selected" href="main.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"
+              /></svg
+            ><span>Main</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <rect height="16" rx="2" width="18" x="3" y="5" />
+              <path d="M16 3v4M8 3v4M3 11h18" /></svg
+            ><span>Calendar</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="m5 12 4 4L19 6" /></svg
+            ><span>Tasks</span></a
+          ><a class="mock-nav-item" href="notifications.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+              <path d="M10 20a2 2 0 0 0 4 0" /></svg
+            ><span>Notifications</span></a
+          ><a class="mock-nav-item" href="alerts.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"
+              /></svg
+            ><span>Settings</span></a
+          >
+        </nav>
+        <div class="sidebar-foot"><span class="avatar">J</span><span>Jamie</span></div>
+      </aside>
+      <div class="mock-workspace">
+        <header class="mock-topbar">
+          <div class="topbar-title"><span>Main</span></div>
+        </header>
+        <div class="mock-body">
+          <main class="main-chat">
+            <div class="thread" role="log" aria-label="Main conversation">
+              <div class="day-label">Today</div>
+              <div data-scene="timecard">
+                <div class="chatd-msg" id="m1">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <div class="msg-eyebrow">Check-in · 8:00 AM</div>
+                    <p>Did you submit your timecard? You said it is due today.</p>
+                  </div>
+                  <div class="msg-foot">
+                    <span class="time">8:00 AM</span>
+                    <div class="rate" role="group" aria-label="Rate this check-in">
+                      <span data-rating="none"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="up"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="down"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="true"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="saving"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status"
+                          ><svg
+                            aria-hidden="true"
+                            class="spin"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M21 12a9 9 0 1 1-6.2-8.6" /></svg
+                          >Saving</span
+                        ></span
+                      >
+                      <span data-rating="error"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status rate-status--error" role="alert"
+                          >Could not save your rating.
+                          <button type="button" class="jds-btn jds-btn--link">
+                            Try again
+                          </button></span
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">Yes, I sent it this morning.</div>
+                </div>
+                <div class="chatd-msg">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble"><p>Good. I will not ask again.</p></div>
+                  <div class="msg-foot"><span class="time">8:02 AM</span></div>
+                </div>
+              </div>
+              <div data-scene="cross">
+                <div class="chatd-msg" id="m2">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <div class="msg-eyebrow">Check-in · Yesterday 8:00 AM</div>
+                    <p>
+                      Harbor FC kick off Saturday at 3:00 PM. Your dinner with Sam is at 4:30 PM. I
+                      do not have the match length, so I cannot say whether they overlap.
+                    </p>
+                  </div>
+                  <div class="msg-foot"><span class="time">Yesterday</span></div>
+                </div>
+                <div class="chatd-msg" id="m3">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <div class="msg-eyebrow">Check-in · 8:00 AM</div>
+                    <p>
+                      Harbor FC play tomorrow at 7:00 AM and the match should end around 8:45 AM.
+                      You have the vet appointment for Biscuit at 10:00 AM, so there is no overlap.
+                    </p>
+                  </div>
+                  <div class="msg-foot">
+                    <span class="time">8:00 AM</span>
+                    <div class="rate" role="group" aria-label="Rate this check-in">
+                      <span data-rating="none"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="up"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="down"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="true"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="saving"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status"
+                          ><svg
+                            aria-hidden="true"
+                            class="spin"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M21 12a9 9 0 1 1-6.2-8.6" /></svg
+                          >Saving</span
+                        ></span
+                      >
+                      <span data-rating="error"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status rate-status--error" role="alert"
+                          >Could not save your rating.
+                          <button type="button" class="jds-btn jds-btn--link">
+                            Try again
+                          </button></span
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div data-scene="multi">
+                <div class="chatd-msg" id="m4">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <div class="msg-eyebrow">Check-in · 2 items · 8:00 AM</div>
+                    <ul class="items">
+                      <li><strong>Timecard.</strong> You said it is due today.</li>
+                      <li>
+                        <strong>Harbor FC.</strong> They play tomorrow at 7:00 AM and the match
+                        should end around 8:45 AM. Your vet appointment for Biscuit is at 10:00 AM,
+                        so there is no overlap.
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="msg-foot">
+                    <span class="time">8:00 AM</span>
+                    <div class="rate" role="group" aria-label="Rate this check-in">
+                      <span data-rating="none"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="up"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="down"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="true"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="saving"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status"
+                          ><svg
+                            aria-hidden="true"
+                            class="spin"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M21 12a9 9 0 1 1-6.2-8.6" /></svg
+                          >Saving</span
+                        ></span
+                      >
+                      <span data-rating="error"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status rate-status--error" role="alert"
+                          >Could not save your rating.
+                          <button type="button" class="jds-btn jds-btn--link">
+                            Try again
+                          </button></span
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div data-scene="ambiguity">
+                <div class="chatd-msg" id="m4">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <div class="msg-eyebrow">Check-in · 2 items · 8:00 AM</div>
+                    <ul class="items">
+                      <li><strong>Timecard.</strong> You said it is due today.</li>
+                      <li>
+                        <strong>Harbor FC.</strong> They play tomorrow at 7:00 AM and the match
+                        should end around 8:45 AM. Your vet appointment for Biscuit is at 10:00 AM,
+                        so there is no overlap.
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="msg-foot"><span class="time">8:00 AM</span></div>
+                </div>
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">Stop telling me about that.</div>
+                </div>
+                <div class="chatd-msg">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <p>Which one should I stop?</p>
+                    <div class="chip-row">
+                      <button class="jds-btn jds-btn--chip" type="button">Timecards</button
+                      ><button class="jds-btn jds-btn--chip" type="button">
+                        Harbor FC fixtures</button
+                      ><button class="jds-btn jds-btn--chip" type="button">Both</button>
+                    </div>
+                  </div>
+                  <div class="msg-foot"><span class="time">8:03 AM</span></div>
+                </div>
+              </div>
+              <div data-scene="stop">
+                <div class="chatd-msg" id="m1">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <div class="msg-eyebrow">Check-in · 8:00 AM</div>
+                    <p>Did you submit your timecard? You said it is due today.</p>
+                  </div>
+                  <div class="msg-foot"><span class="time">8:00 AM</span></div>
+                </div>
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">Stop telling me about timecards.</div>
+                </div>
+                <div class="chatd-msg">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <p>Done. Check-ins will not mention timecards.</p>
+                    <div class="mute-pill">
+                      <span class="jds-badge jds-badge--neutral">Muted</span><span>Timecards</span
+                      ><button type="button" class="jds-btn jds-btn--link">Undo</button>
+                    </div>
+                  </div>
+                  <div class="msg-foot"><span class="time">8:03 AM</span></div>
+                </div>
+              </div>
+              <div data-scene="concurrent">
+                <div class="chatd-msg chatd-msg--me">
+                  <div class="chatd-bubble">Move my 3 PM to Thursday.</div>
+                </div>
+                <div class="chatd-msg" aria-busy="true">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <p>Thursday at 3 PM is free. I am checking whether Sam is available</p>
+                    <span class="typing" aria-label="Moss is replying"><i></i><i></i><i></i></span>
+                  </div>
+                </div>
+                <div class="chatd-msg" id="m5">
+                  <span class="chatd-msg__av"
+                    ><span class="av-mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                        /></svg></span
+                  ></span>
+                  <div class="chatd-bubble">
+                    <div class="msg-eyebrow">Check-in · 9:00 AM</div>
+                    <p>Your parking permit renews Friday.</p>
+                  </div>
+                  <div class="msg-foot">
+                    <span class="time">9:00 AM</span>
+                    <div class="rate" role="group" aria-label="Rate this check-in">
+                      <span data-rating="none"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="up"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="down"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="false"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="true"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                      ></span>
+                      <span data-rating="saving"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                          disabled
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status"
+                          ><svg
+                            aria-hidden="true"
+                            class="spin"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M21 12a9 9 0 1 1-6.2-8.6" /></svg
+                          >Saving</span
+                        ></span
+                      >
+                      <span data-rating="error"
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Useful"
+                          title="Useful"
+                          aria-pressed="true"
+                          data-rate="up"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M7 11v9H4v-9h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 6.5a2 2 0 0 1-2 1.7H7"
+                            />
+                          </svg></button
+                        ><button
+                          type="button"
+                          class="jds-iconbtn rate-btn"
+                          aria-label="Not useful"
+                          title="Not useful"
+                          aria-pressed="false"
+                          data-rate="down"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M17 13V4h3v9h-3Zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3L4.7 6.2a2 2 0 0 1 2-1.7H17"
+                            />
+                          </svg></button
+                        ><span class="rate-status rate-status--error" role="alert"
+                          >Could not save your rating.
+                          <button type="button" class="jds-btn jds-btn--link">
+                            Try again
+                          </button></span
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div data-scene="loading">
+                <div class="skeleton skeleton--thread" aria-busy="true" role="status">
+                  <span class="sr-only">Loading messages</span>
+                  <div class="sk-bubble"><i></i><i></i></div>
+                  <div class="sk-bubble sk-bubble--me"><i></i></div>
+                  <div class="sk-bubble"><i></i><i></i><i></i></div>
+                </div>
+              </div>
+              <div data-scene="error">
+                <div class="hb-note hb-note--danger" role="alert">
+                  Could not load Main.
+                  <button type="button" class="jds-btn jds-btn--link">Try again</button>
+                </div>
+              </div>
+            </div>
+            <form class="composer" onsubmit="return false;">
+              <label class="sr-only" for="main-input">Message Moss</label>
+              <div class="composer-box">
+                <textarea
+                  class="jds-textarea chat-input"
+                  id="main-input"
+                  rows="2"
+                  placeholder="Message Moss"
+                ></textarea>
+                <button class="jds-iconbtn jds-iconbtn--primary" type="submit" aria-label="Send">
+                  <svg
+                    aria-hidden="true"
+                    class=""
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.6"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 19V5m-6 6 6-6 6 6" />
+                  </svg>
+                </button>
+              </div>
+            </form>
+          </main>
+        </div>
+      </div>
+    </div>
+    <nav aria-label="Mockup screens" class="review-nav">
+      <a href="index.html">Mockups</a><span aria-hidden="true">/</span
+      ><a href="alerts.html">01 Check-in controls</a><a href="checkins.html">02 Status and lists</a
+      ><a href="main.html" aria-current="page">03 Main message</a
+      ><a href="notifications.html">04 Notifications</a>
+      <div class="review-theme">
+        <label class="state-pick"
+          ><span>Conversation</span
+          ><select class="jds-select" data-group="scene">
+            <option value="timecard">Timecard question</option>
+            <option value="cross">Sports and calendar note</option>
+            <option value="multi">Several items</option>
+            <option value="ambiguity">Which topic to stop</option>
+            <option value="stop">Topic stopped</option>
+            <option value="concurrent">Reply in progress</option>
+            <option value="loading">Loading</option>
+            <option value="error">Load failed</option>
+          </select></label
+        ><label class="state-pick"
+          ><span>Rating</span
+          ><select class="jds-select" data-group="rating">
+            <option value="none">Not rated</option>
+            <option value="up">Thumbs up</option>
+            <option value="down">Thumbs down</option>
+            <option value="saving">Saving</option>
+            <option value="error">Save failed</option>
+          </select></label
+        ><a
+          class="jds-btn jds-btn--quiet jds-btn--sm"
+          data-phone-link
+          href="phone.html?page=main.html"
+          >Phone</a
+        ><button class="jds-btn jds-btn--quiet jds-btn--sm" data-theme-toggle>Dark</button
+        ><button class="jds-btn jds-btn--quiet jds-btn--sm" data-park-toggle>Forest</button>
+      </div>
+    </nav>
+    <div aria-live="polite" class="mock-status" role="status"></div>
+  </body>
+</html>
