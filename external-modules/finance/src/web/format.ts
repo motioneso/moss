@@ -2,7 +2,7 @@
 // FIN-02 (#1147) Task 11: pure display helpers. Amounts are stored in cents
 // with Plaid sign convention (positive = money out); formatting keeps the
 // stored sign — the feed is a ledger, not a budget view (that's FIN-03).
-import { decimalToCents } from "../domain/values";
+import { decimalToCents, safeCents } from "../domain/values";
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
 export function formatCents(amountCents: number, isoCurrency: string): string {
@@ -17,7 +17,10 @@ export function formatCents(amountCents: number, isoCurrency: string): string {
     }
     currencyFormatters.set(isoCurrency, formatter);
   }
-  return formatter.format(amountCents / 100);
+  // ECMA-402 accepts exact decimal strings. Dividing a safe integer by 100
+  // first can still lose a cent near the limit. The TS library omits strings.
+  const formatDecimal = formatter.format as (value: number | string) => string;
+  return formatDecimal(`${safeCents(amountCents)}E-2`);
 }
 
 /** "2026-07" → "July 2026" (feed month heading). */
@@ -68,7 +71,9 @@ export function parseAmountToCents(text: string): number | null {
 
 /** Integer cents → the plain "1234.56" form the assign input edits. */
 export function centsToAmountInput(cents: number): string {
-  return (cents / 100).toFixed(2);
+  const value = BigInt(safeCents(cents));
+  const absolute = value < 0n ? -value : value;
+  return `${value < 0n ? "-" : ""}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
 }
 
 /** "2026-07-15" → "Wednesday · July 15" (date group heading). */

@@ -66,11 +66,26 @@ function AccountsBody(props: { result: AccountsResult; hostActions: HostActions 
     props.hostActions.openAssistant({ starterPrompt: "Reconnect my bank account" });
   return (
     <div className="fnm-stack">
-      <Masthead
-        tone="field"
-        eyebrow="Net worth"
-        title={formatCents(view.netWorthCents, view.currency)}
-      />
+      <div className="fnm-account-totals" aria-label="Account totals by currency">
+        {view.netWorthByCurrency.map(({ currency, netWorthCents }) => (
+          <Masthead
+            key={currency}
+            tone="field"
+            eyebrow={`Net worth · ${currency}`}
+            title={netWorthCents === null ? "Unavailable" : formatCents(netWorthCents, currency)}
+          />
+        ))}
+      </div>
+      <p className="jds-caption">
+        Latest account balances, with debts subtracted. Each currency is kept separate; no
+        exchange-rate conversion is applied.
+      </p>
+      {view.netWorthByCurrency.some((total) => total.netWorthCents === null) ? (
+        <p className="jds-hint" role="status">
+          A combined balance exceeds supported precision. Its total is unavailable; individual
+          account balances remain below.
+        </p>
+      ) : null}
       {view.banks.map((bank) => {
         const status = (
           <BankStatus
@@ -103,7 +118,8 @@ function AccountsBody(props: { result: AccountsResult; hostActions: HostActions 
                   }
                   meta={
                     <div className="fnm-bal">
-                      <strong>{formatCents(account.balanceCents, view.currency)}</strong>
+                      <strong>{formatCents(account.balanceCents, account.isoCurrency)}</strong>
+                      <span className="jds-hint">{account.isoCurrency}</span>
                       {bank.asOf ? <span className="jds-hint">{`As of ${bank.asOf}`}</span> : null}
                     </div>
                   }

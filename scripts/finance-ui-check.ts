@@ -145,6 +145,23 @@ try {
       await page.getByText("$12,345.67", { exact: true }).waitFor();
       assert.equal(await page.getByText("€6,543.21", { exact: true }).count(), 0);
       evidence.push({ width, theme, reportCurrenciesSeparated: true });
+      await page.getByRole("button", { name: "Accounts", exact: true }).click();
+      const totals = page.getByLabel("Account totals by currency", { exact: true });
+      await totals.getByText("$12,345.67", { exact: true }).waitFor();
+      await totals.getByText("€6,543.21", { exact: true }).waitFor();
+      await page.getByText("-$1,234.56", { exact: true }).waitFor();
+      assert.equal(await page.getByText("$18,888.88", { exact: true }).count(), 0);
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+        false,
+        `accounts overflow at ${width}/${theme}`
+      );
+      if (artifacts)
+        await page.screenshot({
+          path: join(resolve(artifacts), `accounts-${width}-${theme}.png`),
+          fullPage: true
+        });
+      evidence.push({ width, theme, accountCurrenciesSeparated: true });
       assert.deepEqual(errors, []);
       evidence.push({
         width,
@@ -173,6 +190,23 @@ try {
     evidence.push({ fixture, visible: true });
     await page.close();
   }
+  const overflowPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await overflowPage.goto(`${base}?fixture=accounts-overflow`);
+  await overflowPage.getByRole("button", { name: "Accounts", exact: true }).click();
+  await overflowPage.getByText("Unavailable", { exact: true }).waitFor();
+  await overflowPage.getByText("$90,071,992,547,409.91", { exact: true }).waitFor();
+  assert.equal(
+    await overflowPage.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+    false,
+    "large individual balances must fit the account layout"
+  );
+  if (artifacts)
+    await overflowPage.screenshot({
+      path: join(resolve(artifacts), "accounts-overflow.png"),
+      fullPage: true
+    });
+  evidence.push({ fixture: "accounts-overflow", totalUnavailable: true, exactCentsVisible: true });
+  await overflowPage.close();
   if (artifacts)
     await writeFile(
       join(artifacts, "inspection.json"),

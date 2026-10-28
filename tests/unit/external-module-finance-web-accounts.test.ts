@@ -81,8 +81,68 @@ describe("buildAccountsView", () => {
 
   it("totals net worth as assets less debts", () => {
     const view = buildAccountsView(accounts, [healthy, expired], NOW);
-    expect(view.netWorthCents).toBe(348210 - 61244 + 921000);
-    expect(view.currency).toBe("USD");
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "USD", netWorthCents: 348210 - 61244 + 921000 }
+    ]);
+  });
+
+  it("keeps currencies separate even within one bank and retains every row's currency", () => {
+    const view = buildAccountsView(
+      [
+        row({ accountId: "usd", itemId: "i1", balanceCents: 10000 }),
+        row({ accountId: "eur", itemId: "i1", balanceCents: 2345, isoCurrency: "EUR" }),
+        row({
+          accountId: "loan",
+          itemId: "i1",
+          balanceCents: 1200,
+          isoCurrency: "EUR",
+          type: "loan"
+        })
+      ],
+      [healthy],
+      NOW
+    );
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "EUR", netWorthCents: 1145 },
+      { currency: "USD", netWorthCents: 10000 }
+    ]);
+    expect(view.banks[0]!.accounts.map((account) => account.isoCurrency)).toEqual([
+      "USD",
+      "EUR",
+      "EUR"
+    ]);
+  });
+
+  it("does not round overflowing totals or hide individual balances", () => {
+    const view = buildAccountsView(
+      [
+        row({ accountId: "large", itemId: "i1", balanceCents: Number.MAX_SAFE_INTEGER }),
+        row({ accountId: "extra", itemId: "i1", balanceCents: 1 }),
+        row({ accountId: "eur", itemId: "i1", balanceCents: 250, isoCurrency: "EUR" })
+      ],
+      [healthy],
+      NOW
+    );
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "EUR", netWorthCents: 250 },
+      { currency: "USD", netWorthCents: null }
+    ]);
+    expect(view.banks[0]!.accounts).toHaveLength(3);
+  });
+
+  it("accumulates exactly before testing whether a final total can be displayed", () => {
+    const view = buildAccountsView(
+      [
+        row({ accountId: "large", itemId: "i1", balanceCents: Number.MAX_SAFE_INTEGER }),
+        row({ accountId: "extra", itemId: "i1", balanceCents: 2 }),
+        row({ accountId: "debt", itemId: "i1", balanceCents: 3, type: "credit" })
+      ],
+      [healthy],
+      NOW
+    );
+    expect(view.netWorthByCurrency).toEqual([
+      { currency: "USD", netWorthCents: Number.MAX_SAFE_INTEGER - 1 }
+    ]);
   });
 
   it("marks a healthy bank ready with a synced-ago line", () => {
@@ -143,6 +203,6 @@ describe("buildAccountsView", () => {
   it("is empty with no accounts", () => {
     const view = buildAccountsView([], [], NOW);
     expect(view.banks).toEqual([]);
-    expect(view.netWorthCents).toBe(0);
+    expect(view.netWorthByCurrency).toEqual([]);
   });
 });

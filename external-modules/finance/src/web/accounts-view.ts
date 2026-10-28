@@ -4,6 +4,7 @@
 // as-of date and the net worth total. No React, no I/O.
 
 import { signedBalanceCents } from "../domain/account-sign.js";
+import { safeCents } from "../domain/values.js";
 
 export interface AccountsRow {
   accountId: string;
@@ -30,6 +31,7 @@ export interface AccountsLine {
   mask: string | null;
   /** Debts (credit, loan) are negative. */
   balanceCents: number;
+  isoCurrency: string;
 }
 
 export interface BankSection {
@@ -47,8 +49,8 @@ export interface BankSection {
 
 export interface AccountsView {
   banks: BankSection[];
-  netWorthCents: number;
-  currency: string;
+  /** No cross-currency total. Null means the exact sum exceeds safe display precision. */
+  netWorthByCurrency: Array<{ currency: string; netWorthCents: number | null }>;
 }
 
 const MINUTE_MS = 60_000;
@@ -95,17 +97,21 @@ export function buildAccountsView(
     ...[...byItem.keys()].filter((id) => !bankFor.has(id))
   ].filter((id) => byItem.has(id));
 
-  let netWorthCents = 0;
+  const totals = new Map<string, bigint>();
   const sections: BankSection[] = itemIds.map((itemId, index) => {
     const bank = bankFor.get(itemId);
     const lines = (byItem.get(itemId) ?? []).map((account) => {
-      const balanceCents = signedBalanceCents(account);
-      netWorthCents += balanceCents;
+      const balanceCents = safeCents(signedBalanceCents(account));
+      totals.set(
+        account.isoCurrency,
+        (totals.get(account.isoCurrency) ?? 0n) + BigInt(balanceCents)
+      );
       return {
         accountId: account.accountId,
         name: account.name,
         mask: account.mask,
-        balanceCents
+        balanceCents,
+        isoCurrency: account.isoCurrency
       };
     });
     const status = bank?.status ?? "error";
@@ -137,7 +143,11 @@ export function buildAccountsView(
 
   return {
     banks: sections,
-    netWorthCents,
-    currency: accounts[0]?.isoCurrency ?? "USD"
+    netWorthByCurrency: [...totals.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([currency, total]) => ({
+        currency,
+        netWorthCents: Number.isSafeInteger(Number(total)) ? Number(total) : null
+      }))
   };
 }

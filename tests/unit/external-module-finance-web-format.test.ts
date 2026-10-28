@@ -12,6 +12,7 @@ import {
 
 import {
   centsToAmountInput,
+  formatCents,
   parseAmountToCents
 } from "../../external-modules/finance/src/web/format.js";
 
@@ -53,11 +54,25 @@ describe("parseAmountToCents", () => {
 });
 
 describe("centsToAmountInput", () => {
+  it("retains every cent at the safe integer boundary", () => {
+    expect(centsToAmountInput(Number.MAX_SAFE_INTEGER)).toBe("90071992547409.91");
+    expect(centsToAmountInput(-Number.MAX_SAFE_INTEGER)).toBe("-90071992547409.91");
+    expect(centsToAmountInput(-1)).toBe("-0.01");
+  });
   it("round-trips with the parser", () => {
     expect(centsToAmountInput(123456)).toBe("1234.56");
     expect(centsToAmountInput(0)).toBe("0.00");
     expect(centsToAmountInput(-2000)).toBe("-20.00");
     expect(parseAmountToCents(centsToAmountInput(37655))).toBe(37655);
+  });
+});
+
+describe("formatCents", () => {
+  it("formats the exact decimal without dividing cents through a float", () => {
+    expect(formatCents(Number.MAX_SAFE_INTEGER, "USD")).toBe("$90,071,992,547,409.91");
+    expect(formatCents(-Number.MAX_SAFE_INTEGER, "EUR")).toBe("-€90,071,992,547,409.91");
+    expect(formatCents(-1, "USD")).toBe("-$0.01");
+    expect(formatCents(0, "USD")).toBe("$0.00");
   });
 });
 

@@ -70,7 +70,7 @@
       {
         "id": "finance.accounts",
         "label": "Accounts",
-        "description": "Connected banks listed by their real names (filled in on the next sync), balances, sync status, reconnect, and net worth.",
+        "description": "Connected banks listed by their real names (filled in on the next sync), balances, sync status and reconnect. Latest balance totals keep currencies separate and subtract debts, with no FX conversion. Each account retains its own currency. A total outside safe precision is unavailable while individual balances remain visible.",
         "path": "/accounts"
       },
       {

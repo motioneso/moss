@@ -7,6 +7,7 @@ Object.assign(globalThis, {
   __JARVIS_MODULE_RUNTIME__: { contractVersion: 2, react: React, reactDomClient: ReactDom }
 });
 const date = new Date();
+const fixture = new URL(location.href).searchParams.get("fixture");
 const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const categories = [
   { id: "groceries", name: "Groceries" },
@@ -14,9 +15,28 @@ const categories = [
   { id: "income", name: "Income" }
 ];
 const accounts = [
-  { accountId: "checking", name: "Everyday checking" },
-  { accountId: "card", name: "Household card" }
-];
+  {
+    accountId: "checking",
+    name: "Everyday checking",
+    type: "depository",
+    balanceCents: 1358023,
+    isoCurrency: "USD"
+  },
+  {
+    accountId: "card",
+    name: "Household card",
+    type: "credit",
+    balanceCents: 123456,
+    isoCurrency: "USD"
+  },
+  {
+    accountId: "euro",
+    name: "Travel reserve",
+    type: "depository",
+    balanceCents: 654321,
+    isoCurrency: "EUR"
+  }
+].map((account) => ({ ...account, itemId: "synthetic-bank", mask: null }));
 const rows = [
   {
     id: "market",
@@ -89,11 +109,35 @@ window.fetch = async (input, init) => {
     }
     return Response.json({ jobId: "synthetic-job" }, { status: 202 });
   }
-  const fixture = new URL(location.href).searchParams.get("fixture");
   if (fixture === "error") return Response.json({}, { status: 503 });
   if (fixture === "loading") await new Promise((resolve) => setTimeout(resolve, 60_000));
   const p = body.input ?? {};
   if (url.includes("/users/directory")) return Response.json({ users: [] });
+  if (url.includes("finance.accounts.list"))
+    return Response.json({
+      invocation: {
+        status: "succeeded",
+        result: {
+          accounts:
+            fixture === "accounts-overflow"
+              ? [
+                  { ...accounts[0], balanceCents: Number.MAX_SAFE_INTEGER },
+                  { ...accounts[1], type: "depository", balanceCents: 1 }
+                ]
+              : accounts,
+          banks: [
+            {
+              itemId: "synthetic-bank",
+              institutionId: "synthetic",
+              institutionName: "Moss sample bank",
+              status: "connected",
+              lastSyncAt: date.toISOString(),
+              message: null
+            }
+          ]
+        }
+      }
+    });
   if (url.includes("finance.reports.")) {
     const currency = typeof p.currency === "string" ? p.currency : null;
     const scope = {

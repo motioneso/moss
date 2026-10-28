@@ -40,6 +40,63 @@ afterEach(() => {
 });
 
 describe("Accounts screen (#3177)", () => {
+  it("labels individual currencies and separates own totals while excluding shared balances", async () => {
+    const base = { itemId: "i1", type: "depository", mask: null };
+    stubAccountsRead({
+      accounts: [
+        { ...base, accountId: "usd", name: "Checking", balanceCents: 10000, isoCurrency: "USD" },
+        { ...base, accountId: "eur", name: "Travel", balanceCents: 2345, isoCurrency: "EUR" },
+        {
+          ...base,
+          accountId: "loan",
+          name: "Loan",
+          type: "loan",
+          balanceCents: 1200,
+          isoCurrency: "EUR"
+        },
+        {
+          ...base,
+          accountId: "shared",
+          name: "Shared",
+          balanceCents: 99999,
+          isoCurrency: "EUR",
+          shared: true
+        }
+      ]
+    });
+    const { renderer } = await render();
+    const text = textOf(renderer);
+    expect(text).toContain("Net worth · EUR");
+    expect(text).toContain("Net worth · USD");
+    expect(text).toContain("€11.45");
+    expect(text).toContain("€23.45");
+    expect(text).toContain("-€12.00");
+    expect(text).toContain("$100.00");
+    expect(text).not.toContain("$111.45");
+    expect(text).not.toContain("999.99");
+    expect(text).toContain("no exchange-rate conversion");
+  });
+
+  it("explains an unavailable total without dropping account rows", async () => {
+    const base = { itemId: "i1", type: "depository", isoCurrency: "USD", mask: null };
+    stubAccountsRead({
+      accounts: [
+        {
+          ...base,
+          accountId: "large",
+          name: "Large synthetic account",
+          balanceCents: Number.MAX_SAFE_INTEGER
+        },
+        { ...base, accountId: "extra", name: "Extra synthetic account", balanceCents: 1 }
+      ]
+    });
+    const { renderer } = await render();
+    expect(textOf(renderer)).toContain("Unavailable");
+    expect(textOf(renderer)).toContain("A combined balance exceeds supported precision");
+    expect(textOf(renderer)).toContain("Large synthetic account");
+    expect(textOf(renderer)).toContain("Extra synthetic account");
+  });
+
   it("shows an expired bank with its stored message, as-of date and a working Reconnect", async () => {
     stubAccountsRead({
       accounts: [
