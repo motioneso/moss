@@ -23,13 +23,26 @@ function harness(rejectClaim = false) {
     object_name: null as string | null,
     row_version: "510",
     subject_version: "509",
-    object_version: null as string | null
+    object_version: null as string | null,
+    conflict_group_id: null,
+    recording_side: null,
+    version_revision: null
   };
   const rows = [row];
   const db = makeRecordingDb({
     rows,
     beforeQuery: async (statement) => {
-      if (rejectClaim && statement.includes("DELETE FROM app.memory_facts")) rows.splice(0);
+      // This fixture is a legacy fact: lineage lookups have no receipt/version rows.
+      const lineageLookup =
+        statement.includes("FROM app.memory_recording_receipts") ||
+        statement.includes("FROM app.memory_recording_fact_versions");
+      rows.splice(
+        0,
+        rows.length,
+        ...(lineageLookup || (rejectClaim && statement.includes("DELETE FROM app.memory_facts"))
+          ? []
+          : [row])
+      );
     }
   });
   databases.push(db.scoped);
@@ -74,27 +87,43 @@ describe("memory forget target version and conditional deletion", () => {
     const target = await h.service.target(h.scoped, OWNER, FACT);
     h.queries.splice(0);
     expect(await h.service.forgetApproved(h.scoped, OWNER, FACT, target!.version)).toBe(true);
-    expect(h.queries).toHaveLength(6);
-    expect(h.queries[1]?.sql.replace(/\s+/g, " ").trim()).toBe(
+    const entityLock = h.queries.findIndex((query) =>
+      query.sql.includes("SELECT id FROM app.memory_entities")
+    );
+    const deletion = h.queries.findIndex((query) =>
+      query.sql.includes("DELETE FROM app.memory_facts")
+    );
+    const searchLock = h.queries.findIndex((query) =>
+      query.sql.includes("SELECT id FROM app.memory_search_documents")
+    );
+    const deactivation = h.queries.findIndex((query) =>
+      query.sql.includes("UPDATE app.memory_search_documents")
+    );
+    expect(entityLock).toBeGreaterThanOrEqual(0);
+    expect(deletion).toBeGreaterThan(entityLock);
+    expect(searchLock).toBeGreaterThan(deletion);
+    expect(deactivation).toBeGreaterThan(searchLock);
+    expect(h.queries[entityLock]?.sql.replace(/\s+/g, " ").trim()).toBe(
       "SELECT id FROM app.memory_entities WHERE owner_user_id = $1::uuid AND id = ANY($2::uuid[]) ORDER BY id FOR SHARE"
     );
-    expect(h.queries[1]?.parameters).toEqual([OWNER, [SUBJECT]]);
-    expect(h.queries[3]?.sql.replace(/\s+/g, " ").trim()).toBe(
+    expect(h.queries[entityLock]?.parameters).toEqual([OWNER, [SUBJECT]]);
+    expect(h.queries[deletion]?.sql.replace(/\s+/g, " ").trim()).toBe(
       "DELETE FROM app.memory_facts WHERE owner_user_id = $1::uuid AND id = $2::uuid AND xmin::text = $3 RETURNING id, conflict_group_id"
     );
-    expect(h.queries[3]?.parameters).toEqual([OWNER, FACT, "510"]);
-    expect(h.queries[4]?.sql.replace(/\s+/g, " ").trim()).toBe(
+    expect(h.queries[deletion]?.parameters).toEqual([OWNER, FACT, "510"]);
+    expect(h.queries[searchLock]?.sql.replace(/\s+/g, " ").trim()).toBe(
       "SELECT id FROM app.memory_search_documents WHERE owner_user_id = $1::uuid AND target_kind = 'fact' AND target_id = $2::uuid FOR UPDATE NOWAIT"
     );
-    expect(h.queries[4]?.parameters).toEqual([OWNER, FACT]);
-    expect(h.queries[5]?.sql).toContain("UPDATE app.memory_search_documents");
+    expect(h.queries[searchLock]?.parameters).toEqual([OWNER, FACT]);
   });
 
   it("leaves search active when the conditional version claim loses a race", async () => {
     const h = harness(true);
     const target = await h.service.target(h.scoped, OWNER, FACT);
     expect(await h.service.forgetApproved(h.scoped, OWNER, FACT, target!.version)).toBe(false);
-    expect(h.queries.at(-1)?.sql).toContain("AND xmin::text =");
+    expect(
+      h.queries.find((query) => query.sql.includes("DELETE FROM app.memory_facts"))?.sql
+    ).toContain("AND xmin::text =");
     expect(
       h.queries.some((query) => query.sql.includes("UPDATE app.memory_search_documents"))
     ).toBe(false);
