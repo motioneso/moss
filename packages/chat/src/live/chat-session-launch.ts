@@ -304,12 +304,10 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   // #342 — only in-process engines need manager-owned replay submit + drain.
   if (replayBatch !== undefined && !serverOwnsDrain) {
     try {
+      const submitReplay = () => engine.submit(replayBatch);
       await (chatAttemptObservationEnabled()
-        ? observeChatAttempt("replay.submit", () => engine.submit(replayBatch), {
-            actorUserId,
-            surface
-          })
-        : engine.submit(replayBatch));
+        ? observeChatAttempt("replay.submit", submitReplay, { actorUserId, surface })
+        : submitReplay());
       // Drain so real turn records start from a clean offset. The replies still count.
       session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs, (r) =>
         noteSessionOutput(session.usage, r)

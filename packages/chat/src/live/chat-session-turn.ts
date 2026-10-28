@@ -388,14 +388,15 @@ async function runAcceptedChatTurn(
       if (context) engineText = { ...engineText, text: `${engineText.text}\n\n${context}` };
     }
     try {
+      const submitTurn = () => submitPreparedTurn(session.engine, engineText);
       await (chatAttemptObservationEnabled()
         ? observeChatAttempt(
             "submit.initial",
-            () => submitPreparedTurn(session.engine, engineText),
+            submitTurn,
             { actorUserId, surface },
             controller.signal
           )
-        : submitPreparedTurn(session.engine, engineText));
+        : submitTurn());
       noteSessionSubmission(session.usage, engineText.text, "turn");
     } catch (err) {
       // #2934 finding 1 — a stop around a failed submit refuses instead of resubmitting.
@@ -436,14 +437,15 @@ async function runAcceptedChatTurn(
         toolsListBaseline = session.mcpToken // #2164 r21 — recapture against the fresh token
           ? host.deps.getToolsListObservationCount?.(session.mcpToken)
           : undefined;
+        const submitTurn = () => submitPreparedTurn(session.engine, engineText);
         await (chatAttemptObservationEnabled()
           ? observeChatAttempt(
               "submit.retry",
-              () => submitPreparedTurn(session.engine, engineText),
+              submitTurn,
               { actorUserId, surface },
               controller.signal
             )
-          : submitPreparedTurn(session.engine, engineText));
+          : submitTurn());
         noteSessionSubmission(session.usage, engineText.text, "turn");
       } else {
         throw err;
