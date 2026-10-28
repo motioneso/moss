@@ -2,6 +2,7 @@
 // FIN-02 (#1147) Task 11: pure display helpers. Amounts are stored in cents
 // with Plaid sign convention (positive = money out); formatting keeps the
 // stored sign — the feed is a ledger, not a budget view (that's FIN-03).
+import { decimalToCents } from "../domain/values";
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
 export function formatCents(amountCents: number, isoCurrency: string): string {
@@ -57,9 +58,12 @@ const MAX_ASSIGN_CENTS = 100_000_000;
 export function parseAmountToCents(text: string): number | null {
   const cleaned = text.trim().replace(/[$,\s]/g, "");
   if (!/^-?(\d+(\.\d{0,2})?|\.\d{1,2})$/.test(cleaned)) return null;
-  const cents = Math.round(Number(cleaned) * 100);
-  if (!Number.isInteger(cents) || Math.abs(cents) > MAX_ASSIGN_CENTS) return null;
-  return cents;
+  try {
+    const cents = decimalToCents(cleaned);
+    return Math.abs(cents) > MAX_ASSIGN_CENTS ? null : cents;
+  } catch {
+    return null;
+  }
 }
 
 /** Integer cents → the plain "1234.56" form the assign input edits. */

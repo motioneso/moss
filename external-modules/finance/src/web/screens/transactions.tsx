@@ -25,6 +25,10 @@ import { chunkReviewRows } from "../assign";
 import { currentMonth, dayLabel, formatCents, monthLabel, shiftMonth } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
+import { downloadTransactionsCsv, transactionsCsv } from "../register";
+import { EMPTY_FILTERS, filterInput, RegisterFilterBar } from "../register-filters";
+import { SplitEditor, type SplitTransaction } from "../split-editor";
+import { splitsBalance } from "../../domain/splits";
 
 interface TxCategory {
   id: string;
@@ -38,7 +42,7 @@ interface TxAccount {
   mask?: string | null;
 }
 
-interface Tx {
+interface Tx extends SplitTransaction {
   id: string;
   accountId: string;
   date: string;
@@ -48,6 +52,8 @@ interface Tx {
   categoryId: string | null;
   reviewState?: "confirmed" | "needs_look";
   shared?: boolean;
+  pending?: boolean;
+  possibleDuplicate?: boolean;
 }
 
 interface TxResult extends Record<string, unknown> {
@@ -57,6 +63,7 @@ interface TxResult extends Record<string, unknown> {
   accounts?: TxAccount[];
   needsLookCount?: number;
   totalCount?: number;
+  supportsSplits?: boolean;
 }
 
 type Filter = "all" | "look";
@@ -66,7 +73,9 @@ const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 200;
 const MAX_PAGES = 10;
 
-const isLook = (tx: Tx): boolean => tx.shared !== true && tx.reviewState === "needs_look";
+const isLook = (tx: Tx): boolean =>
+  tx.shared !== true &&
+  (tx.reviewState === "needs_look" || Boolean(tx.splits?.length && !splitsBalance(tx)));
 
 /** True when the job was queued; false when the request failed and nothing will happen. */
 function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => void): boolean {
@@ -93,6 +102,19 @@ function Amount(props: { tx: Tx }): ReactNodeLike {
   // Money in is stored negative.
   if (tx.amountCents < 0) return <strong>+{formatCents(-tx.amountCents, tx.isoCurrency)}</strong>;
   return <span>{formatCents(tx.amountCents, tx.isoCurrency)}</span>;
+}
+
+function TransactionStatus(props: { tx: Tx }): ReactNodeLike {
+  return (
+    <div className="fnm-chips">
+      {props.tx.pending ? <Badge tone="steel">Pending</Badge> : null}
+      {props.tx.shared ? <Badge tone="steel">Household · read only</Badge> : null}
+      {props.tx.possibleDuplicate ? <Badge tone="amber">Possible duplicate</Badge> : null}
+      {props.tx.splits?.length && !splitsBalance(props.tx) ? (
+        <Badge tone="amber">Check split total</Badge>
+      ) : null}
+    </div>
+  );
 }
 
 // The category picker, Confirm button and merchant switch for one Needs a look row.
@@ -195,6 +217,55 @@ interface RowContext {
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
+  onSplit: (tx: Tx) => void;
+  supportsSplits: boolean;
+}
+
+function CategoryControls({
+  tx,
+  ctx,
+  look
+}: {
+  tx: Tx;
+  ctx: RowContext;
+  look: boolean;
+}): ReactNodeLike {
+  return (
+    <div className="fnm-category-controls">
+      {tx.splits?.length ? (
+        <span>
+          {tx.splits.length} categories ·{" "}
+          {tx.splits
+            .map(
+              (part) =>
+                ctx.categories.find((c) => c.id === part.categoryId)?.name ?? "Archived category"
+            )
+            .join(", ")}
+        </span>
+      ) : tx.shared ? (
+        ctx.categoryName(tx)
+      ) : look ? (
+        <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
+      ) : (
+        <ChangeCategory
+          key={`${tx.id}:${tx.categoryId}`}
+          tx={tx}
+          categories={ctx.categories}
+          onChange={ctx.onChange}
+        />
+      )}
+      {ctx.supportsSplits && !tx.shared && !tx.pending ? (
+        <Button
+          variant="link"
+          size="sm"
+          aria-label={`${tx.splits?.length ? "Edit split for" : "Split"} ${tx.name}`}
+          onClick={() => ctx.onSplit(tx)}
+        >
+          {tx.splits?.length ? "Edit split" : "Split"}
+        </Button>
+      ) : null}
+    </div>
+  );
 }
 
 function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): ReactNodeLike {
@@ -227,7 +298,8 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
                 <td>
                   <div className="fnm-block fnm-block--tight">
                     <span>{tx.name}</span>
-                    {look ? (
+                    <TransactionStatus tx={tx} />
+                    {look && !tx.splits?.length ? (
                       <div>
                         <Badge tone="amber">Predicted</Badge>
                       </div>
@@ -235,18 +307,7 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
                   </div>
                 </td>
                 <td>
-                  {look ? (
-                    <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
-                  ) : tx.shared === true ? (
-                    ctx.categoryName(tx)
-                  ) : (
-                    <ChangeCategory
-                      key={`${tx.id}:${tx.categoryId}`}
-                      tx={tx}
-                      categories={ctx.categories}
-                      onChange={ctx.onChange}
-                    />
-                  )}
+                  <CategoryControls tx={tx} ctx={ctx} look={look} />
                 </td>
                 <td>{ctx.accountName(tx)}</td>
                 <td className="jds-table__num">
@@ -272,31 +333,20 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
           return (
             <RowIndexItem
               key={tx.id}
-              title={tx.name}
-              excerpt={
-                look ? (
-                  <div className="fnm-block fnm-block--tight">
-                    <div className="fnm-spread">
-                      <Badge tone="amber">Predicted</Badge>
-                      <Amount tx={tx} />
-                    </div>
-                    <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
-                  </div>
-                ) : tx.shared === true ? (
-                  `${ctx.categoryName(tx)} · ${ctx.accountName(tx)}`
-                ) : (
-                  <div className="fnm-block fnm-block--tight">
-                    <ChangeCategory
-                      key={`${tx.id}:${tx.categoryId}`}
-                      tx={tx}
-                      categories={ctx.categories}
-                      onChange={ctx.onChange}
-                    />
-                    <span>{ctx.accountName(tx)}</span>
-                  </div>
-                )
+              title={
+                <span className="fnm-block fnm-block--tight">
+                  {tx.name}
+                  <TransactionStatus tx={tx} />
+                </span>
               }
-              meta={look ? null : <Amount tx={tx} />}
+              excerpt={
+                <div className="fnm-block fnm-block--tight">
+                  {look && !tx.splits?.length ? <Badge tone="amber">Predicted</Badge> : null}
+                  <CategoryControls tx={tx} ctx={ctx} look={look} />
+                  <span>{ctx.accountName(tx)}</span>
+                </div>
+              }
+              meta={<Amount tx={tx} />}
             />
           );
         })}
@@ -312,6 +362,7 @@ function TransactionsBody(props: {
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
   onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
+  onSplit: (tx: Tx) => void;
 }): ReactNodeLike {
   const { result, filter, confirmed } = props;
   const accounts = result.accounts ?? [];
@@ -327,7 +378,9 @@ function TransactionsBody(props: {
     accountName: (tx) => accounts.find((account) => account.accountId === tx.accountId)?.name ?? "",
     confirmed,
     onConfirm: props.onConfirm,
-    onChange: props.onChange
+    onChange: props.onChange,
+    onSplit: props.onSplit,
+    supportsSplits: result.supportsSplits === true
   };
   if (rows.length === 0) {
     if (filter === "look") {
@@ -362,12 +415,18 @@ export function TransactionsScreen(): ReactNodeLike {
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [editing, setEditing] = useState<Tx | null>(null);
+  const [filterOptions, setFilterOptions] = useState<{
+    accounts: TxAccount[];
+    categories: TxCategory[];
+  }>({ accounts: [], categories: [] });
   // Rows confirmed here, hidden from Needs a look until the refetch catches up.
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
   // How many pages of PAGE_SIZE rows to load; Show more adds one.
   const [pages, setPages] = useState(1);
 
-  useEffect(() => setPages(1), [month, filter, search]);
+  useEffect(() => setPages(1), [month, filter, search, filters]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(draft.trim()), SEARCH_DELAY_MS);
@@ -377,11 +436,16 @@ export function TransactionsScreen(): ReactNodeLike {
   const query = useToolQuery<TxResult>("finance.transactions.query", {
     month,
     limit: PAGE_SIZE * pages,
+    ...filterInput(filters),
     ...(search ? { search } : {}),
     ...(filter === "look" ? { needsLookOnly: true } : {})
   });
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
+  useEffect(() => {
+    if (result)
+      setFilterOptions({ accounts: result.accounts ?? [], categories: result.categories ?? [] });
+  }, [result]);
 
   // Ids whose server answer should replace the optimistic mark once the next read lands.
   const releaseOnRead = useRef<string[]>([]);
@@ -446,7 +510,7 @@ export function TransactionsScreen(): ReactNodeLike {
 
   // Exactly the Needs a look rows on screen: the filter, the search and the month decide them.
   const visibleLook = (result?.transactions ?? []).filter(
-    (tx) => isLook(tx) && tx.categoryId !== null && !confirmed.has(tx.id)
+    (tx) => isLook(tx) && tx.categoryId !== null && !tx.splits?.length && !confirmed.has(tx.id)
   );
   const confirmAll = (): void => {
     void send(
@@ -466,7 +530,7 @@ export function TransactionsScreen(): ReactNodeLike {
   return (
     <section aria-label="Transactions" className="fnm-block">
       <div className="fnm-spread">
-        <div className="fnm-inline">
+        <div className="fnm-chips">
           <Segmented
             ariaLabel="Filter transactions"
             value={filter}
@@ -482,7 +546,7 @@ export function TransactionsScreen(): ReactNodeLike {
             </Button>
           ) : null}
         </div>
-        <div className="fnm-inline">
+        <div className="fnm-chips">
           <Button
             variant="field"
             size="sm"
@@ -502,23 +566,67 @@ export function TransactionsScreen(): ReactNodeLike {
           </Button>
           <input
             className="jds-input fnm-search"
-            placeholder="Search payees"
-            aria-label="Search payees"
+            placeholder="Search payees or notes"
+            aria-label="Search payees or notes"
             value={draft}
             onChange={(event: { target: { value: string } }) => setDraft(event.target.value)}
           />
         </div>
       </div>
+      <RegisterFilterBar
+        value={filters}
+        onChange={setFilters}
+        accounts={filterOptions.accounts}
+        categories={filterOptions.categories}
+      />
+      {filters.attention === "duplicates" ? (
+        <p role="status">
+          These entries share an account, date, amount, currency and payee. They may be separate
+          purchases. Nothing has been removed.
+        </p>
+      ) : null}
+      {result ? (
+        <div className="fnm-spread">
+          <span role="status">
+            {result.transactions?.length ?? 0} of{" "}
+            {result.totalCount ?? result.transactions?.length ?? 0} matching transactions loaded ·{" "}
+            {monthLabel(month)}
+          </span>
+          <Button
+            variant="secondary"
+            disabled={!result.transactions?.length}
+            onClick={() => {
+              downloadTransactionsCsv(
+                transactionsCsv(
+                  result.transactions ?? [],
+                  (tx) =>
+                    result.accounts?.find((a) => a.accountId === tx.accountId)?.name ??
+                    tx.accountId,
+                  (tx) =>
+                    result.categories?.find((c) => c.id === tx.categoryId)?.name ?? "Uncategorized"
+                ),
+                month
+              );
+              announce(
+                "Exported loaded transactions. The file includes only the rows loaded in this view."
+              );
+            }}
+          >
+            Export loaded rows
+          </Button>
+        </div>
+      ) : null}
       {outcomeGate(
         query,
         (data) => (
           <TransactionsBody
             result={data}
             filter={filter}
-            searching={search !== ""}
+            searching={search !== "" || Object.values(filters).some(Boolean)}
             confirmed={confirmed}
             onConfirm={confirmOne}
             onChange={changeOne}
+            onSplit={setEditing}
           />
         ),
         { loadingLabel: "Loading transactions" }
@@ -531,6 +639,26 @@ export function TransactionsScreen(): ReactNodeLike {
             Show more
           </Button>
         </div>
+      ) : null}
+      {result &&
+      pages >= MAX_PAGES &&
+      (result.totalCount ?? 0) > (result.transactions?.length ?? 0) ? (
+        <p role="status">
+          This view shows at most 2,000 rows. Narrow the filters to see and export the remaining
+          transactions.
+        </p>
+      ) : null}
+      {editing ? (
+        <SplitEditor
+          transaction={editing}
+          categories={filterOptions.categories}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            invalidateQueries();
+            announce("Split saved.");
+          }}
+        />
       ) : null}
     </section>
   );

@@ -98,6 +98,20 @@ afterEach(() => {
 });
 
 describe("Transactions screen (#3176)", () => {
+  it("sends the labeled register filters to the server and exposes loaded export scope", async () => {
+    fakeFetch({ ...base, transactions: rows, totalCount: 450 });
+    const renderer = await render();
+    const picker = renderer.root.findAll(
+      (node) => node.type === "select" && node.props["aria-label"] === "Filter by posting status"
+    )[0]!;
+    await act(async () => picker.props.onChange({ target: { value: "posted" } }));
+    expect(
+      calls.filter((call) => call.body.input?.postingState === "posted").length
+    ).toBeGreaterThan(0);
+    expect(text(renderer)).toContain("3 of 450 matching transactions loaded");
+    expect(text(renderer)).toContain("Export loaded rows");
+    expect(text(renderer)).toContain("Clear filters");
+  });
   it("groups by day, flags guesses as Predicted and shows the count and Confirm all", async () => {
     fakeFetch({ ...base, transactions: rows, needsLookCount: 2 });
     const out = text(await render());

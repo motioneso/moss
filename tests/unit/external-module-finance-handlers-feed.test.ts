@@ -199,6 +199,44 @@ function ids(result: Record<string, unknown>): string[] {
 }
 
 describe("finance feed handlers (#1147)", () => {
+  it("combines posting, direction, duplicate and category filters before limiting", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        txRecord({ id: "dup-a", categoryId: "groceries" }),
+        txRecord({ id: "dup-b", categoryId: "groceries" }),
+        txRecord({
+          id: "refund",
+          amountCents: -1200,
+          pending: true,
+          notes: "Synthetic reimbursement"
+        })
+      ]
+    });
+    const handler = transactionsQueryHandler(fakePorts(kv, readOnlyMirror()));
+    const result = await handler({
+      actorUserId: ACTOR,
+      accountId: "acc-1",
+      categoryId: "groceries",
+      postingState: "posted",
+      direction: "outflow",
+      duplicatesOnly: true,
+      limit: 1
+    });
+    expect(ids(result)).toEqual(["dup-a"]);
+    expect(result.totalCount).toBe(2);
+    expect(
+      ids(
+        await handler({
+          actorUserId: ACTOR,
+          postingState: "pending",
+          direction: "inflow",
+          search: "reimbursement"
+        })
+      )
+    ).toEqual(["refund"]);
+  });
   it("query defaults to the current month and returns the feed in one call", async () => {
     const kv = fakeKv();
     await seedFeed(kv);
@@ -256,7 +294,7 @@ describe("finance feed handlers (#1147)", () => {
     await expect(handler({ limit: 2001 })).rejects.toThrow("at most 2000");
     // The total lets the screen offer Show more (review A11).
     expect((await handler({ limit: 10 })).totalCount).toBe(60);
-    await expect(handler({ month: "July 2026" })).rejects.toThrow("month must be YYYY-MM");
+    await expect(handler({ month: "July 2026" })).rejects.toThrow("month must be a valid YYYY-MM");
   });
 
   it("categorize-new sets user provenance, confirms the row, and persists notes", async () => {

@@ -20,6 +20,7 @@
 
 import {
   deriveBudgetMonths,
+  isCalendarMonth,
   effectiveTransferIds,
   type BudgetLedger,
   type BudgetMonthState,
@@ -34,7 +35,6 @@ import type { WorkerPorts } from "../ports.js";
 import { InputError, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
 
-const MONTH = /^[0-9]{4}-[0-9]{2}$/;
 // Mirrors the manifest bound on finance.budget-apply's amountCents param —
 // ±$1M in cents. The manifest gate runs host-side; this re-check covers the
 // tool path, which never crosses the queue params schema.
@@ -45,7 +45,7 @@ export const MAX_BATCH = 20;
 
 function readMonth(input: Record<string, unknown>): string {
   const month = readString(input, "month", { required: true });
-  if (!MONTH.test(month)) {
+  if (!isCalendarMonth(month)) {
     throw new InputError("month must be YYYY-MM");
   }
   return month;
@@ -343,7 +343,7 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
     if (ids.length === 0 || ids.length !== amounts.length || ids.length > MAX_BATCH) {
       throw new InputError("categoryIds and amountsCents must be equal-length, 1 to 20 items");
     }
-    const results: Record<string, unknown>[] = [];
+    const assignments: { categoryId: string; amountCents: number }[] = [];
     for (let i = 0; i < ids.length; i += 1) {
       const amountCents = amounts[i];
       if (
@@ -354,16 +354,28 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
       ) {
         throw new InputError("each batch item needs a category id and an integer amount");
       }
-      results.push(
-        await applyAssignment(
-          ports,
-          { month, categoryId: ids[i] as string, amountCents },
-          "user",
-          liveIds
-        )
-      );
+      const categoryId = ids[i] as string;
+      if (!liveIds.has(categoryId))
+        throw new InputError("invalid_category", "categoryId is not a live category");
+      if (assignments.some((a) => a.categoryId === categoryId))
+        throw new InputError("categoryIds must be unique");
+      assignments.push({ categoryId, amountCents });
     }
-    return { status: "ok", applied: results.length };
+    const store = await ports.store();
+    const before = (await store.getLedger(month))?.assignments ?? {};
+    await store.commitBudgetChange({
+      month,
+      assignments,
+      activity: assignments
+        .filter((a) => (before[a.categoryId] ?? 0) !== a.amountCents)
+        .map((a) => ({
+          actor: "user",
+          kind: "budget.assign",
+          params: { month, ...a, previousCents: before[a.categoryId] ?? 0 },
+          undo: { month, categoryId: a.categoryId, amountCents: before[a.categoryId] ?? 0 }
+        }))
+    });
+    return { status: "ok", applied: assignments.length };
   }
 
   const categoryId = readString(command, "categoryId", { required: true });

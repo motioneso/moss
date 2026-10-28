@@ -64,7 +64,15 @@ export function toSharedTransaction(transaction: TransactionRecord): Transaction
     categoryId: transaction.categoryId,
     pending: transaction.pending,
     pendingTransactionId: transaction.pendingTransactionId,
-    categorizedBy: transaction.categorizedBy
+    categorizedBy: transaction.categorizedBy,
+    ...(transaction.splits?.length
+      ? {
+          splits: transaction.splits.map((split) => ({
+            categoryId: split.categoryId,
+            amountCents: split.amountCents
+          }))
+        }
+      : {})
   };
 }
 

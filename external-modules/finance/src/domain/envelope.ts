@@ -6,6 +6,7 @@
 // Spending-positive integer cents throughout (FIN-01 record convention).
 
 import type { TransactionRecord } from "./records.js";
+import { allocations } from "./splits.js";
 
 /** `ledger:{YYYY-MM}` value — the assignment SOURCE OF TRUTH. Values are
  *  set totals per category+month (assign sets, never increments), which is
@@ -74,7 +75,7 @@ export function deriveBudgetMonths(
     const assignments = input.ledgers[month]?.assignments ?? {};
     const activity: Record<string, number> = {};
     let income = 0;
-    for (const txn of input.transactionsByMonth[month] ?? []) {
+    for (const txn of (input.transactionsByMonth[month] ?? []).flatMap(allocations)) {
       if (txn.categoryId === null || txn.categoryId === "transfers") continue;
       activity[txn.categoryId] = (activity[txn.categoryId] ?? 0) + txn.amountCents;
       if (txn.categoryId === "income") income += -txn.amountCents;

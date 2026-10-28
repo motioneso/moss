@@ -10,6 +10,7 @@ import { normalizePayee } from "./keys.js";
 import type { ReviewState, TransactionRecord } from "./records.js";
 import type { Category } from "./taxonomy.js";
 import { PFC_MAP } from "./taxonomy.js";
+import { splitsBalance } from "./splits.js";
 
 export type Rule = { payeeKey: string; categoryId: string; createdAt: string };
 
@@ -83,7 +84,7 @@ export async function categorize(
 ): Promise<TransactionRecord[]> {
   const placed = await categorizeSteps(records, rules, categories, ai, review);
   return placed.map((record) =>
-    record.categoryId === null && record.reviewState !== "needs_look"
+    record.categoryId === null && !splitsBalance(record) && record.reviewState !== "needs_look"
       ? { ...record, reviewState: "needs_look" }
       : record
   );

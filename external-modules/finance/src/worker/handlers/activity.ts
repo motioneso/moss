@@ -132,6 +132,10 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
         ? `Sorted ${what} into ${category}`
         : `Changed ${what} to ${category}`;
     }
+    case "transaction.split":
+      return (num(p.parts) ?? 0) === 1
+        ? "Returned a transaction to one category"
+        : `Split a transaction between ${num(p.parts) ?? 0} categories`;
     case "merchant-rule.set":
       return `Made a rule: ${await names.merchantForRule(str(p.ruleId))} goes to ${names.category(str(p.categoryId))}`;
     case "category.add":

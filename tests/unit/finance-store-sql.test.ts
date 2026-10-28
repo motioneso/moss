@@ -79,7 +79,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls).toHaveLength(1);
     expect(db.calls[0]!.text).toBe(
       "SELECT id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence " +
+        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision " +
         "FROM app.finance_transactions " +
         "WHERE account_id = $1 AND date >= $2 AND date < $3 ORDER BY date DESC, id ASC"
     );
@@ -102,14 +102,14 @@ describe("sqlStore (FIN-06b #1166)", () => {
     await sqlStore(db).putTransaction(
       tx({ id: "n", categoryId: "dining", reviewState: "needs_look", aiConfidence: 0.42 })
     );
-    expect(db.calls[0]!.params.slice(-2)).toEqual(["needs_look", 0.42]);
+    expect(db.calls[0]!.params.slice(13, 15)).toEqual(["needs_look", 0.42]);
   });
 
   it("putTransaction stores an uncategorized row with no review state as needs_look", async () => {
     const db = fakeDb();
     const { reviewState: _drop, ...bare } = tx({ id: "u", categoryId: null });
     await sqlStore(db).putTransaction(bare);
-    expect(db.calls[0]!.params.slice(-2)).toEqual(["needs_look", null]);
+    expect(db.calls[0]!.params.slice(13, 15)).toEqual(["needs_look", null]);
   });
 
   it("getTransactionChunk returns null on zero rows", async () => {
@@ -137,15 +137,17 @@ describe("sqlStore (FIN-06b #1166)", () => {
       expect(call.text).toBe(
         "INSERT INTO app.finance_transactions (owner_user_id, id, account_id, date, amount_cents, " +
           "iso_currency, name, merchant, plaid_category, category_id, pending, " +
-          "pending_transaction_id, categorized_by, notes, review_state, ai_confidence) " +
-          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) " +
+          "pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits) " +
+          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb) " +
           "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
           "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
           "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
-          "category_id = EXCLUDED.category_id, pending = EXCLUDED.pending, " +
+          "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
           "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-          "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes, " +
-          "review_state = EXCLUDED.review_state, ai_confidence = EXCLUDED.ai_confidence"
+          "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
+          "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
+          "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents THEN 'needs_look' ELSE finance_transactions.review_state END " +
+          "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence"
       );
     }
     expect(db.calls[0]!.params).toEqual([
@@ -163,7 +165,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
       null,
       null,
       "confirmed",
-      null
+      null,
+      "[]"
     ]);
     expect(db.calls[1]!.params).toEqual([
       "b",
@@ -180,7 +183,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
       null,
       null,
       "confirmed",
-      null
+      null,
+      "[]"
     ]);
     expect(db.calls[2]!.text).toBe(
       "DELETE FROM app.finance_transactions WHERE account_id = $1 AND date >= $2 AND date < $3 " +
@@ -216,7 +220,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
 
     expect(db.calls[0]!.text).toBe(
       "SELECT id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence " +
+        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision " +
         "FROM app.finance_transactions " +
         "WHERE date >= $1 AND date < $2 ORDER BY date DESC, id ASC"
     );
@@ -243,15 +247,17 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls[0]!.text).toBe(
       "INSERT INTO app.finance_transactions (owner_user_id, id, account_id, date, amount_cents, " +
         "iso_currency, name, merchant, plaid_category, category_id, pending, " +
-        "pending_transaction_id, categorized_by, notes, review_state, ai_confidence) " +
-        "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) " +
+        "pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits) " +
+        "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb) " +
         "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
         "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
         "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
-        "category_id = EXCLUDED.category_id, pending = EXCLUDED.pending, " +
+        "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
         "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-        "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes, " +
-        "review_state = EXCLUDED.review_state, ai_confidence = EXCLUDED.ai_confidence"
+        "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
+        "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
+        "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents THEN 'needs_look' ELSE finance_transactions.review_state END " +
+        "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence"
     );
     expect(db.calls[0]!.params).toEqual([
       "a",
@@ -268,7 +274,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
       null,
       null,
       "confirmed",
-      null
+      null,
+      "[]"
     ]);
   });
 

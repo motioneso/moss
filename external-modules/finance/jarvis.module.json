@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.12",
+  "version": "0.7.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -64,7 +64,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows.",
+        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows. Includes labeled account, category, posting and direction filters, possible duplicate indicators, loaded result counts and CSV export of loaded rows.",
         "path": "/transactions"
       },
       {
@@ -130,6 +130,22 @@
       {
         "id": "finance.settings-activity",
         "description": "On Finance settings, the activity list shows this week's changes by you and by Moss, newest first, each with who did it and when. Undo reverses a row (a budget amount, a move between categories, a sorted purchase, a merchant rule, or a category added or archived) and says so inline if the data changed since. Earlier weeks loads the week before. With nothing yet it says Nothing yet."
+      },
+      {
+        "id": "finance.ledger-safety",
+        "description": "Amounts use safe integer hundredths and decimal provider rounding. Invalid calendar months are rejected. Transfer inference requires the same currency. A batch of budget assignments validates every category and amount before one SQL commit; a rejected batch changes nothing."
+      },
+      {
+        "id": "finance.register-filters",
+        "description": "Transactions can be filtered by account, category, pending or posted status, money in or out, uncategorized rows and possible duplicates. Possible duplicates match account, currency, amount, date and payee; they are suggestions and are never deleted automatically."
+      },
+      {
+        "id": "finance.register-export",
+        "description": "Export loaded rows downloads a CSV of exactly the currently loaded filtered transactions with separate outflow and inflow columns, currency and posting state. The loaded count and total matches make truncation visible. This is not a complete account backup."
+      },
+      {
+        "id": "finance.transaction-splits",
+        "description": "Split a posted transaction across up to 20 non-transfer category allocations. Signed amounts must equal the original amount exactly. Saving checks the bank amount and allocation revision, and confirms only after a read sees the saved allocation. Reduce to one part to remove the split. Provider corrections preserve allocations for repair and mark an unbalanced split for review; reports count its bank amount once as uncategorized until repaired. Split editing requires migrated SQL storage. Household rows are read only. Splitting does not move bank money."
       }
     ]
   },
@@ -200,7 +216,7 @@
     {
       "name": "finance.transactions.query",
       "permissionId": "finance.transactions.query",
-      "description": "Query synced transactions by month, account, category, or text.",
+      "description": "Query a calendar month of transactions by account, category, payee or private notes, posting status, direction, uncategorized state, or possible duplicate. Possible duplicates remain in the ledger; no automatic deletion.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
@@ -212,7 +228,12 @@
           "search": { "type": "string" },
           "pendingOnly": { "type": "boolean" },
           "needsLookOnly": { "type": "boolean" },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 2000 }
+          "limit": { "type": "integer", "minimum": 1, "maximum": 2000 },
+          "postingState": { "type": "string", "enum": ["pending", "posted"] },
+          "direction": { "type": "string", "enum": ["inflow", "outflow"] },
+          "uncategorizedOnly": { "type": "boolean" },
+          "duplicatesOnly": { "type": "boolean" },
+          "transactionId": { "type": "string" }
         }
       },
       "handler": "transactions.query"
@@ -756,6 +777,28 @@
           "type": "object",
           "fields": {
             "activityId": { "type": "uuid" }
+          }
+        }
+      },
+      {
+        "name": "finance.split-apply",
+        "handler": "split.apply",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "transactionId": { "type": "identifier" },
+            "accountId": { "type": "identifier" },
+            "month": { "type": "identifier" },
+            "expectedAmountCents": { "type": "integer", "min": -2000000000, "max": 2000000000 },
+            "expectedRevision": { "type": "integer", "min": 0, "max": 2147483646 },
+            "categoryIds": { "type": "array", "maxItems": 20, "items": { "type": "identifier" } },
+            "amountsCents": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "integer", "min": -100000000, "max": 100000000 }
+            }
           }
         }
       }

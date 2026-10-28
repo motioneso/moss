@@ -72,10 +72,22 @@ export const MODULE_STYLES = `
 .fnm-col-category { width: 34%; }
 .fnm-col-amount { width: 14%; }
 .fnm-search { width: 14rem; max-width: 100%; }
+.fnm-register-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); align-items: end; gap: var(--space-4); }
+.fnm-register-filters > label { min-width: 0; }
+.fnm-register-filters select { width: 100%; }
+.fnm-fixed td { overflow-wrap: anywhere; }
+.fnm-category-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.fnm-category-controls > span { flex: 1; min-width: 0; }
+.fnm-category-controls > .fnm-block { width: 100%; }
+.fnm-category-controls select { width: 100%; }
+.fnm-split-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: end; gap: var(--space-3); }
+.fnm-split-row input, .fnm-split-row select { width: 100%; min-width: 0; }
 @media (max-width: 720px) {
   .fnm-root { padding: 1rem 0.75rem 2rem; }
   .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
   .fnm-desktop-only { display: none; }
   .fnm-phone-only { display: block; }
+  .fnm-chips { max-width: 100%; }
+  .fnm-split-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 `;

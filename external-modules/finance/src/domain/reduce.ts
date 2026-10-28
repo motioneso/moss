@@ -9,6 +9,8 @@
 // the only place a pending twin can hide per the grounded decisions doc).
 import { monthKey, prevMonthKey } from "./keys.js";
 import type { TransactionChunk, TransactionRecord } from "./records.js";
+import { decimalToCents } from "./values.js";
+import { splitsBalance } from "./splits.js";
 
 // Raw Plaid /transactions/sync entry (snake_case, float dollars). Declared
 // structurally instead of importing from adapters/ so the domain layer keeps
@@ -37,15 +39,14 @@ export type ChunkMap = Record<string, TransactionChunk>;
 
 /**
  * The ONE dollars→cents conversion in the module (spec "Money"). Plaid's
- * sign convention (spending-positive) is preserved as-is; Math.round guards
- * against IEEE754 artifacts (4.56 * 100 === 455.999…).
+ * sign convention (spending-positive) is preserved with decimal rounding.
  */
 export function toRecord(tx: PlaidTx): TransactionRecord {
   return {
     id: tx.transaction_id,
     accountId: tx.account_id,
     date: tx.date,
-    amountCents: Math.round(tx.amount * 100),
+    amountCents: decimalToCents(tx.amount),
     isoCurrency: tx.iso_currency_code ?? "USD",
     name: tx.name,
     merchant: tx.merchant_name,
@@ -66,7 +67,13 @@ function carryUserFields(from: TransactionRecord, onto: TransactionRecord): void
   if (from.categorizedBy !== "user") return;
   onto.categoryId = from.categoryId;
   onto.categorizedBy = "user";
+  if (from.reviewState !== undefined) onto.reviewState = from.reviewState;
   if (from.notes !== undefined) onto.notes = from.notes;
+  if (from.splits !== undefined) {
+    onto.splits = from.splits.map((split) => ({ ...split }));
+    onto.splitRevision = from.splitRevision;
+    if (onto.splits.length && !splitsBalance(onto)) onto.reviewState = "needs_look";
+  }
 }
 
 /** Sort contract from records.ts: date desc, then id asc. */

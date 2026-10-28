@@ -8,6 +8,7 @@
 import { createHash } from "node:crypto";
 
 import { FinanceKvError } from "./errors.js";
+import { isCalendarDate } from "./values.js";
 
 // 32 hex chars = 128 bits of sha256 (job-search keys.ts precedent) —
 // collision-safe at personal-finance scale.
@@ -24,7 +25,7 @@ const ISO_DATE = /^(\d{4})-(\d{2})-\d{2}$/;
 
 function monthOf(isoDate: string): { year: number; month: number } {
   const match = ISO_DATE.exec(isoDate);
-  if (!match) {
+  if (!match || !isCalendarDate(isoDate)) {
     // Deliberately does not echo the value — a malformed "date" from a
     // provider payload could be arbitrary content.
     throw new FinanceKvError("invalid_record", "date must be YYYY-MM-DD");

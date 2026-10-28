@@ -6,6 +6,7 @@
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
 import type { BudgetDraft, DraftBuild, DraftLine } from "./draft.js";
+import type { SplitChange } from "./splits.js";
 
 /**
  * One row of the activity trail (#3174). `params` and `undo` hold ids, cents
@@ -45,6 +46,7 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly supportsSplits: boolean;
   listItems(): Promise<ItemRecord[]>;
   getItem(itemId: string): Promise<ItemRecord | null>;
   putItem(record: ItemRecord): Promise<void>;
@@ -76,6 +78,8 @@ export interface FinanceStore {
   listConfirmedPayeeNames(): Promise<string[]>;
   /** Rewrite a single transaction in place (feed categorize/note paths). */
   putTransaction(record: TransactionRecord): Promise<void>;
+  /** Compare-and-set allocations plus activity in one SQL statement. False leaves data unchanged. */
+  setTransactionSplits(change: SplitChange): Promise<boolean>;
 
   /** Every (accountId, month) snapshot window that exists. */
   listSnapshotChunks(): Promise<{ accountId: string; month: string }[]>;

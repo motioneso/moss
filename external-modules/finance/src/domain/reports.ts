@@ -5,6 +5,7 @@
 // computes the window from ports.now() and pre-excludes transfers
 // (domain/transfers.ts) before calling; nothing here touches a clock or KV.
 import type { TransactionRecord } from "./records.js";
+import { allocations } from "./splits.js";
 
 /** Bucket key for categoryId===null rows. Reports INCLUDE uncategorized
  *  spending (unlike budget activity) — hiding it would make report totals
@@ -49,7 +50,9 @@ export function aggregateSpending(
     const byPayee: Record<string, number> = {};
     let incomeCents = 0;
     let outflowCents = 0;
-    for (const txn of byMonth.get(month) ?? []) {
+    for (const txn of (byMonth.get(month) ?? []).flatMap((row) =>
+      allocations(row).map((part) => ({ ...row, ...part }))
+    )) {
       if (txn.categoryId === "income") {
         incomeCents += -txn.amountCents;
         continue;

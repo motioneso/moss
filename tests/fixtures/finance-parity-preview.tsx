@@ -1,0 +1,134 @@
+// Actual production Finance bundle, synthetic responses. Visual regression fixture only;
+// this is deliberately not an installed live-path acceptance receipt.
+import * as React from "react";
+import * as ReactDom from "react-dom/client";
+
+Object.assign(globalThis, {
+  __JARVIS_MODULE_RUNTIME__: { contractVersion: 2, react: React, reactDomClient: ReactDom }
+});
+const date = new Date();
+const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+const categories = [
+  { id: "groceries", name: "Groceries" },
+  { id: "dining", name: "Dining out" },
+  { id: "income", name: "Income" }
+];
+const accounts = [
+  { accountId: "checking", name: "Everyday checking" },
+  { accountId: "card", name: "Household card" }
+];
+const rows = [
+  {
+    id: "market",
+    name: "Weekend market",
+    amountCents: 8243,
+    categoryId: "groceries",
+    accountId: "checking"
+  },
+  {
+    id: "salary",
+    name: "Monthly pay",
+    amountCents: -420000,
+    categoryId: "income",
+    accountId: "checking"
+  },
+  {
+    id: "coffee",
+    name: "Corner coffee",
+    amountCents: 1260,
+    categoryId: "dining",
+    accountId: "card",
+    pending: true
+  },
+  {
+    id: "duplicate-a",
+    name: "Dinner with friends",
+    amountCents: 6450,
+    categoryId: "dining",
+    accountId: "card",
+    possibleDuplicate: true
+  },
+  {
+    id: "duplicate-b",
+    name: "Dinner with friends",
+    amountCents: 6450,
+    categoryId: "dining",
+    accountId: "card",
+    possibleDuplicate: true
+  },
+  {
+    id: "review",
+    name: "A new neighborhood shop with a long descriptive bank statement name",
+    amountCents: 2431,
+    categoryId: null,
+    accountId: "checking",
+    reviewState: "needs_look"
+  }
+].map((row) => ({
+  date: `${month}-15`,
+  isoCurrency: "USD",
+  reviewState: "confirmed",
+  pending: false,
+  splitRevision: 0,
+  splits: [] as { categoryId: string; amountCents: number }[],
+  ...row
+}));
+
+window.fetch = async (input, init) => {
+  const url = String(input);
+  const body = JSON.parse(String(init?.body ?? "{}"));
+  if (url.includes("/queues/")) {
+    const p = body.params;
+    const row = rows.find((r) => r.id === p?.transactionId);
+    if (row && url.includes("split-apply")) {
+      row.splits = p.categoryIds.map((categoryId: string, i: number) => ({
+        categoryId,
+        amountCents: p.amountsCents[i]
+      }));
+      row.splitRevision += 1;
+    }
+    return Response.json({ jobId: "synthetic-job" }, { status: 202 });
+  }
+  const fixture = new URL(location.href).searchParams.get("fixture");
+  if (fixture === "error") return Response.json({}, { status: 503 });
+  if (fixture === "loading") await new Promise((resolve) => setTimeout(resolve, 60_000));
+  const p = body.input ?? {};
+  const filtered =
+    fixture === "empty"
+      ? []
+      : rows.filter(
+          (r) =>
+            (!p.accountId || p.accountId === r.accountId) &&
+            (!p.transactionId || p.transactionId === r.id) &&
+            (!p.categoryId || p.categoryId === r.categoryId) &&
+            (!p.postingState || r.pending === (p.postingState === "pending")) &&
+            (!p.direction || (p.direction === "inflow" ? r.amountCents < 0 : r.amountCents > 0)) &&
+            (!p.duplicatesOnly || r.possibleDuplicate) &&
+            (!p.uncategorizedOnly || r.categoryId === null) &&
+            (!p.needsLookOnly || r.reviewState === "needs_look") &&
+            (!p.search || r.name.toLowerCase().includes(p.search.toLowerCase()))
+        );
+  return Response.json({
+    invocation: {
+      status: "succeeded",
+      result: {
+        month,
+        transactions: filtered,
+        totalCount: filtered.length,
+        needsLookCount: filtered.filter((r) => r.reviewState === "needs_look").length,
+        accounts,
+        categories,
+        supportsSplits: true
+      }
+    }
+  });
+};
+
+const entry = "/finance.js";
+const { default: finance } = await import(entry);
+const style = document.createElement("style");
+style.textContent = finance.css;
+document.head.append(style);
+ReactDom.createRoot(document.getElementById("app")!).render(
+  React.createElement(finance.Root, { hostActions: { openAssistant: () => {} } })
+);

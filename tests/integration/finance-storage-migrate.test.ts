@@ -530,3 +530,106 @@ describe("finance.storage-migrate integration (FIN-06b #1166)", () => {
     await assertMigratedKvGoneSurvivorsRemain(ids.userA);
   });
 });
+
+describe("Finance split storage through the module RPC", () => {
+  const withStore = <T>(
+    actorUserId: string,
+    work: (store: ReturnType<typeof sqlStore>) => Promise<T>
+  ) =>
+    appDataContext.withDataContext(
+      { actorUserId, requestId: "synthetic-finance-split" },
+      (scoped) => work(sqlStore(dbFor(scoped)))
+    );
+
+  it("commits one allocation and activity, rejects a stale edit, and retains allocations on sync", async () => {
+    const original = {
+      ...TXN_JUNE_1,
+      id: "synthetic-split",
+      amountCents: 1001,
+      categoryId: "groceries"
+    };
+    await withStore(ids.userA, (store) => store.putTransaction(original));
+    const change = {
+      transactionId: original.id,
+      accountId: original.accountId,
+      month: "2026-06",
+      expectedAmountCents: 1001,
+      expectedRevision: 0,
+      splits: [
+        { categoryId: "groceries", amountCents: 700 },
+        { categoryId: "dining", amountCents: 301 }
+      ]
+    };
+    expect(await withStore(ids.userA, (store) => store.setTransactionSplits(change))).toBe(true);
+    expect(await withStore(ids.userA, (store) => store.setTransactionSplits(change))).toBe(false);
+    expect(
+      await withStore(ids.userB, (store) =>
+        store.setTransactionSplits({ ...change, expectedRevision: 1 })
+      )
+    ).toBe(false);
+    await withStore(ids.userA, async (store) => {
+      const saved = (await store.getTransactionChunk(original.accountId, "2026-06"))!.find(
+        (r) => r.id === original.id
+      )!;
+      expect(saved).toMatchObject({
+        splits: change.splits,
+        splitRevision: 1,
+        categoryId: null,
+        amountCents: 1001
+      });
+      expect(
+        (await store.listActivity("2000-01-01", "2100-01-01", 200)).filter(
+          (a) => a.params.transactionId === original.id
+        )
+      ).toHaveLength(1);
+      // A sync read before the user's edit and now returns a corrected bank total.
+      await store.putTransaction({ ...original, amountCents: 1200 });
+      const corrected = (await store.getTransactionChunk(original.accountId, "2026-06"))!.find(
+        (r) => r.id === original.id
+      )!;
+      expect(corrected).toMatchObject({
+        splits: change.splits,
+        splitRevision: 1,
+        categoryId: null,
+        amountCents: 1200,
+        reviewState: "needs_look"
+      });
+    });
+  });
+
+  it("two simultaneous editors cannot both commit the same revision", async () => {
+    const original = { ...TXN_JUNE_1, id: "synthetic-race", amountCents: 1000 };
+    await withStore(ids.userA, (store) => store.putTransaction(original));
+    const change = {
+      transactionId: original.id,
+      accountId: original.accountId,
+      month: "2026-06",
+      expectedAmountCents: 1000,
+      expectedRevision: 0,
+      splits: [
+        { categoryId: "groceries", amountCents: 700 },
+        { categoryId: "dining", amountCents: 300 }
+      ]
+    };
+    const outcomes = await Promise.all([
+      withStore(ids.userA, (store) => store.setTransactionSplits(change)),
+      withStore(ids.userA, (store) =>
+        store.setTransactionSplits({
+          ...change,
+          splits: [
+            { categoryId: "groceries", amountCents: 500 },
+            { categoryId: "dining", amountCents: 500 }
+          ]
+        })
+      )
+    ]);
+    expect(outcomes.sort()).toEqual([false, true]);
+    await withStore(ids.userA, async (store) => {
+      expect(
+        (await store.listActivity("2000-01-01", "2100-01-01", 200)).filter(
+          (a) => a.params.transactionId === original.id
+        )
+      ).toHaveLength(1);
+    });
+  });
+});

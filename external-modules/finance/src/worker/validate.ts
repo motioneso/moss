@@ -102,8 +102,8 @@ export function readInt(
     }
     return undefined;
   }
-  // Number.isInteger rejects NaN, Infinity, and fractional values in one check.
-  if (typeof value !== "number" || !Number.isInteger(value)) {
+  // Also reject integers whose cents cannot be represented exactly in JavaScript.
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
     throw new InputError(`${key} must be an integer`);
   }
   if (opts.min !== undefined && value < opts.min) {

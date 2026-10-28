@@ -422,6 +422,28 @@ describe("finance manifest contract (#1146)", () => {
         retryLimit: 1,
         allowManualRun: true,
         paramsSchema: { type: "object", fields: { activityId: { type: "uuid" } } }
+      },
+      {
+        name: "finance.split-apply",
+        handler: "split.apply",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: {
+          type: "object",
+          fields: {
+            transactionId: { type: "identifier" },
+            accountId: { type: "identifier" },
+            month: { type: "identifier" },
+            expectedAmountCents: { type: "integer", min: -2000000000, max: 2000000000 },
+            expectedRevision: { type: "integer", min: 0, max: 2147483646 },
+            categoryIds: { type: "array", maxItems: 20, items: { type: "identifier" } },
+            amountsCents: {
+              type: "array",
+              maxItems: 20,
+              items: { type: "integer", min: -100000000, max: 100000000 }
+            }
+          }
+        }
       }
     ]);
     expect(result.manifest.worker?.schedules).toEqual([
@@ -476,7 +498,12 @@ describe("finance manifest contract (#1146)", () => {
       "search",
       "pendingOnly",
       "needsLookOnly",
-      "limit"
+      "limit",
+      "postingState",
+      "direction",
+      "uncategorizedOnly",
+      "duplicatesOnly",
+      "transactionId"
     ]);
     expect(querySchema.required).toBeUndefined();
     const categorize = tools.find((tool) => tool.name === "finance.transaction.categorize")!;

@@ -1,3 +1,4 @@
+import { allocations } from "./splits.js";
 // external-modules/finance/src/domain/draft.ts
 //
 // #3180 (Finance R1): the deterministic first-budget draft. Every number is a
@@ -190,7 +191,9 @@ export function buildDraft(input: {
   const incomeByMonth = new Map<string, number>();
 
   for (const month of basisMonths) {
-    for (const txn of input.transactionsByMonth[month] ?? []) {
+    for (const txn of (input.transactionsByMonth[month] ?? []).flatMap((row) =>
+      allocations(row).map((part) => ({ ...row, ...part }))
+    )) {
       if (txn.pending || txn.categoryId === null || excluded.has(txn.id)) continue;
       if (txn.categoryId === "transfers") continue;
       if (txn.categoryId === "income") {

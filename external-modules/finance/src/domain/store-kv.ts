@@ -33,6 +33,10 @@ function sortTransactions(records: TransactionRecord[]): TransactionRecord[] {
 
 export function kvStore(kv: FinanceKv): FinanceStore {
   return {
+    supportsSplits: false,
+    async setTransactionSplits() {
+      return false;
+    },
     async listItems() {
       const keys = await kv.list(NS.connections);
       const items: ItemRecord[] = [];
@@ -184,8 +188,11 @@ export function kvStore(kv: FinanceKv): FinanceStore {
         const existing = await this.getActivity(change.markUndone.activityId);
         if (existing?.undoneAt) return false;
       }
-      for (const a of change.assignments) {
-        await this.setAssignment(change.month, a.categoryId, a.amountCents);
+      if (change.assignments.length > 0) {
+        const ledger = (await this.getLedger(change.month)) ?? { assignments: {} };
+        for (const a of change.assignments) ledger.assignments[a.categoryId] = a.amountCents;
+        // A month is one KV value: a batch must not leave half its assignments behind.
+        await kv.set(NS.budgets, `ledger:${change.month}`, ledger);
       }
       for (const entry of change.activity) await this.appendActivity(entry);
       if (change.startDraft) {

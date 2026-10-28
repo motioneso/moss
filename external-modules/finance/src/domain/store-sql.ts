@@ -13,6 +13,7 @@ import type {
 } from "./records.js";
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
+import { safeCents } from "./values.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
 // this is redeclared rather than imported (bundler independence, see
@@ -33,7 +34,7 @@ function monthWindow(month: string): { from: string; to: string } {
 
 const TXN_COLUMNS =
   "id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence";
+  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision";
 
 type TransactionRow = {
   id: string;
@@ -51,6 +52,8 @@ type TransactionRow = {
   notes: string | null;
   review_state: ReviewState;
   ai_confidence: number | null;
+  splits?: TransactionRecord["splits"];
+  split_revision?: number;
 };
 
 function rowToTransaction(row: TransactionRow): TransactionRecord {
@@ -58,7 +61,7 @@ function rowToTransaction(row: TransactionRow): TransactionRecord {
     id: row.id,
     accountId: row.account_id,
     date: row.date,
-    amountCents: Number(row.amount_cents),
+    amountCents: safeCents(row.amount_cents),
     isoCurrency: row.iso_currency,
     name: row.name,
     merchant: row.merchant,
@@ -69,7 +72,10 @@ function rowToTransaction(row: TransactionRow): TransactionRecord {
     categorizedBy: row.categorized_by,
     notes: row.notes ?? undefined,
     reviewState: row.review_state,
-    aiConfidence: row.ai_confidence
+    aiConfidence: row.ai_confidence,
+    ...(row.splits?.length || row.split_revision
+      ? { splits: row.splits ?? [], splitRevision: row.split_revision ?? 0 }
+      : {})
   };
 }
 
@@ -77,15 +83,17 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
   await db.query(
     "INSERT INTO app.finance_transactions (owner_user_id, id, account_id, date, amount_cents, " +
       "iso_currency, name, merchant, plaid_category, category_id, pending, " +
-      "pending_transaction_id, categorized_by, notes, review_state, ai_confidence) " +
-      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) " +
+      "pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits) " +
+      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb) " +
       "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
       "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
       "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
-      "category_id = EXCLUDED.category_id, pending = EXCLUDED.pending, " +
+      "category_id = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.category_id ELSE EXCLUDED.category_id END, pending = EXCLUDED.pending, " +
       "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-      "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes, " +
-      "review_state = EXCLUDED.review_state, ai_confidence = EXCLUDED.ai_confidence",
+      "categorized_by = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN finance_transactions.categorized_by ELSE EXCLUDED.categorized_by END, notes = EXCLUDED.notes, " +
+      "review_state = CASE WHEN finance_transactions.splits <> '[]'::jsonb THEN " +
+      "CASE WHEN finance_transactions.amount_cents <> EXCLUDED.amount_cents THEN 'needs_look' ELSE finance_transactions.review_state END " +
+      "ELSE EXCLUDED.review_state END, ai_confidence = EXCLUDED.ai_confidence",
     [
       record.id,
       record.accountId,
@@ -101,7 +109,8 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       record.categorizedBy ?? null,
       record.notes ?? null,
       record.reviewState ?? (record.categoryId == null ? "needs_look" : "confirmed"),
-      record.aiConfidence ?? null
+      record.aiConfidence ?? null,
+      JSON.stringify(record.splits ?? [])
     ]
   );
 }
@@ -170,7 +179,7 @@ function rowToAccount(row: AccountRow): AccountRecord {
     type: row.type,
     subtype: row.subtype,
     mask: row.mask,
-    balanceCents: Number(row.balance_cents),
+    balanceCents: safeCents(row.balance_cents),
     isoCurrency: row.iso_currency,
     updatedAt: row.updated_at,
     sharedToHousehold: row.shared_to_household
@@ -228,9 +237,9 @@ function rowToDraftLine(row: DraftLineRow): DraftLine {
     categoryKey: row.category_key,
     groupName: row.group_name,
     categoryName: row.category_name,
-    basisMonthlyCents: Number(row.basis_monthly_cents),
-    proposedCents: Number(row.proposed_cents),
-    adjustedCents: row.adjusted_cents === null ? null : Number(row.adjusted_cents),
+    basisMonthlyCents: safeCents(row.basis_monthly_cents),
+    proposedCents: safeCents(row.proposed_cents),
+    adjustedCents: row.adjusted_cents === null ? null : safeCents(row.adjusted_cents),
     adjustedBy: row.adjusted_by,
     dropped: row.dropped
   };
@@ -242,7 +251,7 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
     status: row.status,
     basisFrom: row.basis_from,
     basisTo: row.basis_to,
-    monthlyIncomeCents: Number(row.monthly_income_cents),
+    monthlyIncomeCents: safeCents(row.monthly_income_cents),
     createdAt: isoText(row.created_at),
     startedAt: row.started_at === null ? null : isoText(row.started_at),
     lines
@@ -251,6 +260,37 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
 
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
+    supportsSplits: true,
+    async setTransactionSplits(change) {
+      const { from, to } = monthWindow(change.month);
+      const result = await db.query<{ id: string }>(
+        "WITH changed AS (UPDATE app.finance_transactions SET splits = $1::jsonb, " +
+          "category_id = $2, categorized_by = 'user', review_state = 'confirmed', " +
+          "split_revision = split_revision + 1 " +
+          "WHERE id = $3 AND account_id = $4 AND date >= $5 AND date < $6 " +
+          "AND amount_cents = $7 AND split_revision = $8 AND pending = false RETURNING id), " +
+          "logged AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params) " +
+          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), 'user', 'transaction.split', $9::jsonb " +
+          "FROM changed RETURNING id) SELECT id FROM changed",
+        [
+          JSON.stringify(change.splits.length === 1 ? [] : change.splits),
+          change.splits.length === 1 ? change.splits[0]!.categoryId : null,
+          change.transactionId,
+          change.accountId,
+          from,
+          to,
+          change.expectedAmountCents,
+          change.expectedRevision,
+          JSON.stringify({
+            transactionId: change.transactionId,
+            accountId: change.accountId,
+            month: change.month,
+            parts: change.splits.length
+          })
+        ]
+      );
+      return result.rows.length === 1;
+    },
     async listItems() {
       const result = await db.query<ItemRow>(`SELECT ${ITEM_COLUMNS} FROM app.finance_items`);
       return result.rows.map(rowToItem);
@@ -396,7 +436,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
       if (result.rows.length === 0) return null;
       const days: Record<string, number> = {};
-      for (const row of result.rows) days[row.day] = Number(row.balance_cents);
+      for (const row of result.rows) days[row.day] = safeCents(row.balance_cents);
       return days;
     },
 
@@ -425,7 +465,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
       if (result.rows.length === 0) return null;
       const assignments: Record<string, number> = {};
-      for (const row of result.rows) assignments[row.category_id] = Number(row.assigned_cents);
+      for (const row of result.rows) assignments[row.category_id] = safeCents(row.assigned_cents);
       return { assignments };
     },
 
@@ -552,7 +592,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
         [month, categoryId]
       );
       const row = result.rows[0];
-      return row === undefined ? null : Number(row.amount);
+      return row === undefined ? null : safeCents(row.amount);
     },
 
     async getLatestDraft() {

@@ -25,17 +25,25 @@ import {
   parseSharedKey,
   toSharedTransaction
 } from "../../domain/index.js";
+import { isCalendarMonth } from "../../domain/values.js";
+import { duplicateCandidates } from "../../domain/duplicates.js";
+import { splitsBalance } from "../../domain/splits.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { InputError, readActiveUserIds, readBool, readInt, readString } from "../validate.js";
+import {
+  InputError,
+  readActiveUserIds,
+  readBool,
+  readEnum,
+  readInt,
+  readString
+} from "../validate.js";
 import { accountsListHandler } from "./accounts.js";
-
-const MONTH = /^\d{4}-\d{2}$/;
 
 function readMonth(input: Record<string, unknown>, ports: WorkerPorts): string {
   const month = readString(input, "month");
   if (month === undefined) return ports.now().toISOString().slice(0, 7);
-  if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
+  if (!isCalendarMonth(month)) throw new InputError("month must be a valid YYYY-MM");
   return month;
 }
 
@@ -53,7 +61,11 @@ export async function loadCategories(ports: WorkerPorts): Promise<Category[]> {
 
 // A feed row: own rows are plain records; rows merged from the household
 // mirror carry their owner's id and a shared marker for the web layer.
-type FeedRow = TransactionRecord & { ownerUserId?: string; shared?: true };
+type FeedRow = TransactionRecord & {
+  ownerUserId?: string;
+  shared?: true;
+  possibleDuplicate?: true;
+};
 
 /** Most rows one transactions.query call returns; the screen asks for more in steps of 200. */
 const MAX_QUERY_LIMIT = 2000;
@@ -65,17 +77,26 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   const month = readMonth(input, ports);
   const activeUserIds = readActiveUserIds(input);
   const accountId = readString(input, "accountId");
+  const transactionId = readString(input, "transactionId");
   const categoryId = readString(input, "categoryId");
   const search = readString(input, "search")?.toLowerCase();
   const pendingOnly = readBool(input, "pendingOnly") ?? false;
   const needsLookOnly = readBool(input, "needsLookOnly") ?? false;
+  const uncategorizedOnly = readBool(input, "uncategorizedOnly") ?? false;
+  const duplicatesOnly = readBool(input, "duplicatesOnly") ?? false;
+  const postingState = readEnum(input, "postingState", ["pending", "posted"] as const);
+  const direction = readEnum(input, "direction", ["inflow", "outflow"] as const);
   const limit = readInt(input, "limit", { min: 1, max: MAX_QUERY_LIMIT }) ?? 50;
 
   // FIN-06c (#1166) Task 9: one store call for the requested month, across
   // every account — store.listMonthTransactions already returns the pinned
   // date-desc/id-asc order, so accountId (when given) is just a filter.
   const store = await ports.store();
-  const monthTransactions = await store.listMonthTransactions(month);
+  const stored = await store.listMonthTransactions(month);
+  const duplicates = duplicateCandidates(stored);
+  const monthTransactions: FeedRow[] = stored.map((row) =>
+    duplicates.has(row.id) ? { ...row, possibleDuplicate: true } : row
+  );
   let transactions: FeedRow[] = accountId
     ? monthTransactions.filter((record) => record.accountId === accountId)
     : [...monthTransactions];
@@ -103,19 +124,39 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     }
   }
   if (categoryId !== undefined) {
-    transactions = transactions.filter((record) => record.categoryId === categoryId);
+    transactions = transactions.filter(
+      (record) =>
+        record.categoryId === categoryId ||
+        record.splits?.some((part) => part.categoryId === categoryId)
+    );
   }
+  if (transactionId !== undefined)
+    transactions = transactions.filter((record) => record.id === transactionId);
   if (search !== undefined) {
     transactions = transactions.filter(
       (record) =>
         record.name.toLowerCase().includes(search) ||
-        (record.merchant ?? "").toLowerCase().includes(search)
+        (record.merchant ?? "").toLowerCase().includes(search) ||
+        (record.notes ?? "").toLowerCase().includes(search)
     );
   }
   if (pendingOnly) transactions = transactions.filter((record) => record.pending);
+  if (postingState)
+    transactions = transactions.filter((record) => record.pending === (postingState === "pending"));
+  if (direction)
+    transactions = transactions.filter((record) =>
+      direction === "inflow" ? record.amountCents < 0 : record.amountCents > 0
+    );
+  if (uncategorizedOnly)
+    transactions = transactions.filter(
+      (record) => record.categoryId === null && !splitsBalance(record)
+    );
+  if (duplicatesOnly) transactions = transactions.filter((record) => record.possibleDuplicate);
   // Household rows are read-only here, so only the viewer's own rows can need a look.
   const needsLook = (record: FeedRow): boolean =>
-    record.shared !== true && record.reviewState === "needs_look";
+    record.shared !== true &&
+    (record.reviewState === "needs_look" ||
+      Boolean(record.splits?.length && !splitsBalance(record)));
   const needsLookCount = transactions.filter(needsLook).length;
   if (needsLookOnly) transactions = transactions.filter(needsLook);
   // Chunks are date-desc/id-asc internally; re-sort after the cross-account
@@ -135,6 +176,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     transactions,
     totalCount,
     needsLookCount,
+    supportsSplits: store.supportsSplits,
     categories: await loadCategories(ports),
     accounts: (accounts.accounts as unknown[] | undefined) ?? []
   };
@@ -144,7 +186,7 @@ type ApplyIds = { transactionId: string; accountId: string; month: string; categ
 
 function readApplyIds(input: Record<string, unknown>): ApplyIds {
   const month = readString(input, "month", { required: true });
-  if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
+  if (!isCalendarMonth(month)) throw new InputError("month must be a valid YYYY-MM");
   return {
     transactionId: readString(input, "transactionId", { required: true }),
     accountId: readString(input, "accountId", { required: true }),
@@ -194,6 +236,8 @@ async function applyCategory(
     throw new InputError("not_found", "no transaction matches the given ids");
   }
   const previousCategoryId = record.categoryId;
+  if (record.splits?.length)
+    throw new InputError("split_transaction", "Edit the transaction's split categories instead");
   record.categoryId = ids.categoryId;
   record.categorizedBy = "user";
   // Choosing a category is the user's confirmation, whatever Moss guessed.
@@ -353,7 +397,7 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
     [];
   for (let index = 0; index < transactionIds.length; index += 1) {
     const month = months[index]!;
-    if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
+    if (!isCalendarMonth(month)) throw new InputError("month must be a valid YYYY-MM");
     const ids: ApplyIds = {
       transactionId: transactionIds[index]!,
       accountId: accountIds[index]!,
