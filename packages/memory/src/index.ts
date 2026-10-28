@@ -145,3 +145,15 @@ export type {
   VaultIndexPublicationResult,
   VaultIndexPublicationPort
 } from "./vault-index-publication.js";
+
+export { RecordingMemoryService } from "./recording-facts.js";
+export type {
+  RecordingFactAuthority,
+  RecordingFactSourceSnapshot
+} from "./recording-fact-authority.js";
+export { RecordingFactConflictError } from "./recording-fact-mutations.js";
+export {
+  RecordingMemoryConflictError,
+  RecordingMemoryUnavailableError
+} from "./recording-fact-identity.js";
+export { collectRecordingMemoryExport } from "./recording-memory-export.js";

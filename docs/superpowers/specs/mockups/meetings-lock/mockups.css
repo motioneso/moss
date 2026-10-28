@@ -1,0 +1,196 @@
+/* Reuse the merged Meetings frame and shipped Park Press primitives. */
+@import url("../meetings-redesign/mockups.css");
+
+/* Artifact layout only; no product CSS or new visual primitive. */
+.lock-review .mock-body > .lock-chat {
+  flex-basis: 404px;
+  width: 404px;
+  max-width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  animation: none;
+}
+.lock-chat .chatd__head {
+  justify-content: space-between;
+}
+.lock-chat .chatd__body {
+  gap: var(--space-5);
+}
+.lock-chat .chatd__body > * {
+  min-width: 0;
+}
+.lock-chat .jds-card {
+  width: 100%;
+}
+.lock-chat .chatd-input textarea {
+  min-width: 0;
+}
+.lock-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.lock-title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-snug);
+}
+.lock-stack p {
+  font-size: var(--text-sm);
+}
+.lock-stack .jds-field {
+  gap: var(--space-2);
+}
+.lock-stack .jds-input {
+  width: 100%;
+  min-height: 44px;
+}
+.lock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.lock-choices {
+  display: grid;
+}
+.lock-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-3);
+  padding-block: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+.lock-choice > :first-child {
+  grid-column: 1 / -1;
+  font-weight: var(--weight-semibold);
+}
+.lock-choice > :not(:first-child) {
+  color: var(--text-muted);
+}
+.lock-choice:hover {
+  background: var(--hover-tint);
+}
+.lock-window {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+.lock-deadline {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.lock-outcome,
+.lock-redacted {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.lock-history {
+  display: grid;
+  gap: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.lock-redacted {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.lock-review .review-nav {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+.lock-review .review-theme {
+  position: sticky;
+  right: calc(-1 * var(--space-5));
+}
+.lock-review .review-nav > * {
+  flex-shrink: 0;
+}
+.lock-index {
+  height: auto;
+  overflow: auto;
+}
+.lock-index > header,
+.lock-index > main {
+  padding: var(--space-6);
+}
+.lock-index > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.lock-index h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+}
+.lock-index ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  padding-left: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+.lock-review-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: start;
+}
+.lock-review-pair iframe {
+  flex: 1 1 760px;
+  min-width: 0;
+  height: 800px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+}
+.lock-review-pair .lock-phone-frame {
+  flex: 0 1 390px;
+  width: 390px;
+  height: 844px;
+}
+.lock-chat[hidden] {
+  display: none;
+}
+@media (max-width: 920px) {
+  .lock-review .mock-body > .lock-chat {
+    position: fixed;
+    inset: 65px 0 49px auto;
+    width: min(404px, 100vw);
+    max-width: 100%;
+    height: auto;
+    flex-basis: auto;
+  }
+  .lock-review .review-theme {
+    right: calc(-1 * var(--space-5));
+  }
+}
+/* The dedicated phone snapshot is a drawer even in a wide review window. */
+.lock-phone-preview .mock-body > .lock-chat {
+  position: fixed;
+  inset: 65px 0 49px auto;
+  width: min(390px, 100vw);
+  height: auto;
+  z-index: 50;
+  box-shadow: var(--shadow-drawer);
+}
+.lock-home {
+  min-width: 0;
+}
+.lock-citation {
+  display: block;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

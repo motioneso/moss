@@ -21,10 +21,12 @@ import {
 } from "./embedding-provider-config.js";
 import { GraphMemoryRecallService } from "./graph-recall-service.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
+import { RecordingFactConflictError } from "./recording-fact-mutations.js";
 import type { MemoryRememberInput, NewMemoryEntity } from "./graph-types.js";
 
 export interface MemoryGraphRouteDependencies {
   readonly dataContext: DataContextRunner;
+  readonly graphRepository?: MemoryGraphRepository;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
 }
 
@@ -32,7 +34,7 @@ export function registerMemoryGraphRoutes(
   server: FastifyInstance,
   dependencies: MemoryGraphRouteDependencies
 ): void {
-  const repository = new MemoryGraphRepository();
+  const repository = dependencies.graphRepository ?? new MemoryGraphRepository();
 
   server.get(
     "/api/memory/graph/recall",
@@ -50,12 +52,17 @@ export function registerMemoryGraphRoutes(
           (request.query as { includeLowConfidence?: unknown }).includeLowConfidence === true;
         if (!query) return reply.code(400).send({ error: "q is required" });
         return dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).recall(scopedDb, access.actorUserId, query, {
-            limit,
-            includeInactive,
-            includeStale,
-            includeLowConfidence
-          })
+          (await createGraphService(scopedDb, repository)).recall(
+            scopedDb,
+            access.actorUserId,
+            query,
+            {
+              limit,
+              includeInactive,
+              includeStale,
+              includeLowConfidence
+            }
+          )
         );
       } catch (error) {
         return handleMemoryGraphRouteError(error, reply);
@@ -70,7 +77,7 @@ export function registerMemoryGraphRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         return dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).core(scopedDb, access.actorUserId)
+          (await createGraphService(scopedDb, repository)).core(scopedDb, access.actorUserId)
         );
       } catch (error) {
         return handleMemoryGraphRouteError(error, reply);
@@ -103,7 +110,11 @@ export function registerMemoryGraphRoutes(
         const access = await dependencies.resolveAccessContext(request);
         const body = request.body as MemoryRememberInput;
         return dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).remember(scopedDb, access.actorUserId, body)
+          (await createGraphService(scopedDb, repository)).remember(
+            scopedDb,
+            access.actorUserId,
+            body
+          )
         );
       } catch (error) {
         return handleMemoryGraphRouteError(error, reply);
@@ -119,7 +130,7 @@ export function registerMemoryGraphRoutes(
         const access = await dependencies.resolveAccessContext(request);
         const pinned = Boolean((request.body as { pinned?: unknown }).pinned);
         const found = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).pin(
+          (await createGraphService(scopedDb, repository)).pin(
             scopedDb,
             access.actorUserId,
             { factId: request.params.id },
@@ -141,7 +152,7 @@ export function registerMemoryGraphRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const fact = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).confirm(scopedDb, access.actorUserId, {
+          (await createGraphService(scopedDb, repository)).confirm(scopedDb, access.actorUserId, {
             factId: request.params.id
           })
         );
@@ -161,7 +172,7 @@ export function registerMemoryGraphRoutes(
         const access = await dependencies.resolveAccessContext(request);
         const body = request.body as { replacementText: string; correctionReason?: string };
         const fact = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).correct(scopedDb, access.actorUserId, {
+          (await createGraphService(scopedDb, repository)).correct(scopedDb, access.actorUserId, {
             targetFactId: request.params.id,
             replacementText: body.replacementText,
             correctionReason: body.correctionReason
@@ -186,7 +197,7 @@ export function registerMemoryGraphRoutes(
           reason?: string;
         };
         const fact = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).patchStatus(
+          (await createGraphService(scopedDb, repository)).patchStatus(
             scopedDb,
             access.actorUserId,
             request.params.id,
@@ -208,7 +219,7 @@ export function registerMemoryGraphRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const fact = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).markStale(scopedDb, access.actorUserId, {
+          (await createGraphService(scopedDb, repository)).markStale(scopedDb, access.actorUserId, {
             factId: request.params.id
           })
         );
@@ -228,7 +239,7 @@ export function registerMemoryGraphRoutes(
         const access = await dependencies.resolveAccessContext(request);
         const validToRaw = (request.body as { validTo?: string | null } | null)?.validTo;
         const result = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).supersede(scopedDb, access.actorUserId, {
+          (await createGraphService(scopedDb, repository)).supersede(scopedDb, access.actorUserId, {
             factId: request.params.id,
             validTo: validToRaw ? new Date(validToRaw) : undefined
           })
@@ -247,7 +258,7 @@ export function registerMemoryGraphRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const result = await dependencies.dataContext.withDataContext(access, async (scopedDb) =>
-          (await createGraphService(scopedDb)).forget(scopedDb, access.actorUserId, {
+          (await createGraphService(scopedDb, repository)).forget(scopedDb, access.actorUserId, {
             factId: request.params.id
           })
         );
@@ -260,12 +271,18 @@ export function registerMemoryGraphRoutes(
   );
 }
 
-async function createGraphService(scopedDb: DataContextDb): Promise<GraphMemoryRecallService> {
+async function createGraphService(
+  scopedDb: DataContextDb,
+  repository: MemoryGraphRepository
+): Promise<GraphMemoryRecallService> {
   const config = await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb));
-  return new GraphMemoryRecallService(createEmbeddingProvider(config));
+  return new GraphMemoryRecallService(createEmbeddingProvider(config), repository);
 }
 
 function handleMemoryGraphRouteError(error: unknown, reply: FastifyReply) {
+  if (error instanceof RecordingFactConflictError) {
+    return reply.code(409).send({ error: error.message });
+  }
   if (error instanceof Error && error.message === "Unauthorized") {
     return reply.code(401).send({ error: "Unauthorized" });
   }

@@ -216,7 +216,8 @@ export const postMemoryGraphConfirmRouteSchema = {
       required: ["fact"],
       properties: { fact: { type: "object", additionalProperties: true } }
     },
-    404: memoryGraphErrorResponseSchema
+    404: memoryGraphErrorResponseSchema,
+    409: memoryGraphErrorResponseSchema
   }
 } as const;
 
@@ -236,7 +237,8 @@ export const postMemoryGraphCorrectRouteSchema = {
       required: ["fact"],
       properties: { fact: { type: "object", additionalProperties: true } }
     },
-    404: memoryGraphErrorResponseSchema
+    404: memoryGraphErrorResponseSchema,
+    409: memoryGraphErrorResponseSchema
   }
 } as const;
 
@@ -257,7 +259,8 @@ export const postMemoryGraphStatusRouteSchema = {
       properties: { fact: { type: "object", additionalProperties: true } }
     },
     400: memoryGraphErrorResponseSchema,
-    404: memoryGraphErrorResponseSchema
+    404: memoryGraphErrorResponseSchema,
+    409: memoryGraphErrorResponseSchema
   }
 } as const;
 
@@ -273,7 +276,8 @@ export const postMemoryGraphMarkStaleRouteSchema = {
       required: ["fact"],
       properties: { fact: { type: "object", additionalProperties: true } }
     },
-    404: memoryGraphErrorResponseSchema
+    404: memoryGraphErrorResponseSchema,
+    409: memoryGraphErrorResponseSchema
   }
 } as const;
 

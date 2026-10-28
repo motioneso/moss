@@ -105,6 +105,7 @@ export async function handleExportBuildJob(
         preferences: userExport.tables.preferences,
         tasks: userExport.tables.tasks,
         memory: {
+          recordingHistory: userExport.tables.recordingMemory,
           chunks: userExport.tables.memoryChunks,
           facts: userExport.tables.chatMemoryFacts,
           entities: userExport.tables.memoryEntities,
