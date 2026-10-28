@@ -1,6 +1,6 @@
 # Finance parity checkpoint
 
-Updated 2026-10-28, 10:45 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
+Updated 2026-10-28, 10:48 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
 The original checkout is separate. Nothing has been pushed, published, merged or deployed.
 The [source-linked parity matrix](../specs/2026-10-28-finance-parity.md) records the audited
 baseline and testable acceptance criteria; this document records current implementation.
@@ -133,9 +133,9 @@ Manual account/entry persistence is exercised through the installed app. The rem
 - Removing only currency setup's `confirmWhenKeys` condition made both browser confirmation
   checks fail because no dialog appeared (`103731-1NHBUh`, base `4592edb5`, input `0d13bd7de5bb`,
   rc 1). The manifest was restored before the final six-flow green run. No removed guard remains.
-- Aggregate static passed before the final small copy/draft-review follow-up in
-  `moss-finance-budget-stageb-static3.log`; the final static run is in progress at TypeScript
-  (`moss-finance-budget-stageb-final-static.log`). Earlier attempts caught a fake KV delete return
+- Aggregate static passed, including the final copy/draft-review follow-up, in
+  `moss-finance-budget-stageb-final-static.log` (rc 0). This includes lint, format, all design and
+  maintainability checks, root/tests/web/module TypeScript and app-map generation. Earlier attempts caught a fake KV delete return
   type and a test exceeding 1,000 lines; both were fixed. Browser attempts exposed the missing
   REST locale (fixed), then the actual host confirmation title and the second owner's onboarding
   setup (harness corrected). All four final integration containers were removed.
@@ -338,8 +338,9 @@ full foundation must be rerun after the next substantive slice with available pr
 
 ## Next actions
 
-1. Finish the current currency/history acceptance rerun and commit locally, then run a new frozen
-   foundation while continuing the [concurrent-write plan](2026-10-28-finance-budget-concurrency.md).
+1. Currency/history is committed as `5152c880`, locale forwarding as `7f147700`, and the
+   concurrency plan as `4107c130`. A new frozen foundation is running on clean `5152c880`
+   (`moss_finance_verify-20261028-104418-lQ4O7G.log`); continue the [concurrent-write plan](2026-10-28-finance-budget-concurrency.md).
 2. Bind assignments, moves, draft start and undo to the reviewed ledger and budget revision. Keep
    failed changes atomic and preserve typed input; move Budget forms to awaited host tools.
 3. Implement monthly/date-bound targets, recurring bills and flexible budgeting as tested vertical
@@ -359,8 +360,7 @@ completion is claimed; those need separately authorized configuration and agreem
 
 ## Exact continuation point
 
-The original checkout is clean. The isolated task checkout preserves the currency/history slice locally. Final static verification
-is recorded above; all work is local. The previous full gate completed with the limitations
+The original checkout is clean. The isolated task checkout preserves the currency/history slice locally. Final static verification passed; a frozen full foundation is running on `5152c880`; all work is local. The previous full gate completed with the limitations
 above. Installed harnesses close their API/browser instances and remove temporary bundles.
 Continue Stage C of the budget correctness spec after preserving Stage B. The focused concurrency
 plan describes the revision/fingerprint boundary and taxonomy cutover needed for atomic draft start.
