@@ -1,3 +1,4 @@
+import { MeetingCleanupError, type MeetingDeletionService } from "./deletion-service.js";
 import { registerRecordingRoutes } from "./recording-routes.js";
 import type { MeetingStopSummaryEnqueue } from "./stop-summary-repository.js";
 import {
@@ -8,7 +9,7 @@ import { registerMeetingTranscriptRoutes } from "./transcript-routes.js";
 import type { MeetingPreferenceStore } from "./preferences.js";
 import { registerMeetingPreferenceRoutes } from "./preferences-routes.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
 import {
   createMeetingRecordSchema,
@@ -26,16 +27,10 @@ import {
   MeetingRecordsRepository
 } from "./repository.js";
 
-export interface MeetingRecordRoutesDependencies extends MeetingHistoryRoutesDependencies {
+export interface MeetingContentRoutesDependencies extends MeetingHistoryRoutesDependencies {
   /** General authenticated user session only. Existing companion tokens gain no access here. */
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
-  /** Public-module cleanup runs atomically only for an owner-visible record. */
-  readonly beforeRemove?: (
-    db: DataContextDb,
-    meetingId: string,
-    actor: AccessContext
-  ) => Promise<void>;
   readonly manualSummaryEnqueue?: MeetingStopSummaryEnqueue;
   readonly preferences?: MeetingPreferenceStore;
   readonly repository?: Pick<
@@ -60,17 +55,11 @@ export function registerMeetingRecordRoutes(
     async (request, reply) => {
       try {
         const actor = await dependencies.resolveAccessContext(request);
-        await dependencies.dataContext.withDataContext(actor, async (db) => {
-          if (
-            dependencies.beforeRemove &&
-            (await repository.get(db, request.params.id, { forUpdate: true }))
-          ) {
-            await dependencies.beforeRemove(db, request.params.id, actor);
-          }
-          await repository.remove(db, request.params.id);
-        });
+        await dependencies.deletion.remove(actor, request.params.id);
         return reply.code(204).send();
       } catch (error) {
+        if (error instanceof MeetingCleanupError)
+          return reply.code(409).send({ code: error.code, message: error.message });
         return handleRouteError(error, reply);
       }
     }
@@ -182,4 +171,8 @@ export function registerMeetingRecordRoutes(
       }
     }
   );
+}
+
+export interface MeetingRecordRoutesDependencies extends MeetingContentRoutesDependencies {
+  readonly deletion: Pick<MeetingDeletionService, "remove">;
 }

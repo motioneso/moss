@@ -52,7 +52,8 @@ export const notesModuleManifest = {
   database: {
     migrations: [
       "sql/0336_notes_managed_source_lifecycle.sql",
-      "sql/0337_notes_recording_contributions.sql"
+      "sql/0337_notes_recording_contributions.sql",
+      "sql/0340_notes_recording_cleanup.sql"
     ],
     migrationDirectories: [notesModuleSqlMigrationDirectory],
     ownedTables: [
@@ -257,7 +258,7 @@ export const notesModuleManifest = {
     {
       id: "notes.coordinated_writes",
       description:
-        "Concurrent Moss edits read the latest note before saving. An external edit detected during a save returns a conflict; review the current note before retrying.",
+        "Concurrent Moss edits preserve current note text. Recording deletion removes exact source blocks; changed blocks or unavailable folders keep deletion pending. Account exports include cleanup progress.",
       errors: [
         {
           code: "notes.write_conflict",

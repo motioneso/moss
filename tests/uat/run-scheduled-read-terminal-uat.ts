@@ -1,8 +1,9 @@
 /**
  * #3529 supplemental seeded-owner proof: signup, nine blocking UATs, N1,
  * cancellation/unsaved/fault/due-worker and routine activation remain OUTSTANDING.
- * BLOCKED: no complete correlated fallback observer. All live entries fail closed.
- * After seam repair/executable review: --launch <NEW-private-evidence-directory> (read verify-gate).
+ * The worker drives the correlated fallback observer: chosen run id, observer windows around
+ * each chat turn, 12-minute browser box, ordered teardown. The self-test fails if any join is cut.
+ * Live: --launch <NEW-private-evidence-directory> (read verify-gate).
  * One no-sweep test:uat:3529-real gate/wait; local Docker, pre-import private roots/source/image/DB.
  * Birth/group/session checked before signals/stop; uncertainty retains roots/port/resources (RED).
  * Aggregate 14m includes cleanup. RAW evidence is 0700/0600, without a zero-capture/erasure claim.
@@ -10,16 +11,14 @@
  * --self-test: fake/local scratch only; no Docker/DB/browser/port/auth/network/provider.
  */
 import assert from "node:assert/strict";
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
-  closeSync,
   copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -30,9 +29,22 @@ import { writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DOCKER_HOST, rejectOverrides } from "./n3-launch-checks.js";
+import {
+  groupClosed,
+  validateProcess,
+  type ProcessIdentity,
+  processIdentity,
+  settled,
+  signalOwned,
+  startChild
+} from "./n3-process-control.js";
+import { driveWorker } from "./n3-worker-drive.js";
+import { driveControls, runnerCallControls } from "./n3-worker-drive-controls.js";
+import { EXPECTED_WINDOWS, serveWindows, verifyWindows } from "./n3-window-handshake.js";
 
 const SELF = fileURLToPath(import.meta.url);
-const BASE = "966527c413adc752def72f45ce0c54e660ca0615";
+const BASE = "e4cf4c969a20f6b98d6145b900a913aa086f4aa7";
 const SPEC = "tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts";
 const PRODUCT = [
   "packages/chat/src/live/chat-session-ports.ts",
@@ -41,24 +53,31 @@ const PRODUCT = [
   "packages/chat/src/scheduled-reads/generation.ts",
   "packages/chat/src/scheduled-reads/request.ts"
 ];
-const LEASE = [
+// Paths the branch may change relative to BASE: the N3 tooling, the passive observer
+// instrumentation, and the lease files. Anything else is unreviewed drift.
+const CHANGE_FILES = new Set([
   "package.json",
-  "tests/uat/run-scheduled-read-terminal-uat.ts",
-  SPEC,
-  ".claude/skills/coordinate/uat-trigger-map.tsv"
-];
+  ".dockerignore",
+  ".claude/skills/coordinate/uat-trigger-map.tsv",
+  "packages/chat/src/live/chat-attempt-observer.ts",
+  "packages/chat/src/live/chat-session-launch.ts",
+  "packages/chat/src/live/chat-session-turn.ts",
+  "packages/chat/src/live/classifier-gate-lifecycle.ts",
+  "packages/chat/src/live/classifier-gate-shadow.ts",
+  "tests/unit/chat-attempt-observer.test.ts"
+]);
+const CHANGE_PREFIXES = ["tests/uat/", "docs/superpowers/"];
+export function sourceChangeAllowed(path: string): boolean {
+  return CHANGE_FILES.has(path) || CHANGE_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
 const RUN_MS = 12 * 60_000;
-const TOTAL_MS = RUN_MS + 120_000; // Includes teardown; +30m due retains >10m margin.
+const CLEANUP_MS = 120_000;
+const TOTAL_MS = RUN_MS + CLEANUP_MS; // Includes teardown; +30m due retains >10m margin.
 let protocolEnd = Infinity;
 function remaining(max = 120_000): number {
   const left = protocolEnd - Date.now();
   check(left > 0, "aggregate protocol deadline exhausted; retain owned resources");
   return Math.max(1, Math.min(max, left));
-}
-export function requireFallbackObserver(): void {
-  throw new Error(
-    "N3_FALLBACK_OBSERVER_UNAVAILABLE: launch/submission/classifier attempts unobservable"
-  );
 }
 async function protectedLifecycle(body: () => Promise<void>, cleanup: () => Promise<number>) {
   let failed = false;
@@ -75,7 +94,6 @@ async function protectedLifecycle(body: () => Promise<void>, cleanup: () => Prom
   }
   return { failed, cleanup: errors };
 }
-const DOCKER_HOST = "unix:///var/run/docker.sock";
 const uid = process.getuid?.();
 function check(value: unknown, label: string): asserts value {
   if (!value) throw new Error(label);
@@ -103,10 +121,10 @@ function record(directory: string, name: string, data: unknown): void {
     flag: "wx"
   });
 }
-async function beforeDeadline<T>(operation: () => Promise<T>): Promise<T> {
+async function beforeDeadline<T>(operation: () => Promise<T>, until = Infinity): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const budget = remaining(Infinity);
+    const budget = Math.min(remaining(Infinity), Math.max(1, until - Date.now()));
     if (!Number.isFinite(budget)) return operation(); // Fake controls have no live protocol.
     return await Promise.race([
       operation(),
@@ -151,8 +169,8 @@ function sourceReceipt() {
   );
   const changed = capture("git", ["diff", "--name-only", BASE, head]).split("\n").filter(Boolean);
   check(
-    changed.length === 4 && changed.every((path) => LEASE.includes(path)),
-    "four-path lease mismatch"
+    changed.length > 0 && changed.every(sourceChangeAllowed),
+    "source change outside the allowed set"
   );
   const hashes: Record<string, string> = {};
   for (const path of capture("git", ["ls-files", "apps", "packages"]).split("\n").filter(Boolean)) {
@@ -174,68 +192,9 @@ export async function cleanupAll(
   }
   return errors;
 }
-function rejectOverrides(env: NodeJS.ProcessEnv): void {
-  check(!env.DOCKER_HOST || env.DOCKER_HOST === DOCKER_HOST, "local Docker daemon required");
-  for (const key of [
-    "DOCKER_CONTEXT",
-    "DOCKER_TLS_VERIFY",
-    "DOCKER_CERT_PATH",
-    "DOCKER_CONFIG",
-    "MOSS_UAT_REAL_CHAT_MODEL",
-    "JARVIS_UAT_SEED_CHAT_SCRIPT",
-    "MOSS_UAT_SEED_CHAT_SCRIPT",
-    "MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF",
-    "UAT_DOCKER_SUBNET",
-    "MOSS_NATIVE_SANDBOX",
-    "MOSS_UAT_NODE_ENV",
-    "MOSS_TEST_GOOGLE_CALENDAR_BASE_URL",
-    "JARVIS_ENV_FILE",
-    "COMPOSE_FILE",
-    "COMPOSE_PROJECT_NAME",
-    "NODE_OPTIONS",
-    "MOSS_UAT_REAL_CHAT_PROVIDER"
-  ])
-    check(!env[key], `override rejected: ${key}`);
-  check(
-    !env.JARVIS_UAT_REAL_CHAT_PROVIDER || env.JARVIS_UAT_REAL_CHAT_PROVIDER === "codex",
-    "Codex required"
-  );
-  check(env.JARVIS_UAT_BUILD !== "0" && env.MOSS_UAT_BUILD !== "0", "fresh build required");
-}
-function startChild(
-  args: string[],
-  env: NodeJS.ProcessEnv,
-  log: string,
-  detached = false
-): ChildProcess {
-  const fd = openSync(log, "wx", 0o600);
-  let child: ChildProcess | undefined;
+async function boundedChild(child: ChildProcess, until = Infinity): Promise<number> {
   try {
-    child = spawn(args[0]!, args.slice(1), { env, stdio: ["ignore", fd, fd], detached });
-    // No post-spawn exception may lose the child. Unknown birth stays uncertain.
-    try {
-      if (child.pid) births.set(child, processIdentity(child.pid));
-    } catch {
-      /* Missing birth remains uncertain. */
-    }
-    return child;
-  } finally {
-    try {
-      closeSync(fd);
-    } catch {
-      if (child) births.delete(child); // Preserve ownership, mark closure uncertain.
-    }
-  }
-}
-function settled(child: ChildProcess): Promise<number> {
-  return new Promise((resolveResult) => {
-    child.once("error", () => resolveResult(1));
-    child.once("close", (code) => resolveResult(code ?? 1));
-  });
-}
-async function boundedChild(child: ChildProcess): Promise<number> {
-  try {
-    return await beforeDeadline(() => settled(child));
+    return await beforeDeadline(() => settled(child), until);
   } catch {
     try {
       signalOwned(child, "SIGKILL");
@@ -244,48 +203,6 @@ async function boundedChild(child: ChildProcess): Promise<number> {
     }
     return 1;
   }
-}
-interface ProcessIdentity {
-  pid: number;
-  start: string;
-  group: number;
-  session: number;
-}
-const births = new WeakMap<ChildProcess, ProcessIdentity | undefined>();
-function processIdentity(pid: number): ProcessIdentity | undefined {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-    return { pid, start: fields[19]!, group: Number(fields[2]), session: Number(fields[3]) };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
-}
-function validateProcess(expected: ProcessIdentity | undefined, actual: ProcessIdentity): void {
-  check(
-    expected && JSON.stringify(expected) === JSON.stringify(actual),
-    "process identity changed"
-  );
-}
-function signalOwned(child: ChildProcess, signal: NodeJS.Signals, group = false): void {
-  if (!child.pid) return;
-  const current = processIdentity(child.pid);
-  if (!current) return;
-  validateProcess(births.get(child), current); // Revalidate before EVERY TERM/KILL.
-  if (group) check(current.group === child.pid && current.session === child.pid, "unowned group");
-  try {
-    process.kill(group ? -child.pid : child.pid, signal);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-  }
-}
-function groupClosed(child: ChildProcess): boolean {
-  if (!child.pid) return true;
-  if (!births.get(child)) return false;
-  return !readdirSync("/proc")
-    .filter((name) => /^\d+$/.test(name))
-    .some((name) => processIdentity(Number(name))?.group === child.pid);
 }
 function projectsInLog(raw: string, pid: number): string[] {
   return [
@@ -300,7 +217,6 @@ function projectsInLog(raw: string, pid: number): string[] {
 }
 
 async function gateMain(): Promise<number> {
-  requireFallbackObserver();
   check(process.env.JARVIS_GATE_RUN === "1", "verify-gate launcher required");
   const root = process.env.N3_UAT_ROOT!;
   const evidence = process.env.N3_UAT_EVIDENCE!;
@@ -331,7 +247,7 @@ async function gateMain(): Promise<number> {
         join(evidence, "worker-raw.log"),
         true
       ),
-    remaining(Math.max(1, protocolEnd - 120_000 - Date.now()))
+    remaining(Math.max(1, protocolEnd - CLEANUP_MS - Date.now()))
   );
 }
 async function supervisedWorker(
@@ -412,7 +328,6 @@ function requireWorkerClosure(evidence: string): number {
   return pid;
 }
 async function worker(): Promise<number> {
-  requireFallbackObserver();
   check(
     process.env.JARVIS_GATE_RUN === "1" && process.env.N3_UAT_ROOT,
     "worker requires owned gate"
@@ -425,6 +340,16 @@ async function worker(): Promise<number> {
     for (const role of ["BOOTSTRAP", "MIGRATION", "APP", "AUTH", "WORKER"])
       delete process.env[`${prefix}_${role}_DATABASE_URL`];
   const { provisionForUat } = await import("./provisioner.js");
+  const { planWorkerObserver } = await import("./n3-worker-wiring.js");
+  const { listOwnedResources } = await import("./provisioner-cleanup.js");
+  const runEnd = protocolEnd - CLEANUP_MS; // The run time box; cleanup keeps the rest.
+  const plan = planWorkerObserver({
+    evidenceDir: evidence,
+    repoRoot: process.cwd(),
+    claimedPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),
+    imageTag: process.env.JARVIS_IMAGE_TAG!,
+    deadline: runEnd
+  });
   let stopped = false;
   let browserChild: ChildProcess | undefined;
   const stop = () => {
@@ -433,91 +358,96 @@ async function worker(): Promise<number> {
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  let stack: Awaited<ReturnType<typeof provisionForUat>> | undefined;
-  let result = 1;
-  let phase = "provision";
-  let cleanup: number;
+  let outcome: Awaited<ReturnType<typeof driveWorker>>;
   try {
-    stack = await provisionForUat("solo-admin", {
-      claimedWebPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT)
+    outcome = await driveWorker({
+      evidence,
+      claimedPort: claimedPort(process.env.JARVIS_UAT_CLAIMED_WEB_PORT),
+      runEnd,
+      plan,
+      env: process.env,
+      now: Date.now,
+      isStopped: () => stopped,
+      provision: provisionForUat,
+      serveWindows,
+      verifyWindows,
+      verifyInstalled: (stack) => verifyInstalled(evidence, stack.projectName),
+      runBrowser: async (env, deadline) => {
+        browserChild = startChild(
+          [
+            process.execPath,
+            "node_modules/@playwright/test/cli.js",
+            "test",
+            "--config",
+            "tests/uat/playwright.uat.config.ts",
+            "--workers=1",
+            "--retries=0",
+            "--reporter=line",
+            "--output",
+            join(process.env.N3_UAT_ROOT!, "playwright"),
+            SPEC
+          ],
+          env,
+          join(evidence, "playwright-raw.log")
+        );
+        return boundedChild(browserChild, deadline);
+      },
+      listOwned: listOwnedResources,
+      beforeStep: () => void remaining(),
+      onError: (error) => console.error(error) // Quarantined worker-raw.log only; never relay.
     });
-    check(!stopped, "interrupted during provisioning");
-    phase = "installed-source-correspondence";
-    const image = `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`;
-    const imageId = capture("docker", ["image", "inspect", "--format", "{{.Id}}", image]);
-    check(/^sha256:[a-f0-9]{64}$/.test(imageId), "immutable image missing");
-    const container = `${stack.projectName}-jarv1s-1`;
-    check(
-      capture("docker", ["inspect", "--format", "{{.Image}}", container]) === imageId,
-      "installed image mismatch"
-    );
-    const databaseBoundary = capture("docker", [
-      "exec",
-      container,
-      "node",
-      "-e",
-      "const roles=['BOOTSTRAP','MIGRATION','APP','AUTH','WORKER'];" +
-        "for(const role of roles){const u=new URL(process.env['MOSS_'+role+'_DATABASE_URL']??process.env['JARVIS_'+role+'_DATABASE_URL']);" +
-        "if(u.hostname!=='postgres'||u.port!=='5432'||u.pathname!=='/jarv1s')process.exit(1)};console.log('owned-compose-postgres')"
-    ]);
-    check(databaseBoundary === "owned-compose-postgres", "UAT DB endpoint mismatch");
-    const installed: Record<string, string> = {};
-    for (const path of PRODUCT) {
-      const hash = capture("docker", ["exec", container, "sha256sum", `/app/${path}`]).split(
-        /\s+/
-      )[0]!;
-      check(hash === digest(readFileSync(path)), "installed product bytes mismatch");
-      installed[path] = hash;
-    }
-    const input = JSON.parse(readFileSync(join(evidence, "inputs.json"), "utf8")) as {
-      head: string;
-    };
-    check(sourceReceipt().head === input.head, "source freeze changed during build");
-    record(evidence, "installed.json", {
-      project: stack.projectName,
-      imageId,
-      databaseBoundary,
-      installed,
-      callerRoot: process.env.N3_UAT_ROOT,
-      fixtureRoots: ["/data/cli-auth", `/data/vaults/00000000-0000-4000-8000-000000000001`]
-    });
-    const env = {
-      ...process.env,
-      JARVIS_UAT_BASE_URL: stack.baseURL,
-      JARVIS_UAT_PROJECT_NAME: stack.projectName,
-      MOSS_UAT_CAPTURE_OFF: "1",
-      MOSS_UAT_BROWSER: "chromium"
-    };
-    phase = "playwright";
-    browserChild = startChild(
-      [
-        process.execPath,
-        "node_modules/@playwright/test/cli.js",
-        "test",
-        "--config",
-        "tests/uat/playwright.uat.config.ts",
-        "--workers=1",
-        "--retries=0",
-        "--reporter=line",
-        "--output",
-        join(process.env.N3_UAT_ROOT!, "playwright"),
-        SPEC
-      ],
-      env,
-      join(evidence, "playwright-raw.log")
-    );
-    result = await boundedChild(browserChild);
-    if (stopped) result = 1;
-  } catch (error) {
-    console.error(error); // Quarantined worker-raw.log only; never relay this output.
-    result = 1;
   } finally {
-    cleanup = await cleanupAll([() => stack?.teardown()]);
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
-    await terminalRecord(evidence, "stack-exit.json", { result, cleanup, stopped, phase });
   }
-  return result || cleanup ? 1 : 0;
+  await terminalRecord(evidence, "stack-exit.json", {
+    result: outcome.result,
+    cleanup: outcome.cleanup,
+    stopped,
+    phase: outcome.phase,
+    teardown: outcome.teardown
+  });
+  return outcome.exitCode;
+}
+async function verifyInstalled(evidence: string, projectName: string): Promise<void> {
+  const image = `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG}`;
+  const imageId = capture("docker", ["image", "inspect", "--format", "{{.Id}}", image]);
+  check(/^sha256:[a-f0-9]{64}$/.test(imageId), "immutable image missing");
+  const container = `${projectName}-jarv1s-1`;
+  check(
+    capture("docker", ["inspect", "--format", "{{.Image}}", container]) === imageId,
+    "installed image mismatch"
+  );
+  const databaseBoundary = capture("docker", [
+    "exec",
+    container,
+    "node",
+    "-e",
+    "const roles=['BOOTSTRAP','MIGRATION','APP','AUTH','WORKER'];" +
+      "for(const role of roles){const u=new URL(process.env['MOSS_'+role+'_DATABASE_URL']??process.env['JARVIS_'+role+'_DATABASE_URL']);" +
+      "if(u.hostname!=='postgres'||u.port!=='5432'||u.pathname!=='/jarv1s')process.exit(1)};console.log('owned-compose-postgres')"
+  ]);
+  check(databaseBoundary === "owned-compose-postgres", "UAT DB endpoint mismatch");
+  const installed: Record<string, string> = {};
+  for (const path of PRODUCT) {
+    const hash = capture("docker", ["exec", container, "sha256sum", `/app/${path}`]).split(
+      /\s+/
+    )[0]!;
+    check(hash === digest(readFileSync(path)), "installed product bytes mismatch");
+    installed[path] = hash;
+  }
+  const input = JSON.parse(readFileSync(join(evidence, "inputs.json"), "utf8")) as {
+    head: string;
+  };
+  check(sourceReceipt().head === input.head, "source freeze changed during build");
+  record(evidence, "installed.json", {
+    project: projectName,
+    imageId,
+    databaseBoundary,
+    installed,
+    callerRoot: process.env.N3_UAT_ROOT,
+    fixtureRoots: ["/data/cli-auth", `/data/vaults/00000000-0000-4000-8000-000000000001`]
+  });
 }
 async function removeDocker(list: string[], remove: string[], valid = (_id: string) => true) {
   const ids = capture("docker", list).split("\n").filter(Boolean);
@@ -541,7 +471,6 @@ async function cleanupProject(project: string): Promise<void> {
   check(errors === 0, "project cleanup incomplete");
 }
 async function launch(destination: string): Promise<number> {
-  requireFallbackObserver();
   process.umask(0o077);
   rejectOverrides(process.env);
   // All launch, observation, fixture, spec and cleanup calls inherit one endpoint.
@@ -833,6 +762,21 @@ async function launch(destination: string): Promise<number> {
 }
 async function selfTest(): Promise<void> {
   let controls = 0;
+  const windowLog = (modes: readonly ("positive" | "terminal")[], extra = {}) => ({
+    completed: modes.map((mode, i) => ({ seq: i + 1, mode, window: i + 1, delta: {} })),
+    failure: null,
+    open: false,
+    ...extra
+  });
+  verifyWindows(windowLog(EXPECTED_WINDOWS), EXPECTED_WINDOWS);
+  for (const bad of [
+    windowLog(["positive", "terminal"]),
+    windowLog(["terminal", "terminal", "positive"]),
+    windowLog(EXPECTED_WINDOWS, { open: true }),
+    windowLog(EXPECTED_WINDOWS, { failure: "x" })
+  ])
+    assert.throws(() => verifyWindows(bad, EXPECTED_WINDOWS));
+  controls += 5;
   for (const value of [undefined, "", "5173", "1533", "5300", "5180x"]) {
     assert.throws(() => claimedPort(value));
     controls++;
@@ -840,6 +784,19 @@ async function selfTest(): Promise<void> {
   assert.equal(claimedPort("5180"), 5180);
   assert.equal(claimedPort("5299"), 5299);
   controls += 2;
+  for (const path of [
+    "tests/uat/n3-teardown.ts",
+    "packages/chat/src/live/chat-session-turn.ts",
+    "docs/superpowers/specs/x.md"
+  ])
+    assert.equal(sourceChangeAllowed(path), true);
+  for (const path of [
+    "packages/chat/src/live/chat-session-manager.ts",
+    "apps/api/src/server.ts",
+    "tests/uat-other/x.ts"
+  ])
+    assert.equal(sourceChangeAllowed(path), false);
+  controls += 6;
   assert.deepEqual(
     projectsInLog(
       "[uat] provisioning uat-123_abcd1234 on port 5180 subnet x\n" +
@@ -883,8 +840,8 @@ async function selfTest(): Promise<void> {
     assert.equal(lstatSync(join(root, "receipt.json")).mode & 0o777, 0o600);
     assert.throws(() => record(root, "receipt.json", { replaced: true }));
     controls++;
-    assert.throws(requireFallbackObserver, /N3_FALLBACK_OBSERVER_UNAVAILABLE/);
-    controls++;
+    controls += await driveControls();
+    controls += runnerCallControls(readFileSync(SELF, "utf8"));
     for (const failAt of [0, 1, 2]) {
       let partial: string | undefined;
       const disposition = await protectedLifecycle(
