@@ -1,7 +1,7 @@
 import { FinanceKvError } from "./errors.js";
 
 /** Stored money remains integer hundredths; this does not introduce FX conversion. */
-export function safeCents(value: string | number): number {
+export function safeCents(value: string | number | bigint): number {
   const cents = Number(value);
   if (!Number.isSafeInteger(cents)) {
     throw new FinanceKvError("invalid_record", "money must be safe integer hundredths");

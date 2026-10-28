@@ -1,6 +1,6 @@
 # Finance parity checkpoint
 
-Updated 2026-10-28, 09:40 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
+Updated 2026-10-28, 09:52 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
 The original checkout is separate. Nothing has been pushed, published, merged or deployed.
 The [source-linked parity matrix](../specs/2026-10-28-finance-parity.md) records the audited
 baseline and testable acceptance criteria; this document records current implementation.
@@ -65,31 +65,49 @@ baseline and testable acceptance criteria; this document records current impleme
    preserving visible headings/actions. Import into provider accounts, categories/tags from files,
    larger batches and automatic replacement are not claimed.
 
+10. **Exact budget arithmetic and manual cash funding.** Envelope activity, carry and cumulative
+    income/assignment math now use integer arithmetic throughout. Safe public values are checked
+    on output; large intermediate cancellation does not lose cents. Ready-to-assign includes manual
+    cash without treating other assets/loans/investments as spendable money. Existing carry and card
+    policies remain. Currency/history/concurrency work is specified separately and still incomplete.
+
 Current Park Press/Park Pass foundations supply Archivo, semantic colors, shared controls and
 modal behavior, warm paper, tabular amounts and responsive layouts. Module styles add layout.
 The Finance manifest is 0.7.0; app-map entries describe the bounded capability and remediations.
 
 ## Current capability matrix
 
-| Area                        | Status now                                                                   | Remaining acceptance                                                                      |
-| --------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Accounts                    | Partial: manual/provider accounts, exact opening balances and posted entries | Archive, provider reconciliation and broader currency model                               |
-| Import/reconciliation       | Manual entry, statements and bounded atomic CSV preview/import supported     | Provider-account import/reconciliation, larger files/reviews, category mapping            |
-| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV         | Full-history export, atomic bulk editing, explicit transfer linking                       |
-| Splits                      | Supported posted own SQL category splits; installed UI persistence proven    | Split transfers, line notes/payees and pending edits                                      |
-| Categories/rules            | Partial existing categorization and merchant rules                           | Management/preview and ordinary-write concurrency                                         |
-| Envelope budget/rollover    | Partial existing envelopes; validated atomic assignment batches              | Currency/history policy, credit-card reserves, configurable carry                         |
-| Flexible budget             | Missing                                                                      | Fixed/non-monthly/flex model without double counting                                      |
-| Targets/goals               | Missing                                                                      | Monthly/date-bound targets, exact remaining funds                                         |
-| Recurring bills             | Missing                                                                      | Cadence, occurrences and one-time import matching                                         |
-| Cash flow/reports/net worth | Partial: currency-safe spending/cash flow/snapshots                          | Ledger valuations, drill-through, saved/custom views                                      |
-| Household                   | Partial existing opt-in shared reads                                         | Explicit co-edit and joint-account policy; preserve private notes                         |
-| Investments                 | Partial balances only                                                        | Provider-dependent holdings/performance; trading out of scope                             |
-| Long-range forecasts        | Out of scope for initial roadmap                                             | Separate assumptions/uncertainty design                                                   |
-| Platform page writes        | Implemented; actual installed Finance and synthetic-module proof passed      | Independent review, CI and release/deployment acceptance; Meals consumer remains separate |
+| Area                        | Status now                                                                    | Remaining acceptance                                                                      |
+| --------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Accounts                    | Partial: manual/provider accounts, exact opening balances and posted entries  | Archive, provider reconciliation and broader currency model                               |
+| Import/reconciliation       | Manual entry, statements and bounded atomic CSV preview/import supported      | Provider-account import/reconciliation, larger files/reviews, category mapping            |
+| Transaction workspace       | Supported bounded filtering, duplicate candidates and loaded-row CSV          | Full-history export, atomic bulk editing, explicit transfer linking                       |
+| Splits                      | Supported posted own SQL category splits; installed UI persistence proven     | Split transfers, line notes/payees and pending edits                                      |
+| Categories/rules            | Partial existing categorization and merchant rules                            | Management/preview and ordinary-write concurrency                                         |
+| Envelope budget/rollover    | Partial envelopes; exact arithmetic, manual cash and validated atomic batches | Currency/history policy, credit-card reserves, configurable carry                         |
+| Flexible budget             | Missing                                                                       | Fixed/non-monthly/flex model without double counting                                      |
+| Targets/goals               | Missing                                                                       | Monthly/date-bound targets, exact remaining funds                                         |
+| Recurring bills             | Missing                                                                       | Cadence, occurrences and one-time import matching                                         |
+| Cash flow/reports/net worth | Partial: currency-safe spending/cash flow/snapshots                           | Ledger valuations, drill-through, saved/custom views                                      |
+| Household                   | Partial existing opt-in shared reads                                          | Explicit co-edit and joint-account policy; preserve private notes                         |
+| Investments                 | Partial balances only                                                         | Provider-dependent holdings/performance; trading out of scope                             |
+| Long-range forecasts        | Out of scope for initial roadmap                                              | Separate assumptions/uncertainty design                                                   |
+| Platform page writes        | Implemented; actual installed Finance and synthetic-module proof passed       | Independent review, CI and release/deployment acceptance; Meals consumer remains separate |
 
 Manual account/entry persistence is exercised through the installed app. The remaining
 [manual-ledger design](../specs/2026-10-28-finance-manual-ledger.md) now includes completed bounded reconciliation. Explicit transfers and archive remain unimplemented.
+
+## Current budget-precision verification
+
+- **50 Finance files / 538 tests passed**, `moss-finance-budget-precision-unit.log`, including large
+  cancelling values, unsafe source/output values, carry across year gaps and manual cash funding.
+- **4 installed flows passed**, `094830-liZK4k`, base `dbc5c6a3`, input `fe7434a8a696`, rc 0.
+  The real budget tool and signed-in Budget page both show the exact ready-to-assign result including
+  the synthetic manual cash account. Existing import/reconciliation/split/platform flows also passed.
+- Final aggregate static verification is pending for this small follow-up. The next implementation
+  is Stage B in the [budget correctness spec](../specs/2026-10-28-finance-budget-correctness.md):
+  reviewed currency setup and historical funding, followed by atomic ordinary writes. Do not
+  interpret this arithmetic fix as full envelope parity or a fix for mixed-currency budgets.
 
 ## Current import verification
 
@@ -119,7 +137,11 @@ Manual account/entry persistence is exercised through the installed app. The rem
   tests were updated. The manifest retains complete validation under a documented narrow line-count
   exemption. A pre-existing test rejects any uncommitted shared Dialog edit; it passes with the
   reviewed primitive committed. Static attempts found a missing test import extension and a format
-  race while the test was edited. Those are corrected; final aggregate static rerun is pending.
+  race while the test was edited. Those are corrected. On clean `209a4e72`, **17 DB tests**
+  (`094011-EeMUul`), **11 install/backfill tests** (`094011-Bt5W2a`) and **4 installed flows**
+  (`094011-qG9SMr`) all passed, input `e1658952c133`, rc 0 and container cleanup confirmed.
+  Its separate frozen foundation `094009-rgShgW` passed the full static phase and is running units;
+  no final foundation outcome is inferred from that intermediate progress.
 
 ## Earlier reconciliation verification
 
@@ -251,7 +273,7 @@ unmappable native ACL IDs and four bundled-browser suites. The container maps on
 satisfy an ancestry check reaching `/`; guards were not weakened. This comparison establishes no
 new aggregate failure across the tested slices, not an independently proven whole-main baseline.
 Later foundation migration/UAT/full-integration phases did not run; separately listed narrow
-integration gates did. CI remains unrun. A frozen post-import foundation run is next.
+integration gates did. CI remains unrun. The frozen post-import run at `209a4e72` is active: `094009-rgShgW`; its static phase passed.
 
 `getfacl` and `setfacl` have now been recovered from Debian's official signed package repository
 into task-local tooling. Playwright's official Chromium download failed with HTTP 403 Domain
@@ -265,7 +287,7 @@ full foundation must be rerun after the next substantive slice with available pr
 
 ## Next actions
 
-1. Preserve the CSV checkpoint and finish its frozen acceptance gates. Prioritize budget currency,
+1. Preserve CSV (`209a4e72`) and exact-budget checkpoints; read the active full gate to completion. Prioritize budget currency,
    funding scope, exact arithmetic and historical ready-to-assign, then explicit transfers/archive.
 2. Keep the 500-entry reconciliation limit explicit; add pagination/selection before claiming
    support for larger single-day statements. Provider reconciliation remains separate.

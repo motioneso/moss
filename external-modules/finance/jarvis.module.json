@@ -60,7 +60,7 @@
       {
         "id": "finance.budget",
         "label": "Budget",
-        "description": "This month's budget: money ready to assign, and each category's assigned, spent and available amounts.",
+        "description": "This month's budget: money ready to assign, and each category's assigned, spent and available amounts. Manual cash, depository accounts and credit cards fund ready-to-assign; other assets, loans and investments do not. Exact integer calculations refuse unsafe totals. Currency and historical funding policy remain limited.",
         "path": "/"
       },
       {

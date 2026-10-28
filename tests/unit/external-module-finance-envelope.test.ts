@@ -207,3 +207,53 @@ describe("finance envelope math (#1148)", () => {
     expect(deriveBudgetMonths(input)).toEqual(deriveBudgetMonths(input));
   });
 });
+
+describe("exact envelope boundaries", () => {
+  it("keeps a cent through cancelling large activity instead of rounding an intermediate sum", () => {
+    const maximum = Number.MAX_SAFE_INTEGER;
+    const input = {
+      ledgers: { "2026-07": ledger({ groceries: 10 }) },
+      transactionsByMonth: {
+        "2026-07": [maximum, 2, -maximum].map((amountCents) =>
+          txn({ categoryId: "groceries", amountCents })
+        )
+      }
+    };
+    const category = deriveBudgetMonths(input)["2026-07"]!.categories.groceries!;
+    expect(category).toEqual({ assignedCents: 10, activityCents: 2, availableCents: 8 });
+    input.transactionsByMonth["2026-07"].reverse();
+    expect(deriveBudgetMonths(input)["2026-07"]!.categories.groceries).toEqual(category);
+  });
+  it("rejects unsafe public activity or carry, and validates every source amount", () => {
+    const maximum = Number.MAX_SAFE_INTEGER;
+    expect(() =>
+      deriveBudgetMonths({
+        ledgers: {},
+        transactionsByMonth: {
+          "2026-07": [
+            txn({ amountCents: maximum, categoryId: "groceries" }),
+            txn({ amountCents: 1, categoryId: "groceries" })
+          ]
+        }
+      })
+    ).toThrow(/safe integer/);
+    expect(() =>
+      deriveBudgetMonths({
+        ledgers: { "2026-12": ledger({ groceries: maximum }), "2027-02": ledger({ groceries: 1 }) },
+        transactionsByMonth: {}
+      })
+    ).toThrow(/safe integer/);
+    expect(() =>
+      deriveBudgetMonths({
+        ledgers: {},
+        transactionsByMonth: { "2026-07": [txn({ amountCents: 1.5 })] }
+      })
+    ).toThrow(/safe integer/);
+    expect(() =>
+      deriveBudgetMonths({
+        ledgers: { "2026-07": ledger({ groceries: 1.5 }) },
+        transactionsByMonth: {}
+      })
+    ).toThrow(/safe integer/);
+  });
+});

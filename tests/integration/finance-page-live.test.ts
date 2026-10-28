@@ -449,6 +449,10 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         expect(foreign.statusCode).toBe(422);
         expect(foreign.body).not.toContain("Synthetic wallet");
         await review.getByRole("button", { name: "Close", exact: true }).click();
+        const budget = await readTool("finance.budget.status", { month });
+        expect(budget.readyToAssignCents).toBe(120588);
+        await page.goto(`${base}/m/finance`);
+        await page.getByText("$1,205.88", { exact: true }).waitFor();
       } catch (error) {
         if (artifacts)
           await page.screenshot({
