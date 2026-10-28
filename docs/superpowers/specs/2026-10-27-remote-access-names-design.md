@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-27
 
-**Status:** Draft for Ben's review. Not approved. Seven decisions are recorded (see Decided); the screens are not signed off. No build issue exists yet; one `task` issue is
+**Status:** Draft for Ben's review. Not approved. Seven decisions are recorded (see Decided). The screens were approved by Ben on 2026-10-28, on condition they match the rest of Settings; that check is done (see Screens). No build issue exists yet; one `task` issue is
 opened per slice after approval.
 
 **Grounded on:** `origin/main` = `936eee87a`, `docs/operations/self-hosted-tls.md`,
@@ -462,13 +462,13 @@ its app-map change and release note.
 Slice 3 must finish before any public launch. Slices 5 to 7 are hidden from release until the
 Public Suffix List decision (see Open questions) is made.
 
-## Screens needed (drawn for review, not approved)
+## Screens (approved by Ben, 2026-10-28)
 
 Mockups: `docs/superpowers/mockups/remote-access/index.html`. Serve the folder (any static server)
 so each frame sizes to its screen; opened from disk, frames scroll inside a fixed height. Each
 screen shows the wide window and the phone, with a button per state and a light/dark switch. Ben
-answered the four questions the mockups raised (see Decided); he has not signed off the screens
-themselves.
+answered the four questions the mockups raised (see Decided) and approved the screens on
+2026-10-28, once they matched the rest of Settings.
 
 The screens are drawn with the real app: `app.css` is a frozen copy of the live web CSS at
 `9b0e7487b`, and `shell.js` holds the real sidebar, top bar and Settings markup captured from the
