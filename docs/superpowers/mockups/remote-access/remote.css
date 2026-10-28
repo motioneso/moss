@@ -1,0 +1,167 @@
+/*
+ * Remote access mockups: layout for these screens, plus stand-ins for the three
+ * pieces Moss does not have yet (step list, suffix input, QR code). The build adds
+ * those to @moss/ui. Everything else comes from app.css. Tokens only, no raw colours.
+ */
+
+/* ---- Layout ---- */
+
+.ra-ctl {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.ra-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.ra-actions {
+  margin-top: var(--space-6);
+}
+
+.ra-block {
+  margin-top: var(--space-5);
+}
+
+.ra-qrrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.ra-rail-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.ra-signin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+@media (max-width: 960px) {
+  .ra-rail-steps {
+    display: none;
+  }
+}
+
+/* ---- New piece: step list ---- */
+
+.ra-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.ra-steps__group {
+  margin-top: var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.ra-steps__group:first-child {
+  margin-top: 0;
+}
+
+.ra-steps__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ra-steps__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: var(--border-w) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+
+.ra-steps__dot svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ra-steps__item.is-done .ra-steps__dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.ra-steps__item.is-now {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}
+
+.ra-steps__item.is-now .ra-steps__dot {
+  border-color: var(--accent-fg);
+  box-shadow: inset 0 0 0 4px var(--surface), inset 0 0 0 9px var(--accent-fg);
+}
+
+/* ---- New piece: input with a fixed suffix ---- */
+
+.ra-suffix {
+  display: flex;
+  align-items: stretch;
+  max-width: 460px;
+}
+
+.ra-suffix .jds-input {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.ra-suffix__text {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border: var(--border-w) solid var(--border-default);
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- New piece: QR code ---- */
+
+.ra-qr {
+  display: inline-flex;
+  flex: none;
+  padding: var(--space-2);
+  border: var(--border-w) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.ra-qr svg {
+  width: 112px;
+  height: 112px;
+  color: var(--ink);
+}
