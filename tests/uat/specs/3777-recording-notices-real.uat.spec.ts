@@ -65,6 +65,10 @@ test("an uncertain real classification reaches Main once and survives reload (#3
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const drawer = page.locator("aside.chatd");
   await expect(drawer).toBeVisible();
+  await drawer.getByRole("button", { name: "Remove meeting context", exact: true }).click();
+  await expect(
+    drawer.getByRole("button", { name: "Remove meeting context", exact: true })
+  ).toHaveCount(0);
   const firstTurn = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/api/chat/turn" &&
