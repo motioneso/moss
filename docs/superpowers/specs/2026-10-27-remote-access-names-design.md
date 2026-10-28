@@ -2,8 +2,9 @@
 
 **Date:** 2026-10-27
 
-**Status:** Draft for Ben's review. Not approved. Seven decisions are recorded (see Decided). The screens were approved by Ben on 2026-10-28, on condition they match the rest of Settings; that check is done (see Screens). No build issue exists yet; one `task` issue is
-opened per slice after approval.
+**Status:** Approved by Ben, 2026-10-28. Ten decisions are recorded (see Decided), and the screens
+match the rest of Settings (see Screens). The open questions below are settled in the slice that
+needs each answer. One `task` issue is opened per slice.
 
 **Grounded on:** `origin/main` = `936eee87a`, `docs/operations/self-hosted-tls.md`,
 `docs/operations/deploy.md`, the self-hosted TLS specs of 2026-08-10, the Wave 6 secure-context
@@ -600,6 +601,14 @@ Decided by Ben on 2026-10-27.
 7. **The test case is Ben's own server.** Tailscale's tailnet-wide MagicDNS is on, and the machine's
    own "use Tailscale DNS" setting is off. Slice 1 tests whether a Tailscale certificate and the
    `ts.net` name still work in that state.
+
+Decided by Ben on 2026-10-28, on the screens.
+
+8. **Problems show as a note at the top of Remote access plus a row on the Notifications page.**
+   No banner across every screen.
+9. **Remote access lives in Admin / Setup, in the Operations group**, before Advanced host setup.
+10. **The access choices keep the installer's names**: Keep local, Home network (HTTP,
+    unencrypted), From anywhere.
 
 ## Open questions for Ben (most important first)
 
