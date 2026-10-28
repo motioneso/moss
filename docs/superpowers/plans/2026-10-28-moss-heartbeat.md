@@ -25,6 +25,7 @@ they rely on before writing code and records any drift in the ledger at the end.
 | Calendar change signal                    | `packages/calendar/sql/0011_calendar_module.sql:16` (`updated_at`); bounded read `packages/calendar/src/manifest.ts:343`                     | New bounded read returns max `updated_at` as revision. No sync cursor exists.                                               |
 | Tasks change signal                       | `packages/tasks/sql/0003_tasks_module.sql:24`; background-authorized `packages/tasks/src/manifest.ts:517-530`                                | New bounded read alongside `tasks.get`.                                                                                     |
 | Remembered commitments (Memory source)    | `packages/commitments/sql/0125_commitment_candidates.sql:8-15`, `:31`, `:44`; `packages/commitments/src/repository.ts:242`                   | Accepted candidates with `due_local_date` are the Memory source in V1. Semantic retrieval is not used for the pre-check.    |
+| News stories | Slice 2 owner checks the news module's cached read and manifest at build time | New bounded read of cached stories only, same contract as the other sources. |
 | Sports next fixture                       | `packages/sports/src/followed-card.ts:332`; `packages/sports/src/sports-service.ts:1594`, `:988`                                             | New read returns each followed team's next verified fixture, built on `nextMatchAcross`. Cached data only.                  |
 | Thumbs rating storage                     | `packages/shared/src/usefulness-feedback-api.ts:39` (`chat_message` record-only kinds); UI `apps/web/src/chat/message-row.tsx:251`           | Reuse. Thumbs up records `more_like_this`, thumbs down `not_useful`. No new table.                                          |
 | Scheduled jobs list and stop              | `packages/chat/src/reminders/routes.ts:40-61`, `:74`; `apps/web/src/settings/settings-scheduled-tasks-pane.tsx`                              | Reuse the list and DELETE routes for the Scheduled jobs column. No new API.                                                 |
@@ -78,7 +79,7 @@ An adversarial second opinion on forks 1-3 is recommended before slice 3 starts,
 ### Shared types — `packages/shared/src/heartbeat-api.ts` (slice 1)
 
 ```ts
-export type HeartbeatSource = "calendar" | "tasks" | "memory" | "sports";
+export type HeartbeatSource = "calendar" | "tasks" | "memory" | "sports" | "news";
 export type HeartbeatCadenceMinutes = 30 | 60;
 
 export interface HeartbeatSettings {
@@ -151,7 +152,7 @@ export interface HeartbeatSourceRead {
 
 Tools, each `risk: "read"`, with `authorizeBackgroundRead`, declared in the owning manifest:
 `calendar.heartbeatWindow`, `tasks.heartbeatWindow`, `commitments.heartbeatOpen`,
-`sports.heartbeatNextFixtures`. The gateway's background method changes to:
+`sports.heartbeatNextFixtures`, `news.heartbeatStories`. The gateway's background method changes to:
 
 ```ts
 runBackgroundReadForActor(
@@ -160,7 +161,7 @@ runBackgroundReadForActor(
 ): Promise<GatewayToolResponse>;
 ```
 
-with an explicit allowlist constant naming `tasks.get` plus the four tools above. The scheduled-
+with an explicit allowlist constant naming `tasks.get` plus the five tools above. The scheduled-
 reads caller moves to `{ operation: "tasks.get", input: { taskId } }`.
 
 ### Message origin — `packages/shared/src/chat-api.ts` (slice 3)
@@ -285,7 +286,7 @@ The function body is the builder's to write; the comment states its contract. Ac
 
 ## Shipped defaults
 
-- On, every hour, all four sources on when authorized.
+- On, every hour, all five sources on when authorized. Heartbeat findings do not count against the 8/day unsolicited-finding ceiling.
 - Generation allowance: 6 attempts per local day, 8,000 input and 800 output tokens, 60 seconds.
   Constants in `packages/chat/src/heartbeat/limits.ts`. No env var, no settings file.
 - Sweep cadence: every 5 minutes, at most 200 owners per sweep.
@@ -327,7 +328,7 @@ and `packages/shared/src/app-map-core.ts`.
 - Builds mockup set 1 (`alerts.html`) and set 2 (`checkins.html`) states with `@moss/ui`
   components. Scheduled jobs column reuses the existing list and DELETE routes.
 - Source switches show unavailable sources from `status.unavailableSources`; in this slice all
-  four report available because nothing reads them yet. Slice 3 makes that real.
+  five report available because nothing reads them yet. Slice 3 makes that real.
 - App map: Settings declarations for check-in on/off, frequency, source switches, timezone
   dependency, muted topics and scheduled jobs with Stop, plus load/save/conflict errors.
 
@@ -352,8 +353,8 @@ on/hourly; turns it off, saves, reloads; edits in two tabs and sees the conflict
 Owns `packages/shared/src/heartbeat-source-api.ts`, `packages/ai/src/gateway/gateway.ts`
 (background method and allowlist only), the scheduled-reads caller of that method,
 and one new read tool plus its `authorizeBackgroundRead` in each of `packages/calendar/src/`,
-`packages/tasks/src/`, `packages/commitments/src/` and `packages/sports/src/` (tool file and
-manifest tool entry only).
+`packages/tasks/src/`, `packages/commitments/src/`, `packages/sports/src/` and the news module's
+`src/` (tool file and manifest tool entry only).
 
 - Each tool is bounded by the contract limits, reads only cached/local data, and reports
   `freshness`. Sports reads cached fixtures; it never calls ESPN from a beat.
@@ -377,7 +378,7 @@ Tests:
 Owns `packages/chat/src/heartbeat/{precheck,collect,filter,allowance,generation,validator,publish,notify}.ts`,
 `beat-job.ts` (extending slice 1's), `ChatHeartbeatOriginV1` in `packages/shared/src/chat-api.ts`,
 a heartbeat allowance policy registered with notifications, and the app-map feature metadata in
-`packages/chat/src/manifest.ts` and the four source manifests.
+`packages/chat/src/manifest.ts` and the five source manifests.
 
 First commit: the origin type, so slice 4 can start.
 
@@ -507,7 +508,8 @@ and an operational emergency stop.
 
 ## Open questions
 
-- **News in V1** (Ben): the spec leaves it open. This plan ships four sources.
+- **News in V1**: resolved by Ben on 2026-10-28. News is the fifth source. Slice 3 keeps heartbeat
+  findings out of the 8/day unsolicited-finding ceiling.
 - **Commitments as the Memory source** (slice 2 builder): confirm accepted candidates with a due
   date cover the timecard example in the spec. If they do not, stop and report rather than
   reaching for semantic retrieval in the pre-check.

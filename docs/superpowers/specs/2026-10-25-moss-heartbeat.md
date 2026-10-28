@@ -14,8 +14,8 @@ Requested reminders solve instructions the user already thought to schedule. The
 whether there is something useful to say, or an important question whose answer Moss needs, without
 requiring the user to invent every reminder.
 
-A recurring check every 30–60 minutes considers authorized calendar, Tasks, memory and followed
-sports teams together. Most checks produce no message. Useful findings become ordinary, durable,
+A recurring check every 30–60 minutes considers authorized calendar, Tasks, memory, followed
+sports teams and followed news together. Most checks produce no message. Useful findings become ordinary, durable,
 replyable assistant messages in Main, with existing app push delivery subject to attention controls.
 The heartbeat has no authority to submit a timecard, edit a calendar or create a responsibility.
 
@@ -80,11 +80,12 @@ and before publication; revocation invalidates affected candidates and pending d
 | Tasks           | At most 20 open, due/overdue or explicitly important tasks, plus completion revisions of tracked candidates                                            | An old task is still unfinished after current completion evidence                                                  |
 | Memory          | At most 10 relevant owner-visible commitments/preferences with provenance, explicit dates, corrections and resolved state; total context bound applies | A vague recollection is a deadline; silence is non-completion; private/incognito context is eligible automatically |
 | Sports          | Explicitly followed teams and each team's next verified fixture, at most 20 fixtures; stable team/competition identities and timezone-aware times      | A team mentioned once is followed; an ambiguous team or stale fixture is confirmed                                 |
+| News            | Stories from the owner's followed news sources, cached reads only, at most 20 items; stable story identity and publish time | A story is breaking because it is new; an uncached or stale story is confirmed |
 | Heartbeat state | Prior decisions/messages, suppressions, source checkpoints, outstanding questions, effective settings, budgets and recent equivalent requested results | General memory retrieval alone guarantees deduplication                                                            |
 
-All four sources are considered when available. Ruling 6 lets the heartbeat fetch what it needs,
-such as a followed team's next match; V1 does that through these four public module reads. News is
-not a V1 source (the approved controls show four source switches); see open question 1 below. No
+All five sources are considered when available. Ruling 6 lets the heartbeat fetch what it needs,
+such as a followed team's next match; V1 does that through these five public module reads. Ben added
+News as a fifth source on 2026-10-28. No
 email-body scanning or general web research in V1. An unavailable source does not block an independently supported item; it does block any claim
 that relies on its missing evidence. Truncation is recorded, and negative claims such as “no other
 appointments” are prohibited when coverage is incomplete. Existing public module APIs own reads;
@@ -270,7 +271,7 @@ Location (approved mockup set 1): **Settings → Alerts & quiet hours → Moss c
 existing alerts.
 Show On/Off, Every 30 minutes / Every hour, current timezone, last checked/next check,
 quiet/budget-held/degraded/failed status, available/unavailable sources with recovery links, and
-muted topics with Remove. Include Calendar, Tasks, Memory and Sports use switches, defaulting on
+muted topics with Remove. Include Calendar, Tasks, Memory, Sports and News use switches, defaulting on
 when authorized unless a saved exclusion applies. They control this heartbeat only and grant no
 access. Link existing quiet-hours and Notifications controls rather than copying
 schedules/device switches. No file editing, environment variable or developer console is required.
@@ -292,7 +293,7 @@ existing surfaces, never enabled by a heartbeat switch.
 | Malformed/incompatible saved choice                           | Hold heartbeat, show repair/retry status; preserve the record, never replace it with on defaults                  |
 
 Map legacy Tasks/Calendar off to the matching heartbeat source and Notes off to vault-backed
-memory exclusion; Sports has no legacy equivalent. Conversation commitments remain subject to
+memory exclusion; Sports and News have no legacy equivalent. Conversation commitments remain subject to
 Memory access and the new Memory use switch.
 
 Ruling 3 settles the upgrade. Ben is the only known install, so the normal additive migration is
@@ -391,7 +392,7 @@ Implementation phases need their own complete UI/worker proof; no security, life
 debt may be postponed to a final hardening phase.
 
 **First vertical slice only:** provision/migrate an owner, show the in-app controls, run the actual
-queue/pre-check and a bounded four-source read through the authority seam, then publish
+queue/pre-check and a bounded five-source read through the authority seam, then publish
 one supported message or an inspectable quiet outcome. Include off, suppression, generation
 allowance and quiet-hours enforcement before enabling output. Do not ship a default-on publisher
 ahead of its controls. Stop after this slice for Ben's usefulness/cost decision before detailing
@@ -480,12 +481,10 @@ Decisions that follow from those rulings:
 - No owner-day trial or usefulness threshold; ratings are the signal (ruling 5).
 - Sports reach is each followed team's next verified fixture, not only today (ruling 6).
 
-Open question for Ben:
-
-1. **News in V1.** Ruling 6 allows the heartbeat to read a major news story, but the approved
-   controls show four source switches (Calendar, Tasks, Memory, Sports) and the only news shown
-   is a chat-created scheduled job (ruling 7, later phase). V1 ships without a News source. Adding
-   one later means a fifth switch and a public News read.
+Resolved (Ben, 2026-10-28): **News is a fifth V1 source** with its own switch, defaulting on when
+authorized. Check-in findings stay out of the 8/day unsolicited-finding ceiling (ruling 2), so a
+busy News day cannot crowd out other unprompted findings. Slice 3 must not charge heartbeat
+findings to that ceiling.
 
 Research note (2026-10-25): Muse has no schedule-based wake-up, only a progress watcher for coding
 work that edits one status message and drops duplicate events. Duet is not installed here and
