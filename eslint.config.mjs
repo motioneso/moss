@@ -16,6 +16,7 @@ export default tseslint.config(
       "**/.turbo/**",
       "playwright-report/**",
       "test-results/**",
+      "docs/superpowers/specs/mockups/**",
       // Migration sidecars are frozen into applied checksums; never rewrite with --fix.
       "**/*.backfill.mjs",
       "Jarvis Design System/**",

@@ -134,6 +134,11 @@ export const queryKeys = {
     tags: (listId: string) => ["tasks", "tags", listId] as const,
     preferences: ["tasks", "preferences"] as const
   },
+  heartbeat: {
+    settings: ["heartbeat", "settings"] as const,
+    status: ["heartbeat", "status"] as const,
+    mutes: ["heartbeat", "mutes"] as const
+  },
   proactiveMonitoring: {
     cards: ["proactive-monitoring", "cards"] as const,
     settings: ["proactive-monitoring", "settings"] as const
