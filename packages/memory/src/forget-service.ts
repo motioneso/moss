@@ -32,6 +32,7 @@ export interface MemoryForgetToolService {
 
 /** Owner-scoped approval identity without source excerpts; every lifecycle status is supported. */
 export class MemoryForgetService {
+  constructor(private readonly graph = new MemoryGraphRepository()) {}
   async target(
     db: DataContextDb,
     ownerUserId: string,
@@ -48,48 +49,50 @@ export class MemoryForgetService {
     factId: string,
     version: string
   ): Promise<boolean> {
-    const initial = await this.readRow(db, ownerUserId, factId);
-    if (!initial) return false;
-    const entityIds = [initial.subject_entity_id, initial.object_entity_id].filter(
-      (id): id is string => id !== null
-    );
-    await sql`
+    return this.graph.withFactMutation(db, ownerUserId, [factId], async () => {
+      const initial = await this.readRow(db, ownerUserId, factId);
+      if (!initial) return false;
+      const entityIds = [initial.subject_entity_id, initial.object_entity_id].filter(
+        (id): id is string => id !== null
+      );
+      await sql`
       SELECT id FROM app.memory_entities
       WHERE owner_user_id = ${ownerUserId}::uuid AND id = ANY(${entityIds}::uuid[])
       ORDER BY id FOR SHARE
     `.execute(db.db);
-    const current = await this.readRow(db, ownerUserId, factId);
-    if (!current || this.toTarget(current).version !== version) return false;
-    // PostgreSQL rechecks xmin after a concurrent update; no changed row can slip between
-    // the final label check and the deletion. A failed claim never changes the search index.
-    const deleted = await sql<{ id: string; conflict_group_id: string | null }>`
+      const current = await this.readRow(db, ownerUserId, factId);
+      if (!current || this.toTarget(current).version !== version) return false;
+      // PostgreSQL rechecks xmin after a concurrent update; no changed row can slip between
+      // the final label check and the deletion. A failed claim never changes the search index.
+      const deleted = await sql<{ id: string; conflict_group_id: string | null }>`
       DELETE FROM app.memory_facts
       WHERE owner_user_id = ${ownerUserId}::uuid AND id = ${factId}::uuid
         AND xmin::text = ${current.row_version}
       RETURNING id, conflict_group_id
     `.execute(db.db);
-    const removed = deleted.rows[0];
-    if (!removed) return false;
-    // Other deletion paths lock the document first; edits lock the fact first. Never wait
-    // on a document, or on any conflict-sibling row, while holding this fact: contention
-    // aborts and rolls back the deletion.
-    await sql`
+      const removed = deleted.rows[0];
+      if (!removed) return false;
+      // Other deletion paths lock the document first; edits lock the fact first. Never wait
+      // on a document, or on any conflict-sibling row, while holding this fact: contention
+      // aborts and rolls back the deletion.
+      await sql`
       SELECT id FROM app.memory_search_documents
       WHERE owner_user_id = ${ownerUserId}::uuid AND target_kind = 'fact' AND target_id = ${factId}::uuid
       FOR UPDATE NOWAIT
     `.execute(db.db);
-    const graph = new MemoryGraphRepository();
-    await graph.deactivateSearchDocument(db, ownerUserId, "fact", factId);
-    if (removed.conflict_group_id) {
-      await new MemoryGraphDashboardRepository(graph).releaseSoleConflictSibling(
-        db,
-        ownerUserId,
-        factId,
-        removed.conflict_group_id,
-        { nowait: true }
-      );
-    }
-    return true;
+      const graph = this.graph;
+      await graph.deactivateSearchDocument(db, ownerUserId, "fact", factId);
+      if (removed.conflict_group_id) {
+        await new MemoryGraphDashboardRepository(graph).releaseSoleConflictSibling(
+          db,
+          ownerUserId,
+          factId,
+          removed.conflict_group_id,
+          { nowait: true }
+        );
+      }
+      return true;
+    });
   }
 
   private toTarget(row: ForgetRow): MemoryForgetTarget {

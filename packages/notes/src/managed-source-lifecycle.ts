@@ -205,6 +205,29 @@ export class ManagedSourceLifecycle {
     });
   }
 
+  /** Preparatory generations only; final publication reacquires and validates admission. */
+  async captureSourcesScoped(
+    db: DataContextDb,
+    input: readonly ManagedSourceKey[]
+  ): Promise<ManagedSourceSnapshot> {
+    const owner = await scopedOwner(db);
+    if (input.length === 0) throw new ManagedSourceUnavailableError();
+    const sources = new Map<string, ManagedSourceKey>();
+    for (const entry of input) {
+      const source = ownedSource(owner, entry);
+      sources.set(`${source.sourceModuleId}:${source.sourceId}`, source);
+    }
+    const actor = await readActor(db, owner);
+    requireActive(actor);
+    const revisions: ManagedSourceRevision[] = [];
+    for (const [, source] of [...sources].sort(([left], [right]) => left.localeCompare(right))) {
+      const current = await readSource(db, source);
+      requireActive(current);
+      revisions.push({ source, generation: current.generation });
+    }
+    return { ownerUserId: owner, actorGeneration: actor.generation, sources: revisions };
+  }
+
   async withPublication<T>(
     access: AccessContext,
     expected: ManagedSourceSnapshot,

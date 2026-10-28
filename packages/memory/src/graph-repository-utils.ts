@@ -12,6 +12,10 @@ import type {
   MemorySourceSummary
 } from "./graph-types.js";
 
+export function toVectorLiteral(vector: readonly number[]): string {
+  return `[${vector.join(",")}]`;
+}
+
 export interface EntityRow {
   readonly id: string;
   readonly owner_user_id: string;

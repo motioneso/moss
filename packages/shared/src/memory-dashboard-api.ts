@@ -271,7 +271,8 @@ export const patchMemoryFactDashboardRouteSchema = {
       properties: { patched: { type: "boolean" } }
     },
     401: errorResponseSchema,
-    404: errorResponseSchema
+    404: errorResponseSchema,
+    409: errorResponseSchema
   }
 } as const;
 

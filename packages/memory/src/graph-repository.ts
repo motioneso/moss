@@ -1,3 +1,8 @@
+import type { RecordingFactAuthority } from "./recording-fact-authority.js";
+import { RecordingFactMutations } from "./recording-fact-mutations.js";
+import { RecordingFactLineage } from "./recording-fact-lineage.js";
+import { MemoryFactLifecycleRepository } from "./graph-fact-lifecycle.js";
+import { listMemoryFactSources } from "./graph-fact-sources.js";
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
@@ -26,7 +31,8 @@ import {
   confidenceTier,
   mapEntity,
   mapFact,
-  mapSource
+  mapSource,
+  toVectorLiteral
 } from "./graph-repository-utils.js";
 
 export type { EntityRow, FactRow, SourceRow };
@@ -39,6 +45,29 @@ const SELF_SUBJECTS = new Set(["self", "user", "me", "myself", "i", "the user"])
 // withDataContext (packages/db/src/data-context.ts). If any write in the method throws,
 // the caller's transaction rolls back atomically. assertDataContextDb() enforces this seam.
 export class MemoryGraphRepository {
+  private readonly mutations: RecordingFactMutations;
+  private readonly lineage: RecordingFactLineage;
+  private readonly factLifecycle: MemoryFactLifecycleRepository;
+
+  constructor(authority?: RecordingFactAuthority) {
+    this.mutations = new RecordingFactMutations(authority);
+    this.lineage = new RecordingFactLineage(this.mutations);
+    this.factLifecycle = new MemoryFactLifecycleRepository(this, this.lineage);
+  }
+
+  async withFactMutation<T>(
+    db: DataContextDb,
+    owner: string,
+    ids: readonly string[],
+    work: () => Promise<T>
+  ): Promise<T> {
+    return this.mutations.withFacts(db, owner, ids, async () => {
+      const result = await work();
+      await this.lineage.synchronize(db, owner, this.mutations.factIds(db, owner));
+      return result;
+    });
+  }
+
   async ensureSelfEntity(
     scopedDb: DataContextDb,
     ownerUserId: string
@@ -261,6 +290,7 @@ export class MemoryGraphRepository {
     input: Omit<NewMemoryFact, "source"> & { readonly episodeId: string }
   ): Promise<MemoryFactRecord> {
     assertDataContextDb(scopedDb);
+    await this.mutations.assertSearchMutation(scopedDb, ownerUserId, "episode", input.episodeId);
     if (Boolean(input.objectEntityId) === Boolean(input.objectText)) {
       throw new Error("memory fact requires exactly one object target");
     }
@@ -322,6 +352,7 @@ export class MemoryGraphRepository {
     embedModelVersion?: string
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    await this.mutations.assertSearchMutation(scopedDb, ownerUserId, targetKind, targetId);
     const vectorSql = embedding ? sql`${toVectorLiteral(embedding)}::vector` : sql`NULL`;
     await sql`
       INSERT INTO app.memory_search_documents (
@@ -363,6 +394,7 @@ export class MemoryGraphRepository {
     targetId: string
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    await this.mutations.assertSearchMutation(scopedDb, ownerUserId, targetKind, targetId);
     await sql`
       UPDATE app.memory_search_documents
       SET status = 'inactive', updated_at = now()
@@ -380,6 +412,7 @@ export class MemoryGraphRepository {
     status: "active" | "inactive"
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    await this.mutations.assertSearchMutation(scopedDb, ownerUserId, targetKind, targetId);
     await sql`
       UPDATE app.memory_search_documents
       SET status = ${status}, updated_at = now()
@@ -462,6 +495,7 @@ export class MemoryGraphRepository {
        AND d.target_id = f.id
        AND (${options.includeInactive ?? false} OR d.status = 'active')
       WHERE f.owner_user_id = ${ownerUserId}::uuid
+        AND (f.recording_side IS NULL OR app.memory_recording_fact_eligible(f.owner_user_id,f.id,f.recording_side))
         AND (f.valid_from IS NULL OR f.valid_from <= now())
         AND (
           ${options.includeInactive ?? false}
@@ -495,6 +529,7 @@ export class MemoryGraphRepository {
       SELECT *
       FROM app.memory_facts
       WHERE owner_user_id = ${ownerUserId}::uuid
+        AND (recording_side IS NULL OR app.memory_recording_fact_eligible(owner_user_id,id,recording_side))
         AND status = 'active'
         AND (valid_to IS NULL OR valid_to > now())
         AND (stale_at IS NULL OR stale_at > now())
@@ -524,6 +559,7 @@ export class MemoryGraphRepository {
       SELECT *
       FROM app.memory_facts
       WHERE owner_user_id = ${ownerUserId}::uuid
+        AND (recording_side IS NULL OR app.memory_recording_fact_eligible(owner_user_id,id,recording_side))
         AND id = ${factId}::uuid
         AND status = 'active'
         AND (valid_to IS NULL OR valid_to > now())
@@ -540,20 +576,9 @@ export class MemoryGraphRepository {
     factId: string,
     validTo: Date | null = new Date()
   ): Promise<boolean> {
-    assertDataContextDb(scopedDb);
-    const result = await sql<{ id: string }>`
-      UPDATE app.memory_facts
-      SET status = 'superseded',
-          valid_to = ${validTo},
-          updated_at = now()
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND id = ${factId}::uuid
-      RETURNING id
-    `.execute(scopedDb.db);
-    if (result.rows.length > 0) {
-      await this.deactivateSearchDocument(scopedDb, ownerUserId, "fact", factId);
-    }
-    return result.rows.length > 0;
+    return this.withFactMutation(scopedDb, ownerUserId, [factId], () =>
+      this.factLifecycle.supersedeFact(scopedDb, ownerUserId, factId, validTo)
+    );
   }
 
   async pinFact(
@@ -562,15 +587,9 @@ export class MemoryGraphRepository {
     factId: string,
     pinned: boolean
   ): Promise<boolean> {
-    assertDataContextDb(scopedDb);
-    const result = await sql<{ id: string }>`
-      UPDATE app.memory_facts
-      SET pinned = ${pinned}, updated_at = now()
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND id = ${factId}::uuid
-      RETURNING id
-    `.execute(scopedDb.db);
-    return result.rows.length > 0;
+    return this.withFactMutation(scopedDb, ownerUserId, [factId], () =>
+      this.factLifecycle.pinFact(scopedDb, ownerUserId, factId, pinned)
+    );
   }
 
   async confirmFact(
@@ -578,50 +597,9 @@ export class MemoryGraphRepository {
     ownerUserId: string,
     factId: string
   ): Promise<MemoryFactRecord | undefined> {
-    assertDataContextDb(scopedDb);
-    const existing = await this.getFact(scopedDb, ownerUserId, factId);
-    if (!existing) return undefined;
-
-    if (existing.conflictGroupId) {
-      await sql`
-        UPDATE app.memory_facts
-        SET status = 'superseded',
-            superseded_by_fact_id = ${factId}::uuid,
-            valid_to = COALESCE(valid_to, now()),
-            updated_at = now()
-        WHERE owner_user_id = ${ownerUserId}::uuid
-          AND conflict_group_id = ${existing.conflictGroupId}::uuid
-          AND id <> ${factId}::uuid
-      `.execute(scopedDb.db);
-      await sql`
-        UPDATE app.memory_conflict_groups
-        SET status = 'resolved', resolved_at = now()
-        WHERE owner_user_id = ${ownerUserId}::uuid
-          AND id = ${existing.conflictGroupId}::uuid
-      `.execute(scopedDb.db);
-      await this.deactivateConflictGroupSearchDocuments(
-        scopedDb,
-        ownerUserId,
-        existing.conflictGroupId,
-        factId
-      );
-    }
-
-    const result = await sql<FactRow>`
-      UPDATE app.memory_facts
-      SET provenance = 'confirmed',
-          confidence = GREATEST(confidence, 0.90),
-          status = 'active',
-          conflict_group_id = NULL,
-          last_confirmed_at = now(),
-          updated_at = now()
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND id = ${factId}::uuid
-      RETURNING *
-    `.execute(scopedDb.db);
-
-    await this.setSearchDocumentStatus(scopedDb, ownerUserId, "fact", factId, "active");
-    return this.mapFactRow(scopedDb, ownerUserId, result.rows[0]);
+    return this.withFactMutation(scopedDb, ownerUserId, [factId], () =>
+      this.factLifecycle.confirmFact(scopedDb, ownerUserId, factId)
+    );
   }
 
   async markFactStale(
@@ -629,7 +607,9 @@ export class MemoryGraphRepository {
     ownerUserId: string,
     factId: string
   ): Promise<MemoryFactRecord | undefined> {
-    return this.patchFactStatus(scopedDb, ownerUserId, factId, { status: "stale" });
+    return this.withFactMutation(scopedDb, ownerUserId, [factId], () =>
+      this.factLifecycle.markFactStale(scopedDb, ownerUserId, factId)
+    );
   }
 
   async patchFactStatus(
@@ -638,38 +618,9 @@ export class MemoryGraphRepository {
     factId: string,
     input: MemoryStatusPatchInput
   ): Promise<MemoryFactRecord | undefined> {
-    assertDataContextDb(scopedDb);
-    const existing = await this.getFact(scopedDb, ownerUserId, factId);
-    if (!existing) return undefined;
-    if (existing.conflictGroupId) {
-      throw new Error("conflict-group memory must be resolved with confirm or correct");
-    }
-    if (existing.supersededByFactId != null && input.status === "active") {
-      throw Object.assign(
-        new Error("Cannot reactivate a superseded memory record; create a new fact instead"),
-        { code: "SUPERSEDED_REACTIVATION_BLOCKED" }
-      );
-    }
-
-    const result = await sql<FactRow>`
-      UPDATE app.memory_facts
-      SET status = ${input.status},
-          stale_at = CASE WHEN ${input.status} = 'stale' THEN now() ELSE stale_at END,
-          valid_to = CASE WHEN ${input.status} = 'expired' THEN COALESCE(valid_to, now()) ELSE valid_to END,
-          updated_at = now()
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND id = ${factId}::uuid
-      RETURNING *
-    `.execute(scopedDb.db);
-
-    await this.setSearchDocumentStatus(
-      scopedDb,
-      ownerUserId,
-      "fact",
-      factId,
-      input.status === "expired" || input.status === "rejected" ? "inactive" : "active"
+    return this.withFactMutation(scopedDb, ownerUserId, [factId], () =>
+      this.factLifecycle.patchFactStatus(scopedDb, ownerUserId, factId, input)
     );
-    return this.mapFactRow(scopedDb, ownerUserId, result.rows[0]);
   }
 
   async correctFact(
@@ -677,111 +628,9 @@ export class MemoryGraphRepository {
     ownerUserId: string,
     input: MemoryCorrectionInput
   ): Promise<MemoryFactRecord | undefined> {
-    assertDataContextDb(scopedDb);
-    const existing = await this.getFact(scopedDb, ownerUserId, input.targetFactId);
-    if (!existing) return undefined;
-
-    const source = existing.sources[0];
-    const replacement = await this.createFact(scopedDb, ownerUserId, {
-      subjectEntityId: existing.subjectEntityId,
-      predicate: existing.predicate,
-      objectEntityId: null,
-      objectText: input.replacementText,
-      recordKind: existing.recordKind,
-      confidence: Math.max(existing.confidence, 0.9),
-      provenance: "confirmed",
-      importance: existing.importance,
-      pinned: existing.pinned,
-      source: {
-        sourceKind: source?.sourceKind ?? "manual",
-        sourceRef: source?.sourceRef ?? `memory:${existing.id}`,
-        sourceLabel: source?.sourceLabel ?? "Memory correction",
-        occurredAt: source?.occurredAt ?? null,
-        excerpt: source?.excerpt ?? ""
-      }
-    });
-
-    if (existing.conflictGroupId) {
-      await sql`
-        UPDATE app.memory_facts
-        SET status = 'superseded',
-            superseded_by_fact_id = ${replacement.id}::uuid,
-            valid_to = COALESCE(valid_to, now()),
-            updated_at = now()
-        WHERE owner_user_id = ${ownerUserId}::uuid
-          AND conflict_group_id = ${existing.conflictGroupId}::uuid
-      `.execute(scopedDb.db);
-      await sql`
-        UPDATE app.memory_conflict_groups
-        SET status = 'resolved', resolved_at = now()
-        WHERE owner_user_id = ${ownerUserId}::uuid
-          AND id = ${existing.conflictGroupId}::uuid
-      `.execute(scopedDb.db);
-      await this.deactivateConflictGroupSearchDocuments(
-        scopedDb,
-        ownerUserId,
-        existing.conflictGroupId,
-        replacement.id
-      );
-    } else {
-      await sql`
-        UPDATE app.memory_facts
-        SET status = 'superseded',
-            superseded_by_fact_id = ${replacement.id}::uuid,
-            valid_to = COALESCE(valid_to, now()),
-            updated_at = now()
-        WHERE owner_user_id = ${ownerUserId}::uuid
-          AND id = ${existing.id}::uuid
-      `.execute(scopedDb.db);
-    }
-
-    await this.deactivateSearchDocument(scopedDb, ownerUserId, "fact", existing.id);
-    return replacement;
-  }
-
-  private async getFact(
-    scopedDb: DataContextDb,
-    ownerUserId: string,
-    factId: string
-  ): Promise<MemoryFactRecord | undefined> {
-    const result = await sql<FactRow>`
-      SELECT *
-      FROM app.memory_facts
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND id = ${factId}::uuid
-    `.execute(scopedDb.db);
-    return this.mapFactRow(scopedDb, ownerUserId, result.rows[0]);
-  }
-
-  private async deactivateConflictGroupSearchDocuments(
-    scopedDb: DataContextDb,
-    ownerUserId: string,
-    conflictGroupId: string,
-    exceptFactId: string
-  ): Promise<void> {
-    await sql`
-      UPDATE app.memory_search_documents
-      SET status = 'inactive', updated_at = now()
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND target_kind = 'fact'
-        AND target_id IN (
-          SELECT id
-          FROM app.memory_facts
-          WHERE owner_user_id = ${ownerUserId}::uuid
-            AND conflict_group_id = ${conflictGroupId}::uuid
-            AND id <> ${exceptFactId}::uuid
-        )
-    `.execute(scopedDb.db);
-  }
-
-  private async mapFactRow(
-    scopedDb: DataContextDb,
-    ownerUserId: string,
-    row: FactRow | undefined
-  ): Promise<MemoryFactRecord | undefined> {
-    return row
-      ? mapFact(row, await this.listSourcesForFact(scopedDb, ownerUserId, row.id))
-      : undefined;
+    return this.withFactMutation(scopedDb, ownerUserId, [input.targetFactId], () =>
+      this.factLifecycle.correctFact(scopedDb, ownerUserId, input)
+    );
   }
 
   private async listSourcesForFact(
@@ -789,17 +638,7 @@ export class MemoryGraphRepository {
     ownerUserId: string,
     factId: string
   ): Promise<MemorySourceSummary[]> {
-    const result = await sql<SourceRow>`
-      SELECT e.id, e.source_kind, e.source_ref, e.source_label, e.occurred_at, e.excerpt
-      FROM app.memory_episodes e
-      JOIN app.memory_fact_sources s
-        ON s.owner_user_id = e.owner_user_id
-       AND s.episode_id = e.id
-      WHERE s.owner_user_id = ${ownerUserId}::uuid
-        AND s.fact_id = ${factId}::uuid
-      ORDER BY e.occurred_at DESC NULLS LAST, e.created_at DESC
-    `.execute(scopedDb.db);
-    return result.rows.map(mapSource);
+    return listMemoryFactSources(scopedDb, ownerUserId, factId);
   }
 
   async getEntityIdByAlias(
@@ -939,10 +778,6 @@ export class MemoryGraphRepository {
 
 function normalizeAlias(alias: string): string {
   return alias.trim().toLocaleLowerCase();
-}
-
-function toVectorLiteral(vector: readonly number[]): string {
-  return `[${vector.join(",")}]`;
 }
 
 function clamp01(value: number): number {

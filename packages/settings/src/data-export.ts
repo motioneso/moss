@@ -1,4 +1,4 @@
-import type { ManagedNotesExportSection } from "@moss/shared";
+import type { RecordingMemoryExportSection, ManagedNotesExportSection } from "@moss/shared";
 import { sql, type Kysely } from "kysely";
 import { chatExportText } from "./chat-export-text.js";
 
@@ -129,6 +129,7 @@ export interface UserDataExportTables {
   readonly medications: readonly ExportRow[];
   readonly meetings: MeetingsExportSection;
   readonly notes: ManagedNotesExportSection;
+  readonly recordingMemory: RecordingMemoryExportSection;
   readonly memoryChunks: readonly ExportRow[];
   readonly memoryAliases: readonly ExportRow[];
   readonly memoryCandidates: readonly ExportRow[];
@@ -280,6 +281,14 @@ async function readExportTables(
     { actorUserId: userId, requestId }
   );
 
+  const recordingMemory = await collectModuleExportSection<RecordingMemoryExportSection>(
+    listModuleManifests,
+    "memory",
+    "recordingMemory",
+    scopedDb,
+    { actorUserId: userId, requestId }
+  );
+
   const notesSection = await collectModuleExportSection<ManagedNotesExportSection>(
     listModuleManifests,
     "notes",
@@ -356,6 +365,7 @@ async function readExportTables(
     sportsSources: sportsSourcesSection,
     meetings: meetingsSection,
     notes: notesSection,
+    recordingMemory,
     usefulnessFeedbackSignals: await readRows(scopedDb.db, usefulnessFeedbackSignalsQuery(userId)),
     usefulnessFeedbackTargets: await readRows(scopedDb.db, usefulnessFeedbackTargetsQuery(userId)),
     focusJudgments: await readRows(scopedDb.db, focusJudgmentsQuery(userId)),
