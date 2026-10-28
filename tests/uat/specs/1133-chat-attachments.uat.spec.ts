@@ -79,6 +79,8 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   // A fresh chat per run: a reopened chat resumes the scripted conversation at a later turn.
   await drawer.getByRole("button", { name: "Open conversations" }).click();
   await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
+  // The composer is disabled while the new side chat is being set up; attach only once it is ready.
+  await expect(drawer.locator(".chatd-input textarea")).toBeEnabled();
 
   // Drive the visually-hidden real <input type=file> directly — the paperclip button only
   // proxies a click to it, and a native picker can't be automated.
@@ -181,12 +183,19 @@ test("model reads an attached file and answers about its content (#3343)", async
   await expect(drawer).toBeVisible();
   await drawer.getByRole("button", { name: "Open conversations" }).click();
   await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
+  // The composer is disabled while the new side chat is being set up; attach only once it is ready.
+  await expect(drawer.getByLabel("Message Moss")).toBeEnabled();
   await drawer.locator(".chatd-attach__input").setInputFiles({
     name: "content-proof.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("The validation phrase is cobalt otter 47.")
   });
-  await expect(drawer.locator(".chatd-attach__chip")).not.toHaveClass(/is-uploading|is-error/);
+  // Only this file's pending chip; an earlier conversation's sent chips may still be on screen.
+  const chip = drawer
+    .locator(".chatd-attach__row .chatd-attach__chip")
+    .filter({ hasText: "content-proof.txt" });
+  await expect(chip).toHaveCount(1);
+  await expect(chip).not.toHaveClass(/is-uploading|is-error/);
   const response = page.waitForResponse(
     (r) => r.request().method() === "POST" && r.url().endsWith("/api/chat/turn"),
     { timeout: 120_000 }

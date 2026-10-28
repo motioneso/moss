@@ -171,17 +171,26 @@ public final class DeliveryService extends Service {
             voice.inventory(inventory, client);
             for (String name : store.retrievalOrder(inventory.keySet())) {
                 consumeCommands(client, config);
+                if (RingProtocol.isContinuation(name, inventory)) continue;
                 Integer packetSize = inventory.get(name);
+                java.util.List<String> parts = RingProtocol.continuations(name, inventory);
+                boolean partsSettled = true;
+                long totalSize = packetSize;
+                for (String part : parts) {
+                    partsSettled &= inventory.get(part).equals(previousInventory.get(part));
+                    totalSize += inventory.get(part);
+                }
                 String id = name.substring(0, name.length() - 5), sidecarName = id + ".json";
                 Integer sidecarSize = inventory.get(sidecarName);
                 boolean settled = packetSize.equals(previousInventory.get(name)) && sidecarSize != null && sidecarSize.equals(previousInventory.get(sidecarName));
                 if (!RetrievalGate.wanted(id, store.contains(id), voice.intent(id) != null)) continue;
                 if (!store.retrievalDue(id) || !RetrievalGate.ready(voice.intent(id) != null, sidecarSize, packetSize,
                     previousInventory.get(sidecarName), previousInventory.get(name))) continue;
+                if (!partsSettled && voice.intent(id) == null) continue;
                 if (!store.hasStorageCapacity() || stopping) break;
                 if (!store.contains(id) && !store.canDiscover()) continue;
                 store.discover(id, voice.intent(id));
-                if (packetSize > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT) {
+                if (totalSize > RingProtocol.PACKET_LIMIT || sidecarSize > RingProtocol.SIDECAR_LIMIT) {
                     store.failure(id, "source_size_limit", true); continue;
                 }
                 byte[] sidecar;
@@ -190,8 +199,17 @@ public final class DeliveryService extends Service {
                 if (!store.admitSidecar(id, sidecar, settled)) { if (voice.intent(id) != null && admitRetries++ < 3) fastRetries = Math.max(fastRetries, 3); continue; }
                 consumeCommands(client, config);
                 if (store.excluded(id)) continue;
-                store.reserveRetrieval(id, packetSize, sidecarSize, sidecar);
-                try { active.retrieve(name, packetSize, store.file(id, "packets.bin")); }
+                store.reserveRetrieval(id, (int) totalSize, sidecarSize, sidecar);
+                try {
+                    File packets = store.file(id, "packets.bin"), tail = store.file(id, "tail.bin");
+                    active.retrieve(name, packetSize, packets);
+                    // A packet can straddle two files, so the tails are appended byte for byte before parsing.
+                    for (String part : parts) {
+                        active.retrieve(part, inventory.get(part), tail);
+                        try (java.io.FileOutputStream out = new java.io.FileOutputStream(packets, true)) { out.write(PrivateFiles.read(tail, RingProtocol.PACKET_LIMIT)); }
+                        tail.delete();
+                    }
+                }
                 catch (IllegalArgumentException invalid) { store.failure(id, "ring_file_invalid", false); throw invalid; }
                 store.retrieved(id, sidecar);
                 if (voice.intent(id) != null) { fastRetries = 0; admitRetries = 0; }

@@ -1,16 +1,40 @@
+import { lifecycleFixture } from "./provisioner-lifecycle-fixture.js";
+import {
+  chmodSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import type * as Net from "node:net";
+import * as lifecycleRecords from "./lifecycle-records.js";
+import { createLifecycleRecorder, type LifecycleCapture } from "./lifecycle-records.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // #1121 Task 4: pure arg-building coverage for buildSeedHookInput/composeSeedHook — no Docker.
 // spawn is mocked so composeSeedHook's runCommand resolves immediately without touching a real
 // process; only the args it was invoked with are asserted.
 const mocks = vi.hoisted(() => ({
-  spawn: vi.fn()
+  spawn: vi.fn(),
+  createServer: vi.fn()
 }));
 
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn, execFile: vi.fn() }));
+vi.mock("node:net", async (importOriginal) => ({
+  ...(await importOriginal<typeof Net>()),
+  createServer: mocks.createServer
+}));
 
-const { buildSeedHookInput, composeSeedHook, captureFailureEvidence, cleanupUatAttempt } =
-  await import("./provisioner.js");
+const {
+  buildSeedHookInput,
+  composeSeedHook,
+  captureFailureEvidence,
+  cleanupUatAttempt,
+  provisionForUat
+} = await import("./provisioner.js");
 
 describe("#1121 Task 4: chatScript arg-building", () => {
   beforeEach(() => {
@@ -295,5 +319,621 @@ describe("#3410: API-key chat seed values", () => {
         .apiKeyChat
     ).toBe(seed);
     expect(buildSeedHookInput("proj", "admin+data", {}).apiKeyChat).toBeUndefined();
+  });
+});
+
+describe("N3 lifecycle cleanup boundaries", () => {
+  it("records before credential teardown and after leak checks, before removing env identity", async () => {
+    const order: string[] = [];
+    await cleanupUatAttempt({
+      beforeTeardown: async () => {
+        order.push("before");
+      },
+      teardownCompose: async () => {
+        order.push("credentials-and-resources");
+      },
+      assertNoLeaks: async () => {
+        order.push("leaks");
+      },
+      afterTeardown: async () => {
+        order.push("after");
+      },
+      cleanupEnvFile: () => {
+        order.push("env");
+      }
+    });
+    expect(order).toEqual(["before", "credentials-and-resources", "leaks", "after", "env"]);
+  });
+
+  it("aggregates both metadata failures with cleanup failures and still removes env last", async () => {
+    const order: string[] = [];
+    const fail = (stage: string) => async () => {
+      order.push(stage);
+      throw new Error(stage);
+    };
+    const error = await cleanupUatAttempt({
+      beforeTeardown: fail("before"),
+      teardownCompose: fail("teardown"),
+      assertNoLeaks: fail("leaks"),
+      afterTeardown: async (failed) => {
+        expect(failed).toBe(true);
+        await fail("after")();
+      },
+      cleanupEnvFile: () => {
+        order.push("env");
+      }
+    }).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors.map((e: Error) => e.message)).toEqual([
+      "before",
+      "teardown",
+      "leaks",
+      "after"
+    ]);
+    expect(order).toEqual(["before", "teardown", "leaks", "after", "env"]);
+  });
+
+  it("rejects partial opt-in before any provisioning effects", async () => {
+    vi.stubEnv("JARVIS_UAT_LIFECYCLE_DIR", "/not-created");
+    vi.stubEnv("JARVIS_UAT_LIFECYCLE_NONCE", undefined);
+    mocks.createServer.mockImplementation(() => {
+      throw new Error("unexpected port probe");
+    });
+    try {
+      await expect(provisionForUat("bare")).rejects.toThrow(/lifecycle configuration/);
+      expect(mocks.createServer).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe("N3 private lifecycle producer", () => {
+  let f: ReturnType<typeof lifecycleFixture>;
+  beforeEach(() => {
+    f = lifecycleFixture();
+  });
+  afterEach(() => {
+    f.dispose();
+  });
+  it("disabled opt-in performs no metadata queries or filesystem writes", async () => {
+    const record = await createLifecycleRecorder({
+      env: {},
+      root: "/does-not-exist",
+      capture: f.capture
+    });
+    await record("attempt-created", f.attempt);
+    expect(f.capture).not.toHaveBeenCalled();
+    expect(f.records()).toEqual([]);
+  });
+  it.each([
+    "partial",
+    "empty",
+    "nonce",
+    "public",
+    "symlink",
+    "missing",
+    "occupied",
+    "build-disabled"
+  ])("rejects %s configuration before queries or creation", async (which) => {
+    if (which === "partial") delete (f.env as Partial<typeof f.env>).JARVIS_UAT_LIFECYCLE_NONCE;
+    if (which === "empty") f.env.JARVIS_UAT_LIFECYCLE_DIR = "";
+    if (which === "nonce") f.env.JARVIS_UAT_LIFECYCLE_NONCE = "invalid";
+    if (which === "public") chmodSync(f.dir, 0o755);
+    if (which === "symlink") {
+      symlinkSync(f.dir, join(f.root, "alias"));
+      f.env.JARVIS_UAT_LIFECYCLE_DIR = join(f.root, "alias");
+    }
+    if (which === "missing") f.env.JARVIS_UAT_LIFECYCLE_DIR = join(f.root, "missing");
+    if (which === "occupied") writeFileSync(join(f.dir, "existing"), "untouched");
+    if (which === "build-disabled") Object.assign(f.env, { JARVIS_UAT_BUILD: "0" });
+    await expect(f.recorder()).rejects.toThrow(/lifecycle configuration/);
+    expect(f.capture).not.toHaveBeenCalled();
+  });
+  it("writes exclusive private monotonic digest-bound receipts and retains immutable app/auth/socket identities", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.appPresent = f.state.volumesPresent = true;
+    await record("resources-created", f.attempt);
+    await record("before-teardown", f.attempt);
+    f.state.appPresent = f.state.volumesPresent = f.state.built = false;
+    await record("after-teardown", f.attempt);
+    const records = f.records();
+    expect(records.map((r) => r.phase)).toEqual([
+      "attempt-created",
+      "image-built",
+      "resources-created",
+      "before-teardown",
+      "after-teardown"
+    ]);
+    expect(records.map((r) => r.sequence)).toEqual([1, 2, 3, 4, 5]);
+    for (const [i, r] of records.entries()) {
+      const { digest, ...body } = r;
+      expect(digest).toBe(createHash("sha256").update(JSON.stringify(body)).digest("hex"));
+      expect(r.previousDigest).toBe(i ? records[i - 1].digest : null);
+      expect(r.nonce).toBe("ab".repeat(32));
+      expect(r.source.commit).toBe("3".repeat(40));
+      expect(r.producer.pid).toBeGreaterThan(0);
+    }
+    for (const file of readdirSync(f.dir))
+      expect(statSync(join(f.dir, file)).mode & 0o777).toBe(0o600);
+    const final = records.at(-1);
+    expect(final.complete).toBe(true);
+    expect(final.image.id).toBe(f.imageId);
+    expect(final.inventory.map((r: { id: string }) => r.id)).toEqual([
+      f.id,
+      ...f.volumes.map((v) => v.id)
+    ]);
+    for (const row of final.inventory) expect(row.observation.state).toBe("absent");
+    expect(final.inventory[0].creation.imageId).toBe(f.imageId);
+    expect(final.inventory[0].creation.imageReference).toBe(f.reference);
+    expect(JSON.stringify(records)).not.toContain("SECRET_SENTINEL");
+    expect(JSON.stringify(records)).not.toContain('"Env"');
+    expect(JSON.stringify(records)).not.toContain('"Mounts"');
+  });
+  it("preserves partial creation on failed attempt and retains it across a fresh retry", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.volumesPresent = true;
+    const failed = { ...f.attempt, failed: true };
+    await record("resources-created", failed);
+    await record("before-teardown", failed);
+    f.state.volumesPresent = false;
+    await record("after-teardown", failed);
+    const retry = {
+      ...f.attempt,
+      projectName: "uat-124_abcdef02",
+      composeArgs: f.attempt.composeArgs.map((a) =>
+        a === f.attempt.projectName ? "uat-124_abcdef02" : a
+      )
+    };
+    await record("attempt-created", retry);
+    await record("image-built", retry);
+    const records = f.records();
+    expect(records[4].complete).toBe(false);
+    expect(records[4].inventory).toHaveLength(3);
+    expect(records[5].attempt.number).toBe(2);
+    expect(records[5].inventory).toEqual([]);
+    expect(records[6].image.id).toBe(f.imageId);
+    expect(records.map((r) => r.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+  it("rejects a preexisting tag before any build or creation", async () => {
+    f.state.built = true;
+    const record = await f.recorder();
+    await expect(record("attempt-created", f.attempt)).rejects.toThrow(/lifecycle/);
+    expect(f.records()[0].errors).toContain("image-tag-not-absent");
+  });
+  it("writes an error observation instead of absence on selected-daemon lookup failure", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.appPresent = true;
+    await record("resources-created", f.attempt);
+    await record("before-teardown", f.attempt);
+    f.state.lookupError = true;
+    await expect(record("after-teardown", f.attempt)).rejects.toThrow(/lifecycle/);
+    const final = f.records().at(-1);
+    expect(final.complete).toBe(false);
+    expect(final.inventory[0].observation.state).toBe("error");
+    expect(final.errors.length).toBeGreaterThan(0);
+    expect(JSON.stringify(final)).not.toContain("SECRET_SENTINEL");
+  });
+  it.each(["daemon", "image", "port", "source", "compose", "unpublished", "configured-port"])(
+    "rejects changed %s identity before a passing receipt",
+    async (which) => {
+      const record = await f.recorder();
+      await record("attempt-created", f.attempt);
+      f.state.built = true;
+      await record("image-built", f.attempt);
+      f.state.appPresent = true;
+      if (which === "daemon") f.state.daemon = "daemon-switched";
+      if (which === "image") f.app.imageId = `sha256:${"9".repeat(64)}`;
+      if (which === "port") f.app.ports["3000/tcp"][0]!.HostPort = "5202";
+      if (which === "source") f.state.dirty = true;
+      if (which === "unpublished") f.app.ports["3000/tcp"] = [];
+      if (which === "configured-port") f.app.configuredPorts["3000/tcp"][0]!.HostPort = "5202";
+      if (which === "compose")
+        f.app.labels["com.docker.compose.project.config_files"] = "/different.yml";
+      await expect(record("resources-created", { ...f.attempt, requireApp: true })).rejects.toThrow(
+        /lifecycle/
+      );
+      expect(f.records().at(-1).complete).toBe(false);
+    }
+  );
+  it("observes a created app becoming bound without changing configured identity", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.appPresent = true;
+    f.app.ports["3000/tcp"] = [];
+    await record("resources-created", f.attempt);
+    f.app.ports["3000/tcp"] = [{ HostIp: "127.0.0.1", HostPort: "5201" }];
+    await expect(
+      record("resources-created", { ...f.attempt, requireApp: true })
+    ).resolves.toBeUndefined();
+    expect(f.records().at(-1).inventory[0].creation.webPorts).toEqual([]);
+    expect(f.records().at(-1).inventory[0].observation.metadata.webPorts[0].hostPort).toBe(5201);
+    f.app.configuredPorts["3000/tcp"][0]!.HostPort = "5202";
+    await expect(record("resources-created", { ...f.attempt, requireApp: true })).rejects.toThrow(
+      /lifecycle/
+    );
+  });
+  it("requires current app identity before readiness can be released", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    await expect(record("resources-created", { ...f.attempt, requireApp: true })).rejects.toThrow(
+      /lifecycle/
+    );
+    expect(f.records().at(-1).errors).toContain("app-build-proof-missing");
+  });
+  it("requires app/build proof on a successful attempt before teardown", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    await expect(record("before-teardown", f.attempt)).rejects.toThrow(/lifecycle/);
+    expect(f.records().at(-1).errors).toContain("app-build-proof-missing");
+  });
+  it.each(["image-built", "invented"])(
+    "rejects out-of-order or unknown %s and permanently fails that stream",
+    async (phase) => {
+      const record = await f.recorder();
+      await expect(record(phase as never, f.attempt)).rejects.toThrow(/lifecycle/);
+      await expect(record("attempt-created", f.attempt)).rejects.toThrow(/lifecycle/);
+      expect(f.records().at(-1).errors).toContain("prior-record-failure");
+    }
+  );
+  it("does not overwrite a record nominated by the channel owner", async () => {
+    const record = await f.recorder();
+    writeFileSync(join(f.dir, "000001.json"), "preserved", { mode: 0o600 });
+    await expect(record("attempt-created", f.attempt)).rejects.toThrow(/lifecycle/);
+    expect(readFileSync(join(f.dir, "000001.json"), "utf8")).toBe("preserved");
+  });
+  it("fails same-daemon absence verification even when every saved resource disappeared", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.appPresent = true;
+    await record("resources-created", f.attempt);
+    await record("before-teardown", f.attempt);
+    f.state.appPresent = false;
+    f.state.daemon = "wrong-daemon";
+    await expect(record("after-teardown", f.attempt)).rejects.toThrow(/lifecycle/);
+    expect(f.records().at(-1).inventory[0].observation.state).toBe("error");
+  });
+  it("retains every discovered identity when one inspection fails, and positively observes absence later", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.volumesPresent = f.state.inspectError = true;
+    await expect(record("resources-created", { ...f.attempt, failed: true })).rejects.toThrow(
+      /lifecycle/
+    );
+    const partial = f.records().at(-1);
+    expect(partial.inventory.map((r: { id: string }) => r.id)).toEqual(f.volumes.map((v) => v.id));
+    expect(partial.inventory[0].creation).toBeNull();
+    expect(partial.inventory[0].observation.state).toBe("error");
+    await expect(record("before-teardown", { ...f.attempt, failed: true })).rejects.toThrow(
+      /lifecycle/
+    );
+    f.state.volumesPresent = false;
+    await expect(record("after-teardown", { ...f.attempt, failed: true })).rejects.toThrow(
+      /lifecycle/
+    );
+    expect(
+      f
+        .records()
+        .at(-1)
+        .inventory.every(
+          (r: { observation: { state: string } }) => r.observation.state === "absent"
+        )
+    ).toBe(true);
+  });
+  it("reports extra project residuals without treating them as deletion authority", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.appPresent = true;
+    await record("resources-created", f.attempt);
+    await record("before-teardown", f.attempt);
+    f.state.appPresent = false;
+    f.state.extra = true;
+    await expect(record("after-teardown", f.attempt)).rejects.toThrow(/lifecycle/);
+    expect(f.records().at(-1).residuals).toEqual([
+      { kind: "volume", id: `${f.attempt.projectName}_unexpected-volume` }
+    ]);
+    expect(f.records().at(-1).complete).toBe(false);
+  });
+  it("retains the exact network identity and reports a surviving network", async () => {
+    const record = await f.recorder();
+    await record("attempt-created", f.attempt);
+    f.state.built = true;
+    await record("image-built", f.attempt);
+    f.state.networkPresent = true;
+    await record("resources-created", { ...f.attempt, failed: true });
+    await record("before-teardown", { ...f.attempt, failed: true });
+    await expect(record("after-teardown", { ...f.attempt, failed: true })).rejects.toThrow(
+      /lifecycle/
+    );
+    const row = f.records().at(-1).inventory[0];
+    expect(row.kind).toBe("network");
+    expect(row.id).toBe("5".repeat(64));
+    expect(row.creation.driver).toBe("bridge");
+    expect(row.observation.state).toBe("present");
+  });
+  it("rejects a changed channel mode before publication", async () => {
+    const record = await f.recorder();
+    chmodSync(f.dir, 0o755);
+    await expect(record("attempt-created", f.attempt)).rejects.toThrow(/lifecycle/);
+    expect(f.records()).toEqual([]);
+  });
+  it("scrubs malformed endpoint output before it can reach an error", async () => {
+    const capture: LifecycleCapture = async (command, args, env, root) =>
+      args[0] === "context" && args[1] === "inspect"
+        ? "SECRET_SENTINEL"
+        : f.capture(command, args, env, root);
+    const error = await createLifecycleRecorder({ env: f.env, root: f.root, capture }).catch(
+      (e: unknown) => e
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).not.toContain("SECRET_SENTINEL");
+  });
+});
+describe("N3 provisioner integration with fake Docker/ports/auth/health", () => {
+  let f: ReturnType<typeof lifecycleFixture>;
+  let events: string[];
+  let failPhase: string | undefined;
+  let failedOnce: boolean;
+  let conflict: boolean;
+  let appStarts: number;
+  let cleanupFails: boolean;
+  let teardownFailure: string | undefined;
+  let lifecycleEnabled: boolean;
+  let savedEnv: NodeJS.ProcessEnv;
+  beforeEach(async () => {
+    savedEnv = { ...process.env };
+    f = lifecycleFixture();
+    events = [];
+    failedOnce = false;
+    conflict = false;
+    appStarts = 0;
+    cleanupFails = false;
+    teardownFailure = undefined;
+    lifecycleEnabled = true;
+    vi.stubEnv("JARVIS_UAT_LIFECYCLE_DIR", f.env.JARVIS_UAT_LIFECYCLE_DIR);
+    vi.stubEnv("JARVIS_UAT_LIFECYCLE_NONCE", f.env.JARVIS_UAT_LIFECYCLE_NONCE);
+    failPhase = undefined;
+    vi.stubEnv("JARVIS_IMAGE_TAG", "uat-unique");
+    vi.stubEnv("JARVIS_UAT_BUILD", "1");
+    vi.stubEnv("UAT_DOCKER_SUBNET", undefined);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", async () => {
+      events.push("ready");
+      return new Response(JSON.stringify({ ok: true, db: "ok", pgboss: "ok" }));
+    });
+    const record = await f.recorder();
+    vi.spyOn(lifecycleRecords, "createLifecycleRecorder").mockResolvedValue(
+      async (phase, input) => {
+        if (!lifecycleEnabled) return;
+        events.push(phase);
+        if (phase === "attempt-created") {
+          f.app.name = `/${input.projectName}-jarv1s-1`;
+          f.app.labels["com.docker.compose.project"] = input.projectName;
+          f.app.ports["3000/tcp"] = [{ HostIp: "127.0.0.1", HostPort: String(input.webPort) }];
+          f.app.configuredPorts["3000/tcp"] = structuredClone(f.app.ports["3000/tcp"]);
+          for (const v of f.volumes) {
+            v.id = `${input.projectName}_${v.labels["com.docker.compose.volume"]}`;
+            v.name = v.id;
+            v.labels["com.docker.compose.project"] = input.projectName;
+          }
+        }
+        if (phase === failPhase && !failedOnce) {
+          failedOnce = true;
+          throw new Error(`injected-${phase}`);
+        }
+        await record(phase, input);
+      }
+    );
+    mocks.createServer.mockImplementation(() => ({
+      once: () => {},
+      listen: (_port: number, _host: string, fn: () => void) => fn(),
+      close: (fn: () => void) => fn()
+    }));
+    mocks.spawn.mockImplementation((_command: string, args: string[]) => {
+      let rc = 0;
+      let stderr = "";
+      let stdout = "";
+      if (args[0] === "build") {
+        events.push("build");
+        f.state.built = true;
+      }
+      if (args.includes("up") && args.includes("postgres")) f.state.volumesPresent = true;
+      if (args.includes("up") && args.includes("jarv1s")) {
+        appStarts++;
+        if (conflict && appStarts === 1) {
+          rc = 1;
+          stderr = "address already in use";
+          f.state.appPresent = true;
+          f.app.ports["3000/tcp"] = [];
+        } else f.state.appPresent = true;
+      }
+      if (args.includes("down")) {
+        events.push("delete-resources");
+        f.state.appPresent = f.state.volumesPresent = false;
+        if (teardownFailure === "compose-down") rc = 1;
+      }
+      if (args[0] === "network" && args.includes("{{.ID}}")) {
+        events.push("network-discovery");
+        if (teardownFailure === "network-discovery") rc = 1;
+        else stdout = "5".repeat(64);
+      }
+      if (args[0] === "network" && args[1] === "rm") {
+        events.push("network-removal");
+        if (teardownFailure === "network-removal") rc = 1;
+      }
+      return {
+        stderr: {
+          on: (_event: string, fn: (chunk: Buffer) => void) => {
+            if (stderr) fn(Buffer.from(stderr));
+          }
+        },
+        stdout: { on: (_event: string, fn: (chunk: Buffer) => void) => fn(Buffer.from(stdout)) },
+        on: (event: string, fn: (code: number) => void) => {
+          if (event === "exit") fn(rc);
+        }
+      };
+    });
+  });
+  afterEach(() => {
+    f.dispose();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
+    Object.assign(process.env, savedEnv);
+  });
+  const provision = () =>
+    provisionForUat("bare", undefined, {
+      listLiveSubnets: async () => [],
+      installRealChatAuth: () => ({
+        cleanup: async () => {
+          events.push("credentials");
+          if (cleanupFails) throw new Error("credential-cleanup-error");
+        }
+      })
+    });
+  it("awaits image and resource receipts before readiness, then observes after credential/resource cleanup", async () => {
+    const run = await provision();
+    expect(f.records().map((r) => r.phase)).toContain("image-built");
+    expect(events.indexOf("image-built")).toBeLessThan(events.indexOf("ready"));
+    await run.teardown();
+    expect(events.indexOf("before-teardown")).toBeLessThan(events.indexOf("credentials"));
+    expect(events.indexOf("after-teardown")).toBeGreaterThan(events.indexOf("delete-resources"));
+    expect(f.records().at(-1).complete).toBe(true);
+  });
+  it.each([
+    "attempt-created",
+    "image-built",
+    "resources-created",
+    "before-teardown",
+    "after-teardown"
+  ])("makes a failed %s boundary nonzero while still cleaning resources", async (phase) => {
+    failPhase = phase;
+    const result = await provision()
+      .then((run) => run.teardown())
+      .catch((error: unknown) => error);
+    expect(result).toBeInstanceOf(Error);
+    expect(events).toContain("delete-resources");
+    expect(events).toContain("after-teardown");
+    expect(f.state.appPresent).toBe(false);
+    if (["attempt-created", "image-built", "resources-created"].includes(phase))
+      expect(events).not.toContain("ready");
+  });
+  it("retains partial creation and separate retry inventory while building once", async () => {
+    conflict = true;
+    const provisioning = provision();
+    await expect(provisioning).resolves.toMatchObject({ teardown: expect.any(Function) });
+    const run = await provisioning;
+    await run.teardown();
+    const records = f.records();
+    const finals = records.filter((r) => r.phase === "after-teardown");
+    expect(finals).toHaveLength(2);
+    expect(finals[0].attempt.failed).toBe(true);
+    expect(finals[0].complete).toBe(false);
+    expect(finals[0].inventory).toHaveLength(4);
+    const partial = records.find((r) => r.phase === "resources-created" && r.attempt.failed);
+    const app = partial.inventory.find((r: { kind: string }) => r.kind === "container");
+    expect(app.observation.state).toBe("present");
+    expect(app.creation.webPorts).toEqual([]);
+    expect(app.creation.configuredWebPorts[0].hostPort).toBe(finals[0].attempt.port);
+    for (const row of finals[0].inventory) expect(row.observation.state).toBe("absent");
+    expect(finals[1].attempt.port).not.toBe(finals[0].attempt.port);
+    expect(events.indexOf("after-teardown")).toBeLessThan(events.lastIndexOf("attempt-created"));
+    expect(finals[1].attempt.number).toBe(2);
+    expect(finals[1].complete).toBe(true);
+    expect(events.filter((e) => e === "build")).toHaveLength(1);
+    expect(records.filter((r) => r.phase === "resources-created" && r.attempt.failed)).toHaveLength(
+      1
+    );
+  });
+  describe.each([true, false])("caught cleanup failures, lifecycle enabled=%s", (enabled) => {
+    it.each(["compose-down", "network-discovery", "network-removal"])(
+      "retains %s despite positive final absence",
+      async (cause) => {
+        lifecycleEnabled = enabled;
+        if (!enabled) {
+          vi.stubEnv("JARVIS_UAT_LIFECYCLE_DIR", undefined);
+          vi.stubEnv("JARVIS_UAT_LIFECYCLE_NONCE", undefined);
+        }
+        teardownFailure = cause;
+        const run = await provision();
+        const envFile = process.env.JARVIS_ENV_FILE!;
+        const result = await run.teardown().catch((e: unknown) => e);
+        expect(events).toContain("network-discovery");
+        if (cause !== "network-discovery") expect(events).toContain("network-removal");
+        expect(() => statSync(envFile)).toThrow();
+        if (enabled) {
+          expect(result).toBeInstanceOf(AggregateError);
+          expect((result as AggregateError).errors.map((e: Error) => e.message)).toContain(
+            `UAT lifecycle cleanup: ${cause}-failed`
+          );
+          const final = f.records().at(-1);
+          expect(final.phase).toBe("after-teardown");
+          expect(final.attempt.failed).toBe(true);
+          expect(final.complete).toBe(false);
+          for (const row of final.inventory) expect(row.observation.state).toBe("absent");
+          expect(JSON.stringify(final)).not.toContain("SECRET_SENTINEL");
+        } else {
+          expect(result).toBeUndefined();
+          expect(f.records()).toEqual([]);
+        }
+      }
+    );
+  });
+  it("uses a caller-chosen project name for exactly one attempt and removes credentials before volumes", async () => {
+    const run = await provisionForUat("bare", undefined, {
+      runId: { projectName: "uat-777_deadbeef", suffix: "777_deadbeef" },
+      listLiveSubnets: async () => [],
+      installRealChatAuth: () => ({
+        cleanup: async () => {
+          events.push("credentials");
+        }
+      })
+    });
+    expect(run.projectName).toBe("uat-777_deadbeef");
+    await run.teardown();
+    expect(events.indexOf("credentials")).toBeLessThan(events.indexOf("delete-resources"));
+  });
+  it("fails closed instead of retrying under the same caller-chosen name after a port race", async () => {
+    conflict = true;
+    await expect(
+      provisionForUat("bare", undefined, {
+        runId: { projectName: "uat-777_deadbeef", suffix: "777_deadbeef" },
+        listLiveSubnets: async () => [],
+        installRealChatAuth: () => ({ cleanup: async () => {} })
+      })
+    ).rejects.toThrow("caller-chosen run id allows one attempt");
+    expect(appStarts).toBe(1);
+    expect(events).toContain("delete-resources");
+  });
+  it("publishes after-teardown even on credential cleanup error and marks it incomplete", async () => {
+    cleanupFails = true;
+    const run = await provision();
+    await expect(run.teardown()).rejects.toThrow(/credential-cleanup-error/);
+    const final = f.records().at(-1);
+    expect(final.phase).toBe("after-teardown");
+    expect(final.complete).toBe(false);
+    for (const row of final.inventory) expect(row.observation.state).toBe("absent");
   });
 });
