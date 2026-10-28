@@ -60,6 +60,7 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
   { pattern: /^\/api\/mcp(\/|$)/, category: "self_authority" },
   { pattern: /^\/internal(\/|$)/, category: "self_authority" },
   { pattern: /^\/api\/ai\/assistant-tools\/[^/]+\/invoke$/, category: "self_authority" },
+  { pattern: /^\/api\/modules\/[^/]+\/tools\/[^/]+\/invoke$/, category: "self_authority" },
   {
     pattern: /^\/api\/(ai\/assistant-actions|chat\/action-requests)\/[^/]+\/resolve$/,
     category: "self_authority"

@@ -62,5 +62,33 @@ authorizes this continuation on the isolated Finance branch rather than the olde
 ## Checkpoint
 
 The five Finance slices and their validation are recorded in
-`2026-10-28-finance-parity-checkpoint.md`. Platform route, host bridge and manual ledger are
-not implemented at this planning checkpoint. No safeguard is deferred to a later consumer PR.
+`2026-10-28-finance-parity-checkpoint.md`. The guarded route is implemented on the isolated
+branch, rebased onto main `66f8e4ef`. The optional host bridge and manual ledger remain next.
+
+Route verification on October 28 (Node 24.19.0, pnpm 10.6.2, throwaway PostgreSQL 17.11):
+
+- Five focused unit files, 24 tests passed, including real route-catalog refusal and the
+  preference-context argument. Two initial harness typing/coverage mistakes were corrected.
+- Gate `test:integration:module-page-writes`: five files, 46 tests passed. Final restored run
+  `moss_finance-20261028-071438.log`, input fingerprint `529d808d6d8a`, exit 0; container removed.
+  This is real confirmation/audit storage with explicit auth/tool stand-ins, not installed UI proof.
+- Negative control 1 removed only the destructive risk guard. Run
+  `moss_finance-20261028-071237.log`, fingerprint `ac30a9465105`, exit 1: destructive request
+  returned 200 instead of 409. The outbound guard remained. Five dependent assertions failed.
+- Negative control 2 restored risk handling and removed only the module owner comparison.
+  Run `moss_finance-20261028-071341.log`, fingerprint `08eb1d017bb3`, exit 1: module A invoked
+  module B's tool (200 instead of 404). Both protections were restored before the green run.
+- The first aggregate static run stopped at two newly merged heartbeat mockup lint errors
+  (duplicate URLSearchParams global and undeclared location). A separate local fix uses
+  window.location and removes the redundant declaration. Aggregate verification must rerun.
+- Approval consumption commits before execution; a failed worker cannot roll it back and revive
+  the approval. Worker mutations and the platform activity record are separate transactions:
+  a failed response can follow a completed write, so the host must not automatically retry.
+- Existing confirmed-row consumers were traced: recovery handles pending/timeouts, does not
+  execute confirmed rows, and emits chat outcomes only with chat bindings. The unchanged REST
+  approval path cannot replay a page row. Cancellation remains available through its owner route.
+
+Migration 0342 adds module-page activity attribution; no applied migration changed. Existing
+confirmation migration 0334 and public AI APIs are reused. Synchronous module preferences reuse
+an already-open actor context to avoid acquiring a second connection from a one-slot pool.
+No bank service, production database, publication or deployment was used.

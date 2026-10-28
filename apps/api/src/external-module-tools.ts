@@ -138,7 +138,8 @@ export function createExternalModuleTools(input: {
     const preferences = await resolveModulePreferences(
       input.appDataContext,
       { actorUserId: context.actorUserId, requestId: context.requestId },
-      { id: module.id, preferences: module.manifest.preferences ?? [] }
+      { id: module.id, preferences: module.manifest.preferences ?? [] },
+      scopedDb
     );
     // FIN-04 (#1149, spec delta "Host change 2"): hand the worker the
     // host-resolved actor identity in tool input, matching the queue job

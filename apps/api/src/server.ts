@@ -96,6 +96,7 @@ import type { HerdrInstallDependencies } from "@moss/settings";
 import { registerStaticWeb } from "./static-web.js";
 import { registerClientErrorsRoute, setMossErrorHandler } from "./error-handling.js";
 import { registerExternalModuleWebAssetRoute } from "./external-module-web-route.js";
+import { registerModulePageToolRoutes } from "./module-page-tool-routes.js";
 import {
   reconcileExternalModuleUserJobs,
   registerExternalModuleJobRoutes
@@ -527,6 +528,15 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
           requestId: `external-tools:${randomUUID()}`
         })
     );
+
+    registerModulePageToolRoutes(server, {
+      runner: dataContext,
+      repository: aiRepository,
+      resolveAccessContext: authRuntime.resolveAccessContext,
+      resolveActiveModules,
+      getExternalModuleIds: () => new Set(getExternalToolManifests().map((module) => module.id)),
+      trustedOrigins: authRuntime.trustedOrigins
+    });
 
     // The integrations family key loads per request from env or the master key
     // store (#2312) — never eagerly here, so a missing key degrades the tools

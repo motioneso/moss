@@ -469,6 +469,27 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "core.modules.confirmation_invalid",
+    class: "permission",
+    remediationRef: "core.modules.check_page_result",
+    description:
+      "A module-page confirmation expired, was cancelled, was already used, or does not match this operation. This request did not execute the tool."
+  },
+  {
+    code: "core.modules.page_rate_limited",
+    class: "transient",
+    remediationRef: "core.modules.wait_before_page_change",
+    description:
+      "Too many module-page tool calls were made in the session/module limit window. The request is refused before execution."
+  },
+  {
+    code: "core.modules.page_write_unavailable",
+    class: "transient",
+    remediationRef: "core.modules.check_page_result",
+    description:
+      "A module page could not obtain a confirmed result. A transport or result failure can occur after a write, so a failed response must not trigger an automatic retry."
+  },
+  {
     code: "android_hardware_status_unavailable",
     class: "transient",
     remediationRef: "android_hardware_status_recovery",
@@ -604,6 +625,19 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.check_page_result",
+    description:
+      "Refresh the module's data and check whether the change completed before starting a new operation. Review any new confirmation before continuing.",
+    path: "/",
+    scope: "user"
+  },
+  {
+    id: "core.modules.wait_before_page_change",
+    description: "Wait a minute before making another change on the module page.",
+    path: "/",
+    scope: "user"
+  },
   {
     id: "android_hardware_status_recovery",
     description:
