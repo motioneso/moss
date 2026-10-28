@@ -66,6 +66,45 @@ function writer(actor: string, path: string, from: string, to: string, hold = fa
 }
 
 describe("coordinated Vault mutation", () => {
+  it("preserves a leading UTF-8 byte-order mark during a disjoint text edit", async () => {
+    await writeFile(join(root, "topic.md"), "\uFEFFAPPLE BANANA");
+    await runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+      new VaultContextRunner(root).withVaultContextAt(
+        { actorUserId: ids.userA },
+        root,
+        [root],
+        (ctx) =>
+          mutateVaultFiles(db, ctx, ["topic.md"], async ([file]) => ({
+            changes: [{ path: "topic.md", content: file!.content!.replace("APPLE", "ORANGE") }],
+            result: undefined
+          }))
+      )
+    );
+    expect(await readFile(join(root, "topic.md"))).toEqual(Buffer.from("\uFEFFORANGE BANANA"));
+  });
+
+  it("rejects malformed UTF-8 before invoking a mutable-text transform", async () => {
+    const bytes = Buffer.from([0x61, 0xff, 0x62]);
+    await writeFile(join(root, "topic.md"), bytes);
+    let entered = false;
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+        new VaultContextRunner(root).withVaultContextAt(
+          { actorUserId: ids.userA },
+          root,
+          [root],
+          (ctx) =>
+            mutateVaultFiles(db, ctx, ["topic.md"], async () => {
+              entered = true;
+              return { changes: [{ path: "topic.md", content: "replacement" }], result: undefined };
+            })
+        )
+      )
+    ).rejects.toThrow(TypeError);
+    expect(entered).toBe(false);
+    expect(await readFile(join(root, "topic.md"))).toEqual(bytes);
+  });
+
   it("rejects a VaultContext belonging to a different scoped actor before reading or writing", async () => {
     await writeFile(join(root, "topic.md"), "untouched");
     let entered = false;

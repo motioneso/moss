@@ -123,6 +123,7 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "chunkOffset",
   "windowStartMs",
   "fileHash",
+  "snapshotKey",
   "op",
   "source",
   "goalId",

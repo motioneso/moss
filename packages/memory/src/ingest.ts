@@ -1,13 +1,12 @@
-import { createHash } from "node:crypto";
-
-import { listVaultFilesRecursive, readVaultFile } from "@moss/vault";
+import { listVaultFilesRecursive } from "@moss/vault";
 import type { DataContextDb } from "@moss/db";
 import type { VaultContext } from "@moss/vault";
 
-import { embedChunks } from "./embed-chunks.js";
 import type { EmbeddingProvider } from "./embedding-provider.js";
-import { parseDocument } from "./parser.js";
-import type { MemoryRepository, NewChunkData } from "./repository.js";
+import type { MemoryRepository } from "./repository.js";
+
+import { ingestVaultDocument } from "./ingest-document.js";
+import type { VaultIndexPublicationPort } from "./vault-index-publication.js";
 
 const SOURCE_KIND = "vault";
 
@@ -25,7 +24,8 @@ export interface IngestFileOptions {
 export class MemoryIngestPipeline {
   constructor(
     private readonly embeddingProvider: EmbeddingProvider,
-    private readonly repository: MemoryRepository
+    private readonly repository: MemoryRepository,
+    private readonly publication?: VaultIndexPublicationPort
   ) {}
 
   async ingestFile(
@@ -34,56 +34,22 @@ export class MemoryIngestPipeline {
     relativePath: string,
     options: IngestFileOptions = {}
   ): Promise<IngestFileResult> {
-    const content = await readVaultFile(vaultCtx, relativePath);
-    const fileHash = createHash("sha256").update(content).digest("hex");
-    const ownerUserId = vaultCtx.actorUserId;
-
-    if (!options.force) {
-      const existing = await this.repository.getFileIndex(
-        scopedDb,
-        ownerUserId,
-        SOURCE_KIND,
-        relativePath
-      );
-      if (
-        existing &&
-        existing.fileHash === fileHash &&
-        existing.embedModelName === this.embeddingProvider.modelName
-      ) {
-        return { status: "skipped", chunkCount: 0 };
+    const result = await ingestVaultDocument(
+      scopedDb,
+      vaultCtx,
+      relativePath,
+      {
+        sourceKind: SOURCE_KIND,
+        sourcePath: relativePath,
+        force: options.force
+      },
+      {
+        repository: this.repository,
+        embeddingProvider: this.embeddingProvider,
+        publication: this.publication
       }
-    }
-
-    const { chunks, wikilinks } = parseDocument(content);
-
-    const newChunks: NewChunkData[] = await embedChunks(
-      this.embeddingProvider,
-      chunks,
-      relativePath
     );
-
-    await this.repository.upsertFileChunks(
-      scopedDb,
-      ownerUserId,
-      relativePath,
-      newChunks,
-      this.embeddingProvider.modelName,
-      this.embeddingProvider.modelVersion,
-      SOURCE_KIND
-    );
-    await this.repository.replaceFileLinks(scopedDb, ownerUserId, relativePath, wikilinks);
-    await this.repository.upsertFileIndex(
-      scopedDb,
-      ownerUserId,
-      SOURCE_KIND,
-      relativePath,
-      fileHash,
-      newChunks.length,
-      this.embeddingProvider.modelName,
-      this.embeddingProvider.modelVersion
-    );
-
-    return { status: "ingested", chunkCount: newChunks.length };
+    return { status: result.status, chunkCount: result.chunksProcessed };
   }
 
   async deleteFile(
@@ -118,6 +84,10 @@ export class MemoryIngestPipeline {
 
   /** Disaster-recovery: wipe and re-ingest everything for this user. */
   async rebuildFromVault(scopedDb: DataContextDb, vaultCtx: VaultContext): Promise<void> {
+    if (this.publication)
+      throw new Error(
+        "Managed rebuild requires IngestionService with force and one transaction per file"
+      );
     await this.repository.deleteAllForUser(scopedDb, vaultCtx.actorUserId);
     const allFiles = await listVaultFilesRecursive(vaultCtx);
     for (const file of allFiles) {

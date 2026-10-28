@@ -145,6 +145,7 @@ export async function handleExportBuildJob(
         newsPersonalization: userExport.tables.newsPersonalization,
         sportsSources: userExport.tables.sportsSources,
         meetings: userExport.tables.meetings,
+        notes: userExport.tables.notes,
         connector_metadata: userExport.tables.connectorAccounts,
         calendar_cache: userExport.tables.calendarEvents,
         email_cache: userExport.tables.emailMessages,

@@ -646,7 +646,10 @@ describe("MVP foundation schema catalog", () => {
         { version: "0331", name: "0331_outlook_browser_calendar.sql" },
         { version: "0333", name: "0333_chat_automatic_voice_inputs.sql" },
         { version: "0334", name: "0334_module_page_confirmations.sql" },
-        { version: "0335", name: "0335_meeting_recording_identity.sql" }
+        { version: "0335", name: "0335_meeting_recording_identity.sql" },
+        { version: "0336", name: "0336_notes_managed_source_lifecycle.sql" },
+        { version: "0337", name: "0337_notes_recording_contributions.sql" },
+        { version: "0338", name: "0338_memory_managed_note_snapshots.sql" }
       ]);
     } finally {
       await client.end();

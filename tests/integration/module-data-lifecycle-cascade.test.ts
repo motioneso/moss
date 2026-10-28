@@ -149,6 +149,12 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.sports_espn_source_assignments",
         "app.sports_policy_verdicts",
         "app.sports_headline_prefs",
+        "app.notes_managed_actors",
+        "app.notes_managed_sources",
+        "app.notes_destination_bindings",
+        "app.notes_recording_contributions",
+        "app.notes_contribution_proposals",
+        "app.notes_contribution_operations",
         "app.news_prefs",
         // #953 News Slice 1 personalization tables — all owner-keyed to app.users cascade.
         "app.news_custom_sources",
