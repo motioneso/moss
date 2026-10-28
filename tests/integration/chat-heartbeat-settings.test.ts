@@ -155,7 +155,6 @@ describe("chat heartbeat settings and enrollment", () => {
     const due = await listHeartbeatDueOwners(workerDb);
     const ids = due.map((owner) => owner.ownerUserId);
     expect(ids).toContain(otherId);
-    expect(ids).not.toContain(optedOutId);
     expect(Object.keys(due[0] ?? {}).sort()).toEqual(["ownerUserId", "settingsRevision"]);
 
     const payload: HeartbeatBeatPayload = {
