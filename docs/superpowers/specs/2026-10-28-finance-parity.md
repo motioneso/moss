@@ -75,8 +75,19 @@ implemented, not full product equivalence. Checkpoint results belong in the prog
 3. Splits: additive storage, bounded allocation editor, exact total and remaining amount;
    preserve original bank transaction. SQL update and activity commit atomically, reject stale
    totals. Changed provider total retains allocations for repair and shows needs-review.
-4. Next: manual ledger/accounts and previewed import; reconciliation; targets/goals; recurring
-   obligations; flexible budget and currency-separated reports; household refinement.
+4. Currency-separated Reports: require a choice before mixed-currency totals, retain owner
+   boundaries, guard arithmetic and disclose snapshot/pending policies.
+5. Accounts: preserve each row's currency, show separate asset-minus-debt totals, and retain
+   exact decimal cents in display, inputs and loaded-row export.
+6. Authorized platform prerequisite: implement the existing approved #3723/#3724 route and
+   host tools handle contract, including confirmation, activity, RLS and actual installed-module
+   proof. Foundation PR #3733 is merged; both continuation issues remain open and no matching
+   open implementation PR was found on October 28. No competing platform implementation is copied.
+7. Manual ledger/accounts and previewed import; reconciliation; budget currency/history policy;
+   targets/goals; recurring obligations; flexible budgets and household refinement.
+
+See the [current checkpoint](../plans/2026-10-28-finance-parity-checkpoint.md) for implemented,
+missing, dependency-bound and unverified capabilities, exact test receipts and remaining work.
 
 No integration-dependent feature is complete from a mock. New SQL must install through the module
 installer and run through the isolated verify-gate. Run focused tests, lint, format, typechecks,
