@@ -6,7 +6,10 @@ import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { installPromotedMeetingCodex } from "./meeting-promoted-codex.js";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
-export const uatLevel = { level: "solo-admin", without: [] } as const;
+export const uatLevel = {
+  level: "admin+data",
+  without: ["news", "sports", "tasks", "calendar", "finance"]
+} as const;
 test.use({ trace: "off", screenshot: "off", video: "off" });
 const factText = "Fernworld uses shared wind for grass and birds.";
 const contributionText = "The shared wind drives grass and birds.";
