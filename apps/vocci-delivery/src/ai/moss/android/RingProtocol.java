@@ -6,7 +6,10 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /** Only finished-file listing/reads; deliberately no destructive command builder. */
 final class RingProtocol {
@@ -17,6 +20,21 @@ final class RingProtocol {
     static final String FILE = "e49a3003-f69a-11e8-8eb2-f2801f1b9fd1";
     static boolean validName(String name) {
         return name.matches("(?:amsg_)?[0-9]{10}_[A-Za-z0-9_-]{1,24}\\.(opus|json)");
+    }
+    /** True for a numbered tail (name_001.opus) of a recording whose first part is also listed. */
+    static boolean isContinuation(String name, Map<String, Integer> inventory) {
+        return name.matches(".+_[0-9]{3}\\.opus") && inventory.containsKey(name.substring(0, name.length() - 9) + ".opus");
+    }
+    /** The ring cuts long recordings into 5 MiB files; the tails are named name_001.opus, name_002.opus and so on. */
+    static List<String> continuations(String packetName, Map<String, Integer> inventory) {
+        String base = packetName.substring(0, packetName.length() - 5);
+        List<String> parts = new ArrayList<>();
+        for (int n = 1; n < 1000; n++) {
+            String part = String.format("%s_%03d.opus", base, n);
+            if (!inventory.containsKey(part)) break;
+            parts.add(part);
+        }
+        return parts;
     }
     static byte[] read(String name) {
         if (!validName(name)) throw new IllegalArgumentException("filename");
