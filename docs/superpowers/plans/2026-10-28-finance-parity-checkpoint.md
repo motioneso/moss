@@ -1,6 +1,6 @@
 # Finance parity checkpoint
 
-Updated 2026-10-28, 09:52 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
+Updated 2026-10-28, 10:00 UTC. Local branch `task/finance-parity-20261028`, under `~/Jarv1s`.
 The original checkout is separate. Nothing has been pushed, published, merged or deployed.
 The [source-linked parity matrix](../specs/2026-10-28-finance-parity.md) records the audited
 baseline and testable acceptance criteria; this document records current implementation.
@@ -104,7 +104,7 @@ Manual account/entry persistence is exercised through the installed app. The rem
 - **4 installed flows passed**, `094830-liZK4k`, base `dbc5c6a3`, input `fe7434a8a696`, rc 0.
   The real budget tool and signed-in Budget page both show the exact ready-to-assign result including
   the synthetic manual cash account. Existing import/reconciliation/split/platform flows also passed.
-- Final aggregate static verification is pending for this small follow-up. The next implementation
+- **Aggregate static passed** on committed `395c8ab9`, `moss-finance-budget-static-final.log`: lint, format, design tokens/classes/catalogue, file sizes, dependencies, migrations, root/test/web/module TypeScript and app-map generation. The next implementation
   is Stage B in the [budget correctness spec](../specs/2026-10-28-finance-budget-correctness.md):
   reviewed currency setup and historical funding, followed by atomic ordinary writes. Do not
   interpret this arithmetic fix as full envelope parity or a fix for mixed-currency budgets.
@@ -140,8 +140,7 @@ Manual account/entry persistence is exercised through the installed app. The rem
   race while the test was edited. Those are corrected. On clean `209a4e72`, **17 DB tests**
   (`094011-EeMUul`), **11 install/backfill tests** (`094011-Bt5W2a`) and **4 installed flows**
   (`094011-qG9SMr`) all passed, input `e1658952c133`, rc 0 and container cleanup confirmed.
-  Its separate frozen foundation `094009-rgShgW` passed the full static phase and is running units;
-  no final foundation outcome is inferred from that intermediate progress.
+  Its separate frozen foundation `094009-rgShgW` completed with the same unrelated failures; see the aggregate section below.
 
 ## Earlier reconciliation verification
 
@@ -261,19 +260,34 @@ and owner isolation had already succeeded before the stale selector timed out.
 
 ## Aggregate limitations and recoverable prerequisites
 
-Latest frozen full foundation: clean committed `69ddecfb`,
-`moss_finance_verify-20261028-090433-FvGON8.log`, input `8fd0d01fd0d0`, **rc 1**, container removed.
-Static passed. Unit phase: **1,597 files / 19,359 tests passed, 24 files / 277 tests failed,
-16 skipped**. This includes manual ledger, reconciliation and the gate-log fix, before CSV import.
-All 281 failed assertion/suite identifiers are identical to the earlier `e7ef904a` run (`083341`),
-which in turn matched the `2e3bddbd` run (`075738`), with no added or removed failures.
+Latest **completed** frozen foundation: clean committed `209a4e72`,
+`moss_finance_verify-20261028-094009-rgShgW.log`, input `e1658952c133`, **rc 1**, ended
+09:58:42 UTC and removed its container. Static passed. Unit phase: **1,599 files / 19,397 tests
+passed, 24 files / 277 tests failed, 16 skipped**. This includes CSV import, before exact-budget
+and browser-prerequisite follow-ups. All 281 failed assertion/suite identifiers are identical to
+`69ddecfb` (`090433-FvGON8`), with no added or removed failure identifiers. Earlier snapshots
+`e7ef904a` and `2e3bddbd` had the same failures.
+
 Failures are outside Finance: Computer ancestor ownership/IPC (including auth-session fixture),
 unmappable native ACL IDs and four bundled-browser suites. The container maps only UID/GID 1000;
 `/` appears owned by 65534 and ACL user 100001 is invalid. Changing the temp directory cannot
 satisfy an ancestry check reaching `/`; guards were not weakened. This comparison establishes no
 new aggregate failure across the tested slices, not an independently proven whole-main baseline.
 Later foundation migration/UAT/full-integration phases did not run; separately listed narrow
-integration gates did. CI remains unrun. The frozen post-import run at `209a4e72` is active: `094009-rgShgW`; its static phase passed.
+integration gates did. CI remains unrun.
+
+**Recovered browser prerequisite:** `e6f831f4` lets the three parity-only browser suites use
+`CHROMIUM_PATH`, retaining their bundled-browser default. All **3 files / 13 tests passed** with
+installed Chromium (`moss-parity-system-chromium.log`), plus scoped lint/format. This uses
+Playwright's [documented executable option](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-executable-path),
+with actual browser execution and unchanged assertions. These harness tests use their existing
+labeled fixtures; they are separate from Finance's unmocked installed proof. The production Sports
+sidecar remains unchanged and still depends on its bundled browser in this environment.
+
+**Pending full rerun:** frozen clean `e6f831f4` in the separate verification checkout,
+`moss_finance_verify-20261028-095917-1eDZFx.log`, started with the installed Chromium path. It
+includes exact-budget math and the recovered three suites. Read its terminal sentinel with the
+verify-gate procedure; do not switch that checkout while it runs. This is pending, not passed.
 
 `getfacl` and `setfacl` have now been recovered from Debian's official signed package repository
 into task-local tooling. Playwright's official Chromium download failed with HTTP 403 Domain
@@ -287,7 +301,7 @@ full foundation must be rerun after the next substantive slice with available pr
 
 ## Next actions
 
-1. Preserve CSV (`209a4e72`) and exact-budget checkpoints; read the active full gate to completion. Prioritize budget currency,
+1. Preserve CSV (`209a4e72`), exact budget (`395c8ab9`) and browser prerequisite (`e6f831f4`); read the active full gate to completion. Prioritize budget currency,
    funding scope, exact arithmetic and historical ready-to-assign, then explicit transfers/archive.
 2. Keep the 500-entry reconciliation limit explicit; add pagination/selection before claiming
    support for larger single-day statements. Provider reconciliation remains separate.
@@ -297,7 +311,7 @@ full foundation must be rerun after the next substantive slice with available pr
 4. Rerun current focused/static/foundation gates; diagnose remaining failures and record unrun
    phases. Keep commits local and leave a precise tested checkpoint if continuation is needed.
 
-Fresh GitHub reads at 09:02 UTC: #3723/#3724 are open, unassigned **issues**, with no
+Fresh GitHub reads at 09:02 UTC, with main/open-Finance-PR rechecked at 09:58 UTC: #3723/#3724 are open, unassigned **issues**, with no
 matching open implementation PR; #3733 is merged. Main `b24780e3` is one documentation-only
 commit ahead of branch base `66f8e4ef`, touching only the heartbeat build plan. No Finance PR is
 open. Direct shell GitHub access is forbidden; the authorized GitHub connector supplied these
@@ -306,3 +320,21 @@ reads. Historical #3269 and #3349 remain merged, not pending dependencies.
 Platform details and exact route contracts: [continuation plan](2026-10-28-finance-platform-integration.md)
 and [module-author guide](../../module-page-actions.md). No provider-dependent holdings/import
 completion is claimed; those need separately authorized configuration and agreements.
+
+## Exact continuation point
+
+Both task and original checkouts are clean; all work is local. Installed harnesses closed their
+API/browser instances and removed temporary bundles. Only the documented full gate is pending.
+Continue Stage B of the budget correctness spec before targets/flex: add reviewed owner-scoped
+currency setup and filter both account funding and transaction history consistently. Start with
+`domain/store-port.ts`, `domain/store-sql.ts`, `worker/handlers/budget.ts`, `worker/handlers/draft.ts`
+and `web/screens/budget.tsx`. Extract a focused budget SQL adapter rather than expanding the main
+store. Keep the existing migration selector in `worker/store.ts` authoritative; do not silently
+reinterpret legacy KV/SQL assignments or pre-currency drafts. Update app-map facts and exercise a
+fresh/single-currency/mixed-currency/legacy-history owner through the installed browser.
+
+For later atomic writes, account for `activityUndoHandler` and draft-start as well as normal assign
+and move. Existing `commitBudgetChange` draft/undo status CTEs are not all dependent on successful
+assignment guards; every dependent write must share the same guarded outcome. An assignment-only
+revision is insufficient to prove an available-funds review is current after account/transaction
+changes. These are inspected remaining risks, not completed capabilities.
