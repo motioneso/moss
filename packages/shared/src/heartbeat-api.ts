@@ -1,7 +1,6 @@
+import { HEARTBEAT_SOURCES, type HeartbeatSource } from "./heartbeat-source-api.js";
 import { errorResponseSchema } from "./schema-fragments.js";
 
-export const HEARTBEAT_SOURCES = ["calendar", "tasks", "memory", "sports", "news"] as const;
-export type HeartbeatSource = (typeof HEARTBEAT_SOURCES)[number];
 export type HeartbeatCadenceMinutes = 30 | 60;
 
 export interface HeartbeatSettings {
