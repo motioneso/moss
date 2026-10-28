@@ -14,6 +14,7 @@ import type {
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
 import { manualSqlStore } from "./store-manual-sql.js";
+import { importSqlStore } from "./store-import-sql.js";
 import { reconciliationSqlStore } from "./store-reconciliation-sql.js";
 import { safeCents } from "./values.js";
 
@@ -306,6 +307,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     supportsSplits: true,
     manual: manualSqlStore(db),
     reconciliation: reconciliationSqlStore(db),
+    imports: importSqlStore(db),
     async setTransactionSplits(change) {
       const { from, to } = monthWindow(change.month);
       const result = await db.query<{ id: string }>(

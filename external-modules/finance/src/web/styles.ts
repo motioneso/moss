@@ -30,6 +30,11 @@ export const MODULE_STYLES = `
 .fnm-manual-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
 .fnm-manual-columns > * { min-width: 0; }
 .fnm-account-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
+.fnm-import-dialog { max-width: 42rem; }
+.fnm-import-dialog p { margin: 0; }
+.fnm-import-rows { display: flex; flex-direction: column; gap: var(--space-4); }
+.fnm-import-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
+.fnm-import-row > * { min-width: 0; overflow-wrap: anywhere; }
 .fnm-manual-form { display: flex; flex-direction: column; gap: var(--space-4); }
 @media (max-width: 480px) { .fnm-manual-columns { grid-template-columns: minmax(0, 1fr); } }
 .fnm-account-totals { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }

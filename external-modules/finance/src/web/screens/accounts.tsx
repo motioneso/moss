@@ -20,6 +20,7 @@ import { formatCents } from "../format";
 import { buildAccountsView, type AccountsBank, type AccountsRow } from "../accounts-view";
 import { EmptyState, outcomeGate } from "../states";
 import { ManualEntryDialog, type ManualAccountChoice } from "../manual-entry";
+import { ImportDialog } from "../import-dialog";
 import { ReconciliationDialog } from "../reconciliation-dialog";
 import { announce } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
@@ -54,6 +55,7 @@ function AccountsBody(props: {
   hostActions: HostActions;
   onAddEntry: (account: ManualAccountChoice) => void;
   onReconcile: (account: ManualAccountChoice) => void;
+  onImport: (account: ManualAccountChoice) => void;
 }): ReactNodeLike {
   const own = (props.result.accounts ?? []).filter((account) => !account.shared);
   const addBank = (): void =>
@@ -156,6 +158,17 @@ function AccountsBody(props: {
                           >
                             Reconcile
                           </Button>
+                          <Button
+                            variant="link"
+                            aria-label={`Import CSV into ${account.name}`}
+                            onClick={() =>
+                              props.onImport(
+                                own.find((row) => row.accountId === account.accountId)!
+                              )
+                            }
+                          >
+                            Import CSV
+                          </Button>
                         </div>
                       ) : null}
                       {bank.asOf ? <span className="jds-hint">{`As of ${bank.asOf}`}</span> : null}
@@ -182,6 +195,7 @@ export function AccountsScreen(props: {
 }): ReactNodeLike {
   const [editing, setEditing] = useState<ManualAccountChoice | null | undefined>(undefined);
   const [reconciling, setReconciling] = useState<ManualAccountChoice | null>(null);
+  const [importing, setImporting] = useState<ManualAccountChoice | null>(null);
   const accounts = useToolQuery<AccountsResult>("finance.accounts.list");
   return (
     <section aria-label="Accounts" className="fnm-stack">
@@ -202,6 +216,7 @@ export function AccountsScreen(props: {
             hostActions={props.hostActions}
             onAddEntry={setEditing}
             onReconcile={setReconciling}
+            onImport={setImporting}
           />
         ),
         { loadingLabel: "Loading accounts" }
@@ -215,6 +230,18 @@ export function AccountsScreen(props: {
             setEditing(undefined);
             invalidateQueries();
             announce(editing ? "Transaction saved." : "Manual account added.");
+          }}
+        />
+      ) : null}
+      {importing ? (
+        <ImportDialog
+          account={importing}
+          tools={props.tools}
+          onClose={() => setImporting(null)}
+          onSaved={() => {
+            setImporting(null);
+            invalidateQueries();
+            announce("Transactions imported.");
           }}
         />
       ) : null}

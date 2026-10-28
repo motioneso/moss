@@ -50,7 +50,8 @@
       "app.finance_activity",
       "app.finance_budget_drafts",
       "app.finance_budget_draft_lines",
-      "app.finance_reconciliations"
+      "app.finance_reconciliations",
+      "app.finance_imports"
     ]
   },
   "settingsPath": "/settings",
@@ -71,13 +72,13 @@
       {
         "id": "finance.accounts",
         "label": "Accounts",
-        "description": "Manual accounts offer Add transaction and Reconcile actions. Connected banks show their names (filled in on the next sync), balances, sync status and reconnect. Latest balance totals keep currencies separate and subtract debts, with no FX conversion. Each account retains its own currency. A total outside safe precision is unavailable while individual balances remain visible.",
+        "description": "Manual accounts offer Add transaction Reconcile and Import CSV actions. Connected banks show their names (filled in on the next sync), balances, sync status and reconnect. Latest balance totals keep currencies separate and subtract debts, with no FX conversion. Each account retains its own currency. A total outside safe precision is unavailable while individual balances remain visible.",
         "path": "/accounts"
       },
       {
         "id": "finance.start",
         "label": "Getting started",
-        "description": "Connect a first bank, let Moss sort the spending, then build the budget together. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin. After the first sync it shows Your first budget, a draft built from up to three months of history, with a Build my budget with Moss button and a Start this budget button.",
+        "description": "Begin with a private manual account without bank keys, enter transactions or import CSV from Accounts. Bank connection remains available after an admin configures keys. Connected accounts can build a first-budget draft from up to three months of history.",
         "path": "/start"
       },
       {
@@ -104,7 +105,7 @@
       },
       {
         "id": "finance.getting-started",
-        "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
+        "description": "Start without bank keys through Getting started \u2192 Add a manual account. Accounts imports UTF-8 CSV into manual accounts, up to 1 MiB, 200 rows and 500 KiB of mapped entries. Explicit column, date-order and money-direction mapping precedes a read-only preview in the account currency. Rows start uncategorized. Every possible duplicate needs Skip or Import anyway. Invalid dates, sub-cent/unsafe amounts and mixed currencies prevent saving. Receipt, transactions, balance and activity commit atomically; identical replay does not duplicate rows. A changed ledger requires a fresh preview. Uncertain saves require checking saved records. No provider-account import, FX conversion or automatic duplicate deletion."
       },
       {
         "id": "finance.first-budget",
@@ -156,7 +157,7 @@
       },
       {
         "id": "finance.manual-ledger",
-        "description": "Manual cash, checking, savings, credit, loan and asset accounts need no bank credentials. Opening balance/date and a fixed two-decimal currency establish the ledger; posted entries update exact balances atomically with replay-safe identities and Moss-timezone date checks. Manual accounts remain private. Forms await committed success; uncertain saves retain input for a records check. Reconcile a dated statement by selecting cleared entries and matching its exact balance. Finish requires zero difference and a current ledger revision; receipt, entry marks and activity commit together. Completed periods reject backdated postings, while outstanding entries can clear later. Reviews above 500 entries require an earlier cutoff and cannot finish a truncated list. Old hosts or unmigrated storage require an update. File import, linked transfers, provider reconciliation and automatic adjustments are unavailable."
+        "description": "Manual cash, checking, savings, credit, loan and asset accounts need no bank credentials. Opening balance/date and a fixed two-decimal currency establish the ledger; posted entries update exact balances atomically with replay-safe identities and Moss-timezone date checks. Manual accounts remain private. Forms await committed success; uncertain saves retain input for a records check. Reconcile a dated statement by selecting cleared entries and matching its exact balance. Finish requires zero difference and a current ledger revision; receipt, entry marks and activity commit together. Completed periods reject backdated postings, while outstanding entries can clear later. Reviews above 500 entries require an earlier cutoff and cannot finish a truncated list. Old hosts or unmigrated storage require an update. Linked transfers, provider reconciliation and automatic adjustments are unavailable."
       }
     ]
   },
@@ -325,6 +326,95 @@
         ]
       },
       "handler": "reconciliation.finish"
+    },
+    {
+      "name": "finance.import.preview",
+      "permissionId": "finance.import.preview",
+      "actionLabel": "Review a CSV import",
+      "description": "Validate rows and identify possible duplicates without saving.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string", "maxLength": 128 },
+          "isoCurrency": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sourceRow": { "type": "integer", "minimum": 1, "maximum": 200 },
+                "date": { "type": "string" },
+                "name": { "type": "string", "minLength": 1, "maxLength": 640 },
+                "amountCents": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "notes": { "type": "string", "maxLength": 4000 },
+                "allowDuplicate": { "type": "boolean" }
+              },
+              "required": ["sourceRow", "date", "name", "amountCents", "allowDuplicate"]
+            }
+          }
+        },
+        "required": ["accountId", "isoCurrency", "rows"]
+      },
+      "handler": "import.preview"
+    },
+    {
+      "name": "finance.import.apply",
+      "permissionId": "finance.import.apply",
+      "actionLabel": "Import manual transactions",
+      "description": "Atomically import reviewed manual transactions; no bank money moves.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": { "type": "string", "maxLength": 128 },
+          "isoCurrency": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sourceRow": { "type": "integer", "minimum": 1, "maximum": 200 },
+                "date": { "type": "string" },
+                "name": { "type": "string", "minLength": 1, "maxLength": 640 },
+                "amountCents": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "notes": { "type": "string", "maxLength": 4000 },
+                "allowDuplicate": { "type": "boolean" }
+              },
+              "required": ["sourceRow", "date", "name", "amountCents", "allowDuplicate"]
+            }
+          },
+          "operationId": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "cleared": { "type": "boolean" }
+        },
+        "required": [
+          "accountId",
+          "isoCurrency",
+          "rows",
+          "operationId",
+          "expectedRevision",
+          "cleared"
+        ]
+      },
+      "handler": "import.apply",
+      "executionPolicy": "confirm"
     },
     {
       "name": "finance.setup.status",

@@ -115,6 +115,14 @@ async function namesFor(ports: WorkerPorts, store: FinanceStore): Promise<Names>
 async function describe(row: ActivityRecord, names: Names): Promise<string> {
   const p = row.params;
   switch (row.kind) {
+    case "account.create":
+      return "Added a manual account";
+    case "transaction.create":
+      return "Added a manual transaction";
+    case "account.reconcile":
+      return "Reconciled a manual statement";
+    case "transaction.import":
+      return `Imported ${num(p.entryCount) ?? 0} manual transaction${p.entryCount === 1 ? "" : "s"}`;
     case "budget.assign":
       return `Set ${names.category(str(p.categoryId))} to ${money(num(p.amountCents) ?? 0)} for ${monthLabel(str(p.month))}`;
     case "budget.move": {

@@ -11,6 +11,7 @@ import {
   manualAccountCreateHandler,
   manualEntryCreateHandler
 } from "./handlers/manual-ledger.js";
+import { importPreviewHandler, importApplyHandler } from "./handlers/import.js";
 import {
   reconciliationReadHandler,
   reconciliationFinishHandler
@@ -61,6 +62,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "manual.context": manualContextHandler,
   "manual.account-create": manualAccountCreateHandler,
   "manual.entry-create": manualEntryCreateHandler,
+  "import.preview": importPreviewHandler,
+  "import.apply": importApplyHandler,
   "reconciliation.read": reconciliationReadHandler,
   "reconciliation.finish": reconciliationFinishHandler,
   // Getting started (#3178): bank keys present, bank linked.

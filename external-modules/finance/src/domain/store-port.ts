@@ -7,6 +7,7 @@ import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js"
 import type { BudgetLedger } from "./envelope.js";
 import type { BudgetDraft, DraftBuild, DraftLine } from "./draft.js";
 import type { ManualLedgerStore } from "./manual-ledger.js";
+import type { ImportStore } from "./csv-import.js";
 import type { ReconciliationStore } from "./reconciliation.js";
 import type { SplitChange } from "./splits.js";
 
@@ -52,6 +53,7 @@ export interface FinanceStore {
   /** SQL-only ledger; legacy KV must migrate before manual entry. */
   readonly manual?: ManualLedgerStore;
   readonly reconciliation?: ReconciliationStore;
+  readonly imports?: ImportStore;
   listItems(): Promise<ItemRecord[]>;
   getItem(itemId: string): Promise<ItemRecord | null>;
   putItem(record: ItemRecord): Promise<void>;

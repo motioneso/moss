@@ -18,6 +18,7 @@ import {
   type FinanceDb,
   type ManualAccountCreate,
   type ReconciliationFinish,
+  type ImportApply,
   type ManualEntryCreate
 } from "../../external-modules/finance/src/domain/index.js";
 import {
@@ -418,5 +419,142 @@ describe("manual ledger through installed module SQL and actual owner role", () 
         s.reconciliation!.finish(statement(a.accountId, { expectedRevision: 501 }))
       )
     ).toBe("conflict");
+  });
+});
+
+describe("atomic CSV imports through installed SQL", () => {
+  const batch = (accountId: string, over: Partial<ImportApply> = {}): ImportApply => ({
+    id: `manual:${randomUUID()}`,
+    accountId,
+    isoCurrency: "USD",
+    expectedRevision: 0,
+    rows: [
+      {
+        sourceRow: 1,
+        date: "2026-10-02",
+        name: "Synthetic import market",
+        amountCents: 123,
+        notes: "Synthetic imported private note",
+        allowDuplicate: false
+      },
+      {
+        sourceRow: 3,
+        date: "2026-10-03",
+        name: "Synthetic refund",
+        amountCents: -456,
+        notes: "",
+        allowDuplicate: false
+      }
+    ],
+    cleared: true,
+    digest: "1".repeat(64),
+    at: "2026-10-28T00:00:00Z",
+    ...over
+  });
+  it("imports every row once, retains source identities and replays after later ledger changes", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const b = batch(a.accountId);
+    expect(await owner((s) => s.imports!.apply(b))).toBe("created");
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(100333);
+    const rows = await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"));
+    expect(rows?.map((r) => r.id).sort()).toEqual([`${b.id}:1`, `${b.id}:3`]);
+    expect(
+      rows?.every(
+        (r) =>
+          r.source === "manual" &&
+          r.cleared &&
+          r.categoryId === null &&
+          r.reviewState === "needs_look"
+      )
+    ).toBe(true);
+    await owner((s) => s.manual!.createEntry(entry(a.accountId)));
+    expect(await owner((s) => s.imports!.apply(b))).toBe("unchanged");
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(92090);
+    expect(await owner((s) => s.imports!.apply({ ...b, digest: "2".repeat(64) }))).toBe("conflict");
+    const events = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 200));
+    expect(
+      events.filter((e) => e.kind === "transaction.import" && e.params.importId === b.id)
+    ).toHaveLength(1);
+    expect(JSON.stringify(events)).not.toContain("Synthetic imported private note");
+  });
+  it("marks both file and ledger duplicates and requires explicit import decisions", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    await owner((s) =>
+      s.manual!.createEntry(
+        entry(a.accountId, { name: " Synthetic  IMPORT market ", amountCents: 123 })
+      )
+    );
+    const b = batch(a.accountId, { expectedRevision: 1 });
+    b.rows.push({ ...b.rows[0]!, sourceRow: 4 });
+    expect((await owner((s) => s.imports!.preview(a.accountId, b.rows)))?.duplicateRows).toEqual([
+      1, 4
+    ]);
+    expect(await owner((s) => s.imports!.apply(b))).toBe("conflict");
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(99877);
+    const reviewed = { ...b, rows: [{ ...b.rows[0]!, allowDuplicate: true }, b.rows[1]!] };
+    expect(await owner((s) => s.imports!.apply(reviewed))).toBe("created");
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(100210);
+  });
+  it("rejects one invalid row, currency, overflow and reconciled dates without partial writes", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const b = batch(a.accountId);
+    expect(
+      await owner((s) =>
+        s.imports!.apply({ ...b, rows: [b.rows[0]!, { ...b.rows[1]!, date: "2026-09-30" }] })
+      )
+    ).toBe("conflict");
+    expect(await owner((s) => s.imports!.apply({ ...b, isoCurrency: "EUR" }))).toBe("conflict");
+    expect(await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"))).toBeNull();
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(100000);
+    await owner((s) => s.reconciliation!.finish(statement(a.accountId)));
+    expect(await owner((s) => s.imports!.apply({ ...b, expectedRevision: 1 }))).toBe("conflict");
+    const max = account({ openingBalanceCents: Number.MAX_SAFE_INTEGER });
+    await owner((s) => s.manual!.createAccount(max));
+    expect(await owner((s) => s.imports!.apply(batch(max.accountId)))).toBe("conflict");
+    expect(await owner((s) => s.getTransactionChunk(max.accountId, "2026-10"))).toBeNull();
+  });
+  it("serializes identical replay and distinct concurrent batches against one ledger revision", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const b = batch(a.accountId);
+    expect(
+      (
+        await Promise.all([owner((s) => s.imports!.apply(b)), owner((s) => s.imports!.apply(b))])
+      ).sort()
+    ).toEqual(["created", "unchanged"]);
+    const c = account();
+    await owner((s) => s.manual!.createAccount(c));
+    const c1 = batch(c.accountId),
+      c2 = batch(c.accountId, { digest: "2".repeat(64) });
+    expect(
+      (
+        await Promise.all([owner((s) => s.imports!.apply(c1)), owner((s) => s.imports!.apply(c2))])
+      ).sort()
+    ).toEqual(["conflict", "created"]);
+    expect((await owner((s) => s.getTransactionChunk(c.accountId, "2026-10")))?.length).toBe(2);
+  });
+  it("makes a transaction identity collision abort the whole import and leaves no receipt", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const b = batch(a.accountId);
+    await owner((s) => s.manual!.createEntry(entry(a.accountId, { id: `${b.id}:3` })));
+    await expect(owner((s) => s.imports!.apply({ ...b, expectedRevision: 1 }))).rejects.toThrow();
+    const rows = await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"));
+    expect(rows).toHaveLength(1);
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(91757);
+    // A receipt would incorrectly turn this retry into unchanged.
+    expect(await owner((s) => s.imports!.apply(b))).toBe("conflict");
+  });
+  it("keeps preview, entries and import receipts owner scoped", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const b = batch(a.accountId);
+    expect(await owner((s) => s.imports!.apply(b))).toBe("created");
+    expect(await owner((s) => s.imports!.preview(a.accountId, b.rows), ids.userB)).toBeNull();
+    expect(await owner((s) => s.imports!.apply(b), ids.userB)).toBe("conflict");
+    expect(await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"), ids.userB)).toBeNull();
   });
 });

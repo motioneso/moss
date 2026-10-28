@@ -8,7 +8,7 @@ Official comparison evidence remains in the [parity matrix](2026-10-28-finance-p
 ## Bounded first delivery
 
 Import posted transactions into an existing manual account. The browser reads a CSV locally,
-with a 1 MiB file limit and at most 200 data rows. Support quoted commas, escaped quotes, CRLF,
+with a 1 MiB file limit, at most 200 data rows and 500 KiB of mapped JSON entries. The last limit keeps requests below the host body limit even after JSON escaping. Support quoted commas, escaped quotes, CRLF,
 quoted newlines and a UTF-8 BOM. Reject malformed quoting or unequal field counts. Do not guess
 currency, date order or whether positive amounts mean money in or money out.
 
@@ -50,7 +50,7 @@ review and offers a saved-records check rather than starting a new identity auto
 ## UX and acceptance
 
 Accounts offers Import CSV for manual accounts. Use shared Dialog, Select, Button and Switch,
-current Park Press tokens, exact tabular amounts, and layout-only module CSS. Keep mapping,
+current Park Press tokens, exact tabular amounts, and layout-only module CSS. A shared opt-in Dialog body-scroll mode keeps the title and action footer visible while longer mappings and previews scroll. Keep mapping,
 validation, duplicate decisions, loaded scope and confirmation clear on phone and desktop. Show
 file errors before any write and preserve mapping/choices on rejected saves. Add a manual-account
 route from Getting started so bank credentials are not a prerequisite for beginning.
@@ -63,3 +63,11 @@ owner enforcement fail with its generated RLS removed in a disposable test, then
 Run the new unique-log verify-gate procedure, relevant unit/static/type/install gates and browser
 inspection at 320/390/768/1440 in light/dark. Larger files and provider-account import stay explicit
 limitations; do not advertise universal import parity.
+
+## Manifest size rationale
+
+The installable manifest remains a single declarative wire contract and now exceeds the general
+source line limit. It has a narrow file-size exemption: every tool retains a complete explicit
+input schema, with bounded rows and required duplicate decisions. Removing validation or hiding
+schemas to shorten the manifest would be a worse tradeoff. Implementation and UI code remain
+split into focused files below the source limit.
