@@ -1,8 +1,10 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "pg-boss";
+import type * as DbModule from "@moss/db";
+import type * as MemoryModule from "@moss/memory";
 import type { NotesSyncJobPayload } from "../../packages/notes/src/jobs.js";
 
 const state = vi.hoisted(() => ({ allowedRoot: "" }));
@@ -21,8 +23,15 @@ vi.mock("@moss/settings", () => ({
   resolveNotesRoots: () => [state.allowedRoot]
 }));
 
-vi.mock("@moss/memory", () => ({
-  createEmbeddingProvider: vi.fn(),
+vi.mock("@moss/db", async (importOriginal) => ({
+  ...(await importOriginal<typeof DbModule>()),
+  readScopedActorUserId: async () => "00000000-0000-4000-8000-000000000001"
+}));
+
+vi.mock("../../packages/memory/src/parser.js", () => ({
+  parseDocument: vi.fn(() => ({ chunks: parsedChunks, wikilinks: [] }))
+}));
+vi.mock("../../packages/memory/src/embed-chunks.js", () => ({
   embedChunks: vi.fn(async (_provider: unknown, chunks: readonly { text: string }[]) => {
     embedCalls.push(chunks.length);
     return chunks.map((chunk) => ({
@@ -31,7 +40,12 @@ vi.mock("@moss/memory", () => ({
       contentHash: chunk.text,
       embedding: [1]
     }));
-  }),
+  })
+}));
+
+vi.mock("@moss/memory", async (importOriginal) => ({
+  ...(await importOriginal<typeof MemoryModule>()),
+  createEmbeddingProvider: vi.fn(),
   getEmbeddingProviderConfig: vi.fn(),
   MemoryRepository: class {
     async getFileIndex() {
@@ -48,6 +62,7 @@ vi.mock("@moss/memory", () => ({
       return [];
     }
 
+    async deleteFileIndex() {}
     async replaceFileLinks() {}
     async upsertFileIndex() {}
   },
@@ -58,6 +73,7 @@ describe("notes.sync chunk cap (#1590)", () => {
   let root = "";
 
   afterEach(async () => {
+    if (root) await rm(root, { recursive: true, force: true });
     state.allowedRoot = "";
     embedCalls.length = 0;
     upsertCalls.length = 0;

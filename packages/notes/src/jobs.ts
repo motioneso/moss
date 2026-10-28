@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
-import { readFile, readdir, realpath } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, realpath } from "node:fs/promises";
+import { join, relative } from "node:path";
 
 import type { Job, PgBoss } from "pg-boss";
 
@@ -19,11 +18,8 @@ import {
 import type { EmbeddingProvider } from "@moss/memory";
 import {
   createEmbeddingProvider,
-  embedChunks,
   getEmbeddingProviderConfig,
-  MemoryRepository,
-  parseDocument,
-  type NewChunkData
+  MemoryRepository
 } from "@moss/memory";
 import {
   NOTES_LAST_SYNC_PREFERENCE_KEY,
@@ -36,6 +32,10 @@ import type { PreferencesRepository } from "@moss/structured-state";
 import { NotesSyncFailure, sinkSafeErrorMessage } from "./error-sink.js";
 import { assertWithinRoot, recheckWithinRoot, NotesPathError } from "./path-guard.js";
 import { NOTES_SYNC_QUEUE } from "./manifest.js";
+
+import { ingestVaultDocument, type VaultDocumentIngestResult } from "@moss/memory";
+import type { VaultIndexPublicationPort } from "@moss/memory";
+import { withNotesVault } from "./notes-vault-context.js";
 
 const NOTES_SOURCE_KIND = "notes";
 export const NOTES_SYNC_MAX_CHUNKS_PER_RUN = 100;
@@ -57,6 +57,7 @@ export interface NotesSyncJobPayload extends ActorScopedJobPayload {
   readonly filePath?: string;
   readonly chunkOffset?: number;
   readonly fileHash?: string;
+  readonly snapshotKey?: string;
 }
 
 export interface NotesSyncJobResult {
@@ -76,6 +77,7 @@ export interface NotesSyncJobResult {
     readonly filePath: string;
     readonly chunkOffset: number;
     readonly fileHash: string;
+    readonly snapshotKey?: string;
   };
 }
 
@@ -94,12 +96,7 @@ export interface NotesAfterSyncInput {
 
 export type NotesAfterSyncHook = (input: NotesAfterSyncInput) => Promise<void>;
 
-type NotesFileIngestStatus = "ingested" | "skipped";
-interface NotesFileIngestResult {
-  readonly status: NotesFileIngestStatus;
-  readonly chunksProcessed: number;
-  readonly continuation?: { readonly chunkOffset: number; readonly fileHash: string };
-}
+type NotesFileIngestResult = VaultDocumentIngestResult;
 export type EmbeddingProviderFactory = (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
 
 export const NOTES_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
@@ -154,77 +151,32 @@ async function resolveSourcePath(
 async function ingestResolvedMarkdownFile(
   resolvedRoot: string,
   scopedDb: DataContextDb,
-  actorUserId: string,
   resolvedFile: string,
   repository: MemoryRepository,
   embeddingProvider: EmbeddingProvider,
   chunkOffset = 0,
   chunkLimit = NOTES_SYNC_MAX_CHUNKS_PER_RUN,
-  expectedFileHash?: string
+  expectedFileHash?: string,
+  expectedSnapshotKey?: string,
+  publication?: VaultIndexPublicationPort
 ): Promise<NotesFileIngestResult> {
   await recheckWithinRoot(resolvedRoot, resolvedFile);
-  const content = await readFile(resolvedFile, "utf-8");
-  const fileHash = createHash("sha256").update(content).digest("hex");
-  const effectiveChunkOffset = expectedFileHash === fileHash ? chunkOffset : 0;
-
-  const existing = await repository.getFileIndex(
-    scopedDb,
-    actorUserId,
-    NOTES_SOURCE_KIND,
-    resolvedFile
+  return withNotesVault(scopedDb, resolvedRoot, (ctx) =>
+    ingestVaultDocument(
+      scopedDb,
+      ctx,
+      relative(resolvedRoot, resolvedFile),
+      {
+        sourceKind: NOTES_SOURCE_KIND,
+        sourcePath: resolvedFile,
+        chunkOffset,
+        chunkLimit,
+        expectedFileHash,
+        expectedSnapshotKey
+      },
+      { repository, embeddingProvider, publication }
+    )
   );
-
-  if (
-    effectiveChunkOffset === 0 &&
-    existing &&
-    existing.fileHash === fileHash &&
-    existing.embedModelName === embeddingProvider.modelName
-  ) {
-    return { status: "skipped", chunksProcessed: 0 };
-  }
-
-  const { chunks, wikilinks } = parseDocument(content);
-  const chunkEnd = Math.min(effectiveChunkOffset + chunkLimit, chunks.length);
-
-  const newChunks: NewChunkData[] = await embedChunks(
-    embeddingProvider,
-    chunks.slice(effectiveChunkOffset, chunkEnd),
-    resolvedFile
-  );
-
-  await repository.upsertFileChunks(
-    scopedDb,
-    actorUserId,
-    resolvedFile,
-    newChunks,
-    embeddingProvider.modelName,
-    embeddingProvider.modelVersion,
-    NOTES_SOURCE_KIND,
-    effectiveChunkOffset === 0
-  );
-
-  if (chunkEnd < chunks.length) {
-    return {
-      status: "ingested",
-      chunksProcessed: newChunks.length,
-      continuation: { chunkOffset: chunkEnd, fileHash }
-    };
-  }
-
-  await repository.replaceFileLinks(scopedDb, actorUserId, resolvedFile, wikilinks);
-
-  await repository.upsertFileIndex(
-    scopedDb,
-    actorUserId,
-    NOTES_SOURCE_KIND,
-    resolvedFile,
-    fileHash,
-    newChunks.length,
-    embeddingProvider.modelName,
-    embeddingProvider.modelVersion
-  );
-
-  return { status: "ingested", chunksProcessed: newChunks.length };
 }
 
 async function resolveAndValidateNoteFile(
@@ -272,9 +224,12 @@ export async function handleNotesSyncJob(
   job: Job<NotesSyncJobPayload>,
   scopedDb: DataContextDb,
   embeddingProvider: EmbeddingProvider,
-  preferencesRepository: PreferencesRepository
+  preferencesRepository: PreferencesRepository,
+  publication?: VaultIndexPublicationPort
 ): Promise<NotesSyncJobResult> {
-  const { actorUserId, sourcePath, filePath, chunkOffset = 0, fileHash } = job.data;
+  if (publication)
+    throw new Error("Managed Notes indexing requires handleNotesSyncJobWithDataContext");
+  const { actorUserId, sourcePath, filePath, chunkOffset = 0, fileHash, snapshotKey } = job.data;
 
   const sourcePathToUse = await resolveSourcePath(scopedDb, sourcePath, preferencesRepository);
 
@@ -362,13 +317,14 @@ export async function handleNotesSyncJob(
       const status = await ingestResolvedMarkdownFile(
         resolvedRoot,
         scopedDb,
-        actorUserId,
         resolvedFile,
         repository,
         embeddingProvider,
         fileIndex === startFileIndex ? chunkOffset : 0,
         chunkBudget,
-        fileIndex === startFileIndex ? fileHash : undefined
+        fileIndex === startFileIndex ? fileHash : undefined,
+        fileIndex === startFileIndex ? snapshotKey : undefined,
+        publication
       );
       chunkBudget -= status.chunksProcessed;
 
@@ -382,7 +338,10 @@ export async function handleNotesSyncJob(
             sourcePath: sourcePathToUse,
             filePath: resolvedFile,
             chunkOffset: status.continuation.chunkOffset,
-            fileHash: status.continuation.fileHash
+            fileHash: status.continuation.fileHash,
+            ...(status.continuation.snapshotKey
+              ? { snapshotKey: status.continuation.snapshotKey }
+              : {})
           }
         };
       }
@@ -435,10 +394,11 @@ export async function handleNotesSyncJobWithDataContext(
   job: Job<NotesSyncJobPayload>,
   dataContextRunner: DataContextRunner,
   embeddingProviderFactory: EmbeddingProviderFactory,
-  preferencesRepository: PreferencesRepository
+  preferencesRepository: PreferencesRepository,
+  publication?: VaultIndexPublicationPort
 ): Promise<NotesSyncJobResult> {
   const accessContext = toAccessContext(job);
-  const { actorUserId, sourcePath, filePath, chunkOffset = 0, fileHash } = job.data;
+  const { actorUserId, sourcePath, filePath, chunkOffset = 0, fileHash, snapshotKey } = job.data;
 
   const [sourcePathToUse, embeddingProvider] = await dataContextRunner.withDataContext(
     accessContext,
@@ -512,13 +472,14 @@ export async function handleNotesSyncJobWithDataContext(
         ingestResolvedMarkdownFile(
           resolvedRoot,
           scopedDb,
-          actorUserId,
           resolvedFile,
           repository,
           embeddingProvider,
           fileIndex === startFileIndex ? chunkOffset : 0,
           chunkBudget,
-          fileIndex === startFileIndex ? fileHash : undefined
+          fileIndex === startFileIndex ? fileHash : undefined,
+          fileIndex === startFileIndex ? snapshotKey : undefined,
+          publication
         )
       );
       chunkBudget -= status.chunksProcessed;
@@ -533,7 +494,10 @@ export async function handleNotesSyncJobWithDataContext(
             sourcePath: sourcePathToUse,
             filePath: resolvedFile,
             chunkOffset: status.continuation.chunkOffset,
-            fileHash: status.continuation.fileHash
+            fileHash: status.continuation.fileHash,
+            ...(status.continuation.snapshotKey
+              ? { snapshotKey: status.continuation.snapshotKey }
+              : {})
           }
         };
       }
@@ -614,6 +578,7 @@ export interface RegisterNotesJobWorkersOptions {
   readonly embeddingProviderFactory?: EmbeddingProviderFactory;
   readonly preferencesRepository: PreferencesRepository;
   readonly afterSync?: NotesAfterSyncHook;
+  readonly publication?: VaultIndexPublicationPort;
 }
 
 async function defaultEmbeddingProviderFactory(
@@ -662,7 +627,8 @@ export async function registerNotesJobWorkers(
           job,
           dataContext,
           options.embeddingProviderFactory ?? defaultEmbeddingProviderFactory,
-          options.preferencesRepository
+          options.preferencesRepository,
+          options.publication
         );
         if (result.continuation) {
           await sendJob(

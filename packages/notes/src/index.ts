@@ -51,3 +51,28 @@ export {
   type PrivateNoteIndexPort,
   type PrivateNoteIndexResult
 } from "./private-note-export.js";
+
+export {
+  ManagedSourceLifecycle,
+  ManagedSourceUnavailableError,
+  ManagedSourceFencedError,
+  assertManagedSourceAdmission,
+  assertManagedCleanupAdmission,
+  type ManagedSourceAuthority,
+  type ManagedSourceSnapshot,
+  type ManagedSourceRevision,
+  type ManagedSourceAdmission,
+  type ManagedCleanupAdmission,
+  type ManagedDeletionOperation
+} from "./managed-source-lifecycle.js";
+export { collectManagedNotesExportSection } from "./managed-source-export.js";
+
+export { RecordingContributionService } from "./recording-contributions.js";
+export {
+  NoteContributionConflictError,
+  NoteContributionUnavailableError,
+  type RecordingContributionAuthority,
+  type RecordingContributionIndexPort,
+  type StoredNoteDestination
+} from "./contribution-state.js";
+export { ManagedNoteSnapshotService } from "./managed-note-snapshots.js";

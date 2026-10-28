@@ -34,3 +34,9 @@ export { appendVaultFileBytes } from "./vault-append.js";
 export { canonicalizeAsFarAsExists } from "./vault-canonical-path.js";
 export { mutateVaultFiles, VaultMutationConflictError } from "./vault-mutation.js";
 export type { VaultMutationSnapshot, VaultMutationChange } from "./vault-mutation.js";
+
+export {
+  readBoundedVaultInventory,
+  type VaultInventoryEntry,
+  type VaultInventoryResult
+} from "./bounded-vault-inventory.js";

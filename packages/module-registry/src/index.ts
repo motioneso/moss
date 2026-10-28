@@ -464,6 +464,7 @@ import {
   DatasetCache,
   type DatasetClient
 } from "@moss/datasets";
+import { createManagedNoteSnapshotPort } from "./managed-note-runtime.js";
 import {
   notesModuleManifest,
   notesPrivateExportIngestProvider,
@@ -2598,6 +2599,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerVaultIngestWorkers(boss, deps.dataContext, {
         vaultRunner: new VaultContextRunner(getVaultBaseDir()),
         vaultsBaseDir: getVaultBaseDir(),
+        publication: createManagedNoteSnapshotPort(deps.dataContext),
         embeddingProviderFactory: createRuntimeEmbeddingProvider
       })
   },
@@ -2963,6 +2965,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerWorkers: (boss, deps) => {
       registerVaultIngestRootProvider(notesPrivateExportIngestProvider);
       return registerNotesJobWorkers(boss, deps.dataContext, {
+        publication: createManagedNoteSnapshotPort(deps.dataContext),
         embeddingProviderFactory: createRuntimeEmbeddingProvider,
         preferencesRepository: new PreferencesRepository(),
         afterSync: async ({ actorUserId }) => {
@@ -4127,3 +4130,5 @@ export async function registerBuiltInModuleWorkers(
 
   return workerIds.flat();
 }
+
+export { createManagedNoteSnapshotPort } from "./managed-note-runtime.js";

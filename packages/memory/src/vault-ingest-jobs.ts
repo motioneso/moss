@@ -12,6 +12,7 @@ import { listVaultFilesRecursive, listVaultOwnerIds } from "@moss/vault";
 import type { VaultContext, VaultContextRunner } from "@moss/vault";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
+import type { VaultIndexPublicationPort } from "./vault-index-publication.js";
 import { MemoryIngestPipeline } from "./ingest.js";
 import type { IngestFailure } from "./ingestion-service.js";
 import { MemoryRepository } from "./repository.js";
@@ -58,6 +59,7 @@ export interface VaultIngestWorkerDeps {
   readonly vaultsBaseDir: string;
   readonly embeddingProviderFactory: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
   readonly repository?: MemoryRepository;
+  readonly publication?: VaultIndexPublicationPort;
   readonly sweepCron?: string;
 }
 
@@ -246,13 +248,13 @@ export async function registerVaultIngestWorkers(
     async ([job]) => {
       if (!job) throw new Error(`pg-boss invoked ${VAULT_INGEST_SWEEP_QUEUE} without a job`);
       const accessContext = toAccessContext(job);
-      return dataContext.withDataContext(accessContext, async (scopedDb) => {
-        const embeddingProvider = await deps.embeddingProviderFactory(scopedDb);
-        const pipeline = new MemoryIngestPipeline(embeddingProvider, repository);
-        return deps.vaultRunner.withVaultContext(accessContext, (vaultCtx) =>
-          runVaultIngestSweep(accessContext, vaultCtx, dataContext, pipeline, repository)
-        );
-      });
+      const embeddingProvider = await dataContext.withDataContext(accessContext, (scopedDb) =>
+        deps.embeddingProviderFactory(scopedDb)
+      );
+      const pipeline = new MemoryIngestPipeline(embeddingProvider, repository, deps.publication);
+      return deps.vaultRunner.withVaultContext(accessContext, (vaultCtx) =>
+        runVaultIngestSweep(accessContext, vaultCtx, dataContext, pipeline, repository)
+      );
     }
   );
 
@@ -262,20 +264,20 @@ export async function registerVaultIngestWorkers(
     async ([job]) => {
       if (!job) throw new Error(`pg-boss invoked ${VAULT_INGEST_NUDGE_QUEUE} without a job`);
       const accessContext = toAccessContext(job);
-      return dataContext.withDataContext(accessContext, async (scopedDb) => {
-        const embeddingProvider = await deps.embeddingProviderFactory(scopedDb);
-        const pipeline = new MemoryIngestPipeline(embeddingProvider, repository);
-        return deps.vaultRunner.withVaultContext(accessContext, (vaultCtx) =>
-          applyVaultIngestNudge(
-            accessContext,
-            vaultCtx,
-            dataContext,
-            pipeline,
-            job.data.sourcePath,
-            job.data.op
-          )
-        );
-      });
+      const embeddingProvider = await dataContext.withDataContext(accessContext, (scopedDb) =>
+        deps.embeddingProviderFactory(scopedDb)
+      );
+      const pipeline = new MemoryIngestPipeline(embeddingProvider, repository, deps.publication);
+      return deps.vaultRunner.withVaultContext(accessContext, (vaultCtx) =>
+        applyVaultIngestNudge(
+          accessContext,
+          vaultCtx,
+          dataContext,
+          pipeline,
+          job.data.sourcePath,
+          job.data.op
+        )
+      );
     }
   );
 

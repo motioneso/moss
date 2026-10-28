@@ -10,6 +10,7 @@ import {
   getEmbeddingProviderConfig
 } from "@moss/memory";
 import { RuntimeConfigResolver } from "@moss/settings";
+import { createManagedNoteSnapshotPort } from "@moss/module-registry";
 
 function requireEnv(name: string): string {
   const value = resolveMossEnv(process.env, name);
@@ -37,7 +38,11 @@ async function main(): Promise<void> {
   );
   console.log(`Embedding provider: ${provider.modelName} (${provider.dimensions} dims)`);
 
-  const pipeline = new MemoryIngestPipeline(provider, repository);
+  const pipeline = new MemoryIngestPipeline(
+    provider,
+    repository,
+    createManagedNoteSnapshotPort(dataContextRunner)
+  );
   const service = new IngestionService(pipeline, repository, dataContextRunner);
   const vaultRunner = new VaultContextRunner(vaultBaseDir);
 

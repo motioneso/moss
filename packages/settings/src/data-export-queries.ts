@@ -390,6 +390,7 @@ export function memoryChunksQuery(userId: string) {
       line_start AS "lineStart",
       line_end AS "lineEnd",
       text,
+      managed_snapshot AS "managedSnapshot",
       updated_at AS "updatedAt"
     FROM app.memory_chunks
     WHERE owner_user_id = ${userId}::uuid

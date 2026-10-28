@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import type { VaultIndexSnapshot } from "./vault-index-publication.js";
 
 export interface NewChunkData {
   readonly sourcePath: string;
@@ -63,6 +64,75 @@ function sanitizeChunkText(text: string): string {
 }
 
 export class MemoryRepository {
+  async fileChunkCheckpoint(
+    db: DataContextDb,
+    owner: string,
+    kind: string,
+    path: string,
+    snapshotKey: string,
+    modelName: string,
+    modelVersion: string
+  ): Promise<number | null> {
+    assertDataContextDb(db);
+    const result = await sql<{ count: number; matching: number }>`
+      select count(*)::int as count,
+        count(*) filter (where managed_snapshot->>'key'=${snapshotKey}
+          and embed_model_name=${modelName} and embed_model_version=${modelVersion})::int as matching
+      from app.memory_chunks where owner_user_id=${owner}::uuid
+        and source_kind=${kind} and source_path=${path}
+    `.execute(db.db);
+    const row = result.rows[0]!;
+    return row.count === row.matching ? row.count : null;
+  }
+  /** Clear every alias of an authoritative canonical destination before a receipt changes. */
+  async invalidateManagedDestinations(
+    db: DataContextDb,
+    owner: string,
+    destinationIds: readonly string[]
+  ): Promise<void> {
+    assertDataContextDb(db);
+    if (destinationIds.length === 0) return;
+    if (destinationIds.length > 200 || destinationIds.some((id) => !/^[a-f0-9]{64}$/.test(id)))
+      throw new Error("Invalid managed destination invalidation");
+    const paths = await sql<{ path: string }>`
+      select source_path as path from app.memory_file_index
+      where owner_user_id=${owner}::uuid and managed_snapshot->>'destinationId'=any(${[...destinationIds]}::text[])
+      union select source_path as path from app.memory_chunks
+      where owner_user_id=${owner}::uuid and managed_snapshot->>'destinationId'=any(${[...destinationIds]}::text[])
+    `.execute(db.db);
+    if (paths.rows.length)
+      await sql`delete from app.memory_links where owner_user_id=${owner}::uuid and from_path=any(${paths.rows.map(({ path }) => path)}::text[])`.execute(
+        db.db
+      );
+    await sql`delete from app.memory_chunks where owner_user_id=${owner}::uuid and managed_snapshot->>'destinationId'=any(${[...destinationIds]}::text[])`.execute(
+      db.db
+    );
+    await sql`delete from app.memory_file_index where owner_user_id=${owner}::uuid and managed_snapshot->>'destinationId'=any(${[...destinationIds]}::text[])`.execute(
+      db.db
+    );
+  }
+  /** An unguarded legacy writer cannot erase an already labelled destination. */
+  private async assertSnapshotAuthority(
+    db: DataContextDb,
+    owner: string,
+    kind: string,
+    path: string,
+    snapshot: VaultIndexSnapshot | null
+  ): Promise<void> {
+    if (snapshot) {
+      if (snapshot.ownerUserId.toLowerCase() !== owner.toLowerCase())
+        throw new Error("Snapshot owner differs from derivative owner");
+      if (snapshot.side !== null) return;
+    }
+    const result = await sql<{ managed: boolean }>`select exists (
+      select 1 from app.memory_file_index where owner_user_id=${owner}::uuid and source_kind=${kind} and source_path=${path} and managed_snapshot->>'side' is not null
+      union all
+      select 1 from app.memory_chunks where owner_user_id=${owner}::uuid and source_kind=${kind} and source_path=${path} and managed_snapshot->>'side' is not null
+    ) as managed`.execute(db.db);
+    if (result.rows[0]?.managed)
+      throw new Error("Managed derivatives require current snapshot publication authority");
+  }
+
   async upsertFileChunks(
     scopedDb: DataContextDb,
     ownerUserId: string,
@@ -71,9 +141,11 @@ export class MemoryRepository {
     embedModelName: string,
     embedModelVersion: string,
     sourceKind: string = "vault",
-    replaceExisting = true
+    replaceExisting = true,
+    snapshot: VaultIndexSnapshot | null = null
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    await this.assertSnapshotAuthority(scopedDb, ownerUserId, sourceKind, sourcePath, snapshot);
     if (replaceExisting) {
       await this.deleteFileChunks(scopedDb, ownerUserId, sourcePath, sourceKind);
     }
@@ -83,11 +155,11 @@ export class MemoryRepository {
       await sql`
         INSERT INTO app.memory_chunks
           (owner_user_id, source_kind, source_path, line_start, line_end, content_hash, text,
-           embedding, embed_model_name, embed_model_version)
+           embedding, embed_model_name, embed_model_version, managed_snapshot)
         VALUES
           (${ownerUserId}::uuid, ${sourceKind}, ${chunk.sourcePath}, ${chunk.lineStart},
            ${chunk.lineEnd}, ${chunk.contentHash}, ${sanitizeChunkText(chunk.text)}, ${vectorLiteral}::vector,
-           ${embedModelName}, ${embedModelVersion})
+           ${embedModelName}, ${embedModelVersion}, ${snapshot ? JSON.stringify(snapshot) : null}::jsonb)
       `.execute(scopedDb.db);
     }
   }
@@ -263,17 +335,31 @@ export class MemoryRepository {
     ownerUserId: string,
     sourceKind: string,
     sourcePath: string
-  ): Promise<{ fileHash: string; embedModelName: string } | null> {
+  ): Promise<{
+    fileHash: string;
+    embedModelName: string;
+    managedSnapshot?: VaultIndexSnapshot;
+  } | null> {
     assertDataContextDb(scopedDb);
-    const result = await sql<{ file_hash: string; embed_model_name: string }>`
-      SELECT file_hash, embed_model_name
+    const result = await sql<{
+      file_hash: string;
+      embed_model_name: string;
+      managed_snapshot: VaultIndexSnapshot | null;
+    }>`
+      SELECT file_hash, embed_model_name, managed_snapshot
       FROM app.memory_file_index
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND source_kind = ${sourceKind}
         AND source_path = ${sourcePath}
     `.execute(scopedDb.db);
     const row = result.rows[0];
-    return row ? { fileHash: row.file_hash, embedModelName: row.embed_model_name } : null;
+    return row
+      ? {
+          fileHash: row.file_hash,
+          embedModelName: row.embed_model_name,
+          ...(row.managed_snapshot ? { managedSnapshot: row.managed_snapshot } : {})
+        }
+      : null;
   }
 
   async upsertFileIndex(
@@ -284,21 +370,24 @@ export class MemoryRepository {
     fileHash: string,
     chunkCount: number,
     embedModelName: string,
-    embedModelVersion: string
+    embedModelVersion: string,
+    snapshot: VaultIndexSnapshot | null = null
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    await this.assertSnapshotAuthority(scopedDb, ownerUserId, sourceKind, sourcePath, snapshot);
     await sql`
       INSERT INTO app.memory_file_index
         (owner_user_id, source_kind, source_path, file_hash, chunk_count,
-         embed_model_name, embed_model_version, ingested_at)
+         embed_model_name, embed_model_version, managed_snapshot, ingested_at)
       VALUES
         (${ownerUserId}::uuid, ${sourceKind}, ${sourcePath}, ${fileHash}, ${chunkCount},
-         ${embedModelName}, ${embedModelVersion}, now())
+         ${embedModelName}, ${embedModelVersion}, ${snapshot ? JSON.stringify(snapshot) : null}::jsonb, now())
       ON CONFLICT (owner_user_id, source_kind, source_path) DO UPDATE SET
         file_hash = EXCLUDED.file_hash,
         chunk_count = EXCLUDED.chunk_count,
         embed_model_name = EXCLUDED.embed_model_name,
         embed_model_version = EXCLUDED.embed_model_version,
+        managed_snapshot = EXCLUDED.managed_snapshot,
         ingested_at = now()
     `.execute(scopedDb.db);
   }
