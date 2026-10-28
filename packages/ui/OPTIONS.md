@@ -89,6 +89,7 @@ _No enum or boolean props._
 
 ## dialog
 
+- **scrollBody** (optional boolean flag)
 - **dismissOnEscape** (optional boolean flag)
 - **dismissOnBackdrop** (optional boolean flag)
 - **closeDisabled** (optional boolean flag)

@@ -276,6 +276,7 @@ Import from `@moss/ui`. Full option list in `packages/ui/OPTIONS.md`.
 
 ## Interaction contracts
 
+- For long forms, `Dialog scrollBody` keeps the heading and footer visible while only the body scrolls. The default retains whole-dialog scrolling. Use the shared option instead of local sticky-header or footer rules.
 - `Dialog` remains inline so footer submit buttons keep their enclosing form. It generates title
   and description ids; an explicit `aria-labelledby` remains supported. Mount it only when open.
   Initial focus stays on an already-focused child, otherwise uses `initialFocusRef`, otherwise

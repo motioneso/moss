@@ -249,6 +249,7 @@
       "exports": ["Dialog"],
       "options": [],
       "flags": [
+        { "prop": "scrollBody", "optional": true },
         { "prop": "dismissOnEscape", "optional": true },
         { "prop": "dismissOnBackdrop", "optional": true },
         { "prop": "closeDisabled", "optional": true }
