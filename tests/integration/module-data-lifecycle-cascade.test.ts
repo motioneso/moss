@@ -127,6 +127,8 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.chat_conversation_provenance",
         "app.chat_live_turns",
         "app.chat_messages",
+        "app.chat_module_notices",
+        "app.chat_module_notice_intents",
         "app.chat_reminder_quiet_allowances",
         "app.chat_reminder_quiet_proposals",
         "app.chat_responsibility_proposals",

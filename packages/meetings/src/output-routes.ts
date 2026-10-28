@@ -1,3 +1,4 @@
+import type { RecordingNoticeEnqueue } from "./recording-notice-jobs.js";
 import { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextRunner } from "@moss/db";
@@ -25,6 +26,7 @@ const params = {
   properties: { id: uuid }
 } as const;
 export interface MeetingOutputRoutesDependencies {
+  readonly enqueueRecordingNotice?: RecordingNoticeEnqueue;
   resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   dataContext: Pick<DataContextRunner, "withDataContext">;
   generator: MeetingOutputGenerator;
@@ -40,7 +42,9 @@ export function registerMeetingOutputRoutes(
   const service = new MeetingOutputService(
     dependencies.dataContext,
     dependencies.generator,
-    repository
+    repository,
+    undefined,
+    dependencies.enqueueRecordingNotice
   );
   server.get("/api/meetings/output-availability", async (request, reply) => {
     try {

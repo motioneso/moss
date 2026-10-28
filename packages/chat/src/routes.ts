@@ -1,3 +1,5 @@
+import { registerModuleNoticeArrivalLifecycle } from "./module-notice-arrival.js";
+import type { ModuleNoticeService } from "./module-notices.js";
 import type { MemoryGraphRepository } from "@moss/memory";
 import { createScheduledReadResolver } from "./scheduled-reads/generation.js";
 import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
@@ -131,6 +133,10 @@ export {
 } from "./gateway-services.js";
 
 export interface ChatRoutesDependencies {
+  readonly moduleNoticeArrival?: {
+    readonly connectionString?: string;
+    readonly notices: ModuleNoticeService;
+  };
   readonly meetingChat?: MeetingChatData;
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -607,6 +613,12 @@ export function registerChatRoutes(
 
   registerVoiceRequestRuntime(server, dependencies, runtime);
 
+  if (dependencies.moduleNoticeArrival)
+    registerModuleNoticeArrivalLifecycle(server, {
+      ...dependencies.moduleNoticeArrival,
+      manager: runtime.manager
+    });
+
   registerReminderArrivalLifecycle(server, {
     connectionString: dependencies.reminderArrivalConnectionString,
     dataContext: dependencies.dataContext,
@@ -707,6 +719,11 @@ export function registerChatRoutes(
         const threads = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
           repository.listThreads(scopedDb, surface)
         );
+        if (
+          surface === DEFAULT_CHAT_SURFACE &&
+          threads.some((thread) => thread.is_main && !thread.incognito)
+        )
+          await dependencies.moduleNoticeArrival?.notices.recoverPending(accessContext);
         return { threads: threads.map(serializeThread) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -721,6 +738,8 @@ export function registerChatRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const surface = readRouteSurface(request.query);
+        if (surface === DEFAULT_CHAT_SURFACE)
+          await dependencies.moduleNoticeArrival?.notices.recoverPending(access);
         const messages = await dependencies.dataContext.withDataContext(
           access,
           async (scopedDb) => {

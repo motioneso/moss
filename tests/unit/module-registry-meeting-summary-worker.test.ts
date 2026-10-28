@@ -11,7 +11,9 @@ describe("automatic meeting summary worker composition", () => {
     const createConstrainedCliStructuredAdapter = vi.fn();
     const probeConstrainedCli = vi.fn(async () => "available" as const);
     const dataContext = {} as never;
-    const work = vi.fn(async () => "summary-worker");
+    const work = vi.fn(async (queue: string) =>
+      queue === "meetings.recording-notice" ? "notice-worker" : "summary-worker"
+    );
     const registration = getBuiltInModuleRegistrations().find(
       (item) => item.manifest.id === "meetings"
     );
@@ -23,13 +25,19 @@ describe("automatic meeting summary worker composition", () => {
         createConstrainedCliStructuredAdapter,
         probeConstrainedCli
       })
-    ).resolves.toEqual(["summary-worker"]);
+    ).resolves.toEqual(["summary-worker", "notice-worker"]);
     expect(createMeetingOutputRuntime).toHaveBeenCalledExactlyOnceWith({
       dataContext,
       createConstrainedCliStructuredAdapter,
       probeConstrainedCli,
       resolveActiveModules: expect.any(Function)
     });
+    expect(work).toHaveBeenCalledTimes(2);
+    expect(work).toHaveBeenCalledWith(
+      "meetings.recording-notice",
+      expect.any(Object),
+      expect.any(Function)
+    );
     expect(work).toHaveBeenCalledWith(
       "meetings.stop-summary",
       expect.any(Object),
