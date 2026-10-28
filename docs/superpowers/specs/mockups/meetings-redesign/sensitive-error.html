@@ -1,16 +1,17 @@
 <!doctype html>
+
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
     <title>Sensitive meeting · wrong password — Meetings design review</title>
-    <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
-    <link rel="stylesheet" href="../../../../../packages/ui/src/styles.css" />
-    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-chat.css" />
-    <link rel="stylesheet" href="../../../../../apps/web/src/styles/texture.css" />
-    <link rel="stylesheet" href="mockups.css" />
-    <script defer src="mockups.js"></script>
+    <link href="data:," rel="icon" />
+    <link href="../../../../../apps/web/src/styles/tokens.css" rel="stylesheet" />
+    <link href="../../../../../packages/ui/src/styles.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/kit-chat.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/texture.css" rel="stylesheet" />
+    <link href="mockups.css" rel="stylesheet" />
+    <script defer="" src="mockups.js"></script>
   </head>
   <body>
     <div class="mock-shell">
@@ -150,42 +151,42 @@
             <a class="jds-btn jds-btn--link" href="home-table.html"
               ><svg
                 aria-hidden="true"
-                viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="1.6"
                 stroke-linecap="round"
                 stroke-linejoin="round"
+                stroke-width="1.6"
+                viewbox="0 0 24 24"
               >
-                <path d="m15 18-6-6 6-6" /></svg
+                <path d="m15 18-6-6 6-6"></path></svg
               >All recordings</a
             >
-            <section class="password-gate" aria-labelledby="lock-heading">
+            <section aria-labelledby="lock-heading" class="password-gate">
               <div class="lock-mark">
                 <svg
                   aria-hidden="true"
-                  viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="1.6"
                   stroke-linecap="round"
                   stroke-linejoin="round"
+                  stroke-width="1.6"
+                  viewbox="0 0 24 24"
                 >
-                  <rect x="5" y="10" width="14" height="11" rx="2" />
-                  <path d="M8 10V6a4 4 0 0 1 8 0v4" />
+                  <rect height="11" rx="2" width="14" x="5" y="10"></rect>
+                  <path d="M8 10V6a4 4 0 0 1 8 0v4"></path>
                 </svg>
               </div>
               <h1 id="lock-heading">Sensitive meeting</h1>
-              <form data-password-form>
+              <form data-password-form="">
                 <label class="jds-label" for="app-password">App password</label
                 ><input
-                  class="jds-input"
-                  type="password"
-                  id="app-password"
-                  required
-                  autocomplete="off"
-                  aria-invalid="true"
                   aria-describedby="password-error"
+                  aria-invalid="true"
+                  autocomplete="off"
+                  class="jds-input"
+                  id="app-password"
+                  required=""
+                  type="password"
                 />
                 <p class="password-error" id="password-error" role="alert">
                   Incorrect password. Try again.
@@ -200,20 +201,18 @@
         </div>
       </div>
     </div>
-    <nav class="review-nav" aria-label="Mockup screens">
-      <a href="index.html">Mockups</a><span aria-hidden="true">/</span
-      ><a href="home-table.html">Table</a><a href="home-cards.html">Cards</a
-      ><a href="home-split.html">Split</a><a href="meeting-side-by-side.html">Side by side</a
-      ><a href="meeting-single-note.html">Single note</a><a href="meeting-tabs.html">Tabs</a
-      ><a href="sensitive-lock.html">Password</a
-      ><a href="sensitive-error.html" aria-current="page">Wrong password</a
+    <nav aria-label="Mockup screens" class="review-nav">
+      <a href="index.html">Mockups</a><a href="home-table.html">Table</a
+      ><a href="meeting-side-by-side.html">Mapped</a><a href="meeting-unmapped.html">Unmapped</a
+      ><a href="attendee-editing.html">Edit attendee</a><a href="sensitive-lock.html">Password</a
+      ><a aria-current="page" href="sensitive-error.html">Wrong password</a
       ><a href="sensitive-unlocked.html">Unlocked</a
       ><a href="regenerate-warning.html">Regenerate warning</a>
       <div class="review-theme">
-        <button class="jds-btn jds-btn--quiet" data-theme-toggle>Dark</button
-        ><button class="jds-btn jds-btn--quiet" data-park-toggle>Forest</button>
+        <button class="jds-btn jds-btn--quiet" data-theme-toggle="">Dark</button
+        ><button class="jds-btn jds-btn--quiet" data-park-toggle="">Forest</button>
       </div>
     </nav>
-    <div class="mock-status" role="status" aria-live="polite"></div>
+    <div aria-live="polite" class="mock-status" role="status"></div>
   </body>
 </html>

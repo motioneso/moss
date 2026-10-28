@@ -39,9 +39,6 @@ function filterHistory() {
       excerpt.hidden = false;
     }
   });
-  $$(".day-group").forEach(
-    (group) => (group.hidden = !$("[data-history-row]:not([hidden])", group))
-  );
   $(".history-empty").hidden = rows.some((row) => !row.hidden);
 }
 $("#history-search")?.addEventListener("input", filterHistory);
@@ -107,19 +104,6 @@ if (meeting?.classList.contains("mode-side")) {
     });
   }).observe(meeting);
 }
-if (meeting?.classList.contains("mode-tabs")) {
-  $$(".meeting-panes > section", meeting).forEach((panel) => {
-    panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", panel.id.replace("panel", "tab"));
-  });
-}
-$("[data-transcript-toggle]")?.addEventListener("click", (event) => {
-  const layout = $(".single-layout");
-  const open = layout.dataset.transcriptOpen !== "true";
-  layout.dataset.transcriptOpen = String(open);
-  event.currentTarget.setAttribute("aria-expanded", String(open));
-  if (open) $(".transcript-pane").scrollIntoView({ block: "nearest" });
-});
 const divider = $(".pane-divider");
 function resizeTranscript(value) {
   value = Math.min(65, Math.max(25, value));
@@ -247,7 +231,10 @@ $("[data-search-transcript]")?.addEventListener("click", () => {
   input.setAttribute("aria-label", "Find in transcript");
   input.addEventListener("input", () =>
     $$(".transcript-line").forEach(
-      (line) => (line.hidden = !line.textContent.toLowerCase().includes(input.value.toLowerCase()))
+      (line) =>
+        ((line.closest(".transcript-entry") || line).hidden = !line.textContent
+          .toLowerCase()
+          .includes(input.value.toLowerCase()))
     )
   );
   $(".transcript-lines").before(input);

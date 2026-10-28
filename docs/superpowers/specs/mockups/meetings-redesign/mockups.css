@@ -2,7 +2,11 @@
 @import url("../meetings-any-recording/mockups.css");
 
 /* Layout only; semantic colours, type and controls use shipped Park Press contracts. */
+.mock-workspace {
+  min-height: 0;
+}
 .mock-body > main {
+  position: relative;
   padding: var(--space-5) var(--space-5) var(--space-7);
 }
 .mock-body > .chatd {
@@ -136,45 +140,6 @@ svg {
   margin-top: var(--space-3);
   color: var(--accent-fg);
   font-size: var(--text-xs);
-}
-.day-group {
-  margin-bottom: var(--space-7);
-}
-.day-label {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  padding-bottom: var(--space-3);
-  margin-bottom: var(--space-4);
-  border-bottom: 1px solid var(--border);
-}
-.day-cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-.meeting-card {
-  padding: var(--space-5);
-  display: flex;
-  flex-direction: column;
-  align-items: start;
-  gap: var(--space-4);
-}
-.meeting-card p {
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-}
-.card-top,
-.card-bottom {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-3);
-  width: 100%;
-}
-.card-bottom {
-  margin-top: auto;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
 }
 .meeting-heading {
   display: grid;
@@ -370,100 +335,8 @@ svg {
 .mode-side > .view-tabs {
   display: none;
 }
-.mode-tabs .meeting-panes {
-  display: block;
-}
-.mode-tabs .meeting-panes[data-active="notes"] > .transcript-pane,
-.mode-tabs .meeting-panes[data-active="transcript"] > .notes-pane {
-  display: none;
-}
-.tab-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
-  gap: var(--space-6);
-}
-.mode-tabs :is(.transcript-pane, .notes-pane) {
-  padding-inline: 0;
-}
-.people-panel {
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-  padding-left: var(--space-5);
-  border-left: 1px solid var(--border);
-}
-.people-panel h2 {
-  font-size: var(--text-md);
-}
-.people-panel h2:not(:first-child) {
-  margin-top: var(--space-5);
-}
-.person {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.note-toolbar {
-  margin-bottom: var(--space-4);
-}
-.single-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.single-layout .notes-pane {
-  padding-left: 0;
-}
-.single-layout[data-transcript-open="false"] .transcript-pane {
-  display: none;
-}
-.single-layout[data-transcript-open="true"] {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 40%);
-  gap: var(--space-6);
-}
-.single-layout .transcript-pane {
-  padding-right: 0;
-  padding-left: var(--space-5);
-  border-left: 1px solid var(--border);
-}
-.split-layout {
-  display: grid;
-  grid-template-columns: 255px minmax(0, 1fr);
-  gap: var(--space-5);
-}
-.split-list {
-  border-right: 1px solid var(--border);
-  padding-right: var(--space-4);
-}
-.split-item {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-3);
-  border-bottom: 1px solid var(--border);
-  text-decoration: none;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-.split-item strong {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  color: var(--text);
-  font-size: var(--text-sm);
-}
-.split-item strong svg {
-  width: 16px;
-  height: 16px;
-}
-.split-item.selected {
-  background: var(--accent-soft);
-}
-.split-meeting {
-  min-width: 0;
-}
-.split-meeting .meeting-title-row h1 {
-  font-size: var(--text-xl);
-}
 .fixture-dialog {
+  color: var(--text);
   padding: 0;
   width: min(460px, calc(100vw - 32px));
 }
@@ -562,22 +435,6 @@ svg {
   .mode-side > .meeting-panes > section {
     padding-inline: 0;
   }
-  .single-layout[data-transcript-open="true"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .single-layout .transcript-pane {
-    border-left: 0;
-    padding-left: 0;
-    margin-top: var(--space-6);
-  }
-  .tab-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .people-panel {
-    border-left: 0;
-    border-top: 1px solid var(--border);
-    padding: var(--space-5) 0;
-  }
 }
 @media (max-width: 920px) {
   .review-theme {
@@ -619,9 +476,6 @@ svg {
   }
   .upcoming .jds-btn {
     margin-left: 0;
-  }
-  .day-cards {
-    grid-template-columns: minmax(0, 1fr);
   }
   .meeting-table thead {
     display: none;
@@ -671,21 +525,6 @@ svg {
   .playback-speed {
     display: none;
   }
-  .split-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .split-list {
-    display: flex;
-    gap: var(--space-3);
-    overflow-x: auto;
-    padding: 0 0 var(--space-4);
-    border: 0;
-  }
-  .split-item {
-    flex: 0 0 220px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-  }
   .index-page {
     padding: var(--space-5);
   }
@@ -697,23 +536,11 @@ svg {
 .home-page {
   min-width: 0;
 }
-.mode-single-note {
-  min-width: 0;
-}
 .transcript-search {
   width: 100%;
   padding: var(--space-3);
   margin-top: var(--space-4);
   font-size: var(--text-sm);
-}
-
-/* Tabs already name the visible pane. Keep its actions without a second title. */
-.mode-tabs .pane-head h2,
-.mode-tabs .note-document > h3:first-child {
-  display: none;
-}
-.mode-tabs .pane-head {
-  justify-content: end;
 }
 @container (max-width: 680px) {
   .mode-side > .meeting-panes .pane-head h2 {
