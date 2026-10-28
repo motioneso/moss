@@ -13,7 +13,7 @@ import type {
   ToolResult,
   ToolServices
 } from "@moss/module-sdk";
-import type { AiAssistantToolDto } from "@moss/shared";
+import { BACKGROUND_READ_OPERATIONS, type AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository } from "../repository.js";
@@ -566,13 +566,14 @@ export class AssistantToolGateway {
 
   async runBackgroundReadForActor(
     actorUserId: string,
-    read: { readonly operation: string; readonly itemId: string; readonly runId: string }
+    read: { operation: string; input: Record<string, unknown>; runId: string }
   ): Promise<GatewayToolResponse> {
-    if (read.operation !== "tasks.get") return { ok: false, error: "Background operation refused" };
+    if (!BACKGROUND_READ_OPERATIONS.has(read.operation))
+      return { ok: false, error: "Background operation refused" };
     return this.runActorRead(
       actorUserId,
       read.operation,
-      { taskId: read.itemId },
+      read.input,
       { threadId: null, chatSessionId: read.runId },
       true
     );
@@ -994,4 +995,5 @@ export class AssistantToolGateway {
     return out;
   }
 }
+
 const backgroundReadRefused = new Error("Background source access refused");
