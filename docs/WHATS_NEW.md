@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-28
+
+#### Added
+
+- **Moss check-in settings.** You can now choose in Settings how often Moss checks in on your day and which of Calendar, Tasks, Memory, Sports and News it may look at. [PR #3820](https://github.com/motioneso/moss/pull/3820)
+
 ### 2026-10-27
 
 #### Added
