@@ -390,6 +390,65 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
             path: join(resolve(artifacts), "finance-manual-accounts-phone.png"),
             fullPage: true
           });
+        await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
+        const review = page.getByRole("dialog", { name: "Reconcile a statement", exact: true });
+        await review.getByLabel("Statement balance", { exact: true }).fill("122.21");
+        const finish = review.getByRole("button", { name: "Finish reconciliation", exact: true });
+        expect(await finish.isDisabled()).toBe(true);
+        await review.getByRole("button", { name: "Close", exact: true }).click();
+        const beforeReconcile = (
+          await readTool("finance.transactions.query", { month, accountId: account.accountId })
+        ).transactions as { reconciledAt: string | null }[];
+        expect(beforeReconcile[0]?.reconciledAt).toBeNull();
+        await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
+        await review.getByLabel("Statement balance", { exact: true }).fill("122.22");
+        expect(await finish.isEnabled()).toBe(true);
+        const selection = review.getByRole("checkbox", {
+          name: /^Cleared: Synthetic manual market/
+        });
+        await selection.focus();
+        await page.keyboard.press("Space");
+        expect(await finish.isDisabled()).toBe(true);
+        await selection.locator("..").click();
+        expect(await finish.isEnabled()).toBe(true);
+        for (const mode of ["light", "dark"]) {
+          await page.evaluate((mode) => {
+            document.documentElement.dataset.theme = mode;
+          }, mode);
+          for (const width of [320, 390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            await finish.scrollIntoViewIfNeeded();
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+            ).toBe(false);
+            expect(
+              await review.evaluate((element) => element.scrollWidth > element.clientWidth)
+            ).toBe(false);
+            if (artifacts)
+              await page.screenshot({
+                path: join(resolve(artifacts), `finance-reconcile-${mode}-${width}.png`),
+                fullPage: true
+              });
+          }
+        }
+        await finish.click();
+        await review.waitFor({ state: "detached" });
+        const reconciled = (
+          await readTool("finance.transactions.query", { month, accountId: account.accountId })
+        ).transactions as { reconciledAt: string | null }[];
+        expect(reconciled[0]?.reconciledAt).toBeTruthy();
+        await page.reload();
+        await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
+        await review.getByText(/Last reconciled statement:/).waitFor();
+        expect(await finish.isDisabled()).toBe(true);
+        const foreign = await post(
+          "/api/modules/finance/tools/finance.reconciliation.read/invoke",
+          { input: { accountId: account.accountId } },
+          member.cookie
+        );
+        expect(foreign.statusCode).toBe(422);
+        expect(foreign.body).not.toContain("Synthetic wallet");
+        await review.getByRole("button", { name: "Close", exact: true }).click();
       } catch (error) {
         if (artifacts)
           await page.screenshot({

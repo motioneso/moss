@@ -20,6 +20,7 @@ import { formatCents } from "../format";
 import { buildAccountsView, type AccountsBank, type AccountsRow } from "../accounts-view";
 import { EmptyState, outcomeGate } from "../states";
 import { ManualEntryDialog, type ManualAccountChoice } from "../manual-entry";
+import { ReconciliationDialog } from "../reconciliation-dialog";
 import { announce } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
 // Structural copy of root.tsx HostActions; importing root would pull every screen into this graph.
@@ -52,6 +53,7 @@ function AccountsBody(props: {
   result: AccountsResult;
   hostActions: HostActions;
   onAddEntry: (account: ManualAccountChoice) => void;
+  onReconcile: (account: ManualAccountChoice) => void;
 }): ReactNodeLike {
   const own = (props.result.accounts ?? []).filter((account) => !account.shared);
   const addBank = (): void =>
@@ -130,18 +132,31 @@ function AccountsBody(props: {
                       <span className="jds-hint">{account.isoCurrency}</span>
                       {own.find((row) => row.accountId === account.accountId)?.source ===
                       "manual" ? (
-                        <Button
-                          variant="link"
-                          aria-label={`Add transaction to ${account.name}`}
-                          onClick={() => {
-                            const original = own.find(
-                              (row) => row.accountId === account.accountId
-                            )!;
-                            props.onAddEntry(original);
-                          }}
-                        >
-                          Add transaction
-                        </Button>
+                        <div className="fnm-account-actions">
+                          <Button
+                            variant="link"
+                            aria-label={`Add transaction to ${account.name}`}
+                            onClick={() => {
+                              const original = own.find(
+                                (row) => row.accountId === account.accountId
+                              )!;
+                              props.onAddEntry(original);
+                            }}
+                          >
+                            Add transaction
+                          </Button>
+                          <Button
+                            variant="link"
+                            aria-label={`Reconcile ${account.name}`}
+                            onClick={() =>
+                              props.onReconcile(
+                                own.find((row) => row.accountId === account.accountId)!
+                              )
+                            }
+                          >
+                            Reconcile
+                          </Button>
+                        </div>
                       ) : null}
                       {bank.asOf ? <span className="jds-hint">{`As of ${bank.asOf}`}</span> : null}
                     </div>
@@ -166,6 +181,7 @@ export function AccountsScreen(props: {
   tools?: ExternalModuleToolsHandleV1;
 }): ReactNodeLike {
   const [editing, setEditing] = useState<ManualAccountChoice | null | undefined>(undefined);
+  const [reconciling, setReconciling] = useState<ManualAccountChoice | null>(null);
   const accounts = useToolQuery<AccountsResult>("finance.accounts.list");
   return (
     <section aria-label="Accounts" className="fnm-stack">
@@ -181,7 +197,12 @@ export function AccountsScreen(props: {
       {outcomeGate(
         accounts,
         (result) => (
-          <AccountsBody result={result} hostActions={props.hostActions} onAddEntry={setEditing} />
+          <AccountsBody
+            result={result}
+            hostActions={props.hostActions}
+            onAddEntry={setEditing}
+            onReconcile={setReconciling}
+          />
         ),
         { loadingLabel: "Loading accounts" }
       )}
@@ -194,6 +215,18 @@ export function AccountsScreen(props: {
             setEditing(undefined);
             invalidateQueries();
             announce(editing ? "Transaction saved." : "Manual account added.");
+          }}
+        />
+      ) : null}
+      {reconciling ? (
+        <ReconciliationDialog
+          account={reconciling}
+          tools={props.tools}
+          onClose={() => setReconciling(null)}
+          onSaved={() => {
+            setReconciling(null);
+            invalidateQueries();
+            announce("Statement reconciled.");
           }}
         />
       ) : null}

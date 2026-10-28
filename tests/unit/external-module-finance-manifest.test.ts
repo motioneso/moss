@@ -127,6 +127,8 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.manual.context", "manual.context"],
         ["finance.manual.account-create", "manual.account-create"],
         ["finance.manual.entry-create", "manual.entry-create"],
+        ["finance.reconciliation.read", "reconciliation.read"],
+        ["finance.reconciliation.finish", "reconciliation.finish"],
         ["finance.setup.status", "setup.status"],
         ["finance.connect.start", "connect.start"],
         ["finance.connect.poll", "connect.poll"],

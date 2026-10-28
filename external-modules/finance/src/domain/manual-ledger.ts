@@ -58,6 +58,7 @@ export type ManualWriteResult =
   | "conflict"
   | "unavailable"
   | "invalid_date"
+  | "reconciled_period"
   | "overflow";
 export interface ManualLedgerStore {
   createAccount(input: ManualAccountCreate): Promise<ManualWriteResult>;

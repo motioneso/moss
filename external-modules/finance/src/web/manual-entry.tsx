@@ -43,6 +43,8 @@ export function manualSaveMessage(outcome: ModuleToolOutcome): string | null {
     future_date:
       "Choose today or an earlier date in your Moss timezone. Future bills need a scheduled entry.",
     manual_invalid_date: "Choose a date on or after this account's opening balance.",
+    manual_reconciled_period:
+      "This statement period is reconciled. Choose a date after the last reconciled statement.",
     manual_unavailable:
       "This account is unavailable or its currency changed. Refresh accounts before continuing.",
     manual_conflict:

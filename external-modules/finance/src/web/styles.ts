@@ -29,6 +29,7 @@ export const MODULE_STYLES = `
 .fnm-report-grid { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); align-items: start; }
 .fnm-manual-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
 .fnm-manual-columns > * { min-width: 0; }
+.fnm-account-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 .fnm-manual-form { display: flex; flex-direction: column; gap: var(--space-4); }
 @media (max-width: 480px) { .fnm-manual-columns { grid-template-columns: minmax(0, 1fr); } }
 .fnm-account-totals { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }

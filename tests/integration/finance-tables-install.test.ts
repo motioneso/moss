@@ -28,7 +28,8 @@ const ownedTables = [
   "app.finance_categories",
   "app.finance_activity",
   "app.finance_budget_drafts",
-  "app.finance_budget_draft_lines"
+  "app.finance_budget_draft_lines",
+  "app.finance_reconciliations"
 ];
 
 beforeAll(async () => {
@@ -57,7 +58,7 @@ afterEach(async () => {
 });
 
 describe("finance module table install (FIN-06a #1166)", () => {
-  it("installs all twenty-one migrations, FORCE RLS on every table, and re-runs idempotently", async () => {
+  it("installs all twenty-three migrations, FORCE RLS on every table, and re-runs idempotently", async () => {
     const result = await installModule({
       moduleId,
       manifest: { database: { ownedTables } },
@@ -65,7 +66,7 @@ describe("finance module table install (FIN-06a #1166)", () => {
       migrationConnectionString: urls.migration,
       migrationsDirectory: "external-modules/finance/sql"
     });
-    expect(result.installed).toHaveLength(21);
+    expect(result.installed).toHaveLength(23);
 
     const client = new Client({ connectionString: urls.bootstrap });
     await client.connect();
@@ -90,7 +91,7 @@ describe("finance module table install (FIN-06a #1166)", () => {
       "SELECT version FROM app.module_schema_migrations WHERE module_id = $1",
       [moduleId]
     );
-    expect(ledger.rows).toHaveLength(21);
+    expect(ledger.rows).toHaveLength(23);
 
     // #3175: existing rows default to confirmed (no review backlog), and the
     // partial index serves the Needs a look filter.

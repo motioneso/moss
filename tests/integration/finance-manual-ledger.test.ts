@@ -17,6 +17,7 @@ import {
   sqlStore,
   type FinanceDb,
   type ManualAccountCreate,
+  type ReconciliationFinish,
   type ManualEntryCreate
 } from "../../external-modules/finance/src/domain/index.js";
 import {
@@ -62,6 +63,21 @@ const entry = (accountId: string, over: Partial<ManualEntryCreate> = {}): Manual
   notes: "Synthetic private note",
   cleared: false,
   digest: "b".repeat(64),
+  at: "2026-10-28T00:00:00Z",
+  ...over
+});
+const statement = (
+  accountId: string,
+  over: Partial<ReconciliationFinish> = {}
+): ReconciliationFinish => ({
+  id: `manual:${randomUUID()}`,
+  accountId,
+  statementDate: "2026-10-10",
+  balanceCents: 100000,
+  isoCurrency: "USD",
+  expectedRevision: 0,
+  selectedIds: [],
+  digest: "e".repeat(64),
   at: "2026-10-28T00:00:00Z",
   ...over
 });
@@ -210,5 +226,197 @@ describe("manual ledger through installed module SQL and actual owner role", () 
     expect(
       (await owner((s) => s.getTransactionChunk(a.accountId, "2026-10")))![0]!.amountCents
     ).toBe(8243);
+  });
+  it("reconciles an exact selected statement once and carries outstanding entries forward", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const expense = entry(a.accountId, { cleared: true });
+    const refund = entry(a.accountId, { amountCents: -123, digest: "c".repeat(64) });
+    await owner((s) => s.manual!.createEntry(expense));
+    await owner((s) => s.manual!.createEntry(refund));
+    const view = await owner((s) => s.reconciliation!.read(a.accountId, "2026-10-10"));
+    expect(view).toMatchObject({
+      baselineCents: 100000,
+      recordedCents: 91880,
+      revision: 2,
+      totalEntries: 2
+    });
+    const finish = statement(a.accountId, {
+      expectedRevision: 2,
+      balanceCents: 91757,
+      selectedIds: [expense.id]
+    });
+    expect(await owner((s) => s.reconciliation!.finish(finish))).toBe("created");
+    expect(await owner((s) => s.reconciliation!.finish(finish))).toBe("unchanged");
+    expect(
+      await owner((s) => s.reconciliation!.finish({ ...finish, digest: "f".repeat(64) }))
+    ).toBe("conflict");
+    expect(await owner((s) => s.reconciliation!.finish(finish), ids.userB)).toBe("conflict");
+    expect(
+      await owner((s) => s.reconciliation!.read(a.accountId, "2026-10-10"), ids.userB)
+    ).toBeNull();
+    const after = await owner((s) => s.reconciliation!.read(a.accountId, "2026-10-11"));
+    expect(after).toMatchObject({
+      baselineCents: 91757,
+      recordedCents: 91880,
+      revision: 3,
+      totalEntries: 1,
+      lastReconciledDate: "2026-10-10"
+    });
+    expect(after!.entries[0]?.id).toBe(refund.id);
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(91880);
+    const rows = await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"));
+    expect(rows?.find((r) => r.id === expense.id)?.reconciledAt).toBeTruthy();
+    expect(rows?.find((r) => r.id === refund.id)?.reconciledAt).toBeNull();
+    const reconciled = rows!.find((r) => r.id === expense.id)!;
+    await owner((s) =>
+      s.putTransaction({
+        ...reconciled,
+        categoryId: "dining",
+        notes: "Updated private note",
+        amountCents: 1,
+        date: "2026-10-28",
+        cleared: false,
+        reconciledAt: null
+      })
+    );
+    const edited = (await owner((s) => s.getTransactionChunk(a.accountId, "2026-10")))!.find(
+      (r) => r.id === expense.id
+    )!;
+    expect(edited).toMatchObject({
+      categoryId: "dining",
+      notes: "Updated private note",
+      amountCents: expense.amountCents,
+      date: expense.date,
+      cleared: true,
+      reconciledAt: reconciled.reconciledAt
+    });
+    expect(await owner((s) => s.manual!.createEntry(entry(a.accountId)))).toBe("reconciled_period");
+    expect(
+      await owner((s) =>
+        s.reconciliation!.finish(
+          statement(a.accountId, {
+            statementDate: "2026-10-11",
+            expectedRevision: 3,
+            balanceCents: 91880,
+            selectedIds: [refund.id]
+          })
+        )
+      )
+    ).toBe("created");
+    const events = await owner((s) => s.listActivity("2026-10-01", "2026-11-01", 100));
+    expect(
+      events.filter((e) => e.kind === "account.reconcile" && e.params.accountId === a.accountId)
+    ).toHaveLength(2);
+  });
+  it("rejects mismatched, stale, foreign and incomplete selections without partial reconciliation", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const expense = entry(a.accountId, { cleared: true });
+    await owner((s) => s.manual!.createEntry(expense));
+    const valid = statement(a.accountId, {
+      expectedRevision: 1,
+      balanceCents: 91757,
+      selectedIds: [expense.id]
+    });
+    const invalid: Partial<ReconciliationFinish>[] = [
+      { balanceCents: 91758 },
+      { expectedRevision: 0 },
+      { isoCurrency: "EUR" },
+      { selectedIds: [expense.id, "foreign"] },
+      { selectedIds: [expense.id, expense.id] },
+      { statementDate: "2026-10-01" },
+      { statementDate: "2026-09-30", selectedIds: [], balanceCents: 100000 }
+    ];
+    for (const change of invalid)
+      expect(await owner((s) => s.reconciliation!.finish({ ...valid, ...change }))).toBe(
+        "conflict"
+      );
+    const view = await owner((s) => s.reconciliation!.read(a.accountId, "2026-10-10"));
+    expect(view).toMatchObject({ lastReconciledDate: null, revision: 1, totalEntries: 1 });
+    expect(
+      (await owner((s) => s.getTransactionChunk(a.accountId, "2026-10")))?.[0]?.reconciledAt
+    ).toBeNull();
+  });
+  it("handles debt and unchecked entries without changing the recorded account balance", async () => {
+    const a = account({ type: "credit", subtype: "credit card" });
+    await owner((s) => s.manual!.createAccount(a));
+    const charge = entry(a.accountId, { cleared: true });
+    const payment = entry(a.accountId, { amountCents: -12000, cleared: true });
+    await owner((s) => s.manual!.createEntry(charge));
+    await owner((s) => s.manual!.createEntry(payment));
+    expect(
+      await owner((s) =>
+        s.reconciliation!.finish(
+          statement(a.accountId, {
+            expectedRevision: 2,
+            selectedIds: [payment.id],
+            balanceCents: 88000
+          })
+        )
+      )
+    ).toBe("created");
+    const rows = await owner((s) => s.getTransactionChunk(a.accountId, "2026-10"));
+    expect(rows?.find((r) => r.id === charge.id)).toMatchObject({
+      cleared: false,
+      reconciledAt: null
+    });
+    expect(rows?.find((r) => r.id === payment.id)?.reconciledAt).toBeTruthy();
+    expect((await owner((s) => s.getAccount(a.accountId)))?.balanceCents).toBe(96243);
+  });
+  it("serializes concurrent finish replays and competing statements", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const finish = statement(a.accountId);
+    const same = await Promise.all([
+      owner((s) => s.reconciliation!.finish(finish)),
+      owner((s) => s.reconciliation!.finish(finish))
+    ]);
+    expect(same.sort()).toEqual(["created", "unchanged"]);
+    const b = account();
+    await owner((s) => s.manual!.createAccount(b));
+    const distinct = await Promise.all([
+      owner((s) => s.reconciliation!.finish(statement(b.accountId))),
+      owner((s) => s.reconciliation!.finish(statement(b.accountId)))
+    ]);
+    expect(distinct.sort()).toEqual(["conflict", "created"]);
+  });
+  it("races a new posting against statement finish without reconciling a stale ledger", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    const results = await Promise.all([
+      owner((s) => s.manual!.createEntry(entry(a.accountId))),
+      owner((s) => s.reconciliation!.finish(statement(a.accountId)))
+    ]);
+    expect([
+      ["created", "conflict"],
+      ["reconciled_period", "created"]
+    ]).toContainEqual(results);
+  });
+  it("counts the complete statement and refuses a truncated 501-entry review", async () => {
+    const a = account();
+    await owner((s) => s.manual!.createAccount(a));
+    await runner.withDataContext({ actorUserId: ids.userA }, async (scope) => {
+      const rpc = createModuleStorageRpc(scope, "finance");
+      await rpc.query(
+        `WITH inserted AS (
+        INSERT INTO app.finance_transactions
+          (owner_user_id, id, account_id, date, name, amount_cents, iso_currency, pending, categorized_by, source, entry_digest)
+        SELECT app.current_actor_user_id(), 'limit-' || g::text, $1, '2026-10-02'::date,
+          'Synthetic volume entry', 1, 'USD', false, 'user', 'manual', repeat('a', 64)
+        FROM generate_series(1, 501) g RETURNING amount_cents
+      ) UPDATE app.finance_accounts SET balance_cents = balance_cents - (SELECT sum(amount_cents) FROM inserted),
+          ledger_revision = 501 WHERE account_id = $1`,
+        [a.accountId]
+      );
+    });
+    const view = await owner((s) => s.reconciliation!.read(a.accountId, "2026-10-10"));
+    expect(view).toMatchObject({ totalEntries: 501, recordedCents: 99499, revision: 501 });
+    expect(view!.entries).toHaveLength(500);
+    expect(
+      await owner((s) =>
+        s.reconciliation!.finish(statement(a.accountId, { expectedRevision: 501 }))
+      )
+    ).toBe("conflict");
   });
 });

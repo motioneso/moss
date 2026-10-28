@@ -14,6 +14,7 @@ import type {
 import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { ActivityRecord, FinanceStore } from "./store-port.js";
 import { manualSqlStore } from "./store-manual-sql.js";
+import { reconciliationSqlStore } from "./store-reconciliation-sql.js";
 import { safeCents } from "./values.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
@@ -92,12 +93,12 @@ function rowToTransaction(row: TransactionRow): TransactionRecord {
 
 async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Promise<void> {
   if (record.source === "manual") {
-    // Legacy categorization/note paths may change metadata, never ledger movement.
+    // Categories/notes remain editable after reconciliation; these fields never move money.
     await db.query(
       "UPDATE app.finance_transactions SET category_id = CASE WHEN splits = '[]'::jsonb THEN $2 ELSE category_id END, " +
         "categorized_by = CASE WHEN splits = '[]'::jsonb THEN $3 ELSE categorized_by END, notes = $4, " +
         "review_state = CASE WHEN splits = '[]'::jsonb THEN $5 ELSE review_state END " +
-        "WHERE id = $1 AND source = 'manual' AND reconciled_at IS NULL",
+        "WHERE id = $1 AND source = 'manual'",
       [
         record.id,
         record.categoryId,
@@ -304,6 +305,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     supportsSplits: true,
     manual: manualSqlStore(db),
+    reconciliation: reconciliationSqlStore(db),
     async setTransactionSplits(change) {
       const { from, to } = monthWindow(change.month);
       const result = await db.query<{ id: string }>(

@@ -45,7 +45,7 @@ export function manualSqlStore(db: FinanceDb): ManualLedgerStore {
     async createEntry(input) {
       const changed = await db.query<{ id: string }>(
         `WITH locked AS (
-          SELECT account_id, balance_cents, type, iso_currency, opening_date, archived_at
+          SELECT account_id, balance_cents, type, iso_currency, opening_date, archived_at, last_reconciled_date
           FROM app.finance_accounts WHERE account_id = $1 AND source = 'manual' FOR UPDATE
         ), inserted AS (
           INSERT INTO app.finance_transactions
@@ -55,6 +55,7 @@ export function manualSqlStore(db: FinanceDb): ManualLedgerStore {
                  $7, $8, false, 'user', CASE WHEN $7::text IS NULL THEN 'needs_look' ELSE 'confirmed' END,
                  'manual', $9, $10 FROM locked
           WHERE archived_at IS NULL AND iso_currency = $6 AND $3::date >= opening_date
+            AND (last_reconciled_date IS NULL OR $3::date > last_reconciled_date)
             AND balance_cents::numeric + (CASE WHEN type IN ('credit', 'loan') THEN 1 ELSE -1 END) * $5::bigint
                 BETWEEN -9007199254740991 AND 9007199254740991
           ON CONFLICT (owner_user_id, id) DO NOTHING RETURNING id, amount_cents, account_id
@@ -100,14 +101,17 @@ export function manualSqlStore(db: FinanceDb): ManualLedgerStore {
         opening_date: string;
         archived_at: unknown;
         iso_currency: string;
+        last_reconciled_date: string | null;
       }>(
-        "SELECT opening_date::text AS opening_date, archived_at, iso_currency FROM app.finance_accounts WHERE account_id = $1 AND source = 'manual'",
+        "SELECT opening_date::text AS opening_date, archived_at, iso_currency, last_reconciled_date::text FROM app.finance_accounts WHERE account_id = $1 AND source = 'manual'",
         [input.accountId]
       );
       const account = accounts.rows[0];
       if (!account || account.archived_at || account.iso_currency !== input.isoCurrency)
         return "unavailable";
       if (input.date < account.opening_date) return "invalid_date";
+      if (account.last_reconciled_date && input.date <= account.last_reconciled_date)
+        return "reconciled_period";
       return "overflow";
     }
   };

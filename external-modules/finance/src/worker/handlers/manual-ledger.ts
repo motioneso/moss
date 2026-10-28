@@ -12,7 +12,7 @@ import type { WorkerPorts } from "../ports.js";
 import { InputError, readBool, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
 
-function today(ports: WorkerPorts): string {
+export function today(ports: WorkerPorts): string {
   if (!ports.localTimezone)
     throw new InputError(
       "timezone_required",
@@ -27,13 +27,13 @@ function today(ports: WorkerPorts): string {
   const get = (type: string) => parts.find((part) => part.type === type)!.value;
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
-function id(input: Record<string, unknown>, key: string): string {
+export function id(input: Record<string, unknown>, key: string): string {
   const value = readString(input, key, { required: true });
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value))
     throw new InputError(`${key} must be a UUID`);
   return `manual:${value}`;
 }
-function date(input: Record<string, unknown>, key: string, currentDate: string): string {
+export function date(input: Record<string, unknown>, key: string, currentDate: string): string {
   const value = readString(input, key, { required: true });
   if (!isCalendarDate(value)) throw new InputError(`${key} must be a valid calendar date`);
   if (value > currentDate)
@@ -43,13 +43,13 @@ function date(input: Record<string, unknown>, key: string, currentDate: string):
     );
   return value;
 }
-function currency(input: Record<string, unknown>): string {
+export function currency(input: Record<string, unknown>): string {
   const value = readString(input, "isoCurrency", { required: true });
   if (!(MANUAL_CURRENCIES as readonly string[]).includes(value))
     throw new InputError("unsupported_currency", "Choose a supported two-decimal currency");
   return value;
 }
-const digest = (input: Record<string, unknown>) =>
+export const digest = (input: Record<string, unknown>) =>
   createHash("sha256").update(JSON.stringify(input)).digest("hex");
 async function ledger(ports: WorkerPorts) {
   const store = await ports.store();
@@ -67,6 +67,7 @@ function outcome(result: ManualWriteResult, recordId: string) {
     conflict: "This operation identity belongs to different entries; check the saved result",
     unavailable: "This manual account is unavailable, archived or has a different currency",
     invalid_date: "The entry date precedes the account opening balance",
+    reconciled_period: "This date is in a reconciled statement period; choose a later date",
     overflow: "The resulting balance exceeds supported precision"
   };
   throw new InputError(`manual_${result}`, messages[result]);
