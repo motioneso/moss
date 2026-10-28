@@ -30,19 +30,20 @@ function LiveRegion(): ReactNodeLike {
   );
 }
 
-// The tab bar names Budget, Transactions and Accounts. Other pages (Getting started,
-// Settings, Reports) show it with nothing selected so there is always a way back.
-type Tab = "budget" | "transactions" | "accounts";
+// Getting started and Settings retain a way back to the four primary views.
+type Tab = "budget" | "transactions" | "accounts" | "reports";
 const TAB_PATHS: Record<Tab, string> = {
   budget: "/",
   transactions: "/transactions",
-  accounts: "/accounts"
+  accounts: "/accounts",
+  reports: "/reports"
 };
 
 function tabFor(path: string): Tab | "none" {
   if (path === "/") return "budget";
   if (path === "/transactions") return "transactions";
   if (path === "/accounts") return "accounts";
+  if (path === "/reports") return "reports";
   return "none";
 }
 
@@ -63,7 +64,8 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
           options={[
             { value: "budget", label: "Budget" },
             { value: "transactions", label: "Transactions" },
-            { value: "accounts", label: "Accounts" }
+            { value: "accounts", label: "Accounts" },
+            { value: "reports", label: "Reports" }
           ]}
         />
       </div>

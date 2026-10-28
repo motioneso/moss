@@ -93,6 +93,40 @@ window.fetch = async (input, init) => {
   if (fixture === "error") return Response.json({}, { status: 503 });
   if (fixture === "loading") await new Promise((resolve) => setTimeout(resolve, 60_000));
   const p = body.input ?? {};
+  if (url.includes("/users/directory")) return Response.json({ users: [] });
+  if (url.includes("finance.reports.")) {
+    const currency = typeof p.currency === "string" ? p.currency : null;
+    const scope = {
+      window: [month],
+      currency,
+      currencies: ["EUR", "USD"],
+      currencySelectionRequired: currency === null
+    };
+    const headlineCents = currency === "EUR" ? 654321 : 1234567;
+    const outflowCents = currency === "EUR" ? 18423 : 8243;
+    const result = url.includes("net-worth")
+      ? {
+          ...scope,
+          points: currency ? [{ date: `${month}-15`, totalCents: headlineCents }] : [],
+          headlineCents: currency ? headlineCents : null
+        }
+      : {
+          ...scope,
+          categories,
+          shared: [],
+          own: currency
+            ? [
+                {
+                  month,
+                  byCategory: { groceries: outflowCents },
+                  byPayee: { "Weekend market": outflowCents },
+                  cashFlow: { incomeCents: 420000, outflowCents, netCents: 420000 - outflowCents }
+                }
+              ]
+            : []
+        };
+    return Response.json({ invocation: { status: "succeeded", result } });
+  }
   const filtered =
     fixture === "empty"
       ? []

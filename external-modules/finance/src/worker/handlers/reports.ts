@@ -15,7 +15,7 @@ import {
 } from "../../domain/index.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { readActiveUserIds, readInt, readString } from "../validate.js";
+import { InputError, readActiveUserIds, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
 
 function readWindow(input: Record<string, unknown>, ports: WorkerPorts): string[] {
@@ -31,6 +31,18 @@ function loadMonths(window: string[]): Set<string> {
   const [year = 0, month = 1] = first.split("-").map(Number);
   const margin = new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
   return new Set([margin, ...window]);
+}
+
+function currencyScope(input: Record<string, unknown>, values: string[]) {
+  const requested = readString(input, "currency");
+  if (requested !== undefined && !/^[A-Z]{3}$/.test(requested))
+    throw new InputError("currency must be a three-letter uppercase code");
+  const currencies = [...new Set(values)].sort();
+  return {
+    currencies,
+    currency: requested ?? (currencies.length === 1 ? currencies[0]! : null),
+    currencySelectionRequired: requested === undefined && currencies.length > 1
+  };
 }
 
 export const reportsSpendingHandler: ToolFactory = (ports) => async (input) => {
@@ -71,15 +83,30 @@ export const reportsSpendingHandler: ToolFactory = (ports) => async (input) => {
     }
   }
 
+  const scope = currencyScope(
+    input,
+    [own, ...sharedByOwner.values()]
+      .flat()
+      .filter((row) => window.includes(row.date.slice(0, 7)))
+      .map((row) => row.isoCurrency)
+  );
+  const inCurrency = (rows: TransactionRecord[]) =>
+    excludeTransfers(rows).filter(
+      (row) => scope.currency === null || row.isoCurrency === scope.currency
+    );
   return {
     window,
-    own: aggregateSpending(excludeTransfers(own), window),
-    shared: [...sharedByOwner.entries()]
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([ownerUserId, rows]) => ({
-        ownerUserId,
-        months: aggregateSpending(excludeTransfers(rows), window)
-      })),
+    ...scope,
+    own: scope.currencySelectionRequired ? [] : aggregateSpending(inCurrency(own), window),
+    shared: scope.currencySelectionRequired
+      ? []
+      : [...sharedByOwner.entries()]
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          .flatMap(([ownerUserId, rows]) => {
+            const scoped = inCurrency(rows);
+            if (!scoped.some((row) => window.includes(row.date.slice(0, 7)))) return [];
+            return [{ ownerUserId, months: aggregateSpending(scoped, window) }];
+          }),
     // Taxonomy rides along so the screen renders category names from one
     // call (same shape transactions.query ships).
     categories: await loadCategories(ports)
@@ -92,14 +119,26 @@ export const reportsNetWorthHandler: ToolFactory = (ports) => async (input) => {
 
   const store = await ports.store();
   const accounts = await store.listAccounts();
+  const scope = currencyScope(
+    input,
+    accounts.map((account) => account.isoCurrency)
+  );
+  if (scope.currencySelectionRequired) return { window, ...scope, points: [], headlineCents: null };
+  const selectedAccounts = accounts.filter((account) => account.isoCurrency === scope.currency);
+  const selectedIds = new Set(selectedAccounts.map((account) => account.accountId));
   // ALL snapshot chunks, not just window months: pre-window snapshots feed
   // carry-forward into the window (domain/net-worth.ts contract). Bounded by
   // accounts × months-since-connect. Own-only by design — snapshots are
   // never mirrored, so the mirror port is untouched here.
   const chunks: Record<string, SnapshotChunk> = {};
   for (const { accountId, month } of await store.listSnapshotChunks()) {
+    if (!selectedIds.has(accountId)) continue;
     const days = await store.getSnapshotChunk(accountId, month);
     if (days) chunks[`${accountId}:${month}`] = { days };
   }
-  return { window, ...deriveNetWorth(accounts, chunks, window) };
+  return {
+    window,
+    ...scope,
+    ...deriveNetWorth(selectedAccounts, chunks, window)
+  };
 };

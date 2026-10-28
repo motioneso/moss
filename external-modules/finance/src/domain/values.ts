@@ -9,6 +9,16 @@ export function safeCents(value: string | number): number {
   return cents;
 }
 
+/** Refuse overflow instead of silently rounding accumulated financial totals. */
+export function addCents(left: number, right: number): number {
+  return safeCents(safeCents(left) + safeCents(right));
+}
+
+export function requireSingleCurrency(currencies: Iterable<string>): void {
+  if (new Set(currencies).size > 1)
+    throw new FinanceKvError("invalid_record", "Choose one currency before aggregating money");
+}
+
 /** Decimal conversion, rounded half away from zero, before entering the ledger. */
 export function decimalToCents(value: number | string): number {
   if (typeof value === "number" && !Number.isFinite(value)) {

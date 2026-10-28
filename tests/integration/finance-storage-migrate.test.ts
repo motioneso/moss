@@ -52,6 +52,10 @@ import type { WorkerPorts } from "../../external-modules/finance/src/worker/port
 import { MIGRATED_MARKER_KEY } from "../../external-modules/finance/src/worker/store.js";
 import { storageMigrateHandler } from "../../external-modules/finance/src/worker/handlers/migrate.js";
 import {
+  reportsSpendingHandler,
+  reportsNetWorthHandler
+} from "../../external-modules/finance/src/worker/handlers/reports.js";
+import {
   connectionStrings,
   dropModuleRolesAtTeardown,
   grantModuleMembershipAtSetup,
@@ -540,6 +544,43 @@ describe("Finance split storage through the module RPC", () => {
       { actorUserId, requestId: "synthetic-finance-split" },
       (scoped) => work(sqlStore(dbFor(scoped)))
     );
+
+  it("keeps stored currencies separate in spending and snapshot reports", async () => {
+    await withStore(ids.userA, async (store) => {
+      const accountId = "synthetic-eur-account";
+      await store.putAccount({ ...ACCOUNT_1, accountId, isoCurrency: "EUR" });
+      await store.putTransaction({
+        ...TXN_JUNE_1,
+        id: "synthetic-eur-report",
+        accountId,
+        isoCurrency: "EUR",
+        amountCents: 4321
+      });
+      await store.putSnapshotChunk(accountId, "2026-06", { "2026-06-15": 654321 });
+      const ports = {
+        store: async () => store,
+        kv: { get: async () => null },
+        mirror: { list: async () => [] },
+        now: () => new Date("2026-06-20T12:00:00Z")
+      } as unknown as WorkerPorts;
+      const input = { actorUserId: ids.userA, months: 1 };
+      expect(await reportsSpendingHandler(ports)(input)).toMatchObject({
+        currencySelectionRequired: true,
+        own: []
+      });
+      expect(await reportsSpendingHandler(ports)({ ...input, currency: "EUR" })).toMatchObject({
+        currency: "EUR",
+        own: [{ cashFlow: { outflowCents: 4321 } }]
+      });
+      expect(await reportsNetWorthHandler(ports)(input)).toMatchObject({
+        headlineCents: null,
+        currencySelectionRequired: true
+      });
+      expect(await reportsNetWorthHandler(ports)({ ...input, currency: "EUR" })).toMatchObject({
+        headlineCents: 654321
+      });
+    });
+  });
 
   it("commits one allocation and activity, rejects a stale edit, and retains allocations on sync", async () => {
     const original = {

@@ -20,9 +20,6 @@ import {
 } from "../../domain/reports.js";
 import type { NetWorthPoint } from "../../domain/net-worth.js";
 
-// Plaid reports in the account's currency but the module renders USD
-// throughout v0 (budget.tsx's BUDGET_CURRENCY convention).
-const REPORT_CURRENCY = "USD";
 const WINDOW_OPTIONS = [3, 6, 12, 24];
 const PAYEE_CAP = 12;
 
@@ -35,14 +32,20 @@ interface ReportCategory {
 
 // Wire shapes of the two Task 4 handlers, verbatim. `shared` stays per-owner
 // on the wire so this screen can apply the FIN-04 owner check before merging.
-interface SpendingResult extends Record<string, unknown> {
+interface CurrencyResult extends Record<string, unknown> {
+  currencies: string[];
+  currency: string | null;
+  currencySelectionRequired: boolean;
+}
+
+interface SpendingResult extends CurrencyResult {
   window: string[];
   own: MonthSpending[];
   shared: Array<{ ownerUserId: string; months: MonthSpending[] }>;
   categories: ReportCategory[];
 }
 
-interface NetWorthResult extends Record<string, unknown> {
+interface NetWorthResult extends CurrencyResult {
   window: string[];
   points: NetWorthPoint[];
   headlineCents: number | null;
@@ -75,7 +78,7 @@ function trendPoints(points: NetWorthPoint[]): string {
     .join(" ");
 }
 
-function BarList(props: { rows: BarRow[] }): ReactNodeLike {
+function BarList(props: { rows: BarRow[]; currency: string }): ReactNodeLike {
   // Widths are relative to the largest magnitude row; the `, 1` floor keeps
   // an all-zero month from dividing by zero.
   const max = Math.max(...props.rows.map((row) => Math.abs(row.cents)), 1);
@@ -90,7 +93,7 @@ function BarList(props: { rows: BarRow[] }): ReactNodeLike {
               style={{ width: `${Math.round((Math.abs(row.cents) / max) * 100)}%` }}
             />
           </div>
-          <span className="fnm-amount">{formatCents(row.cents, REPORT_CURRENCY)}</span>
+          <span className="fnm-amount">{formatCents(row.cents, props.currency)}</span>
         </div>
       ))}
     </div>
@@ -98,19 +101,23 @@ function BarList(props: { rows: BarRow[] }): ReactNodeLike {
 }
 
 function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
-  const { points, headlineCents } = props.result;
+  const { points, headlineCents, currency } = props.result;
   return (
-    <Card flush>
+    <Card>
       <section className="fnm-state" aria-label="Net worth">
-        <span className="jds-eyebrow">Net worth</span>
-        {headlineCents === null ? (
+        <span className="jds-eyebrow">Net worth{currency ? ` · ${currency}` : ""}</span>
+        {headlineCents === null || !currency ? (
           <EmptyState
             title="No snapshots yet"
             body="Net worth builds from daily balance snapshots, which appear after your first sync."
           />
         ) : (
           <div className="fnm-stack">
-            <strong className="fnm-amount">{formatCents(headlineCents, REPORT_CURRENCY)}</strong>
+            <strong className="fnm-amount">{formatCents(headlineCents, currency)}</strong>
+            <p className="jds-caption">
+              Recorded account balances; earlier balances carry forward. Accounts without snapshots
+              are omitted.
+            </p>
             {/* A polyline needs ≥2 points; a single snapshot day renders the
                 headline alone. */}
             {points.length >= 2 ? (
@@ -140,7 +147,14 @@ function SpendingSection(props: {
   result: SpendingResult;
   directory: DirectoryUser[] | null;
 }): ReactNodeLike {
-  const { window: windowMonths, own, shared, categories } = props.result;
+  const { window: windowMonths, own, shared, categories, currency } = props.result;
+  if (!currency)
+    return (
+      <EmptyState
+        title="No transactions yet"
+        body="Spending reports appear after your first sync brings in transactions."
+      />
+    );
   const directory = props.directory;
   // FIN-04/#1149 fail-closed posture: a shared contribution merges ONLY when
   // its owner resolves in the user directory. A null directory (fetch failed
@@ -178,22 +192,22 @@ function SpendingSection(props: {
         <p className="jds-caption">Includes shared household accounts</p>
       ) : null}
       <div className="fnm-report-grid">
-        <Card flush>
+        <Card>
           <section className="fnm-state" aria-label="Spending by category">
             <span className="jds-eyebrow">Spending by category — {monthLabel(latest.month)}</span>
             {categoryRows.length > 0 ? (
-              <BarList rows={categoryRows} />
+              <BarList rows={categoryRows} currency={currency} />
             ) : (
               <EmptyState title="Nothing this month" body="No spending recorded this month yet." />
             )}
           </section>
         </Card>
-        <Card flush>
+        <Card>
           <section className="fnm-state" aria-label="Spending by payee">
             <span className="jds-eyebrow">Spending by payee — {monthLabel(latest.month)}</span>
             {payeeRows.length > 0 ? (
               <div className="fnm-stack">
-                <BarList rows={payeeRows} />
+                <BarList rows={payeeRows} currency={currency} />
                 {/* Visible caption IS the no-silent-caps disclosure. */}
                 {payeeRowsAll.length > PAYEE_CAP ? (
                   <p className="jds-caption">Top {PAYEE_CAP} payees</p>
@@ -205,10 +219,13 @@ function SpendingSection(props: {
           </section>
         </Card>
       </div>
-      <Card flush>
+      <Card>
         <section className="fnm-state" aria-label="Cash flow">
-          <span className="jds-eyebrow">Cash flow</span>
-          <table className="fnm-table">
+          <span className="jds-eyebrow">Cash flow · {currency}</span>
+          <p className="jds-caption">
+            Includes pending transactions. Refunds reduce outflow; transfers are excluded.
+          </p>
+          <table className="fnm-table fnm-desktop-only">
             <thead>
               <tr>
                 <th>Month</th>
@@ -222,18 +239,39 @@ function SpendingSection(props: {
                 <tr key={entry.month}>
                   <td>{monthLabel(entry.month)}</td>
                   <td className="fnm-amount">
-                    {formatCents(entry.cashFlow.incomeCents, REPORT_CURRENCY)}
+                    {formatCents(entry.cashFlow.incomeCents, currency)}
                   </td>
                   <td className="fnm-amount">
-                    {formatCents(entry.cashFlow.outflowCents, REPORT_CURRENCY)}
+                    {formatCents(entry.cashFlow.outflowCents, currency)}
                   </td>
-                  <td className="fnm-amount">
-                    {formatCents(entry.cashFlow.netCents, REPORT_CURRENCY)}
-                  </td>
+                  <td className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div className="fnm-phone-only fnm-block">
+            {[...merged].reverse().map((entry) => (
+              <section
+                key={entry.month}
+                className="fnm-report-month"
+                aria-label={monthLabel(entry.month)}
+              >
+                <strong>{monthLabel(entry.month)}</strong>
+                <dl>
+                  <dt>Income</dt>
+                  <dd className="fnm-amount">
+                    {formatCents(entry.cashFlow.incomeCents, currency)}
+                  </dd>
+                  <dt>Outflow</dt>
+                  <dd className="fnm-amount">
+                    {formatCents(entry.cashFlow.outflowCents, currency)}
+                  </dd>
+                  <dt>Net</dt>
+                  <dd className="fnm-amount">{formatCents(entry.cashFlow.netCents, currency)}</dd>
+                </dl>
+              </section>
+            ))}
+          </div>
         </section>
       </Card>
     </div>
@@ -242,6 +280,7 @@ function SpendingSection(props: {
 
 export function ReportsScreen(): ReactNodeLike {
   const [months, setMonths] = useState(6);
+  const [currency, setCurrency] = useState("");
   // Owner directory for the household merge; null = not loaded / failed, in
   // which case the merge drops every shared contribution (fail closed).
   const [directory, setDirectory] = useState<DirectoryUser[] | null>(null);
@@ -254,8 +293,18 @@ export function ReportsScreen(): ReactNodeLike {
       cancelled = true;
     };
   }, []);
-  const spending = useToolQuery<SpendingResult>("finance.reports.spending", { months });
-  const netWorth = useToolQuery<NetWorthResult>("finance.reports.net-worth", { months });
+  const input = { months, ...(currency ? { currency } : {}) };
+  const spending = useToolQuery<SpendingResult>("finance.reports.spending", input);
+  const netWorth = useToolQuery<NetWorthResult>("finance.reports.net-worth", input);
+  const [currencies, setCurrencies] = useState<string[]>([]);
+  useEffect(() => {
+    if (spending.status !== "settled" || netWorth.status !== "settled") return;
+    const values = [spending.outcome, netWorth.outcome].flatMap((outcome) =>
+      outcome.kind === "ok" ? (outcome.result.currencies ?? []) : []
+    );
+    setCurrencies([...new Set(values)].sort());
+  }, [spending, netWorth]);
+  const chooseCurrency = currencies.length > 1 && currency === "";
   return (
     <section className="fnm-stack" aria-label="Finance reports">
       <div className="fnm-row">
@@ -263,6 +312,7 @@ export function ReportsScreen(): ReactNodeLike {
         <label className="fnm-catpick">
           <span className="jds-caption">Window</span>
           <Select
+            aria-label="Report period"
             value={months}
             onChange={(event: { target: { value: string } }) =>
               setMonths(Number(event.target.value))
@@ -275,24 +325,53 @@ export function ReportsScreen(): ReactNodeLike {
             ))}
           </Select>
         </label>
+        <label className="fnm-catpick">
+          <span className="jds-caption">Currency</span>
+          <Select
+            aria-label="Report currency"
+            value={currency || (currencies.length === 1 ? currencies[0] : "")}
+            onChange={(event: { target: { value: string } }) => setCurrency(event.target.value)}
+          >
+            <option value="" disabled>
+              {currencies.length ? "Choose currency" : "No balances yet"}
+            </option>
+            {[...new Set([...currencies, ...(currency ? [currency] : [])])].map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </Select>
+        </label>
       </div>
-      {outcomeGate(
-        netWorth,
-        (result) => (
-          <NetWorthSection result={result} />
-        ),
-        {
-          loadingLabel: "Loading net worth"
-        }
-      )}
-      {outcomeGate(
-        spending,
-        (result) => (
-          <SpendingSection result={result} directory={directory} />
-        ),
-        {
-          loadingLabel: "Loading spending reports"
-        }
+      <p className="jds-caption">
+        Each currency is shown separately. No exchange-rate conversion is applied.
+      </p>
+      {chooseCurrency ? (
+        <EmptyState
+          title="Choose a currency"
+          body="Your accounts use more than one currency. Choose one above to see its balances and spending."
+        />
+      ) : (
+        <>
+          {outcomeGate(
+            netWorth,
+            (result) => (
+              <NetWorthSection result={result} />
+            ),
+            {
+              loadingLabel: "Loading net worth"
+            }
+          )}
+          {outcomeGate(
+            spending,
+            (result) => (
+              <SpendingSection result={result} directory={directory} />
+            ),
+            {
+              loadingLabel: "Loading spending reports"
+            }
+          )}
+        </>
       )}
     </section>
   );

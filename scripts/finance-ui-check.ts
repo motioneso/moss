@@ -127,6 +127,24 @@ try {
       assert.equal(await opener.evaluate((el) => el === document.activeElement), true);
       await page.getByLabel("Filter by posting status", { exact: true }).selectOption("pending");
       await page.getByText("1 of 1 matching transactions loaded", { exact: false }).waitFor();
+      await page.getByRole("button", { name: "Reports", exact: true }).click();
+      await page.getByText("Choose a currency", { exact: true }).waitFor();
+      await page.getByLabel("Report currency", { exact: true }).selectOption("EUR");
+      await page.getByText("€6,543.21", { exact: true }).waitFor();
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+        false,
+        `reports overflow at ${width}/${theme}`
+      );
+      if (artifacts)
+        await page.screenshot({
+          path: join(resolve(artifacts), `reports-${width}-${theme}.png`),
+          fullPage: true
+        });
+      await page.getByLabel("Report currency", { exact: true }).selectOption("USD");
+      await page.getByText("$12,345.67", { exact: true }).waitFor();
+      assert.equal(await page.getByText("€6,543.21", { exact: true }).count(), 0);
+      evidence.push({ width, theme, reportCurrenciesSeparated: true });
       assert.deepEqual(errors, []);
       evidence.push({
         width,

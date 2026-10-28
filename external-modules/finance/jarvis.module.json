@@ -80,6 +80,12 @@
         "path": "/start"
       },
       {
+        "id": "finance.reports",
+        "label": "Reports",
+        "description": "Reports is a primary Finance tab. Spending, cash flow and own-account net worth are shown in a selected currency, with no FX conversion. Mixed-currency data requires a choice before totals appear. Pending transactions remain included in spending; transfers are excluded. Snapshot net worth carries earlier balances forward and omits accounts without recorded balances. Monetary overflow is rejected instead of showing rounded totals.",
+        "path": "/reports"
+      },
+      {
         "id": "finance.settings",
         "label": "Finance settings",
         "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Maximum per budget move dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button. Freedom and dollar-limit controls stay unavailable until their reads succeed. Read failures have separate explanations and Retry; unverified fallback values are not presented as confirmed settings.",
@@ -535,13 +541,14 @@
     {
       "name": "finance.reports.spending",
       "permissionId": "finance.reports.spending",
-      "description": "Monthly spending by category and payee plus cash flow (income, outflow, net) over a window of recent months, including household-shared accounts.",
+      "description": "Monthly spending and cash flow, including pending and household-shared transactions, with transfers excluded. Returns available currencies; mixed currencies require an explicit currency before totals are returned. No FX conversion.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "months": { "type": "integer", "minimum": 1, "maximum": 24 }
+          "months": { "type": "integer", "minimum": 1, "maximum": 24 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
         }
       },
       "handler": "reports.spending"
@@ -549,13 +556,14 @@
     {
       "name": "finance.reports.net-worth",
       "permissionId": "finance.reports.net-worth",
-      "description": "Daily net-worth series and current headline from your own account balance snapshots (liabilities negated).",
+      "description": "Daily own-account net worth from recorded balance snapshots (liabilities negated). Mixed currencies require an explicit currency before a headline is returned. Earlier balances carry forward; accounts without snapshots are omitted. No FX conversion.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "months": { "type": "integer", "minimum": 1, "maximum": 24 }
+          "months": { "type": "integer", "minimum": 1, "maximum": 24 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
         }
       },
       "handler": "reports.net-worth"

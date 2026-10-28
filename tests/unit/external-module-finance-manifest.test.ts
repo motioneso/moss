@@ -528,8 +528,7 @@ describe("finance manifest contract (#1146)", () => {
       "amountCents"
     ]);
 
-    // FIN-05 (#1150): both report tools take ONLY an optional bounded months
-    // count (default 6 handler-side) — no free text can reach a report call.
+    // Reports accept a bounded period and an explicit currency, never arbitrary prose.
     for (const name of ["finance.reports.spending", "finance.reports.net-worth"]) {
       const tool = tools.find((entry) => entry.name === name)!;
       const schema = tool.inputSchema as {
@@ -537,7 +536,7 @@ describe("finance manifest contract (#1146)", () => {
         additionalProperties?: unknown;
         required?: unknown;
       };
-      expect(Object.keys(schema.properties), name).toEqual(["months"]);
+      expect(Object.keys(schema.properties), name).toEqual(["months", "currency"]);
       expect(schema.additionalProperties, name).toBe(false);
       expect(schema.required, name).toBeUndefined();
       expect(schema.properties.months, name).toEqual({
@@ -545,6 +544,7 @@ describe("finance manifest contract (#1146)", () => {
         minimum: 1,
         maximum: 24
       });
+      expect(schema.properties.currency, name).toEqual({ type: "string", pattern: "^[A-Z]{3}$" });
     }
   });
 

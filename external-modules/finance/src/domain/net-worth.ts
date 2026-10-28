@@ -6,6 +6,7 @@
 // snapshot chunks (pre-window months feed carry-forward) and the window.
 import { balanceSign } from "./account-sign.js";
 import type { AccountRecord, SnapshotChunk } from "./records.js";
+import { addCents, requireSingleCurrency } from "./values.js";
 
 export type NetWorthPoint = { date: string; totalCents: number };
 
@@ -21,6 +22,7 @@ export function deriveNetWorth(
   chunks: Record<string, SnapshotChunk>,
   window: string[]
 ): NetWorthSeries {
+  requireSingleCurrency(accounts.map((account) => account.isoCurrency));
   const windowSet = new Set(window);
   // Liabilities count against net worth; everything else counts toward it.
   const sign = new Map(accounts.map((acc) => [acc.accountId, balanceSign(acc.type)]));
@@ -58,7 +60,7 @@ export function deriveNetWorth(
         if (date > day) break;
         last = balanceCents;
       }
-      if (last !== undefined) totalCents += last * (sign.get(accountId) ?? 1);
+      if (last !== undefined) totalCents = addCents(totalCents, last * (sign.get(accountId) ?? 1));
     }
     return { date: day, totalCents };
   });

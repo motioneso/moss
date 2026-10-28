@@ -26,10 +26,14 @@ export const MODULE_STYLES = `
 /* FIN-05 (#1150) reports: bars/trend are layout-only — the bar track is a
    .jds-progress (packages/ui), .jds-progress--current making the fill inherit
    currentColor at reduced opacity so no raw color enters the module. */
-.fnm-report-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); align-items: start; }
-.fnm-report-bar { flex: 1; min-width: 4rem; }
-.fnm-report-bar-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.25rem 0; }
-.fnm-report-bar-row > span:first-child { flex: 0 0 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fnm-report-grid { display: grid; gap: var(--space-6); grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); align-items: start; }
+.fnm-report-bar { grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; }
+.fnm-report-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-1) 0; }
+.fnm-report-bar-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.fnm-report-bar-row > span:last-child { grid-column: 2; grid-row: 1; }
+.fnm-report-month { display: grid; gap: var(--space-2); }
+.fnm-report-month dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); margin: 0; }
+.fnm-report-month dd { margin: 0; }
 .fnm-report-trend { width: 100%; height: 8rem; display: block; }
 /* #3177 Accounts: status sits in the section head on wide screens and under the bank name on phone. */
 .fnm-bank-status-row { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -75,6 +79,7 @@ export const MODULE_STYLES = `
 .fnm-register-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); align-items: end; gap: var(--space-4); }
 .fnm-register-filters > label { min-width: 0; }
 .fnm-register-filters select { width: 100%; }
+.fnm-tabs .jds-segmented { flex-wrap: wrap; }
 .fnm-fixed td { overflow-wrap: anywhere; }
 .fnm-category-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .fnm-category-controls > span { flex: 1; min-width: 0; }
