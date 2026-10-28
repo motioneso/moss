@@ -459,14 +459,35 @@ its app-map change and release note.
 Slice 3 must finish before any public launch. Slices 5 to 7 are hidden from release until the
 Public Suffix List decision (see Open questions) is made.
 
-## Screens needed (to design with Ben before building; none drawn yet)
+## Screens needed (drawn for review, not approved)
+
+Mockups: `docs/superpowers/mockups/remote-access/index.html` (open from disk, no server). Each
+screen shows the wide window and the phone, with a button per state. Status: awaiting Ben's
+review; the questions at the bottom of the mockup page need his ruling.
+
+| #   | Screen                     | States drawn                                                                           |
+| --- | -------------------------- | -------------------------------------------------------------------------------------- |
+| 1   | Where you start            | Ready screen, Ready once set up, empty Settings section, choose where from             |
+| 2   | Tailscale on this computer | Not installed, signed out, sign-in expired, running                                    |
+| 3   | Your phone and laptop      | Waiting, one device seen, two devices, nothing after a while                           |
+| 4   | Secure address             | Available, turning on, done, not available with the name recommended                   |
+| 5   | About the name             | One state                                                                              |
+| 6   | Sign in to meetmoss.com    | Choose GitHub or Google, waiting for browser, not invited yet, service down, signed in |
+| 7   | Pick a name                | Empty, checking, free, taken with suggestions, reserved, too short, bad characters     |
+| 8   | Network check              | All pass, devices still to check, router blocking with a fix                           |
+| 9   | Certificate and switch on  | In progress, failed, rate limited, service down, open on a device, ready               |
+| 10  | Settings, once set up      | Name and Tailscale, Tailscale only, changing name, releasing                           |
+| 11  | Banners and notifications  | Tailscale signed out, address changed, renewal failing, certificate ran out            |
+
+The phone layout (item 12 below) is drawn beside every screen. Sign-in uses GitHub or Google per
+the Decided list, so item 6's email wording below is superseded.
 
 1. Access panel entry on the first-run Ready screen and in Settings ("Use Moss from other devices").
 2. Tailscale: install on this machine (with the detected state: not installed, signed out, running).
 3. Tailscale: add your phone and laptop (links, QR code, second-device check result).
 4. HTTPS choice: Tailscale-provided name available, or not available and why.
 5. Name path intro (what it is, what becomes public, that it is optional).
-6. Sign in to the registration service (email entry, waiting for link, signed in).
+6. Sign in to the registration service (GitHub or Google, waiting for the browser, signed in).
 7. Pick a name (live availability, refusal reasons, suggestions, public-log notice).
 8. Network test results (resolver check, each device check, plain-language fixes per router/filter).
 9. Certificate progress and failure states.
