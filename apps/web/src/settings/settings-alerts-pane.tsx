@@ -9,6 +9,12 @@ import {
 import { listConnectorAccounts } from "../api/client.js";
 import { getConnectorFeatureGrants } from "../api/connectors-client.js";
 import { queryKeys } from "../api/query-keys.js";
+import { HeartbeatCard } from "./settings-heartbeat-card.js";
+import {
+  HeartbeatJobsGroup,
+  HeartbeatMutesGroup,
+  HeartbeatStatusGroup
+} from "./settings-heartbeat-status.js";
 import { QuietHoursAllowances } from "./settings-quiet-hours-allowances.js";
 import { QuietHoursEditor } from "./settings-quiet-hours-editor.js";
 import type { PaneProps } from "./settings-types.js";
@@ -73,6 +79,10 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
       />
       <div className="alerts-pane__grid">
         <div>
+          <HeartbeatCard onOpenProfile={() => onSelectSection?.("profile")} />
+          <HeartbeatStatusGroup />
+          <HeartbeatMutesGroup />
+          <HeartbeatJobsGroup />
           <Group
             title="Automatic email alerts"
             desc="Useful updates from connected email you did not ask Moss to watch."

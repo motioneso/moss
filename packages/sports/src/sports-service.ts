@@ -18,6 +18,7 @@ import {
   type SportsNewsGroup,
   type SportsSportKey,
   type SportsTeamSearchResponse,
+  type SportsBriefingEvidenceGameV1,
   type StandingsGroup,
   type StoryRelevanceCandidate,
   type StoryRelevanceResult,
@@ -1182,6 +1183,82 @@ export class SportsService {
 
   private today(): IsoDate {
     return localDay(this.now(), ESPN_TIMEZONE);
+  }
+
+  /**
+   * Followed-team fixtures for the heartbeat. Reads only what the dataset cache already holds and
+   * never calls the sports provider, so a missing day shows up as an unknown or stale answer.
+   */
+  async getCachedFixturesForHeartbeat(
+    scopedDb: DataContextDb,
+    opts: { readonly horizonHours: number }
+  ): Promise<{
+    readonly games: readonly SportsBriefingEvidenceGameV1[];
+    readonly freshness: "fresh" | "stale" | "unknown";
+  }> {
+    const now = this.now();
+    const follows = (await this.repository.list(scopedDb)).filter(
+      (f) => catalogEntry(f.competitionKey) !== undefined
+    );
+    if (follows.length === 0) return { games: [], freshness: "fresh" };
+
+    const today = this.today();
+    const days = isoDaysInclusive(today, addIsoDays(today, Math.ceil(opts.horizonHours / 24)));
+    const competitionKeys = [...new Set(follows.map((f) => f.competitionKey))].filter(
+      (key) => !catalogEntry(key)?.newsFeedUrl
+    );
+    let missing = 0;
+    let degraded = 0;
+    let reads = 0;
+    const peek = async <T>(key: string, params: Record<string, unknown>): Promise<T[]> => {
+      const result = await this.datasetClient.getDataset<T[]>(key, params, {
+        fallback: [],
+        cacheOnly: true
+      });
+      reads += 1;
+      if (result.cacheMiss) missing += 1;
+      else if (result.degraded) degraded += 1;
+      return result.data;
+    };
+    const scoreboardByComp = new Map<string, GameSummary[]>();
+    const teamsByComp = new Map<string, readonly SourceTeamRef[]>();
+    for (const competitionKey of competitionKeys) {
+      const perDay: GameSummary[] = [];
+      for (const day of days)
+        perDay.push(...(await peek<GameSummary>("scoreboard", { competitionKey, day })));
+      const seen = new Set<string>();
+      scoreboardByComp.set(
+        competitionKey,
+        perDay.filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)))
+      );
+      teamsByComp.set(competitionKey, await peek<SourceTeamRef>("teams", { competitionKey }));
+    }
+    const composed = composeSportsBriefingEvidence({
+      follows,
+      teamsByComp,
+      scoreboardByComp,
+      headlinesByComp: new Map(),
+      now,
+      timeZone: "UTC",
+      degraded: degraded > 0 || missing > 0,
+      capturedAt: now.toISOString()
+    });
+    const until = now.getTime() + opts.horizonHours * 3_600_000;
+    const games = composed.evidence.games.filter((g) => {
+      const starts = Date.parse(g.startsAt);
+      return (
+        (g.phase === "live" || g.phase === "tonight" || g.phase === "upcoming") &&
+        starts <= until &&
+        (g.phase === "live" || starts >= now.getTime())
+      );
+    });
+    const freshness =
+      reads === 0 || missing === reads
+        ? "unknown"
+        : missing > 0 || degraded > 0
+          ? "stale"
+          : "fresh";
+    return { games, freshness };
   }
 
   private async cached<T>(

@@ -60,7 +60,7 @@ function fixture(
     }
   };
 }
-const read = { operation: "tasks.get", itemId: "item", runId: "run" };
+const read = { operation: "tasks.get", input: { taskId: "item" }, runId: "run" };
 describe("the real background read gateway", () => {
   it("keeps ordinary chat reads on their existing error contract", async () => {
     const f = fixture();
