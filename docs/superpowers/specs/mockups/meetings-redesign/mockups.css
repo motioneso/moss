@@ -181,16 +181,48 @@ svg {
 }
 .meeting-page {
   container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+}
+.mock-body > .meeting-page {
+  overflow: hidden;
+}
+.meeting-info {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 55%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.meeting-page > :is(.audio-bar, .view-tabs) {
+  flex: none;
 }
 .meeting-panes {
   display: grid;
   grid-template-columns: minmax(0, var(--transcript-width, 44%)) 16px minmax(0, 1fr);
-  min-height: 420px;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .meeting-panes > section {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.transcript-lines,
+.note-document {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  scroll-padding-block: var(--space-3);
 }
 .pane-head {
+  flex: none;
   gap: var(--space-3);
   flex-wrap: wrap;
   min-height: 50px;
@@ -261,8 +293,15 @@ svg {
   line-height: var(--leading-relaxed);
 }
 .speaker-copy strong {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
   font-weight: var(--weight-semibold);
   color: var(--accent-fg);
+}
+.transcript-line:is(:hover, [aria-current="true"]) .speaker-copy strong {
+  background: var(--accent-soft);
 }
 .note-document {
   padding-top: var(--space-5);
@@ -423,7 +462,10 @@ svg {
     display: flex;
   }
   .mode-side > .meeting-panes {
-    display: block;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .meeting-info {
+    max-height: 45%;
   }
   .mode-side > .meeting-panes > .pane-divider {
     display: none;
@@ -514,9 +556,6 @@ svg {
   }
   .meeting-controls {
     gap: var(--space-3);
-  }
-  .meeting-panes {
-    min-height: 300px;
   }
   .audio-bar {
     gap: var(--space-2);

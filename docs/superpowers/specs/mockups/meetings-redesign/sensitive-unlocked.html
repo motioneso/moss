@@ -150,135 +150,137 @@
         </header>
         <div class="mock-body">
           <main class="meeting-page mode-side" data-meeting="" data-sensitive-open="">
-            <header class="meeting-heading">
-              <a class="jds-btn jds-btn--link" href="home-table.html"
-                ><svg
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.6"
-                  viewbox="0 0 24 24"
+            <div class="meeting-info" role="region" aria-label="Meeting information" tabindex="0">
+              <header class="meeting-heading">
+                <a class="jds-btn jds-btn--link" href="home-table.html"
+                  ><svg
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.6"
+                    viewbox="0 0 24 24"
+                  >
+                    <path d="m15 18-6-6 6-6"></path></svg
+                  >All recordings</a
                 >
-                  <path d="m15 18-6-6 6-6"></path></svg
-                >All recordings</a
-              >
-              <div class="meeting-title-row">
-                <h1>A quieter evening</h1>
-                <div class="meeting-controls">
-                  <span class="jds-badge jds-badge--neutral"
-                    ><svg
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.6"
-                      viewbox="0 0 24 24"
+                <div class="meeting-title-row">
+                  <h1>A quieter evening</h1>
+                  <div class="meeting-controls">
+                    <span class="jds-badge jds-badge--neutral"
+                      ><svg
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewbox="0 0 24 24"
+                      >
+                        <rect height="11" rx="2" width="14" x="5" y="10"></rect>
+                        <path d="M8 10V6a4 4 0 0 1 8 0"></path></svg
+                      >Sensitive · Unlocked</span
+                    ><a class="jds-btn jds-btn--secondary" href="sensitive-lock.html"
+                      ><svg
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewbox="0 0 24 24"
+                      >
+                        <rect height="11" rx="2" width="14" x="5" y="10"></rect>
+                        <path d="M8 10V6a4 4 0 0 1 8 0v4"></path></svg
+                      >Lock</a
                     >
-                      <rect height="11" rx="2" width="14" x="5" y="10"></rect>
-                      <path d="M8 10V6a4 4 0 0 1 8 0"></path></svg
-                    >Sensitive · Unlocked</span
-                  ><a class="jds-btn jds-btn--secondary" href="sensitive-lock.html"
-                    ><svg
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.6"
-                      viewbox="0 0 24 24"
-                    >
-                      <rect height="11" rx="2" width="14" x="5" y="10"></rect>
-                      <path d="M8 10V6a4 4 0 0 1 8 0v4"></path></svg
-                    >Lock</a
-                  >
-                </div>
-              </div>
-              <div class="record-meta">
-                <span class="jds-badge jds-badge--neutral">Appointment</span
-                ><span>Oct 26 · 4:00 PM</span><span>50 min</span>
-              </div>
-              <div aria-label="Attendees" class="attendee-row">
-                <span class="attendee-label">Attendees</span>
-                <div class="attendee-chips">
-                  <button
-                    class="jds-btn jds-btn--secondary attendee-chip"
-                    data-attendee="you"
-                    data-name="Jamie"
-                    data-person="you"
-                    data-self=""
-                  >
-                    Jamie (You)</button
-                  ><button
-                    class="jds-btn jds-btn--secondary attendee-chip"
-                    data-attendee="riley"
-                    data-name="Riley"
-                    data-person="riley"
-                  >
-                    Riley
-                  </button>
-                </div>
-                <button class="jds-btn jds-btn--link" data-add-attendee="">+ Add attendee</button>
-              </div>
-              <details class="voice-mapping">
-                <summary>Voices</summary>
-                <div class="voice-list">
-                  <div class="voice-row">
-                    <label for="map-you">Speaker 3</label
-                    ><select class="jds-select" data-voice-map="you" id="map-you">
-                      <option value="">Unassigned</option>
-                      <option selected="" value="you">Jamie</option>
-                      <option value="riley">Riley</option>
-                    </select>
-                  </div>
-                  <div class="voice-row">
-                    <label for="map-voice1">Speaker 1</label
-                    ><select class="jds-select" data-voice-map="voice1" id="map-voice1">
-                      <option value="">Unassigned</option>
-                      <option value="you">Jamie</option>
-                      <option selected="" value="riley">Riley</option>
-                    </select>
                   </div>
                 </div>
-              </details>
-            </header>
-            <section aria-label="Previous context" class="meeting-context">
-              <div>
-                <h2>Where this left off</h2>
-                <p>Make room for one quiet evening after the studio deadline.</p>
-                <a
-                  class="context-source"
-                  data-source="source-private-meeting"
-                  href="#source-private-meeting"
-                  >Time to recharge · Oct 19 · Sensitive ↗</a
-                >
-              </div>
-              <div>
-                <h2>Open actions</h2>
-                <ul>
-                  <li>
-                    Jamie · Try a short evening walk
-                    <a
-                      class="context-source"
-                      data-source="source-private-note"
-                      href="#source-private-note"
-                      >Evening routine · Sensitive ↗</a
+                <div class="record-meta">
+                  <span class="jds-badge jds-badge--neutral">Appointment</span
+                  ><span>Oct 26 · 4:00 PM</span><span>50 min</span>
+                </div>
+                <div aria-label="Attendees" class="attendee-row">
+                  <span class="attendee-label">Attendees</span>
+                  <div class="attendee-chips">
+                    <button
+                      class="jds-btn jds-btn--secondary attendee-chip"
+                      data-attendee="you"
+                      data-name="Jamie"
+                      data-person="you"
+                      data-self=""
                     >
-                  </li>
-                  <li>
-                    Jamie · Keep one evening free
-                    <a
-                      class="context-source"
-                      data-source="source-private-meeting"
-                      href="#source-private-meeting"
-                      >Time to recharge · Oct 19 ↗</a
+                      Jamie (You)</button
+                    ><button
+                      class="jds-btn jds-btn--secondary attendee-chip"
+                      data-attendee="riley"
+                      data-name="Riley"
+                      data-person="riley"
                     >
-                  </li>
-                </ul>
-              </div>
-            </section>
+                      Riley
+                    </button>
+                  </div>
+                  <button class="jds-btn jds-btn--link" data-add-attendee="">+ Add attendee</button>
+                </div>
+                <details class="voice-mapping">
+                  <summary>Voices</summary>
+                  <div class="voice-list">
+                    <div class="voice-row">
+                      <label for="map-you">Speaker 3</label
+                      ><select class="jds-select" data-voice-map="you" id="map-you">
+                        <option value="">Unassigned</option>
+                        <option selected="" value="you">Jamie</option>
+                        <option value="riley">Riley</option>
+                      </select>
+                    </div>
+                    <div class="voice-row">
+                      <label for="map-voice1">Speaker 1</label
+                      ><select class="jds-select" data-voice-map="voice1" id="map-voice1">
+                        <option value="">Unassigned</option>
+                        <option value="you">Jamie</option>
+                        <option selected="" value="riley">Riley</option>
+                      </select>
+                    </div>
+                  </div>
+                </details>
+              </header>
+              <section aria-label="Previous context" class="meeting-context">
+                <div>
+                  <h2>Where this left off</h2>
+                  <p>Make room for one quiet evening after the studio deadline.</p>
+                  <a
+                    class="context-source"
+                    data-source="source-private-meeting"
+                    href="#source-private-meeting"
+                    >Time to recharge · Oct 19 · Sensitive ↗</a
+                  >
+                </div>
+                <div>
+                  <h2>Open actions</h2>
+                  <ul>
+                    <li>
+                      Jamie · Try a short evening walk
+                      <a
+                        class="context-source"
+                        data-source="source-private-note"
+                        href="#source-private-note"
+                        >Evening routine · Sensitive ↗</a
+                      >
+                    </li>
+                    <li>
+                      Jamie · Keep one evening free
+                      <a
+                        class="context-source"
+                        data-source="source-private-meeting"
+                        href="#source-private-meeting"
+                        >Time to recharge · Oct 19 ↗</a
+                      >
+                    </li>
+                  </ul>
+                </div>
+              </section>
+            </div>
             <template id="source-private-meeting"
               ><h2>Time to recharge</h2>
               <p class="source-meta">Sensitive meeting · Oct 19 · Jamie, Riley</p>
@@ -374,7 +376,12 @@
                     </svg>
                   </button>
                 </div>
-                <div class="transcript-lines">
+                <div
+                  class="transcript-lines"
+                  role="region"
+                  aria-label="Transcript lines"
+                  tabindex="0"
+                >
                   <div class="transcript-entry" data-voice="you">
                     <button class="jds-rowbtn transcript-line" data-seek="0">
                       <span class="line-time">00:00</span
@@ -508,7 +515,7 @@
                     ><button class="jds-btn jds-btn--link" data-regenerate="">Regenerate</button>
                   </div>
                 </div>
-                <div class="note-document">
+                <div class="note-document" role="region" aria-label="Meeting notes" tabindex="0">
                   <h3>Summary</h3>
                   <div class="summary-lines">
                     <button class="jds-rowbtn summary-line" data-seek="0">

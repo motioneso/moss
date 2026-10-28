@@ -50,6 +50,10 @@ Review interactions:
   that segment. The first part keeps its original voice. An unassigned segment
   gets a new Speaker number and voice selector. Both parts retain the original
   timestamp; the fixture does not infer an audio boundary.
+- Transcript and notes each scroll inside the remaining screen height; neither
+  grows the meeting page. Audio and pane controls stay in place, and the current
+  utterance's speaker label stays visible while its text scrolls. Meeting details
+  have a bounded scroll area at narrow widths or when expanded.
 - Click any transcript or summary line to seek the illustrated audio bar. Resize
   the divider by dragging or with Left/Right and Home/End. At narrow content widths,
   Transcript and Notes become tabs with arrow-key navigation.
@@ -80,6 +84,10 @@ suggestion accept/dismiss, line reassignment/splitting, search/filter, seeking,
 divider drag/keys, summary warnings, password/relock and docked/modal chat were
 exercised. Native dialog text follows the light/dark foreground. No page errors,
 failed assets or API requests were observed. Prettier, scoped ESLint, design-token
-and shared/local class audits passed.
+and shared/local class audits passed. A follow-up scroll check injected 80 extra
+transcript rows and 40 note paragraphs into the normal and unlocked fixtures at
+1280 × 800, 1440 × 900, 390 × 844 and 320 × 760 in light/dark. Each pane scrolled
+independently while the page, audio and pane controls stayed fixed; speaker labels
+remained visible, including within long utterances.
 
 These mockups do not start product implementation.
