@@ -1,3 +1,5 @@
+import { centsToAmountInput } from "./format.js";
+
 /** The explicit, loaded register selection exported by the user. Never fetches hidden rows. */
 export interface ExportTransaction {
   id: string;
@@ -35,8 +37,8 @@ export function transactionsCsv(
           csvText(row.name),
           csvText(accountName(row)),
           csvText(row.splits?.length ? "Split" : categoryName(row)),
-          row.amountCents >= 0 ? (row.amountCents / 100).toFixed(2) : "",
-          row.amountCents < 0 ? (-row.amountCents / 100).toFixed(2) : "",
+          row.amountCents >= 0 ? centsToAmountInput(row.amountCents) : "",
+          row.amountCents < 0 ? centsToAmountInput(-row.amountCents) : "",
           csvText(row.isoCurrency),
           csvText(row.pending ? "Pending" : "Posted"),
           csvText(row.shared ? "Household (read only)" : "Own"),
@@ -45,7 +47,7 @@ export function transactionsCsv(
             (row.splits ?? [])
               .map(
                 (part) =>
-                  `${categoryName({ ...row, categoryId: part.categoryId })}: ${(part.amountCents / 100).toFixed(2)} ${row.isoCurrency}`
+                  `${categoryName({ ...row, categoryId: part.categoryId })}: ${centsToAmountInput(part.amountCents)} ${row.isoCurrency}`
               )
               .join("; ")
           )

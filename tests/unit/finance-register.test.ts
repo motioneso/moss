@@ -62,4 +62,16 @@ describe("register review and export", () => {
     expect(csv).toContain('"Split",10.01,,"USD"');
     expect(csv).toContain('"food: 12.01 USD; refund: -2.00 USD"');
   });
+  it("exports every cent of safe integer inflows and outflows", () => {
+    const csv = transactionsCsv(
+      [
+        { ...toRecord(raw), amountCents: Number.MAX_SAFE_INTEGER - 1 },
+        { ...toRecord(raw), id: "refund", amountCents: -(Number.MAX_SAFE_INTEGER - 1) }
+      ],
+      () => "Synthetic",
+      () => "Uncategorized"
+    );
+    expect(csv).toContain(',90071992547409.90,,"USD"');
+    expect(csv).toContain(',,90071992547409.90,"USD"');
+  });
 });
