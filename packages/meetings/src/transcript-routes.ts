@@ -8,7 +8,7 @@ import {
   type ReadMeetingTranscriptInput,
   type MeetingTranscriptEvidence
 } from "@moss/shared";
-import type { MeetingRecordRoutesDependencies } from "./routes.js";
+import type { MeetingContentRoutesDependencies } from "./routes.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import {
   encodeMeetingTranscriptBatch,
@@ -18,7 +18,7 @@ import {
 } from "./transcript-batch.js";
 
 export interface MeetingTranscriptRoutesDependencies extends Pick<
-  MeetingRecordRoutesDependencies,
+  MeetingContentRoutesDependencies,
   "resolveAccessContext" | "dataContext"
 > {
   readonly transcriptRepository?: Pick<

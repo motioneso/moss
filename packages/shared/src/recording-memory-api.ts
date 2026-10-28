@@ -108,6 +108,7 @@ export interface RecordingMemoryReceiptExport {
   readonly state: "pending" | "applied" | "undone" | "forgotten";
   readonly factId: string | null;
   readonly episodeId: string;
+  readonly cleanupOperationId: string | null;
 }
 export interface RecordingMemoryProposalExport {
   readonly ownerUserId: string;

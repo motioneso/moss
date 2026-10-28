@@ -9,7 +9,12 @@ import {
   type DeleteMyAccountRequest
 } from "@moss/shared";
 
-import { deleteUserData, LastActiveAdminError } from "../../../scripts/delete-user-data.js";
+import {
+  deleteUserData,
+  LastActiveAdminError,
+  ManagedDeletionError,
+  type PrepareManagedDeletion
+} from "../../../scripts/delete-user-data.js";
 import { HttpRepositoryError, type SettingsRepository } from "./repository.js";
 import { handleSettingsRouteError } from "./route-error.js";
 
@@ -48,6 +53,7 @@ export interface MeAccountRoutesDependencies {
   readonly hasPasswordCredential?: HasPasswordCredentialPort;
   /** See SettingsRoutesDependencies.moduleDeletionTables (#801 Phase A). */
   readonly moduleDeletionTables: readonly { table: string; countPredicate: string }[];
+  readonly prepareManagedDeletion?: PrepareManagedDeletion;
   readonly reconcileExternalModuleJobs?: (change: {
     readonly kind: "user";
     readonly userId: string;
@@ -187,6 +193,7 @@ export function registerMeAccountRoutes(
             bootstrapConnectionString: dependencies.bootstrapConnectionString,
             dryRun: false,
             auditAction: "user.delete.self",
+            prepareManagedDeletion: dependencies.prepareManagedDeletion,
             moduleDeletionTables: dependencies.moduleDeletionTables
           });
         } catch (error) {
@@ -210,6 +217,9 @@ export function registerMeAccountRoutes(
         return { deletedUserId: actorUserId };
       } catch (error) {
         // Coded 409s carry a stable discriminator the client maps to guidance.
+        if (error instanceof ManagedDeletionError) {
+          return reply.code(409).send({ code: error.code });
+        }
         if (error instanceof BootstrapOwnerSelfDeleteError) {
           return reply.code(409).send({ code: "bootstrap_owner" });
         }

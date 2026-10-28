@@ -31,7 +31,7 @@ export async function collectManagedNotesExportSection(
   const contributions = await sql<ManagedNoteContributionExport>`
     select receipt_id as "receiptId",source_module_id as "sourceModuleId",source_id as "sourceId",
       source_version as "sourceVersion",source_generation as "sourceGeneration",item_key as "itemKey",
-      revision,side,state,destination,prose as text,block_bytes as "blockBytes",operation_id as "operationId"
+      revision,side,state,destination,prose as text,block_bytes as "blockBytes",operation_id as "operationId",cleanup_operation_id as "cleanupOperationId"
     from app.notes_recording_contributions order by receipt_id
   `.execute(db.db);
   const proposals = await sql<ManagedNoteProposalExport>`

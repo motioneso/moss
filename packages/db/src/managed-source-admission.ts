@@ -18,8 +18,13 @@ export async function lockManagedActor(
   actorUserId: string,
   mode: LockMode
 ): Promise<void> {
+  await lockKey(db, managedActorLockKey(actorUserId), mode);
+}
+
+/** Bootstrap deletion uses the same validated actor key without forging a DataContextDb. */
+export function managedActorLockKey(actorUserId: string): string {
   assertUuid(actorUserId, "Managed actor");
-  await lock(db, ["actor", actorUserId.toLowerCase()], mode);
+  return admissionKey(["actor", actorUserId.toLowerCase()]);
 }
 
 export async function lockManagedSources(
@@ -42,18 +47,21 @@ export async function lockManagedSources(
       source.sourceId.toLowerCase()
     ]);
   });
-  for (const key of [...new Set(keys)].sort()) await lock(db, key, mode);
+  for (const key of [...new Set(keys)].sort()) await lockKey(db, admissionKey(key), mode);
 }
 
-async function lock(db: DataContextDb, identity: string | readonly string[], mode: LockMode) {
-  assertDataContextDb(db);
-  if (mode !== "shared" && mode !== "exclusive") throw new Error("Invalid admission lock mode");
-  const key = createHash("sha256")
+function admissionKey(identity: string | readonly string[]): string {
+  return createHash("sha256")
     .update("moss:managed-admission:v1\0")
     .update(typeof identity === "string" ? identity : JSON.stringify(identity))
     .digest()
     .readBigInt64BE()
     .toString();
+}
+
+async function lockKey(db: DataContextDb, key: string, mode: LockMode): Promise<void> {
+  assertDataContextDb(db);
+  if (mode !== "shared" && mode !== "exclusive") throw new Error("Invalid admission lock mode");
   if (mode === "shared") {
     await sql`select pg_advisory_xact_lock_shared(${key}::bigint)`.execute(db.db);
   } else {

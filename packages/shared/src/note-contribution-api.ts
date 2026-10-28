@@ -173,7 +173,7 @@ export interface ManagedNoteOperationStateExport {
   readonly receiptId: string;
   readonly source: RecordingNoteSource;
   readonly lifecycle: ManagedNoteLifecycleExport;
-  readonly state: "pending" | "conflict" | "applied";
+  readonly state: "pending" | "conflict" | "applied" | "cancelled";
   readonly resultState: "applied" | "undone";
   readonly legs: readonly ManagedNoteOperationLegExport[];
 }
@@ -196,6 +196,7 @@ export interface ManagedNoteContributionExport {
   readonly text: string;
   readonly blockBytes: string;
   readonly operationId: string | null;
+  readonly cleanupOperationId: string | null;
 }
 export interface ManagedNoteProposalExport {
   readonly proposalId: string;

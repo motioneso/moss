@@ -1,3 +1,4 @@
+import { managedDeletionFeature } from "./managed-deletion-feature.js";
 import { putWeatherUnitRouteSchema } from "@moss/shared";
 import { fileURLToPath } from "node:url";
 
@@ -648,6 +649,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     }
   ],
   features: [
+    managedDeletionFeature,
     {
       id: "settings.app_map_lookup",
       description:

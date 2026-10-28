@@ -49,3 +49,9 @@ export * from "./recording-metadata.js";
 export * from "./manual-entry-service.js";
 
 export * from "./output-guidance.js";
+
+export {
+  MeetingDeletionService,
+  MeetingCleanupError,
+  type MeetingDeletionPort
+} from "./deletion-service.js";

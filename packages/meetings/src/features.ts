@@ -7,6 +7,37 @@ import {
 import { androidDeliveryFeature } from "./android-delivery-feature.js";
 export const meetingFeatures = [
   {
+    id: "meetings.recording_cleanup",
+    description:
+      "Recording deletion removes exact note blocks and unsupported memories first, preserving other text and sources. Changed blocks or unavailable folders retain the recording for a later explicit retry.",
+    errors: [
+      {
+        code: "meeting_cleanup_pending",
+        class: "transient",
+        description:
+          "Recording cleanup is incomplete, unavailable or another deletion is in progress."
+      },
+      {
+        code: "meeting_cleanup_conflict",
+        class: "validation",
+        description: "A note contribution changed; the recording was retained for owner review."
+      }
+    ],
+    remediations: [
+      {
+        id: "meetings.review_cleanup",
+        path: "/meetings",
+        description:
+          "Review the current recording and note, resolve changed contribution text without removing unrelated edits, then retry Delete recording."
+      },
+      {
+        id: "meetings.restore_cleanup_folder",
+        path: "/settings?section=connections",
+        description: "Restore access to the recording's note folder, then retry deletion."
+      }
+    ]
+  },
+  {
     id: "meetings.transcript_vocabulary",
     description:
       "Save/Clear 20 spellings, 200 UTF-8 bytes with separators, in Settings → Meetings. Needs explicit language. Selected ASR may ignore hints. Future live speech, short imports and long windows; existing text, hold and raw voice unchanged.",

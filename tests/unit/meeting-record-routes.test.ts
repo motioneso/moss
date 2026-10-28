@@ -4,6 +4,7 @@ import type { AccessContext, DataContextDb } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import type { MeetingRecord } from "@moss/shared";
 import {
+  MeetingCleanupError,
   MeetingRecordConflictError,
   MeetingRecordInputError,
   registerMeetingRecordRoutes,
@@ -25,10 +26,7 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-function setup(
-  authError?: Error,
-  beforeRemove?: (db: DataContextDb, meetingId: string, actor: AccessContext) => Promise<void>
-) {
+function setup(authError?: Error, deletionError?: Error) {
   const server = Fastify();
   servers.push(server);
   const scopedDb = {} as DataContextDb;
@@ -47,6 +45,11 @@ function setup(
       .fn<MeetingRecordsRepository["putNotes"]>()
       .mockResolvedValue({ status: "saved", replayed: false, meeting: record })
   };
+  const deletion = {
+    remove: vi.fn(async (_actor: AccessContext, _meetingId: string) => {
+      if (deletionError) throw deletionError;
+    })
+  };
   registerMeetingRecordRoutes(server, {
     resolveAccessContext: async () => {
       if (authError) throw authError;
@@ -59,14 +62,14 @@ function setup(
       }
     },
     repository,
-    beforeRemove
+    deletion
   });
-  return { server, repository, contexts, scopedDb };
+  return { server, repository, deletion, contexts, scopedDb };
 }
 
 describe("meeting draft record routes", () => {
-  it("deletes through the actor context and returns no content on retries", async () => {
-    const { server, repository, scopedDb, contexts } = setup();
+  it("uses the owning deletion facade with resolved actor and remains idempotent", async () => {
+    const { server, repository, deletion } = setup();
     for (let attempt = 0; attempt < 2; attempt++) {
       const response = await server.inject({
         method: "DELETE",
@@ -75,42 +78,26 @@ describe("meeting draft record routes", () => {
       expect(response.statusCode).toBe(204);
       expect(response.body).toBe("");
     }
-    expect(repository.remove).toHaveBeenCalledTimes(2);
-    expect(repository.remove).toHaveBeenCalledWith(scopedDb, id);
-    expect(contexts.every((context) => context.actorUserId === id)).toBe(true);
-  });
-
-  it("locks an owner-visible record before atomic public-module deletion cleanup", async () => {
-    const beforeRemove = vi.fn().mockResolvedValue(undefined);
-    const { server, repository, scopedDb } = setup(undefined, beforeRemove);
-    expect(
-      (await server.inject({ method: "DELETE", url: `/api/meetings/records/${id}` })).statusCode
-    ).toBe(204);
-    expect(repository.get).toHaveBeenCalledExactlyOnceWith(scopedDb, id, { forUpdate: true });
-    expect(beforeRemove).toHaveBeenCalledExactlyOnceWith(scopedDb, id, {
-      actorUserId: id,
-      requestId: "test-request"
-    });
-    expect(beforeRemove.mock.invocationCallOrder[0]).toBeLessThan(
-      repository.remove.mock.invocationCallOrder[0]!
+    expect(deletion.remove).toHaveBeenCalledTimes(2);
+    expect(deletion.remove).toHaveBeenCalledWith(
+      { actorUserId: id, requestId: "test-request" },
+      id
     );
-  });
-  it("does not run deletion cleanup for an inaccessible record or delete after cleanup failure", async () => {
-    const beforeRemove = vi.fn().mockResolvedValue(undefined);
-    const { server, repository } = setup(undefined, beforeRemove);
-    repository.get.mockResolvedValue(null);
-    expect(
-      (await server.inject({ method: "DELETE", url: `/api/meetings/records/${id}` })).statusCode
-    ).toBe(204);
-    expect(beforeRemove).not.toHaveBeenCalled();
-    repository.get.mockResolvedValue(record);
-    repository.remove.mockClear();
-    beforeRemove.mockRejectedValue(new HttpError(503, "Cleanup unavailable"));
-    expect(
-      (await server.inject({ method: "DELETE", url: `/api/meetings/records/${id}` })).statusCode
-    ).toBe(503);
     expect(repository.remove).not.toHaveBeenCalled();
   });
+  it.each(["pending", "conflict"] as const)(
+    "returns stable409for cleanup%s without directly deleting",
+    async (status) => {
+      const { server, repository } = setup(undefined, new MeetingCleanupError(status));
+      const response = await server.inject({
+        method: "DELETE",
+        url: `/api/meetings/records/${id}`
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toMatchObject({ code: `meeting_cleanup_${status}` });
+      expect(repository.remove).not.toHaveBeenCalled();
+    }
+  );
   it("creates a draft under the resolved actor and strips body ownership claims", async () => {
     const { server, repository, contexts, scopedDb } = setup();
     const response = await server.inject({

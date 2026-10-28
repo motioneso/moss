@@ -574,6 +574,14 @@ export const adminRevokeSessionsRouteSchema = {
   }
 } as const;
 
+const accountDeletionConflictSchema = {
+  ...errorResponseSchema,
+  properties: {
+    ...errorResponseSchema.properties,
+    code: { type: "string", enum: ["managed_cleanup_pending", "managed_cleanup_conflict"] }
+  }
+} as const;
+
 export const adminDeleteUserRouteSchema = {
   params: {
     type: "object",
@@ -591,7 +599,7 @@ export const adminDeleteUserRouteSchema = {
     401: errorResponseSchema,
     403: errorResponseSchema,
     404: errorResponseSchema,
-    409: errorResponseSchema,
+    409: accountDeletionConflictSchema,
     422: errorResponseSchema
   }
 } as const;
@@ -613,7 +621,7 @@ export const adminRejectUserRouteSchema = {
     401: errorResponseSchema,
     403: errorResponseSchema,
     404: errorResponseSchema,
-    409: errorResponseSchema,
+    409: accountDeletionConflictSchema,
     422: errorResponseSchema
   }
 } as const;

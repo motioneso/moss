@@ -1,3 +1,4 @@
+import { ManagedDeletionError } from "../../../scripts/delete-user-data.js";
 import type { FastifyReply } from "fastify";
 
 import type { AdminAuditEvent, DataContextDb, InstanceSetting, User } from "@moss/db";
@@ -134,6 +135,10 @@ export function serializeDate(value: Date | string): string {
 export function handleRouteError(error: unknown, reply: FastifyReply) {
   return handleModuleRouteError(error, reply, {
     mappers: [
+      (error, reply) =>
+        error instanceof ManagedDeletionError
+          ? reply.code(409).send({ error: error.message, code: error.code })
+          : undefined,
       (e, r) =>
         e instanceof HttpRepositoryError
           ? r.code(e.statusCode).send({ error: e.message })
