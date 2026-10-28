@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" data-color-mode="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Remote access screen</title>
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="remote.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="shell.js"></script>
+    <script src="screens.js"></script>
+    <script>
+      // screen.html?m=m4&s=nohttps&mode=dark
+      const q = new URLSearchParams(location.search);
+      document.documentElement.dataset.colorMode = q.get("mode") === "dark" ? "dark" : "light";
+      document.getElementById("root").innerHTML = RENDER[q.get("m") || "m1"](q.get("s") || undefined);
+    </script>
+  </body>
+</html>

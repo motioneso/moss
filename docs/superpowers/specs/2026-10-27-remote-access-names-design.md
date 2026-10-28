@@ -464,14 +464,20 @@ Public Suffix List decision (see Open questions) is made.
 
 ## Screens needed (drawn for review, not approved)
 
-Mockups: `docs/superpowers/mockups/remote-access/index.html` (open from disk, no server). Each
-screen shows the wide window and the phone, with a button per state. Status: awaiting Ben's
-review. Ben answered the four questions the mockups raised (see Decided); he has not signed off
-the screens themselves.
+Mockups: `docs/superpowers/mockups/remote-access/index.html`. Serve the folder (any static server)
+so each frame sizes to its screen; opened from disk, frames scroll inside a fixed height. Each
+screen shows the wide window and the phone, with a button per state and a light/dark switch. Ben
+answered the four questions the mockups raised (see Decided); he has not signed off the screens
+themselves.
+
+The screens are drawn with the real app: `app.css` is a frozen copy of the live web CSS at
+`9b0e7487b`, and `shell.js` holds the real sidebar, top bar and Settings markup captured from the
+dev instance. Only `remote.css` is new, and it holds layout plus the three new pieces listed
+below.
 
 | #   | Screen                     | States drawn                                                                           |
 | --- | -------------------------- | -------------------------------------------------------------------------------------- |
-| 1   | Where you start            | Ready screen, Ready once set up, empty Settings section, choose where from             |
+| 1   | Where you start            | Empty Settings section, choose where from                                              |
 | 2   | Tailscale on this computer | Not installed, signed out, sign-in expired, running                                    |
 | 3   | Your phone and laptop      | Waiting, one device seen, two devices, nothing after a while                           |
 | 4   | Secure address             | Available, turning on, done, not available with the name recommended                   |
@@ -480,8 +486,8 @@ the screens themselves.
 | 7   | Pick a name                | Empty, checking, free, taken with suggestions, reserved, too short, bad characters     |
 | 8   | Network check              | All pass, devices still to check, router blocking with a fix                           |
 | 9   | Certificate and switch on  | In progress, failed, rate limited, service down, open on a device, ready               |
-| 10  | Settings, once set up      | Name and Tailscale, Tailscale only, changing name, releasing                           |
-| 11  | Banners and notifications  | Tailscale signed out, address changed, renewal failing, certificate ran out            |
+| 10  | Settings, once set up      | Name and Tailscale, Tailscale only, changing name, releasing, address copied           |
+| 11  | Alerts                     | Tailscale signed out, address changed, renewal failing, certificate ran out, list      |
 | 12  | Moving a name              | Already has a name, confirm, moving, done, failed                                      |
 
 The phone layout (item 12 below) is drawn beside every screen. Sign-in uses GitHub or Google per
@@ -498,9 +504,47 @@ the Decided list, so item 6's email wording below is superseded.
 9. Certificate progress and failure states.
 10. Done / status row (name, address, certificate expiry, last verified) with rename, release,
     sign out.
-11. Notifications and banners (Tailscale signed out, address changed, renewal failing, certificate
+11. Notifications and the Remote access note (Tailscale signed out, address changed, renewal failing, certificate
     expiring).
 12. Phone layout of all of the above.
+
+The installer's Ready screen and its access chooser are drawn in the installer's own mockup
+(`docs/superpowers/mockups/moss-installer-onboarding`), not here. Its "HTTPS" option changes to
+"From anywhere" in that spec's PR.
+
+### How the screens fit the rest of Settings
+
+Checked against the live Settings screens on the dev instance, `apps/web/src/settings` and
+`docs/design-system.md` on 2026-10-28.
+
+- **Place.** Remote access is an admin section (Settings > Admin / Setup), in the Operations group,
+  just before Advanced host setup, with a globe icon.
+- **Section anatomy.** Pane head, then sections (`Group`) of rows (`Row`), exactly like Advanced
+  host setup. Addresses, Tailscale and the name are three sections.
+- **Setup.** The guided setup uses the full-width Settings view an open connection uses: a back
+  link, the pane head, the current step on the left and a 300px side column on the right. The side
+  column holds the step list and the addresses that work now. Each step opens with a numbered
+  section head whose meta says "Tailscale, step 2 of 3". On the phone the column moves on top and
+  the step list hides.
+- **Statuses** use `Indicator` (ready, drift, error, idle; live while waiting). "Recommended" is a
+  forest `Badge`. Buttons are `Button` variants; disabled buttons use the disabled state.
+- **Problems** use the Settings pane note (the same one as the encryption warning), with its action
+  button inside it. Help steps use the numbered guide from the Google connection walkthrough.
+- **Confirms.** Releasing a name and moving a name use the shared confirm dialog with a danger or
+  primary button, like removing a person. Release sits in a danger section.
+- **Alerts** appear in two places: the pane note at the top of Remote access and a row on the
+  Notifications page. Moss has no banner across every screen, so none is drawn.
+- **Copied** uses the Settings toast.
+
+### New pieces the build adds to the shared kit
+
+The design system says a missing primitive goes into `@moss/ui` before a screen uses it.
+
+- **Step list** (done, current, to do), used in the setup side column.
+- **Input with a fixed suffix** (`.meetmoss.com`), used in Pick a name and Change name.
+- **QR code**, used on the phone and network-check screens.
+- **The full-width detail layout and the guided-flow back link.** Both are local to the connection
+  screen today (`intg-detail`, `gflow`). Promote them before Remote access uses them.
 
 ## App map impact
 
@@ -510,6 +554,9 @@ Same PR as each slice.
   label "Remote access", path `/settings?section=remoteaccess`, admin scope, describing the
   Tailscale path, the optional name, the verified address and the certificate state. Update the
   `host` entry's description if its host guidance mentions reachability.
+  The Settings page throws "Missing core app-map setting declaration" for a section id with no
+  entry here, so the section cannot ship without it. The entry sits with the other admin
+  Operations sections, before `host`.
 - **Core screens (`CORE_APP_SCREENS`).** Add the access panel reached from the Ready screen and update
   that screen's entry.
 - **Core features, errors and remediations.** Declare these, each with a remediation Moss can state
@@ -538,8 +585,9 @@ Decided by Ben on 2026-10-27.
    Public Suffix List entry for `meetmoss.com`, and the marketing site at the apex shares no cookies
    with names.
 3. **"From anywhere" replaces the installer's "HTTPS" access option.** The access choice becomes
-   Only this computer, Your home network, From anywhere. The installer spec and its mockup still
-   show "HTTPS" and need the same change.
+   Keep local, Home network (HTTP, unencrypted), From anywhere; the first two keep the
+   installer's existing names. The installer spec and its mockup still show "HTTPS" and need the
+   same change.
 4. **The beta gate is an invite code typed after sign-in**, with an "Ask for an invite" link on the
    same screen (mockup screen 6, "Not invited yet").
 5. **An account that already has a name can move it to this Moss.** Right after sign-in, in place of

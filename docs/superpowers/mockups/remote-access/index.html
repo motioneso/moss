@@ -1,604 +1,358 @@
 <!doctype html>
-<html lang="en" data-mode="dark">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Use Moss from other devices: screens for review</title>
-<link rel="stylesheet" href="mockup.css">
-<link rel="stylesheet" href="remote.css">
-</head>
-<body>
+<html lang="en" data-color-mode="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Use Moss from other devices: screens for review</title>
+    <link rel="stylesheet" href="app.css" />
+    <style>
+      /* Review page chrome only. The screens themselves render in screen.html. */
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+      }
+      .doc {
+        padding: var(--space-10) var(--space-10) var(--space-14);
+      }
+      .doc__head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--space-6);
+      }
+      .doc__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-4xl);
+        font-weight: var(--weight-black);
+      }
+      .doc__lede {
+        margin: var(--space-3) 0 0;
+        max-width: 76ch;
+        color: var(--text-muted);
+      }
+      .doc__tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+      }
+      .doc__toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2) var(--space-5);
+        margin-top: var(--space-6);
+        font-size: var(--text-sm);
+      }
+      .doc__toc a {
+        color: var(--accent-fg);
+      }
+      .mock {
+        margin-top: var(--space-12);
+      }
+      .mock__states {
+        margin-top: var(--space-3);
+      }
+      .mock__note {
+        max-width: 90ch;
+        color: var(--text-muted);
+      }
+      .mock__note p {
+        margin: var(--space-3) 0 0;
+      }
+      .mock__note b {
+        color: var(--text);
+      }
+      .frames {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-8);
+        margin-top: var(--space-5);
+      }
+      .frame-wrap {
+        flex: none;
+      }
+      .frame-cap {
+        margin: 0 0 var(--space-2);
+        font-size: var(--text-xs);
+        color: var(--text-subtle);
+      }
+      .frame {
+        display: block;
+        border: var(--border-w) solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        background: var(--bg);
+      }
+      .qs {
+        max-width: 90ch;
+        color: var(--text-muted);
+      }
+      .qs li {
+        margin-bottom: var(--space-3);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="doc">
+      <header class="doc__head">
+        <div>
+          <h1 class="doc__title">Use Moss from other devices</h1>
+          <p class="doc__lede">
+            Every screen from the remote access spec, with its states, drawn with the real Moss
+            Settings markup and styles. Each shows the wide window and the phone. Names, addresses
+            and accounts are made up.
+          </p>
+        </div>
+        <div class="doc__tools">
+          <div class="jds-segmented" role="group" aria-label="Colours" id="modeSeg">
+            <button type="button" class="jds-segmented__opt" aria-pressed="true" data-v="light">Light</button>
+            <button type="button" class="jds-segmented__opt" aria-pressed="false" data-v="dark">Dark</button>
+          </div>
+          <div class="jds-segmented" role="group" aria-label="Size" id="sizeSeg">
+            <button type="button" class="jds-segmented__opt" aria-pressed="true" data-v="fit">Fit to window</button>
+            <button type="button" class="jds-segmented__opt" aria-pressed="false" data-v="full">Actual size</button>
+          </div>
+        </div>
+      </header>
+      <nav class="doc__toc" id="toc"></nav>
+      <div id="mocks"></div>
 
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
-  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
-  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4"/></symbol>
-  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
-  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
-  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
-  <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6"/></symbol>
-  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20h4"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></symbol>
-  <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
-  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
-</svg>
-
-<div class="doc">
-  <header class="doc__head">
-    <div>
-      <h1 class="doc__title">Use Moss from other devices</h1>
-      <p class="doc__lede">Every screen from the remote access spec, with its states. Each one shows the wide window and the phone side by side, drawn from the same markup. Tailscale is the main path; the meetmoss.com name is the optional second part. Names, addresses and accounts are made up.</p>
+      <section class="mock" id="qs">
+        <div class="jds-section-head jds-section-head--rule">
+          <h2 class="jds-section-head__title">Your answers, 27 October</h2>
+        </div>
+        <ol class="qs" id="qlist"></ol>
+      </section>
     </div>
-    <div class="doc__tools">
-      <span class="lbl">Colours</span>
-      <span class="seg" id="modeSeg"><span class="on" data-mode="dark">Dark</span><span data-mode="light">Light</span></span>
-      <span class="lbl">Size</span>
-      <span class="seg" id="sizeSeg"><span class="on" data-size="fit">Fit to window</span><span data-size="full">Actual size</span></span>
-    </div>
-  </header>
-  <nav class="doc__toc" id="toc"></nav>
-  <div id="mocks"></div>
 
-  <section class="mock" id="qs">
-    <div class="mock__head"><h2 class="mock__title">Your answers, 27 October</h2></div>
-    <ol class="qs" id="qlist"></ol>
-  </section>
-</div>
+    <script>
+      const MOCKS = [
+        {
+          id: "m1",
+          title: "Where you start",
+          states: [
+            ["settings", "Settings, not set up"],
+            ["choose", "Choose where from"],
+          ],
+          note: `<p><b>Place in Settings.</b> Remote access is an admin section, under Operations, just before Advanced host setup. It needs its app-map entry or the section will not load.</p><p><b>Choice.</b> The three options use the installer's names. "From anywhere" replaces the installer's "HTTPS" and carries the Recommended badge. The installer's Ready screen is drawn in the installer mockup, not here.</p>`,
+        },
+        {
+          id: "m2",
+          title: "Tailscale on this computer",
+          states: [
+            ["missing", "Not installed"],
+            ["signedout", "Signed out"],
+            ["expired", "Sign-in expired"],
+            ["running", "Running"],
+          ],
+          note: `<p><b>Layout.</b> Setup uses the same full-width Settings view as one open connection: a back link, the step on the left, and a side column with the step list and the addresses that work now. On the phone the side column goes on top and the step list hides, because the step heading already says where you are.</p><p><b>Detection.</b> Moss watches for Tailscale and moves on by itself.</p>`,
+        },
+        {
+          id: "m3",
+          title: "Your phone and laptop",
+          states: [
+            ["waiting", "Waiting"],
+            ["seen", "One device seen"],
+            ["two", "Two devices"],
+            ["stuck", "Nothing after a while"],
+          ],
+          note: `<p><b>Proof.</b> Continue stays off until a second device actually opens Moss over Tailscale. Skip is there for people who will do their phone later.</p><p><b>Help.</b> The fix list uses the numbered guide from the Google connection walkthrough.</p>`,
+        },
+        {
+          id: "m4",
+          title: "Secure address",
+          states: [
+            ["available", "Available"],
+            ["checking", "Turning on"],
+            ["done", "Done"],
+            ["nohttps", "Not available, name recommended"],
+          ],
+          note: `<p><b>Not available.</b> When the Tailscale network has secure addresses off, the meetmoss.com name comes first with the Recommended badge. The plain address stays as the third choice.</p>`,
+        },
+        {
+          id: "m5",
+          title: "About the name",
+          states: [],
+          note: `<p><b>What it says.</b> What goes public and what stays private, plus cost and sign-in. "Not now" returns to Settings with Tailscale fully set up.</p>`,
+        },
+        {
+          id: "m6",
+          title: "Sign in to meetmoss.com",
+          states: [
+            ["choose", "Choose"],
+            ["waiting", "Waiting for browser"],
+            ["invite", "Not invited yet"],
+            ["down", "Service down"],
+            ["done", "Signed in"],
+          ],
+          note: `<p><b>Sign-in.</b> GitHub or Google. The code on the waiting screen matches the one on the sign-in page. Problems use the same note as the encryption warning in Settings.</p>`,
+        },
+        {
+          id: "m7",
+          title: "Pick a name",
+          states: [
+            ["empty", "Empty"],
+            ["checking", "Checking"],
+            ["free", "Free"],
+            ["taken", "Taken"],
+            ["reserved", "Reserved"],
+            ["short", "Too short"],
+            ["chars", "Bad characters"],
+          ],
+          note: `<p><b>Live check.</b> A standard Settings field with the suffix fixed beside the box, a new piece for the shared kit. Errors use the field's error line. Taken names offer three chips.</p>`,
+        },
+        {
+          id: "m8",
+          title: "Network check",
+          states: [
+            ["pass", "All pass"],
+            ["pending", "Devices to check"],
+            ["blocked", "Router blocking"],
+          ],
+          note: `<p><b>Per device.</b> Each device proves its own lookup. The blocked state names the filter when Moss can tell. The Pi-hole steps are a placeholder; the build checks each vendor's real wording.</p>`,
+        },
+        {
+          id: "m9",
+          title: "Certificate and switching on",
+          states: [
+            ["working", "In progress"],
+            ["failed", "Failed"],
+            ["limit", "Rate limited"],
+            ["down", "Service down"],
+            ["switch", "Open on a device"],
+            ["done", "Ready"],
+          ],
+          note: `<p><b>Steps.</b> Every step is a row with a status, so a failure shows where it stopped. A rate limit shows when Moss tries again and has no button, because pressing one would not help.</p>`,
+        },
+        {
+          id: "m10",
+          title: "Settings, once set up",
+          states: [
+            ["all", "Name and Tailscale"],
+            ["tsonly", "Tailscale only"],
+            ["rename", "Changing name"],
+            ["release", "Releasing"],
+            ["copied", "Address copied"],
+          ],
+          note: `<p><b>Sections.</b> Addresses, Tailscale and the name are standard Settings sections with rows. Releasing the name sits in a danger section and confirms in the standard dialog, like removing a person.</p>`,
+        },
+        {
+          id: "m11",
+          title: "Alerts",
+          states: [
+            ["signedout", "Tailscale signed out"],
+            ["addr", "Address changed"],
+            ["renew", "Renewal failing"],
+            ["expired", "Certificate ran out"],
+            ["list", "Notifications page"],
+          ],
+          note: `<p><b>Two places.</b> A note at the top of Remote access, like the encryption warning, and a matching row on the Notifications page. Moss has no banner across every screen, so these screens do not draw one.</p>`,
+        },
+        {
+          id: "m12",
+          title: "Moving a name from another Moss",
+          states: [
+            ["offer", "Already has a name"],
+            ["confirm", "Confirm"],
+            ["moving", "Moving"],
+            ["done", "Done"],
+            ["failed", "Failed"],
+          ],
+          note: `<p><b>When.</b> Right after sign-in, in place of Pick a name, when the account already has a name on another Moss. The confirm uses the standard dialog. A failed move leaves the name on the other Moss.</p>`,
+        },
+      ];
 
-<script>
-const ic = (n) => `<svg class="i"><use href="#i-${n}"/></svg>`;
-const btn = (t, k = "", icon = "") => `<span class="btn${k ? " " + k.split(" ").map((c) => "btn--" + c).join(" ") : ""}">${icon ? ic(icon) : ""}${t}</span>`;
-const pill = (t, k) => `<span class="pill pill--${k}">${t}</span>`;
+      const QUESTIONS = [
+        `<b>"From anywhere" replaces the installer's "HTTPS" option.</b> Screen 1 shows the new list.`,
+        `<b>The beta uses an invite code typed after sign-in</b>, with an "Ask for an invite" link. Screen 6, "Not invited yet".`,
+        `<b>An account that already has a name can move it to this Moss.</b> Screen 12.`,
+        `<b>The plain Tailscale address stays listed</b> once a secure one works. Screen 10.`,
+      ];
 
-/* Made-up sample data. */
-const MACHINE = "moss-box";
-const TSIP = "100.101.7.22";
-const TSNAME = "moss-box.tail1234.ts.net";
-const NAME = "jordan";
-const FULL = `${NAME}.meetmoss.com`;
+      const seg = (attrs, opts, on) =>
+        `<div class="jds-segmented" role="group" ${attrs}>${opts
+          .map(([v, t]) => `<button type="button" class="jds-segmented__opt" aria-pressed="${v === on}" data-v="${v}">${t}</button>`)
+          .join("")}</div>`;
 
-/* ---------- Shell ---------- */
+      let mode = "light";
+      let size = "fit";
+      const state = {};
 
-function shell(inner, { title = "Settings", banner = "" } = {}) {
-  const nav = [["sun", "Today"], ["chat", "Chat"], ["check", "Tasks"], ["note", "Notes"], ["bell", "Activity"], ["gear", "Settings"]];
-  return `<div class="app">
-    <aside class="side"><div class="side__brand"><span class="bars"><i></i><i></i><i></i></span>Moss</div>
-      ${nav.map(([i, t]) => `<div class="side__item${t === title ? " on" : ""}">${ic(i)}${t}</div>`).join("")}
-      <div class="side__user"><span class="avatar">J</span>Jordan</div></aside>
-    <div class="main"><div class="top"><span class="iconbtn top__menu">${ic("menu")}</span><span class="top__title">${title}</span><span class="iconbtn">${ic("search")}</span></div>
-      ${banner}<div class="content">${inner}</div></div>
-  </div>`;
-}
+      document.getElementById("mocks").innerHTML = MOCKS.map((m, i) => {
+        state[m.id] = m.states[0]?.[0] || "";
+        return `<section class="mock" id="${m.id}">
+          <div class="jds-section-head jds-section-head--rule"><span class="jds-section-head__number">${String(i + 1).padStart(2, "0")}</span><h2 class="jds-section-head__title">${m.title}</h2></div>
+          ${m.states.length ? `<div class="mock__states">${seg(`aria-label="States" data-target="${m.id}"`, m.states, state[m.id])}</div>` : ""}
+          <div class="mock__note">${m.note}</div>
+          <div class="frames">
+            <div class="frame-wrap"><p class="frame-cap">Wide window, 1440</p><iframe class="frame" data-m="${m.id}" width="1440" height="900" title="${m.title}, wide"></iframe></div>
+            <div class="frame-wrap"><p class="frame-cap">Phone, 390</p><iframe class="frame" data-m="${m.id}" width="390" height="844" title="${m.title}, phone"></iframe></div>
+          </div>
+        </section>`;
+      }).join("");
+      document.getElementById("toc").innerHTML =
+        MOCKS.map((m, i) => `<a href="#${m.id}">${i + 1}. ${m.title}</a>`).join("") + `<a href="#qs">Your answers</a>`;
+      document.getElementById("qlist").innerHTML = QUESTIONS.map((q) => `<li>${q}</li>`).join("");
 
-function settingsPage(inner, banner = "") {
-  const idx = [["Personal", ["Your assistant", "Profile", "Connections", "Notifications"]], ["Moss", ["AI providers", "Modules", "Remote access", "Privacy and data"]]];
-  return shell(`
-    <div class="mh"><h1 class="mh__title">Settings</h1><span class="field" style="width:300px">${ic("search")}Search settings</span></div>
-    <div class="sbody">
-      <nav class="idx">${idx.map(([g, items]) => `<div class="idx__grp">${g}</div>${items.map((t) => `<a class="${t === "Remote access" ? "on" : ""}">${t}</a>`).join("")}`).join("")}</nav>
-      <div class="pane">
-        <div class="picker"><small>Section</small><b>Remote access</b>${ic("down")}</div>
-        ${inner}
-      </div>
-    </div>`, { banner });
-}
+      /* Deep link: #m4=nohttps opens that section in that state. */
+      const [hashId, hashState] = location.hash.slice(1).split("=");
+      if (hashState && hashId in state) state[hashId] = hashState;
 
-/* ---------- The guided setup screen ---------- */
+      function load(frame) {
+        const m = frame.dataset.m;
+        frame.src = `screen.html?m=${m}&s=${state[m]}&mode=${mode}`;
+      }
+      function sizeToContent(frame) {
+        try {
+          const doc = frame.contentDocument;
+          const min = frame.width === "390" ? 844 : 900;
+          frame.style.height = "auto";
+          frame.height = Math.max(min, doc.documentElement.scrollHeight);
+        } catch {
+          /* Opened from file:// with cross-frame access blocked; keep the default height. */
+        }
+      }
+      function fit() {
+        document.querySelectorAll(".frames").forEach((row) => {
+          const z = size === "full" ? 1 : Math.min(1, row.clientWidth / (1442 + 392 + 32));
+          [...row.children].forEach((w) => (w.style.zoom = z));
+          row.style.overflowX = size === "full" ? "auto" : "visible";
+        });
+      }
+      function wire(el, fn) {
+        el.addEventListener("click", (e) => {
+          const b = e.target.closest("button[data-v]");
+          if (!b) return;
+          [...el.children].forEach((c) => c.setAttribute("aria-pressed", String(c === b)));
+          fn(b.dataset.v);
+        });
+      }
 
-const STEPS = [
-  ["grp", "Tailscale"],
-  ["ts", "This computer"],
-  ["devices", "Your phone and laptop"],
-  ["https", "Secure address"],
-  ["grp", "meetmoss.com name", "Optional"],
-  ["intro", "About the name"],
-  ["signin", "Sign in"],
-  ["name", "Pick a name"],
-  ["net", "Network check"],
-  ["cert", "Certificate"],
-];
-
-function setup(step, body, { addrs = "base", nameDone = false } = {}) {
-  const keys = STEPS.filter((s) => s[0] !== "grp").map((s) => s[0]);
-  const at = keys.indexOf(step);
-  const list = STEPS.map(([k, t, sub]) => {
-    if (k === "grp") return `<li class="steps__grp">${t}${sub ? `<small>${sub}</small>` : ""}</li>`;
-    const i = keys.indexOf(k);
-    const cls = i < at ? "done" : i === at ? "now" : "";
-    return `<li class="${cls}"><span class="dot">${i < at ? ic("check") : ""}</span>${t}</li>`;
-  }).join("");
-  const total = at < 3 ? 3 : keys.length - 3;
-  const pos = at < 3 ? at + 1 : at - 2;
-  const part = at < 3 ? "Tailscale" : "meetmoss.com name";
-  return shell(`
-    <div class="crumb"><a>${ic("back")}Remote access</a></div>
-    <div class="dmh"><div><h1 class="ph__title">Use Moss from other devices</h1></div></div>
-    <div class="setup">
-      <ol class="steps">${list}</ol>
-      <div class="stepmain">
-        <div class="progress"><p><b>${part}</b> &middot; step ${pos} of ${total}</p><div class="bar"><i style="width:${(pos / total) * 100}%"></i></div></div>
-        ${body}
-      </div>
-      ${rail(addrs, nameDone)}
-    </div>`);
-}
-
-function rail(kind, nameDone) {
-  const row = (a, meta, dim) => `<div class="raddr${dim ? " raddr--dim" : ""}"><div class="addr">${a}</div><div class="raddr__meta">${meta}</div></div>`;
-  const rows = [row("http://localhost:1533", `${pill("Works", "ok")} This computer`)];
-  if (kind === "base") rows.push(row(`http://${TSIP}:1533`, `${pill("Not set up", "plain")}`, true));
-  if (kind === "tspending") rows.push(row(`http://${TSIP}:1533`, `${pill("Not checked yet", "plain")} Your Tailscale devices`));
-  else if (kind !== "base") rows.push(row(`http://${TSIP}:1533`, `${pill("Works", "ok")} Your Tailscale devices`));
-  if (kind === "ts" || kind === "tspending" || kind === "tsname") rows.push(row(`https://${TSNAME}`, kind === "tsname" ? `${pill("Works", "ok")} Secure` : pill("Not set up", "plain"), kind !== "tsname"));
-  if (kind === "nohttps") rows.push(row(`https://${TSNAME}`, pill("Not available", "warn"), true));
-  if (kind === "tsname" || kind === "nohttps" || nameDone) rows.push(row(`https://${FULL}`, nameDone ? `${pill("Works", "ok")} Secure` : pill("Not set up", "plain"), !nameDone));
-  return `<aside class="arail"><p class="arail__head">Addresses</p>${rows.join("")}</aside>`;
-}
-
-const head = (eyebrow, title, lede = "") => `<p class="stepmain__eyebrow">${eyebrow}</p><h2 class="stepmain__title">${title}</h2>${lede ? `<p class="stepmain__lede">${lede}</p>` : ""}`;
-const acts = (left, right = "") => `<div class="stepmain__acts">${left}${right ? `<span class="right">${right}</span>` : ""}</div>`;
-
-/* A fixed fake QR code. */
-function qr(seed = 7) {
-  let s = seed, cells = "";
-  const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
-  const n = 25;
-  const finder = (x, y) => `<rect x="${x}" y="${y}" width="7" height="7" fill="#111"/><rect x="${x + 1}" y="${y + 1}" width="5" height="5" fill="#fff"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3" fill="#111"/>`;
-  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-    const inF = (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
-    if (!inF && rnd() > 0.52) cells += `<rect x="${x}" y="${y}" width="1" height="1" fill="#111"/>`;
-  }
-  return `<span class="qr"><svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges">${cells}${finder(0, 0)}${finder(n - 7, 0)}${finder(0, n - 7)}</svg></span>`;
-}
-
-const mark = (k) => `<span class="row__mark row__mark--${k}">${k === "ok" ? ic("check") : k === "bad" ? ic("x") : ""}</span>`;
-
-/* ---------- Screen 1: entry points ---------- */
-
-function entry(f) {
-  const s = f.dataset.s || "ready";
-  if (s === "ready" || s === "readydone") {
-    const done = s === "readydone";
-    return shell(`<div class="ready">
-      <p class="stepmain__eyebrow">All set</p><h1 class="ready__title">Moss is ready.</h1>
-      <div class="sumrow"><span>Account</span><div>Jordan<small>Owner</small></div><span></span></div>
-      <div class="sumrow"><span>AI</span><div>Claude, signed in</div><span></span></div>
-      <div class="sumrow"><span>Access</span><div>${done ? `<b>https://${TSNAME}</b><small>Your Tailscale devices &middot; checked today, 14:10</small>` : `This computer only`}</div>
-        ${done ? btn("Change", "quiet sm") : btn("Use Moss from other devices", "sm")}</div>
-      ${acts(btn("Open Moss", "primary"))}
-    </div>`, { title: "Today" });
-  }
-  if (s === "choose") {
-    return setupChoose();
-  }
-  return settingsPage(`
-    <h2 class="ph__title" style="margin-top:16px">Remote access</h2>
-    <div class="eyesec"><div class="empty">
-      <div><p class="empty__big">Moss opens on this computer only.</p><p>Reach it from your phone and laptop, at home or away.</p></div>
-      ${btn("Use Moss from other devices", "primary")}
-    </div></div>`);
-}
-
-function setupChoose() {
-  const c = (on, t, p, tag = "") => `<div class="choice${on ? " on" : ""}"><span class="radio"></span><b>${t}${tag}</b><p>${p}</p></div>`;
-  return shell(`
-    <div class="crumb"><a>${ic("back")}Remote access</a></div>
-    <div class="dmh"><div><h1 class="ph__title">Use Moss from other devices</h1></div></div>
-    <div class="setup setup--choose">
-      <div class="stepmain">
-        ${head("Where from", "Where will you open Moss?")}
-        ${c(false, "Only this computer", "Nothing else can connect.")}
-        ${c(false, "Your home network", "Devices on your Wi-Fi. The connection isn't encrypted.")}
-        ${c(true, "From anywhere", "Your phone and laptop, at home or away, through Tailscale. Free for personal use.", " " + pill("Recommended", "ok"))}
-        ${acts(btn("Continue", "primary"), btn("Cancel", "quiet"))}
-      </div>
-      ${rail("base")}
-    </div>`);
-}
-
-/* ---------- Screen 2: Tailscale on this computer ---------- */
-
-function tsScreen(f) {
-  const s = f.dataset.s || "missing";
-  const kv = `<dl class="kv2"><dt>This computer</dt><dd>${MACHINE}</dd><dt>Tailscale address</dt><dd>${TSIP}</dd><dt>Signed in as</dt><dd>jordan@example.com</dd></dl>`;
-  const body = {
-    missing: `${head("Tailscale", "Install Tailscale on this computer", "Tailscale joins your devices into a private network that only you can use.")}
-      <div class="cols"><div class="col col--rec"><p class="col__title">Linux</p><p>One command in the terminal on ${MACHINE}.</p>
-        <div class="addrbox"><span class="addr code">curl -fsSL https://tailscale.com/install.sh | sh</span>${btn("Copy", "quiet sm", "copy")}</div></div>
-        <div class="col"><p class="col__title">Then sign in</p><p>Run <span class="code">sudo tailscale up</span> and finish in the browser. Use the account you'll use on your phone.</p></div></div>
-      <div class="status"><span class="wait">Looking for Tailscale on this computer</span></div>
-      ${acts(`<span class="btn btn--primary" style="opacity:.45">Continue</span>`, btn("Other systems", "quiet", "out"))}`,
-    signedout: `${head("Tailscale", "Sign in to Tailscale", "Tailscale is installed on this computer but isn't signed in.")}
-      <div class="status status--warn">${pill("Signed out", "warn")}<span>Run <span class="code">sudo tailscale up</span> on ${MACHINE} and finish in the browser.</span>${btn("Check again", "sm", "refresh")}</div>
-      ${acts(`<span class="btn btn--primary" style="opacity:.45">Continue</span>`)}`,
-    expired: `${head("Tailscale", "Sign in to Tailscale again", "This computer's Tailscale sign-in has expired.")}
-      <div class="status status--bad">${pill("Sign-in expired", "bad")}<span>Run <span class="code">sudo tailscale up</span> on ${MACHINE}, or renew it in the Tailscale admin page.</span>${btn("Check again", "sm", "refresh")}</div>
-      ${acts(`<span class="btn btn--primary" style="opacity:.45">Continue</span>`, btn("Open Tailscale admin", "quiet", "out"))}`,
-    running: `${head("Tailscale", "Tailscale is running on this computer")}
-      <div class="status">${pill("Connected", "ok")}<span>Checked just now</span></div>${kv}
-      ${acts(btn("Continue", "primary"))}`,
-  }[s];
-  return setup("ts", body);
-}
-
-/* ---------- Screen 3: phone and laptop ---------- */
-
-function devScreen(f) {
-  const s = f.dataset.s || "waiting";
-  const dev = s === "seen" || s === "two"
-    ? `<div class="row">${mark("ok")}<div><b>iPhone</b><small>Safari</small></div><span class="row__state">Opened Moss at 14:02</span><span></span></div>`
-      + (s === "two" ? `<div class="row">${mark("ok")}<div><b>Laptop</b><small>Firefox</small></div><span class="row__state">Opened Moss at 14:05</span><span></span></div>` : `<div class="row">${mark("wait")}<div><b>Waiting for another device</b></div><span class="row__state"></span><span></span></div>`)
-    : s === "stuck"
-      ? `<div class="row">${mark("todo")}<div><b>No device has opened it yet</b></div><span class="row__state">Waiting 6 minutes</span><span></span></div>`
-      : `<div class="row">${mark("wait")}<div><b>Waiting for a device</b></div><span class="row__state"></span><span></span></div>`;
-  const stuck = s === "stuck" ? `<div class="fix"><p class="fix__title">If it won't open</p><ol>
-      <li>Open the Tailscale app on that device and check it says Connected.</li>
-      <li>Sign in with the same account as ${MACHINE}.</li>
-      <li>Type the address yourself instead of scanning.</li></ol></div>` : "";
-  const body = `${head("Tailscale", "Add your phone and laptop", "Install Tailscale on each device, sign in with the same account, then open the address below.")}
-    <div class="cols"><div class="col"><p class="col__title">Phone</p><p>Scan to get Tailscale for iPhone or Android.</p>
-        <div class="qrrow">${qr(11)}<div class="btnrow">${btn("App Store", "sm", "out")}${btn("Google Play", "sm", "out")}</div></div></div>
-      <div class="col"><p class="col__title">Laptop</p><p>Mac, Windows or Linux.</p><div class="btnrow">${btn("Get Tailscale", "sm", "out")}</div></div></div>
-    <div class="col" style="margin-top:28px"><p class="col__title">Then open Moss on each device</p>
-      <div class="qrrow">${qr(29)}<div style="min-width:0;flex:1"><div class="addrbox"><span class="addr">http://${TSIP}:1533</span>${btn("Copy", "quiet sm", "copy")}</div></div></div></div>
-    <div class="rows">${dev}</div>${stuck}
-    ${acts(s === "seen" || s === "two" ? btn("Continue", "primary") : `<span class="btn btn--primary" style="opacity:.45">Continue</span>`, btn("Skip for now", "quiet"))}`;
-  return setup("devices", body, { addrs: s === "seen" || s === "two" ? "ts" : "tspending" });
-}
-
-/* ---------- Screen 4: secure address ---------- */
-
-function httpsScreen(f) {
-  const s = f.dataset.s || "available";
-  const body = {
-    available: `${head("Tailscale", "Turn on a secure address", "Needed for the microphone, notifications and the Mac app.")}
-      <div class="addrbox" style="margin-top:22px">${ic("lock")}<span class="addr">https://${TSNAME}</span></div>
-      ${acts(btn("Turn on", "primary"), btn("Use a meetmoss.com name instead", "quiet"))}`,
-    checking: `${head("Tailscale", "Turning on the secure address")}
-      <div class="rows">
-        <div class="row">${mark("ok")}<div><b>Get a certificate from Tailscale</b></div><span class="row__state">Done</span><span></span></div>
-        <div class="row">${mark("ok")}<div><b>Let Moss answer on the new address</b></div><span class="row__state">Done</span><span></span></div>
-        <div class="row">${mark("wait")}<div><b>Open it on another device</b><small>https://${TSNAME}</small></div><span class="row__state">Waiting</span>${btn("Copy", "quiet sm", "copy")}</div>
-      </div>
-      ${acts(`<span class="btn btn--primary" style="opacity:.45">Finish</span>`)}`,
-    done: `${head("Tailscale", "You're set up")}
-      <div class="status">${pill("Works", "ok")}<span>Opened from iPhone at 14:10</span></div>
-      <dl class="kv2"><dt>Secure address</dt><dd>https://${TSNAME}</dd><dt>Also works</dt><dd>http://${TSIP}:1533</dd></dl>
-      <div class="col" style="margin-top:28px"><p class="col__title">Want a shorter name?</p><p>Get an address like ${FULL}.</p>${btn("Add a meetmoss.com name", "sm")}</div>
-      ${acts(btn("Finish", "primary"))}`,
-    nohttps: `${head("Tailscale", "A secure address isn't available yet", "Your Tailscale network has secure addresses switched off, so Tailscale can't give this computer one.")}
-      <div class="cols cols--3">
-        <div class="col col--rec"><p class="col__title">Get a meetmoss.com name ${pill("Recommended", "ok")}</p><p>A secure address like ${FULL}. Works whatever your Tailscale settings.</p>${btn("Get a name", "primary sm")}</div>
-        <div class="col"><p class="col__title">Switch it on in Tailscale</p><p>In the Tailscale admin page, open DNS and turn on MagicDNS and HTTPS certificates.</p><div class="btnrow">${btn("Open Tailscale admin", "sm", "out")}${btn("Check again", "quiet sm", "refresh")}</div></div>
-        <div class="col"><p class="col__title">Use the plain address for now</p><p>http://${TSIP}:1533 works on your devices. The microphone, notifications and the Mac app need a secure address.</p>${btn("Finish without it", "quiet sm")}</div>
-      </div>`,
-  }[s];
-  return setup("https", body, { addrs: s === "nohttps" ? "nohttps" : s === "done" ? "tsname" : "ts" });
-}
-
-/* ---------- Screen 5: about the name ---------- */
-
-function introScreen() {
-  const body = `${head("meetmoss.com name", "Add a meetmoss.com name")}
-    <p class="bigname">${NAME}<span>.meetmoss.com</span></p>
-    <div class="cols" style="margin-top:28px">
-      <div class="col"><p class="col__title">Public</p><p>Your name, this computer's Tailscale address, and the certificate for the name, which is listed in public logs for good.</p></div>
-      <div class="col"><p class="col__title">Private</p><p>Everything in Moss. Only devices on your Tailscale network can open the name.</p></div>
-    </div>
-    <dl class="kv2"><dt>Cost</dt><dd>Free, one name per account</dd><dt>Sign in with</dt><dd>GitHub or Google</dd><dt>Keep it</dt><dd>Renews by itself while Moss is running</dd></dl>
-    ${acts(btn("Continue", "primary"), btn("Not now", "quiet"))}`;
-  return setup("intro", body, { addrs: "tsname" });
-}
-
-/* ---------- Screen 6: sign in ---------- */
-
-function signinScreen(f) {
-  const s = f.dataset.s || "choose";
-  const gh = `<span class="brandmark">G</span>`;
-  const body = {
-    choose: `${head("meetmoss.com name", "Sign in to meetmoss.com")}
-      <div class="signin">${btn(`${gh}Sign in with GitHub`)}${btn(`<span class="brandmark">G</span>Sign in with Google`)}</div>
-      ${acts(btn("Back", "quiet"))}`,
-    waiting: `${head("meetmoss.com name", "Finish signing in in your browser", "Moss opened a sign-in page. Check that it shows this code.")}
-      <p class="code-big">KQ7-4WD</p>
-      <div class="status"><span class="wait">Waiting for you to sign in</span>${btn("Open the page again", "quiet sm", "out")}</div>
-      ${acts(btn("Cancel", "quiet"))}`,
-    invite: `${head("meetmoss.com name", "meetmoss.com names are invite-only for now")}
-      <div class="status status--warn">${pill("Not on the list yet", "warn")}<span>Signed in as jordan-k on GitHub.</span></div>
-      <div class="col" style="margin-top:24px"><p class="col__title">Have an invite code?</p>
-        <div class="inline-field"><span class="field">MOSS-</span>${btn("Use code", "primary")}</div></div>
-      ${acts(btn("Ask for an invite", "", "out"), btn("Use the Tailscale address for now", "quiet"))}`,
-    down: `${head("meetmoss.com name", "Can't reach meetmoss.com")}
-      <div class="status status--bad">${pill("No answer", "bad")}<span>Last tried 14:20. Your Tailscale addresses aren't affected.</span>${btn("Try again", "sm", "refresh")}</div>
-      ${acts(btn("Back", "quiet"))}`,
-    done: `${head("meetmoss.com name", "Signed in")}
-      <div class="status">${pill("Signed in", "ok")}<span>jordan-k on GitHub</span>${btn("Use another account", "quiet sm")}</div>
-      ${acts(btn("Continue", "primary"))}`,
-  }[s];
-  return setup("signin", body, { addrs: "tsname" });
-}
-
-/* ---------- Screen 7: pick a name ---------- */
-
-function nameScreen(f) {
-  const s = f.dataset.s || "free";
-  const cases = {
-    empty: ["", "", ""],
-    free: [NAME, "ok", `${ic("check")}${FULL} is free`],
-    taken: ["jordan", "bad", `jordan.meetmoss.com is taken. Try one of these:`],
-    reserved: ["admin", "bad", "admin is reserved. Pick another."],
-    short: ["jo", "bad", "Use 3 to 30 characters."],
-    chars: ["jordan_k!", "bad", "Use letters, numbers and hyphens only."],
-    checking: ["jordank", "", `<span class="wait">Checking</span>`],
-  };
-  const [val, st, msg] = cases[s];
-  const field = `<div class="namefield${st ? " " + st : ""}"><span class="namefield__in${val ? "" : " ph"}">${val || "yourname"}<span class="caret"></span></span><span class="namefield__sfx">.meetmoss.com</span></div>`;
-  const sugg = s === "taken" ? `<div class="sugg"><span>jordank</span><span>jordan-home</span><span>jordan-moss</span></div>` : "";
-  const ok = s === "free";
-  const body = `${head("meetmoss.com name", "Pick a name")}
-    ${field}${msg ? `<p class="namemsg${st ? " namemsg--" + st : ""}">${msg}</p>` : ""}${sugg}
-    <p class="fine">Every name is listed in public certificate logs, where it stays even after you release it.</p>
-    ${acts(ok ? btn("Register name", "primary") : `<span class="btn btn--primary" style="opacity:.45">Register name</span>`, btn("Back", "quiet"))}`;
-  return setup("name", body, { addrs: "tsname" });
-}
-
-/* ---------- Screen 8: network check ---------- */
-
-function netScreen(f) {
-  const s = f.dataset.s || "pass";
-  const here = s === "blocked"
-    ? `<div class="row">${mark("bad")}<div><b>This computer</b><small>Home router</small></div><span class="row__state">Blocked</span><span></span></div>`
-    : `<div class="row">${mark("ok")}<div><b>This computer</b><small>Home router</small></div><span class="row__state">Finds ${FULL}</span><span></span></div>`;
-  const phone = s === "pending"
-    ? `<div class="row">${mark("wait")}<div><b>iPhone</b></div><span class="row__state">Open the check page on it</span>${btn("Copy", "quiet sm", "copy")}</div>`
-    : s === "blocked"
-      ? `<div class="row">${mark("ok")}<div><b>iPhone</b><small>Mobile data</small></div><span class="row__state">Finds it</span><span></span></div>`
-      : `<div class="row">${mark("ok")}<div><b>iPhone</b><small>Home Wi-Fi</small></div><span class="row__state">Finds it</span><span></span></div>`;
-  const laptop = s === "blocked"
-    ? `<div class="row">${mark("bad")}<div><b>Laptop</b><small>Home Wi-Fi</small></div><span class="row__state">Blocked</span><span></span></div>`
-    : s === "pending"
-      ? `<div class="row">${mark("todo")}<div><b>Laptop</b></div><span class="row__state">Not checked</span>${btn("Copy", "quiet sm", "copy")}</div>`
-      : `<div class="row">${mark("ok")}<div><b>Laptop</b><small>Home Wi-Fi</small></div><span class="row__state">Finds it</span><span></span></div>`;
-  const fix = s === "blocked" ? `<div class="fix"><p class="fix__title">Pi-hole on your network is blocking the name</p>
-      <ol><li>Open the Pi-hole admin page.</li><li>Go to Settings, then DNS.</li><li>Add <b>meetmoss.com</b> to the allowed rebind domains, then save.</li></ol>
-      <div class="btnrow" style="display:flex;gap:8px;margin-top:12px">${btn("Check again", "sm", "refresh")}${btn("Use the Tailscale address instead", "quiet sm")}</div></div>` : "";
-  const ok = s === "pass";
-  const body = `${head("meetmoss.com name", ok ? "Every device can find your name" : s === "blocked" ? "Your network is blocking the name" : "Check each device")}
-    <div class="rows">${here}${phone}${laptop}</div>${fix}
-    ${s === "pending" ? `<div class="col" style="margin-top:24px"><p class="col__title">Check page</p><div class="qrrow">${qr(41)}<div style="flex:1;min-width:0"><div class="addrbox"><span class="addr">https://${FULL}/check</span>${btn("Copy", "quiet sm", "copy")}</div></div></div></div>` : ""}
-    ${acts(ok ? btn("Continue", "primary") : `<span class="btn btn--primary" style="opacity:.45">Continue</span>`, btn("Add another device", "quiet"))}`;
-  return setup("net", body, { addrs: "tsname" });
-}
-
-/* ---------- Screen 9: certificate and switch on ---------- */
-
-function certScreen(f) {
-  const s = f.dataset.s || "working";
-  const steps = [
-    ["Ask Let's Encrypt for a certificate", "ok", "Done"],
-    ["Prove the name is yours", "ok", "Done"],
-    ["Let's Encrypt checks the proof", s === "working" ? "wait" : s === "failed" ? "bad" : "ok", s === "working" ? "Usually under a minute" : s === "failed" ? "Didn't pass" : "Done"],
-    ["Install the certificate", s === "switch" || s === "done" ? "ok" : "todo", s === "switch" || s === "done" ? "Done" : ""],
-    ["Open it on another device", s === "done" ? "ok" : s === "switch" ? "wait" : "todo", s === "done" ? "iPhone at 14:31" : s === "switch" ? "Waiting" : ""],
-  ];
-  const rows = (s === "limit" || s === "down") ? "" : `<div class="rows">${steps.map(([t, m, st]) => `<div class="row">${mark(m)}<div><b>${t}</b>${t.startsWith("Open") && s === "switch" ? `<small>https://${FULL}</small>` : ""}</div><span class="row__state">${st}</span>${t.startsWith("Open") && s === "switch" ? btn("Copy", "quiet sm", "copy") : "<span></span>"}</div>`).join("")}</div>`;
-  const body = {
-    working: `${head("meetmoss.com name", "Getting a certificate")}${rows}${acts(`<span class="btn btn--primary" style="opacity:.45">Finish</span>`)}`,
-    failed: `${head("meetmoss.com name", "The certificate didn't come through")}${rows}
-      <div class="status status--bad">${pill("Failed", "bad")}<span>Let's Encrypt couldn't see the proof record. It can take a few minutes to appear.</span>${btn("Try again", "sm", "refresh")}</div>
-      ${acts(btn("Back", "quiet"))}`,
-    limit: `${head("meetmoss.com name", "Too many certificate requests")}
-      <div class="status status--warn">${pill("Paused", "warn")}<span>Let's Encrypt is limiting new certificates for this name. Moss tries again on 28 October at 16:40.</span></div>
-      ${acts(btn("Finish later", "quiet"))}`,
-    down: `${head("meetmoss.com name", "Can't reach meetmoss.com")}
-      <div class="status status--bad">${pill("No answer", "bad")}<span>Last tried 14:28. Moss tries again every 10 minutes.</span>${btn("Try now", "sm", "refresh")}</div>
-      ${acts(btn("Finish later", "quiet"))}`,
-    switch: `${head("meetmoss.com name", `Open ${FULL} on another device`)}${rows}${acts(`<span class="btn btn--primary" style="opacity:.45">Finish</span>`)}`,
-    done: `${head("meetmoss.com name", `${FULL} is ready`)}${rows}
-      <dl class="kv2"><dt>Certificate until</dt><dd>25 January</dd><dt>Renews on</dt><dd>26 December</dd></dl>
-      ${acts(btn("Finish", "primary"))}`,
-  }[s];
-  return setup("cert", body, { addrs: "tsname", nameDone: s === "done" });
-}
-
-/* ---------- Screen 12: move a name from another Moss ---------- */
-
-function moveScreen(f) {
-  const s = f.dataset.s || "offer";
-  const where = `<dl class="kv2"><dt>Points to</dt><dd>Another Moss, last seen 3 days ago</dd><dt>Signed in as</dt><dd>jordan-k on GitHub</dd></dl>`;
-  const step = (t, m, st) => `<div class="row">${mark(m)}<div><b>${t}</b></div><span class="row__state">${st}</span><span></span></div>`;
-  const steps = (k) => `<div class="rows">
-      ${step("Point the name at this computer", "ok", "Done")}
-      ${step("Check each device can find it", k === "moving" ? "wait" : "ok", k === "moving" ? "Checking" : "Done")}
-      ${step("Get a certificate for this Moss", k === "moving" ? "todo" : "ok", k === "moving" ? "" : "Done")}
-      ${step("Open it on another device", k === "moving" ? "todo" : "ok", k === "moving" ? "" : "iPhone at 14:52")}
-    </div>`;
-  const body = {
-    offer: `${head("meetmoss.com name", "Your account already has a name")}
-      <p class="bigname">${NAME}<span>.meetmoss.com</span></p>${where}
-      ${acts(btn("Move it to this Moss", "primary"), btn("Not now", "quiet"))}`,
-    confirm: `${head("meetmoss.com name", "Your account already has a name")}
-      <p class="bigname">${NAME}<span>.meetmoss.com</span></p>${where}
-      <div class="inlineconfirm" style="background:var(--amber-soft);color:var(--amber-ink)"><p><b>Move ${FULL} to this Moss?</b> It stops opening the other Moss straight away.</p>
-        <div class="acts">${btn("Move name", "primary sm")}${btn("Cancel", "quiet sm")}</div></div>`,
-    moving: `${head("meetmoss.com name", `Moving ${FULL}`)}${steps("moving")}
-      ${acts(`<span class="btn btn--primary" style="opacity:.45">Finish</span>`)}`,
-    done: `${head("meetmoss.com name", `${FULL} now opens this Moss`)}${steps("done")}
-      <dl class="kv2"><dt>Certificate until</dt><dd>25 January</dd><dt>Renews on</dt><dd>26 December</dd></dl>
-      ${acts(btn("Finish", "primary"))}`,
-    failed: `${head("meetmoss.com name", "The name didn't move")}
-      <div class="status status--bad">${pill("Not moved", "bad")}<span>meetmoss.com didn't answer. ${FULL} still points to the other Moss.</span>${btn("Try again", "sm", "refresh")}</div>
-      ${acts(btn("Back", "quiet"))}`,
-  }[s];
-  return setup("name", body, { addrs: "tsname", nameDone: s === "done" });
-}
-
-/* ---------- Screen 10: Settings > Remote access ---------- */
-
-function statusScreen(f) {
-  const s = f.dataset.s || "all";
-  const row = (a, kind, facts, actsHtml = "") => `<div class="arow"><div class="addr">${a}</div><span class="arow__kind">${kind}</span><span class="arow__facts">${facts}</span><span class="arow__acts">${actsHtml}</span></div>`;
-  const hasName = s !== "tsonly";
-  const addrs = [
-    hasName ? row(`https://${FULL}`, "meetmoss.com name", `${pill("Works", "ok")}&nbsp; <b>Certificate until 25 Jan</b>, renews 26 Dec &middot; checked today 14:31`, btn("Copy", "quiet sm", "copy")) : "",
-    row(`https://${TSNAME}`, "Tailscale", `${pill("Works", "ok")}&nbsp; checked today 14:31`, btn("Copy", "quiet sm", "copy")),
-    row(`http://${TSIP}:1533`, "Tailscale, plain", `${pill("Works", "ok")}&nbsp; not secure in the browser`, btn("Copy", "quiet sm", "copy")),
-  ].join("");
-  const rename = s === "rename" ? `<div class="col" style="margin-top:14px;border-top:none;padding-top:0"><p class="col__title">New name</p>
-      <div class="namefield ok" style="margin-top:6px"><span class="namefield__in">jordan-home<span class="caret"></span></span><span class="namefield__sfx">.meetmoss.com</span></div>
-      <p class="namemsg namemsg--ok">${ic("check")}jordan-home.meetmoss.com is free</p>
-      <p class="fine" style="margin-top:8px">${FULL} stops working once the new name is ready.</p>
-      <div style="display:flex;gap:8px;margin-top:12px">${btn("Change name", "primary sm")}${btn("Cancel", "quiet sm")}</div></div>` : "";
-  const release = s === "release" ? `<div class="inlineconfirm"><p><b>Release ${FULL}?</b> It stops working on all your devices now. Nobody else can take it for 30 days.</p>
-      <div class="acts">${btn("Release name", "dangerfill sm")}${btn("Cancel", "quiet sm")}</div></div>` : "";
-  const nameSec = hasName
-    ? `<div class="eyesec"><div class="eyesec__head"><h3 class="eyesec__title">meetmoss.com name</h3><span class="eyesec__meta">Signed in as jordan-k on GitHub</span></div>
-        <dl class="kv2"><dt>Name</dt><dd>${FULL}</dd><dt>Address it points to</dt><dd>${TSIP}, updated today</dd></dl>
-        ${rename}${release}
-        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${btn("Change name", "sm")}${btn("Release name", "quiet sm danger")}${btn("Sign out of meetmoss.com", "quiet sm")}</div></div>`
-    : `<div class="eyesec"><div class="eyesec__head"><h3 class="eyesec__title">meetmoss.com name</h3></div>
-        <div class="empty"><div><p class="empty__big">Get a shorter secure address.</p><p>Like ${FULL}.</p></div>${btn("Add a name", "")}</div></div>`;
-  return settingsPage(`
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:16px"><h2 class="ph__title">Remote access</h2>${btn("Check now", "sm", "refresh")}</div>
-    <div class="eyesec" style="margin-top:28px"><div class="eyesec__head"><h3 class="eyesec__title">Addresses</h3><span class="eyesec__meta">${pill("All working", "ok")}</span></div>
-      <div class="ahead"><span>Address</span><span>Kind</span><span>Status</span><span></span></div>
-      <div class="atable" style="border-top:2px solid var(--ink)">${addrs}</div></div>
-    <div class="twocol">
-      <div class="eyesec"><div class="eyesec__head"><h3 class="eyesec__title">Tailscale</h3><span class="eyesec__meta">${pill("Connected", "ok")}</span></div>
-        <dl class="kv2"><dt>This computer</dt><dd>${MACHINE}</dd><dt>Address</dt><dd>${TSIP}</dd><dt>Signed in as</dt><dd>jordan@example.com</dd></dl>
-        <div style="display:flex;gap:8px;margin-top:14px">${btn("Add a device", "sm")}${btn("Open Tailscale admin", "quiet sm", "out")}</div></div>
-      ${nameSec}
-    </div>`);
-}
-
-/* ---------- Screen 11: banners and notifications ---------- */
-
-const BANNERS = {
-  signedout: ["bad", `<b>Moss can't be reached from your other devices.</b> Tailscale is signed out on this computer.`, btn("Fix it", "sm")],
-  addr: ["warn", `<b>This computer's Tailscale address changed</b> and ${FULL} couldn't be updated.`, btn("Try again", "sm", "refresh")],
-  renew: ["warn", `<b>The certificate for ${FULL} didn't renew.</b> It runs out on 25 January. Moss keeps trying.`, btn("Details", "sm")],
-  expired: ["bad", `<b>${FULL} has stopped working.</b> Its certificate ran out. Use https://${TSNAME} meanwhile.`, btn("Fix it", "sm")],
-};
-function bannerScreen(f) {
-  const s = f.dataset.s || "signedout";
-  const [k, text, b] = BANNERS[s];
-  const banner = `<div class="banner banner--${k}"><span>${text}</span><span class="acts">${b}${btn("Dismiss", "quiet sm")}</span></div>`;
-  const notes = [
-    ["", "Tailscale is signed out on this computer", "Your phone and laptop can't reach Moss.", "14:02"],
-    ["warn", "Tailscale address changed", `${FULL} couldn't be updated. Moss will try again in an hour.`, "Yesterday"],
-    ["warn", "Certificate didn't renew", `${FULL} runs out on 25 January.`, "Mon"],
-    ["", "Certificate ran out", `${FULL} stopped working. https://${TSNAME} still works.`, "26 Jan"],
-  ];
-  return shell(`
-    <div class="mh" style="border-bottom:none;padding-bottom:0"><h1 class="mh__title">Activity</h1></div>
-    <div class="eyesec"><div class="eyesec__head"><h3 class="eyesec__title">Notifications</h3></div>
-      <div class="notes">${notes.map(([w, t, d, when]) => `<div class="note"><i class="${w}"></i><div><b>${t}</b><span>${d}</span></div><small>${when}</small></div>`).join("")}</div></div>`,
-    { title: "Activity", banner });
-}
-
-/* ---------- Mockups on the page ---------- */
-
-const MOCKS = [
-  { id: "m1", title: "1. Where you start", fn: entry,
-    states: [["ready", "Ready screen"], ["readydone", "Ready, set up"], ["settings", "Settings, not set up"], ["choose", "Choose where from"]],
-    note: `<p><b>Entry.</b> The installer's Ready screen keeps its access row. Its button opens the guided setup, as does the empty Remote access section in Settings. Remote access is a core Settings section in the Moss group, so it sits in the Settings list, not behind a module cog.</p><p><b>Choice.</b> "From anywhere" is new and marked Recommended. It replaces the installer's "HTTPS" option, as you decided.</p>` },
-  { id: "m2", title: "2. Tailscale on this computer", fn: tsScreen,
-    states: [["missing", "Not installed"], ["signedout", "Signed out"], ["expired", "Sign-in expired"], ["running", "Running"]],
-    note: `<p><b>Layout.</b> Setup is its own full-width screen with a back link, like a connection's screen. Steps on the left, the current step in the middle, and the addresses that work right now on the right. The phone swaps the step list for a progress line and puts the addresses below.</p><p><b>Detection.</b> Moss watches for Tailscale and moves on by itself. The install command is for Linux because the sample computer runs Linux; other systems get their own link.</p>` },
-  { id: "m3", title: "3. Your phone and laptop", fn: devScreen,
-    states: [["waiting", "Waiting"], ["seen", "One device seen"], ["two", "Two devices"], ["stuck", "Nothing after a while"]],
-    note: `<p><b>Proof.</b> Continue stays off until a second device actually opens Moss over Tailscale, per the installer spec's rule. Skip is there for people who will do their phone later.</p><p><b>Two codes.</b> The first gets the Tailscale app, the second opens Moss once it's installed.</p>` },
-  { id: "m4", title: "4. Secure address", fn: httpsScreen,
-    states: [["available", "Available"], ["checking", "Turning on"], ["done", "Done"], ["nohttps", "Not available, name recommended"]],
-    note: `<p><b>Not available.</b> When the Tailscale network has secure addresses off, the meetmoss.com name moves to first place and gets the Recommended tag, as the spec suggests. The plain address stays as the third choice.</p><p><b>Done.</b> The finish screen offers the name once, as a small block, then the setup is over.</p>` },
-  { id: "m5", title: "5. About the name", fn: introScreen, states: [],
-    note: `<p><b>What it says.</b> What goes public and what stays private, side by side, plus cost and sign-in. No longer explanation. "Not now" returns to Settings with Tailscale fully set up.</p>` },
-  { id: "m6", title: "6. Sign in to meetmoss.com", fn: signinScreen,
-    states: [["choose", "Choose"], ["waiting", "Waiting for browser"], ["invite", "Not invited yet"], ["down", "Service down"], ["done", "Signed in"]],
-    note: `<p><b>Changed from the spec's list.</b> The spec's screen list still says email entry. This uses GitHub or Google, per your ruling. The code on the waiting screen matches the one on the sign-in page, so the owner knows it's the right page.</p><p><b>Beta.</b> An invite code typed after sign-in, with an "Ask for an invite" link, as you decided.</p>` },
-  { id: "m7", title: "7. Pick a name", fn: nameScreen,
-    states: [["empty", "Empty"], ["checking", "Checking"], ["free", "Free"], ["taken", "Taken"], ["reserved", "Reserved"], ["short", "Too short"], ["chars", "Bad characters"]],
-    note: `<p><b>Live check.</b> One box with the suffix fixed beside it. The message under the box changes as you type. Taken names get three suggestions you can click.</p><p><b>Public logs.</b> The one fixed line under the box is the public-log notice the spec requires.</p>` },
-  { id: "m8", title: "8. Network check", fn: netScreen,
-    states: [["pass", "All pass"], ["pending", "Devices to check"], ["blocked", "Router blocking"]],
-    note: `<p><b>Per device.</b> Each device proves its own lookup, because a phone on mobile data and a laptop on home Wi-Fi can disagree. The blocked state names the filter when Moss can tell and gives its menu path.</p><p><b>Not checked.</b> The Pi-hole steps are a placeholder. The build slice checks each vendor's real wording.</p>` },
-  { id: "m9", title: "9. Certificate and switching on", fn: certScreen,
-    states: [["working", "In progress"], ["failed", "Failed"], ["limit", "Rate limited"], ["down", "Service down"], ["switch", "Open on a device"], ["done", "Ready"]],
-    note: `<p><b>Steps.</b> Every step of getting the certificate is a row, so a failure shows exactly where it stopped. A rate limit shows when Moss will try again and offers no button, because pressing it would not help.</p>` },
-  { id: "m10", title: "10. Settings, once set up", fn: statusScreen,
-    states: [["all", "Name and Tailscale"], ["tsonly", "Tailscale only"], ["rename", "Changing name"], ["release", "Releasing"]],
-    note: `<p><b>Wide.</b> Addresses get a full-width table: each address, what kind it is, whether it works, certificate dates and when it was last checked. Tailscale and the name sit side by side below.</p><p><b>Name actions.</b> Change, release and sign out live with the name. Release confirms inline and says the 30-day hold.</p>` },
-  { id: "m11", title: "11. Banners and notifications", fn: bannerScreen,
-    states: [["signedout", "Tailscale signed out"], ["addr", "Address changed"], ["renew", "Renewal failing"], ["expired", "Certificate ran out"]],
-    note: `<p><b>Two places.</b> A banner across the top of every screen until fixed or dismissed, and a matching notification. The buttons open Remote access at the right step.</p>` },
-  { id: "m12", title: "12. Moving a name from another Moss", fn: moveScreen,
-    states: [["offer", "Already has a name"], ["confirm", "Confirm"], ["moving", "Moving"], ["done", "Done"], ["failed", "Failed"]],
-    note: `<p><b>When.</b> Right after sign-in, in place of Pick a name, when the account already has a name on another Moss. One name per account, so moving is the only way to use it here.</p><p><b>Moving.</b> The name points at this computer first, then the usual device check and certificate run. A failed move leaves the name on the other Moss.</p>` },
-];
-
-const QUESTIONS = [
-  `<b>"From anywhere" replaces the installer's "HTTPS" option.</b> Screen 1 shows the new list.`,
-  `<b>The beta uses an invite code typed after sign-in</b>, with an "Ask for an invite" link. Screen 6, "Not invited yet".`,
-  `<b>An account that already has a name can move it to this Moss.</b> Screen 12 draws the offer, the confirm, the move, done, and a failed move.`,
-  `<b>The plain Tailscale address stays listed</b> once a secure one works. Screen 10.`,
-];
-
-const mocksEl = document.getElementById("mocks");
-mocksEl.innerHTML = MOCKS.map((m) => `
-  <section class="mock" id="${m.id}">
-    <div class="mock__head"><h2 class="mock__title">${m.title}</h2>
-      ${m.states.length ? `<span class="seg" data-target="${m.id}">${m.states.map(([v, t], i) => `<span class="${i === 0 ? "on" : ""}" data-v="${v}">${t}</span>`).join("")}</span>` : ""}</div>
-    <div class="mock__note">${m.note}</div>
-    <div class="frames">
-      <div class="frame-wrap"><p class="frame-cap">Wide window, 1440</p><div class="frame frame--desk" data-m="${m.id}" data-s="${m.states[0]?.[0] || ""}"></div></div>
-      <div class="frame-wrap"><p class="frame-cap">Phone, 390</p><div class="frame frame--phone" data-m="${m.id}" data-s="${m.states[0]?.[0] || ""}"></div></div>
-    </div>
-  </section>`).join("");
-document.getElementById("toc").innerHTML = MOCKS.map((m) => `<a href="#${m.id}">${m.title}</a>`).join("") + `<a href="#qs">Your answers</a>`;
-document.getElementById("qlist").innerHTML = QUESTIONS.map((q) => `<li>${q}</li>`).join("");
-
-const FN = Object.fromEntries(MOCKS.map((m) => [m.id, m.fn]));
-function build(frame) { frame.innerHTML = FN[frame.dataset.m](frame); }
-
-/* Deep link: #m4=nohttps opens that section in that state. */
-function applyHash() {
-  const [id, v] = location.hash.slice(1).split("=");
-  if (!v || !FN[id]) return;
-  document.querySelectorAll(`#${id} .frame`).forEach((f) => (f.dataset.s = v));
-  document.querySelectorAll(`#${id} .seg span`).forEach((c) => c.classList.toggle("on", c.dataset.v === v));
-}
-applyHash();
-document.querySelectorAll(".frame").forEach(build);
-
-let size = "fit";
-function fit() {
-  document.querySelectorAll(".frames").forEach((row) => {
-    const wraps = [...row.children];
-    if (size === "full") { wraps.forEach((w) => (w.style.zoom = 1)); row.style.overflowX = "auto"; return; }
-    row.style.overflowX = "visible";
-    const z = Math.min(1, row.clientWidth / (1442 + 392 + 32 + 4));
-    wraps.forEach((w) => (w.style.zoom = z));
-  });
-}
-addEventListener("resize", fit);
-fit();
-
-function wireSeg(el, fn) {
-  el.addEventListener("click", (e) => {
-    const s = e.target.closest("span[data-mode],span[data-size],span[data-v]"); if (!s) return;
-    [...el.children].forEach((c) => c.classList.toggle("on", c === s)); fn(s);
-  });
-}
-wireSeg(document.getElementById("modeSeg"), (s) => (document.documentElement.dataset.mode = s.dataset.mode));
-wireSeg(document.getElementById("sizeSeg"), (s) => { size = s.dataset.size; fit(); });
-document.querySelectorAll(".seg[data-target]").forEach((seg) => wireSeg(seg, (s) => {
-  document.querySelectorAll(`#${seg.dataset.target} .frame`).forEach((f) => { f.dataset.s = s.dataset.v; build(f); });
-}));
-</script>
-</body>
+      document.querySelectorAll(".frame").forEach((f) => {
+        f.addEventListener("load", () => sizeToContent(f));
+        load(f);
+      });
+      document.querySelectorAll(".jds-segmented[data-target]").forEach((el) => {
+        if (state[el.dataset.target] !== undefined)
+          [...el.children].forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.v === state[el.dataset.target])));
+        wire(el, (v) => {
+          state[el.dataset.target] = v;
+          document.querySelectorAll(`.frame[data-m="${el.dataset.target}"]`).forEach(load);
+        });
+      });
+      wire(document.getElementById("modeSeg"), (v) => {
+        mode = v;
+        document.documentElement.dataset.colorMode = v;
+        document.querySelectorAll(".frame").forEach(load);
+      });
+      wire(document.getElementById("sizeSeg"), (v) => {
+        size = v;
+        fit();
+      });
+      addEventListener("resize", fit);
+      fit();
+    </script>
+  </body>
 </html>
