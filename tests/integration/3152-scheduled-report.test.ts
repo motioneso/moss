@@ -42,6 +42,7 @@ describe("configured scheduled reports through the worker", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          boss,
           gateway: gateway(),
           generateReport: async (...args) => {
             expect(
@@ -74,7 +75,7 @@ describe("configured scheduled reports through the worker", () => {
   });
   it("concurrent jobs and replay persist one result with each run's reserved identity", async () => {
     const first = await save();
-    const deps = { dataContext: worker, gateway: gateway(), generateReport };
+    const deps = { dataContext: worker, boss, gateway: gateway(), generateReport };
     const outcomes = await Promise.all([
       runScheduledReadJob({ data: first.data }, deps),
       runScheduledReadJob({ data: first.data }, deps)
@@ -101,6 +102,7 @@ describe("configured scheduled reports through the worker", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          boss,
           gateway: gateway(),
           generateReport: async (...args) => {
             await owner((db) =>
@@ -122,6 +124,7 @@ describe("configured scheduled reports through the worker", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          boss,
           gateway: gateway(),
           generateReport: async (...args) => {
             await setTasksDisabled(true);
@@ -144,6 +147,7 @@ describe("configured scheduled reports through the worker", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          boss,
           gateway: gateway(),
           generateReport: async (...args) => {
             await owner((db) => tasks.update(db, saved.task.id, { status: "done" }));
@@ -169,6 +173,7 @@ describe("configured scheduled reports through the worker", () => {
     const model = vi.fn(generateReport);
     const deps = {
       dataContext: worker,
+      boss,
       gateway: { runBackgroundReadForActor: source },
       generateReport: model
     };
@@ -187,28 +192,68 @@ describe("configured scheduled reports through the worker", () => {
     ).toBe("inactive");
     expect(model).toHaveBeenCalledTimes(1);
   });
-  it("exhausts at two retries even when queue metadata allows more", async () => {
+  it("exhausts at two admissions even when queue metadata allows more", async () => {
     const saved = await save();
     const model = vi.fn(generateReport);
+    const source = vi.fn(async () => ({
+      ok: false as const,
+      error: "failed",
+      failureKind: "read" as const,
+      retryable: true as const
+    }));
     const deps = {
       dataContext: worker,
+      boss,
       generateReport: model,
-      gateway: {
-        runBackgroundReadForActor: async () => ({
-          ok: false as const,
-          error: "failed",
-          failureKind: "read" as const,
-          retryable: true as const
-        })
-      }
+      gateway: { runBackgroundReadForActor: source }
     };
-    for (const retryCount of [0, 1])
-      await expect(
-        runScheduledReadJob({ data: saved.data, retryCount, retryLimit: 99 }, deps)
-      ).rejects.toThrow("temporarily failed");
+    await expect(
+      runScheduledReadJob({ data: saved.data, retryCount: 0, retryLimit: 99 }, deps)
+    ).rejects.toThrow("temporarily failed");
+    const pending = await owner((db) =>
+      db.db
+        .selectFrom("app.chat_scheduled_reads")
+        .selectAll()
+        .where("reminder_id", "=", saved.id)
+        .executeTakeFirstOrThrow()
+    );
+    expect(pending).toMatchObject({ attempt_count: 1, attempt_state: "retry_pending" });
+    const recoveries = async () =>
+      (
+        await bootstrap.query(
+          "SELECT id,data FROM pgboss.job WHERE name='chat.scheduled-read' AND data->>'resourceId'=$1 AND data ? 'idempotencyKey'",
+          [saved.id]
+        )
+      ).rows;
+    const dispatched = await recoveries();
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]?.id).toBe(pending.recovery_job_id);
+    const wakes = async () =>
+      (
+        await bootstrap.query(
+          "SELECT id FROM pgboss.job WHERE name='chat.scheduled-read-bookkeeping' AND data->>'resourceId'=$1 ORDER BY id",
+          [saved.id]
+        )
+      ).rows;
+    expect(await wakes()).toEqual([{ id: pending.watchdog_job_id }]);
+    expect(
+      await runScheduledReadJob({ data: saved.data, retryCount: 1, retryLimit: 99 }, deps)
+    ).toBe("failed");
+    const terminal = await owner((db) =>
+      db.db
+        .selectFrom("app.chat_scheduled_reads")
+        .selectAll()
+        .where("reminder_id", "=", saved.id)
+        .executeTakeFirstOrThrow()
+    );
+    expect(terminal).toMatchObject({
+      attempt_count: 2,
+      attempt_state: "terminal",
+      recovery_job_id: pending.recovery_job_id
+    });
     expect(
       await runScheduledReadJob({ data: saved.data, retryCount: 2, retryLimit: 99 }, deps)
-    ).toBe("failed");
+    ).toBe("inactive");
     expect(model).not.toHaveBeenCalled();
     const result = (await owner(listScheduledReminders)).find((r) => r.id === saved.id)?.runs[0]
       ?.message;
@@ -216,6 +261,12 @@ describe("configured scheduled reports through the worker", () => {
     expect(
       await runScheduledReadJob({ data: saved.data, retryCount: 3, retryLimit: 99 }, deps)
     ).toBe("inactive");
+    expect(source).toHaveBeenCalledTimes(2);
+    expect(model).not.toHaveBeenCalled();
+    expect(await recoveries()).toEqual(dispatched);
+    const receipts = await wakes();
+    expect(receipts).toHaveLength(2);
+    expect(receipts.map((job) => job.id)).toContain(terminal.watchdog_job_id);
   });
   it.each(["unavailable", "failed", "timeout"] as const)(
     "model %s posts honestly without retrying",
@@ -226,6 +277,7 @@ describe("configured scheduled reports through the worker", () => {
           { data: saved.data, retryCount: 0, retryLimit: 2 },
           {
             dataContext: worker,
+            boss,
             gateway: gateway(),
             generateReport: async () => ({ ok: false, reason })
           }
@@ -269,7 +321,7 @@ describe("scheduled-read and chat-turn lock order", () => {
       }
       let loads = 0;
       const dataContext = new ObservedDataContextRunner(workerDb, async (db) => {
-        if (++loads === (phase === "initial" ? 1 : 4)) workerPid.resolve(await backendPid(db));
+        if (++loads === (phase === "initial" ? 1 : 6)) workerPid.resolve(await backendPid(db));
       });
       const real = gateway();
       let reads = 0;
@@ -277,6 +329,7 @@ describe("scheduled-read and chat-turn lock order", () => {
         { data: saved.data },
         {
           dataContext,
+          boss,
           generateReport,
           gateway: {
             runBackgroundReadForActor: async (...args) => {
@@ -314,10 +367,10 @@ describe("scheduled-read and chat-turn lock order", () => {
     const dataContext = new ObservedDataContextRunner(
       workerDb,
       async (db) => {
-        if (++loads === 4) workerPid.resolve(await backendPid(db));
+        if (++loads === 6) workerPid.resolve(await backendPid(db));
       },
       async () => {
-        if (loads === 4) {
+        if (loads === 6) {
           posted.resolve();
           await releasePost.promise;
         }
@@ -325,7 +378,7 @@ describe("scheduled-read and chat-turn lock order", () => {
     );
     const delivery = runScheduledReadJob(
       { data: saved.data },
-      { dataContext, generateReport, gateway: gateway() }
+      { dataContext, boss, generateReport, gateway: gateway() }
     );
     void delivery.catch(() => undefined);
     await untilObserved(posted.promise, delivery);
@@ -357,6 +410,7 @@ describe("scheduled-read and chat-turn lock order", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          boss,
           gateway: gateway(),
           generateReport: async (...args) => {
             const changed = await owner((db) =>

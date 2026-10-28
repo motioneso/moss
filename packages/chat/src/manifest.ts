@@ -99,6 +99,7 @@ export const chatModuleManifest = {
       "sql/0321_chat_repeating_reads.sql",
       "sql/0322_chat_responsibility_agreements.sql",
       "sql/0323_chat_unread_messages.sql",
+      "sql/0324_chat_scheduled_read_attempts.sql",
       "sql/0327_chat_voice_requests.sql",
       "sql/0333_chat_automatic_voice_inputs.sql"
     ],

@@ -1,6 +1,6 @@
 # Terminal refusal after one-time task-check interpretation
 
-2026-10-16. Proposed canonical destination: `docs/superpowers/specs/2026-10-16-scheduled-read-terminal-creation.md`. **DRAFT — separate local implementation approval required.** This entire file is the sanitized canonical specification draft; it may be copied verbatim only under the requested grant.
+2026-10-16. Canonical specification for #3529. The original local behavior agreement below is retained; its draft/prospective language describes that original fixed-source scope. The observer R2 amendment is an accepted diagnostic design, with documentation-only authority in this window. It does not release an executable or waive any acceptance obligation.
 
 ## Problem and bounded outcome
 
@@ -64,3 +64,281 @@ Record external structured `generateStructured` admissions separately from chat-
 Application admissions, CLI/ACP launch/submit and raw upstream provider requests remain distinct. Common completed-turn persistence can enqueue embedding/fact-extraction/summary work. Record that queue inventory; do not suppress existing enqueue behavior. No workers run in this fixture. Enqueue is an attribution/coverage gap, not observed dispatch or a proved cap violation. This separate local scope does not redefine which work belongs to the original experiment's cap or authorize prohibiting embeddings.
 
 A successful local result is **locally code-complete, unverified for shipping/installation** after its exact checks and independent code review. Full foundation/CI, actual installed UI/provider proof, original total-call enforcement/count/async/fault proof, publication and merge remain separate gates. Stage4 remains NOT_ACCEPTED. A failed/missing check is recorded precisely; no issue Done/closure, shipped, installed, fixed-#3503 or Stage4-accepted claim follows.
+
+## Observer R2 amendment: supplemental installed fallback evidence
+
+This diagnostic contract supplements the original N3 behavior and local tests; it changes no app-visible semantics. It does not implement a general budget, raw upstream count cap, new error/remediation, setting, provider policy or queue rule. Application attempts, completed activity, CLI/ACP operations and upstream requests remain distinct. Completed-chat activity alone cannot establish zero failed or aborted fallback attempts. Finding 4 stays hardblocked by the existing live guards until independently accepted executable evidence supplies this contract; accepting these documents is not that release.
+
+### Noninterference and exact version 1 coverage
+
+Disabled by default means no subscriber installation, asynchronous context, I/O, timers or delegate wrappers. When enabled, preserve factory selection, engine objects, arguments, `this`, result/error identity and cancellation. The whole subscriber must be nonthrowing: initialization, validation, serialization, socket/error/timer callbacks and promise rejection handlers included. Every observer failure sets sticky evidence error or renders the observer unavailable; catching publish alone is insufficient. Do not intercept process-wide uncaught exceptions. Observer readiness is separate from product health/readiness. There is no product endpoint, setting, ledger, error or app-map-visible behavior change; any newly proposed user-visible semantics would require a separately reviewed owning app-map change.
+
+Version 1 has exactly twelve registered sites: `turn`, `ensure.initial`, `ensure.retry`, `heal`, `factory`, `launch`, `replay.submit`, `submit.initial`, `submit.retry`, `classifier.evaluate`, `shadow.start`, `shadow.run`. All registrations are required before observer Ready. Record entry synchronously before invoking the delegate, including immediate failure; record actual settlement with an outcome enum and abort state. Maintain monotonic sequence, cumulative counters, coverage and sticky errors across all evidence windows; resets cannot erase an attempt.
+
+The new observer module lazily uses `AsyncLocalStorage`. Scope the entire accepted-turn body immediately after minting its existing turn ID, through setup and every terminal, error and finally path. Bind the captured request-thread ID before terminal return and require equality with the independently known owned Main thread. Correlate the accepted actor, thread, surface and turn; unknown context fails proof. Propagate context through initial/retry ensure, asynchronous healing, factory, launch and replay without changing manager/runtime/helper signatures. Track the original healing promise until actual settlement even when admission stops waiting. Track shadow `runAttempt` through its actual finally: a returned `shadow.start` is not proof of classification or settlement.
+
+### Initial-start bootstrap, transport and ownership
+
+Use one narrowly typed opt-in at the existing provisioner/env-writer boundary before initial start. Accept only a 64-hex nonce, bootstrap SHA256, schema version 1 and the shared absolute deadline. Derive the fixed `/app/tests/uat/n3-fallback-observer-bootstrap.mjs` import internally. Reject conflicting scripted-provider configuration and arbitrary inherited `NODE_OPTIONS`. Verify the committed and installed-image bootstrap hash and private env identity before first start. With the option omitted, env output bytes remain identical. No recreation/snapshot API, container transition or unrelated shared signature change is permitted.
+
+The bootstrap may be imported by supervisor, migration, worker, health or query children, but activates only for resolved `/app/dist/server.js`, bound to the API PID, birth and exact container. The bundled observer channel needs no source-loader adapter. Bind the existing first-start producer inventory to exact container/image/source/bundle/bootstrap hashes and auth/socket volume IDs/mounts. Keep its immutable chain and command/raw-exit receipts authoritative, without relabeling or a second recorder.
+
+Keep the nonce directory 0700 and socket 0600. Query the exact bound container only. Frames are capped at 4 KiB, attempts at 256 and buffered metadata at 64 KiB; every operation is bounded by the shared absolute deadline. Transport IDs/enums only, never message content, credentials, tokens or raw errors. Identity ambiguity, overflow, transport loss, reset/restart, concurrency, unclassified work or sticky error makes evidence RED. Preserve the accepted host-lifetime/deadline boundary; process exit never proves an uncertain child closed or licenses resource release.
+
+On success, failure or abort, retain uncertain ownership, private roots, resources and port rather than falsely recording closure. Existing service-plus-slot credential cleanup precedes `down -v`. Require both successful returned teardown and terminal producer absence records, including failure paths. Missing cleanup, evidence or source identity is a hard failure, not an acceptance waiver.
+
+### Evidence windows and sensitivity
+
+Begin each N3 window only with healthy observer identity/coverage and globally zero open turns/attempts. End requires exactly one matched actor/thread/surface/turn begin/end, actual settlement of every descendant, terminal HTTP/UI completion and an acknowledged sequence barrier; an event-loop tick is insufficient. Require identity/sequence continuity, globally quiescent boundaries and no forbidden attempt delta. This observer requirement does not replace the original structured-admission, saved/refused text, actor-scoped schedule/source/job or cleanup assertions.
+
+After both N3 windows, exercise one bounded harmless real ordinary UI turn as a separate positive control. Keep installed provider, model and classifier modes unchanged; create no additional future tasks. Separately, offline tests exercise the actual classifier/shadow callsites with adverse, abort and observer-guard-removal controls. Those controls prove sensitivity, not real installed classification. Neither a shadow start nor the ordinary positive control permits an unsupported classification claim or a provider/model/mode substitution.
+
+The seeded-owner supplemental proof does not prove fresh signup through Settings/provider setup into N3. Primary signup, the existing nine blocking UATs, N1, cancellation/unsaved/fault/due-worker and routine activation obligations remain outstanding where already held. Prior local/full/CI results retain their exact frozen source applicability; none certifies a future observer executable. No live run, push, merge, issue closure or broader activation follows from this amendment.
+
+### Source lock and serial implementation boundary
+
+The plan reserves the accepted prospective fifteen-path union, split into O1 and O2, but this window leases only these canonical spec/plan documents. Preserve executable freeze `5113700e878158212a42b33c42336ee46947beaf` and its accepted lifecycle repair. Product baseline is `966527c413adc752def72f45ce0c54e660ca0615`; the observer contract also cited product-equivalent `e0638457e1612e49bef5bf082ff79fec39954963`. Producer anchor `81e824a73c74bcd17a9ccce8dcb7f8e0b470d961` is superseded and not integratable. Exact replacement **P = `04436bad186750c7b569a30d460b960a464052d1`**, its direct child, is independently accepted as a finite three-path lifecycle repair. Resolve source identity from immutable Git objects only. Producer ownership remains read-only; explicit overlapping-path handover is pending canonical/O1 acceptance. Pinning P grants no executable edits or integration.
+
+No executable implementation may start until this exact producer pin is accepted in the reviewed canonical source-lock amendment and the applicable window has an explicit lease. Preserve the current executable lock until its reviewed amendment; do not widen it automatically, read a mutable producer worktree, or integrate a candidate without authorization. O1 requires its separate six-path grant. O2 integration and overlapping producer-path ownership transfer follow canonical/O1 acceptance and require explicit handover plus its own executable lease. Keep observer composition in the focused helper rather than expanding the 1000-line runner. Implementation, adverse controls, integrated source/image/producer bindings and final executable review are still due.
+
+## O2a structural rider R2 — authorized layout maintenance
+
+The coordinator’s O2a R1 brief and structural rider R2 explicitly authorize this finite continuation on accepted O1 `80ceefc563fb9eeb2df0e89b0fbfb498e128389c`, after conflict-free producer integration at `8fe37b0858a3ccd8f838d4c6ddbf42763708f558` (tree `84d66053e1ba4c0868f51c1ca4c99c3556fff2bc`). P remains exactly `04436bad186750c7b569a30d460b960a464052d1`; the integration freeze and R1 evidence remain immutable. This explicit lease supersedes the historical pending-lease/layout statements above only for O2a, without changing the diagnostic contract or any runtime/acceptance hold.
+
+The following exact structural additions resolve the 999-line provisioner/test constraint without compaction or broad refactoring. Repository paths are under `~/Jarv1s`:
+
+| O2a path                                           | Narrow responsibility                                                                                                                                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/uat/provisioner-options.ts`                 | Move the existing options interface intact, retaining the public type re-export; hide narrowly typed observer validation, pin and env preparation. No new lifecycle or cleanup manager.                             |
+| `tests/uat/provisioner-lifecycle-fixture.ts`       | Move the existing private `lifecycleFixture` factory intact into a test-only shared helper; no test registration, module mocks or global side effects. Retain all existing assertions, cases and fixture semantics. |
+| `tests/uat/n3-fallback-observer-bootstrap.test.ts` | Focused fake/offline subscriber and initial-provisioning controls, reusing the extracted fixture; no importing a test module or duplicating the whole fixture.                                                      |
+
+The complete O2a executable lease is those three paths plus `tests/uat/n3-fallback-observer-bootstrap.mjs`, `tests/uat/provisioner.ts`, `tests/uat/provisioner.test.ts` and `tests/uat/env-file.ts`. All seven files stay at most 1000 lines. Accepted O1’s six files, including its unit file, stay byte-for-byte unchanged. `tests/uat/lifecycle-records.ts` remains exact P. Preserve all 103 retained tests and their original case bodies. This nonsemantic layout amendment is committed separately before source edits and needs no additional plan gate; it adds no user-visible behavior or app-map declaration.
+
+O2a implements only the original nonthrowing subscriber/bootstrap and typed initial-provisioning contract. O2b retains runner/helper/spec wiring, independently owned identity/source/image/producer consumer bindings, windows’ UI/HTTP completion proof and the separate real positive. The original N3 runner/spec hard guards stay unchanged. No consumer relabeling, recreation, arbitrary NODE_OPTIONS, provider/model substitution, weakened bindings, uncaught-exception interception or new lifecycle recorder is permitted. Shared absolute deadlines, private transport, bounded metadata, cumulative correlation/settlement/barrier requirements, decisive offline protection-removal controls and exact restoration remain mandatory. Independent exact-commit review is still required; no Docker/DB/provider/browser/installed/live/socket execution, full gate, CI, push, PR, merge, signup, final O2 acceptance or automatic successor is released.
+
+## O2b serial layout amendment — offline consumer lease
+
+For #3529, the coordinator’s O2b1 R1 brief authorizes a finite offline build on accepted O2a
+`c1739462bc364d0665818a25207d253a9039ebc8`. This nonsemantic amendment supersedes only the
+historical helper-test placement and unsplit O2b layout. Commit it separately before executable edits.
+
+O2b1 leases exactly two new executable paths under `~/Jarv1s`:
+`tests/uat/n3-fallback-observer-runner.ts` for the inert typed consumer, independent receipt and
+identity checks, fixed persistent native bridge, cumulative windows and bounded bridge disposal;
+and `tests/uat/n3-fallback-observer-runner.test.ts` for dedicated fake-only controls. Each stays at
+most 1000 lines without compaction. Expected authoritative pins remain separate from independently
+collected installation, API and producer observations. Preserve the version 1 schema, private
+channel, immutable chain, source/image/volume identity, actual descendant settlement, external
+UI/HTTP completion attestation, barrier and inherited absolute deadline contracts above.
+
+After independent exact-commit O2b1 acceptance, O2b2 requires its own serial ownership transfer
+and lease for minimal existing runner and real UI spec composition, plus finite adapter/test
+integration changes. O2b1 does not lease those paths or an O1 test edit. The original runner/UI
+guards, accepted O1/O2a and exact P bytes remain frozen. O2b1 runs fake-only tests and scoped static
+checks; it opens no actual Docker/socket/DB/provider/browser resources and runs no existing runner
+selftest, full gate or CI. Freeze local evidence for two-axis independent review. O2b2, runtime,
+publication and Stage4 acceptance remain held; no push, PR, merge or automatic successor is granted.
+
+## O2b2 packaging prerequisite R1 — finite static child K
+
+For #3529, the explicit finite packaging grant authorizes only `.dockerignore` and these existing canonical spec/plan documents in one local direct child K of accepted C `cb9420a924a6725f501e03f6155ce0e70228aa92` (tree `5ee00eb9de7e27d473ca0dbb7ebfb6e44873f1d9`). Earlier pending-lease language is superseded only for this three-path prerequisite. K remains subject to independent exact-commit review and coordinator acceptance; this amendment asserts neither acceptance nor installed proof. Accepted P `04436bad186750c7b569a30d460b960a464052d1`, O1 `80ceefc563fb9eeb2df0e89b0fbfb498e128389c`, O2a `c1739462bc364d0665818a25207d253a9039ebc8` and O2b1 C retain their executable bytes and applicability.
+
+### Canonical installed-map reconciliation
+
+The fixed installed map has exactly fourteen duplicate-free keys: the complete four-member accepted fixture union, five inherited product-source checks and five O1 production sources after deduplication. The fixture corroborates required membership; it is not a production map or image proof. All thirteen source members below are normal mode `100644` blobs at C and remain byte-identical. Their source hashes are authoritative frozen Git inputs, independent of observations. The generated bundle has no invented source hash.
+
+| Installed key                                              | Frozen C source SHA256 / generated baseline                         | Role                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
+| `/app/tests/uat/n3-fallback-observer-bootstrap.mjs`        | `cb5e0aad361cd18305d511752bfd05fb40362f4673176225f04d1ef435afd97d`  | initial-start bootstrap                               |
+| `/app/tests/uat/lifecycle-records.ts`                      | `aaeed62a44bfd45c1767f7a0ecdb8198227562c22a913187fe2550430d4251e0`  | passive producer source mirror; executes only on host |
+| `/app/packages/chat/src/live/chat-session-manager.ts`      | `e8687560858dc953a64ba7017a9aff9175588408f3ec3435fb6e8c08e7c8becc`  | retained manager anchor                               |
+| `/app/packages/chat/src/live/chat-session-ports.ts`        | `0195bd5bcd288289b82cc1010463cd99c7049ff98df2729e450cfcf3aa076114`  | inherited product source                              |
+| `/app/packages/chat/src/live/pre-model-turn.ts`            | `113ceb8cc90d8005d5d28017a7d197158bd02e01a168b4d0141422958ed6d140`  | inherited product source                              |
+| `/app/packages/chat/src/reminders/features.ts`             | `91ca420a38f8fc9bdf9003953e2f26429a5c480dd335248aabd4c9f84d922158`  | inherited product source                              |
+| `/app/packages/chat/src/scheduled-reads/generation.ts`     | `b6d4883b3abba7103d07549be68045cdb0bf6b8d77e3c618f725434e42d1979b`  | inherited product source                              |
+| `/app/packages/chat/src/scheduled-reads/request.ts`        | `b9f0cde8124905180fcec82ab2665def136bf98038ee4db9b8958eab7e9f0174`  | inherited product source                              |
+| `/app/packages/chat/src/live/chat-attempt-observer.ts`     | `9a21cd24d0a1888159c0df855deb1116313c009791db928fa3f536dd520d8af1`  | O1 observer source                                    |
+| `/app/packages/chat/src/live/chat-session-turn.ts`         | `d8e4461a87d3785bea18e98bd687843a54ea7401dc69160249eb0c1abce5df84`  | O1 turn hooks                                         |
+| `/app/packages/chat/src/live/chat-session-launch.ts`       | `38e75a015cd7a415071cc09e9747c10274ff15344933c8f3c82e067be7e330a2`  | O1 launch hooks                                       |
+| `/app/packages/chat/src/live/classifier-gate-lifecycle.ts` | `c4483827a5330ace9dac901fedba8b77d600eae9f312bde447d4c9203fd7290c`  | O1 evaluation hooks                                   |
+| `/app/packages/chat/src/live/classifier-gate-shadow.ts`    | `ed0dc5f536d4372718039f6e6606b94414eed4d611d232a4565e1972022d6308`  | O1 shadow hooks                                       |
+| `/app/dist/server.js`                                      | Generated; original closed build and image-backed baseline required | API bundle; no static source hash                     |
+
+`/app/tests/uat/lifecycle-records.ts` is a passive exact source mirror. It is never imported or executed by the API container; lifecycle execution, producer source authentication, immutable chain and command/raw-exit/close receipts remain independently host-owned. The mirror must equal both the independently authenticated host producer and exact accepted P source. Omitting it as “host-only” would change the accepted trust contract and is not authorized.
+
+The eleven `packages/chat` members are existing context inputs. The fixed bootstrap uses Node builtins and activates only for resolved `/app/dist/server.js`; no UAT source-loader or transitive provisioner tree is needed. The unchanged `Dockerfile` copies context with `COPY . .`, invokes `pnpm build:api` in the build stage and inherits that stage into runtime. `package.json` maps that command to `tsx scripts/build-app.ts api`, which emits `dist/server.js`. `**/dist` remains excluded from source context; the bundle digest must come from the original fresh closed build and its image-backed never-started original container. The generated `.js.map` is not an additional installed-map key. This finite map does not enumerate every API dependency or image file; the full reviewed repository source/tree/input fingerprint remains mandatory.
+
+Original runner, real UI spec, provisioner, options/env/compose/auth helpers, accepted consumer adapter, future installed collector, fixtures and all unit/UAT tests remain independently source/tree-pinned host/browser orchestration or fake controls. Their exclusion does not justify further carve-ins. Fixed native bridge/readers remain committed host source passed through the reviewed allowlist. `Dockerfile`, `.dockerignore`, manifests/lock, build scripts, compose inputs, private producer channel and actual command receipts retain their independent build/provenance authority. P already fingerprints `Dockerfile` and `.dockerignore` together with commit/tree. A future build binds its actual final O2b2a source identity and fingerprint, never a relabeled C or a purported packaging-built image.
+
+### Exact context delta and static limits
+
+The sole context change inserts exactly `!tests/uat/lifecycle-records.ts` immediately after `tests/uat/*.ts`. Preserve every original byte, newline, rule order and all other exclusion/exception behavior. C ignore SHA256 is `982de9acc88c3e42bf4874c5023b1b931dba76488967c6c48ba10e57eb666570`; K ignore SHA256 is `c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`. Removing that exact inserted line reconstructs C. No wildcard/blanket inclusion, producer edit, Dockerfile change or additional context member is authorized.
+
+Before editing, verify clean owned C, the ordinary producer blob, absent `Dockerfile.dockerignore`, included `tests`/`tests/uat` ancestors and unchanged copy/build/generation stages. Reproduce every source hash from immutable C. Bounded Docker-compatible last-match/ancestor traces must show C includes twelve of thirteen source members and K includes thirteen; only the producer changes. Check all tracked paths using the frozen rule grammar, or an explicit finite-rule proof: the literal negation has only its exact path/descendant domain; the target is a regular tracked file without descendants, parents are included and no later rule rematches it. Unsupported syntax, excluded ancestor, nonregular/missing member, override or extra membership delta is a finite stop.
+
+Adjacent/suffix/nested producer-like paths, provisioner, current/future collector/adapter sources/tests, real UI spec and O1 tests retain their prior membership. Preserve preexisting nested inclusions and every secret/local/runtime exclusion. In-memory removal of this exception must fail the same unchanged required-producer-membership assertion with numeric status, original/proposed/removed/restored input hashes and exact restoration. These checks establish static context membership only; they are not Docker, build-context archive, installed-image, tar or mount security proof. No product test, build or runtime is authorized by this prerequisite. The later dedicated `tests/uat/n3-fallback-observer-installed.test.ts` must consume this same canonical map and check immutable context membership, including failure on in-memory removal of the exact exception; it is not leased now.
+
+### Serial acceptance and retained R2 obligations
+
+Freeze K commit/tree/parent, exact three-path diff, file hashes/blobs/modes, static receipts and clean owned state. Only coordinator acceptance of independently reviewed K and a separately reviewed complete five-path O2b2a brief may establish the new packaging base. `.dockerignore` then returns to frozen status. O2b2a still commits its own narrow two-document serial/provenance amendment separately before executable edits, freezes its own final source commit/tree and binds the future original build to that actual source. No packaging image is claimed.
+
+Every R2 safeguard remains binding: attach to the original build ChildProcess after pre-spawn source/command/daemon freeze; independently observe raw zero exit and separate close before image-built; preserve omitted-option commands/env/errors/defaults. Use the original O2a-created never-started API container and the awaited hook after O2a immediately before original first up, without recreation. Independently verify exact identity/state/source/daemon and empty diff, all mount types and canonical destinations before any cp and again immediately before up, with no intervening async work except original start dispatch and a final deadline check. Reject file/ancestor/root overlays, ambiguous paths and late substitutions; independently reconcile required auth/socket volume identity and P inventory.
+
+Read only fixed map keys with exact original-container cp commands. Strict bounded tar validation requires exactly the requested regular member and rejects links, extras, directory members, malformed/checksum/size/truncated archives, extensions/path overrides and trailing substitutions before hashing. Preserve independently authoritative expected pins versus observed receipts, connected collector/accepted-adapter composition, closed read allowlist, inherited absolute deadline, bounded outputs/closure and uncertain-ownership retention. Every future mount/tar removal witness must fail an unchanged attributable assertion with unrelated protections active, restore exact bytes in `finally` and rerun affected controls; static membership sensitivity cannot substitute for those witnesses.
+
+Original runner/UI and both unconditional guards, P/O1/O2a/O2b1 sources/tests, package/lock/config bytes and original behavior remain frozen. No app-visible behavior or app-map declaration changes. O2b2b, actual Docker/socket/DB/provider/browser/port/process/signal work, full foundation gate, CI, publication, push/PR/merge, guard releases, final O2 and Stage4 acceptance remain held. This finite prerequisite grants no automatic follow-on, successor or source ownership transfer.
+
+## O2b2a R3 — finite offline provenance implementation
+
+The finite execution grant on accepted packaging K
+`e2b66b672d625221ddd7139d31046372d94d2e8d` authorizes only this serial offline
+slice for #3529. Commit this amendment separately as A before executable edits;
+freeze the final candidate F and its tree through A/K after fake controls. A future
+original build must bind genuine F, never relabel C/K or claim an offline-built image.
+
+The five owned paths under `~/Jarv1s` are this spec, its matching canonical plan,
+new `tests/uat/n3-fallback-observer-installed.ts` (target 750, hard 1000 lines),
+new `tests/uat/n3-fallback-observer-installed.test.ts` (target 800, hard 1000),
+and only the original-child/pre-first-up seam in `tests/uat/provisioner.ts`
+(984 to at most 1000). No compaction, unrelated extraction or sixth path is leased.
+The fourteen-key packaging map above and all thirteen source pins are unchanged.
+The exact K ignore hash remains
+`c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`;
+Dockerfile, P/O1/O2a/O2b1, adapter/tests, original runner/UI guards and every
+package/lock/config input remain frozen except the expressly reopened provisioner seam.
+
+The optional typed `n3BuildEvidence` requires validated observer opt-in. Prepare
+actual argv/cwd/source/root/input/daemon evidence before spawn, attach synchronously
+to the original build ChildProcess, retain its birth/group/session/boot identity,
+and independently await raw zero exit plus separate close before image-built.
+Keep omitted-hook commands/env/retries/errors identical. Await the new pre-start
+hook after O2a's original container creation and before original `up --no-recreate`.
+Never replace the original build, create owner, lifecycle recorder or host supervisor.
+
+Before any new baseline cp and again immediately before original up, require the
+same original never-started container/image/config/source/daemon, empty diff and
+canonical all-mount exclusion for every fixed reviewed file and its ancestors,
+including `/app` and `/`. Independently authenticate auth/socket mounts and volume
+inspect against P inventory. Accept only the single requested regular tar member:
+validate name, checksum, size, type, padding and termination; reject links, extras,
+path overrides, truncation and trailing archives even when payload hashes match.
+Source payload ceilings equal immutable K byte lengths; bundle 64 MiB, aggregate
+archives 80 MiB, metadata per command 256 KiB, one cp pending. Archive allowance is
+one header plus rounded payload and at most 16 KiB zero termination/padding.
+
+Construct the accepted adapter through verified build/baseline receipts and closed
+fixed readers, with independent expected pins. Import/construction stays inert.
+Keep source/DB semantics, exact namespace API/socket identity, projected errors,
+one inherited absolute deadline, bounded output/closure and uncertain-handle retention.
+Fake controls traverse these seams and actual accepted O2a/P/adapter interfaces.
+Require immutable K context membership and exception removal in memory, plus
+attributable unchanged-assertion guard removals for file/ancestor/final-only mounts
+and link/extra-member tars, exact restoration and tested/Git byte correspondence.
+
+Only offline controls and scoped lint/format/types/size/diff checks are authorized;
+root nonincremental TypeScript is capped at 120 seconds. Stop at the first finite
+cap/source/receipt/context/control limitation; do not claim partial collector completion.
+Independent exact-commit Standards and Spec review precedes acceptance. O2b2b,
+actual build/Docker/socket/DB/provider/browser/port/PID-signal work, process selftest,
+full gate/CI/push/PR/merge/publication and both guard releases remain held. All nine
+blocking UATs remain UNRUN here; runtime/release/Stage4 booleans remain false and
+Stage4 remains NOT_ACCEPTED. No automatic follow-on or successor is authorized.
+
+## O2b2a R4 — six-code layout and aggregate proof treatment
+
+The issued finite offline grant for #3529 activates this exact eight-path slice on
+immutable A `dd6b60dcd458c7d2592b7bb5ecfeeca5ccf82962`, child of accepted K
+`e2b66b672d625221ddd7139d31046372d94d2e8d`. Earlier agreements and source pins
+remain intact. This appendix supersedes only the historical five-path layout,
+commit sequencing and aggregate-only witness classification for this slice.
+
+The exact six code/test paths under `~/Jarv1s`, each at most 1000 complete physical
+canonically formatted lines, are:
+
+- `tests/uat/n3-fallback-observer-installed.ts`: inert original-child capture,
+  trust ordering, baseline and accepted-consumer composition.
+- `tests/uat/n3-fallback-observer-installed-reads.ts`: inert injected bounded
+  transport and closed fixed semantic read allowlist.
+- `tests/uat/n3-fallback-observer-installed-evidence.ts`: typed pure tar, mount
+  and producer authentication, immutable source pins and literal ceilings.
+- `tests/uat/n3-fallback-observer-installed.test.ts`: connected fake controls
+  through the actual provisioner, O2a, producer, bootstrap and consumer.
+- `tests/uat/n3-fallback-observer-installed-evidence.test.ts`: pure policy,
+  immutable Git/context, size/map/arithmetic and sensitivity controls.
+- `tests/uat/provisioner.ts`: only optional typed evidence, observation and
+  awaiting of the original build child, and serial post-O2a/pre-original-up hook.
+
+The other two paths are this canonical document and its matching specification
+or plan. Append this amendment to both and commit docs-only D as a direct child
+of A before executable edits. Freeze D/tree/doc diff; executable candidate F must
+then descend D/A/K/C. F minus D changes only those six code paths; F minus K only
+the eight paths. Preserve all old assertions and every earlier document byte;
+no minification, unrelated extraction, ninth path, package/config change or cap
+waiver. The fixed fourteen installed keys and thirteen source hashes remain
+unchanged. Keep full reviewed source/root/commit/tree/input identity in addition
+to that map, and prove exact tested-versus-F Git bytes and protected correspondence.
+
+### Aggregate80MiB adjudication — exact treatment, no isolated RED claim
+
+Count each of the fourteen baseline archive buffers once, serially; metadata,
+host reads, later running observations and retained receipts do not contribute.
+The exact thirteen immutable K source lengths are 19140, 26903, 19872, 19496,
+11174, 11733, 5278, 6607, 6251, 26118, 13664, 12558 and 20867 bytes. Their sum is
+199661 and their individually 512-rounded sum is 202752. Each archive is bounded
+by the actual transport before accumulation, including malformed archives, at
+one 512-byte header plus rounded payload plus at most 16384 bytes of validated
+zero termination/padding. The single generated bundle remains capped at 67108864
+bytes (64 MiB), with no static or observer-derived expected bundle hash.
+
+The exact safe-integer maximum is
+`202752 + 67108864 + 14*(512+16384) = 67548160 < 83886080`.
+Every nonnegative running partial sum is bounded by that total; the margin is
+16337920 bytes. Metadata retains its separate 256 KiB stdout/stderr limits and
+cannot fill this gap. Retain the delivered 80 MiB guard and every stronger cap.
+Classify it as defense in depth:
+**NO_ISOLATED_AGGREGATE_WITNESS_POSSIBLE_UNDER_FIXED_CAPS**. No independent
+aggregate-guard assertion RED is required or credited; this is no guard waiver.
+
+The named evidence test must independently obtain all thirteen source lengths
+and hashes from immutable K Git blobs and candidate Git inputs, cross-check the
+literal map/lengths, assert thirteen sources plus one bundle and fourteen distinct
+keys, source totals 199661/202752, all fourteen archive ceilings, and the exact
+67548160 maximum strictly below 83886080. Expected paths and numeric results
+cannot come solely from implementation output. Record its actual numeric result
+as arithmetic/model evidence, never aggregate-removal security evidence.
+
+Connected fakes must traverse actual transport and provisioner seams, enforce
+closed key/order/count, one pending cp, source/archive/metadata overflow refusal,
+and malformed-tar controls. The positive receipt retains fourteen ordered archive
+byte counts and their sum below the bound. Independent exact-F structural review
+must establish that no admitted path repeats or adds uncounted archives or bypasses
+those limits. A future map/size/count/transport change invalidating this arithmetic
+requires fresh adjudication. Do not add keys/copies, alter caps, inject oversized
+returns above the real transport or remove another guard to manufacture sensitivity.
+
+Retain every reachable R3 original-child, file/ancestor/final-only overlay and
+link/extra-member tar boundary and its required attributable unchanged-assertion
+removal/restoration. Prepared patches are inputs only. Preserve unrelated guards,
+record numeric exits/durations, patches and original/mutant/restored hashes, restore
+exact source in finally and rerun affected controls. Masked failures, setup errors
+and timeouts are NONDECISIVE. Context-exception removal is in memory only; frozen
+ignore SHA256 remains `c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`.
+
+Pin exact new and retained fake suites and inspect their dependencies before launch.
+Run only finite scoped fake checks, required witnesses, lint/format/strict types,
+root nonincremental noEmit (at most 120 seconds), caps/protected/diff checks, with
+at most 120 seconds per command and 1200 seconds aggregate offline checks. Stop at
+the first unsatisfied source/cap/receipt/context/witness/session obligation; no
+campaign, successor or partial-completion promotion. Freeze F/tree/input/evidence
+before separately owned independent Standards and Spec review of that exact F;
+any repair creates a new candidate requiring renewed exact-commit review.
+
+O2b2b remains separately leased for original runner/UI/source-lock/host-supervisor
+integration, exact Main-thread/message/turn completion, two terminal windows and
+separate harmless real positive, returned teardown plus terminal P absence/chain
+proof, twelve-minute run and two-minute cleanup, credentials before down-v and
+uncertain retention. This slice runs no Docker/build/live socket/DB/provider/browser,
+port/PID-signal work, process selftest, install, full gate, CI, push/PR/merge or
+publication. Both unconditional guards, all runtime/release/Stage4 booleans remain
+false; nine real UATs remain UNRUN/NONLAUNCHABLE and Stage4 NOT_ACCEPTED.
