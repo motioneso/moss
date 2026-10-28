@@ -63,7 +63,7 @@ $("[data-close-chat]")?.addEventListener("click", closeChat);
 opener?.addEventListener("click", () => {
   chat.hidden = false;
   syncDrawer();
-  $("#app-password, [data-close-chat]")?.focus();
+  ($("#app-password") || $("[data-close-chat]"))?.focus();
 });
 chat?.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -89,7 +89,7 @@ $("[data-send]")?.addEventListener("click", () => {
   const composer = $(".chatd-input textarea");
   if (!composer.value.trim()) return;
   composer.value = "";
-  const locked = window.location.pathname.endsWith("locked.html");
+  const locked = window.location.pathname.split("/").at(-1) === "locked.html";
   window.location.assign(locked ? "expired.html" : "chooser.html");
 });
 media.addEventListener("change", syncDrawer);
