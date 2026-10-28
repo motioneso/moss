@@ -42,7 +42,7 @@ export type ProducerBindings = Pick<
   | "volumes"
 >;
 const rounded = (n: number) => Math.ceil(n / 512) * 512;
-export const K = "e2b66b672d625221ddd7139d31046372d94d2e8d";
+export const K = "df85689a14cef96618d71be00521a19733bdcd6d";
 export const IGNORE_SHA256 = "c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938";
 // Literal immutable K payload ceilings are installed below, never learned from Docker output.
 export const SOURCE_FILES: Readonly<Record<string, readonly [string, number]>> = Object.freeze({
@@ -51,24 +51,24 @@ export const SOURCE_FILES: Readonly<Record<string, readonly [string, number]>> =
     19140
   ],
   "/app/tests/uat/lifecycle-records.ts": [
-    "aaeed62a44bfd45c1767f7a0ecdb8198227562c22a913187fe2550430d4251e0",
-    26903
+    "f9ee634f867e2ba271d092fe9178b5f3257ac9c43dc74b10b95ac881e2cc38ad",
+    26974
   ],
   "/app/packages/chat/src/live/chat-session-manager.ts": [
-    "e8687560858dc953a64ba7017a9aff9175588408f3ec3435fb6e8c08e7c8becc",
-    19872
+    "84c4e754f13647c497d4f980a6aa729fc8e1bdc9735a55441b0d73c9dad013a3",
+    24380
   ],
   "/app/packages/chat/src/live/chat-session-ports.ts": [
-    "0195bd5bcd288289b82cc1010463cd99c7049ff98df2729e450cfcf3aa076114",
-    19496
+    "d7b6e7dae1765c7867433db39a06a46b86c913b29cb22588e55e2234798c005a",
+    20498
   ],
   "/app/packages/chat/src/live/pre-model-turn.ts": [
     "113ceb8cc90d8005d5d28017a7d197158bd02e01a168b4d0141422958ed6d140",
     11174
   ],
   "/app/packages/chat/src/reminders/features.ts": [
-    "91ca420a38f8fc9bdf9003953e2f26429a5c480dd335248aabd4c9f84d922158",
-    11733
+    "942de0883c86935b7c096c0004dcf00ce0788659a960ffa07eec07591790bd20",
+    11833
   ],
   "/app/packages/chat/src/scheduled-reads/generation.ts": [
     "b6d4883b3abba7103d07549be68045cdb0bf6b8d77e3c618f725434e42d1979b",
@@ -83,16 +83,16 @@ export const SOURCE_FILES: Readonly<Record<string, readonly [string, number]>> =
     6251
   ],
   "/app/packages/chat/src/live/chat-session-turn.ts": [
-    "d8e4461a87d3785bea18e98bd687843a54ea7401dc69160249eb0c1abce5df84",
-    26118
+    "c34793081aa78b831975bd81779b9874a9d53ae02d5e654419769c8cb40d08ac",
+    29613
   ],
   "/app/packages/chat/src/live/chat-session-launch.ts": [
-    "38e75a015cd7a415071cc09e9747c10274ff15344933c8f3c82e067be7e330a2",
-    13664
+    "e4061547bb2b3bfbdcfb1e04392baa955d976df40e65ea838b9a0089be1a2c91",
+    13677
   ],
   "/app/packages/chat/src/live/classifier-gate-lifecycle.ts": [
-    "c4483827a5330ace9dac901fedba8b77d600eae9f312bde447d4c9203fd7290c",
-    12558
+    "82a272597f9f8c451a5fe675a74c1d54e5511d5ad5456798882b0a8c5ca7d124",
+    12686
   ],
   "/app/packages/chat/src/live/classifier-gate-shadow.ts": [
     "ed0dc5f536d4372718039f6e6606b94414eed4d611d232a4565e1972022d6308",

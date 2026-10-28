@@ -10,7 +10,12 @@ import {
   type ListScheduledTasksResponse,
   type LocaleSettingsDto
 } from "@moss/shared";
-import { requireFallbackObserver } from "../run-scheduled-read-terminal-uat.js";
+import {
+  completeWindow,
+  receiptSha256,
+  requestWindow,
+  type WindowMode
+} from "../n3-window-handshake.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { execUatSql } from "./job-search-board-sql.js";
 import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
@@ -174,12 +179,33 @@ function outcome(since: string): Outcome {
 function databaseNow(): string {
   return sqlJson<{ now: string }>("SELECT json_build_object('now',clock_timestamp())").now;
 }
-async function sendInMain(page: Page, text: string): Promise<void> {
+let windowSeq = 0;
+function mainThreadId(): string | null {
+  return sqlJson<{ id: string | null }>(`SELECT coalesce(
+    (SELECT json_build_object('id',id) FROM app.chat_threads
+      WHERE owner_user_id='${UAT_ADMIN_ID}' AND surface='drawer' AND is_main),
+    json_build_object('id',NULL))`).id;
+}
+/**
+ * One chat turn inside one observer window. The worker opens the window before the message is
+ * sent and closes it with these receipts; any missing acknowledgement fails the test.
+ */
+async function sendInMain(page: Page, text: string, mode: WindowMode): Promise<void> {
+  const evidence = process.env.N3_UAT_EVIDENCE!;
+  const seq = ++windowSeq;
   await page.goto("/today");
   const composer = page.getByRole("textbox", { name: "Message Moss" });
   if (!(await composer.isVisible()))
     await page.getByRole("button", { name: "Chat with Moss" }).click();
   await expect(composer).toBeEnabled({ timeout: 120_000 });
+  // The window needs the thread the turn will land in, so it must already exist.
+  await expect.poll(mainThreadId, { timeout: 15_000 }).toMatch(UUID);
+  await requestWindow(evidence, {
+    seq,
+    actorUserId: UAT_ADMIN_ID,
+    threadId: mainThreadId()!,
+    mode
+  });
   const received = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -188,9 +214,30 @@ async function sendInMain(page: Page, text: string): Promise<void> {
   );
   await composer.fill(text);
   await composer.press("Enter");
-  expect((await received).ok()).toBe(true);
+  const response = await received;
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    userMessageId?: string;
+    assistantMessageId?: string;
+  };
+  expect(body.userMessageId).toMatch(UUID);
+  expect(body.assistantMessageId).toMatch(UUID);
   await expect(composer).toBeEnabled({ timeout: 120_000 });
   await expect(composer).toHaveValue("");
+  const ids = { user: body.userMessageId!, assistant: body.assistantMessageId! };
+  await completeWindow(evidence, {
+    seq,
+    turnId: ids.assistant,
+    http: {
+      status: response.status(),
+      finished: true,
+      receiptSha256: receiptSha256({ path: "/api/chat/turn", status: response.status(), ...ids })
+    },
+    ui: {
+      finished: true,
+      receiptSha256: receiptSha256({ composerEnabled: true, composerEmpty: true, ...ids })
+    }
+  });
 }
 function admittedRefusal(since: string): boolean {
   // Raw log collection remains in memory/private child output, never published.
@@ -217,8 +264,7 @@ else
   test("#3529 admitted missing-task refusal and one saved owned check stay terminal", async ({
     page
   }) => {
-    requireFallbackObserver(); // Fail closed until correlated attempt coverage exists.
-    test.setTimeout(7 * 60_000);
+    test.setTimeout(8 * 60_000);
     expect(process.env.JARVIS_GATE_RUN).toBe("1");
     expect(process.env.N3_UAT_EVIDENCE).toBeTruthy();
     expect(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED).toBe("1");
@@ -227,6 +273,8 @@ else
     await signInUatAdmin(page);
     const model = await bringUpRealChatModel(page);
     expect(model.tier).toBe("economy");
+    // Harmless positive: a plain reply, the one window allowed to show provider attempts.
+    await sendInMain(page, "Reply with the single word ready.", "positive");
     const title = `N3 owned task ${Date.now()}`;
     await page.goto("/tasks");
     const capture = page.getByRole("textbox", { name: "Task title" });
@@ -245,7 +293,8 @@ else
     const missingAt = databaseNow();
     await sendInMain(
       page,
-      `Check the status of my task N3 nonexistent task ${Date.now()} in 30 minutes`
+      `Check the status of my task N3 nonexistent task ${Date.now()} in 30 minutes`,
+      "terminal"
     );
     await expect(page.getByText(REFUSED, { exact: true }).last()).toBeVisible({ timeout: 120_000 });
     await expect
@@ -269,7 +318,7 @@ else
       await page.getByRole("button", { name: "Chat with Moss" }).click();
     await expect(page.getByText(REFUSED, { exact: true }).last()).toBeVisible();
     const savedAt = databaseNow();
-    await sendInMain(page, `Check the status of my task ${title} in 30 minutes`);
+    await sendInMain(page, `Check the status of my task ${title} in 30 minutes`, "terminal");
     const confirmation = `I'll check ${title} once in 1800 seconds and report its status here.`;
     await expect(page.getByText(confirmation, { exact: true }).last()).toBeVisible({
       timeout: 120_000

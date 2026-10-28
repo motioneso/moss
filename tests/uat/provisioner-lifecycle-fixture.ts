@@ -51,7 +51,9 @@ export function lifecycleFixture() {
       join(root, "infra/docker-compose.prod.yml"),
       join(root, "tests/uat/compose.override.yml")
     ].join(","),
-    "com.docker.compose.service": "jarv1s"
+    "com.docker.compose.service": "jarv1s",
+    // Compose writes an empty value for a service with no dependencies, such as Postgres.
+    "com.docker.compose.depends_on": ""
   };
   const app = {
     id,

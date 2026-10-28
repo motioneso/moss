@@ -295,19 +295,19 @@ describe("immutable installed source/context contract", () => {
         expect(include(path.split("/").slice(0, n).join("/"))).toBe(true);
     }
     expect(sourceSizes).toEqual([
-      19140, 26903, 19872, 19496, 11174, 11733, 5278, 6607, 6251, 26118, 13664, 12558, 20867
+      19140, 26974, 24380, 20498, 11174, 11833, 5278, 6607, 6251, 29613, 13677, 12686, 20867
     ]);
-    expect(sourceSizes.reduce((sum, size) => sum + size, 0)).toBe(199661);
+    expect(sourceSizes.reduce((sum, size) => sum + size, 0)).toBe(208978);
     const rounded = sourceSizes.map((size) => Math.ceil(size / 512) * 512);
-    expect(rounded.reduce((sum, size) => sum + size, 0)).toBe(202752);
+    expect(rounded.reduce((sum, size) => sum + size, 0)).toBe(211968);
     const ceilings = [...rounded, 67108864].map((size) => 512 + size + 16384);
     expect(ceilings).toHaveLength(14);
     const maximum = ceilings.reduce((sum, size) => sum + size, 0);
     expect(Number.isSafeInteger(maximum)).toBe(true);
-    expect(maximum).toBe(67548160);
+    expect(maximum).toBe(67557376);
     expect(maximum).toBeLessThan(83886080);
-    expect(83886080 - maximum).toBe(16337920);
-    console.info("aggregate maximum=67548160 limit=83886080", maximum);
+    expect(83886080 - maximum).toBe(16328704);
+    console.info("aggregate maximum=67557376 limit=83886080", maximum);
     for (const path of ["Dockerfile", "package.json", "scripts/build-app.ts"])
       expect(git("show", head + ":" + path)).toEqual(git("show", K + ":" + path));
     expect(git("show", K + ":Dockerfile").toString()).toContain("COPY . .");
