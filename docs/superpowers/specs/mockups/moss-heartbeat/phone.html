@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title>Phone view - Moss check-ins mockups</title>
+    <link href="../../../../../apps/web/src/styles/tokens.css" rel="stylesheet" />
+    <link href="../../../../../packages/ui/src/styles.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/kit-chat.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/texture.css" rel="stylesheet" />
+    <link href="mockups.css" rel="stylesheet" />
+    <script defer src="mockups.js"></script>
+  </head>
+  <body>
+    <main class="phone-page">
+      <div><a class="jds-btn jds-btn--link" id="back" href="index.html">All mockups</a></div>
+      <iframe id="frame" title="Phone-width preview"></iframe>
+    </main>
+    <script>
+      const p = new URLSearchParams(location.search);
+      const page = p.get("page") || "alerts.html";
+      p.delete("page");
+      document.getElementById("frame").src = page + "?" + p;
+      document.getElementById("back").href = page + "?" + p;
+      document.getElementById("back").textContent = "Desktop view";
+    </script>
+  </body>
+</html>
