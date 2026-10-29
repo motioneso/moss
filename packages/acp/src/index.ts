@@ -61,6 +61,12 @@ export type {
   ToolCallLocation as AcpToolCallLocation,
   Usage as AcpUsage
 } from "@agentclientprotocol/sdk";
+export {
+  CLAUDE_NO_TOOLS_OPTIONS,
+  assertClaudeNoToolsOptions,
+  assertZeroToolsProof,
+  codexNoToolsConfig
+} from "./no-tools.js";
 export { MOSS_OPENCODE_API_KEY_ENV, MOSS_OPENCODE_PROVIDER_ID } from "./opencode-provider.js";
 export { createTunnelStream } from "./stream.js";
 export type { AcpExecPoll, AcpTunnel } from "./tunnel.js";
