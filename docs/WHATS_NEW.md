@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Recording review messages in chat.** Moss now tells you in Main chat when it is unsure whether a recording is personal or work, with a link to review it. [PR #3815](https://github.com/motioneso/moss/pull/3815)
 - **Moss check-in settings.** You can now choose in Settings how often Moss checks in on your day and which of Calendar, Tasks, Memory, Sports and News it may look at. [PR #3820](https://github.com/motioneso/moss/pull/3820)
 
 ### 2026-10-27
