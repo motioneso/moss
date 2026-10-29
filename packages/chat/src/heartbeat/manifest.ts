@@ -30,7 +30,7 @@ export const HEARTBEAT_FEATURE: ModuleFeatureManifest = {
 export const HEARTBEAT_MESSAGE_FEATURE: ModuleFeatureManifest = {
   id: "chat.heartbeat_messages",
   description:
-    "Moss posts a check-in message in Main when a check finds items that deserve attention, with a short intro and one note per item. Nothing is posted when nothing changed. Each owner gets at most six model checks per local day. A push notification follows, held during quiet hours.",
+    "Moss posts a check-in in Main when a check finds items needing attention, with a short intro and a note per item. Nothing is posted when nothing changed. Up to six model checks per local day.",
   featureFlagId: "chat.module",
   errors: [
     {
