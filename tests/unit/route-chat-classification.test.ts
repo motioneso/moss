@@ -221,6 +221,7 @@ const EXPECTED: readonly string[] = [
   "chat GET /api/me/heartbeat/status read",
   "chat GET /api/me/heartbeat/mutes blocked data_scope_consent",
   "chat DELETE /api/me/heartbeat/mutes/:id blocked self_authority",
+  "chat POST /api/me/heartbeat/mutes blocked self_authority",
   "chat POST /api/chat/scheduled-tasks/:id/pause blocked self_authority",
   "chat POST /api/chat/scheduled-tasks/:id/resume blocked self_authority",
   "chat DELETE /api/chat/scheduled-tasks/:id blocked self_authority",
