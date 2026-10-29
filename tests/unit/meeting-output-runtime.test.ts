@@ -18,6 +18,7 @@ import {
   getMeetingOutputTemplate,
   meetingsModuleManifest
 } from "@moss/meetings";
+import type { MeetingTranscriptSnapshot } from "@moss/shared";
 import { ConstrainedProcessError } from "../../packages/chat/src/live/constrained-structured-process.js";
 import { parseConstrainedClaudeOutput } from "../../packages/chat/src/live/constrained-claude-profile.js";
 import * as meetings from "@moss/meetings";
@@ -411,15 +412,96 @@ describe("meeting output composition HTTP boundary", () => {
     });
     expect(h.fetch).toHaveBeenCalledTimes(2);
   });
-  it("fails oversized UTF-8 input before selecting or dispatching without truncation", async () => {
+  it("summarises oversized UTF-8 notes in pieces instead of failing", async () => {
     const h = setup();
     const request = input();
     request.inputs.personalNotes = "🥭".repeat(18000);
-    await expect(h.generator(actor, request)).rejects.toMatchObject({
-      code: "meeting_output_input_too_large"
+    const generated = await h.generator(actor, request);
+    expect(generated.content).toMatchObject({ overview: "A synthetic meeting" });
+    expect(h.fetch.mock.calls.length).toBeGreaterThan(1);
+  });
+  it("folds a long transcript piece by piece and keeps early evidence citable", async () => {
+    const h = setup();
+    const request = input();
+    const segments = Array.from({ length: 30 }, (_, index) => ({
+      meetingId: "meeting-id",
+      segmentId: `segment-${index}`,
+      sourceId: "microphone",
+      epoch: 1,
+      startMs: index * 1000,
+      endMs: index * 1000 + 1000,
+      revision: 1,
+      text: `Segment ${index} decided the launch date and Alex will send the plan. `.repeat(40),
+      finality: "final" as const,
+      provenance: "transcription" as const,
+      speakerId: null
+    }));
+    const transcript: MeetingTranscriptSnapshot = {
+      meetingId: "meeting-id",
+      ownerUserId: "owner",
+      transcriptRevision: 1,
+      cutoffMs: 30000,
+      maxSegments: 500,
+      maxCharacters: 100000,
+      cursor: 30,
+      throughMs: 30000,
+      omittedSegments: 0,
+      containsProvisional: false,
+      segments
+    };
+    const longRequest = {
+      ...request,
+      inputs: { ...request.inputs, transcript }
+    };
+    let calls = 0;
+    h.fetch.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 1) return response(content);
+      // Later pieces cite a segment from the first piece. This only checks when
+      // validation runs against all evidence seen so far.
+      return response({
+        ...content,
+        decisions: [
+          {
+            text: "Launch date decided",
+            evidence: [
+              {
+                kind: "transcript",
+                meetingId: "meeting-id",
+                segmentId: "segment-0",
+                segmentRevision: 1,
+                startCharacter: 0,
+                endCharacter: 20
+              }
+            ]
+          }
+        ]
+      });
     });
-    expect(h.fetch).not.toHaveBeenCalled();
-    expect(h.route).not.toHaveBeenCalled();
+    const generated = await h.generator(actor, longRequest);
+    expect(calls).toBeGreaterThan(1);
+    expect(generated.content).toMatchObject({
+      decisions: [{ text: "Launch date decided" }]
+    });
+  });
+  it("retries only the failed piece and never resends a finished piece", async () => {
+    const h = setup();
+    const request = input();
+    request.inputs.personalNotes = "Note words for the summary. ".repeat(2800);
+    const bodies: string[] = [];
+    let calls = 0;
+    h.fetch.mockImplementation(async (_url, init) => {
+      calls += 1;
+      bodies.push(String(init?.body ?? ""));
+      // The second call is the first attempt at piece two. Return a bad shape once.
+      if (calls === 2) return response({ unexpected: true });
+      return response(content);
+    });
+    const generated = await h.generator(actor, request);
+    expect(generated.content).toMatchObject({ overview: "A synthetic meeting" });
+    expect(calls).toBe(3);
+    expect(bodies[1]).toBe(bodies[2]);
+    expect(bodies[0]).not.toBe(bodies[1]);
   });
   it("ignores caller-supplied template guidance and rejects unknown versions", async () => {
     const h = setup();

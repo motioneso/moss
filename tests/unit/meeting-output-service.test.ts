@@ -426,7 +426,7 @@ describe("meeting output generation service", () => {
     });
     const first = harness.service.generate(ACTOR, MEETING_ID, INPUT);
     await started.promise;
-    expect(timeout).toHaveBeenCalledExactlyOnceWith(110_000);
+    expect(timeout).toHaveBeenCalledExactlyOnceWith(600_000);
     controller.abort();
     const result = await first;
     expect(result).toEqual({

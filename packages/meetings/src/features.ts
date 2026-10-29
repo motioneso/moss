@@ -363,7 +363,7 @@ export const meetingFeatures = [
   {
     id: "meetings.grounded_outputs",
     description:
-      "Generate evidence-checked summaries with your default model, without fallback. Subscription summaries run through the same route as chat, with tools off. Compare versions and sources; refresh to check availability without generating.",
+      "Generate evidence-checked summaries with your default model, without fallback. Subscription summaries run through the same route as chat, with tools off. Long recordings are summarised piece by piece into one summary.",
     errors: [
       {
         code: "meeting_output_unavailable",
@@ -405,7 +405,7 @@ export const meetingFeatures = [
         code: "meeting_output_input_too_large",
         class: "validation",
         description:
-          "The selected transcript and notes exceed the safe prompt budget. No provider request was sent; use a shorter retained input."
+          "One single piece of the transcript is too large to summarise on its own, even after the recording was split into pieces. No summary was saved for that piece."
       },
       {
         code: "meeting_output_module_unavailable",
