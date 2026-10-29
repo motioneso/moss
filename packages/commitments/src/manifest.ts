@@ -101,6 +101,19 @@ export const commitmentsModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "commitments.heartbeat_source",
+      description:
+        "Accepted commitments with a due date can appear in Moss check-ins (the Memory source). Check-ins read saved commitments only.",
+      errors: [
+        {
+          code: "commitments_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "Memory could not be read for a check-in. Settings > Alerts shows Memory as unavailable and the next check tries again."
+        }
+      ]
+    },
+    {
       id: "commitments.chat_app_actions",
       description:
         "App actions read candidates, change their status or suppress them. Extraction remains unavailable through this path; candidate resolution currently returns unavailable rather than creating tasks or events."

@@ -49,6 +49,7 @@ describe("registered queue definitions", () => {
       "chat.scheduled-read",
       "chat.scheduled-read-bookkeeping",
       "chat.notify-reminder",
+      "chat.heartbeat-notify",
       "chat.heartbeat-sweep",
       "chat.heartbeat-beat",
       "briefings-run",

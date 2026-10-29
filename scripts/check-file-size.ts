@@ -36,7 +36,9 @@ const exemptFiles = new Set<string>([
   // #2521 restores this historical Study prototype stylesheet intact.
   ".superpowers/brainstorm/today-briefings-20260909/study.css",
   // #3529 N3 observer wiring pushes the UAT provisioner just past the limit.
-  "tests/uat/provisioner.ts"
+  "tests/uat/provisioner.ts",
+  // Heartbeat slice 3 adds a feature reference to a manifest that sat at the limit.
+  "packages/tasks/src/manifest.ts"
 ]);
 const checkedExtensions = new Set([
   ".css",

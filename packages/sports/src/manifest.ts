@@ -149,6 +149,19 @@ export const sportsModuleManifest = {
   },
   features: [
     {
+      id: "sports.heartbeat_source",
+      description:
+        "The next fixture of each followed team can appear in Moss check-ins. Check-ins read saved fixtures only and never call a sports provider.",
+      errors: [
+        {
+          code: "sports_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "Sports could not be read for a check-in. Settings > Alerts shows Sports as unavailable and the next check tries again."
+        }
+      ]
+    },
+    {
       id: "sports.visual_result",
       description:
         "Chat reads latest available completed results over 90 days and can show saved scorecards with real permitted crests, score, competition, date, source and coverage. Missing sources retain text; history never refreshes scores.",

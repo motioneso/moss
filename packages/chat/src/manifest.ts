@@ -22,7 +22,11 @@ import {
 } from "@moss/shared";
 
 import { reminderFeatures } from "./reminders/features.js";
-import { HEARTBEAT_FEATURE, HEARTBEAT_ROUTES } from "./heartbeat/manifest.js";
+import {
+  HEARTBEAT_FEATURE,
+  HEARTBEAT_MESSAGE_FEATURE,
+  HEARTBEAT_ROUTES
+} from "./heartbeat/manifest.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -106,7 +110,9 @@ export const chatModuleManifest = {
       "sql/0327_chat_voice_requests.sql",
       "sql/0333_chat_automatic_voice_inputs.sql",
       "sql/0342_chat_module_notices.sql",
-      "sql/0343_chat_heartbeat.sql"
+      "sql/0343_chat_heartbeat.sql",
+      "sql/0344_chat_heartbeat_unavailable_sources.sql",
+      "sql/0345_chat_heartbeat_worker_publish.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -241,6 +247,7 @@ export const chatModuleManifest = {
     },
     REMINDER_CONTROL_FEATURE,
     HEARTBEAT_FEATURE,
+    HEARTBEAT_MESSAGE_FEATURE,
     {
       id: "chat.current_view_grounding",
       description:
