@@ -4,12 +4,19 @@ import { seedFromLegacyProactiveChoice } from "../../packages/chat/src/heartbeat
 import { parseHeartbeatSources } from "../../packages/chat/src/heartbeat/settings-repository.js";
 
 describe("seedFromLegacyProactiveChoice", () => {
-  it("defaults to on with every source when nothing valid is saved", () => {
-    for (const raw of [null, undefined, "x", { version: 2, enabled: false }, { version: 1 }]) {
+  it("defaults to on with every source when nothing is saved", () => {
+    for (const raw of [null, undefined]) {
       expect(seedFromLegacyProactiveChoice(raw)).toMatchObject({
         enabled: true,
-        origin: "default"
+        origin: "default",
+        readable: true
       });
+    }
+  });
+
+  it("marks a saved but unreadable choice as unreadable, never as a default", () => {
+    for (const raw of ["x", { version: 2, enabled: false }, { version: 1 }]) {
+      expect(seedFromLegacyProactiveChoice(raw)).toMatchObject({ readable: false });
     }
   });
 

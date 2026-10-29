@@ -5,6 +5,7 @@ import {
 import type { AiCapabilityRouteReason, AiConfiguredModelDto, AiModelCapability } from "./ai-api.js";
 import { visualReplySchema } from "./visual-chat-schema.js";
 import type { VisualReplyV1 } from "./visual-chat.js";
+import { chatHeartbeatOriginSchema, type ChatHeartbeatOriginV1 } from "./chat-heartbeat-origin.js";
 import type { SourceFreshnessV1 } from "./freshness-types.js";
 import type { MeetingChatCoverage } from "./meeting-chat-api.js";
 import type { WorkflowApprovalStatusDto } from "./workflows-api.js";
@@ -366,10 +367,13 @@ export interface ChatReminderOriginV1 {
   readonly late?: boolean;
 }
 
+export type { ChatHeartbeatOriginV1 };
+
 export type ChatTurnOriginV1 =
   | ChatClassifierGateOriginV1
   | ChatReminderOriginV1
-  | ChatModuleNoticeOriginV1;
+  | ChatModuleNoticeOriginV1
+  | ChatHeartbeatOriginV1;
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
 export type MemoryCorrectionSourceDto = "chat" | "pattern-reject";
@@ -705,7 +709,8 @@ const chatTurnOriginSchema = {
         reminderState: { type: "string" },
         late: { type: "boolean" }
       }
-    }
+    },
+    chatHeartbeatOriginSchema
   ]
 } as const;
 

@@ -1,3 +1,4 @@
+import { TASKS_HEARTBEAT_FEATURE } from "./heartbeat-feature.js";
 import { authorizeTasksHeartbeatRead, tasksHeartbeatWindowExecute } from "./heartbeat.js";
 import {
   taskItemsToolOutputSchema,
@@ -827,6 +828,7 @@ export const tasksModuleManifest = {
   ],
   visualTemplates: [taskSummaryTemplate],
   features: [
+    TASKS_HEARTBEAT_FEATURE,
     {
       id: "tasks.visual_summary",
       description:

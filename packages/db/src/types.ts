@@ -1051,6 +1051,7 @@ export interface HeartbeatOccurrencesTable {
   message_id: ColumnType<string | null, string | null | undefined, string | null>;
   input_tokens: ColumnType<number | null, number | null | undefined, number | null>;
   output_tokens: ColumnType<number | null, number | null | undefined, number | null>;
+  unavailable_sources: ColumnType<string[], string[] | undefined, string[]>;
 }
 
 export interface HeartbeatFindingsTable {

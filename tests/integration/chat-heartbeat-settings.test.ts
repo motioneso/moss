@@ -45,6 +45,8 @@ describe("chat heartbeat settings and enrollment", () => {
   let ownerId: string;
   let otherId: string;
   let optedOutId: string;
+  let garbledCookie: string;
+  let garbledId: string;
   let adminId: string;
 
   beforeAll(async () => {
@@ -62,7 +64,9 @@ describe("chat heartbeat settings and enrollment", () => {
     ownerCookie = await signUp("Owner", "owner.hb@example.test");
     otherCookie = await signUp("Other", "other.hb@example.test");
     optedOutCookie = await signUp("Opted", "opted.hb@example.test");
+    garbledCookie = await signUp("Garbled", "garbled.hb@example.test");
     adminId = await userId(adminCookie);
+    garbledId = await userId(garbledCookie);
     ownerId = await userId(ownerCookie);
     otherId = await userId(otherCookie);
     optedOutId = await userId(optedOutCookie);
@@ -71,6 +75,14 @@ describe("chat heartbeat settings and enrollment", () => {
         db,
         PROACTIVE_MONITORING_PREFERENCE_KEY,
         { version: 1, enabled: false, automaticEmailAlerts: true },
+        null
+      )
+    );
+    await asUser(garbledId, (db) =>
+      new PreferencesRepository().upsertWithRevision(
+        db,
+        PROACTIVE_MONITORING_PREFERENCE_KEY,
+        { version: 9, mystery: true },
         null
       )
     );
@@ -108,6 +120,49 @@ describe("chat heartbeat settings and enrollment", () => {
       new PreferencesRepository().getVersioned(db, PROACTIVE_MONITORING_PREFERENCE_KEY)
     );
     expect(legacy?.revision).toBe(1);
+  });
+
+  it("keeps a legacy-off owner off through a beat and writes no check", async () => {
+    const result = await asWorker(optedOutId, (db) =>
+      handleHeartbeatBeat(
+        db,
+        {
+          actorUserId: optedOutId,
+          kind: "heartbeat-beat",
+          resourceId: "9d1d7b0e-6c1f-4a0e-8b8e-1f5f3a1c0010",
+          version: 0,
+          idempotencyKey: "heartbeat:legacy-off"
+        },
+        { preferences: new PreferencesRepository() }
+      )
+    );
+    expect(result).toBe("off");
+    const status = await get(optedOutCookie, STATUS_URL);
+    expect(status.json().status).toMatchObject({ outcome: "off", nextCheckAt: null });
+    const settings = await get(optedOutCookie, SETTINGS_URL);
+    expect(settings.json().settings).toMatchObject({ enabled: false, origin: "legacy_off" });
+  });
+
+  it("holds an owner whose saved Proactive alerts record is unreadable, and shows repair", async () => {
+    const result = await asWorker(garbledId, (db) =>
+      handleHeartbeatBeat(
+        db,
+        {
+          actorUserId: garbledId,
+          kind: "heartbeat-beat",
+          resourceId: "9d1d7b0e-6c1f-4a0e-8b8e-1f5f3a1c0011",
+          version: 0,
+          idempotencyKey: "heartbeat:garbled"
+        },
+        { preferences: new PreferencesRepository() }
+      )
+    );
+    expect(result).toBe("on_hold");
+    expect(await storedRevision(garbledId)).toBeNull();
+    const settings = await get(garbledCookie, SETTINGS_URL);
+    expect(settings.json().readable).toBe(false);
+    const status = await get(garbledCookie, STATUS_URL);
+    expect(status.json().status).toMatchObject({ outcome: "failed", nextCheckAt: null });
   });
 
   it("saves, then refuses a stale revision with the saved settings", async () => {

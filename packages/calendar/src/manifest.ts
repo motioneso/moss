@@ -567,6 +567,19 @@ export const calendarModuleManifest = {
   ],
   features: [
     {
+      id: "calendar.heartbeat_source",
+      description:
+        "Calendar events starting in the next day can appear in Moss check-ins. Check-ins read saved calendar data only and skip Calendar when access is revoked.",
+      errors: [
+        {
+          code: "calendar_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "Calendar could not be read for a check-in. Settings > Alerts shows Calendar as unavailable and the next check tries again."
+        }
+      ]
+    },
+    {
       id: "calendar.preview_recovery",
       description:
         "An unavailable task-block preview retains selected choices and leaves Save changes available to recheck. No calendar apply follows that unavailable preview.",
