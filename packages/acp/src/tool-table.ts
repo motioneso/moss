@@ -22,6 +22,7 @@ export interface AcpToolRow {
   readonly family: Exclude<AcpToolFamily, "moss">;
   readonly chat: boolean;
   readonly workshop: boolean;
+  readonly "no-tools": boolean;
 }
 
 /** Prefix the adapter puts on its own bridged file and shell tool names. */
@@ -35,7 +36,7 @@ function rowsFor(
   chat: boolean,
   workshop: boolean
 ): AcpToolRow[] {
-  return names.map((name) => ({ name, family, chat, workshop }));
+  return names.map((name) => ({ name, family, chat, workshop, "no-tools": false }));
 }
 
 /**
@@ -67,8 +68,6 @@ export function lookupAcpToolFamily(name: string): AcpToolFamily | "unknown" {
 
 /** Tool names switched off at launch for a profile; phase 5 passes these on. */
 export function launchOffList(surface: AcpProfile): string[] {
-  // `unattended` has no column yet (slice 2); fail closed with everything off
-  // until then. The profile gate rejects it before this is consulted.
   if (surface === "unattended") return ACP_TOOL_TABLE.map((row) => row.name);
   return ACP_TOOL_TABLE.filter((row) => !row[surface]).map((row) => row.name);
 }

@@ -12,6 +12,7 @@ export { createVoiceRequestWorkerRuntime } from "./voice-request-worker-runtime.
 import { createHeartbeatGenerator, createScheduledReportGenerator } from "@moss/chat";
 import { SessionTokenRegistry, ConfirmationRegistry } from "@moss/ai";
 import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
+import { createAcpNoToolsReadinessProbe } from "./acp-no-tools-readiness.js";
 export { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
 import {
   createMeetingCaptureRuntime,
@@ -192,6 +193,7 @@ import {
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createConstrainedCliStructuredAdapterFactory,
+  createAcpNoToolsStructuredAdapterFactoryForConnection,
   selectEngineFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
@@ -800,6 +802,14 @@ export interface BuiltInRouteDependencies {
     signal?: AbortSignal,
     providerKind?: AiProviderKind
   ) => Promise<ConstrainedCliReadiness>;
+  readonly createAcpCliStructuredAdapter?: ReturnType<
+    typeof createAcpNoToolsStructuredAdapterFactoryForConnection
+  >;
+  readonly probeAcpCli?: (
+    actorUserId: string,
+    signal?: AbortSignal,
+    providerKind?: AiProviderKind
+  ) => Promise<ConstrainedCliReadiness>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
    * no boot-time probing) and forwarded to the settings module so it keeps no @moss/ai /
@@ -878,6 +888,8 @@ export interface BuiltInRouteDependencies {
 export interface BuiltInWorkerDependencies {
   readonly createConstrainedCliStructuredAdapter?: BuiltInRouteDependencies["createConstrainedCliStructuredAdapter"];
   readonly probeConstrainedCli?: BuiltInRouteDependencies["probeConstrainedCli"];
+  readonly createAcpCliStructuredAdapter?: BuiltInRouteDependencies["createAcpCliStructuredAdapter"];
+  readonly probeAcpCli?: BuiltInRouteDependencies["probeAcpCli"];
   readonly rootDb: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   readonly focusSignals?: BuiltInRouteDependencies["focusSignals"];
@@ -919,7 +931,10 @@ export interface BuiltInWorkerDependencies {
 export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.env): {
   readonly dependencies: Pick<
     BuiltInWorkerDependencies,
-    "createConstrainedCliStructuredAdapter" | "probeConstrainedCli"
+    | "createConstrainedCliStructuredAdapter"
+    | "probeConstrainedCli"
+    | "createAcpCliStructuredAdapter"
+    | "probeAcpCli"
   >;
   close(): void;
 } {
@@ -930,7 +945,11 @@ export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.e
       createConstrainedCliStructuredAdapter: runtime
         ? createConstrainedCliStructuredAdapterFactory(runtime.factory)
         : undefined,
-      probeConstrainedCli: createConstrainedCliReadinessProbe(() => runtime?.connection)
+      probeConstrainedCli: createConstrainedCliReadinessProbe(() => runtime?.connection),
+      createAcpCliStructuredAdapter: runtime?.connection
+        ? createAcpNoToolsStructuredAdapterFactoryForConnection(() => runtime?.connection)
+        : undefined,
+      probeAcpCli: createAcpNoToolsReadinessProbe()
     },
     close: () => runtime?.connection?.close()
   };
@@ -3123,6 +3142,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           dataContext: deps.dataContext,
           createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
           probeConstrainedCli: deps.probeConstrainedCli,
+          createAcpCliStructuredAdapter: deps.createAcpCliStructuredAdapter,
+          probeAcpCli: deps.probeAcpCli,
           resolveActiveModules
         }).generator,
         notices.enqueue(boss)
@@ -3944,6 +3965,9 @@ export function registerBuiltInApiRoutes(
       structuredChatEngineFactory
     ),
     probeConstrainedCli: createConstrainedCliReadinessProbe(getRpcConnection),
+    createAcpCliStructuredAdapter:
+      createAcpNoToolsStructuredAdapterFactoryForConnection(getRpcConnection),
+    probeAcpCli: createAcpNoToolsReadinessProbe(),
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {

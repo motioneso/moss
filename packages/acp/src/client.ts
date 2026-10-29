@@ -26,7 +26,17 @@ import {
 import { RequestError } from "@agentclientprotocol/sdk";
 import { randomUUID } from "node:crypto";
 
-import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capabilities.js";
+import {
+  AcpCapabilityError,
+  checkAcpProfile,
+  checkAgentCapabilities,
+  type AcpProfile
+} from "./capabilities.js";
+import {
+  CLAUDE_NO_TOOLS_OPTIONS,
+  assertClaudeNoToolsOptions,
+  assertZeroToolsProof
+} from "./no-tools.js";
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
 import { launchOffList } from "./tool-table.js";
 import { isCodexCommandPermission } from "./codex-command-permission.js";
@@ -280,6 +290,7 @@ export class MossAcpClient {
   private readonly sessionUids = new Map<string, number>();
   private readonly sessionGids = new Map<string, number>();
   private readonly sessionKinds = new Map<string, AcpProviderKind>();
+  private readonly sessionProfiles = new Map<string, AcpProfile>();
   private readonly sessionOptions = new Map<string, readonly SessionConfigOption[]>();
   private readonly turnIds = new Map<string, string>();
   private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
@@ -310,6 +321,12 @@ export class MossAcpClient {
     personaText?: string
   ): Promise<AcpSessionHandle> {
     checkAcpProfile(surface, providerKind);
+    if (surface === "no-tools" && toolServer) {
+      throw new AcpCapabilityError(
+        "no-tools",
+        "the Moss tool server must not be attached under the no-tools profile."
+      );
+    }
     const { cwd, home, pid, uid, gid } = await this.tunnel.spawn(
       sessionKey,
       projectId,
@@ -327,16 +344,29 @@ export class MossAcpClient {
         clientInfo: { name: "moss", version: "0.1.0" }
       });
       checkAgentCapabilities(surface, init);
+      const claudeOptions =
+        surface === "no-tools"
+          ? {
+              disallowedTools: launchOffList(surface),
+              tools: [...CLAUDE_NO_TOOLS_OPTIONS.tools],
+              settingSources: [...CLAUDE_NO_TOOLS_OPTIONS.settingSources],
+              persistSession: CLAUDE_NO_TOOLS_OPTIONS.persistSession
+            }
+          : { disallowedTools: launchOffList(surface) };
+      if (surface === "no-tools" && providerKind === "anthropic") {
+        assertClaudeNoToolsOptions(claudeOptions);
+      }
       const session = await connection.newSession({
         cwd,
         mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
-        // The row's launch-time off-list, from the tool table through the row's
-        // own mechanism: the agent's disallowed-tools list.
         _meta: {
-          claudeCode: { options: { disallowedTools: launchOffList(surface) } },
+          claudeCode: { options: claudeOptions },
           ...(personaText !== undefined ? { systemPrompt: personaText } : {})
         }
       });
+      if (surface === "no-tools") {
+        assertZeroToolsProof({ providerKind, toolCallsSeen: 0 });
+      }
       this.connections.set(session.sessionId, connection);
       this.sessionKeys.set(session.sessionId, sessionKey);
       this.streams.set(session.sessionId, stream);
@@ -348,6 +378,7 @@ export class MossAcpClient {
       this.sessionUids.set(session.sessionId, uid);
       this.sessionGids.set(session.sessionId, gid);
       this.sessionKinds.set(session.sessionId, providerKind);
+      this.sessionProfiles.set(session.sessionId, surface);
       this.sessionOptions.set(session.sessionId, session.configOptions ?? []);
       if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
       return { sessionId: session.sessionId, cwd, home, pid, uid, gid };
@@ -407,10 +438,15 @@ export class MossAcpClient {
         })
       ]);
       const chunks = this.texts.get(handle.sessionId) ?? [];
+      const toolCallsSeen = this.toolCalls.get(handle.sessionId) ?? 0;
+      if (this.sessionProfiles.get(handle.sessionId) === "no-tools") {
+        const kind = this.sessionKinds.get(handle.sessionId);
+        if (kind) assertZeroToolsProof({ providerKind: kind, toolCallsSeen });
+      }
       return {
         stopReason: response.stopReason,
         text: chunks.join(""),
-        toolCallsSeen: this.toolCalls.get(handle.sessionId) ?? 0,
+        toolCallsSeen,
         usage: response.usage ?? null
       };
     } finally {
@@ -518,6 +554,7 @@ export class MossAcpClient {
     this.sessionUids.delete(handle.sessionId);
     this.sessionGids.delete(handle.sessionId);
     this.sessionKinds.delete(handle.sessionId);
+    this.sessionProfiles.delete(handle.sessionId);
     this.sessionOptions.delete(handle.sessionId);
     this.announcements.delete(handle.sessionId);
     // Wake any questions still waiting: they re-check, find nothing, refuse.

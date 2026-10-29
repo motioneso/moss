@@ -283,6 +283,7 @@ export async function prepareStructuredGeneration(
     "service" | "schema" | "prompt" | "maxOutputTokens" | "signal"
   > & {
     readonly explicitModel: GenerateStructuredExplicitModel;
+    readonly maxAttempts?: number;
   },
   deps: Pick<GenerateStructuredDeps, "cipher" | "createAdapter" | "createCliStructuredAdapter"> & {
     readonly repository: Pick<AiRepository, "selectProviderWithCredential">;
@@ -318,7 +319,7 @@ export async function prepareStructuredGeneration(
     },
     explicitModel,
     {
-      maxAttempts: 1,
+      maxAttempts: input.maxAttempts ?? 1,
       detailedFailureReasons: true,
       signal: input.signal,
       servedBy: "main",

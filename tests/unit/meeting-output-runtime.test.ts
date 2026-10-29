@@ -369,17 +369,25 @@ describe("meeting output composition HTTP boundary", () => {
       ...content,
       actions: [{ text: "Fabricated", evidence: [], ownerPhrase: null, duePhrase: null }]
     }
-  ])("does not retry malformed output %j", async (value) => {
+  ])("retries malformed output once, then rejects %j", async (value) => {
     const h = setup();
-    h.fetch.mockResolvedValue(response(value));
+    h.fetch.mockImplementation(async () => response(value));
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_rejected_schema_validation"
     });
-    expect(h.fetch).toHaveBeenCalledTimes(1);
+    expect(h.fetch).toHaveBeenCalledTimes(2);
+  });
+  it("saves the summary when the one retry answers with a good shape", async () => {
+    const h = setup();
+    h.fetch.mockResolvedValueOnce(response({})).mockResolvedValue(response(content));
+    await expect(h.generator(actor, input())).resolves.toMatchObject({
+      modelRoute: expect.any(String)
+    });
+    expect(h.fetch).toHaveBeenCalledTimes(2);
   });
   it("rejects valid-schema fabricated source bindings", async () => {
     const h = setup();
-    h.fetch.mockResolvedValue(
+    h.fetch.mockImplementation(async () =>
       response({
         ...content,
         decisions: [
@@ -401,6 +409,7 @@ describe("meeting output composition HTTP boundary", () => {
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_rejected_source_identity_mismatch"
     });
+    expect(h.fetch).toHaveBeenCalledTimes(2);
   });
   it("fails oversized UTF-8 input before selecting or dispatching without truncation", async () => {
     const h = setup();
