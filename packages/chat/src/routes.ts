@@ -1,5 +1,7 @@
-import { registerModuleNoticeArrivalLifecycle } from "./module-notice-arrival.js";
-import type { ModuleNoticeService } from "./module-notices.js";
+import {
+  registerModuleNoticeArrivalLifecycle,
+  type ModuleNoticeArrivalDependencies
+} from "./module-notice-arrival.js";
 import type { MemoryGraphRepository } from "@moss/memory";
 import { createScheduledReadResolver } from "./scheduled-reads/generation.js";
 import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
@@ -134,10 +136,7 @@ export {
 } from "./gateway-services.js";
 
 export interface ChatRoutesDependencies {
-  readonly moduleNoticeArrival?: {
-    readonly connectionString?: string;
-    readonly notices: ModuleNoticeService;
-  };
+  readonly moduleNoticeArrival?: ModuleNoticeArrivalDependencies;
   readonly meetingChat?: MeetingChatData;
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -614,11 +613,10 @@ export function registerChatRoutes(
 
   registerVoiceRequestRuntime(server, dependencies, runtime);
 
-  if (dependencies.moduleNoticeArrival)
-    registerModuleNoticeArrivalLifecycle(server, {
-      ...dependencies.moduleNoticeArrival,
-      manager: runtime.manager
-    });
+  if (dependencies.moduleNoticeArrival) {
+    const { manager } = runtime;
+    registerModuleNoticeArrivalLifecycle(server, { ...dependencies.moduleNoticeArrival, manager });
+  }
 
   registerReminderArrivalLifecycle(server, {
     connectionString: dependencies.reminderArrivalConnectionString,
@@ -725,10 +723,8 @@ export function registerChatRoutes(
         const threads = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
           repository.listThreads(scopedDb, surface)
         );
-        if (
-          surface === DEFAULT_CHAT_SURFACE &&
-          threads.some((thread) => thread.is_main && !thread.incognito)
-        )
+        const hasMain = threads.some((thread) => thread.is_main && !thread.incognito);
+        if (surface === DEFAULT_CHAT_SURFACE && hasMain)
           await dependencies.moduleNoticeArrival?.notices.recoverPending(accessContext);
         return { threads: threads.map(serializeThread) };
       } catch (error) {

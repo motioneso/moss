@@ -6,12 +6,15 @@ import {
   type StoredMessageArrivalListener
 } from "./stored-message-arrival.js";
 
+export interface ModuleNoticeArrivalDependencies {
+  readonly connectionString?: string;
+  readonly notices: ModuleNoticeService;
+}
+
 /** Only the host installs the configured notice service. No source definitions means no listener. */
 export function registerModuleNoticeArrivalLifecycle(
   server: FastifyInstance,
-  deps: {
-    readonly connectionString?: string;
-    readonly notices: ModuleNoticeService;
+  deps: ModuleNoticeArrivalDependencies & {
     readonly manager: Pick<ChatSessionManager, "deliverBackgroundMessage">;
   }
 ): void {
