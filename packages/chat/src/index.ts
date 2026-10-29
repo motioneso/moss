@@ -121,3 +121,11 @@ export { createConstrainedCliStructuredAdapterFactory } from "./live/constrained
 
 export { createHeartbeatGenerator } from "./heartbeat/generation.js";
 export { createScheduledReportGenerator } from "./scheduled-reads/report-generation.js";
+
+export {
+  ModuleNoticeService,
+  ModuleNoticeUnavailableError,
+  type ModuleNoticeDefinition,
+  type ModuleNoticeResult
+} from "./module-notices.js";
+export { registerModuleNoticeArrivalLifecycle } from "./module-notice-arrival.js";

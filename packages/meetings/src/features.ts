@@ -1,3 +1,4 @@
+import { recordingNoticeFeature } from "./recording-notice-feature.js";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   recordingImportFeature,
@@ -6,6 +7,7 @@ import {
 } from "./recording-delivery-declarations.js";
 import { androidDeliveryFeature } from "./android-delivery-feature.js";
 export const meetingFeatures = [
+  recordingNoticeFeature,
   {
     id: "meetings.recording_cleanup",
     description:

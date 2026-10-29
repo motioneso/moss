@@ -61,6 +61,7 @@ describe("registered queue definitions", () => {
       "news.revalidate",
       "notes.sync",
       "meetings.stop-summary",
+      "meetings.recording-notice",
       "meetings.capture-maintenance",
       "meetings.recording-import",
       "proactive-scan-source",

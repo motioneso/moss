@@ -223,6 +223,7 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
+      "meetings.side_review_notices",
       "meetings.recording_cleanup",
       "meetings.transcript_vocabulary",
       "meetings.transcript_language",

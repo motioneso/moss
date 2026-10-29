@@ -1,3 +1,7 @@
+import {
+  chatModuleNoticeOriginSchema,
+  type ChatModuleNoticeOriginV1
+} from "./module-notice-api.js";
 import type { AiCapabilityRouteReason, AiConfiguredModelDto, AiModelCapability } from "./ai-api.js";
 import { visualReplySchema } from "./visual-chat-schema.js";
 import type { VisualReplyV1 } from "./visual-chat.js";
@@ -209,6 +213,7 @@ export interface ActionRequestDetails {
 }
 
 export interface TranscriptRecord {
+  readonly origin?: ChatTurnOriginV1;
   readonly visualState?: "preparing" | "clear";
   readonly visualReply?: VisualReplyV1;
   readonly visualFallbackText?: string;
@@ -367,6 +372,7 @@ export type { ChatHeartbeatOriginV1 };
 export type ChatTurnOriginV1 =
   | ChatClassifierGateOriginV1
   | ChatReminderOriginV1
+  | ChatModuleNoticeOriginV1
   | ChatHeartbeatOriginV1;
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
@@ -657,6 +663,7 @@ const chatModelRouteSchema = {
  */
 const chatTurnOriginSchema = {
   anyOf: [
+    chatModuleNoticeOriginSchema,
     {
       type: "object",
       additionalProperties: false,

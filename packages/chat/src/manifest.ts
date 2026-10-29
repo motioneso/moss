@@ -1,3 +1,5 @@
+import { collectModuleNoticeExport } from "./module-notice-export.js";
+import { MODULE_NOTICE_FEATURE } from "./module-notice-feature.js";
 import { approvalFeatures } from "./approval-features.js";
 import { userDataVisualFeature } from "./visual/manifest.js";
 import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
@@ -107,6 +109,7 @@ export const chatModuleManifest = {
       "sql/0324_chat_scheduled_read_attempts.sql",
       "sql/0327_chat_voice_requests.sql",
       "sql/0333_chat_automatic_voice_inputs.sql",
+      "sql/0342_chat_module_notices.sql",
       "sql/0343_chat_heartbeat.sql",
       "sql/0344_chat_heartbeat_unavailable_sources.sql",
       "sql/0345_chat_heartbeat_worker_publish.sql"
@@ -116,6 +119,8 @@ export const chatModuleManifest = {
       "app.chat_threads",
       "app.chat_messages",
       "app.chat_unread_messages",
+      "app.chat_module_notices",
+      "app.chat_module_notice_intents",
       "app.chat_user_memory_settings",
       "app.chat_skills",
       "app.chat_classifier_shadow_records",
@@ -172,6 +177,7 @@ export const chatModuleManifest = {
   ],
   dataLifecycle: {
     exportSections: [
+      { key: "moduleNotices", displayName: "Module notices", collect: collectModuleNoticeExport },
       { key: "voiceRequests", displayName: "Voice requests", collect: collectVoiceRequestExport }
     ],
     deletion: {
@@ -181,6 +187,8 @@ export const chatModuleManifest = {
           "app.chat_threads",
           "app.chat_messages",
           "app.chat_unread_messages",
+          "app.chat_module_notices",
+          "app.chat_module_notice_intents",
           "app.chat_skills",
           "app.chat_classifier_shadow_records",
           "app.chat_conversation_provenance",
@@ -212,6 +220,7 @@ export const chatModuleManifest = {
   },
   visualTemplates: [reminderSummaryTemplate],
   features: [
+    MODULE_NOTICE_FEATURE,
     {
       id: "chat.domain_read_resolution",
       description:

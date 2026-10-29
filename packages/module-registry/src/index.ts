@@ -1,3 +1,5 @@
+import { registerRecordingNoticeWorker, RECORDING_NOTICE_QUEUES } from "@moss/meetings";
+import { createRecordingNoticeRuntime } from "./recording-notice-runtime.js";
 import {
   createManagedDeletionPreparation,
   createMeetingDeletionPort
@@ -2364,6 +2366,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     queueDefinitions: CHAT_QUEUE_DEFINITIONS,
     registerRoutes: (server, deps) =>
       registerChatRoutes(server, {
+        moduleNoticeArrival: {
+          connectionString: deps.appConnectionString,
+          notices: createRecordingNoticeRuntime({
+            dataContext: deps.dataContext,
+            isMeetingsAvailable: async (access) =>
+              (await deps.resolveActiveModules(access.actorUserId)).some(
+                (module) => module.id === "meetings"
+              )
+          }).notices
+        },
         meetingChat: createMeetingChatData(deps),
         memoryGraphRepository: new MemoryGraphRepository(
           createRecordingFactAuthority(deps.dataContext)
@@ -3035,6 +3047,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
     queueDefinitions: [
       ...MEETING_STOP_SUMMARY_QUEUES,
+      ...RECORDING_NOTICE_QUEUES,
       ...MEETING_CAPTURE_MAINTENANCE_QUEUES,
       ...RECORDING_IMPORT_QUEUES
     ],
@@ -3069,6 +3082,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const outputRuntime = createMeetingOutputRuntime(deps);
       registerMeetingOutputRoutes(server, {
         ...outputRuntime,
+        enqueueRecordingNotice: createRecordingNoticeRuntime({
+          dataContext: deps.dataContext,
+          isMeetingsAvailable: async (access) =>
+            (await deps.resolveActiveModules(access.actorUserId)).some(
+              (module) => module.id === "meetings"
+            )
+        }).enqueue(deps.boss),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
@@ -3084,20 +3104,32 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         )
       });
     },
-    registerWorkers: (boss, deps) =>
-      registerMeetingStopSummaryWorker(
+    registerWorkers: async (boss, deps) => {
+      const resolveActiveModules = createActiveModulesResolver({
+        dataContext: deps.dataContext,
+        manifests: getBuiltInModuleManifests
+      });
+      const notices = createRecordingNoticeRuntime({
+        dataContext: deps.dataContext,
+        isMeetingsAvailable: async (access) =>
+          (await resolveActiveModules(access.actorUserId)).some(
+            (module) => module.id === "meetings"
+          )
+      });
+      const summaryWorkers = await registerMeetingStopSummaryWorker(
         boss,
         deps.dataContext,
         createMeetingOutputRuntime({
           dataContext: deps.dataContext,
           createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
           probeConstrainedCli: deps.probeConstrainedCli,
-          resolveActiveModules: createActiveModulesResolver({
-            dataContext: deps.dataContext,
-            manifests: getBuiltInModuleManifests
-          })
-        }).generator
-      )
+          resolveActiveModules
+        }).generator,
+        notices.enqueue(boss)
+      );
+      const noticeWorkers = await registerRecordingNoticeWorker(boss, notices.publishSideReview);
+      return [...summaryWorkers, ...noticeWorkers];
+    }
   },
   {
     manifest: scratchpadModuleManifest,
