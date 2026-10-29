@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-29
+
+#### Fixed
+
+- **Clearer times in Heartbeat messages.** Check-in messages now show times in your own timezone in a readable form instead of a raw timestamp. [PR #3830](https://github.com/motioneso/moss/pull/3830)
+
 ### 2026-10-28
 
 #### Added
