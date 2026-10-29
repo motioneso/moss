@@ -39,6 +39,10 @@ feature that is not present in the image you are running.
 
 - **Disabling a module asks first.** Turning an add-on module off now asks you to confirm, and explains that background jobs waiting to run are cancelled, running ones can finish, and turning it back on does not bring cancelled jobs back. [PR #3831](https://github.com/motioneso/moss/pull/3831)
 
+#### Added
+
+- **Rate and stop Moss check-ins.** Moss check-ins now have thumbs up and down, you can tell Moss to stop mentioning a topic and undo it. [PR #3828](https://github.com/motioneso/moss/pull/3828)
+
 ### 2026-10-28
 
 #### Added
