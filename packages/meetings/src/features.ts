@@ -363,7 +363,7 @@ export const meetingFeatures = [
   {
     id: "meetings.grounded_outputs",
     description:
-      "Generate evidence-checked summaries with your default model, without fallback. Subscription availability depends on the selected provider's constrained runner. Compare versions and sources; refresh to check availability without generating.",
+      "Generate evidence-checked summaries with your default model, without fallback. Subscription summaries run through the same route as chat, with tools off. Compare versions and sources; refresh to check availability without generating.",
     errors: [
       {
         code: "meeting_output_unavailable",
@@ -375,7 +375,7 @@ export const meetingFeatures = [
         code: "meeting_output_subscription_unsupported",
         class: "validation",
         description:
-          "This subscription profile has no compatible structured summary transport. No replacement model is used. Ask an admin to check the selected provider's installed runner."
+          "This subscription profile cannot run summaries with tools off yet. No replacement model is used. Ask an admin to check the selected provider in Settings."
       },
       {
         code: "meeting_output_subscription_isolation_unavailable",
@@ -387,13 +387,13 @@ export const meetingFeatures = [
         code: "meeting_output_claude_subscription_unsupported",
         class: "validation",
         description:
-          "Summaries on this Claude subscription are not supported by the installed constrained runner yet. No other model is used. Ask an admin to check the installed CLI version."
+          "Summaries on this Claude subscription cannot run with tools off yet. No other model is used. Ask an admin to check the provider in Settings."
       },
       {
         code: "meeting_output_route_unavailable",
         class: "validation",
         description:
-          "Your default model is unavailable for structured summaries. No replacement is used. Check AI providers and installed CLI compatibility with the constrained runner, then refresh summaries and retry."
+          "Your default model is unavailable for structured summaries. No replacement is used. Check AI providers, then refresh summaries and retry."
       },
       {
         code: "meeting_output_route_changed",

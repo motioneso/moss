@@ -69,13 +69,17 @@ import { acquireLeases, leaseTargetsForPaths } from "./tools-leases.js";
 import { defaultResolveAdapterTarget, type AcpAdapterTarget } from "./acp-adapter-target.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
 import {
-  getAcpProviderRow,
   launchOffList,
   lookupAcpToolFamily,
   opencodeDenyPermissionKeys,
   type AcpProfile,
   type AcpProviderKind
 } from "@moss/acp";
+import {
+  agentHomeForProfile,
+  assertAcpSpawnProfile,
+  codexNoToolsConfigFile
+} from "./acp-no-tools-launch.js";
 import { sanitizeSessionKey } from "@moss/chat/live";
 import { applyAgentCredential, type AcpCredential } from "./acp-launch-credential.js";
 import { logRedactedStderr } from "./stderr-redactor.js";
@@ -298,18 +302,10 @@ export class AcpHost {
     if (typeof userId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(userId)) {
       throw new Error("acpSpawn.userId must match [A-Za-z0-9_-]{1,64}");
     }
-    if (profile !== "chat" && profile !== "workshop")
-      throw new Error("acpSpawn.profile must be chat or workshop");
-    // A row marked not ready refuses here, whoever asks: the launcher is the
-    // only piece that knows the home has no login, and later unattended
-    // callers come through it directly. Before any side effect, so a refused
-    // spawn allocates no slot, kills no prior session and writes no file.
-    if (profile === "chat") {
-      const row = getAcpProviderRow(providerKind);
-      if (!row.chatReady) {
-        throw new Error(`Not logged in (${row.chatBlockReason ?? "provider not ready"})`);
-      }
-    }
+    assertAcpSpawnProfile(profile, providerKind);
+    // A row marked not ready refuses in assertAcpSpawnProfile above, whoever asks: the
+    // launcher is the only piece that knows the home has no login. Before any side effect,
+    // so a refused spawn allocates no slot, kills no prior session and writes no file.
     // A check session runs the staged candidate instead of `current`. The folders come from the
     // runner's own state file, and a missing candidate refuses the spawn.
     let overrides: ReleaseOverrides | undefined;
@@ -356,7 +352,7 @@ export class AcpHost {
           gid,
           this.deps.applyOwnership
         );
-        const agentHome = agentHomeTop.path;
+        const persistentHome = agentHomeTop.path;
         sessionTop = await ensureOwnedTopLevel(
           key,
           this.deps.neutralBase,
@@ -366,6 +362,7 @@ export class AcpHost {
           this.deps.applyOwnership
         );
         const sessionDir = join(sessionTop.path, "acp", projectId);
+        const agentHome = agentHomeForProfile(profile, sessionDir, persistentHome);
 
         const env: NodeJS.ProcessEnv = {
           ...buildSanitizedCliEnv(process.env),
@@ -395,6 +392,7 @@ export class AcpHost {
               }
             : null;
         const prepareDirs = [sessionDir];
+        if (profile === "no-tools") prepareDirs.push(agentHome);
         if (denyFile || opencodeProvider) prepareDirs.push(join(agentHome, ".config", "opencode"));
         if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
         const runAgentHomePrepare: AgentHomePrepareRun =
@@ -433,6 +431,7 @@ export class AcpHost {
                   }
                 ]
               : []),
+            ...codexNoToolsConfigFile(profile, providerKind, agentHome),
             // codex-acp ignores session/new systemPrompt metadata and reads this cwd's AGENTS.md.
             ...(providerKind === "openai" && profile === "chat"
               ? [{ path: join(sessionDir, "AGENTS.md"), content: personaText ?? "" }]
@@ -454,7 +453,7 @@ export class AcpHost {
 
     // Written before the child exists (fail-closed); pid/startTime backfilled below.
     const chatMarkerRecord: AcpPrivateMarkerRecord | null =
-      profile === "chat"
+      profile === "chat" || profile === "no-tools"
         ? {
             sessionKey: key,
             cwd: sessionDir,
@@ -781,7 +780,7 @@ export class AcpHost {
    * throws: a purge failure here must not block the kill itself.
    */
   private async purgeIfChatProfile(key: string, session: AcpSession): Promise<void> {
-    if (session.profile !== "chat") return;
+    if (session.profile !== "chat" && session.profile !== "no-tools") return;
     try {
       await this.purgePrivateWorkingFolder(session.cwd, session.identity);
       const transcriptDir = acpProviderTranscriptDir(

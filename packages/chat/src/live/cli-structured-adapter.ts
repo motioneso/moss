@@ -541,7 +541,7 @@ export function createCliStructuredAdapterFactory(
   };
 }
 
-function buildCliStructuredPrompt(input: GenerateStructuredProviderInput): string {
+export function buildCliStructuredPrompt(input: GenerateStructuredProviderInput): string {
   const conversation = input.messages
     .map((turn) => `${turn.role === "user" ? "User" : "Assistant"}: ${turn.content}`)
     .join("\n\n");

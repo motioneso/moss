@@ -33,6 +33,8 @@ export interface AcpProviderRow {
   readonly chatReady: boolean;
   /** Why not, when `chatReady` is false. */
   readonly chatBlockReason?: string;
+  readonly noToolsReady: boolean;
+  readonly noToolsBlockReason?: string;
 }
 
 const ROWS: readonly AcpProviderRow[] = [
@@ -45,7 +47,8 @@ const ROWS: readonly AcpProviderRow[] = [
     login: "runner token store, CLAUDE_CODE_OAUTH_TOKEN in env",
     model: "configOptions model, set with session/set_config_option",
     offList: "_meta disallowed-tools list, confirmed in source",
-    chatReady: true
+    chatReady: true,
+    noToolsReady: true
   },
   {
     kind: "openai",
@@ -56,7 +59,8 @@ const ROWS: readonly AcpProviderRow[] = [
     login: "runner-owned login is copied into this user's isolated agent home before launch",
     model: "CODEX_CONFIG JSON at launch; configOptions model where advertised",
     offList: "INITIAL_AGENT_MODE=read-only",
-    chatReady: true
+    chatReady: true,
+    noToolsReady: true
   },
   {
     kind: "google",
@@ -69,6 +73,9 @@ const ROWS: readonly AcpProviderRow[] = [
     model: "to verify (configOptions model)",
     offList: "no known switch; Workshop-only until one is found",
     chatReady: false,
+    noToolsReady: false,
+    noToolsBlockReason:
+      "the Google provider has not been proven with tools off yet, so it cannot serve the no-tools profile.",
     chatBlockReason:
       "the Google provider needs its own login over the protocol before it is offered anywhere (slice 2)"
   },
@@ -83,7 +90,10 @@ const ROWS: readonly AcpProviderRow[] = [
     model: "session/set_config_option (switched to Muse Spark 1.3 free live, 2026-09-07)",
     offList:
       "settings file in the agent home with shell and file edits denied, written at spawn for chat",
-    chatReady: true
+    chatReady: true,
+    noToolsReady: false,
+    noToolsBlockReason:
+      "the OpenCode provider has not been proven with tools off yet, so it cannot serve the no-tools profile."
   }
 ];
 

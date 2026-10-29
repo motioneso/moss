@@ -100,8 +100,23 @@ function plainCodexHomeAccess(agentHome: string): CodexHomeAccess {
   };
 }
 
-async function fakeAgentHomePrepare(request: AgentHomePrepareRequest): Promise<void> {
+async function fakeAgentHomePrepare(
+  request: AgentHomePrepareRequest,
+  _identity?: { uid: number; gid: number },
+  secretFiles?: readonly AgentHomeSecretFile[]
+): Promise<void> {
   for (const dir of request.dirs) ensureDirTreeSync(dir);
+  for (const file of secretFiles ?? []) {
+    const content =
+      typeof file.content === "string"
+        ? file.content
+        : typeof file.sourcePath === "string" && existsSync(file.sourcePath)
+          ? readFileSync(file.sourcePath, "utf8")
+          : null;
+    if (content === null) continue;
+    ensureDirTreeSync(file.path.slice(0, file.path.lastIndexOf("/")));
+    writeFileSync(file.path, content, { mode: 0o600 });
+  }
   if (request.denyFile) {
     const { path, permissionKeys } = request.denyFile;
     const first = lstatSync(path, { throwIfNoEntry: false }) ?? null;
@@ -916,6 +931,39 @@ describe("task 5b launch follows the row", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("gives a no-tools Codex call a private home with the tools-off config and purges it on kill", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const child = new FakeChild();
+      const { host, lastSpawn } = makeHost(dir, child);
+      const spawned = await host.spawn("summary:user:1", "summary", "openai", "user-1", "no-tools");
+      expect(spawned.home).toBe(join(spawned.cwd, ".private-home"));
+      expect(lastSpawn()?.env.HOME).toBe(spawned.home);
+      const config = readFileSync(join(spawned.home!, ".codex", "config.toml"), "utf8");
+      expect(config).toContain("shell_tool = false");
+      expect(config).toContain('persistence = "none"');
+      expect(existsSync(join(dir, "acp-private-markers", "summary:user:1.json"))).toBe(true);
+      child.exit(0);
+      await host.kill("summary:user:1");
+      expect(existsSync(spawned.cwd)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a no-tools spawn for a provider that is not proven", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const child = new FakeChild();
+      const { host } = makeHost(dir, child);
+      await expect(
+        host.spawn("summary:user:1", "summary", "google", "user-1", "no-tools")
+      ).rejects.toThrow(/not been proven with tools off/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

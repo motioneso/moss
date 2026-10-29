@@ -640,8 +640,12 @@ async function invoke(
       if (typeof params.userId !== "string" || params.userId.length === 0) {
         throw new BadRequestError("acpSpawn.userId is required: slots belong to people");
       }
-      if (params.profile !== "chat" && params.profile !== "workshop") {
-        throw new BadRequestError("acpSpawn.profile must be chat or workshop");
+      if (
+        params.profile !== "chat" &&
+        params.profile !== "workshop" &&
+        params.profile !== "no-tools"
+      ) {
+        throw new BadRequestError("acpSpawn.profile must be chat, workshop or no-tools");
       }
       if (params.personaText !== undefined && typeof params.personaText !== "string") {
         throw new BadRequestError("acpSpawn.personaText must be a string");
