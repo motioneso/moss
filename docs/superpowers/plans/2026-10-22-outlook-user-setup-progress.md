@@ -7,7 +7,7 @@ remain authoritative.
 
 ## Implemented internal foundation
 
-- New connectors migration `0344_outlook_browser_lifecycle.sql`; applied migration 0331 is unchanged.
+- New connectors migration `0346_outlook_browser_lifecycle.sql`; applied migration 0331 is unchanged.
 - One owner-scoped setup with runtime reference, generation, lifecycle and identity hash.
 - Idempotent creation serialized per owner; replacement waits for confirmed cleanup.
 - Viewer/collector leases carry generation, kind and session metadata; expiry uses injected time.

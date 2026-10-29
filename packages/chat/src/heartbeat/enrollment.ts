@@ -12,7 +12,10 @@ import {
   type ReadHeartbeatSettings
 } from "./settings-repository.js";
 
-type SettingsSeed = Pick<HeartbeatSettings, "enabled" | "sources" | "origin">;
+type SettingsSeed = Pick<HeartbeatSettings, "enabled" | "sources" | "origin"> & {
+  /** False when a saved earlier choice exists but cannot be read. Nothing is enrolled then. */
+  readonly readable: boolean;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -26,13 +29,17 @@ const LEGACY_SOURCE: Partial<Record<HeartbeatSource, string>> = {
 };
 
 /**
- * Reads the earlier proactive-updates choice without changing it. Only an explicit saved choice
- * counts. A missing, partial or unreadable record leaves the defaults in place.
+ * Reads the earlier proactive-updates choice without changing it. A missing record leaves the
+ * defaults in place. A saved record that cannot be read is unreadable, so checks hold until the
+ * owner saves a choice; it never falls back to on.
  */
 export function seedFromLegacyProactiveChoice(raw: unknown): SettingsSeed {
   const sources = defaultHeartbeatSources();
+  if (raw === null || raw === undefined) {
+    return { enabled: true, sources, origin: "default", readable: true };
+  }
   if (!isRecord(raw) || raw.version !== 1 || typeof raw.enabled !== "boolean") {
-    return { enabled: true, sources, origin: "default" };
+    return { enabled: true, sources, origin: "default", readable: false };
   }
   const legacySources = isRecord(raw.sources) ? raw.sources : {};
   for (const [source, legacyKey] of Object.entries(LEGACY_SOURCE) as [HeartbeatSource, string][]) {
@@ -41,8 +48,8 @@ export function seedFromLegacyProactiveChoice(raw: unknown): SettingsSeed {
       sources[source] = false;
     }
   }
-  if (!raw.enabled) return { enabled: false, sources, origin: "legacy_off" };
-  return { enabled: true, sources, origin: "default" };
+  if (!raw.enabled) return { enabled: false, sources, origin: "legacy_off", readable: true };
+  return { enabled: true, sources, origin: "default", readable: true };
 }
 
 export async function readLegacySeed(
@@ -61,7 +68,24 @@ export async function enrollOwner(
 ): Promise<ReadHeartbeatSettings> {
   const existing = await deps.settings.find(scopedDb);
   if (existing) return existing;
-  return deps.settings.enroll(scopedDb, await readLegacySeed(scopedDb, deps.preferences));
+  const seed = await readLegacySeed(scopedDb, deps.preferences);
+  if (!seed.readable) return unstoredRecord(seed);
+  return deps.settings.enroll(scopedDb, seed);
+}
+
+/** A record that is shown but not stored. Unreadable seeds stay on hold. */
+function unstoredRecord(seed: SettingsSeed): ReadHeartbeatSettings {
+  return {
+    settings: {
+      enabled: seed.enabled,
+      cadenceMinutes: HEARTBEAT_DEFAULT_CADENCE_MINUTES,
+      sources: seed.sources,
+      revision: 0,
+      origin: seed.origin
+    },
+    readable: seed.readable,
+    nextDueAt: null
+  };
 }
 
 /**
@@ -74,16 +98,5 @@ export async function resolveHeartbeatSettings(
 ): Promise<ReadHeartbeatSettings> {
   const existing = await deps.settings.find(scopedDb);
   if (existing) return existing;
-  const seed = await readLegacySeed(scopedDb, deps.preferences);
-  return {
-    settings: {
-      enabled: seed.enabled,
-      cadenceMinutes: HEARTBEAT_DEFAULT_CADENCE_MINUTES,
-      sources: seed.sources,
-      revision: 0,
-      origin: seed.origin
-    },
-    readable: true,
-    nextDueAt: null
-  };
+  return unstoredRecord(await readLegacySeed(scopedDb, deps.preferences));
 }

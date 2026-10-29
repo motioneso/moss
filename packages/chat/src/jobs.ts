@@ -4,6 +4,11 @@ import {
   CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE_DEFINITION
 } from "./scheduled-reads/queue.js";
 import { CHAT_VOICE_REQUEST_QUEUE_DEFINITION } from "./voice-request-jobs.js";
+import type { HeartbeatGenerator } from "./heartbeat/generation.js";
+import {
+  CHAT_HEARTBEAT_NOTIFY_QUEUE_DEFINITION,
+  registerHeartbeatNotifyWorker
+} from "./heartbeat/notify.js";
 import {
   CHAT_HEARTBEAT_BEAT_QUEUE_DEFINITION,
   registerHeartbeatBeatWorker
@@ -115,6 +120,7 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   CHAT_SCHEDULED_READ_QUEUE_DEFINITION,
   CHAT_SCHEDULED_READ_BOOKKEEPING_QUEUE_DEFINITION,
   CHAT_NOTIFY_REMINDER_QUEUE_DEFINITION,
+  CHAT_HEARTBEAT_NOTIFY_QUEUE_DEFINITION,
   CHAT_HEARTBEAT_SWEEP_QUEUE_DEFINITION,
   CHAT_HEARTBEAT_BEAT_QUEUE_DEFINITION
 ];
@@ -504,6 +510,8 @@ export async function handleArchiveDayJob(
 export interface RegisterChatJobWorkersOptions {
   readonly scheduledReadGateway?: ScheduledReadRunnerDeps["gateway"];
   readonly scheduledReportGenerator?: ScheduledReadRunnerDeps["generateReport"];
+  /** Model call for check-ins. Without it beats record a quiet check and never message. */
+  readonly heartbeatGenerator?: HeartbeatGenerator;
   readonly reminderNotifications: NotificationsRepository;
   readonly embeddingProviderFactory: (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
   /**
@@ -665,9 +673,25 @@ export async function registerChatJobWorkers(
   const heartbeatBeatWorkId = await registerHeartbeatBeatWorker(
     boss,
     dataContext,
-    { preferences: preferencesPort },
+    {
+      preferences: preferencesPort,
+      gateway: options.scheduledReadGateway,
+      generate: options.heartbeatGenerator,
+      boss
+    },
     options.workOptions
   );
+  const heartbeatNotifyWorkId = await registerHeartbeatNotifyWorker(
+    boss,
+    dataContext,
+    options.reminderNotifications,
+    options.workOptions
+  );
+  if (!options.rootDb) {
+    options.logger?.warn(
+      "chat_heartbeat_sweep_not_started: no root database handle, so no check-ins will run"
+    );
+  }
   const heartbeatSweepWorkId = options.rootDb
     ? await registerHeartbeatSweepWorker(boss, options.rootDb)
     : null;
@@ -675,6 +699,7 @@ export async function registerChatJobWorkers(
   const workIds = [
     bookkeepingWorkId,
     heartbeatBeatWorkId,
+    heartbeatNotifyWorkId,
     ...(heartbeatSweepWorkId ? [heartbeatSweepWorkId] : []),
     ...(readWorkId ? [readWorkId] : []),
     embedWorkId,

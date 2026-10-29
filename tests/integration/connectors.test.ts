@@ -210,7 +210,7 @@ describe("Connectors encrypted foundation", () => {
       "sql/0244_email_refresh.sql",
       "sql/0248_connector_email_history_id.sql",
       "sql/0331_outlook_browser_calendar.sql",
-      "sql/0344_outlook_browser_lifecycle.sql"
+      "sql/0346_outlook_browser_lifecycle.sql"
     ]);
     expect(manifest?.settings?.map((surface) => surface.path)).toEqual([
       "/settings?section=connections",

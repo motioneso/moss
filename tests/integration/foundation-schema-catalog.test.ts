@@ -656,7 +656,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0341", name: "0341_memory_recording_cleanup.sql" },
         { version: "0342", name: "0342_chat_module_notices.sql" },
         { version: "0343", name: "0343_chat_heartbeat.sql" },
-        { version: "0344", name: "0344_outlook_browser_lifecycle.sql" }
+        { version: "0344", name: "0344_chat_heartbeat_unavailable_sources.sql" },
+        { version: "0345", name: "0345_chat_heartbeat_worker_publish.sql" },
+        { version: "0346", name: "0346_outlook_browser_lifecycle.sql" }
       ]);
     } finally {
       await client.end();
