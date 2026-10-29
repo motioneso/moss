@@ -11,6 +11,7 @@ import {
   manualAccountCreateHandler,
   manualEntryCreateHandler
 } from "./handlers/manual-ledger.js";
+import { targetSetHandler } from "./handlers/targets.js";
 import { budgetConfigureHandler } from "./handlers/budget-context.js";
 import { importPreviewHandler, importApplyHandler } from "./handlers/import.js";
 import {
@@ -85,6 +86,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "transaction.split": transactionSplitHandler,
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,
+  "target.set": targetSetHandler,
   "budget.configure": budgetConfigureHandler,
   "budget.assign": budgetAssignHandler,
   "budget.apply": budgetApplyHandler,

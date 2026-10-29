@@ -1,3 +1,4 @@
+import type { TargetStore } from "./targets.js";
 // external-modules/finance/src/domain/store-port.ts
 // FIN-06 (#1166, F6-D3): the storage port both impls satisfy. Vocabulary is
 // deliberately the SAME record/chunk shapes handlers use today so the FIN-06c
@@ -54,6 +55,7 @@ export interface ActivityRecord {
 
 export interface FinanceStore {
   readonly supportsSplits: boolean;
+  readonly targets?: TargetStore;
   readonly budgetPolicy?: BudgetPolicyStore;
   /** SQL-only ledger; legacy KV must migrate before manual entry. */
   readonly manual?: ManualLedgerStore;

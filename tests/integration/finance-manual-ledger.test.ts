@@ -858,4 +858,56 @@ describe("reviewed atomic budget writes through installed SQL", () => {
       )!.name
     ).toBe("Synthetic custom groceries");
   });
+  it("versions targets without changing ledger amounts and rejects competing reviews", async () => {
+    const review = (await c((s) => s.budgetPolicy!.get()))!;
+    const before = await c((s) => s.getLedger("2026-10"));
+    const target = {
+      categoryId: "savings",
+      effectiveMonth: "2026-10",
+      kind: "monthly" as const,
+      amountCents: 10001,
+      dueDate: null
+    };
+    const outcomes = await Promise.all([
+      c((s) => s.targets!.save(target, review, "2026-10-28T00:00:00Z")),
+      c((s) => s.targets!.save({ ...target, amountCents: 20002 }, review, "2026-10-28T00:00:00Z"))
+    ]);
+    expect(outcomes.sort()).toEqual([false, true]);
+    expect(await c((s) => s.getLedger("2026-10"))).toEqual(before);
+    const saved = (await c((s) => s.targets!.forMonth("2026-10")))[0]!;
+    expect(await d((s) => s.targets!.forMonth("2026-10"))).toEqual([]);
+    let fresh = (await c((s) => s.budgetPolicy!.get()))!;
+    expect(
+      await c((s) =>
+        s.targets!.save(
+          {
+            ...target,
+            effectiveMonth: "2026-11",
+            kind: "balance",
+            dueDate: "2027-02-28",
+            amountCents: 50000
+          },
+          fresh,
+          "2026-10-28T00:00:00Z"
+        )
+      )
+    ).toBe(true);
+    expect(await c((s) => s.targets!.forMonth("2026-10"))).toEqual([saved]);
+    expect((await c((s) => s.targets!.forMonth("2026-12")))[0]).toMatchObject({
+      kind: "balance",
+      amountCents: 50000
+    });
+    fresh = (await c((s) => s.budgetPolicy!.get()))!;
+    expect(
+      await c((s) =>
+        s.targets!.save(
+          { ...target, effectiveMonth: "2026-12", kind: "removed", amountCents: 0 },
+          fresh,
+          "2026-10-28T00:00:00Z"
+        )
+      )
+    ).toBe(true);
+    expect(await c((s) => s.targets!.forMonth("2026-12"))).toEqual([]);
+    expect(await c((s) => s.targets!.forMonth("2026-10"))).toEqual([saved]);
+  });
 });

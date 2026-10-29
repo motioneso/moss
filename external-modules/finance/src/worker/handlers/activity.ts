@@ -132,6 +132,8 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return "Reconciled a manual statement";
     case "transaction.import":
       return `Imported ${num(p.entryCount) ?? 0} manual transaction${p.entryCount === 1 ? "" : "s"}`;
+    case "target.set":
+      return `Changed the target for ${names.category(str(p.categoryId))}`;
     case "budget.configure":
       return `Chose ${str(p.isoCurrency) ?? "a"} budget currency`;
     case "budget.assign":

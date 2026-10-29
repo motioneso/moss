@@ -1,3 +1,5 @@
+import { BudgetTargets } from "../budget-targets";
+import type { TargetProgress } from "../../domain/targets";
 // external-modules/finance/src/web/screens/budget.tsx
 //
 // #3173: the Park Press Budget screen. One read, finance.budget.status, returns the
@@ -56,6 +58,7 @@ interface BudgetAccount {
 
 interface BudgetStatusResult extends Record<string, unknown> {
   month: string;
+  targets?: TargetProgress[];
   currentMonth?: string;
   revision?: number;
   fingerprint?: string;
@@ -704,15 +707,28 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                 accountCurrencies={body.accountCurrencies ?? []}
               />
             ) : (
-              <BudgetBody
-                result={body}
-                drafts={drafts}
-                disabled={busy || uncertain || !props.tools}
-                errors={errors}
-                onDraft={onDraft}
-                onAssign={onAssign}
-                onBadAmount={onBadAmount}
-              />
+              <div className="fnm-block">
+                {body.fingerprint && body.revision !== undefined && body.isoCurrency ? (
+                  <BudgetTargets
+                    month={month}
+                    currency={body.isoCurrency}
+                    revision={body.revision}
+                    fingerprint={body.fingerprint}
+                    categories={body.categories ?? []}
+                    targets={body.targets ?? []}
+                    tools={props.tools}
+                  />
+                ) : null}
+                <BudgetBody
+                  result={body}
+                  drafts={drafts}
+                  disabled={busy || uncertain || !props.tools}
+                  errors={errors}
+                  onDraft={onDraft}
+                  onAssign={onAssign}
+                  onBadAmount={onBadAmount}
+                />
+              </div>
             ),
           { loadingLabel: "Loading budget" }
         )}

@@ -23,6 +23,67 @@ export async function exerciseBudgetWrites(
         .groceries?.assignedCents ?? 0
     );
   };
+  await page.getByRole("button", { name: "Add a target", exact: true }).click();
+  const targetDialog = page.getByRole("dialog", { name: "Add a target", exact: true });
+  await targetDialog.getByLabel("Target category", { exact: true }).selectOption("savings");
+  await targetDialog.getByLabel("Target amount", { exact: true }).fill("123.45");
+  await targetDialog.getByRole("button", { name: "Save target", exact: true }).click();
+  await targetDialog.waitFor({ state: "detached" });
+  await page
+    .getByRole("region", { name: "Category targets", exact: true })
+    .getByText(/123.45/)
+    .waitFor();
+  expect((await read("finance.budget.status", { month })).targets).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ categoryId: "savings", kind: "monthly", amountCents: 12345 })
+    ])
+  );
+  await page.getByRole("button", { name: "Edit target", exact: true }).click();
+  const editTarget = page.getByRole("dialog", { name: "Edit target", exact: true });
+  await editTarget.getByLabel("Target type", { exact: true }).selectOption("balance");
+  await editTarget.getByLabel("Target amount", { exact: true }).fill("1000.01");
+  await editTarget
+    .getByLabel("Target date", { exact: true })
+    .fill(`${Number(month.slice(0, 4)) + 1}-02-28`);
+  for (const [mode, width] of [
+    ["dark", 320],
+    ["light", 1440]
+  ] as const) {
+    await page.evaluate((mode) => {
+      document.documentElement.dataset.theme = mode;
+    }, mode);
+    await page.setViewportSize({ width, height: 900 });
+    expect(await editTarget.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+      false
+    );
+    for (const button of await editTarget.getByRole("button").all()) {
+      const box = await button.boundingBox();
+      if (box) {
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+      }
+    }
+    if (artifacts)
+      await page.screenshot({
+        path: join(resolve(artifacts), `finance-target-editor-${mode}-${width}.png`),
+        fullPage: true
+      });
+  }
+  await editTarget.getByRole("button", { name: "Save target", exact: true }).click();
+  await editTarget.waitFor({ state: "detached" });
+  await page
+    .getByRole("region", { name: "Category targets", exact: true })
+    .getByText(/Balance by/)
+    .waitFor();
+  expect((await read("finance.budget.status", { month })).targets).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: "balance",
+        amountCents: 100001,
+        dueDate: `${Number(month.slice(0, 4)) + 1}-02-28`
+      })
+    ])
+  );
   await field().fill("250.00");
   await field().press("Enter");
   await dialog.waitFor();

@@ -35,7 +35,11 @@
     { "namespace": "finance.rules", "scopes": ["user"] },
     { "namespace": "finance.snapshots", "scopes": ["user"] },
     { "namespace": "finance.budgets", "scopes": ["user"] },
-    { "namespace": "finance.shared", "scopes": ["instance"], "instanceWritePolicy": "module" },
+    {
+      "namespace": "finance.shared",
+      "scopes": ["instance"],
+      "instanceWritePolicy": "module"
+    },
     { "namespace": "finance.settings", "scopes": ["user", "instance"] },
     { "namespace": "finance.meta", "scopes": ["user"] }
   ],
@@ -52,7 +56,8 @@
       "app.finance_budget_draft_lines",
       "app.finance_reconciliations",
       "app.finance_imports",
-      "app.finance_budget_policy"
+      "app.finance_budget_policy",
+      "app.finance_targets"
     ]
   },
   "settingsPath": "/settings",
@@ -102,7 +107,7 @@
       },
       {
         "id": "finance.budget-typing",
-        "description": "On Budget, edit Assigned and press Enter or Save. Totals update only after persistence. Writes use the reviewed budget and ledger revision; a stale review preserves typed input and requires refresh. Changes above the configured limit open host confirmation. Cancellation preserves input; uncertain saves require checking saved records. Assignments and metadata activity commit together. Archived categories retain historical amounts."
+        "description": "On Budget, edit Assigned and press Enter or Save. Totals update only after persistence. Writes use the reviewed budget and ledger revision; a stale review preserves typed input and requires refresh. Changes above the configured limit open host confirmation. Cancellation preserves input; uncertain saves require checking saved records. Assignments and metadata activity commit together. Archived categories retain historical amounts. Monthly contribution or balance-by-date guidance uses existing envelope money. Targets take effect from the selected month, with exact remaining cents, overdue and reached states. Saving a target does not move money; stale reviews require refresh."
       },
       {
         "id": "finance.getting-started",
@@ -969,6 +974,40 @@
         "required": ["from", "to"]
       },
       "handler": "activity.list"
+    },
+    {
+      "name": "finance.target.set",
+      "permissionId": "finance.target.set",
+      "actionLabel": "Save a category target",
+      "description": "Save or remove monthly or balance-by-date guidance from this month onward. Does not assign money. Read budget status before saving.",
+      "risk": "write",
+      "executionPolicy": "auto",
+      "actionFamilyId": "drafting",
+      "handler": "target.set",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "kind": { "type": "string", "enum": ["monthly", "balance", "removed"] },
+          "amountCents": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "dueDate": { "type": "string" },
+          "expectedRevision": { "type": "integer", "minimum": 0 },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "categoryId",
+          "kind",
+          "amountCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
+      }
     }
   ],
   "assistantActionFamilies": [

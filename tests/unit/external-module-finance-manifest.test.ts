@@ -157,7 +157,8 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.reports.spending", "reports.spending"],
         ["finance.reports.net-worth", "reports.net-worth"],
         // #3186: the Settings activity list.
-        ["finance.activity.list", "activity.list"]
+        ["finance.activity.list", "activity.list"],
+        ["finance.target.set", "target.set"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {

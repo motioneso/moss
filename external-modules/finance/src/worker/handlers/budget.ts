@@ -1,3 +1,5 @@
+import { today } from "./manual-ledger.js";
+import { targetProgress } from "../../domain/targets.js";
 import {
   isCalendarMonth,
   safeCents,
@@ -41,8 +43,22 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
     ...category,
     tableGroup: tableGroupFor(category.group)
   }));
+  const targets = context.setupRequired
+    ? []
+    : ((await store.targets?.forMonth(month)) ?? []).map((target) =>
+        targetProgress(
+          target,
+          context.state.categories[target.categoryId],
+          month,
+          month < today(ports).slice(0, 7)
+            ? `${month}-${new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()}`
+            : month > today(ports).slice(0, 7)
+              ? `${month}-01`
+              : today(ports)
+        )
+      );
   if (!context.setupRequired) requireSameReview(context, await requireBudgetPolicy(store));
-  return { month, ...context, categories };
+  return { month, ...context, categories, targets };
 };
 
 async function applyAssignments(

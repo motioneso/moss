@@ -410,3 +410,52 @@ above. Installed harnesses close their API/browser instances and remove temporar
 Continue Stage C of the budget correctness spec after preserving Stage B. The focused concurrency
 plan describes the revision/fingerprint boundary and taxonomy cutover needed for atomic draft start.
 Then continue targets, recurring bills and flexible planning through the authorized work window.
+
+## October 29 resumption: category targets
+
+Resumed from clean local `10cb932f`; the four untracked target scaffold files were preserved and
+completed into storage, worker/API and Budget UI. The managed environment retained repository files
+and synthetic screenshots but lost October 28 temporary tooling/logs. The attempted frozen gate on
+`10cb932f` therefore has no recoverable terminal receipt; its result is unknown. Earlier receipts
+above are historical records, not reruns in this environment. A task-local official pnpm 10.6.2
+install restores the toolchain without replacing repository dependencies or accessing secrets.
+
+Migration 0027 adds effective-month category targets. Monthly progress counts net assignments;
+balance-by-date progress counts available category money, including spending/refunds/carry.
+Exact bigint ceiling divides remaining cents over inclusive remaining months. Targets do not assign
+money or create a second goal balance. A shared revision/fingerprint gate serializes target edits,
+writes activity and rejects stale reviews. Removing a target ends guidance from the chosen month;
+earlier months retain their version. The UI retains failed input and requires checking records after
+an ambiguous save. Broader account-linked goals, automatic funding, investments and forecasts are
+still missing. Recurring bills and flexible budgeting remain the next capability slices.
+
+Observed checks so far:
+
+- 53 unit files / 557 tests passed, including cent remainders, negative availability, monthly
+  assignment semantics, due-date/year boundaries and overflow.
+- 27 installed SQL tests passed: `moss_finance-20261029-175741-GYMDxg.log`, including competing
+  target edits, owner-scoped reads, historical versions/removal and unchanged assignment amounts.
+- Target RLS negative control: `moss_finance-20261029-175658-ofkPsC.log`, 1 expected failure /
+  26 passes after disabling only the target table's RLS in a disposable DB. The other owner could
+  then read the target. The temporary test mutation was restored before the 27-test green run.
+- 3 files / 11 install/backfill tests passed: `moss_finance-20261029-175742-akXnDd.log`.
+  Initial failure identified an outdated test-owned table list; it now declares the target table.
+- 7 installed browser flows passed: `moss_finance-20261029-175621-oyRbaT.log`, including monthly
+  target creation through the real host. Phone screenshot inspected. A follow-up exercises editing
+  into a dated target and captures the editor in phone/dark and desktop/light.
+- Final dated-target/phone-footer browser rerun: **7/7 pass**,
+  `moss_finance-20261029-180028-760mhS.log`, rc 0. Monthly target creation and conversion to a
+  dated goal run through actual host/worker/SQL; every editor button remains within phone bounds.
+  Updated dark 320px and light 1440px editor screenshots were inspected. The first visual review
+  caught a clipped Cancel button; wrapping the footer fixed it before the final green run.
+- Static aggregate **passed rc 0**: lint, formatting, file size, design tokens/classes, dependency
+  and migration checks, root/tests/web/module TypeScript and app-map build. Final visual-only
+  edits also passed scoped lint. Final focused units remain **53 files / 557 tests passed**.
+- No new foundation or CI completion is claimed. The former whole-repository failures are recorded
+  above; a fresh full gate must establish the current environment baseline. All work remains local
+  and synthetic. Narrow gates cleaned up their containers and installed browser/API instances.
+
+Next concrete slice: recurring bill plans with anchored calendar recurrence, projected-versus-posted
+states, explicit transaction matching and skip/stop history, following the committed targets/bills/flex
+spec. Then implement flexible-pool conservation and mode transitions. No user decision blocks either
+slice; no provider connection or live financial action is authorized.
