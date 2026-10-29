@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Moss check-ins in Main.** Moss can now post a short check-in in your Main chat when something in your tasks, calendar, memory, sports or news needs attention, and stays quiet when nothing changed. [PR #3824](https://github.com/motioneso/moss/pull/3824)
 - **Recording review messages in chat.** Moss now tells you in Main chat when it is unsure whether a recording is personal or work, with a link to review it. [PR #3815](https://github.com/motioneso/moss/pull/3815)
 - **Moss check-in settings.** You can now choose in Settings how often Moss checks in on your day and which of Calendar, Tasks, Memory, Sports and News it may look at. [PR #3820](https://github.com/motioneso/moss/pull/3820)
 
