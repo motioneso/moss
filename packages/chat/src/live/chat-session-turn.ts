@@ -50,6 +50,7 @@ import {
   waitForOriginThreadTransition,
   type OriginThreadTransition
 } from "./origin-record-routing.js";
+import { RingStageTimer, logRingStageTiming } from "./ring-stage-timing.js";
 import { tryPreModelTurn } from "./pre-model-turn.js";
 import {
   assertNewToolsAttached,
@@ -175,6 +176,10 @@ async function runAcceptedChatTurn(
   let turnUsage: ChatTurnUsageDto | undefined;
   // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
   let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
+  // #3842: metadata-only stage timing for admitted voice turns. Holds no text.
+  const ringTimer = opts?.admittedTurn
+    ? new RingStageTimer(turnId, () => host.deps.clock.now())
+    : undefined;
   // #3128: the in-flight record, settled in the finally unless the turn saved.
   let liveTurn: LiveTurnRecord | undefined;
   let visualTurn: VisualPresentationTurn | undefined;
@@ -209,7 +214,10 @@ async function runAcceptedChatTurn(
       opts?.admittedTurn ? Promise.resolve(pinnedThread) : undefined
     );
     bindChatAttemptThread(requestThreadId, { actorUserId, surface, turnId });
-    if (gated) return gated;
+    if (gated) {
+      ringTimer?.mark("reply");
+      return gated;
+    }
     // #2934 finding 1 — a stop during the gate attempt stops the turn pre-emit.
     if (controller.signal.aborted)
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, undefined);
@@ -241,6 +249,7 @@ async function runAcceptedChatTurn(
           )
         : host.ensureSession(actorUserId, userName, ensureOpts, surface));
     }
+    ringTimer?.mark("session_ready");
     // Refuse another conversation's model, including a same-privacy resume during the mode wait.
     if (
       session.incognito !== requestIncognito ||
@@ -510,11 +519,18 @@ async function runAcceptedChatTurn(
             upsertActivityRecord(turnActivityRecords, record);
           }
         }
+        ringTimer?.mark("first_model_token");
+        if (record.kind === "action_request") ringTimer?.noteApprovalAsked();
+        if (record.kind === "result" || record.kind === "action_result")
+          ringTimer?.noteToolFinished();
         if (record.kind === "reply") {
+          ringTimer?.mark("reply");
           reply = record.text;
           if (record.elapsedMs !== undefined) turnElapsedMs = record.elapsedMs;
           if (record.usage !== undefined) turnUsage = record.usage;
         }
+        if (record.kind === "tool" && record.toolName && !record.rejected)
+          ringTimer?.noteToolChosen();
         if (record.kind === "tool" && record.toolName) {
           invokedToolNames.add(record.toolName);
           if (record.toolName.startsWith("mcp__"))
@@ -699,6 +715,11 @@ async function runAcceptedChatTurn(
         text: "",
         visualState: "clear"
       });
+    if (ringTimer) {
+      if (turnActivityRecords.some((record) => record.kind === "action_request"))
+        ringTimer.noteApprovalAsked();
+      logRingStageTiming(ringTimer.snapshot());
+    }
     controller.signal.removeEventListener("abort", discardVisualTurn);
     if (visualTurn) host.deps.visualPresentation?.release(sessionKey, visualTurn);
     await liveTurn?.settle();
