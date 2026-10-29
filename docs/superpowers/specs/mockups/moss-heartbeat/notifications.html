@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title>Notifications - Moss check-ins mockups</title>
+    <link href="../../../../../apps/web/src/styles/tokens.css" rel="stylesheet" />
+    <link href="../../../../../packages/ui/src/styles.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/components-forms.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/kit-chat.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/settings.css" rel="stylesheet" />
+    <link href="../../../../../apps/web/src/styles/texture.css" rel="stylesheet" />
+    <link href="mockups.css" rel="stylesheet" />
+    <script defer src="mockups.js"></script>
+  </head>
+  <body data-defaults='{"scene":"delivered"}' class="">
+    <div class="mock-shell">
+      <aside class="mock-sidebar">
+        <div class="brand">
+          <svg
+            aria-hidden="true"
+            class=""
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.6"
+            viewBox="0 0 24 24"
+          >
+            <path d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10" /></svg
+          ><span>Moss</span>
+        </div>
+        <nav aria-label="Main">
+          <a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1Z" /></svg
+            ><span>Today</span></a
+          ><a class="mock-nav-item" href="main.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"
+              /></svg
+            ><span>Main</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <rect height="16" rx="2" width="18" x="3" y="5" />
+              <path d="M16 3v4M8 3v4M3 11h18" /></svg
+            ><span>Calendar</span></a
+          ><a class="mock-nav-item" href="#"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="m5 12 4 4L19 6" /></svg
+            ><span>Tasks</span></a
+          ><a class="mock-nav-item selected" href="notifications.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+              <path d="M10 20a2 2 0 0 0 4 0" /></svg
+            ><span>Notifications</span><span class="nav-count">2</span></a
+          ><a class="mock-nav-item" href="alerts.html"
+            ><svg
+              aria-hidden="true"
+              class=""
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.6"
+              viewBox="0 0 24 24"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"
+              /></svg
+            ><span>Settings</span></a
+          >
+        </nav>
+        <div class="sidebar-foot"><span class="avatar">J</span><span>Jamie</span></div>
+      </aside>
+      <div class="mock-workspace">
+        <header class="mock-topbar">
+          <div class="topbar-title"><span>Notifications</span></div>
+        </header>
+        <div class="mock-body">
+          <main class="notif-main">
+            <div class="notif-grid">
+              <section class="notifications-page" aria-label="Notifications">
+                <div
+                  class="n-toolbar"
+                  data-scene="delivered multi held released rebuilt cancelled empty"
+                >
+                  <div class="jds-segmented" role="group" aria-label="Read filter">
+                    <button type="button" class="jds-segmented__opt" aria-pressed="true">
+                      All (3)</button
+                    ><button type="button" class="jds-segmented__opt" aria-pressed="false">
+                      Unread (2)
+                    </button>
+                  </div>
+                  <button class="jds-btn jds-btn--secondary jds-btn--sm">
+                    <svg
+                      aria-hidden="true"
+                      class=""
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.6"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="m5 12 4 4L19 6" /></svg
+                    >Mark all read
+                  </button>
+                </div>
+                <div class="n-list" data-scene="delivered">
+                  <article class="n-row is-unread">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Moss check-in</div>
+                      <div class="n-body">
+                        Did you submit your timecard? You said it is due today.
+                      </div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="main.html?scene=timecard"
+                        >View</a
+                      >
+                    </div>
+                    <div class="n-meta">
+                      <span>Unread</span><span>8:00 AM</span
+                      ><button class="jds-iconbtn" aria-label="Mark read" title="Mark read">
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                  <article class="n-row">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Weekly digest is ready</div>
+                      <div class="n-body">Your digest for the week of Oct 19.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="#">View</a>
+                    </div>
+                    <div class="n-meta">
+                      <span>Read</span><span>Oct 26, 7:00 AM</span
+                      ><button
+                        class="jds-iconbtn"
+                        aria-label="Mark read"
+                        title="Mark read"
+                        disabled
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                </div>
+                <div class="n-list" data-scene="multi">
+                  <article class="n-row is-unread">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Moss check-in · 2 items</div>
+                      <div class="n-body">
+                        Timecard due today. Harbor FC play tomorrow at 7:00 AM.
+                      </div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="main.html?scene=multi"
+                        >View</a
+                      >
+                    </div>
+                    <div class="n-meta">
+                      <span>Unread</span><span>8:00 AM</span
+                      ><button class="jds-iconbtn" aria-label="Mark read" title="Mark read">
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                  <article class="n-row">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Weekly digest is ready</div>
+                      <div class="n-body">Your digest for the week of Oct 19.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="#">View</a>
+                    </div>
+                    <div class="n-meta">
+                      <span>Read</span><span>Oct 26, 7:00 AM</span
+                      ><button
+                        class="jds-iconbtn"
+                        aria-label="Mark read"
+                        title="Mark read"
+                        disabled
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                </div>
+                <div class="n-list" data-scene="held">
+                  <article class="n-row is-unread">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">
+                        Moss check-in<span class="jds-badge jds-badge--amber"
+                          >Push waits until 7:00 AM</span
+                        >
+                      </div>
+                      <div class="n-body">
+                        Did you submit your timecard? You said it is due today.
+                      </div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="main.html?scene=timecard"
+                        >View</a
+                      >
+                    </div>
+                    <div class="n-meta">
+                      <span>Unread</span><span>6:00 AM</span
+                      ><button class="jds-iconbtn" aria-label="Mark read" title="Mark read">
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                  <article class="n-row is-unread">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">
+                        Moss check-in<span class="jds-badge jds-badge--amber"
+                          >Push waits until 7:00 AM</span
+                        >
+                      </div>
+                      <div class="n-body">Harbor FC play tomorrow at 7:00 AM.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="main.html?scene=cross"
+                        >View</a
+                      >
+                    </div>
+                    <div class="n-meta">
+                      <span>Unread</span><span>5:00 AM</span
+                      ><button class="jds-iconbtn" aria-label="Mark read" title="Mark read">
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                  <article class="n-row">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Weekly digest is ready</div>
+                      <div class="n-body">Your digest for the week of Oct 19.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="#">View</a>
+                    </div>
+                    <div class="n-meta">
+                      <span>Read</span><span>Oct 26, 7:00 AM</span
+                      ><button
+                        class="jds-iconbtn"
+                        aria-label="Mark read"
+                        title="Mark read"
+                        disabled
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                </div>
+                <div class="n-list" data-scene="released">
+                  <article class="n-row is-unread">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Moss check-in</div>
+                      <div class="n-body">
+                        Did you submit your timecard? You said it is due today.
+                      </div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="main.html?scene=timecard"
+                        >View</a
+                      >
+                    </div>
+                    <div class="n-meta">
+                      <span>Unread</span><span>6:00 AM</span
+                      ><button class="jds-iconbtn" aria-label="Mark read" title="Mark read">
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                  <article class="n-row is-unread">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Moss check-in</div>
+                      <div class="n-body">Harbor FC play tomorrow at 7:00 AM.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="main.html?scene=cross"
+                        >View</a
+                      >
+                    </div>
+                    <div class="n-meta">
+                      <span>Unread</span><span>5:00 AM</span
+                      ><button class="jds-iconbtn" aria-label="Mark read" title="Mark read">
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                  <article class="n-row">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Weekly digest is ready</div>
+                      <div class="n-body">Your digest for the week of Oct 19.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="#">View</a>
+                    </div>
+                    <div class="n-meta">
+                      <span>Read</span><span>Oct 26, 7:00 AM</span
+                      ><button
+                        class="jds-iconbtn"
+                        aria-label="Mark read"
+                        title="Mark read"
+                        disabled
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                </div>
+                <div class="n-list" data-scene="rebuilt">
+                  <article class="n-row is-unread">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Moss check-in</div>
+                      <div class="n-body">Harbor FC play tomorrow at 7:00 AM.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="main.html?scene=cross"
+                        >View</a
+                      >
+                    </div>
+                    <div class="n-meta">
+                      <span>Unread</span><span>8:00 AM</span
+                      ><button class="jds-iconbtn" aria-label="Mark read" title="Mark read">
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                  <article class="n-row">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Weekly digest is ready</div>
+                      <div class="n-body">Your digest for the week of Oct 19.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="#">View</a>
+                    </div>
+                    <div class="n-meta">
+                      <span>Read</span><span>Oct 26, 7:00 AM</span
+                      ><button
+                        class="jds-iconbtn"
+                        aria-label="Mark read"
+                        title="Mark read"
+                        disabled
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                </div>
+                <div class="n-list" data-scene="cancelled">
+                  <article class="n-row">
+                    <span class="n-icon"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7" />
+                        <path d="M10 20a2 2 0 0 0 4 0" /></svg
+                    ></span>
+                    <div class="n-main">
+                      <div class="n-title">Weekly digest is ready</div>
+                      <div class="n-body">Your digest for the week of Oct 19.</div>
+                      <a class="jds-btn jds-btn--link jds-btn--sm" href="#">View</a>
+                    </div>
+                    <div class="n-meta">
+                      <span>Read</span><span>Oct 26, 7:00 AM</span
+                      ><button
+                        class="jds-iconbtn"
+                        aria-label="Mark read"
+                        title="Mark read"
+                        disabled
+                      >
+                        <svg
+                          aria-hidden="true"
+                          class=""
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="1.6"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m5 12 4 4L19 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                </div>
+                <div class="n-list" data-scene="loading">
+                  <div class="skeleton" aria-busy="true" role="status">
+                    <span class="sr-only">Loading notifications</span>
+                    <div class="sk-row"><i></i><i></i></div>
+                    <div class="sk-row"><i></i><i></i></div>
+                    <div class="sk-row"><i></i><i></i></div>
+                  </div>
+                </div>
+                <div class="n-list" data-scene="empty">
+                  <div class="jds-empty">
+                    <span class="jds-empty__mark"
+                      ><svg
+                        aria-hidden="true"
+                        class=""
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+                        <path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6Z" /></svg
+                    ></span>
+                    <div class="jds-empty__title">No notifications</div>
+                  </div>
+                </div>
+                <div class="n-list" data-scene="error">
+                  <p class="n-error" role="status">
+                    Could not load notifications.
+                    <button type="button" class="jds-btn jds-btn--link">Try again</button>
+                  </p>
+                </div>
+              </section>
+              <aside
+                class="device-col"
+                aria-label="On this device"
+                data-scene="delivered multi held released rebuilt cancelled"
+              >
+                <h3 class="group-label">On this device</h3>
+                <div data-scene="delivered">
+                  <div class="phone-lock">
+                    <div class="lock-time">8:00</div>
+                    <div class="lock-date">Tuesday, October 27</div>
+                    <div class="lock-stack">
+                      <div class="push">
+                        <span class="push-mark"
+                          ><svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                            /></svg
+                        ></span>
+                        <div>
+                          <div class="push-head"><strong>Moss</strong><span>now</span></div>
+                          <div class="push-body">
+                            Did you submit your timecard? You said it is due today.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div data-scene="multi">
+                  <div class="phone-lock">
+                    <div class="lock-time">8:00</div>
+                    <div class="lock-date">Tuesday, October 27</div>
+                    <div class="lock-stack">
+                      <div class="push">
+                        <span class="push-mark"
+                          ><svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                            /></svg
+                        ></span>
+                        <div>
+                          <div class="push-head">
+                            <strong>Moss: 2 check-in items</strong><span>now</span>
+                          </div>
+                          <div class="push-body">
+                            Timecard due today. Harbor FC play tomorrow at 7:00 AM.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div data-scene="held">
+                  <div class="phone-lock">
+                    <div class="lock-time">8:00</div>
+                    <div class="lock-date">Tuesday, October 27</div>
+                    <div class="lock-stack"></div>
+                  </div>
+                </div>
+                <div data-scene="released">
+                  <div class="phone-lock">
+                    <div class="lock-time">8:00</div>
+                    <div class="lock-date">Tuesday, October 27</div>
+                    <div class="lock-stack">
+                      <div class="push">
+                        <span class="push-mark"
+                          ><svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                            /></svg
+                        ></span>
+                        <div>
+                          <div class="push-head">
+                            <strong>Moss: 2 check-ins waiting</strong><span>now</span>
+                          </div>
+                          <div class="push-body">
+                            Timecard due today. Harbor FC play tomorrow at 7:00 AM.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div data-scene="rebuilt">
+                  <div class="phone-lock">
+                    <div class="lock-time">8:00</div>
+                    <div class="lock-date">Tuesday, October 27</div>
+                    <div class="lock-stack">
+                      <div class="push">
+                        <span class="push-mark"
+                          ><svg
+                            aria-hidden="true"
+                            class=""
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              d="M20 4c-7-1-15 1-15 9a6 6 0 0 0 6 6c8 0 10-8 9-15ZM4 21 15 10"
+                            /></svg
+                        ></span>
+                        <div>
+                          <div class="push-head"><strong>Moss</strong><span>now</span></div>
+                          <div class="push-body">Harbor FC play tomorrow at 7:00 AM.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div data-scene="cancelled">
+                  <div class="phone-lock">
+                    <div class="lock-time">8:00</div>
+                    <div class="lock-date">Tuesday, October 27</div>
+                    <div class="lock-stack"></div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <nav aria-label="Mockup screens" class="review-nav">
+      <a href="index.html">Mockups</a><span aria-hidden="true">/</span
+      ><a href="alerts.html">01 Check-in controls</a><a href="checkins.html">02 Status and lists</a
+      ><a href="main.html">03 Main message</a
+      ><a href="notifications.html" aria-current="page">04 Notifications</a>
+      <div class="review-theme">
+        <label class="state-pick"
+          ><span>Notification</span
+          ><select class="jds-select" data-group="scene">
+            <option value="delivered">One item delivered</option>
+            <option value="multi">Several items</option>
+            <option value="held">Held for quiet hours</option>
+            <option value="released">Released after quiet hours</option>
+            <option value="rebuilt">One item expired</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="loading">Loading</option>
+            <option value="empty">Empty</option>
+            <option value="error">Load failed</option>
+          </select></label
+        ><a
+          class="jds-btn jds-btn--quiet jds-btn--sm"
+          data-phone-link
+          href="phone.html?page=notifications.html"
+          >Phone</a
+        ><button class="jds-btn jds-btn--quiet jds-btn--sm" data-theme-toggle>Dark</button
+        ><button class="jds-btn jds-btn--quiet jds-btn--sm" data-park-toggle>Forest</button>
+      </div>
+    </nav>
+    <div aria-live="polite" class="mock-status" role="status"></div>
+  </body>
+</html>

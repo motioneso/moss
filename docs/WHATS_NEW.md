@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-28
+
+#### Added
+
+- **Moss check-in settings.** You can now choose in Settings how often Moss checks in on your day and which of Calendar, Tasks, Memory, Sports and News it may look at. [PR #3820](https://github.com/motioneso/moss/pull/3820)
+
 ### 2026-10-27
 
 #### Added
@@ -40,6 +46,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Recording cleanup before deletion.** Deleting a recording or account now cleans its linked notes and memories first, keeping changed notes for review before you try again. [PR #3812](https://github.com/motioneso/moss/pull/3812)
 - **Simpler connection settings.** Outlook calendar uses a compact account row, and Connections and Notes settings have less repeated text. [PR #3773](https://github.com/motioneso/moss/pull/3773)
 
 #### Fixed

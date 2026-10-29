@@ -22,6 +22,7 @@ import {
 } from "@moss/shared";
 
 import { reminderFeatures } from "./reminders/features.js";
+import { HEARTBEAT_FEATURE, HEARTBEAT_ROUTES } from "./heartbeat/manifest.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -104,7 +105,8 @@ export const chatModuleManifest = {
       "sql/0324_chat_scheduled_read_attempts.sql",
       "sql/0327_chat_voice_requests.sql",
       "sql/0333_chat_automatic_voice_inputs.sql",
-      "sql/0342_chat_module_notices.sql"
+      "sql/0342_chat_module_notices.sql",
+      "sql/0343_chat_heartbeat.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -125,7 +127,13 @@ export const chatModuleManifest = {
       "app.chat_scheduled_reads",
       "app.chat_reminder_quiet_allowances",
       "app.chat_reminder_quiet_proposals",
-      "app.chat_responsibility_proposals"
+      "app.chat_responsibility_proposals",
+      "app.heartbeat_settings",
+      "app.heartbeat_source_checkpoints",
+      "app.heartbeat_occurrences",
+      "app.heartbeat_findings",
+      "app.heartbeat_mutes",
+      "app.heartbeat_allowance_charges"
     ]
   },
   permissions: [
@@ -184,7 +192,13 @@ export const chatModuleManifest = {
           "app.chat_scheduled_reads",
           "app.chat_reminder_quiet_allowances",
           "app.chat_reminder_quiet_proposals",
-          "app.chat_responsibility_proposals"
+          "app.chat_responsibility_proposals",
+          "app.heartbeat_settings",
+          "app.heartbeat_source_checkpoints",
+          "app.heartbeat_occurrences",
+          "app.heartbeat_findings",
+          "app.heartbeat_mutes",
+          "app.heartbeat_allowance_charges"
         ].map((table) => ({ table, countPredicate: "owner_user_id = $1::uuid" })),
         { table: "app.chat_user_memory_settings", countPredicate: "user_id = $1::uuid" },
         {
@@ -226,6 +240,7 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     REMINDER_CONTROL_FEATURE,
+    HEARTBEAT_FEATURE,
     {
       id: "chat.current_view_grounding",
       description:
@@ -558,6 +573,7 @@ export const chatModuleManifest = {
       permissionId: "chat.view"
     },
     ...REMINDER_CONTROL_ROUTES,
+    ...HEARTBEAT_ROUTES,
     {
       method: "GET",
       path: "/api/chat/quiet-hours-allowances",

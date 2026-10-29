@@ -96,6 +96,7 @@ import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import { registerScheduledTaskRoutes } from "./reminders/routes.js";
+import { registerHeartbeatRoutes } from "./heartbeat/settings-routes.js";
 import { registerChatUnreadRoutes } from "./unread-routes.js";
 import { registerVoiceRequestRuntime } from "./voice-request-runtime.js";
 import type { VoiceRequestService } from "./voice-request-service.js";
@@ -698,6 +699,11 @@ export function registerChatRoutes(
   });
 
   registerScheduledTaskRoutes(server, dependencies);
+  registerHeartbeatRoutes(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    dataContext: dependencies.dataContext,
+    preferences: dependencies.chatPreferences ?? new PreferencesRepository()
+  });
   registerChatUnreadRoutes(server, dependencies);
 
   registerChatSkillsRoutes(

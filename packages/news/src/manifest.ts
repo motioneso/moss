@@ -32,10 +32,15 @@ import {
   connectNewsCredentialedSourceSchema,
   listNewsSourceCredentialsSchema,
   replaceNewsSourceCredentialSchema,
-  revokeNewsSourceCredentialSchema
+  revokeNewsSourceCredentialSchema,
+  heartbeatSourceReadInputSchema
 } from "@moss/shared";
 
-import { newsTopHeadlinesTodayExecute } from "./briefing-tool.js";
+import {
+  authorizeNewsHeartbeatRead,
+  newsHeartbeatHeadlinesExecute,
+  newsTopHeadlinesTodayExecute
+} from "./briefing-tool.js";
 import {
   newsAddExclusionExecute,
   newsAddTopicExecute,
@@ -363,6 +368,17 @@ export const newsModuleManifest = {
     }
   ],
   assistantTools: [
+    {
+      name: "news.heartbeatHeadlines",
+      description:
+        "Background heartbeat read. Lists the actor's top stories from the already published news snapshot, with a change revision. Never contacts a news source.",
+      permissionId: "news.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeNewsHeartbeatRead,
+      execute: newsHeartbeatHeadlinesExecute
+    },
     {
       name: "news.topHeadlinesToday",
       description:

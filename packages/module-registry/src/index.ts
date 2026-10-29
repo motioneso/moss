@@ -2475,6 +2475,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         },
         createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
         probeConstrainedCli: deps.probeConstrainedCli,
+        rootDb: deps.rootDb,
         logger: deps.logger ? createModuleLogger(deps.logger, "chat") : undefined
       })
   },
