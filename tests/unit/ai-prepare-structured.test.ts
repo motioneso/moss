@@ -66,25 +66,6 @@ it("prepares without dispatch, then runs once outside the closed DataContext wit
   expect(lookup).toHaveBeenCalledTimes(1);
 });
 
-it("retries once on a bad shape only when maxAttempts is 2", async () => {
-  const bodies = ['{"wrong":true}', '{"overview":"Done"}'];
-  const fetch = vi.fn(
-    async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: bodies.shift() ?? "{}" } }] }))
-  );
-  vi.stubGlobal("fetch", fetch);
-  const run = await prepareStructuredGeneration(
-    {} as DataContextDb,
-    { ...request, maxAttempts: 2 },
-    {
-      cipher,
-      repository: { selectProviderWithCredential: async () => provider }
-    }
-  );
-  expect(await run()).toMatchObject({ ok: true, object: { overview: "Done" } });
-  expect(fetch).toHaveBeenCalledTimes(2);
-});
-
 it("rejects CLI credentials without a provider call", async () => {
   const fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);

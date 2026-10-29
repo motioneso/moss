@@ -364,14 +364,17 @@ export class MossAcpClient {
           ...(personaText !== undefined ? { systemPrompt: personaText } : {})
         }
       });
+      // Real count from the stream: any tool call the agent announced while the
+      // session was opening is already recorded against this session id.
+      const announcedAtOpen = this.toolCalls.get(session.sessionId) ?? 0;
       if (surface === "no-tools") {
-        assertZeroToolsProof({ providerKind, toolCallsSeen: 0 });
+        assertZeroToolsProof({ providerKind, toolCallsSeen: announcedAtOpen });
       }
       this.connections.set(session.sessionId, connection);
       this.sessionKeys.set(session.sessionId, sessionKey);
       this.streams.set(session.sessionId, stream);
       this.texts.set(session.sessionId, []);
-      this.toolCalls.set(session.sessionId, 0);
+      this.toolCalls.set(session.sessionId, announcedAtOpen);
       this.sessionCwds.set(session.sessionId, cwd);
       this.sessionHomes.set(session.sessionId, home);
       this.sessionPids.set(session.sessionId, pid);

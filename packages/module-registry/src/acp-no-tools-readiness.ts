@@ -1,3 +1,4 @@
+import type { RpcConnection } from "@moss/chat";
 import type { AiProviderKind } from "@moss/shared";
 import { getAcpProviderRow, type AcpProviderKind } from "@moss/acp";
 import type { ConstrainedCliReadiness } from "./meeting-output-runtime.js";
@@ -8,7 +9,13 @@ const KIND_BY_PROVIDER: Partial<Record<AiProviderKind, AcpProviderKind>> = {
   google: "google"
 };
 
-export function createAcpNoToolsReadinessProbe(): (
+/**
+ * Cheap reachability only: the runner connection must be ready, and the
+ * provider row must serve the no-tools profile. No model call runs here.
+ */
+export function createAcpNoToolsReadinessProbe(
+  getConnection: () => Pick<RpcConnection, "assertReady"> | undefined
+): (
   actorUserId: string,
   signal?: AbortSignal,
   providerKind?: AiProviderKind
@@ -16,6 +23,14 @@ export function createAcpNoToolsReadinessProbe(): (
   return async (_actorUserId, _signal, providerKind = "anthropic") => {
     const kind = KIND_BY_PROVIDER[providerKind];
     if (!kind) return "model-unavailable";
-    return getAcpProviderRow(kind).noToolsReady ? "available" : "model-unavailable";
+    if (!getAcpProviderRow(kind).noToolsReady) return "model-unavailable";
+    const connection = getConnection();
+    if (!connection) return "model-unavailable";
+    try {
+      connection.assertReady();
+    } catch {
+      return "model-unavailable";
+    }
+    return "available";
   };
 }

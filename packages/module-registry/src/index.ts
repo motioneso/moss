@@ -949,7 +949,7 @@ export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.e
       createAcpCliStructuredAdapter: runtime?.connection
         ? createAcpNoToolsStructuredAdapterFactoryForConnection(() => runtime?.connection)
         : undefined,
-      probeAcpCli: createAcpNoToolsReadinessProbe()
+      probeAcpCli: createAcpNoToolsReadinessProbe(() => runtime?.connection)
     },
     close: () => runtime?.connection?.close()
   };
@@ -3967,7 +3967,7 @@ export function registerBuiltInApiRoutes(
     probeConstrainedCli: createConstrainedCliReadinessProbe(getRpcConnection),
     createAcpCliStructuredAdapter:
       createAcpNoToolsStructuredAdapterFactoryForConnection(getRpcConnection),
-    probeAcpCli: createAcpNoToolsReadinessProbe(),
+    probeAcpCli: createAcpNoToolsReadinessProbe(getRpcConnection),
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {

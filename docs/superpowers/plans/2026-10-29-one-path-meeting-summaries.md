@@ -50,7 +50,7 @@ Add a structured adapter in the chat package that runs one prompt through the no
 - It asks for JSON in the prompt it already receives. It does not force a shape at the protocol layer.
 - The shared structured layer keeps parsing the JSON and checking the meeting shape. The meeting service keeps its evidence validation. One retry on a bad shape makes a second fresh call when the first reply is not usable JSON, fails the shape, or fails evidence validation, so a bad shape gets exactly one second try.
 - The old constrained route stays in the tree for the conversation summary job and for slice 4 to retire. Meeting summaries no longer use it, so a new Claude or Codex build cannot break them through the old allowlist.
-- The readiness probe for Meeting summaries stops asking the constrained runner. A subscription model is ready when the provider row serves the no-tools profile. That keeps the Meeting screen honest without running a model call on every screen load.
+- The readiness probe for Meeting summaries stops asking the constrained runner. A subscription model is ready when the runner connection is ready and the provider row serves the no-tools profile. That keeps the Meeting screen honest without running a model call on every screen load, and a down runner reads as unavailable instead of available.
 
 ## App map
 

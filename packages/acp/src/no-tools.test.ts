@@ -70,6 +70,7 @@ class SilentAgent implements AcpTunnel {
   private readonly outbox: string[] = [];
   private seq = 0;
   announceTool = false;
+  announceAtOpen = false;
   async spawn() {
     return { cwd: "/tmp/work", home: "/tmp/work/.private-home", pid: 1, uid: 1, gid: 1 };
   }
@@ -86,6 +87,16 @@ class SilentAgent implements AcpTunnel {
         }
       });
     } else if (msg.method === "session/new") {
+      if (this.announceAtOpen) {
+        this.emit({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId: "s1",
+            update: { sessionUpdate: "tool_call", toolCallId: "c0", title: "Read" }
+          }
+        });
+      }
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: "s1" } });
     } else if (msg.method === "session/prompt") {
       if (this.announceTool) {
@@ -172,6 +183,15 @@ describe("MossAcpClient no-tools session", () => {
       })
     ).rejects.toThrow(/must not be attached/);
     expect(agent.sent).toHaveLength(0);
+  });
+
+  it("fails the open when the agent announces a tool call while opening", async () => {
+    const agent = new SilentAgent();
+    agent.announceAtOpen = true;
+    const client = new MossAcpClient(agent);
+    await expect(
+      client.openSession("summary:1", "summary", "anthropic", "user-1", "no-tools")
+    ).rejects.toThrow(/offered tools/);
   });
 
   it("fails the prompt when the agent announces a tool call", async () => {
