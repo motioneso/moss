@@ -143,18 +143,20 @@ describe("chat heartbeat stop topic", () => {
         note: "Note."
       }))
     };
+    await asUser(actorUserId, async (db) => {
+      const chat = new ChatRepository();
+      const thread = await chat.ensureMainThread(db, actorUserId);
+      await chat.insertReservedAssistantMessage(db, {
+        id: randomUUID(),
+        threadId: thread.id,
+        body: "Two things.",
+        origin,
+        now: new Date()
+      });
+    });
     await workerContext.withDataContext(
       { actorUserId, requestId: "req:hb-stop-publish" },
       async (db) => {
-        const chat = new ChatRepository();
-        const thread = await chat.ensureMainThread(db, actorUserId);
-        await chat.insertReservedAssistantMessage(db, {
-          id: randomUUID(),
-          threadId: thread.id,
-          body: "Two things.",
-          origin,
-          now: new Date()
-        });
         await db.db
           .insertInto("app.heartbeat_occurrences")
           .values({
