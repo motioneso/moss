@@ -31,7 +31,9 @@ function cookieHeader(headers: OutgoingHttpHeaders): string {
 
 describe("chat heartbeat stop topic", () => {
   let appDb: Kysely<MossDatabase>;
+  let workerDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let workerContext: DataContextRunner;
   let boss: PgBoss;
   let server: ReturnType<typeof createApiServer>;
   let ownerCookie: string;
@@ -45,7 +47,9 @@ describe("chat heartbeat stop topic", () => {
   beforeAll(async () => {
     await resetEmptyFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
+    workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 2 });
     dataContext = new DataContextRunner(appDb);
+    workerContext = new DataContextRunner(workerDb);
     await setInstanceSetting("registration.requires_approval", { value: false });
     boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
     server = createApiServer({ appDb, boss, logger: false });
@@ -58,7 +62,12 @@ describe("chat heartbeat stop topic", () => {
   });
 
   afterAll(async () => {
-    await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
+    await Promise.allSettled([
+      server?.close(),
+      appDb?.destroy(),
+      workerDb?.destroy(),
+      boss?.stop({ graceful: false })
+    ]);
   });
 
   it("returns candidates and saves nothing when a phrase matches several items", async () => {
@@ -134,38 +143,41 @@ describe("chat heartbeat stop topic", () => {
         note: "Note."
       }))
     };
-    await asUser(actorUserId, async (db) => {
-      const chat = new ChatRepository();
-      const thread = await chat.ensureMainThread(db, actorUserId);
-      await chat.insertReservedAssistantMessage(db, {
-        id: randomUUID(),
-        threadId: thread.id,
-        body: "Two things.",
-        origin,
-        now: new Date()
-      });
-      await db.db
-        .insertInto("app.heartbeat_occurrences")
-        .values({
-          id: occurrenceId,
-          owner_user_id: actorUserId,
-          settings_revision: 1,
-          started_at: new Date(),
-          outcome: "message"
-        })
-        .execute();
-      await markPublished(
-        db,
-        occurrenceId,
-        new Date(),
-        items.map((item) => ({
-          id: item.id,
-          source: item.source,
-          entityKey: item.key,
-          episodeKey: "e1"
-        }))
-      );
-    });
+    await workerContext.withDataContext(
+      { actorUserId, requestId: "req:hb-stop-publish" },
+      async (db) => {
+        const chat = new ChatRepository();
+        const thread = await chat.ensureMainThread(db, actorUserId);
+        await chat.insertReservedAssistantMessage(db, {
+          id: randomUUID(),
+          threadId: thread.id,
+          body: "Two things.",
+          origin,
+          now: new Date()
+        });
+        await db.db
+          .insertInto("app.heartbeat_occurrences")
+          .values({
+            id: occurrenceId,
+            owner_user_id: actorUserId,
+            settings_revision: 1,
+            started_at: new Date(),
+            outcome: "message"
+          })
+          .execute();
+        await markPublished(
+          db,
+          occurrenceId,
+          new Date(),
+          items.map((item) => ({
+            id: item.id,
+            source: item.source,
+            entityKey: item.key,
+            episodeKey: "e1"
+          }))
+        );
+      }
+    );
   }
 
   async function mutesFor(cookie: string) {
