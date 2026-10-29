@@ -613,7 +613,8 @@ const chatActivityEventSchema = {
     toolCallId: { type: "string" },
     durationMs: { type: "number" },
     decidedBy: { type: "string", enum: ["person", "policy", "timeout", "cancelled"] },
-    reason: { type: "string" }
+    reason: { type: "string" },
+    result: { type: "object", additionalProperties: true }
   }
 } as const;
 
