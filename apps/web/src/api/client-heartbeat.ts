@@ -1,4 +1,5 @@
 import type {
+  CreateHeartbeatMuteResponse,
   GetHeartbeatSettingsResponse,
   GetHeartbeatStatusResponse,
   ListHeartbeatMutesResponse,
@@ -31,4 +32,11 @@ export async function listHeartbeatMutes(): Promise<ListHeartbeatMutesResponse> 
 
 export async function deleteHeartbeatMute(id: string): Promise<void> {
   await requestJson(`/api/me/heartbeat/mutes/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function createHeartbeatMute(findingId: string): Promise<CreateHeartbeatMuteResponse> {
+  return requestJson<CreateHeartbeatMuteResponse>("/api/me/heartbeat/mutes", {
+    method: "POST",
+    body: { findingId }
+  });
 }

@@ -20,7 +20,7 @@ import type {
   UsefulnessFeedbackDto,
   UsefulnessFeedbackKind
 } from "@moss/shared";
-import { actionOutcomeText } from "@moss/shared";
+import { actionOutcomeText, readChatHeartbeatOrigin } from "@moss/shared";
 import { BrandMark, ChatFreshnessFooter, Menu } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys";
@@ -31,6 +31,7 @@ import {
 
 import { ActionRequestCard } from "./action-request-card";
 import { formatAttachmentSize } from "./attachments";
+import { HeartbeatMessage, HeartbeatMuteRecord } from "./heartbeat-message";
 import { MarkdownMessage } from "./markdown-message";
 import { VisualReply } from "./visual-reply";
 import { ModuleBuildPlanRecord, parseModuleBuildPlanResult } from "./module-build-plan-record";
@@ -121,6 +122,10 @@ export function RecordRow(props: {
       }
     }
 
+    if (props.record.toolName === "chat.heartbeatMute") {
+      return <HeartbeatMuteRecord result={props.record.result} />;
+    }
+
     if (props.approvalOutcomeShown) return null;
     const outcome = actionOutcomeText(props.record);
     return outcome ? (
@@ -128,6 +133,11 @@ export function RecordRow(props: {
         {outcome}
       </p>
     ) : null;
+  }
+
+  const heartbeat = readChatHeartbeatOrigin(props.record.origin);
+  if (heartbeat && !props.meetingScoped) {
+    return <HeartbeatMessage record={props.record} origin={heartbeat} />;
   }
 
   // reply (and any unforeseen non-activity kind) — assistant bubble, rendered as markdown.
