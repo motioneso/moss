@@ -1,3 +1,4 @@
+import { readModuleNoticeOrigin } from "@moss/shared";
 import type { ChatMessage, ChatThread } from "@moss/db";
 import type {
   ChatActivityEventDto,
@@ -139,6 +140,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
  */
 export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
   const record = asRecord(value);
+  if (record.kind === "module_notice") return readModuleNoticeOrigin(value);
   if (record.kind === "reminder" && record.version === 1) return readReminderOrigin(record);
   if (record.kind !== "classifier_gate" || record.version !== 1) return undefined;
   const outcome =

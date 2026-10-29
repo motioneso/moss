@@ -16,6 +16,7 @@ vi.mock("@moss/chat", () => ({
   },
   chatModuleSqlMigrationDirectory: "mock-chat-sql",
   registerChatJobWorkers: vi.fn(),
+  ModuleNoticeService: class ModuleNoticeService {},
   registerChatRoutes
 }));
 

@@ -120,6 +120,7 @@ export const meetingsModuleManifest = {
     }
   ],
   jobs: [
+    { queueName: "meetings.recording-notice", metadataOnly: true },
     { queueName: "meetings.stop-summary", metadataOnly: true },
     { queueName: "meetings.recording-import", metadataOnly: true }
   ],
