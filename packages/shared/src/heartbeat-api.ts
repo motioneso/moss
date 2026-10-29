@@ -214,6 +214,108 @@ export const listHeartbeatMutesRouteSchema = {
   }
 } as const;
 
+export interface HeartbeatMuteCandidate {
+  readonly label: string;
+  readonly findingId: string;
+}
+
+/** What the stop-topic command saved or needs answered. Rendered by the chat record. */
+export type HeartbeatMuteResult =
+  | { readonly status: "muted"; readonly mute: HeartbeatMute }
+  | { readonly status: "choose"; readonly candidates: readonly HeartbeatMuteCandidate[] }
+  | { readonly status: "not_found" };
+
+export interface CreateHeartbeatMuteRequest {
+  readonly findingId: string;
+}
+
+export interface CreateHeartbeatMuteResponse {
+  readonly mute: HeartbeatMute;
+}
+
+const muteSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "label", "scope", "createdAt"],
+  properties: {
+    id: { type: "string" },
+    label: { type: "string" },
+    scope: { type: "string", enum: ["item", "topic"] },
+    createdAt: { type: "string" }
+  }
+} as const;
+
+export const heartbeatMuteResultSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["status"],
+  properties: {
+    status: { type: "string", enum: ["muted", "choose", "not_found"] },
+    mute: muteSchema,
+    candidates: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["label", "findingId"],
+        properties: { label: { type: "string" }, findingId: { type: "string" } }
+      }
+    }
+  }
+} as const;
+
+export function readHeartbeatMuteResult(value: unknown): HeartbeatMuteResult | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.status === "not_found") return { status: "not_found" };
+  if (record.status === "muted") {
+    const mute = record.mute as Record<string, unknown> | undefined;
+    if (
+      mute &&
+      typeof mute.id === "string" &&
+      typeof mute.label === "string" &&
+      typeof mute.createdAt === "string" &&
+      (mute.scope === "item" || mute.scope === "topic")
+    ) {
+      return {
+        status: "muted",
+        mute: { id: mute.id, label: mute.label, scope: mute.scope, createdAt: mute.createdAt }
+      };
+    }
+    return undefined;
+  }
+  if (record.status === "choose" && Array.isArray(record.candidates)) {
+    const candidates: HeartbeatMuteCandidate[] = [];
+    for (const raw of record.candidates) {
+      const entry = (raw ?? {}) as Record<string, unknown>;
+      if (typeof entry.label !== "string" || typeof entry.findingId !== "string") return undefined;
+      candidates.push({ label: entry.label, findingId: entry.findingId });
+    }
+    return { status: "choose", candidates };
+  }
+  return undefined;
+}
+
+export const createHeartbeatMuteRouteSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["findingId"],
+    properties: { findingId: { type: "string", format: "uuid" } }
+  },
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["mute"],
+      properties: { mute: muteSchema }
+    },
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
 export const deleteHeartbeatMuteRouteSchema = {
   params: {
     type: "object",

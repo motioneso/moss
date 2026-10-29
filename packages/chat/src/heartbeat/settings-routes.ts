@@ -4,16 +4,19 @@ import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db
 import { HttpError } from "@moss/module-sdk";
 import { ACT_AS_GRANT_HEADER } from "@moss/module-sdk/server";
 import {
+  createHeartbeatMuteRouteSchema,
   deleteHeartbeatMuteRouteSchema,
   getHeartbeatSettingsRouteSchema,
   getHeartbeatStatusRouteSchema,
   listHeartbeatMutesRouteSchema,
   putHeartbeatSettingsRouteSchema,
+  type CreateHeartbeatMuteRequest,
   type PutHeartbeatSettingsRequest
 } from "@moss/shared";
 
 import { handleRouteError } from "../route-errors.js";
 import { resolveHeartbeatSettings } from "./enrollment.js";
+import { resolveHeartbeatMute } from "./mute-command.js";
 import { HeartbeatMuteRepository } from "./mute-repository.js";
 import { HeartbeatSettingsRepository } from "./settings-repository.js";
 import { HeartbeatOccurrenceRepository } from "./status-repository.js";
@@ -104,6 +107,24 @@ export function registerHeartbeatRoutes(
         return {
           mutes: await dependencies.dataContext.withDataContext(access, (db) => mutes.list(db))
         };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post<{ Body: CreateHeartbeatMuteRequest }>(
+    "/api/me/heartbeat/mutes",
+    { schema: createHeartbeatMuteRouteSchema },
+    async (request, reply) => {
+      try {
+        const access = await dependencies.resolveAccessContext(request);
+        assertOwnerSession(request);
+        const result = await dependencies.dataContext.withDataContext(access, (db) =>
+          resolveHeartbeatMute(db, { findingId: request.body.findingId }, mutes)
+        );
+        if (result.status !== "muted") throw new HttpError(404, "That check-in item is gone.");
+        return { mute: result.mute };
       } catch (error) {
         return handleRouteError(error, reply);
       }

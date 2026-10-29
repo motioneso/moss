@@ -29,6 +29,8 @@ export interface NotificationDto {
   // at write time (worker-rpc-host.ts + NotificationsRepository), not re-validated here.
   // Null for every notification posted before this task, and for any that omit it.
   readonly href: string | null;
+  /** When the device push is held until (quiet hours). Absent or null when nothing is held. */
+  readonly deferredUntil?: string | null;
 }
 
 export interface ListNotificationsResponse {
@@ -98,7 +100,8 @@ export const notificationDtoSchema = {
     // field missing from this schema is silently stripped by fast-json-stringify even
     // though the handler returns it (recurring trap, see #1285's unreadByModule comment
     // above for the same gotcha hitting this file once already).
-    href: nullableStringSchema
+    href: nullableStringSchema,
+    deferredUntil: nullableStringSchema
   }
 } as const;
 

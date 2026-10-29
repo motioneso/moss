@@ -1,4 +1,4 @@
-import type { HeartbeatSource } from "./heartbeat-source-api.js";
+import { HEARTBEAT_SOURCES, type HeartbeatSource } from "./heartbeat-source-api.js";
 
 /**
  * A check-in message written by code from the heartbeat. Item titles, times and sources come from
@@ -44,3 +44,40 @@ export const chatHeartbeatOriginSchema = {
     }
   }
 } as const;
+
+/** Reads a stored or streamed origin; anything malformed reads as absent. */
+export function readChatHeartbeatOrigin(value: unknown): ChatHeartbeatOriginV1 | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.kind !== "heartbeat" || record.version !== 1) return undefined;
+  if (typeof record.occurrenceId !== "string" || typeof record.intro !== "string") return undefined;
+  if (!Array.isArray(record.items)) return undefined;
+  const items: ChatHeartbeatOriginV1["items"][number][] = [];
+  for (const raw of record.items) {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    if (
+      typeof item.findingId !== "string" ||
+      typeof item.source !== "string" ||
+      !(HEARTBEAT_SOURCES as readonly string[]).includes(item.source) ||
+      typeof item.title !== "string" ||
+      typeof item.note !== "string" ||
+      (item.at !== null && typeof item.at !== "string")
+    ) {
+      return undefined;
+    }
+    items.push({
+      findingId: item.findingId,
+      source: item.source as HeartbeatSource,
+      title: item.title,
+      at: item.at as string | null,
+      note: item.note
+    });
+  }
+  return {
+    version: 1,
+    kind: "heartbeat",
+    occurrenceId: record.occurrenceId,
+    items,
+    intro: record.intro
+  };
+}

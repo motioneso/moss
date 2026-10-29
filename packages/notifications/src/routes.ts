@@ -277,7 +277,8 @@ export function serializeNotification(notification: NotificationWithReadState): 
     metadata: projectNotificationMetadata(notification.metadata),
     readAt: toIsoString(notification.read_at),
     createdAt: toIsoString(notification.created_at),
-    href: notification.href
+    href: notification.href,
+    deferredUntil: toIsoString(notification.deferred_until)
   };
 }
 

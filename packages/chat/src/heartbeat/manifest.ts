@@ -80,9 +80,52 @@ export const HEARTBEAT_ROUTES = [
     permissionId: "chat.view"
   },
   {
+    method: "POST",
+    path: "/api/me/heartbeat/mutes",
+    chat: { access: "blocked", blockedBecause: "self_authority" },
+    permissionId: "chat.message"
+  },
+  {
     method: "DELETE",
     path: "/api/me/heartbeat/mutes/:id",
     chat: { access: "blocked", blockedBecause: "self_authority" },
     permissionId: "chat.message"
   }
 ] as const;
+
+export const HEARTBEAT_STOP_FEATURE: ModuleFeatureManifest = {
+  id: "chat.heartbeat_stop",
+  description:
+    "Tell Moss in chat to stop mentioning an item or topic from a check-in. Moss saves it as a muted topic and shows a Muted label with Undo. If the topic matches several check-in items, Moss shows up to three choices and saves nothing until one is picked. Undo, and the list of muted topics, are in Settings > Alerts.",
+  featureFlagId: "chat.module",
+  errors: [
+    {
+      code: "heartbeat_mute_not_found",
+      class: "validation",
+      description:
+        "No recent check-in item matched what was named. Name the topic in your own words, or point at an item in a check-in message."
+    }
+  ],
+  remediations: [
+    {
+      id: "chat.review_heartbeat_mutes",
+      description: "Open Alerts to see muted topics and remove one.",
+      path: "/settings?section=alerts"
+    }
+  ]
+};
+
+export const HEARTBEAT_RATING_FEATURE: ModuleFeatureManifest = {
+  id: "chat.heartbeat_rating",
+  description:
+    "Every check-in message in Main has a thumbs up and a thumbs down under it. A second click on the same thumb undoes the rating. Ratings are saved as feedback on that message only; nothing asks why.",
+  featureFlagId: "chat.module",
+  errors: [
+    {
+      code: "heartbeat_rating_save_failed",
+      class: "transient",
+      description: "The rating could not be saved. Try the thumb again; nothing was changed."
+    }
+  ],
+  remediations: []
+};
