@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Clearer times in Heartbeat messages.** Check-in messages now show times in your own timezone in a readable form instead of a raw timestamp. [PR #3830](https://github.com/motioneso/moss/pull/3830)
 
+#### Changed
+
+- **Disabling a module asks first.** Turning an add-on module off now asks you to confirm, and explains that background jobs waiting to run are cancelled, running ones can finish, and turning it back on does not bring cancelled jobs back. [PR #3831](https://github.com/motioneso/moss/pull/3831)
+
 ### 2026-10-28
 
 #### Added
