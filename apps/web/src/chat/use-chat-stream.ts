@@ -1,4 +1,9 @@
-import { DEFAULT_CHAT_SURFACE, readStoredVisual, readModuleNoticeOrigin } from "@moss/shared";
+import {
+  DEFAULT_CHAT_SURFACE,
+  readChatHeartbeatOrigin,
+  readModuleNoticeOrigin,
+  readStoredVisual
+} from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
@@ -497,6 +502,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
 function isDeliveredBackgroundMessage(message: ChatMessageDto): boolean {
   return (
     (message.origin?.kind === "reminder" && message.origin.event === "delivered") ||
+    message.origin?.kind === "heartbeat" ||
     (message.role === "assistant" &&
       message.status === "stored" &&
       readModuleNoticeOrigin(message.origin) !== undefined)
@@ -518,7 +524,8 @@ function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
     ...(activity.outcome !== undefined ? { outcome: activity.outcome } : {}),
     ...(activity.durationMs !== undefined ? { durationMs: activity.durationMs } : {}),
     ...(activity.decidedBy !== undefined ? { decidedBy: activity.decidedBy } : {}),
-    ...(activity.reason !== undefined ? { reason: activity.reason } : {})
+    ...(activity.reason !== undefined ? { reason: activity.reason } : {}),
+    ...(activity.result !== undefined ? { result: activity.result } : {})
   };
 }
 
@@ -541,7 +548,9 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       text: parsed.text,
       ...(readModuleNoticeOrigin(parsed.origin)
         ? { origin: readModuleNoticeOrigin(parsed.origin) }
-        : {}),
+        : readChatHeartbeatOrigin(parsed.origin)
+          ? { origin: readChatHeartbeatOrigin(parsed.origin) }
+          : {}),
       visualState:
         parsed.kind === "status" &&
         (parsed.visualState === "preparing" || parsed.visualState === "clear")

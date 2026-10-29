@@ -25,8 +25,11 @@ import { reminderFeatures } from "./reminders/features.js";
 import {
   HEARTBEAT_FEATURE,
   HEARTBEAT_MESSAGE_FEATURE,
-  HEARTBEAT_ROUTES
+  HEARTBEAT_RATING_FEATURE,
+  HEARTBEAT_ROUTES,
+  HEARTBEAT_STOP_FEATURE
 } from "./heartbeat/manifest.js";
+import { chatHeartbeatMuteTool } from "./heartbeat/mute-command.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -248,6 +251,8 @@ export const chatModuleManifest = {
     REMINDER_CONTROL_FEATURE,
     HEARTBEAT_FEATURE,
     HEARTBEAT_MESSAGE_FEATURE,
+    HEARTBEAT_STOP_FEATURE,
+    HEARTBEAT_RATING_FEATURE,
     {
       id: "chat.current_view_grounding",
       description:
@@ -883,6 +888,7 @@ export const chatModuleManifest = {
   assistantTools: [
     chatPresentTool,
     reminderSummaryTool,
+    chatHeartbeatMuteTool,
     {
       name: "chat.listTodaysTurns",
       description: "List today's non-incognito chat turns for the active actor.",

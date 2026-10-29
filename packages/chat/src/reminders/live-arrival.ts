@@ -36,7 +36,7 @@ export async function notifyReminderArrival(
 
 /**
  * Re-reads a notified reminder as the named owner. Any role can notify, so the checks below
- * accept only a stored delivered reminder that the owner wrote into the owner's own Main thread.
+ * accept only a stored delivered reminder or check-in that the owner wrote into the owner's own Main thread.
  * A forged payload can at most re-send that owner's own reminder to that owner, which the
  * browser drops as a duplicate.
  */
@@ -65,7 +65,9 @@ export async function readReminderArrival(
     )
       return undefined;
     const origin = readOrigin(asRecord(message.model_metadata).origin);
-    if (origin?.kind !== "reminder" || origin.event !== "delivered") return undefined;
+    const delivered =
+      (origin?.kind === "reminder" && origin.event === "delivered") || origin?.kind === "heartbeat";
+    if (!delivered) return undefined;
     return {
       actorUserId,
       threadId: target.id,
@@ -74,6 +76,7 @@ export async function readReminderArrival(
         text: message.body,
         messageId: message.id,
         background: true,
+        ...(origin?.kind === "heartbeat" ? { origin } : {}),
         scheduledReadSource: readScheduledReadSource(asRecord(message.model_metadata)),
         backgroundThreadId: target.id
       }

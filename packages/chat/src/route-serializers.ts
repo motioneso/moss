@@ -1,4 +1,4 @@
-import { readModuleNoticeOrigin } from "@moss/shared";
+import { readHeartbeatMuteResult, readModuleNoticeOrigin } from "@moss/shared";
 import type { ChatMessage, ChatThread } from "@moss/db";
 import type {
   ChatActivityEventDto,
@@ -269,6 +269,8 @@ export function readActivity(value: unknown): ChatActivityEventDto[] {
       record.outcome === "allowed"
         ? record.outcome
         : undefined;
+    const mute =
+      record.toolName === "chat.heartbeatMute" ? readHeartbeatMuteResult(record.result) : undefined;
     return typeof record.kind === "string" && typeof record.text === "string"
       ? [
           {
@@ -292,7 +294,8 @@ export function readActivity(value: unknown): ChatActivityEventDto[] {
             record.decidedBy === "cancelled"
               ? { decidedBy: record.decidedBy }
               : {}),
-            ...(typeof record.reason === "string" ? { reason: record.reason } : {})
+            ...(typeof record.reason === "string" ? { reason: record.reason } : {}),
+            ...(mute ? { result: mute as unknown as Record<string, unknown> } : {})
           }
         ]
       : [];

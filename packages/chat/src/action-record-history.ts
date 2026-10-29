@@ -1,3 +1,4 @@
+import { readHeartbeatMuteResult } from "@moss/shared";
 import type { ChatActivityEventDto, TranscriptRecord } from "@moss/shared";
 
 export interface TerminalActionRecord extends ChatActivityEventDto {
@@ -20,8 +21,16 @@ export function terminalActionRecord(record: TranscriptRecord): TerminalActionRe
     ...(record.reason ? { reason: record.reason.slice(0, 500) } : {}),
     ...(record.decidedBy ? { decidedBy: record.decidedBy } : {}),
     ...(record.sequence === undefined ? {} : { sequence: record.sequence }),
-    ...(record.durationMs === undefined ? {} : { durationMs: record.durationMs })
+    ...(record.durationMs === undefined ? {} : { durationMs: record.durationMs }),
+    ...durableResult(record)
   };
+}
+
+/** The mute pill must survive a reload, so its small validated result is kept with the record. */
+function durableResult(record: TranscriptRecord): { result?: Record<string, unknown> } {
+  if (record.toolName !== "chat.heartbeatMute") return {};
+  const mute = readHeartbeatMuteResult(record.result);
+  return mute ? { result: mute as unknown as Record<string, unknown> } : {};
 }
 
 function object(value: unknown): Record<string, unknown> | undefined {
