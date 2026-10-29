@@ -17,7 +17,7 @@ import { Link } from "react-router";
 
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "../api/client";
 import { queryKeys } from "../api/query-keys";
-import { formatDateTime, useUserLocale } from "../locale/locale-format";
+import { formatDateTime, formatTime, useUserLocale } from "../locale/locale-format";
 import { personalize } from "../api/use-assistant-name.js";
 
 type NotificationFilter = "all" | "unread";
@@ -133,7 +133,7 @@ function NotificationRow(props: {
   const locale = useUserLocale();
   const unread = !props.notification.readAt;
   const upgrade = props.notification.metadata.kind === "upgrade_available";
-  const heldUntil = formatHeldUntil(props.notification.deferredUntil);
+  const heldUntil = formatHeldUntil(props.notification.deferredUntil, locale);
 
   return (
     <article aria-busy={props.isUpdating}>
@@ -194,9 +194,12 @@ function formatNotificationDate(value: string | null, locale: LocaleSettingsDto)
 }
 
 /** The release time of a push still held for quiet hours; null once it has passed. */
-function formatHeldUntil(value: string | null | undefined): string | null {
+function formatHeldUntil(
+  value: string | null | undefined,
+  locale: LocaleSettingsDto
+): string | null {
   if (!value) return null;
   const release = new Date(value);
   if (Number.isNaN(release.getTime()) || release.getTime() <= Date.now()) return null;
-  return release.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return formatTime(release, locale);
 }

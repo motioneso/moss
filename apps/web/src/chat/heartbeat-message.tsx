@@ -18,12 +18,7 @@ import {
   createUsefulnessFeedback,
   undoUsefulnessFeedback
 } from "../api/usefulness-feedback-client";
-import { formatDateTime, useUserLocale } from "../locale/locale-format";
-
-function formatMessageTime(createdAt: string | undefined): string | null {
-  if (!createdAt) return null;
-  return new Date(createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
+import { formatDateTime, formatTime, useUserLocale } from "../locale/locale-format";
 
 /** A check-in written by the heartbeat: intro, one card per item, and an always-visible rating. */
 export function HeartbeatMessage(props: {
@@ -32,7 +27,7 @@ export function HeartbeatMessage(props: {
 }) {
   const locale = useUserLocale();
   const { origin } = props;
-  const time = formatMessageTime(props.record.createdAt);
+  const time = props.record.createdAt ? formatTime(props.record.createdAt, locale) : null;
   const count = origin.items.length;
   const eyebrow = ["Check-in", count > 1 ? `${count} items` : null, time]
     .filter(Boolean)
