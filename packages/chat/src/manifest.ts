@@ -20,7 +20,11 @@ import {
 } from "@moss/shared";
 
 import { reminderFeatures } from "./reminders/features.js";
-import { HEARTBEAT_FEATURE, HEARTBEAT_ROUTES } from "./heartbeat/manifest.js";
+import {
+  HEARTBEAT_FEATURE,
+  HEARTBEAT_MESSAGE_FEATURE,
+  HEARTBEAT_ROUTES
+} from "./heartbeat/manifest.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -232,6 +236,7 @@ export const chatModuleManifest = {
     },
     REMINDER_CONTROL_FEATURE,
     HEARTBEAT_FEATURE,
+    HEARTBEAT_MESSAGE_FEATURE,
     {
       id: "chat.current_view_grounding",
       description:

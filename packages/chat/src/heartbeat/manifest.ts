@@ -27,6 +27,33 @@ export const HEARTBEAT_FEATURE: ModuleFeatureManifest = {
   ]
 };
 
+export const HEARTBEAT_MESSAGE_FEATURE: ModuleFeatureManifest = {
+  id: "chat.heartbeat_messages",
+  description:
+    "Moss posts a check-in message in Main when a check finds items that deserve attention, with a short intro and one note per item. Nothing is posted when nothing changed. Each owner gets at most six model checks per local day. A push notification follows, held during quiet hours.",
+  featureFlagId: "chat.module",
+  errors: [
+    {
+      code: "heartbeat_check_failed",
+      class: "transient",
+      description:
+        "A check could not produce a usable message. Nothing was posted and the next check tries again."
+    },
+    {
+      code: "heartbeat_allowance_reached",
+      class: "validation",
+      description: "The daily limit of model checks was reached. Checks resume the next local day."
+    }
+  ],
+  remediations: [
+    {
+      id: "chat.review_heartbeat_status",
+      description: "Open Alerts to see the last check, unavailable sources and the next check.",
+      path: "/settings?section=alerts"
+    }
+  ]
+};
+
 export const HEARTBEAT_ROUTES = [
   {
     method: "GET",

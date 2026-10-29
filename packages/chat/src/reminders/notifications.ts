@@ -15,6 +15,7 @@ import {
 } from "@moss/notifications";
 import { chatMessageHref } from "@moss/shared";
 
+import { isHeartbeatNotificationActive } from "../heartbeat/notify.js";
 import { hasQuietHoursAllowance } from "./quiet-hours-allowances.js";
 import { ReminderRepository, type DueReminder } from "./repository.js";
 
@@ -84,6 +85,8 @@ export async function isReminderNotificationActive(
   scopedDb: DataContextDb,
   notification: NotificationWithReadState
 ): Promise<boolean> {
+  if (notification.module_id === "chat" && notification.metadata.kind === "chat_heartbeat")
+    return isHeartbeatNotificationActive(scopedDb, notification);
   if (notification.module_id !== "chat" || notification.metadata.kind !== "chat_reminder")
     return true;
   const { reminderId, messageId } = notification.metadata;

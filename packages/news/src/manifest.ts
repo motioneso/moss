@@ -578,6 +578,19 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      id: "news.heartbeat_source",
+      description:
+        "Saved news stories can appear in Moss check-ins. Check-ins read stored stories only and never fetch new ones.",
+      errors: [
+        {
+          code: "news_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "News could not be read for a check-in. Settings > Alerts shows News as unavailable and the next check tries again."
+        }
+      ]
+    },
+    {
       id: "news.filtered_front_page",
       description:
         "Topic filters offer Show all stories when no matching stories loaded. Empty degraded coverage is unavailable. Aged News pages refresh on focus after ten minutes."

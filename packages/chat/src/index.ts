@@ -119,4 +119,5 @@ export * from "./skills/repository.js";
 
 export { createConstrainedCliStructuredAdapterFactory } from "./live/constrained-structured-adapter.js";
 
+export { createHeartbeatGenerator } from "./heartbeat/generation.js";
 export { createScheduledReportGenerator } from "./scheduled-reads/report-generation.js";

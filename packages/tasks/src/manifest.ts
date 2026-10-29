@@ -828,6 +828,19 @@ export const tasksModuleManifest = {
   visualTemplates: [taskSummaryTemplate],
   features: [
     {
+      id: "tasks.heartbeat_source",
+      description:
+        "Open tasks that are overdue or due within a day can appear in Moss check-ins. Check-ins read saved task data only and never change a task.",
+      errors: [
+        {
+          code: "tasks_heartbeat_source_unavailable",
+          class: "transient",
+          description:
+            "Tasks could not be read for a check-in. Settings > Alerts shows Tasks as unavailable and the next check tries again."
+        }
+      ]
+    },
+    {
       id: "tasks.visual_summary",
       description:
         "Chat summarizes up to twelve owned/shared tasks with source time and coverage; no recurrence advance or reminders. Focus adds separate today context but keeps its ranking/reconciliation. Saved cards never refetch.",

@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
-import type { HeartbeatOutcomeKind, HeartbeatStatus } from "@moss/shared";
+import type { HeartbeatOutcomeKind, HeartbeatSource, HeartbeatStatus } from "@moss/shared";
 
 import { HEARTBEAT_RECENT_OCCURRENCES } from "./limits.js";
 import type { ReadHeartbeatSettings } from "./settings-repository.js";
@@ -40,12 +40,24 @@ export class HeartbeatOccurrenceRepository {
       readonly id: string;
       readonly outcome: Exclude<HeartbeatOutcomeKind, "never" | "off">;
       readonly itemCount?: number;
+      readonly messageId?: string;
+      readonly inputTokens?: number;
+      readonly outputTokens?: number;
+      readonly unavailableSources?: readonly HeartbeatSource[];
     }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
     await scopedDb.db
       .updateTable("app.heartbeat_occurrences")
-      .set({ outcome: input.outcome, item_count: input.itemCount ?? 0, finished_at: new Date() })
+      .set({
+        outcome: input.outcome,
+        item_count: input.itemCount ?? 0,
+        finished_at: new Date(),
+        message_id: input.messageId ?? null,
+        input_tokens: input.inputTokens ?? null,
+        output_tokens: input.outputTokens ?? null,
+        unavailable_sources: [...(input.unavailableSources ?? [])]
+      })
       .where("id", "=", input.id)
       .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
       .where("outcome", "=", "running")
@@ -69,7 +81,7 @@ export class HeartbeatOccurrenceRepository {
     assertDataContextDb(scopedDb);
     const rows = await scopedDb.db
       .selectFrom("app.heartbeat_occurrences")
-      .select(["finished_at", "outcome", "item_count"])
+      .select(["finished_at", "outcome", "item_count", "unavailable_sources"])
       .where("finished_at", "is not", null)
       .orderBy("finished_at", "desc")
       .limit(HEARTBEAT_RECENT_OCCURRENCES)
@@ -86,6 +98,7 @@ export class HeartbeatOccurrenceRepository {
         : []
     );
     const latest = recent[0];
+    const unavailable = (rows[0]?.unavailable_sources ?? []) as HeartbeatSource[];
     const enabled = stored?.settings.enabled ?? true;
     return {
       lastCheckedAt: latest?.at ?? null,
@@ -95,7 +108,7 @@ export class HeartbeatOccurrenceRepository {
         : stored && !stored.readable
           ? "failed"
           : (latest?.outcome ?? "never"),
-      unavailableSources: [],
+      unavailableSources: enabled ? unavailable : [],
       recent
     };
   }
