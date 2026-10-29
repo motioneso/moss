@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Meeting summaries keep working after the AI tool updates.** Meeting summaries now use the same route as chat, so an update to the AI tool no longer stops summaries from being written. [PR #3837](https://github.com/motioneso/moss/pull/3837)
 - **Clearer times in Heartbeat messages.** Check-in messages now show times in your own timezone in a readable form instead of a raw timestamp. [PR #3830](https://github.com/motioneso/moss/pull/3830)
 
 #### Changed
