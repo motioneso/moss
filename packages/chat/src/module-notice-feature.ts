@@ -14,7 +14,7 @@ export const MODULE_NOTICE_FEATURE = {
   remediations: [
     {
       id: "chat.open_main_for_notices",
-      path: "/chat",
+      path: "/today",
       description:
         "Open Main and send a message if it is empty, then reload. Pending notices recover when Main refreshes."
     }

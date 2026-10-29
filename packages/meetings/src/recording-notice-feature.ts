@@ -13,7 +13,7 @@ export const recordingNoticeFeature = {
   remediations: [
     {
       id: "meetings.open_main_for_side_review",
-      path: "/chat",
+      path: "/today",
       description:
         "Open Main and send a message if it is empty, then reload. Refreshing Main recovers pending recording notices after background retries stop."
     }
