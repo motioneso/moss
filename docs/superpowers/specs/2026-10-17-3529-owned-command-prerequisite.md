@@ -21,21 +21,21 @@ tree `65ac9d706ffd8ba2491eb4b6dfdde835a74cf1a3`, relative to `~/Jarv1s`.
 Graph discovery found provisioner functions but no original-child CJS nodes; exact Git objects establish
 these facts. They describe source capabilities and gaps, not installed execution or observed leaks.
 
-| Seam | Verified source fact |
-| --- | --- |
-| `scripts/uat-host/original-child.cjs:59–65` | Private one-use reservations reject duplicate nonce/resource keys. These keys are not daemon resource custody. |
-| `scripts/uat-host/original-child.cjs:67–97` | Retains actual direct spawn and opaque capability; records error, exit, disconnect, stream and separate close events. Spawn forces shell=false/detached=false. |
-| `scripts/uat-host/original-child.cjs:99–116` | Binds actual live identity before release; checks retained identity and nonce/resource before consuming the core reservation. |
-| `scripts/uat-host/original-child.cjs:118–125` | Signals only the retained live original after PID/birth/PPID/boot checks; only TERM/KILL. No descendant or process-group guarantee. |
-| `scripts/uat-host/original-child.cjs:127–142` | Snapshot preserves facts; completion rejects missing/late close, faults, open/error streams, connected IPC and terminal/close mismatch. Completion does not itself classify nonzero as success/failure. |
-| `scripts/uat-host/original-child.cjs:77–90,144–160` | Existing limits: 65,536 bytes per allocated stream, 4,096-byte protocol frames, 64 messages/records. Overflow destroys the stream and preserves a permanent fault. |
-| `scripts/run-gate.sh:137–170` | Production owned foreground refuses before setup effects; control handoff is synthetic only. |
-| `scripts/run-gate.sh:398–425,588–596,673–710` | Legacy start writes state and dispatches detached execution; internal run retains cleanup traps and invokes migrations then gate. An ACK cannot convert it to owned foreground. |
-| `tests/uat/provisioner.ts:389–405,543–576` | Capture/command helpers resolve at exit, before separate close; accumulated strings are unbounded and retry classification uses stderr available at exit. |
-| `tests/uat/provisioner.ts:678–729` | Project selection, port/subnet probing and env preparation precede a separately owned per-attempt reservation. A port candidate is not reservation custody. |
-| `tests/uat/provisioned-run.ts:44–70` | Runner uses npx Playwright exit/code fallback; signals schedule teardown and process exit. Separate ownership/close repair remains. |
-| `tests/uat/provisioner.ts:377–386`; `infra/docker-compose.prod.yml:242–254,452` | Seven helper-listed volumes omit the sports browser socket volume and its one-shot initializer. |
-| `tests/uat/compose-args.ts:9–20` | Compose order is prod, override, then conditional native-sandbox. Selection and input bytes remain protected. |
+| Seam                                                                            | Verified source fact                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/uat-host/original-child.cjs:59–65`                                     | Private one-use reservations reject duplicate nonce/resource keys. These keys are not daemon resource custody.                                                                                          |
+| `scripts/uat-host/original-child.cjs:67–97`                                     | Retains actual direct spawn and opaque capability; records error, exit, disconnect, stream and separate close events. Spawn forces shell=false/detached=false.                                          |
+| `scripts/uat-host/original-child.cjs:99–116`                                    | Binds actual live identity before release; checks retained identity and nonce/resource before consuming the core reservation.                                                                           |
+| `scripts/uat-host/original-child.cjs:118–125`                                   | Signals only the retained live original after PID/birth/PPID/boot checks; only TERM/KILL. No descendant or process-group guarantee.                                                                     |
+| `scripts/uat-host/original-child.cjs:127–142`                                   | Snapshot preserves facts; completion rejects missing/late close, faults, open/error streams, connected IPC and terminal/close mismatch. Completion does not itself classify nonzero as success/failure. |
+| `scripts/uat-host/original-child.cjs:77–90,144–160`                             | Existing limits: 65,536 bytes per allocated stream, 4,096-byte protocol frames, 64 messages/records. Overflow destroys the stream and preserves a permanent fault.                                      |
+| `scripts/run-gate.sh:137–170`                                                   | Production owned foreground refuses before setup effects; control handoff is synthetic only.                                                                                                            |
+| `scripts/run-gate.sh:398–425,588–596,673–710`                                   | Legacy start writes state and dispatches detached execution; internal run retains cleanup traps and invokes migrations then gate. An ACK cannot convert it to owned foreground.                         |
+| `tests/uat/provisioner.ts:389–405,543–576`                                      | Capture/command helpers resolve at exit, before separate close; accumulated strings are unbounded and retry classification uses stderr available at exit.                                               |
+| `tests/uat/provisioner.ts:678–729`                                              | Project selection, port/subnet probing and env preparation precede a separately owned per-attempt reservation. A port candidate is not reservation custody.                                             |
+| `tests/uat/provisioned-run.ts:44–70`                                            | Runner uses npx Playwright exit/code fallback; signals schedule teardown and process exit. Separate ownership/close repair remains.                                                                     |
+| `tests/uat/provisioner.ts:377–386`; `infra/docker-compose.prod.yml:242–254,452` | Seven helper-listed volumes omit the sports browser socket volume and its one-shot initializer.                                                                                                         |
+| `tests/uat/compose-args.ts:9–20`                                                | Compose order is prod, override, then conditional native-sandbox. Selection and input bytes remain protected.                                                                                           |
 
 Core blob: `c1b44aa1a5f201e80850e6c074543291b245de2d`.
 Core SHA256: `aab9a8df031d709b3f7829a90c94336bce0055ef1cd8f803baf98345aeaac43f`.
@@ -44,13 +44,13 @@ If accepted source/core changes, refresh pins and mapped affected coverage befor
 
 ## Allowed future candidate
 
-| New path | Responsibility |
-| --- | --- |
-| `scripts/uat-host/command-owner.cjs` | Caller orchestration using the unchanged core; one owner factory and one run entry. |
-| `scripts/uat-host/command-owner.test.cjs` | One direct builtin regression driver, with its own selected fixture mode in the same file. |
-| `scripts/uat-host/COMMAND_OWNER.md` | Supported command, contract, ordering, profiles, deadlines, errors, cleanup and limits. |
-| `docs/superpowers/specs/2026-10-17-3529-owned-command-prerequisite.md` | This canonical contract. |
-| `docs/superpowers/plans/2026-10-17-3529-owned-command-prerequisite.md` | Finite build/control/review and publication decisions. |
+| New path                                                               | Responsibility                                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `scripts/uat-host/command-owner.cjs`                                   | Caller orchestration using the unchanged core; one owner factory and one run entry.        |
+| `scripts/uat-host/command-owner.test.cjs`                              | One direct builtin regression driver, with its own selected fixture mode in the same file. |
+| `scripts/uat-host/COMMAND_OWNER.md`                                    | Supported command, contract, ordering, profiles, deadlines, errors, cleanup and limits.    |
+| `docs/superpowers/specs/2026-10-17-3529-owned-command-prerequisite.md` | This canonical contract.                                                                   |
+| `docs/superpowers/plans/2026-10-17-3529-owned-command-prerequisite.md` | Finite build/control/review and publication decisions.                                     |
 
 Only the two canonical docs may be written at the current boundary. The other three paths require a
 separate reviewed build grant. All five are new at the base. Every existing tracked blob must stay
@@ -65,17 +65,17 @@ The future CJS export is `createCommandOwner(profile) -> CommandOwner`.
 The only launch entry is `owner.run(request, observations) -> CommandRun`.
 These are contract signatures, not implementation bodies:
 
-| Contract | Decision |
-| --- | --- |
-| `profile` | Frozen exact executable/argv/cwd/env/stdio, source/dependency pins, expected live identity fields, absolute monotonic acceptance/cleanup deadlines. Validate and copy all mutable inputs before effects. |
-| `request` | Contains a candidate profile and challenge. Compare every candidate field to the factory's already frozen trusted profile before reserve/spawn; differing file/argv/env/cwd/stdio/pins/deadlines refuse. Caller copies do not redefine the trusted profile. |
-| `challenge` | Frozen exact 64-hex nonce/resource pair selected by trusted caller; uniquely reserved before each spawn. No caller-provided child, PID, status, capability or serialized resource receipt. |
-| `observations` | Optional trusted synchronous `onHeld(view)` and `onExit(view)` observations. Views are frozen snapshots, never child objects/capabilities or writable core state. Observer failure becomes a retained owner fault. |
-| `CommandRun.release(challenge)` | Guarded one-use release of the internally reserved command ticket and corresponding core reservation, after genuine live bind. Wrong or repeated challenge refuses without sending release. |
-| `CommandRun.cancel()` | Records cancellation and initiates bounded cleanup of the same genuinely bound live original. No numeric-PID fallback. |
-| `CommandRun.snapshot()` | Detached bounded evidence view; never ownership authority. |
-| `CommandRun.completion()` | Synchronous completion inspection against the fixed acceptance deadline and unchanged core predicate; cannot manufacture completion. |
-| `CommandRun.result` | Bounded promise of raw facts, command classification and final disposition. No unbounded await of core.done. |
+| Contract                        | Decision                                                                                                                                                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profile`                       | Frozen exact executable/argv/cwd/env/stdio, source/dependency pins, expected live identity fields, absolute monotonic acceptance/cleanup deadlines. Validate and copy all mutable inputs before effects.                                                    |
+| `request`                       | Contains a candidate profile and challenge. Compare every candidate field to the factory's already frozen trusted profile before reserve/spawn; differing file/argv/env/cwd/stdio/pins/deadlines refuse. Caller copies do not redefine the trusted profile. |
+| `challenge`                     | Frozen exact 64-hex nonce/resource pair selected by trusted caller; uniquely reserved before each spawn. No caller-provided child, PID, status, capability or serialized resource receipt.                                                                  |
+| `observations`                  | Optional trusted synchronous `onHeld(view)` and `onExit(view)` observations. Views are frozen snapshots, never child objects/capabilities or writable core state. Observer failure becomes a retained owner fault.                                          |
+| `CommandRun.release(challenge)` | Guarded one-use release of the internally reserved command ticket and corresponding core reservation, after genuine live bind. Wrong or repeated challenge refuses without sending release.                                                                 |
+| `CommandRun.cancel()`           | Records cancellation and initiates bounded cleanup of the same genuinely bound live original. No numeric-PID fallback.                                                                                                                                      |
+| `CommandRun.snapshot()`         | Detached bounded evidence view; never ownership authority.                                                                                                                                                                                                  |
+| `CommandRun.completion()`       | Synchronous completion inspection against the fixed acceptance deadline and unchanged core predicate; cannot manufacture completion.                                                                                                                        |
+| `CommandRun.result`             | Bounded promise of raw facts, command classification and final disposition. No unbounded await of core.done.                                                                                                                                                |
 
 The module privately retains core.spawnOriginal's exact return, command ticket and core reservation.
 Handle methods validate their genuine receiver; forged/missing receivers cannot construct capability.

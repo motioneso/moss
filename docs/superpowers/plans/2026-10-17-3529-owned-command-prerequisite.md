@@ -16,15 +16,15 @@ Base commit `bbe1e1256b2fc0300e25196f251ff0a72ad30dd3`,
 tree `65ac9d706ffd8ba2491eb4b6dfdde835a74cf1a3`, relative to `~/Jarv1s`.
 The spec's seam table is normative; these are the capabilities this plan actually needs:
 
-| Assumption | Current exact proof / boundary |
-| --- | --- |
-| Real original capability and reserved release exist | `scripts/uat-host/original-child.cjs:59–116`; no reported PID or fabricated child accepted. |
-| Raw terminal differs from close/FD completion | `scripts/uat-host/original-child.cjs:73–96,132–142`; preserve error/nonzero/signal separately. |
-| Bounded capture and direct-original cleanup exist | `scripts/uat-host/original-child.cjs:77–90,118–125`; unchanged limits and identity checks. |
-| Source/identity verification exists | `scripts/uat-host/original-child.cjs:28–52,99–105`; wrapper must provide exact frozen expectations. |
-| Production activation remains unavailable | `scripts/run-gate.sh:137–170`; synthetic ACK cannot authorize real setup. |
-| Caller repairs remain independent | `tests/uat/provisioner.ts:389–405,543–576,678–729`; `tests/uat/provisioned-run.ts:44–70`. |
-| Resource inventory remains incomplete | `tests/uat/provisioner.ts:377–386`; `infra/docker-compose.prod.yml:242–254,452`. |
+| Assumption                                          | Current exact proof / boundary                                                                      |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Real original capability and reserved release exist | `scripts/uat-host/original-child.cjs:59–116`; no reported PID or fabricated child accepted.         |
+| Raw terminal differs from close/FD completion       | `scripts/uat-host/original-child.cjs:73–96,132–142`; preserve error/nonzero/signal separately.      |
+| Bounded capture and direct-original cleanup exist   | `scripts/uat-host/original-child.cjs:77–90,118–125`; unchanged limits and identity checks.          |
+| Source/identity verification exists                 | `scripts/uat-host/original-child.cjs:28–52,99–105`; wrapper must provide exact frozen expectations. |
+| Production activation remains unavailable           | `scripts/run-gate.sh:137–170`; synthetic ACK cannot authorize real setup.                           |
+| Caller repairs remain independent                   | `tests/uat/provisioner.ts:389–405,543–576,678–729`; `tests/uat/provisioned-run.ts:44–70`.           |
+| Resource inventory remains incomplete               | `tests/uat/provisioner.ts:377–386`; `infra/docker-compose.prod.yml:242–254,452`.                    |
 
 Graph discovery found provisioner symbols; no CJS core nodes were available. Immutable Git reads supplied
 exact cited source. No assumed production capability is promoted by a fixture. Unsupported fast-native
@@ -137,20 +137,20 @@ not erase raw failures. Source/identity/capture/ticket/deadline/completion/persi
 
 ### Twelve controls — exact obligations
 
-| # | Behavior and required genuine observation | Broken behavior caught |
-| --- | --- | --- |
-| 1 | Held direct original; release once; stdout `ok\n`; raw 0/null, matching separate close, captured EOF and IPC disconnect. | Exit-only or ACK-only success. |
-| 2 | Captured stderr `failure23\n`; raw 23/null, matching close and complete FD disposition; label expected command failure. | Nonzero normalized to driver 0 or late stderr discarded. |
-| 3 | Released direct builtin self-SIGTERM; raw null/SIGTERM and matching close/FD disposition. | Cooked shell/tsx status replacing actual signal. |
-| 4 | READY and actual bind prove held live original; cancellation uses retained capability only; real terminal/close/FD evidence. | Receipt-PID cancellation or promise rejection mistaken for cleanup. |
-| 5 | Same original stays held with stdout open; synchronous completion rejects before one release, then actual closure. No descendant. | Treating live/open output as completed or inventing a holder. |
-| 6 | Exact absent executable produces real ENOENT; no invented PID or terminal; record real failed-spawn close and pipe disposal. | Fabricated child exit or error discarded. |
-| 7 | In actual exit callback after core listener: terminal exists, close absent, completion rejects; then observe actual later close/EOF. Missed interval freezes RED. | Exit-before-close success or injected interval witness. |
-| 8 | Genuine fixture writes exactly 65,537 ASCII bytes on captured stdout; retained data <=64 KiB, overflow fault, bounded actual cleanup; core completion still rejects. | Truncation as success, cap expansion or invented EOF on destroyed stream. |
-| 9 | Bound live fixture held beyond original +5 s acceptance deadline; timeout preserved; terminal/FD cleanup by +8 s; late completion still rejects. | Clock reset, acceptance extended by cleanup or timeout without disposition. |
-| 10 | Guard-only invalid/missing profile/challenge/source pins and forged/missing handle receiver refuse without spawn/release. A handle already consumed in an earlier case refuses a second release; wrong file/argv/env/cwd/nonce are covered. No new launch. | Caller-fabricated authority, mutable profile drift, challenge mismatch or ticket reuse. |
-| 11 | Genuine live child sends a bounded lookalike completion frame before terminal; completion remains unavailable until genuine original/close/FD facts. | Forwarded IPC promoted to authority. |
-| 12 | Inherited stdout profile emits fixed stdout; no captured stdout entry or invented EOF; real stderr capture, terminal/close and IPC disposition. | False EOF or capture requirement for inherited stdout. |
+| #   | Behavior and required genuine observation                                                                                                                                                                                                                  | Broken behavior caught                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 1   | Held direct original; release once; stdout `ok\n`; raw 0/null, matching separate close, captured EOF and IPC disconnect.                                                                                                                                   | Exit-only or ACK-only success.                                                          |
+| 2   | Captured stderr `failure23\n`; raw 23/null, matching close and complete FD disposition; label expected command failure.                                                                                                                                    | Nonzero normalized to driver 0 or late stderr discarded.                                |
+| 3   | Released direct builtin self-SIGTERM; raw null/SIGTERM and matching close/FD disposition.                                                                                                                                                                  | Cooked shell/tsx status replacing actual signal.                                        |
+| 4   | READY and actual bind prove held live original; cancellation uses retained capability only; real terminal/close/FD evidence.                                                                                                                               | Receipt-PID cancellation or promise rejection mistaken for cleanup.                     |
+| 5   | Same original stays held with stdout open; synchronous completion rejects before one release, then actual closure. No descendant.                                                                                                                          | Treating live/open output as completed or inventing a holder.                           |
+| 6   | Exact absent executable produces real ENOENT; no invented PID or terminal; record real failed-spawn close and pipe disposal.                                                                                                                               | Fabricated child exit or error discarded.                                               |
+| 7   | In actual exit callback after core listener: terminal exists, close absent, completion rejects; then observe actual later close/EOF. Missed interval freezes RED.                                                                                          | Exit-before-close success or injected interval witness.                                 |
+| 8   | Genuine fixture writes exactly 65,537 ASCII bytes on captured stdout; retained data <=64 KiB, overflow fault, bounded actual cleanup; core completion still rejects.                                                                                       | Truncation as success, cap expansion or invented EOF on destroyed stream.               |
+| 9   | Bound live fixture held beyond original +5 s acceptance deadline; timeout preserved; terminal/FD cleanup by +8 s; late completion still rejects.                                                                                                           | Clock reset, acceptance extended by cleanup or timeout without disposition.             |
+| 10  | Guard-only invalid/missing profile/challenge/source pins and forged/missing handle receiver refuse without spawn/release. A handle already consumed in an earlier case refuses a second release; wrong file/argv/env/cwd/nonce are covered. No new launch. | Caller-fabricated authority, mutable profile drift, challenge mismatch or ticket reuse. |
+| 11  | Genuine live child sends a bounded lookalike completion frame before terminal; completion remains unavailable until genuine original/close/FD facts.                                                                                                       | Forwarded IPC promoted to authority.                                                    |
+| 12  | Inherited stdout profile emits fixed stdout; no captured stdout entry or invented EOF; real stderr capture, terminal/close and IPC disposition.                                                                                                            | False EOF or capture requirement for inherited stdout.                                  |
 
 Case 10 retains the earlier opaque handle in the same controller; consumed-ticket guards cannot
 create a capability. Profile drift subcases use copies of the previously frozen expected profile and
