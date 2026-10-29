@@ -128,6 +128,7 @@ export const chatHeartbeatMuteTool = {
   content: "user_authored",
   selfOperationGrant: "granted_at_install",
   actionFamilyId: "chat.preference-write",
+  streamsStructuredResult: true,
   executionPolicy: "auto",
   inputSchema: chatHeartbeatMuteInputSchema,
   outputSchema: chatHeartbeatMuteOutputSchema,
