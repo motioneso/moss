@@ -60,6 +60,14 @@ export interface HeartbeatBeatDeps {
   readonly now?: () => Date;
 }
 
+type Usage = { readonly inputTokens: number; readonly outputTokens: number };
+
+/** CLI providers report 0/0 as a placeholder, so that is stored as unreported (null). */
+function usageColumns(usage?: Usage): { inputTokens?: number; outputTokens?: number } {
+  if (!usage || (usage.inputTokens === 0 && usage.outputTokens === 0)) return {};
+  return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
+}
+
 function localClock(now: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -169,13 +177,12 @@ export async function handleHeartbeatBeat(
     return "checked";
   }
 
-  const failed = async (usage?: { inputTokens: number; outputTokens: number }) => {
+  const failed = async (usage?: Usage) => {
     await occurrences.finish(scopedDb, {
       id: payload.resourceId,
       outcome: "failed",
       unavailableSources: unavailable,
-      inputTokens: usage?.inputTokens,
-      outputTokens: usage?.outputTokens
+      ...usageColumns(usage)
     });
     await advance();
     return "checked" as const;
@@ -192,7 +199,11 @@ export async function handleHeartbeatBeat(
   // Re-read what may have changed while the model ran: the saved choices and the mutes.
   const current = await settings.find(scopedDb, { forUpdate: true });
   if (!current?.settings.enabled || current.settings.revision !== stored.settings.revision) {
-    await occurrences.finish(scopedDb, { id: payload.resourceId, outcome: "quiet" });
+    await occurrences.finish(scopedDb, {
+      id: payload.resourceId,
+      outcome: "quiet",
+      ...usageColumns(generated.usage)
+    });
     return "stale";
   }
   const mutes = await loadMuteRules(scopedDb);
@@ -207,8 +218,7 @@ export async function handleHeartbeatBeat(
       id: payload.resourceId,
       outcome: unavailable.length > 0 ? "degraded" : "quiet",
       unavailableSources: unavailable,
-      inputTokens: generated.usage.inputTokens,
-      outputTokens: generated.usage.outputTokens
+      ...usageColumns(generated.usage)
     });
     await advance();
     return "checked";
@@ -223,7 +233,8 @@ export async function handleHeartbeatBeat(
       settingsRevision: stored.settings.revision,
       candidates,
       result: { selected, intro: validated.result.intro },
-      now
+      now,
+      timeZone
     }
   );
   await advanceCheckpoints();
@@ -233,8 +244,7 @@ export async function handleHeartbeatBeat(
     itemCount: published.itemCount,
     messageId: published.messageId,
     unavailableSources: unavailable,
-    inputTokens: generated.usage.inputTokens,
-    outputTokens: generated.usage.outputTokens
+    ...usageColumns(generated.usage)
   });
   await advance();
   return "checked";

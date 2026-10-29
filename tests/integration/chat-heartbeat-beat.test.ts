@@ -45,6 +45,7 @@ describe("chat heartbeat beat pipeline", () => {
   let server: ReturnType<typeof createApiServer>;
   let aId: string;
   let bId: string;
+  let cId: string;
 
   // What the fake sources return, what the fake model does, and what was sent to the queue.
   let revision = "r1";
@@ -159,7 +160,7 @@ describe("chat heartbeat beat pipeline", () => {
   beforeAll(async () => {
     await resetEmptyFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
-    workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 2 });
+    workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 10 });
     dataContext = new DataContextRunner(appDb);
     workerContext = new DataContextRunner(workerDb);
     await setInstanceSetting("registration.requires_approval", { value: false });
@@ -168,7 +169,8 @@ describe("chat heartbeat beat pipeline", () => {
     await server.ready();
     for (const [name, email] of [
       ["A", "a.hbp@example.test"],
-      ["B", "b.hbp@example.test"]
+      ["B", "b.hbp@example.test"],
+      ["C", "c.hbp@example.test"]
     ] as const) {
       const res = await server.inject({
         method: "POST",
@@ -180,7 +182,8 @@ describe("chat heartbeat beat pipeline", () => {
       const me = await server.inject({ method: "GET", url: "/api/me", headers: { cookie } });
       const id = me.json<MeResponse>().user.id;
       if (name === "A") aId = id;
-      else bId = id;
+      else if (name === "B") bId = id;
+      else cId = id;
     }
   });
 
@@ -323,6 +326,61 @@ describe("chat heartbeat beat pipeline", () => {
     const seventh = await beat(bId);
     expect(seventh.outcome?.outcome).toBe("held_allowance");
     expect(generatorCalls).toBe(HEARTBEAT_DAILY_ATTEMPTS);
+  });
+
+  it("keeps the daily allowance when beats for one owner run at the same time", async () => {
+    generatorBehavior = () => ({ selected: [], intro: null });
+    generatorCalls = 0;
+    // Enroll and use four of the six attempts one at a time.
+    for (let i = 0; i < 4; i += 1) {
+      revision = `c${i}`;
+      items = [item(`c${i}`, `Item ${i}`)];
+      await beat(cId);
+    }
+    expect(generatorCalls).toBe(4);
+
+    // Eight beats start together on a new revision, each with its own occurrence.
+    revision = "c-race";
+    items = [item("c-race", "Race")];
+    const settings = await asWorker(cId, (db) =>
+      db.db
+        .selectFrom("app.heartbeat_settings")
+        .select("revision")
+        .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .executeTakeFirstOrThrow()
+    );
+    const slowGenerate: HeartbeatGenerator = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return generate(...args);
+    };
+    await Promise.all(
+      Array.from({ length: 8 }, () =>
+        asWorker(cId, (db) =>
+          handleHeartbeatBeat(
+            db,
+            {
+              actorUserId: cId,
+              kind: "heartbeat-beat",
+              resourceId: randomUUID(),
+              version: settings.revision,
+              idempotencyKey: `heartbeat:${randomUUID()}`
+            },
+            {
+              preferences: new PreferencesRepository(),
+              gateway,
+              generate: slowGenerate,
+              boss: fakeBoss
+            }
+          )
+        )
+      )
+    );
+
+    const charges = await asWorker(cId, (db) =>
+      db.db.selectFrom("app.heartbeat_allowance_charges").select("attempt").execute()
+    );
+    expect(charges.length).toBeLessThanOrEqual(HEARTBEAT_DAILY_ATTEMPTS);
+    expect(generatorCalls).toBeLessThanOrEqual(HEARTBEAT_DAILY_ATTEMPTS);
   });
 
   it("keeps findings, checkpoints and charges private to their owner", async () => {
