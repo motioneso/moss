@@ -58,6 +58,26 @@ describe("ring stage timing (#3842)", () => {
     expect(line).not.toMatch(/transcript|message|replyText|toolName|argument/i);
   });
 
+  it("sets first model token only on a real model output record", () => {
+    let now = 0;
+    const timer = new RingStageTimer("turn-5", () => now);
+    now = 100;
+    timer.noteModelOutput("status");
+    timer.noteModelOutput("user");
+    expect(timer.snapshot().stagesMs.first_model_token).toBeUndefined();
+    now = 700;
+    timer.noteModelOutput("thinking");
+    expect(timer.snapshot().stagesMs.first_model_token).toBe(700);
+  });
+
+  it("counts each tool call once when its record repeats", () => {
+    const timer = new RingStageTimer("turn-6", () => 0);
+    timer.noteToolChosen("call-1");
+    timer.noteToolChosen("call-1");
+    timer.noteToolChosen("call-2");
+    expect(timer.snapshot().toolCount).toBe(2);
+  });
+
   it("keeps the first mark when a stage is seen twice", () => {
     let now = 0;
     const timer = new RingStageTimer("turn-4", () => now);

@@ -22,20 +22,20 @@
 
 Times are seconds. The chat rows are whole-request times from the proof copy on 2026-10-29.
 
-| Stage | Measured | Source |
-| --- | --- | --- |
-| Button release | not measurable here | phone time, saved as capture time on the voice row |
-| Recording fetched | not measurable here | no phone in this run |
-| Upload received | 0.09 | voice recording post to the proof copy |
-| Transcript ready | failed at once, 0.09 | recording row shows `transcription_unavailable` |
-| Chat turn admitted | about 0.15 in PR #3709 | durable queue wakeup, measured there |
-| Session ready | about 5.3 of the first turn | first turn total minus the model time below |
-| First model token | inside the model time | the engine gives no separate first-token time |
-| Tool chosen | inside the model time | first turn used 2 tools |
-| Approval asked or skipped | no card in these runs | tool count came from the activity log, cards are a separate row below |
-| Tool finished | inside the model time | no separate gateway time is saved on this path |
-| Reply, first turn | 24.23 total, 18.88 model | chat route plus saved message timing |
-| Reply, warm turns | 3.23 and 4.59 total, 3.00 and 4.45 model | chat route plus saved message timing |
+| Stage                     | Measured                                 | Source                                                                |
+| ------------------------- | ---------------------------------------- | --------------------------------------------------------------------- |
+| Button release            | not measurable here                      | phone time, saved as capture time on the voice row                    |
+| Recording fetched         | not measurable here                      | no phone in this run                                                  |
+| Upload received           | 0.09                                     | voice recording post to the proof copy                                |
+| Transcript ready          | failed at once, 0.09                     | recording row shows `transcription_unavailable`                       |
+| Chat turn admitted        | about 0.15 in PR #3709                   | durable queue wakeup, measured there                                  |
+| Session ready             | about 5.3 of the first turn              | first turn total minus the model time below                           |
+| First model token         | inside the model time                    | the engine gives no separate first-token time                         |
+| Tool chosen               | inside the model time                    | first turn used 2 tools                                               |
+| Approval asked or skipped | no card in these runs                    | tool count came from the activity log, cards are a separate row below |
+| Tool finished             | inside the model time                    | no separate gateway time is saved on this path                        |
+| Reply, first turn         | 24.23 total, 18.88 model                 | chat route plus saved message timing                                  |
+| Reply, warm turns         | 3.23 and 4.59 total, 3.00 and 4.45 model | chat route plus saved message timing                                  |
 
 - Older proof with local speech-to-text turned on for the run gives the missing stage. Pickup to transcript took 1.25 to 2.04 seconds across the samples in `docs/evidence/vocci/2026-10-25-server-latency.md`.
 - That older run also gives upload return to first tool at 3.4 to 23.0 seconds. The wide range came from session start and one 15 second delayed retry, both since fixed or still possible when a turn is deferred.
@@ -43,14 +43,14 @@ Times are seconds. The chat rows are whole-request times from the proof copy on 
 
 ## Ranked causes, biggest first
 
-| Rank | Wait | Size seen | Cheapest fix to propose |
-| --- | --- | --- | --- |
-| 1 | Main model turn | 3.0 to 4.5 warm, 18.9 cold with tools | Let the classifier gate handle simple commands so the main model never starts. See the gate section below. |
-| 2 | Cold session start | about 5 seconds on top of the model time | Keep one warm session for the main chat surface, or start it when the ring connects. Measure first with the new line. |
-| 3 | Approval card for Home Assistant on and off | a human wait, not seconds of compute | Stop asking for on and off. Ben ruled this on 2026-10-29. The approval row below gives today's state. |
-| 4 | Speech-to-text | 1.3 to 2.0 where set up, fails at once where not | Set up a transcription model on every install that offers the ring, and show the missing setup on the voice screen. |
-| 5 | Classifier questions, if the gate is on | about 5 to 7 per question, up to 4 questions | Use a fast hosted classifier model, not a sign-in command-line model. The gate already adapts its time limit per model. |
-| 6 | Upload and queue pickup | under 0.2 combined | No fix. PR #3709 already cut this to about 150 ms. |
+| Rank | Wait                                        | Size seen                                        | Cheapest fix to propose                                                                                                 |
+| ---- | ------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| 1    | Main model turn                             | 3.0 to 4.5 warm, 18.9 cold with tools            | Let the classifier gate handle simple commands so the main model never starts. See the gate section below.              |
+| 2    | Cold session start                          | about 5 seconds on top of the model time         | Keep one warm session for the main chat surface, or start it when the ring connects. Measure first with the new line.   |
+| 3    | Approval card for Home Assistant on and off | a human wait, not seconds of compute             | Stop asking for on and off. Ben ruled this on 2026-10-29. The approval row below gives today's state.                   |
+| 4    | Speech-to-text                              | 1.3 to 2.0 where set up, fails at once where not | Set up a transcription model on every install that offers the ring, and show the missing setup on the voice screen.     |
+| 5    | Classifier questions, if the gate is on     | about 5 to 7 per question, up to 4 questions     | Use a fast hosted classifier model, not a sign-in command-line model. The gate already adapts its time limit per model. |
+| 6    | Upload and queue pickup                     | under 0.2 combined                               | No fix. PR #3709 already cut this to about 150 ms.                                                                      |
 
 ## The approval step today
 

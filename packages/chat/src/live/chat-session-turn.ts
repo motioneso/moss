@@ -519,7 +519,7 @@ async function runAcceptedChatTurn(
             upsertActivityRecord(turnActivityRecords, record);
           }
         }
-        ringTimer?.mark("first_model_token");
+        ringTimer?.noteModelOutput(record.kind);
         if (record.kind === "action_request") ringTimer?.noteApprovalAsked();
         if (record.kind === "result" || record.kind === "action_result")
           ringTimer?.noteToolFinished();
@@ -530,7 +530,7 @@ async function runAcceptedChatTurn(
           if (record.usage !== undefined) turnUsage = record.usage;
         }
         if (record.kind === "tool" && record.toolName && !record.rejected)
-          ringTimer?.noteToolChosen();
+          ringTimer?.noteToolChosen(record.toolCallId ?? record.id);
         if (record.kind === "tool" && record.toolName) {
           invokedToolNames.add(record.toolName);
           if (record.toolName.startsWith("mcp__"))

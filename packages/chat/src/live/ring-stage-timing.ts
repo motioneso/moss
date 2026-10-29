@@ -32,9 +32,13 @@ export interface RingStageSnapshot {
   readonly toolCount: number;
 }
 
+/** Record kinds that are the model's own output. Host status and user echoes are not. */
+const MODEL_OUTPUT_KINDS = new Set(["thinking", "thought", "tool", "reply"]);
+
 export class RingStageTimer {
   private readonly startedAt: number;
   private readonly marks = new Map<RingStage, number>();
+  private readonly toolCalls = new Set<string>();
   private approvalValue: RingApproval = "none";
   private tools = 0;
 
@@ -50,7 +54,15 @@ export class RingStageTimer {
     if (!this.marks.has(stage)) this.marks.set(stage, Math.max(0, this.now() - this.startedAt));
   }
 
-  noteToolChosen(): void {
+  noteModelOutput(kind: string): void {
+    if (MODEL_OUTPUT_KINDS.has(kind)) this.mark("first_model_token");
+  }
+
+  noteToolChosen(callKey?: string): void {
+    if (callKey !== undefined) {
+      if (this.toolCalls.has(callKey)) return;
+      this.toolCalls.add(callKey);
+    }
     this.tools += 1;
     this.mark("tool_chosen");
     if (this.approvalValue === "none") this.approvalValue = "skipped";
