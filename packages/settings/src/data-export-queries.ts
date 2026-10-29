@@ -390,6 +390,7 @@ export function memoryChunksQuery(userId: string) {
       line_start AS "lineStart",
       line_end AS "lineEnd",
       text,
+      managed_snapshot AS "managedSnapshot",
       updated_at AS "updatedAt"
     FROM app.memory_chunks
     WHERE owner_user_id = ${userId}::uuid
@@ -444,6 +445,7 @@ export function memoryFactsQuery(userId: string) {
       predicate,
       object_entity_id::text AS "objectEntityId",
       object_text AS "objectText",
+      recording_side AS "recordingSide",
       record_kind AS "recordKind",
       confidence,
       provenance,
@@ -473,6 +475,8 @@ export function memoryEpisodesQuery(userId: string) {
       source_ref AS "sourceRef",
       source_label AS "sourceLabel",
       occurred_at AS "occurredAt",
+      recording_side AS "recordingSide",
+      recording_active AS "recordingActive",
       excerpt,
       created_at AS "createdAt"
     FROM app.memory_episodes
@@ -556,6 +560,8 @@ export function memorySearchDocumentsQuery(userId: string) {
       owner_user_id::text AS "ownerUserId",
       target_kind AS "targetKind",
       target_id::text AS "targetId",
+      recording_side AS "recordingSide",
+      recording_revision::text AS "recordingRevision",
       search_text AS "searchText",
       embed_model_name AS "embedModelName",
       embed_model_version AS "embedModelVersion",

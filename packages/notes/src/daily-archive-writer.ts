@@ -1,15 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import type { DataContextDb } from "@moss/db";
 import { formatLocaleTime, validateChatArchiveFolder, type LocaleSettingsDto } from "@moss/shared";
 
-import {
-  assertInside,
-  recheckInside,
-  resolveSource,
-  type NotesSyncToolService
-} from "./write-tools.js";
+import { mutateVaultFiles } from "@moss/vault";
+
+import { resolveSource, type NotesSyncToolService } from "./write-tools.js";
+import { withNotesVault } from "./notes-vault-context.js";
 
 const ARCHIVE_MARKER = "<!-- moss-chat-archive:v1 -->";
 
@@ -64,39 +61,22 @@ export async function writeDailyChatArchive(
   const primaryRel = join(validatedFolder, `${localDate}.md`);
   const fallbackRel = join(validatedFolder, `${localDate} (moss).md`);
 
-  const targetRel = (await isMossFileOrAbsent(root, primaryRel))
-    ? primaryRel
-    : (await isMossFileOrAbsent(root, fallbackRel))
-      ? fallbackRel
-      : null;
-
-  if (targetRel === null) {
-    throw new ChatArchiveConflictError(
-      `Both ${primaryRel} and ${fallbackRel} are occupied by files not written by the chat archive`
-    );
-  }
-
   const content = renderMarkdown(sessions, locale);
-  const file = join(root, targetRel);
-  await mkdir(dirname(file), { recursive: true });
-  assertInside(root, file);
-  await recheckInside(root, file);
-  await writeFile(file, content, "utf-8");
+  const targetRel = await withNotesVault(scopedDb, root, (vault) =>
+    mutateVaultFiles(scopedDb, vault, [primaryRel, fallbackRel], async (current) => {
+      const destination = current.find(
+        ({ content }) => content === null || content.split("\n", 1)[0] === ARCHIVE_MARKER
+      );
+      if (!destination) {
+        throw new ChatArchiveConflictError(
+          `Both ${primaryRel} and ${fallbackRel} are occupied by files not written by the chat archive`
+        );
+      }
+      return { changes: [{ path: destination.path, content }], result: destination.path };
+    })
+  );
   await notesSync.enqueue(actorUserId, root);
-
   return { written: true, path: targetRel };
-}
-
-async function isMossFileOrAbsent(root: string, rel: string): Promise<boolean> {
-  const file = join(root, rel);
-  let existing: string;
-  try {
-    existing = await readFile(file, "utf-8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
-    throw error;
-  }
-  return existing.split("\n", 1)[0] === ARCHIVE_MARKER;
 }
 
 function renderMarkdown(

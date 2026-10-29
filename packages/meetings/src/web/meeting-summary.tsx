@@ -19,6 +19,7 @@ import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
 import { summaryGenerationFailure, SummaryModelRecovery } from "./summary-generation-error.js";
+import { type getRecording, recordingKeys } from "./recording-client.js";
 export type SummaryTool = "rewrite" | "versions" | "vault" | "copy";
 interface SummaryState {
   readonly generatedVersion?: number;
@@ -28,10 +29,31 @@ interface SummaryState {
     readonly remediation?: "ai-providers";
   };
 }
-export function ArtifactContent({ artifact }: { readonly artifact: MeetingOutputArtifact }) {
+export function ArtifactContent({
+  artifact,
+  typeId = artifact.content.recording?.typeId
+}: {
+  readonly artifact: MeetingOutputArtifact;
+  readonly typeId?: string;
+}) {
+  const groupHeading = typeId === "brain-dump" || typeId === "idea" ? "Ideas" : "Topics";
   return (
     <div className="meetings-section">
       <p className="meetings-transcript-text">{artifact.content.overview}</p>
+      {artifact.content.recording?.ideaGroups.length ? (
+        <Eyebrow as="h3">{groupHeading}</Eyebrow>
+      ) : null}
+      {artifact.content.recording?.ideaGroups.map((group, index) => (
+        <section key={index} className="meetings-section">
+          <p className="jds-label">{group.title}</p>
+          <ul>
+            {group.ideas.map((idea, index) => (
+              <li key={index}>{idea}</li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {artifact.content.decisions.length ? <Eyebrow as="h3">Decisions</Eyebrow> : null}
       {artifact.content.decisions.map((claim, index) => (
         <article className="meetings-section" key={index}>
           <Divider />
@@ -76,6 +98,10 @@ export function MeetingSummary({
     queryKey: meetingKeys.preferences,
     queryFn: getMeetingPreferences,
     retry: false
+  });
+  const recording = useQuery<Awaited<ReturnType<typeof getRecording>>>({
+    queryKey: recordingKeys.record(meeting.id),
+    enabled: false
   });
   const active = useRef(true);
   useEffect(() => {
@@ -161,9 +187,14 @@ export function MeetingSummary({
         ? "check-failed"
         : (data?.generationAvailability ?? "check-failed");
   const generationBlocked = generationAvailability !== "available";
+  const recordingType = recording.data?.configuration.types.find(
+    (type) => type.id === recording.data?.metadata?.typeId
+  );
+  const template = data?.templates.find(
+    (item) => item.id === (recordingType?.templateId ?? state.templateId)
+  );
   async function generate() {
     if (busy || !session.authorized() || !data || (!retry && generationBlocked)) return;
-    const template = data.templates.find((item) => item.id === state.templateId);
     if (!retry && !template) return;
     const input = retry
       ? state.operation!.input
@@ -310,32 +341,37 @@ export function MeetingSummary({
           {tool === "rewrite" ? (
             <>
               <div className="meetings-actions">
-                <Field>
-                  <FormLabel htmlFor="meeting-template">Summary style</FormLabel>
-                  <Select
-                    id="meeting-template"
-                    value={state.templateId}
-                    disabled={busy || retry}
-                    onChange={(event) =>
-                      update((current) => ({
-                        ...current,
-                        templateId: event.target.value as SummaryState["templateId"]
-                      }))
-                    }
-                  >
-                    <option value="">Choose a style</option>
-                    {data.templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                {recordingType ? (
+                  <p className="jds-hint">
+                    Summary style follows the recording type: {recordingType.name}.
+                  </p>
+                ) : (
+                  <Field>
+                    <FormLabel htmlFor="meeting-template">Summary style</FormLabel>
+                    <Select
+                      id="meeting-template"
+                      value={state.templateId}
+                      disabled={busy || retry}
+                      onChange={(event) =>
+                        update((current) => ({
+                          ...current,
+                          templateId: event.target.value as SummaryState["templateId"]
+                        }))
+                      }
+                    >
+                      <option value="">Choose a style</option>
+                      {data.templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
                 <Button
                   disabled={
                     busy ||
-                    (!retry &&
-                      (generationBlocked || !state.templateId || sourceLoading || unsavedNotes))
+                    (!retry && (generationBlocked || !template || sourceLoading || unsavedNotes))
                   }
                   onClick={() => void generate()}
                 >
@@ -453,7 +489,10 @@ export function MeetingSummary({
                   segments omitted.
                 </Note>
               ) : null}
-              <ArtifactContent artifact={artifact} />
+              <ArtifactContent
+                artifact={artifact}
+                typeId={recording.data?.metadata?.typeId ?? undefined}
+              />
               <div className="meetings-actions">
                 <Button
                   variant="secondary"

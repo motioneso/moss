@@ -1,3 +1,4 @@
+import type { RecordingInterpretation, RecordingOutputContext } from "./meeting-recording-api.js";
 import type {
   MeetingTranscriptEvidence,
   MeetingTranscriptSnapshot
@@ -21,6 +22,8 @@ export interface MeetingOutputAction extends MeetingOutputClaim {
   readonly duePhrase: string | null;
 }
 export interface MeetingOutputContent {
+  /** Absent on retained legacy summaries. */
+  readonly recording?: RecordingInterpretation;
   readonly overview: string;
   readonly decisions: readonly MeetingOutputClaim[];
   readonly openQuestions: readonly string[];
@@ -28,6 +31,7 @@ export interface MeetingOutputContent {
   readonly warnings: readonly string[];
 }
 export interface MeetingOutputInputs {
+  readonly recording?: RecordingOutputContext;
   readonly meetingId: string;
   readonly transcript: MeetingTranscriptSnapshot | null;
   readonly personalNotes: string;

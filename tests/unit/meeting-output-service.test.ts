@@ -1,3 +1,4 @@
+import { recordingContext, recordingInterpretation } from "../fixtures/meeting-recording.js";
 import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isDeepStrictEqual } from "node:util";
@@ -100,6 +101,14 @@ function setup() {
       state.title = input.title;
       return { status: "saved", meeting: meeting() };
     });
+  vi.spyOn(repository, "applyRecording").mockImplementation(async (db, inputs, interpretation) => {
+    if (inputs.recording?.metadata.titleSource === "automatic")
+      await new MeetingRecordsRepository().putTitle(
+        db,
+        { meetingId: MEETING_ID, expectedTitle: state.title, title: interpretation.title },
+        "automatic"
+      );
+  });
   const request = vi
     .spyOn(repository, "request")
     .mockImplementation(async (_db, meetingId, key, encoded) => {
@@ -640,7 +649,7 @@ describe("meeting output generation service", () => {
   });
 });
 
-describe("meeting titles derived only from automatic summaries", () => {
+describe("recording title provenance", () => {
   it.each([0, 1])(
     "preserves an untitled meeting during manual generation or Rewrite at output version %s",
     async (expectedOutputVersion) => {
@@ -675,11 +684,16 @@ describe("meeting titles derived only from automatic summaries", () => {
     }
   );
 
-  it("names an untitled meeting from a fresh Stop summary, only once on replay", async () => {
+  it("names an automatic-title recording from interpretation, only once on replay", async () => {
     const f = setup();
     f.state.title = "Untitled meeting";
+    f.state.inputs = { ...f.state.inputs, recording: recordingContext(MEETING_ID) };
     f.generator.mockResolvedValue({
-      content: { ...CONTENT, overview: `${CONTENT.overview} Additional detail.` },
+      content: {
+        ...CONTENT,
+        recording: recordingInterpretation(CONTENT.overview),
+        overview: `${CONTENT.overview} Additional detail.`
+      },
       modelRoute: "configured-route"
     });
 
@@ -687,11 +701,15 @@ describe("meeting titles derived only from automatic summaries", () => {
       status: "saved",
       artifact: { stale: false }
     });
-    expect(f.putTitle).toHaveBeenCalledExactlyOnceWith(f.scopedDb, {
-      meetingId: MEETING_ID,
-      expectedTitle: "Untitled meeting",
-      title: CONTENT.overview
-    });
+    expect(f.putTitle).toHaveBeenCalledExactlyOnceWith(
+      f.scopedDb,
+      {
+        meetingId: MEETING_ID,
+        expectedTitle: "Untitled meeting",
+        title: CONTENT.overview
+      },
+      "automatic"
+    );
     expect(f.state.title).toBe(CONTENT.overview);
     expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
       status: "saved",

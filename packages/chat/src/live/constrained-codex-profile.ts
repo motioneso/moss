@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, realpath } from "node:fs/promises";
+import { access, readFile, realpath, stat } from "node:fs/promises";
 import { delimiter, dirname, isAbsolute, join } from "node:path";
 import type { TmuxIo } from "@moss/ai";
 import { createExecutableDigestCache } from "./constrained-claude-profile.js";
@@ -37,7 +37,7 @@ function isSupportedDigest(hash: string): boolean {
 
 const digest = createExecutableDigestCache();
 
-/** Resolve npm's launcher to the native artifact; do not execute an arbitrary PATH wrapper. */
+/** Advisory installation lookup only; prepareConstrainedCodexProfile verifies bytes at launch. */
 export async function findConstrainedCodexExecutable(
   searchPath = process.env.PATH ?? ""
 ): Promise<string | undefined> {
@@ -53,8 +53,21 @@ export async function findConstrainedCodexExecutable(
     try {
       const launcher = await realpath(join(directory, "codex"));
       const packageRoot = dirname(dirname(launcher));
+      const metadataPath = join(packageRoot, "package.json");
+      if ((await stat(metadataPath)).size > 16_384) continue;
+      const metadata: unknown = JSON.parse(await readFile(metadataPath, "utf8"));
+      if (
+        !metadata ||
+        typeof metadata !== "object" ||
+        !("name" in metadata) ||
+        metadata.name !== "@openai/codex" ||
+        !("version" in metadata) ||
+        typeof metadata.version !== "string" ||
+        !Object.hasOwn(CONSTRAINED_CODEX_RELEASES, metadata.version) ||
+        !CONSTRAINED_CODEX_RELEASES[metadata.version]?.[process.arch]
+      )
+        continue;
       const candidates = [
-        launcher,
         join(packageRoot, "vendor", target, "bin", "codex"),
         join(
           packageRoot,
@@ -71,9 +84,9 @@ export async function findConstrainedCodexExecutable(
       for (const candidate of candidates) {
         try {
           await access(candidate, constants.X_OK);
-          if (isSupportedDigest(await digest(candidate))) return candidate;
+          if ((await stat(candidate)).isFile()) return candidate;
         } catch {
-          // Only the known native artifact is eligible.
+          // Missing or unreadable native installation. Launch still verifies its digest.
         }
       }
     } catch {

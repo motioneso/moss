@@ -19,6 +19,7 @@
     "@moss/structured-state": "workspace:*",
     "@moss/vault": "workspace:*",
     "fastify": "^5.6.2",
+    "kysely": "^0.29.2",
     "pg-boss": "^12.18.2"
   }
 }

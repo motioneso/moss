@@ -142,6 +142,12 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (path: string) => {
+      if (path === "/api/meetings/recording-types")
+        return new Response(JSON.stringify({ revision: 0, types: [] }));
+      if (path.endsWith("/recording"))
+        return new Response(
+          JSON.stringify({ metadata: null, configuration: { revision: 0, types: [] } })
+        );
       if (path === "/api/me/locale")
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })

@@ -29,11 +29,43 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-28
+
+#### Added
+
+- **Recording review messages in chat.** Moss now tells you in Main chat when it is unsure whether a recording is personal or work, with a link to review it. [PR #3815](https://github.com/motioneso/moss/pull/3815)
+- **Moss check-in settings.** You can now choose in Settings how often Moss checks in on your day and which of Calendar, Tasks, Memory, Sports and News it may look at. [PR #3820](https://github.com/motioneso/moss/pull/3820)
+
+### 2026-10-27
+
+#### Added
+
+- **Recording memory history.** Account exports now include recording memory labels, source history and reviewed changes. [PR #3810](https://github.com/motioneso/moss/pull/3810)
+- **Recording note history in exports.** Account exports now include saved recording-source status, note labels and contribution change history. [PR #3802](https://github.com/motioneso/moss/pull/3802)
+- **Edit recording types in chat.** Ask Moss to add, rename or retire recording types and choose how each type is summarized, while keeping older recordings easy to find. [PR #3790](https://github.com/motioneso/moss/pull/3790)
+- **More kinds of recordings.** Paste a transcript into Meetings and let Moss name it, choose its type and label it personal or work, then change or filter the type yourself. [PR #3785](https://github.com/motioneso/moss/pull/3785)
+
+#### Changed
+
+- **Recording cleanup before deletion.** Deleting a recording or account now cleans its linked notes and memories first, keeping changed notes for review before you try again. [PR #3812](https://github.com/motioneso/moss/pull/3812)
+- **Simpler connection settings.** Outlook calendar uses a compact account row, and Connections and Notes settings have less repeated text. [PR #3773](https://github.com/motioneso/moss/pull/3773)
+
+#### Fixed
+
+- **Tool results show plain text in chat.** When Moss uses a tool with a Claude account, the result shown under its thinking steps now reads as plain text instead of showing stray symbols. [PR #3535](https://github.com/motioneso/moss/pull/3535)
+- **Long ring recordings now upload.** Recordings longer than about 45 minutes from your ring now reach Moss instead of failing. [PR #3797](https://github.com/motioneso/moss/pull/3797)
+- **Preserve concurrent note edits.** Moss preserves separate note changes when two updates save together and reports conflicts when it detects an outside edit during a save. [PR #3796](https://github.com/motioneso/moss/pull/3796)
+- **Attached files stay visible while Moss replies.** A file you attach to a chat message now stays visible on your message while Moss writes the reply, instead of disappearing until the reply is done. [PR #3799](https://github.com/motioneso/moss/pull/3799)
+
 ### 2026-10-26
 
 #### Added
 
 - **Moss for Android.** Moss now has an Android app that opens Moss full screen, with ring settings under Settings, Connections, Hardware. [PR #3764](https://github.com/motioneso/moss/pull/3764)
+
+#### Fixed
+
+- **Chat stays at the latest message while Moss replies.** The chat now keeps following Moss's reply as it is written, instead of leaving you scrolled up. [PR #3779](https://github.com/motioneso/moss/pull/3779)
 
 ### 2026-10-25
 

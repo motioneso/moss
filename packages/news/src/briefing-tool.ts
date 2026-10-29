@@ -1,6 +1,14 @@
 import type { DatasetClient } from "@moss/datasets";
 import { assertDataContextDb } from "@moss/db";
+import type { DataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
+import {
+  capHeartbeatItems,
+  heartbeatRevision,
+  parseHeartbeatSourceReadInput,
+  type HeartbeatEvidenceItem,
+  type HeartbeatSourceRead
+} from "@moss/shared";
 
 import { NewsPrefsRepository } from "./repository.js";
 import { NewsService } from "./news-service.js";
@@ -57,4 +65,53 @@ export const newsTopHeadlinesTodayExecute: ToolExecute = async (
   }
   const { facts, evidence } = await service.getTopHeadlinesForToday(scopedDb, ctx.actorUserId);
   return { data: { facts, evidence } };
+};
+
+/**
+ * Input must stay inside the read contract. Extra keys (an owner or user id) are refused, and the
+ * reads below run as the actor the data context was opened for.
+ */
+export async function authorizeNewsHeartbeatRead(
+  _scopedDb: DataContextDb,
+  input: Record<string, unknown>
+): Promise<boolean> {
+  return parseHeartbeatSourceReadInput(input) !== null;
+}
+
+/** Top stories from the published snapshot. Never contacts a news source. */
+export const newsHeartbeatHeadlinesExecute: ToolExecute = async (
+  scopedDb,
+  input,
+  ctx
+): Promise<ToolResult> => {
+  assertDataContextDb(scopedDb);
+  const parsed = parseHeartbeatSourceReadInput(input);
+  if (!parsed) throw new Error("Invalid heartbeat read input");
+  if (!service) {
+    throw new Error(
+      "news briefing tool used before configureNewsBriefingService ran (composition-root bug)"
+    );
+  }
+  const { stories, freshness } = await service.getCachedHeadlinesForHeartbeat(
+    scopedDb,
+    ctx.actorUserId
+  );
+  const { items: bounded, truncated } = capHeartbeatItems(stories, parsed.limit);
+  const items: HeartbeatEvidenceItem[] = bounded.map((story) => ({
+    entityKey: `story:${story.id}`,
+    episodeKey: `story:${story.id}`,
+    title: story.title,
+    at: story.publishedAt,
+    kind: "headline",
+    facts: { source: story.sourceLabel, summary: story.summary }
+  }));
+  const data: HeartbeatSourceRead = {
+    source: "news",
+    revision: heartbeatRevision(stories.map((story) => [story.id, story.title].join("|"))),
+    nextBoundaryAt: null,
+    freshness,
+    truncated,
+    items
+  };
+  return { data };
 };

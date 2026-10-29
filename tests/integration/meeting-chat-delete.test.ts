@@ -1,3 +1,6 @@
+import { createMeetingDeletionPort } from "@moss/module-registry";
+import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
+import { createPgBossClient } from "@moss/jobs";
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -5,6 +8,7 @@ import { sql, type Kysely } from "kysely";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { ChatRepository, deleteMeetingChatThreads } from "@moss/chat";
 import {
+  MeetingDeletionService,
   MeetingRecordsRepository,
   MeetingTranscriptRepository,
   registerMeetingRecordRoutes
@@ -112,7 +116,15 @@ async function deleteViaRoute(
   registerMeetingRecordRoutes(server, {
     resolveAccessContext: async () => ({ actorUserId }),
     dataContext: context,
-    beforeRemove
+    deletion: new MeetingDeletionService({
+      dataContext: context,
+      cleanup: createMeetingDeletionPort({
+        dataContext: context,
+        privateVault: new VaultContextRunner(getVaultBaseDir()),
+        boss: createPgBossClient(connectionStrings.app)
+      }),
+      beforeRemove: (db, id) => beforeRemove(db, id)
+    })
   });
   try {
     return await server.inject({ method: "DELETE", url: `/api/meetings/records/${meetingId}` });

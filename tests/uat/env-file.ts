@@ -1,3 +1,4 @@
+import { n3ObserverEnv, type N3ObserverOption } from "./provisioner-options.js";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
@@ -40,7 +41,9 @@ export function writeUatEnvFile(input: {
   // container — so it has to be here, not only on composeSeedHook's `docker -e` args. Same
   // runtime-vs-seed-time split as JARVIS_UAT_NEWS_TRANSIENT_INPUT below.
   readonly chatScript?: string;
+  readonly n3Observer?: N3ObserverOption;
 }): UatEnvFile {
+  const observerLines = n3ObserverEnv(input.n3Observer, input.chatScript);
   const dir = mkdtempSync(join(tmpdir(), "jarv1s-uat-"));
   const path = join(dir, "env.production.local");
   try {
@@ -48,6 +51,7 @@ export function writeUatEnvFile(input: {
       path,
       [
         "NODE_ENV=production",
+        ...observerLines,
         `JARVIS_WEB_PORT=${input.webPort}`,
         // #1026: Playwright drives this instance at http://127.0.0.1:<webPort> (see baseURL
         // below), which is a DIFFERENT origin than better-auth's "http://localhost:<port>"

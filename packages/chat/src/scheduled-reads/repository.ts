@@ -59,3 +59,23 @@ export async function recordScheduledObservation(
     .where("reminder_id", "=", reminderId)
     .executeTakeFirstOrThrow();
 }
+
+/** FOR UPDATE hides paused rows under worker RLS; caller already holds the reminder advisory lock. */
+export async function isPausedScheduledReadOccurrence(
+  db: DataContextDb,
+  reminderId: string,
+  messageId: string
+): Promise<boolean> {
+  assertDataContextDb(db);
+  const row = await db.db
+    .selectFrom("app.chat_reminders as r")
+    .innerJoin("app.chat_scheduled_reads as s", "s.reminder_id", "r.id")
+    .select("r.id")
+    .where("r.id", "=", reminderId)
+    .where("r.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+    .where("s.attempt_message_id", "=", messageId)
+    .where("r.reserved_message_id", "=", messageId)
+    .where("r.state", "=", "paused")
+    .executeTakeFirst();
+  return !!row;
+}

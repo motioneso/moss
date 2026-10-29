@@ -27,10 +27,24 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assertOperatorConfirmsTargetOwner, createDatabase, getMossDatabaseUrls } from "@moss/db";
-import { getExternalModuleDeletionTables, getModuleDeletionTables } from "@moss/module-registry";
+import {
+  assertOperatorConfirmsTargetOwner,
+  createDatabase,
+  DataContextRunner,
+  getMossDatabaseUrls
+} from "@moss/db";
+import {
+  createManagedDeletionPreparation,
+  getExternalModuleDeletionTables,
+  getModuleDeletionTables
+} from "@moss/module-registry";
+import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
-import { deleteUserData } from "./delete-user-data.js";
+import {
+  deleteUserData,
+  ManagedDeletionError,
+  type DeleteUserDataResult
+} from "./delete-user-data.js";
 
 // External (post-deploy-installed) module manifests are not yet loadable at CLI run time — the
 // #860 pluggable-modules loader that will list them hasn't landed. getExternalModuleDeletionTables
@@ -60,16 +74,30 @@ async function main(): Promise<void> {
     }
   }
 
-  const result = await deleteUserData({
-    actorUserId: args.actorUserId,
-    confirmUserId: args.confirmUserId,
-    dryRun: !args.execute,
-    userId: args.userId,
-    moduleDeletionTables: [
-      ...getModuleDeletionTables(),
-      ...getExternalModuleDeletionTables(installedExternalManifests)
-    ]
-  });
+  const runtimeDb = args.execute
+    ? createDatabase({ connectionString: getMossDatabaseUrls().app, maxConnections: 2 })
+    : undefined;
+  let result: DeleteUserDataResult;
+  try {
+    result = await deleteUserData({
+      actorUserId: args.actorUserId,
+      confirmUserId: args.confirmUserId,
+      dryRun: !args.execute,
+      userId: args.userId,
+      prepareManagedDeletion: runtimeDb
+        ? createManagedDeletionPreparation({
+            dataContext: new DataContextRunner(runtimeDb),
+            privateVault: new VaultContextRunner(getVaultBaseDir())
+          })
+        : undefined,
+      moduleDeletionTables: [
+        ...getModuleDeletionTables(),
+        ...getExternalModuleDeletionTables(installedExternalManifests)
+      ]
+    });
+  } finally {
+    await runtimeDb?.destroy();
+  }
 
   console.log(JSON.stringify(result, null, 2));
 
@@ -125,5 +153,11 @@ if (
   process.argv[1] &&
   fileURLToPath(import.meta.url) === resolve(process.argv[1])
 ) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    if (!(error instanceof ManagedDeletionError)) throw error;
+    console.error(JSON.stringify({ deleted: false, code: error.code }));
+    process.exitCode = 1;
+  }
 }

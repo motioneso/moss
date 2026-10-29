@@ -1,4 +1,8 @@
-import { sportsResultQuerySchema, sportsResultResponseSchema } from "@moss/shared";
+import {
+  heartbeatSourceReadInputSchema,
+  sportsResultQuerySchema,
+  sportsResultResponseSchema
+} from "@moss/shared";
 import { sportsLatestResultTool } from "./results/tool.js";
 import { sportsResultTemplate } from "./results/contract.js";
 import {
@@ -42,7 +46,11 @@ import {
   updateSportsSourceRecipeSchema
 } from "@moss/shared";
 
-import { sportsFollowedFactsTodayExecute } from "./briefing-tool.js";
+import {
+  authorizeSportsHeartbeatRead,
+  sportsFollowedFactsTodayExecute,
+  sportsHeartbeatNextFixturesExecute
+} from "./briefing-tool.js";
 import { sportsFollowTarget, sportsSourceTarget } from "./chat-targets.js";
 import { collectSportsSourcesExportSection } from "./data-lifecycle.js";
 import {
@@ -577,6 +585,17 @@ export const sportsModuleManifest = {
   ],
   assistantTools: [
     sportsLatestResultTool,
+    {
+      name: "sports.heartbeatNextFixtures",
+      description:
+        "Background heartbeat read. Lists the next fixtures for the actor's followed teams from cached data only, with a change revision. Never contacts the sports provider.",
+      permissionId: "sports.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeSportsHeartbeatRead,
+      execute: sportsHeartbeatNextFixturesExecute
+    },
     {
       name: "sports.followedFactsToday",
       description:

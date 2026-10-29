@@ -6,7 +6,7 @@ import {
   updateMeetingCapturePreferencesSchema,
   type UpdateMeetingCapturePreferences
 } from "@moss/shared";
-import type { MeetingRecordRoutesDependencies } from "./routes.js";
+import type { MeetingContentRoutesDependencies } from "./routes.js";
 import { MeetingPreferencesRepository } from "./preferences.js";
 import { MeetingCaptureError } from "./capture-domain.js";
 export { MEETING_CAPTURE_DEFAULT_KEY, MEETING_CAPTURE_SOURCE_KEY } from "./preferences.js";
@@ -14,7 +14,7 @@ const validator = new Ajv({ removeAdditional: false, coerceTypes: false, strict:
 validator.addFormat("uuid", /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 export function registerMeetingPreferenceRoutes(
   server: FastifyInstance,
-  dependencies: MeetingRecordRoutesDependencies
+  dependencies: MeetingContentRoutesDependencies
 ): void {
   const preferences = new MeetingPreferencesRepository(dependencies.preferences);
   server.get(

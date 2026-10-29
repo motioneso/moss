@@ -42,6 +42,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          boss,
           gateway: gateway(),
           generateReport: async () => {
             calls++;
@@ -84,7 +85,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(
       await runScheduledReadJob(
         { data: saved.data },
-        { dataContext: worker, generateReport, gateway: gateway() }
+        { dataContext: worker, boss, generateReport, gateway: gateway() }
       )
     ).toBe("inactive");
     const textEdit = await owner((db) =>
@@ -227,7 +228,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(
       await runScheduledReadJob(
         { data: { ...saved.data, actorUserId: ids.userB } },
-        { dataContext: worker, generateReport, gateway: gateway() }
+        { dataContext: worker, boss, generateReport, gateway: gateway() }
       )
     ).toBe("inactive");
   });
@@ -239,7 +240,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     );
     expect(jobs.rows.map((row) => row.data)).toEqual([saved.data]);
     await owner((db) => tasks.update(db, saved.task.id, { status: "done" }));
-    const deps = { dataContext: worker, generateReport, gateway: gateway() };
+    const deps = { dataContext: worker, boss, generateReport, gateway: gateway() };
     expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("success");
     expect(await runScheduledReadJob({ data: saved.data }, deps)).toBe("inactive");
     const messages = await message(saved);
@@ -264,7 +265,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(
       await runScheduledReadJob(
         { data: saved.data },
-        { dataContext: worker, generateReport, gateway: gateway() }
+        { dataContext: worker, boss, generateReport, gateway: gateway() }
       )
     ).toBe("refused");
     expect((await owner(listScheduledReminders)).find((r) => r.id === saved.id)).toMatchObject({
@@ -293,7 +294,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(
       await gateway().runBackgroundReadForActor(ids.userA, {
         operation: "tasks.get",
-        itemId: task.id,
+        input: { taskId: task.id },
         runId: "foreign"
       })
     ).toMatchObject({ ok: false });
@@ -305,7 +306,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     expect(
       await runScheduledReadJob(
         { data: saved.data },
-        { dataContext: worker, generateReport, gateway: gateway() }
+        { dataContext: worker, boss, generateReport, gateway: gateway() }
       )
     ).toBe("inactive");
     const jobs = await bootstrap.query(
@@ -323,6 +324,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
         { data: saved.data },
         {
           dataContext: worker,
+          boss,
           generateReport,
           gateway: {
             async runBackgroundReadForActor(actor, read) {
@@ -340,6 +342,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     const saved = await save();
     const deps = {
       dataContext: worker,
+      boss,
       generateReport,
       gateway: {
         async runBackgroundReadForActor() {
@@ -369,6 +372,7 @@ describe("scheduled reads through the actor worker and real gateway", () => {
     await owner((db) => tasks.update(db, saved.task.id, { status: "done" }));
     await registerScheduledReadWorker(workerBoss, {
       dataContext: worker,
+      boss,
       generateReport,
       gateway: gateway(true)
     });

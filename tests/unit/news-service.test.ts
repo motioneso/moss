@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DatasetClient, DatasetEnvelope } from "@moss/datasets";
 import type { AccessContext, DataContextDb } from "@moss/db";
@@ -902,5 +902,40 @@ describe("NewsService dismissed-story filtering on read (#2247)", () => {
     const urls = overview.topStories.map((story) => story.url);
     expect(urls).not.toContain("https://preferred.example/one");
     expect(urls).toContain("https://preferred.example/two");
+  });
+});
+
+describe("NewsService.getCachedHeadlinesForHeartbeat", () => {
+  it("reads the published snapshot and never calls a feed", async () => {
+    const getFeed = vi.fn(async () => [item()]);
+    const service = new NewsService(
+      makeDeps({ getFeed, snapshot: snapshot([snapshotArticle("one"), snapshotArticle("two")]) })
+    );
+    const read = await service.getCachedHeadlinesForHeartbeat(fakeScopedDb, userA.actorUserId);
+    expect(read.stories.map((s) => s.id)).toEqual(["one", "two"]);
+    expect(read.freshness).toBe("fresh");
+    expect(getFeed).not.toHaveBeenCalled();
+  });
+
+  it("reports unknown with no snapshot and stale with an expired one, still without a feed call", async () => {
+    const getFeed = vi.fn(async () => [item()]);
+    const none = new NewsService(makeDeps({ getFeed }));
+    expect(await none.getCachedHeadlinesForHeartbeat(fakeScopedDb, userA.actorUserId)).toEqual({
+      stories: [],
+      freshness: "unknown"
+    });
+    const expired = new NewsService(
+      makeDeps({
+        getFeed,
+        snapshot: snapshot([snapshotArticle("one")], {
+          expiresAt: new Date("2026-07-11T11:00:00.000Z")
+        })
+      })
+    );
+    expect(await expired.getCachedHeadlinesForHeartbeat(fakeScopedDb, userA.actorUserId)).toEqual({
+      stories: [],
+      freshness: "stale"
+    });
+    expect(getFeed).not.toHaveBeenCalled();
   });
 });

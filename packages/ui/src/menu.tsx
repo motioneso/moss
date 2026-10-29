@@ -23,7 +23,7 @@ export interface MenuItem {
 export interface MenuProps {
   readonly triggerIcon?: ReactNode;
   readonly triggerContent?: ReactNode;
-  readonly triggerVariant?: "icon" | "content";
+  readonly triggerVariant?: "icon" | "content" | "chip";
   readonly placement?: "bottom" | "top";
   /** Layout-only wrapper hook. */
   readonly className?: string;
@@ -102,6 +102,7 @@ export function Menu(props: MenuProps) {
       className={[
         "jds-menu",
         props.triggerVariant === "content" ? "jds-menu--content" : null,
+        props.triggerVariant === "chip" ? "jds-menu--chip" : null,
         props.className
       ]
         .filter(Boolean)
@@ -113,9 +114,11 @@ export function Menu(props: MenuProps) {
         type="button"
         ref={triggerRef}
         className={
-          props.triggerVariant === "content"
-            ? "jds-menu__trigger jds-menu__trigger--content"
-            : "jds-menu__trigger"
+          props.triggerVariant === "chip"
+            ? `jds-btn jds-btn--chip${open ? " jds-btn--active" : ""}`
+            : props.triggerVariant === "content"
+              ? "jds-menu__trigger jds-menu__trigger--content"
+              : "jds-menu__trigger"
         }
         aria-label={props.triggerLabel}
         aria-expanded={open}
@@ -135,6 +138,19 @@ export function Menu(props: MenuProps) {
         }}
       >
         {props.triggerContent ?? props.triggerIcon}
+        {props.triggerVariant === "chip" ? (
+          <svg
+            aria-hidden="true"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        ) : null}
       </button>
       {open ? (
         <div

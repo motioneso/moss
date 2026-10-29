@@ -1,3 +1,4 @@
+import { recordingTypeIdSchema } from "./meeting-recording-api.js";
 import type { MeetingRecordCursor } from "./meeting-record-api.js";
 import type { MeetingExportReceipt } from "./meeting-export-api.js";
 
@@ -8,6 +9,7 @@ export type MeetingHistoryFilter =
   | "exported"
   | "notes-only";
 export interface SearchMeetingHistoryInput {
+  readonly typeId?: string;
   readonly query?: string;
   readonly filter?: MeetingHistoryFilter;
   readonly limit?: number;
@@ -23,6 +25,10 @@ export interface MeetingHistoryItem {
   readonly title: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly recording?: {
+    readonly typeId: string | null;
+    readonly side: "personal" | "work" | null;
+  };
   readonly hasNotes: boolean;
   readonly notesRevision: number;
   readonly capture: { readonly status: "unavailable"; readonly durationMs?: number | null };
@@ -80,6 +86,7 @@ export const searchMeetingHistorySchema = {
     type: "object",
     additionalProperties: false,
     properties: {
+      typeId: recordingTypeIdSchema,
       query: { type: "string", maxLength: 256 },
       filter: {
         type: "string",

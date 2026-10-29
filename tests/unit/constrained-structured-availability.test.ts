@@ -1,10 +1,15 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { access, chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 import { CONSTRAINED_CLAUDE_VERSION } from "../../packages/chat/src/live/constrained-claude-profile.js";
+import {
+  CONSTRAINED_CODEX_VERSION,
+  ConstrainedCodexUnsupportedError,
+  prepareConstrainedCodexProfile
+} from "../../packages/chat/src/live/constrained-codex-profile.js";
 import { CliChatEngineHost } from "../../packages/cli-runner/src/engine-host.js";
 import * as tokenStore from "../../packages/cli-runner/src/provider-token-store.js";
 import { serveConnection, type ByteChannel } from "../../packages/cli-runner/src/connection.js";
@@ -143,6 +148,55 @@ class ProbeChannel implements ByteChannel {
 }
 
 describe("constrained structured availability is an advisory metadata-only probe", () => {
+  it("reports installed Codex without hashing its bytes, but launch rejects an unapproved artifact", async () => {
+    const { host, root, assertReadOnly } = await fixture("missing");
+    const packageRoot = join(root, "node_modules", "@openai", "codex");
+    const target =
+      process.arch === "arm64" ? "aarch64-unknown-linux-musl" : "x86_64-unknown-linux-musl";
+    const nativeDir = join(packageRoot, "vendor", target, "bin");
+    await mkdir(join(packageRoot, "bin"), { recursive: true });
+    await mkdir(nativeDir, { recursive: true });
+    const launcher = join(packageRoot, "bin", "codex.js");
+    const executablePath = join(nativeDir, "codex");
+    await writeFile(launcher, "must never execute the launcher", { mode: 0o700 });
+    await symlink(launcher, join(root, "codex"));
+    const metadataPath = join(packageRoot, "package.json");
+    await writeFile(
+      metadataPath,
+      JSON.stringify({ name: "@openai/codex", version: CONSTRAINED_CODEX_VERSION })
+    );
+    // Deliberately unapproved bytes: advisory readiness must not hash the native artifact
+    // under the short RPC deadline. Actual generation must still reject this exact file.
+    await writeFile(executablePath, "unapproved native artifact", { mode: 0o700 });
+    await expect(
+      host.probeProvider("openai-compatible", "synthetic-owner", { constrainedStructured: true })
+    ).resolves.toEqual({ status: "ready" });
+    await assertReadOnly();
+    await expect(
+      prepareConstrainedCodexProfile({
+        privateHome: join(root, "private-home"),
+        model: "configured-model",
+        schema: {},
+        io: {
+          run: async () => ({ code: 0, stdout: "", stderr: "" }),
+          readFile: async () => "",
+          writeFile: async () => {},
+          sleep: async () => {}
+        } as TmuxIo,
+        executablePath
+      })
+    ).rejects.toBeInstanceOf(ConstrainedCodexUnsupportedError);
+    for (const metadata of [
+      { name: "unrelated-package", version: CONSTRAINED_CODEX_VERSION },
+      { name: "@openai/codex", version: "0.0.0" }
+    ]) {
+      await writeFile(metadataPath, JSON.stringify(metadata));
+      await expect(
+        host.probeProvider("openai-compatible", "synthetic-owner", { constrainedStructured: true })
+      ).resolves.toEqual({ status: "not_installed" });
+    }
+    await assertReadOnly();
+  });
   it("rejects shared-account runners even when the pinned binary is present", async () => {
     const { host, assertReadOnly } = await fixture("ready", false);
     await expect(

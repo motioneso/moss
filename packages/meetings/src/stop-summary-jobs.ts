@@ -1,3 +1,4 @@
+import type { RecordingNoticeEnqueue } from "./recording-notice-jobs.js";
 import { isUuid, type DataContextRunner } from "@moss/db";
 import { scopedJobDatabase, sendJob, type PgBoss, type QueueDefinition } from "@moss/jobs";
 import { MeetingOutputService, type MeetingOutputGenerator } from "./output-service.js";
@@ -50,12 +51,33 @@ export function createImportedMeetingSummaryScheduler(boss: Pick<PgBoss, "send">
       if (!id) throw new Error("Imported meeting analysis scheduling unavailable");
     });
 }
+export function createManualMeetingSummaryEnqueue(boss: Pick<PgBoss, "send">) {
+  return async (
+    db: Parameters<MeetingStopSummaryRepository["schedule"]>[0],
+    payload: MeetingStopSummaryPayload,
+    at: Date
+  ) => {
+    const id = await sendJob(boss, MEETING_STOP_SUMMARY_QUEUE, payload, {
+      db: scopedJobDatabase(db),
+      startAfter: at,
+      singletonKey: payload.idempotencyKey
+    });
+    if (!id) throw new Error("Manual recording analysis scheduling unavailable");
+  };
+}
 export async function registerMeetingStopSummaryWorker(
   boss: PgBoss,
   dataContext: DataContextRunner,
-  generator: MeetingOutputGenerator
+  generator: MeetingOutputGenerator,
+  enqueueRecordingNotice?: RecordingNoticeEnqueue
 ): Promise<string[]> {
-  const service = new MeetingOutputService(dataContext, generator);
+  const service = new MeetingOutputService(
+    dataContext,
+    generator,
+    undefined,
+    undefined,
+    enqueueRecordingNotice
+  );
   const id = await boss.work<MeetingStopSummaryPayload>(
     MEETING_STOP_SUMMARY_QUEUE,
     { pollingIntervalSeconds: 2 },

@@ -1,3 +1,4 @@
+import { collectRecordingMemoryExport } from "./recording-memory-export.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -84,6 +85,25 @@ const memoryRememberToolInputSchema = {
   }
 } as const;
 
+const memoryOwnedTables = [
+  "app.memory_chunks",
+  "app.memory_links",
+  "app.memory_file_index",
+  "app.chat_memory_facts",
+  "app.memory_entities",
+  "app.memory_facts",
+  "app.memory_episodes",
+  "app.memory_fact_sources",
+  "app.memory_aliases",
+  "app.memory_search_documents",
+  "app.memory_legacy_fact_migrations",
+  "app.memory_conflict_groups",
+  "app.memory_candidates",
+  "app.memory_recording_fact_versions",
+  "app.memory_recording_receipts",
+  "app.memory_recording_proposals"
+];
+
 export const MEMORY_MODULE_ID = "memory";
 export const memorySqlMigrationDirectory = fileURLToPath(new URL("../sql", import.meta.url));
 
@@ -105,24 +125,13 @@ export const memoryModuleManifest: MossModuleManifest = {
       "sql/0030_memory_index.sql",
       "sql/0032_memory_embedding_768.sql",
       "sql/0040_memory_chat_source.sql",
-      "sql/0041_memory_facts.sql"
+      "sql/0041_memory_facts.sql",
+      "sql/0338_memory_managed_note_snapshots.sql",
+      "sql/0339_memory_recording_lineage.sql",
+      "sql/0341_memory_recording_cleanup.sql"
     ],
     migrationDirectories: ["packages/memory/sql"],
-    ownedTables: [
-      "app.memory_chunks",
-      "app.memory_links",
-      "app.memory_file_index",
-      "app.chat_memory_facts",
-      "app.memory_entities",
-      "app.memory_facts",
-      "app.memory_episodes",
-      "app.memory_fact_sources",
-      "app.memory_aliases",
-      "app.memory_search_documents",
-      "app.memory_legacy_fact_migrations",
-      "app.memory_conflict_groups",
-      "app.memory_candidates"
-    ]
+    ownedTables: memoryOwnedTables
   },
   routes: [
     {
@@ -417,7 +426,44 @@ export const memoryModuleManifest: MossModuleManifest = {
       execute: memoryForgetExecute
     }
   ],
+  dataLifecycle: {
+    exportSections: [
+      {
+        key: "recordingMemory",
+        displayName: "Recording memory history",
+        collect: (db, ctx) => collectRecordingMemoryExport(db, ctx.actorUserId)
+      }
+    ],
+    deletion: {
+      strategy: "cascade",
+      tables: memoryOwnedTables.map((table) => ({
+        table,
+        countPredicate: "owner_user_id = $1::uuid"
+      }))
+    }
+  },
   features: [
+    {
+      id: "memory.recording_lineage",
+      description:
+        "Recording memories keep labels and source history through correction. Deletion removes one source and unsupported derivatives; other recording support and corrected text remain. Exports include cleanup progress.",
+      errors: [
+        {
+          code: "recording_memory_conflict",
+          class: "transient",
+          description:
+            "The recording changed or is being removed; the memory change was not applied."
+        }
+      ],
+      remediations: [
+        {
+          id: "memory.refresh_recording_source",
+          description:
+            "Refresh saved memories and review the recording's current state before retrying.",
+          path: "/meetings"
+        }
+      ]
+    },
     {
       id: "memory.forget_approval",
       description:
@@ -452,9 +498,8 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.notes_ingest",
       description:
-        "Read your linked notes into Moss by splitting each note into passages and keeping them " +
-        "with an embedding model, so you can search your notes by meaning. A note you delete or " +
-        "move out of the folder is dropped from search on the next sync."
+        "Search linked notes by meaning. Deleted or moved notes leave search on the next sync. " +
+        "Managed passages retain their personal or work label and current source status; stale indexing cannot replace them."
     }
   ]
 };

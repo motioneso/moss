@@ -1,6 +1,7 @@
 import type { CallCardDetails, ProviderKind } from "@moss/ai"; // "anthropic" | "openai-compatible" | "google"
 import type { ActionRequestPreview } from "@moss/module-sdk";
 import type {
+  ChatAttachmentDto,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessV1,
@@ -84,6 +85,8 @@ export interface TranscriptRecord {
   readonly elapsedMs?: number;
   /** Token usage block for the prompt turn. */
   readonly usage?: ChatTurnUsageDto;
+  /** Files sent with the turn, on the live "user" record so the question keeps its chips. */
+  readonly attachments?: readonly ChatAttachmentDto[];
   /**
    * Task 4.1 (#2901) — present only on a live reply the classifier gate handled, so a stream
    * consumer can tell it apart from a model turn. Never persisted on the record itself: history

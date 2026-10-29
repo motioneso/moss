@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en" data-color-mode="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Use Moss from other devices: screens for review</title>
+    <link rel="stylesheet" href="app.css" />
+    <style>
+      /* Review page chrome only. The screens themselves render in screen.html. */
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+      }
+      .doc {
+        padding: var(--space-10) var(--space-10) var(--space-14);
+      }
+      .doc__head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--space-6);
+      }
+      .doc__title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-4xl);
+        font-weight: var(--weight-black);
+      }
+      .doc__lede {
+        margin: var(--space-3) 0 0;
+        max-width: 76ch;
+        color: var(--text-muted);
+      }
+      .doc__tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+      }
+      .doc__toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2) var(--space-5);
+        margin-top: var(--space-6);
+        font-size: var(--text-sm);
+      }
+      .doc__toc a {
+        color: var(--accent-fg);
+      }
+      .mock {
+        margin-top: var(--space-12);
+      }
+      .mock__states {
+        margin-top: var(--space-3);
+      }
+      .mock__note {
+        max-width: 90ch;
+        color: var(--text-muted);
+      }
+      .mock__note p {
+        margin: var(--space-3) 0 0;
+      }
+      .mock__note b {
+        color: var(--text);
+      }
+      .frames {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-8);
+        margin-top: var(--space-5);
+      }
+      .frame-wrap {
+        flex: none;
+      }
+      .frame-cap {
+        margin: 0 0 var(--space-2);
+        font-size: var(--text-xs);
+        color: var(--text-subtle);
+      }
+      .frame {
+        display: block;
+        border: var(--border-w) solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        background: var(--bg);
+      }
+      .qs {
+        max-width: 90ch;
+        color: var(--text-muted);
+      }
+      .qs li {
+        margin-bottom: var(--space-3);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="doc">
+      <header class="doc__head">
+        <div>
+          <h1 class="doc__title">Use Moss from other devices</h1>
+          <p class="doc__lede">
+            Every screen from the remote access spec, with its states, drawn with the real Moss
+            Settings markup and styles. Each shows the wide window and the phone. Names, addresses
+            and accounts are made up.
+          </p>
+        </div>
+        <div class="doc__tools">
+          <div class="jds-segmented" role="group" aria-label="Colours" id="modeSeg">
+            <button type="button" class="jds-segmented__opt" aria-pressed="true" data-v="light">Light</button>
+            <button type="button" class="jds-segmented__opt" aria-pressed="false" data-v="dark">Dark</button>
+          </div>
+          <div class="jds-segmented" role="group" aria-label="Size" id="sizeSeg">
+            <button type="button" class="jds-segmented__opt" aria-pressed="true" data-v="fit">Fit to window</button>
+            <button type="button" class="jds-segmented__opt" aria-pressed="false" data-v="full">Actual size</button>
+          </div>
+        </div>
+      </header>
+      <nav class="doc__toc" id="toc"></nav>
+      <div id="mocks"></div>
+
+      <section class="mock" id="qs">
+        <div class="jds-section-head jds-section-head--rule">
+          <h2 class="jds-section-head__title">Your answers, 27 October</h2>
+        </div>
+        <ol class="qs" id="qlist"></ol>
+      </section>
+    </div>
+
+    <script>
+      const MOCKS = [
+        {
+          id: "m1",
+          title: "Where you start",
+          states: [
+            ["settings", "Settings, not set up"],
+            ["choose", "Choose where from"],
+          ],
+          note: `<p><b>Place in Settings.</b> Remote access is an admin section, under Operations, just before Advanced host setup. It needs its app-map entry or the section will not load.</p><p><b>Choice.</b> The three options use the installer's names. "From anywhere" replaces the installer's "HTTPS" and carries the Recommended badge. The installer's Ready screen is drawn in the installer mockup, not here.</p>`,
+        },
+        {
+          id: "m2",
+          title: "Tailscale on this computer",
+          states: [
+            ["missing", "Not installed"],
+            ["signedout", "Signed out"],
+            ["expired", "Sign-in expired"],
+            ["running", "Running"],
+          ],
+          note: `<p><b>Layout.</b> Setup uses the same full-width Settings view as one open connection: a back link, the step on the left, and a side column with the step list and the addresses that work now. On the phone the side column goes on top and the step list hides, because the step heading already says where you are.</p><p><b>Detection.</b> Moss watches for Tailscale and moves on by itself.</p>`,
+        },
+        {
+          id: "m3",
+          title: "Your phone and laptop",
+          states: [
+            ["waiting", "Waiting"],
+            ["seen", "One device seen"],
+            ["two", "Two devices"],
+            ["stuck", "Nothing after a while"],
+          ],
+          note: `<p><b>Proof.</b> Continue stays off until a second device actually opens Moss over Tailscale. Skip is there for people who will do their phone later.</p><p><b>Help.</b> The fix list uses the numbered guide from the Google connection walkthrough.</p>`,
+        },
+        {
+          id: "m4",
+          title: "Secure address",
+          states: [
+            ["available", "Available"],
+            ["checking", "Turning on"],
+            ["done", "Done"],
+            ["nohttps", "Not available, name recommended"],
+          ],
+          note: `<p><b>Not available.</b> When the Tailscale network has secure addresses off, the meetmoss.com name comes first with the Recommended badge. The plain address stays as the third choice.</p>`,
+        },
+        {
+          id: "m5",
+          title: "About the name",
+          states: [],
+          note: `<p><b>What it says.</b> What goes public and what stays private, plus cost and sign-in. "Not now" returns to Settings with Tailscale fully set up.</p>`,
+        },
+        {
+          id: "m6",
+          title: "Sign in to meetmoss.com",
+          states: [
+            ["choose", "Choose"],
+            ["waiting", "Waiting for browser"],
+            ["invite", "Not invited yet"],
+            ["down", "Service down"],
+            ["done", "Signed in"],
+          ],
+          note: `<p><b>Sign-in.</b> GitHub or Google. The code on the waiting screen matches the one on the sign-in page. Problems use the same note as the encryption warning in Settings.</p>`,
+        },
+        {
+          id: "m7",
+          title: "Pick a name",
+          states: [
+            ["empty", "Empty"],
+            ["checking", "Checking"],
+            ["free", "Free"],
+            ["taken", "Taken"],
+            ["reserved", "Reserved"],
+            ["short", "Too short"],
+            ["chars", "Bad characters"],
+          ],
+          note: `<p><b>Live check.</b> A standard Settings field with the suffix fixed beside the box, a new piece for the shared kit. Errors use the field's error line. Taken names offer three chips.</p>`,
+        },
+        {
+          id: "m8",
+          title: "Network check",
+          states: [
+            ["pass", "All pass"],
+            ["pending", "Devices to check"],
+            ["blocked", "Router blocking"],
+          ],
+          note: `<p><b>Per device.</b> Each device proves its own lookup. The blocked state names the filter when Moss can tell. The Pi-hole steps are a placeholder; the build checks each vendor's real wording.</p>`,
+        },
+        {
+          id: "m9",
+          title: "Certificate and switching on",
+          states: [
+            ["working", "In progress"],
+            ["failed", "Failed"],
+            ["limit", "Rate limited"],
+            ["down", "Service down"],
+            ["switch", "Open on a device"],
+            ["done", "Ready"],
+          ],
+          note: `<p><b>Steps.</b> Every step is a row with a status, so a failure shows where it stopped. A rate limit shows when Moss tries again and has no button, because pressing one would not help.</p>`,
+        },
+        {
+          id: "m10",
+          title: "Settings, once set up",
+          states: [
+            ["all", "Name and Tailscale"],
+            ["tsonly", "Tailscale only"],
+            ["rename", "Changing name"],
+            ["release", "Releasing"],
+            ["copied", "Address copied"],
+          ],
+          note: `<p><b>Sections.</b> Addresses, Tailscale and the name are standard Settings sections with rows. Releasing the name sits in a danger section and confirms in the standard dialog, like removing a person.</p>`,
+        },
+        {
+          id: "m11",
+          title: "Alerts",
+          states: [
+            ["signedout", "Tailscale signed out"],
+            ["addr", "Address changed"],
+            ["renew", "Renewal failing"],
+            ["expired", "Certificate ran out"],
+            ["list", "Notifications page"],
+          ],
+          note: `<p><b>Two places.</b> A note at the top of Remote access, like the encryption warning, and a matching row on the Notifications page. Moss has no banner across every screen, so these screens do not draw one.</p>`,
+        },
+        {
+          id: "m12",
+          title: "Moving a name from another Moss",
+          states: [
+            ["offer", "Already has a name"],
+            ["confirm", "Confirm"],
+            ["moving", "Moving"],
+            ["done", "Done"],
+            ["failed", "Failed"],
+          ],
+          note: `<p><b>When.</b> Right after sign-in, in place of Pick a name, when the account already has a name on another Moss. The confirm uses the standard dialog. A failed move leaves the name on the other Moss.</p>`,
+        },
+      ];
+
+      const QUESTIONS = [
+        `<b>"From anywhere" replaces the installer's "HTTPS" option.</b> Screen 1 shows the new list.`,
+        `<b>The beta uses an invite code typed after sign-in</b>, with an "Ask for an invite" link. Screen 6, "Not invited yet".`,
+        `<b>An account that already has a name can move it to this Moss.</b> Screen 12.`,
+        `<b>The plain Tailscale address stays listed</b> once a secure one works. Screen 10.`,
+      ];
+
+      const seg = (attrs, opts, on) =>
+        `<div class="jds-segmented" role="group" ${attrs}>${opts
+          .map(([v, t]) => `<button type="button" class="jds-segmented__opt" aria-pressed="${v === on}" data-v="${v}">${t}</button>`)
+          .join("")}</div>`;
+
+      let mode = "light";
+      let size = "fit";
+      const state = {};
+
+      document.getElementById("mocks").innerHTML = MOCKS.map((m, i) => {
+        state[m.id] = m.states[0]?.[0] || "";
+        return `<section class="mock" id="${m.id}">
+          <div class="jds-section-head jds-section-head--rule"><span class="jds-section-head__number">${String(i + 1).padStart(2, "0")}</span><h2 class="jds-section-head__title">${m.title}</h2></div>
+          ${m.states.length ? `<div class="mock__states">${seg(`aria-label="States" data-target="${m.id}"`, m.states, state[m.id])}</div>` : ""}
+          <div class="mock__note">${m.note}</div>
+          <div class="frames">
+            <div class="frame-wrap"><p class="frame-cap">Wide window, 1440</p><iframe class="frame" data-m="${m.id}" width="1440" height="900" title="${m.title}, wide"></iframe></div>
+            <div class="frame-wrap"><p class="frame-cap">Phone, 390</p><iframe class="frame" data-m="${m.id}" width="390" height="844" title="${m.title}, phone"></iframe></div>
+          </div>
+        </section>`;
+      }).join("");
+      document.getElementById("toc").innerHTML =
+        MOCKS.map((m, i) => `<a href="#${m.id}">${i + 1}. ${m.title}</a>`).join("") + `<a href="#qs">Your answers</a>`;
+      document.getElementById("qlist").innerHTML = QUESTIONS.map((q) => `<li>${q}</li>`).join("");
+
+      /* Deep link: #m4=nohttps opens that section in that state. */
+      const [hashId, hashState] = location.hash.slice(1).split("=");
+      if (hashState && hashId in state) state[hashId] = hashState;
+
+      function load(frame) {
+        const m = frame.dataset.m;
+        frame.src = `screen.html?m=${m}&s=${state[m]}&mode=${mode}`;
+      }
+      function sizeToContent(frame) {
+        try {
+          const doc = frame.contentDocument;
+          const min = frame.width === "390" ? 844 : 900;
+          frame.style.height = "auto";
+          frame.height = Math.max(min, doc.documentElement.scrollHeight);
+        } catch {
+          /* Opened from file:// with cross-frame access blocked; keep the default height. */
+        }
+      }
+      function fit() {
+        document.querySelectorAll(".frames").forEach((row) => {
+          const z = size === "full" ? 1 : Math.min(1, row.clientWidth / (1442 + 392 + 32));
+          [...row.children].forEach((w) => (w.style.zoom = z));
+          row.style.overflowX = size === "full" ? "auto" : "visible";
+        });
+      }
+      function wire(el, fn) {
+        el.addEventListener("click", (e) => {
+          const b = e.target.closest("button[data-v]");
+          if (!b) return;
+          [...el.children].forEach((c) => c.setAttribute("aria-pressed", String(c === b)));
+          fn(b.dataset.v);
+        });
+      }
+
+      document.querySelectorAll(".frame").forEach((f) => {
+        f.addEventListener("load", () => sizeToContent(f));
+        load(f);
+      });
+      document.querySelectorAll(".jds-segmented[data-target]").forEach((el) => {
+        if (state[el.dataset.target] !== undefined)
+          [...el.children].forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.v === state[el.dataset.target])));
+        wire(el, (v) => {
+          state[el.dataset.target] = v;
+          document.querySelectorAll(`.frame[data-m="${el.dataset.target}"]`).forEach(load);
+        });
+      });
+      wire(document.getElementById("modeSeg"), (v) => {
+        mode = v;
+        document.documentElement.dataset.colorMode = v;
+        document.querySelectorAll(".frame").forEach(load);
+      });
+      wire(document.getElementById("sizeSeg"), (v) => {
+        size = v;
+        fit();
+      });
+      addEventListener("resize", fit);
+      fit();
+    </script>
+  </body>
+</html>

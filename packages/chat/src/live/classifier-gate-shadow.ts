@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import {
+  beginChatAttempt,
+  chatAttemptObservationEnabled,
+  observeChatAttempt,
+  registerChatAttemptSites
+} from "./chat-attempt-observer.js";
 
 import type { ClassifierHandle } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
@@ -11,6 +17,7 @@ import {
   GATE_LIMITS,
   type GateMode,
   type GateOutcome,
+  type GateRequest,
   type GateSpeed
 } from "./classifier-gate.js";
 import { gateEligibilityProblem, type GateTool } from "./classifier-gate-arguments.js";
@@ -28,6 +35,8 @@ import type { ChatSurface } from "./chat-surface.js";
  * shadow attempt quietly. Nothing stores message text beyond the already-merged 3.4 record, and a
  * private chat never reaches this file.
  */
+
+registerChatAttemptSites("shadow.start", "shadow.run");
 
 export const SHADOW_OBSERVATION_BUFFER_LIMIT = 200;
 
@@ -218,6 +227,8 @@ export function createClassifierGateShadowRunner(
 
   const runAttempt = async (input: ClassifierGateShadowTurnInput): Promise<void> => {
     const { actorUserId, turnId } = input;
+    const settleObservation = beginChatAttempt("shadow.run", input, input.signal);
+    let observationFailed = false;
     try {
       if (input.signal.aborted) return;
       const mode = await deps.readMode(actorUserId);
@@ -297,7 +308,7 @@ export function createClassifierGateShadowRunner(
           ...(deps.speed ? { speed: deps.speed } : {}),
           now: deps.now
         });
-        const outcome = await gate.evaluate({
+        const request: GateRequest = {
           actorUserId,
           threadId: input.threadId,
           message: input.message,
@@ -309,7 +320,15 @@ export function createClassifierGateShadowRunner(
           // join the turn they informed; the answer line id is its parent.
           turnId,
           parentId: turnId
-        });
+        };
+        const outcome = await (chatAttemptObservationEnabled()
+          ? observeChatAttempt(
+              "classifier.evaluate",
+              () => gate.evaluate(request),
+              input,
+              input.signal
+            )
+          : gate.evaluate(request));
         // Cross-turn cooldown, matching the engine's rule at the runner's scope.
         if (
           outcome.kind === "declined" &&
@@ -324,6 +343,7 @@ export function createClassifierGateShadowRunner(
         deps.tokens.revoke(turnId);
       }
     } catch {
+      observationFailed = true;
       // A mode read, classifier, port or storage failure never reaches chat.
     } finally {
       const turn = pending.get(turnId);
@@ -331,6 +351,7 @@ export function createClassifierGateShadowRunner(
         turn.settled = true;
         maybeReclaim(turnId);
       }
+      settleObservation?.(observationFailed);
     }
   };
 
@@ -484,16 +505,21 @@ export function beginClassifierGateShadowTurn(
   // record, the audit rows and the activity lines share one value. Callers that
   // predate the turn id keep the old mint.
   const turnId = options.turnId ?? randomUUID();
-  runner?.start({
-    actorUserId,
-    threadId: options.threadId,
-    surface,
-    message,
-    turnId,
-    hasAttachment: options.hasAttachment,
-    incognito,
-    signal: options.signal
-  });
+  if (runner) {
+    const input = {
+      actorUserId,
+      threadId: options.threadId,
+      surface,
+      message,
+      turnId,
+      hasAttachment: options.hasAttachment,
+      incognito,
+      signal: options.signal
+    };
+    if (chatAttemptObservationEnabled())
+      observeChatAttempt("shadow.start", () => runner.start(input), input, input.signal);
+    else runner.start(input);
+  }
   let observed = false;
   return {
     noteTool(rawToolName) {

@@ -2,10 +2,56 @@ import { randomUUID } from "node:crypto";
 
 import pg from "pg";
 
-import { getMossDatabaseUrls } from "@moss/db";
+import { getMossDatabaseUrls, managedActorLockKey } from "@moss/db";
 import { deleteUserVaultDir, getVaultBaseDir } from "@moss/vault";
 
 const { Client } = pg;
+
+export type ManagedDeletionPreparation =
+  | { readonly status: "complete"; readonly operationId: string; readonly generation: number }
+  | { readonly status: "pending" | "conflict" };
+
+export interface PrepareManagedDeletion {
+  (input: {
+    readonly userId: string;
+    readonly requestId: string;
+  }): Promise<ManagedDeletionPreparation>;
+}
+
+export class ManagedDeletionError extends Error {
+  readonly code: "managed_cleanup_pending" | "managed_cleanup_conflict";
+  constructor(status: "pending" | "conflict") {
+    super(
+      status === "pending"
+        ? "Recording cleanup is pending; confirm deletion again to continue"
+        : "Recording cleanup needs owner review before deletion can continue"
+    );
+    this.name = "ManagedDeletionError";
+    this.code = status === "pending" ? "managed_cleanup_pending" : "managed_cleanup_conflict";
+  }
+}
+
+/** Bootstrap sees existence only. Managed data never bypasses owning cleanup when injection is missing. */
+async function hasManagedDeletionState(client: pg.Client, userId: string): Promise<boolean> {
+  for (const table of [
+    "app.notes_managed_actors",
+    "app.notes_managed_sources",
+    "app.notes_recording_contributions",
+    "app.memory_recording_receipts"
+  ] as const) {
+    const installed = await client.query<{ installed: boolean }>(
+      "SELECT to_regclass($1) IS NOT NULL AS installed",
+      [table]
+    );
+    if (!installed.rows[0]?.installed) continue;
+    const result = await client.query<{ present: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM ${table} WHERE owner_user_id = $1::uuid) AS present`,
+      [userId]
+    );
+    if (result.rows[0]?.present) return true;
+  }
+  return false;
+}
 
 export interface DeleteUserDataOptions {
   readonly actorUserId?: string | null;
@@ -15,6 +61,7 @@ export interface DeleteUserDataOptions {
   readonly dryRun?: boolean;
   readonly requestId?: string;
   readonly userId: string;
+  readonly prepareManagedDeletion?: PrepareManagedDeletion;
   /**
    * Module-owned deletion tables derived from `dataLifecycle.deletion.tables`
    * (#801 Phase A). API callers get this from the composition root
@@ -193,6 +240,25 @@ export async function deleteUserData(
       throw new LastActiveAdminError();
     }
 
+    if (options.prepareManagedDeletion) {
+      // A missing account has no remaining source authority to prepare; retain idempotent CLI behavior.
+      if (adminGuard.rows[0]?.target_is_admin != null) {
+        const prepared = await options.prepareManagedDeletion({
+          userId: options.userId,
+          requestId: options.requestId ?? `maintenance:user-delete:${randomUUID()}`
+        });
+        if (prepared.status !== "complete") throw new ManagedDeletionError(prepared.status);
+      }
+    } else {
+      // Serialize the zero-row probe through cascade against a first managed publisher.
+      // Never hold this lock across an injected cleanup callback, which owns its admission.
+      await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [
+        managedActorLockKey(options.userId)
+      ]);
+      if (await hasManagedDeletionState(client, options.userId))
+        throw new ManagedDeletionError("pending");
+    }
+
     const auditEventId = randomUUID();
     await client.query(
       `
@@ -235,9 +301,10 @@ export async function deleteUserData(
     await client.query("COMMIT");
 
     // Delete the user's vault filesystem directory AFTER the DB commit.
-    // Ordering rationale: if the DB delete fails the vault is untouched; if
-    // the vault rm fails the user rows are already gone (effectively deleted)
-    // and the orphan can be retried manually without risk of data inconsistency.
+    // Managed contribution cleanup may already have committed before a failed DB
+    // cascade; its persisted progress resumes on a freshly confirmed retry. The
+    // private subtree is removed only after cascade commits. A failed subtree
+    // removal leaves an orphan which the operator can remove idempotently.
     // The operation is idempotent — no error if the directory does not exist.
     await deleteUserVaultDir(getVaultBaseDir(), options.userId);
 

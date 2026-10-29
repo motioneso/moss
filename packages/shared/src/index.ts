@@ -93,6 +93,7 @@ export * from "./meeting-history-api.js";
 
 export * from "./meeting-capture-api.js";
 
+export * from "./heartbeat-api.js";
 export * from "./scheduled-tasks-api.js";
 export * from "./responsibility-agreement.js";
 export * from "./briefing-email-evidence.js";
@@ -104,3 +105,35 @@ export * from "./visual-chat.js";
 export * from "./visual-chat-catalog.js";
 
 export * from "./sports-results-api.js";
+
+export * from "./meeting-recording-api.js";
+
+export type {
+  RecordingNoteSource,
+  ManagedNoteActorExport,
+  ManagedNoteSourceExport,
+  ManagedNotesExportSection,
+  ManagedNoteBindingExport,
+  ManagedNoteContributionExport,
+  ManagedNoteProposalExport,
+  ManagedNoteOperationExport,
+  ManagedNoteProposalStateExport,
+  ManagedNoteOperationStateExport,
+  ManagedNoteOperationLegExport,
+  ManagedNoteDestinationExport,
+  RecordingNoteDestinationChoice,
+  RecordingNoteCandidate,
+  RecordingNoteInventory,
+  RecordingNoteDestination,
+  RecordingNoteReceipt,
+  PrepareRecordingNoteInput,
+  RecordingNoteProposal,
+  ApplyRecordingNoteInput,
+  ReviseRecordingNoteInput,
+  RecordingNoteResult
+} from "./note-contribution-api.js";
+
+export * from "./recording-memory-api.js";
+
+export * from "./module-notice-api.js";
+export * from "./heartbeat-source-api.js";

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sensitive meeting password card · Moss design review</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-chat.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/texture.css" />
+    <link rel="stylesheet" href="mockups.css" />
+    <script defer src="mockups.js"></script>
+  </head>
+  <body class="lock-index">
+    <header>
+      <h1>Sensitive meeting · chat</h1>
+      <div class="review-theme">
+        <button class="jds-btn jds-btn--quiet" data-theme-toggle>Dark</button
+        ><button class="jds-btn jds-btn--quiet" data-park-toggle>Forest</button>
+      </div>
+    </header>
+    <main>
+      <ol>
+        <li><a class="jds-btn jds-btn--link" href="password.html">Password</a></li>
+        <li><a class="jds-btn jds-btn--link" href="chooser.html">Chooser</a></li>
+        <li><a class="jds-btn jds-btn--link" href="wrong-password.html">Wrong password</a></li>
+        <li><a class="jds-btn jds-btn--link" href="retry-later.html">Retry later</a></li>
+        <li><a class="jds-btn jds-btn--link" href="cancelled.html">Cancelled</a></li>
+        <li><a class="jds-btn jds-btn--link" href="unavailable.html">Unavailable</a></li>
+        <li><a class="jds-btn jds-btn--link" href="password-setup.html">Set app password</a></li>
+        <li><a class="jds-btn jds-btn--link" href="unlocked.html">Unlocked</a></li>
+        <li><a class="jds-btn jds-btn--link" href="expired.html">Expired</a></li>
+        <li><a class="jds-btn jds-btn--link" href="locked.html">Locked now</a></li>
+        <li><a class="jds-btn jds-btn--link" href="phone.html">Phone drawer</a></li>
+      </ol>
+      <section class="lock-review-pair" aria-label="Password card at desktop and phone widths">
+        <iframe title="Desktop password card" src="password.html"></iframe
+        ><iframe class="lock-phone-frame" title="Phone password drawer" src="phone.html"></iframe>
+      </section>
+    </main>
+  </body>
+</html>

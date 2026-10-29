@@ -1,3 +1,4 @@
+import { recordingInterpretation } from "../fixtures/meeting-recording.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -504,6 +505,7 @@ describe("completed recording imports through real owner DB/vault paths", () => 
           modelRoute: "synthetic-summary",
           content: {
             overview: "Recording follow-up",
+            recording: recordingInterpretation("Recording follow-up"),
             decisions: [],
             openQuestions: [],
             warnings: [],

@@ -6,6 +6,7 @@ import { createRealTmuxIo } from "@moss/ai";
 import { describe, expect, it } from "vitest";
 import {
   ConstrainedCodexUnsupportedError,
+  CONSTRAINED_CODEX_VERSION,
   constrainedCodexCatalog,
   findConstrainedCodexExecutable,
   parseConstrainedCodexOutput,
@@ -112,6 +113,10 @@ describe.skipIf(!executablePath)("pinned native Codex profile", () => {
       await mkdir(bin, { recursive: true });
       await mkdir(join(packages, "codex", "bin"), { recursive: true });
       await mkdir(nativeDir, { recursive: true });
+      await writeFile(
+        join(packages, "codex", "package.json"),
+        JSON.stringify({ name: "@openai/codex", version: CONSTRAINED_CODEX_VERSION })
+      );
       await writeFile(
         launcher,
         "#!/usr/bin/env node\nthrow new Error('must not execute launcher');\n"

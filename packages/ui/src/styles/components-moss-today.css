@@ -289,6 +289,10 @@
 .jds-menu--content {
   width: 100%;
 }
+.jds-menu--chip .jds-menu__list {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+}
 .jds-menu__trigger--content {
   width: 100%;
   height: auto;

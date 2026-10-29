@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { notesMonitorProvider } from "./monitor-provider.js";
+import { collectManagedNotesExportSection } from "./managed-source-export.js";
 import {
   notesCreateInputSchema,
   notesDeleteInputSchema,
@@ -49,9 +50,20 @@ export const notesModuleManifest = {
     supportsUserDisable: true
   },
   database: {
-    migrations: [],
+    migrations: [
+      "sql/0336_notes_managed_source_lifecycle.sql",
+      "sql/0337_notes_recording_contributions.sql",
+      "sql/0340_notes_recording_cleanup.sql"
+    ],
     migrationDirectories: [notesModuleSqlMigrationDirectory],
-    ownedTables: []
+    ownedTables: [
+      "app.notes_managed_actors",
+      "app.notes_managed_sources",
+      "app.notes_destination_bindings",
+      "app.notes_recording_contributions",
+      "app.notes_contribution_proposals",
+      "app.notes_contribution_operations"
+    ]
   },
   permissions: [
     {
@@ -193,6 +205,11 @@ export const notesModuleManifest = {
   ],
   features: [
     {
+      id: "notes.recording_source_export",
+      description:
+        "Your account export includes saved recording-source status, note destination labels and contribution review, change and undo receipts. Recording filing controls are not yet available."
+    },
+    {
       id: "notes.vault_sync",
       description:
         "Sync Markdown notes from the folder in Settings, Connections while keeping files on disk. " +
@@ -236,9 +253,44 @@ export const notesModuleManifest = {
     {
       id: "notes.assistant_authoring",
       description:
-        "Create, edit, or delete Markdown notes in your linked folder. Overwrite is named in approval. " +
-        "Deletion always asks, even with trusted note changes or Auto-approve, with red Approve and a warning that there is no trash or undo."
+        "Create, edit or delete Markdown notes in your linked folder. Overwrite is disclosed. Deletion always asks, including trusted changes and Auto-approve, with red Approve and a warning that there is no trash or undo."
+    },
+    {
+      id: "notes.coordinated_writes",
+      description:
+        "Concurrent Moss edits preserve current note text. Recording deletion removes exact source blocks; changed blocks or unavailable folders keep deletion pending. Account exports include cleanup progress.",
+      errors: [
+        {
+          code: "notes.write_conflict",
+          class: "transient",
+          description: "The note changed while Moss was preparing to save it."
+        }
+      ],
+      remediations: [
+        {
+          id: "notes.review_current_note",
+          description:
+            "Review the current note in your linked folder, then ask Moss to retry the intended change.",
+          path: "/settings?section=sources"
+        }
+      ]
     }
   ],
+  dataLifecycle: {
+    exportSections: [
+      { key: "notes", displayName: "Notes", collect: collectManagedNotesExportSection }
+    ],
+    deletion: {
+      strategy: "cascade",
+      tables: [
+        { table: "app.notes_contribution_operations", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_contribution_proposals", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_recording_contributions", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_destination_bindings", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_managed_sources", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.notes_managed_actors", countPredicate: "owner_user_id = $1::uuid" }
+      ]
+    }
+  },
   proactiveMonitor: notesMonitorProvider
 } satisfies MossModuleManifest;

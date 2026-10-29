@@ -41,3 +41,8 @@ export * from "./source-context/runtime.js";
 
 export * from "./outlook-calendar-jobs.js";
 export * from "./outlook-calendar-availability.js";
+export * from "./work-mail/types.js";
+export * from "./work-mail/cursor.js";
+export * from "./work-mail/entry.js";
+export * from "./work-mail/judge.js";
+export * from "./work-mail/pipeline.js";

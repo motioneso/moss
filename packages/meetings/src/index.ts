@@ -43,3 +43,19 @@ export * from "./recording-voice-enablement.js";
 export * from "./recording-voice-bundle.js";
 
 export * from "./recording-voice-routes.js";
+
+export * from "./recording-types.js";
+export * from "./recording-metadata.js";
+export * from "./manual-entry-service.js";
+
+export * from "./output-guidance.js";
+
+export {
+  MeetingDeletionService,
+  MeetingCleanupError,
+  type MeetingDeletionPort
+} from "./deletion-service.js";
+
+export * from "./recording-notice-jobs.js";
+
+export { recordingSideReviewVersion } from "./recording-notice-source.js";

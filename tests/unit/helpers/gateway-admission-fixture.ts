@@ -89,14 +89,16 @@ export function admissionFixture(
   tools: readonly ModuleAssistantToolManifest[],
   options: {
     threadId?: string | null;
+    actorUserId?: string;
     deps?: Partial<AssistantToolGatewayDependencies>;
   } = {}
 ) {
+  const actorUserId = options.actorUserId ?? "actor-a";
   const state = { tainted: false, held: false };
   const events: string[] = [];
   const recordAdmission = vi.fn<ConversationProvenancePort["recordAdmission"]>(
     async (actor, thread, path) => {
-      if (actor !== "actor-a" || thread !== "thread-a" || state.held) {
+      if (actor !== actorUserId || thread !== "thread-a" || state.held) {
         throw new Error("private admission storage failure");
       }
       events.push(`admit:${path}`);
@@ -108,7 +110,7 @@ export function admissionFixture(
     thread,
     callback
   ) => {
-    if (actor !== "actor-a" || thread !== "thread-a" || state.held || state.tainted) {
+    if (actor !== actorUserId || thread !== "thread-a" || state.held || state.tainted) {
       return { kind: "confirm" };
     }
     events.push("claim");
@@ -170,9 +172,9 @@ export function admissionFixture(
   };
   const gateway = new AssistantToolGateway(deps);
   const token = tokens.mint({
-    actorUserId: "actor-a",
+    actorUserId,
     threadId: options.threadId === undefined ? "thread-a" : options.threadId,
-    chatSessionId: "actor-a:chat",
+    chatSessionId: `${actorUserId}:chat`,
     allowedToolNames: null
   });
   return {

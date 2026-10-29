@@ -119,7 +119,7 @@ importers:
         version: 8.60.1(eslint@10.4.1)(typescript@6.0.3)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4))
+        version: 4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)(yaml@2.9.1))
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -282,13 +282,13 @@ importers:
         version: 19.2.3(@types/react@19.2.17)
       '@vitejs/plugin-react':
         specifier: ^5.0.0
-        version: 5.2.0(vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4))
+        version: 5.2.0(vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1))
       agentation:
         specifier: ^3.0.2
         version: 3.0.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       vite:
         specifier: ^7.0.0
-        version: 7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)
+        version: 7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
 
   apps/worker:
     dependencies:
@@ -379,7 +379,7 @@ importers:
         version: 8.20.0
       better-auth:
         specifier: ^1.6.14
-        version: 1.6.14(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)))
+        version: 1.6.14(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1)))
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
@@ -406,7 +406,7 @@ importers:
         version: link:../shared
       better-auth:
         specifier: ^1.6.14
-        version: 1.6.14(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)))
+        version: 1.6.14(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1)))
       kysely:
         specifier: ^0.29.2
         version: 0.29.2
@@ -734,6 +734,9 @@ importers:
       playwright-core:
         specifier: 1.60.0
         version: 1.60.0
+      yaml:
+        specifier: ^2.8.1
+        version: 2.9.1
     devDependencies:
       '@types/mailparser':
         specifier: ^3.4.6
@@ -1207,6 +1210,9 @@ importers:
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
       pg-boss:
         specifier: ^12.18.2
         version: 12.18.2
@@ -1590,6 +1596,9 @@ importers:
       '@moss/db':
         specifier: workspace:*
         version: link:../db
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
 
   packages/weather:
     dependencies:
@@ -1774,10 +1783,10 @@ importers:
         version: 19.2.3(@types/react@19.2.17)
       '@vitejs/plugin-react':
         specifier: ^5.0.0
-        version: 5.2.0(vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4))
+        version: 5.2.0(vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1))
       vite:
         specifier: ^7.0.0
-        version: 7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)
+        version: 7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
 
 packages:
 
@@ -4860,6 +4869,7 @@ packages:
 
   opencode-ai@1.18.29:
     resolution: {integrity: sha512-syIDVwlrYTgTOXzZe9SkInJWethbq6l3SNC762UeXyO0a9V0wGfd+U4yACvppwNBnhIsl0j2QPYYCyLpNaSomg==}
+    cpu: [arm64, x64]
     os: [darwin, linux, win32]
     hasBin: true
 
@@ -5800,6 +5810,11 @@ packages:
   yallist@5.0.0:
     resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
     engines: {node: '>=18'}
+
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
 
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
@@ -7163,7 +7178,7 @@ snapshots:
 
   '@ungap/structured-clone@1.3.1': {}
 
-  '@vitejs/plugin-react@5.2.0(vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4))':
+  '@vitejs/plugin-react@5.2.0(vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
@@ -7171,7 +7186,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-rc.3
       '@types/babel__core': 7.20.5
       react-refresh: 0.18.0
-      vite: 7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)
+      vite: 7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -7184,21 +7199,21 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4))':
+  '@vitest/mocker@4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)(yaml@2.9.1))':
     dependencies:
       '@vitest/spy': 4.1.8
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)
+      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)(yaml@2.9.1)
 
-  '@vitest/mocker@4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4))':
+  '@vitest/mocker@4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1))':
     dependencies:
       '@vitest/spy': 4.1.8
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)
+      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1)
     optional: true
 
   '@vitest/pretty-format@4.1.8':
@@ -7334,7 +7349,7 @@ snapshots:
 
   baseline-browser-mapping@2.10.34: {}
 
-  better-auth@1.6.14(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4))):
+  better-auth@1.6.14(pg@8.21.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1))):
     dependencies:
       '@better-auth/core': 1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/drizzle-adapter': 1.6.14(@better-auth/core@1.6.14(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.1)
@@ -7357,7 +7372,7 @@ snapshots:
       pg: 8.21.0
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-      vitest: 4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4))
+      vitest: 4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1))
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -9698,7 +9713,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4):
+  vite@7.3.5(@types/node@25.9.2)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1):
     dependencies:
       esbuild: 0.27.7
       fdir: 6.5.0(picomatch@4.0.4)
@@ -9711,8 +9726,9 @@ snapshots:
       fsevents: 2.3.3
       lightningcss: 1.32.0
       tsx: 4.22.4
+      yaml: 2.9.1
 
-  vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4):
+  vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -9724,8 +9740,9 @@ snapshots:
       esbuild: 0.25.12
       fsevents: 2.3.3
       tsx: 4.22.4
+      yaml: 2.9.1
 
-  vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4):
+  vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -9737,12 +9754,13 @@ snapshots:
       esbuild: 0.28.0
       fsevents: 2.3.3
       tsx: 4.22.4
+      yaml: 2.9.1
     optional: true
 
-  vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)):
+  vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4))
+      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)(yaml@2.9.1))
       '@vitest/pretty-format': 4.1.8
       '@vitest/runner': 4.1.8
       '@vitest/snapshot': 4.1.8
@@ -9759,7 +9777,7 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)
+      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.25.12)(tsx@4.22.4)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 25.9.2
@@ -9767,10 +9785,10 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)):
+  vitest@4.1.8(@types/node@25.9.2)(jsdom@30.0.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4))
+      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1))
       '@vitest/pretty-format': 4.1.8
       '@vitest/runner': 4.1.8
       '@vitest/snapshot': 4.1.8
@@ -9787,7 +9805,7 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)
+      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 25.9.2
@@ -9863,6 +9881,8 @@ snapshots:
   yallist@3.1.1: {}
 
   yallist@5.0.0: {}
+
+  yaml@2.9.1: {}
 
   yocto-queue@0.1.0: {}
 

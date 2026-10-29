@@ -28,11 +28,13 @@ import {
   getEmbeddingProviderConfig
 } from "./embedding-provider-config.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
+import { RecordingFactConflictError } from "./recording-fact-mutations.js";
 
 const PENDING_CANDIDATE_LIMIT = 5;
 
 export interface MemoryDashboardRouteDependencies {
   readonly dataContext: DataContextRunner;
+  readonly graphRepository?: MemoryGraphRepository;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
 }
 
@@ -40,7 +42,7 @@ export function registerMemoryDashboardRoutes(
   server: FastifyInstance,
   dependencies: MemoryDashboardRouteDependencies
 ): void {
-  const graphRepo = new MemoryGraphRepository();
+  const graphRepo = dependencies.graphRepository ?? new MemoryGraphRepository();
   const candidatesRepo = new MemoryCandidatesRepository();
 
   server.get(
@@ -262,6 +264,9 @@ async function createDashboardService(
 }
 
 function handleDashboardRouteError(error: unknown, reply: FastifyReply) {
+  if (error instanceof RecordingFactConflictError) {
+    return reply.code(409).send({ error: error.message });
+  }
   if (error instanceof Error && error.message === "Unauthorized") {
     return reply.code(401).send({ error: "Unauthorized" });
   }

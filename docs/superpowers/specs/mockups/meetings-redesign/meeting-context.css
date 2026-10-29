@@ -1,0 +1,156 @@
+/* Context and speaker-editing layout, using the existing primitive controls. */
+.meeting-heading {
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.attendee-row,
+.attendee-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.attendee-row {
+  margin-top: var(--space-1);
+  gap: var(--space-3);
+}
+.attendee-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.attendee-chip,
+.attendee-row > .jds-btn {
+  font-size: var(--text-xs);
+}
+.voice-mapping {
+  font-size: var(--text-xs);
+}
+.voice-mapping summary {
+  cursor: pointer;
+  color: var(--accent-fg);
+  width: fit-content;
+  padding-block: var(--space-2);
+}
+.voice-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  padding-block: var(--space-3);
+}
+.voice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.voice-row select {
+  min-width: 140px;
+}
+.voice-suggestion {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.voice-suggestion a,
+.context-source {
+  color: var(--accent-fg);
+  text-underline-offset: 3px;
+}
+.meeting-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  border-block: 1px solid var(--border);
+  padding-block: var(--space-3);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+.meeting-context > div {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+.meeting-context h2 {
+  font-size: var(--text-sm);
+}
+.meeting-context p,
+.meeting-context ul {
+  margin: 0;
+}
+.meeting-context ul {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+.meeting-context li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.meeting-context li .context-source {
+  margin-top: 0;
+}
+.context-source {
+  display: block;
+  width: fit-content;
+  margin-top: var(--space-2);
+}
+.meeting-context > div > .context-source {
+  margin-top: 0;
+}
+.transcript-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: var(--space-2);
+  align-items: start;
+}
+.line-correct {
+  margin-top: var(--space-2);
+}
+.fixture-dialog input,
+.fixture-dialog select {
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+}
+.fixture-dialog .jds-dialog__foot {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.split-fields {
+  display: grid;
+  gap: var(--space-3);
+}
+.source-dialog .jds-dialog__body {
+  padding-top: var(--space-6);
+}
+.source-dialog h2 {
+  font-size: var(--text-xl);
+}
+.source-dialog h3 {
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+.source-meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+@container (max-width: 680px) {
+  .meeting-context {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+  .voice-row {
+    width: 100%;
+  }
+  .voice-row > select {
+    flex: 1;
+    min-width: 0;
+  }
+}

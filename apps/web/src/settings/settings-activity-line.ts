@@ -32,6 +32,7 @@ export const STRUCTURED_ACTIVITY_TITLES: Record<string, string> = {
   "structured.briefings": "Prepared a briefing",
   "structured.connectors.email-sort": "Sorted new email",
   "structured.connectors.email-extract": "Checked new email for follow-ups",
+  "structured.connectors.work-mail": "Checked work mail for note context",
   "structured.commitments.email-judgement": "Checked what new email asks of you",
   "structured.news": "Ranked your news stories",
   "structured.sports": "Ranked your sports stories",

@@ -288,7 +288,15 @@ export const deleteMyAccountRouteSchema = {
       additionalProperties: false,
       required: ["code"],
       properties: {
-        code: { type: "string", enum: ["bootstrap_owner", "last_admin"] }
+        code: {
+          type: "string",
+          enum: [
+            "bootstrap_owner",
+            "last_admin",
+            "managed_cleanup_pending",
+            "managed_cleanup_conflict"
+          ]
+        }
       }
     },
     429: errorResponseSchema

@@ -253,10 +253,10 @@ function noInternalIds(result: Awaited<ReturnType<RouteApprovalPresentation>>) {
 }
 
 describe("Meetings authored action disclosures", () => {
-  it("covers all seven callable mutations and preserves blocked routes", () => {
+  it("covers all eight callable mutations and preserves blocked routes", () => {
     const routes = meetingsModuleManifest.routes;
     const writable = routes.filter((route) => ["write", "destructive"].includes(route.chat.access));
-    expect(writable).toHaveLength(7);
+    expect(writable).toHaveLength(8);
     for (const route of writable) {
       expect(route.chat).toHaveProperty("title", expect.any(String));
       expect(route.chat).toHaveProperty("presentation", expect.any(Function));
@@ -264,6 +264,8 @@ describe("Meetings authored action disclosures", () => {
     expect(
       routes.filter((route) => route.chat.access === "blocked").map((route) => route.path)
     ).toEqual([
+      "/api/meetings/records/:id/recording/type",
+      "/api/meetings/manual-transcripts",
       "/api/meetings/recording-uploads",
       "/api/meetings/recording-uploads/:id",
       "/api/meetings/recording-uploads/:id/:kind/:index",
@@ -651,6 +653,8 @@ describe("Meetings authored action disclosures", () => {
     const result = await deleteMeetingPresentation(db, call(), ctx);
     expect(result?.target).toBe(meeting.title);
     expect(result?.fields[0]?.value).toContain("linked Moss chats");
+    expect(result?.fields[0]?.value).toContain("source-linked note contributions");
+    expect(result?.fields[0]?.value).toContain("unsupported recording memories");
     expect(result?.version).toMatch(/^[a-f0-9]{64}$/);
     noInternalIds(result);
   });
