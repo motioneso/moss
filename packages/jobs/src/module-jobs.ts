@@ -41,10 +41,13 @@ export function assertModuleControlPayload(
 
 export async function sendModuleControl(
   boss: PgBoss,
-  payload: ModuleControlPayload
+  payload: ModuleControlPayload,
+  options?: Pick<SendOptions, "startAfter" | "singletonKey">
 ): Promise<string | null> {
   assertModuleControlPayload(payload);
-  return boss.send(PLATFORM_MODULE_CONTROL_QUEUE, payload);
+  return options === undefined
+    ? boss.send(PLATFORM_MODULE_CONTROL_QUEUE, payload)
+    : boss.send(PLATFORM_MODULE_CONTROL_QUEUE, payload, options);
 }
 
 export function assertModuleJobPayload(
