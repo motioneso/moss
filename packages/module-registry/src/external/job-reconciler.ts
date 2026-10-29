@@ -22,6 +22,18 @@ export class ExternalModuleJobReconciler {
       readonly reservedQueueNames?: ReadonlySet<string>;
       readonly isModuleEnabled: (moduleId: string) => Promise<boolean>;
       readonly listActiveUserIds: (moduleId: string) => Promise<readonly string[]>;
+      /** True only when an admin disabled the module. Hash drift and a missing discovery are not. */
+      readonly isModuleDisabledByAdmin?: (moduleId: string) => Promise<boolean>;
+      /** Cancels waiting jobs. Absent means lifecycle changes leave queued rows alone. */
+      readonly jobSweep?: {
+        readonly listPendingActors: (moduleId: string) => Promise<readonly string[]>;
+        readonly cancel: (input: {
+          readonly moduleId: string;
+          readonly actorUserId?: string;
+        }) => Promise<{ readonly cancelled: number; readonly leftActive: number }>;
+        /** Schedules a later reconcile that repeats the sweep for rows that were running. */
+        readonly scheduleFollowUp: (moduleId: string) => Promise<void>;
+      };
       /** The actor's effective timezone, for schedules that declare none. */
       readonly resolveActorTimezone?: (actorUserId: string) => Promise<string>;
       readonly registerWorker?: (
@@ -105,6 +117,11 @@ export class ExternalModuleJobReconciler {
     }
     if (!(await this.deps.isModuleEnabled(moduleId))) {
       await this.stopModule(moduleId);
+      // Only an explicit admin disable cancels waiting jobs. Hash drift and a missing
+      // discovery are transient and keep their rows.
+      if (await this.deps.isModuleDisabledByAdmin?.(moduleId)) {
+        await this.sweepDisabledModule(moduleId);
+      }
       return;
     }
     const queues = module.manifest.worker?.queues ?? [];
@@ -144,6 +161,7 @@ export class ExternalModuleJobReconciler {
 
     const desiredScheduleKeys = new Set<string>();
     const users = await this.deps.listActiveUserIds(moduleId);
+    await this.sweepActorsWithoutAccess(moduleId, users);
     const queueByName = new Map(queues.map((queue) => [queue.name, queue]));
     for (const schedule of module.manifest.worker?.schedules ?? []) {
       const queue = queueByName.get(schedule.queue);
@@ -220,6 +238,34 @@ export class ExternalModuleJobReconciler {
     for (const [moduleId, registrations] of this.registrations) {
       for (const queueName of registrations.keys()) await this.deps.boss.offWork(queueName);
       this.registrations.delete(moduleId);
+    }
+  }
+
+  private async sweepDisabledModule(moduleId: string): Promise<void> {
+    const sweep = this.deps.jobSweep;
+    if (!sweep) return;
+    const result = await sweep.cancel({ moduleId });
+    if (result.leftActive > 0) await sweep.scheduleFollowUp(moduleId);
+  }
+
+  /** Cancels waiting rows for actors who lost access, one actor at a time. */
+  private async sweepActorsWithoutAccess(
+    moduleId: string,
+    activeUserIds: readonly string[]
+  ): Promise<void> {
+    const sweep = this.deps.jobSweep;
+    if (!sweep) return;
+    const active = new Set(activeUserIds);
+    try {
+      for (const actorUserId of await sweep.listPendingActors(moduleId)) {
+        if (!active.has(actorUserId)) await sweep.cancel({ moduleId, actorUserId });
+      }
+    } catch (error) {
+      // A failed cleanup must not stop the module for everyone; the next pass retries it.
+      this.deps.logger?.warn(
+        { moduleId, errorName: error instanceof Error ? error.name : "Error" },
+        "module job access-loss sweep failed"
+      );
     }
   }
 

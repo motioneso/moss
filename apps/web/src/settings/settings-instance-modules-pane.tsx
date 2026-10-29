@@ -44,7 +44,7 @@ export function registryIndexIds(rows: readonly ModuleRegistryRowDto[]): Readonl
 
 export function InstanceModulesPane() {
   const queryClient = useQueryClient();
-  const { toast } = useFeedback();
+  const { toast, confirm } = useFeedback();
   const assistantName = useAssistantName();
   const modulesQuery = useQuery({
     queryKey: queryKeys.settings.adminModules,
@@ -92,6 +92,24 @@ export function InstanceModulesPane() {
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
   const external = externalModulesQuery.data;
+  // Turning a module off cancels its waiting background jobs for good, so the admin confirms.
+  const requestExternalEnabled = (id: string, enabled: boolean) => {
+    if (enabled) {
+      setExternalEnabled.mutate({ id, enabled });
+      return;
+    }
+    const name = external?.modules.find((module) => module.id === id)?.name ?? "this module";
+    confirm({
+      title: `Disable ${name}?`,
+      description:
+        "Background jobs that are waiting to run are cancelled. Jobs already running can " +
+        "finish. Turning the module back on does not bring cancelled jobs back, but its " +
+        "regular schedule starts again.",
+      confirmLabel: "Disable",
+      danger: true,
+      onConfirm: () => setExternalEnabled.mutate({ id, enabled })
+    });
+  };
   // Only optional modules are shown — required ones are always on and can't be
   // toggled, so there's nothing for the admin to do with them.
   const modules = (modulesQuery.data?.modules ?? []).filter((module) => !module.required);
@@ -135,7 +153,7 @@ export function InstanceModulesPane() {
         )}
         <ModuleRegistrySection
           externalModules={external?.modules}
-          onSetEnabled={(id, enabled) => setExternalEnabled.mutate({ id, enabled })}
+          onSetEnabled={requestExternalEnabled}
           settingEnabledPending={setExternalEnabled.isPending}
         />
       </Group>
@@ -187,9 +205,7 @@ export function InstanceModulesPane() {
                         ariaLabel={`Enable ${module.name}`}
                         checked={module.status === "enabled"}
                         disabled={setExternalEnabled.isPending}
-                        onChange={(value) =>
-                          setExternalEnabled.mutate({ id: module.id, enabled: value })
-                        }
+                        onChange={(value) => requestExternalEnabled(module.id, value)}
                       />
                     }
                   />
