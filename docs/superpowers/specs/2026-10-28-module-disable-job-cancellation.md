@@ -1,10 +1,10 @@
 # Module disable: pending job cancellation
 
-Status: Draft (2026-10-28), awaiting Ben's approval
+Status: Approved (2026-10-28). Ben ruled yes on fork 1 and yes on fork 4. Built in #3735.
 
 Issue: #3735. Follow-up to #3715 (`docs/superpowers/specs/2026-10-25-module-job-enqueue-design.md`),
 which kept lifecycle behavior unchanged on purpose. This spec adds a policy only. No code ships
-before approval.
+before approval. Corrections found while building are marked "Build note".
 
 ## Problem
 
@@ -25,22 +25,22 @@ chain can resume without any user action.
 
 Checked against the tree at `82c49e6a7`.
 
-| Fact                                                                                                                                                                                         | Evidence                                                                                                                                                                       |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Admin disable writes status `disabled`, then sends a `reconcile` control message for the module                                                                                              | `packages/settings/src/routes-modules.ts:240-262`; `apps/api/src/server.ts:762-764`                                                                                            |
-| Reconcile of a module that is not enabled calls `stopModule` and returns                                                                                                                     | `packages/module-registry/src/external/job-reconciler.ts:107-110`                                                                                                              |
-| `stopModule` removes workers and schedules. It never touches job rows                                                                                                                        | `job-reconciler.ts:226-237`                                                                                                                                                    |
-| "Enabled" in the reconciler is false for a hash mismatch or a missing discovery too, not only for an admin disable                                                                           | `apps/worker/src/worker-module-gate.ts:14-33`                                                                                                                                  |
-| Uninstall and a dropped queue already delete the queue and its rows                                                                                                                          | `job-reconciler.ts:137-143`, `:207-216`                                                                                                                                        |
-| User deactivation, reactivation and deletion send a per-user reconcile, which runs a full pass. The pass only drops that user's schedules because the user falls out of the active-user list | `packages/settings/src/routes.ts:584`, `:701`; `me-account-routes.ts:207`; `job-reconciler.ts:79-82`; `packages/settings/sql/0188_list_active_external_module_users_draft.sql` |
-| Job envelope is `{actorUserId, moduleId, jobKind, manifestHash, params?}` and the queue name starts with `<moduleId>.`                                                                       | `packages/jobs/src/module-jobs.ts:58-76`                                                                                                                                       |
-| Module ids contain no dot (`[a-z0-9-]`), so the `<moduleId>.` prefix is unambiguous                                                                                                          | `module-jobs.ts:31`                                                                                                                                                            |
-| Trust gate refuses `not-active`, `not-discovered`, `not-enabled` and `hash-mismatch`. The queue handler turns a refusal into a thrown error, so the row retries then fails                   | `apps/worker/src/external-module-invoke.ts:159-194`; `external-module-job-handler.ts:237-239`                                                                                  |
-| The gate runs once, at the start of a run. A running job is not re-checked                                                                                                                   | same files                                                                                                                                                                     |
-| `boss.cancel(name, ids)` moves rows with state below `completed` (created, retry, active) to `cancelled`. It does not stop running code                                                      | `pg-boss@12.18.2 dist/plans.js:879-892`                                                                                                                                        |
-| Reconcile jobs are plain `send` with a singleton key. Module queues use the standard policy, so the key does not block a new send after the old row is gone or finished                      | `job-reconciler.ts:196-204`; #3715 spec, seams table                                                                                                                           |
-| A pg-boss send reusing a job id of any existing row inserts nothing (`ON CONFLICT DO NOTHING` on `(name, id)`), including a cancelled row                                                    | #3715 spec, seams table                                                                                                                                                        |
-| `pgboss.job` has no RLS. All access is on the root handle, as in `hasRecentJob`                                                                                                              | `packages/jobs/src/pg-boss.ts:230-247`                                                                                                                                         |
+| Fact                                                                                                                                                                                                                    | Evidence                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Admin disable writes status `disabled`, then sends a `reconcile` control message for the module                                                                                                                         | `packages/settings/src/routes-modules.ts:240-262`; `apps/api/src/server.ts:762-764`                                                                                            |
+| Reconcile of a module that is not enabled calls `stopModule` and returns                                                                                                                                                | `packages/module-registry/src/external/job-reconciler.ts:107-110`                                                                                                              |
+| `stopModule` removes workers and schedules. It never touches job rows                                                                                                                                                   | `job-reconciler.ts:226-237`                                                                                                                                                    |
+| "Enabled" in the reconciler is false for a hash mismatch or a missing discovery too, not only for an admin disable                                                                                                      | `apps/worker/src/worker-module-gate.ts:14-33`                                                                                                                                  |
+| Uninstall and a dropped queue already delete the queue and its rows                                                                                                                                                     | `job-reconciler.ts:137-143`, `:207-216`                                                                                                                                        |
+| User deactivation, reactivation and deletion send a per-user reconcile, which runs a full pass. The pass only drops that user's schedules because the user falls out of the active-user list                            | `packages/settings/src/routes.ts:584`, `:701`; `me-account-routes.ts:207`; `job-reconciler.ts:79-82`; `packages/settings/sql/0188_list_active_external_module_users_draft.sql` |
+| Job envelope is `{actorUserId, moduleId, jobKind, manifestHash, params?}` and the queue name starts with `<moduleId>.`                                                                                                  | `packages/jobs/src/module-jobs.ts:58-76`                                                                                                                                       |
+| Module ids contain no dot (`[a-z0-9-]`), so the `<moduleId>.` prefix is unambiguous                                                                                                                                     | `module-jobs.ts:31`                                                                                                                                                            |
+| Trust gate refuses `not-active`, `not-discovered`, `not-enabled` and `hash-mismatch`. The queue handler turns a refusal into a thrown error, so the row retries then fails                                              | `apps/worker/src/external-module-invoke.ts:159-194`; `external-module-job-handler.ts:237-239`                                                                                  |
+| The gate runs once, at the start of a run. A running job is not re-checked                                                                                                                                              | same files                                                                                                                                                                     |
+| `boss.cancel(name, ids)` moves rows with state below `completed` (created, retry, active) to `cancelled`. Verified by test 2c: it does not stop running code, the handler runs to its end and the row stays `cancelled` | `pg-boss@12.18.2 dist/plans.js:879-892`; `tests/integration/module-job-sweep.test.ts` test 2c                                                                                  |
+| Reconcile jobs are plain `send` with a singleton key. Module queues use the standard policy, so the key does not block a new send after the old row is gone or finished                                                 | `job-reconciler.ts:196-204`; #3715 spec, seams table                                                                                                                           |
+| A pg-boss send reusing a job id of any existing row inserts nothing (`ON CONFLICT DO NOTHING` on `(name, id)`), including a cancelled row                                                                               | #3715 spec, seams table                                                                                                                                                        |
+| `pgboss.job` has no RLS. All access is on the root handle, as in `hasRecentJob`                                                                                                                                         | `packages/jobs/src/pg-boss.ts:230-247`                                                                                                                                         |
 
 ## Job origins
 
@@ -92,6 +92,9 @@ module look disabled to the reconciler.
 The reconciler cannot tell these apart from `isModuleEnabled` alone. The sweep reads the module's
 status row. It runs only when the status is `disabled`. A hash mismatch leaves status `enabled`.
 
+Build note: the automatic package-drift disable also writes status `disabled`, with the reason
+"package changed since it was enabled". The sweep skips that reason, so drift keeps its rows.
+
 ### 2. Which pending states are cancelled
 
 | pg-boss state                      | Meaning                                    | Action           |
@@ -110,14 +113,17 @@ Active jobs are left to finish.
 
 - A running invocation is already past the trust gate, is capped by the queue's timeout (at most
   ten minutes), and runs in its own lane. Cancelling its row would mark it `cancelled` while the
-  code keeps writing, which hides a live run from the record.
+  code keeps writing, which hides a live run from the record (verified, test 2c).
 - Its follow-on enqueues are refused (policy in #3715, step 6), so a chain cannot extend itself.
-- If it fails after the disable, pg-boss moves it to `retry`, where no worker claims it. The
-  sweep therefore runs twice, at disable and again once the longest allowed invocation has
-  passed (11 minutes later, sent as a control message with a start delay). The second pass
-  is idempotent.
+- Build note: stopping the module's worker (`offWork`) waits for the run in progress. The sweep
+  therefore starts after the run ends. A run that fails after the disable has already moved to
+  `retry` by then, and the same sweep cancels it (test 2). While the worker stops, waiting rows
+  are not claimed.
+- A second pass still runs 11 minutes later, as a control message with a start delay, but only
+  when the sweep saw a row still running (a run held by another worker process). The second pass
+  is idempotent and ends the chain, because it finds nothing running.
 - The admin-visible consequence is bounded and stated: work already running when you disable can
-  finish for up to ten minutes.
+  finish for up to ten minutes, and waiting jobs are cancelled once it has.
 
 ### 4. Re-enable
 
@@ -140,8 +146,9 @@ Today access loss removes the user's schedules and lets other pending rows fail 
 after retries. They are never run, so cancelling them early changes the outcome of no job. It
 only changes how soon the row ends and what state it ends in (`cancelled`, not `failed`).
 
-Policy: the same sweep, scoped to the actor, runs from the per-user reconcile when the user is
-no longer in `list_active_external_module_users` for that module.
+Policy: the same sweep, scoped to the actor, runs from the reconcile of an enabled module for
+every actor that has waiting rows but is no longer in `list_active_external_module_users` for
+that module. That covers deactivation, deletion, and a per-user or instance-wide module switch-off.
 
 Edge: a user who is deactivated and then reactivated loses queued work. That also happens today,
 because the gate would have failed those rows. It is stated here so it is not read as a regression.
@@ -149,6 +156,13 @@ because the gate would have failed those rows. It is stated here so it is not re
 ### 6. Concurrency with enqueue
 
 The sweep and a `ctx.jobs.enqueue` call can race. The fix reuses the #3715 lock.
+
+Build note: the per-actor lock alone is not enough. An actor with no waiting row when the sweep
+lists actors is missed, even if that actor's enqueue is mid-flight. Enqueue therefore also holds
+a shared lock on the module (`module-enqueue:<moduleId>`) for its whole check-and-send, and the
+sweep takes that lock exclusively for an instant before it lists actors. That wait lets every
+enqueue that already passed its live check finish, so the sweep sees its row. `ctx.jobs.enqueue`
+is not built yet, so `withModuleEnqueueLock` in `@moss/jobs` is the helper it must use.
 
 - The enqueue step that checks the module is live is repeated inside the per-user advisory lock,
   reading the status row under that lock, before the send.
@@ -163,12 +177,12 @@ The sweep and a `ctx.jobs.enqueue` call can race. The fix reuses the #3715 lock.
 
 The sweep adds no screen and no new error code. Visible changes:
 
-| Where                                  | Change                                                                                                                                                     |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Settings, Modules, disable by an admin | The disable confirmation says waiting background jobs are cancelled, that running ones can finish, and that re-enabling does not bring cancelled ones back |
-| Manual run on a disabled module        | Unchanged. 404 "Not found"                                                                                                                                 |
-| Module-authored enqueue when inactive  | Unchanged. `module_inactive` from #3715                                                                                                                    |
-| Module screens                         | A cancelled chain is shown by the module from its own state (for example "plan stalled, resume"). Declared in that module's manifest `features`            |
+| Where                                  | Change                                                                                                                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Settings, Modules, disable by an admin | Turning an external module off now asks first. The confirmation says waiting background jobs are cancelled, that running ones can finish, and that re-enabling does not bring cancelled ones back |
+| Manual run on a disabled module        | Unchanged. 404 "Not found"                                                                                                                                                                        |
+| Module-authored enqueue when inactive  | Unchanged. `module_inactive` from #3715                                                                                                                                                           |
+| Module screens                         | A cancelled chain is shown by the module from its own state (for example "plan stalled, resume"). Declared in that module's manifest `features`                                                   |
 
 App-map entries to update in the build PR:
 

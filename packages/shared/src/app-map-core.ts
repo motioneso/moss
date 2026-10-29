@@ -263,7 +263,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "modules",
     label: "Modules",
     description:
-      "Enable or disable user-toggleable modules. Every page header shows the page title with the date under it (for example SUN · OCT 4), including a Workshop project and the new-project page. Tasks, Calendar, Wellness, News and Sports also show a settings cog beside the title, which opens that module's own settings here. Today, The Workshop, Notifications and Settings have no cog because they have no settings of their own. A module that declares its own settings page sends its cog to that page, and this Modules list shows it as a link to the page instead of its own switches.",
+      "Enable or disable user-toggleable modules. Every page header shows the page title with the date under it (for example SUN · OCT 4), including a Workshop project and the new-project page. Tasks, Calendar, Wellness, News and Sports also show a settings cog beside the title, which opens that module's own settings here. Today, The Workshop, Notifications and Settings have no cog because they have no settings of their own. A module that declares its own settings page sends its cog to that page, and this Modules list shows it as a link to the page instead of its own switches. Turning an external module off asks an admin to confirm, because waiting background jobs for that module are cancelled for good, jobs already running can finish, and turning the module back on starts its regular schedule again without bringing cancelled jobs back. When a single user loses access to a module, that user's waiting jobs for it are cancelled the same way.",
     path: "/settings?section=modules",
     scope: "user"
   },

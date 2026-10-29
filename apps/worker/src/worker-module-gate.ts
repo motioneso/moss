@@ -1,7 +1,7 @@
 import type { Kysely } from "kysely";
 import type { MossDatabase } from "@moss/db";
 
-import type { ExternalModuleDiscovery } from "@moss/module-registry";
+import { DRIFT_DISABLED_REASON, type ExternalModuleDiscovery } from "@moss/module-registry";
 
 /**
  * Is this module's queue registration live? Extracted from the inline callback passed to
@@ -30,5 +30,20 @@ export function createIsModuleEnabled(deps: {
       state.manifest_hash === module.manifestHash &&
       state.package_hash === module.packageHash
     );
+  };
+}
+
+/**
+ * Did an admin disable this module? True for status `disabled` with any reason except the
+ * automatic package-drift disable, which clears on re-enable and must keep queued jobs.
+ */
+export function createIsModuleDisabledByAdmin(deps: { readonly db: Kysely<MossDatabase> }) {
+  return async (moduleId: string): Promise<boolean> => {
+    const state = await deps.db
+      .selectFrom("app.external_modules")
+      .select(["status", "disabled_reason"])
+      .where("id", "=", moduleId)
+      .executeTakeFirst();
+    return state?.status === "disabled" && state.disabled_reason !== DRIFT_DISABLED_REASON;
   };
 }
