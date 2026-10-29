@@ -1,3 +1,6 @@
+import { RecordingMetadataRepository } from "./recording-metadata.js";
+import { recordingSideReviewVersion } from "./recording-notice-source.js";
+import type { RecordingNoticeEnqueue } from "./recording-notice-jobs.js";
 import { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
@@ -27,7 +30,8 @@ export class MeetingOutputService {
     private readonly dataContext: Pick<DataContextRunner, "withDataContext">,
     private readonly generator: MeetingOutputGenerator,
     private readonly repository = new MeetingOutputsRepository(),
-    private readonly stopSummaries = new MeetingStopSummaryRepository(undefined, repository)
+    private readonly stopSummaries = new MeetingStopSummaryRepository(undefined, repository),
+    private readonly enqueueRecordingNotice?: RecordingNoticeEnqueue
   ) {}
 
   async generate(
@@ -196,6 +200,16 @@ export class MeetingOutputService {
         });
         if (!stale && inputs.recording && validated.recording) {
           await this.repository.applyRecording(db, inputs, validated.recording, artifact.version);
+          if (validated.recording.confidence < 0.8 && this.enqueueRecordingNotice) {
+            const currentMetadata = await new RecordingMetadataRepository().get(db, meetingId);
+            if (!currentMetadata) throw new Error("Recording metadata unavailable");
+            await this.enqueueRecordingNotice(db, {
+              actorUserId: actor.actorUserId,
+              resourceId: meetingId,
+              sourceVersion: recordingSideReviewVersion(currentMetadata)!,
+              idempotencyKey: input.requestKey
+            });
+          }
         }
         const outcome = { status: "saved" as const, artifact, replayed: false };
         await this.repository.finish(db, meetingId, input.requestKey, outcome);
