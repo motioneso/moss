@@ -668,6 +668,11 @@ export async function registerChatJobWorkers(
     { preferences: preferencesPort },
     options.workOptions
   );
+  if (!options.rootDb) {
+    options.logger?.warn(
+      "chat_heartbeat_sweep_not_started: no root database handle, so no check-ins will run"
+    );
+  }
   const heartbeatSweepWorkId = options.rootDb
     ? await registerHeartbeatSweepWorker(boss, options.rootDb)
     : null;

@@ -4,7 +4,9 @@ import type {
   ChatMessageDto,
   ChatSelectedToolMetadataDto,
   ChatThreadDto,
+  ChatHeartbeatOriginV1,
   ChatReminderOriginV1,
+  HeartbeatSource,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   FreshnessKind,
@@ -16,7 +18,7 @@ import { readMeetingChatContext } from "./live/meeting-chat-runtime.js";
 import { readAttachments } from "./attachments-routes.js";
 import type { ShadowReport, ShadowReportRange } from "./classifier-shadow-repository.js";
 import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
-import { readStoredVisual } from "@moss/shared";
+import { HEARTBEAT_SOURCES, readStoredVisual } from "@moss/shared";
 import { toIsoString } from "./memory-serializers.js";
 
 /** Temporary shadow report (#2957): allowlisted day range, defaulting to 30. */
@@ -140,6 +142,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
 export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
   const record = asRecord(value);
   if (record.kind === "reminder" && record.version === 1) return readReminderOrigin(record);
+  if (record.kind === "heartbeat" && record.version === 1) return readHeartbeatOrigin(record);
   if (record.kind !== "classifier_gate" || record.version !== 1) return undefined;
   const outcome =
     record.outcome === "executed-success" || record.outcome === "executed-failure-or-unknown"
@@ -154,6 +157,43 @@ export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
     moduleId: typeof record.moduleId === "string" ? record.moduleId : null,
     toolName: typeof record.toolName === "string" ? record.toolName : null,
     outcome
+  };
+}
+
+const HEARTBEAT_SOURCES_SET: ReadonlySet<string> = new Set(HEARTBEAT_SOURCES);
+
+function readHeartbeatOrigin(record: Record<string, unknown>): ChatTurnOriginV1 | undefined {
+  if (typeof record.occurrenceId !== "string" || typeof record.intro !== "string") {
+    return undefined;
+  }
+  if (!Array.isArray(record.items)) return undefined;
+  const items: ChatHeartbeatOriginV1["items"][number][] = [];
+  for (const raw of record.items) {
+    const item = asRecord(raw);
+    if (
+      typeof item.findingId !== "string" ||
+      typeof item.source !== "string" ||
+      !HEARTBEAT_SOURCES_SET.has(item.source) ||
+      typeof item.title !== "string" ||
+      typeof item.note !== "string" ||
+      (item.at !== null && typeof item.at !== "string")
+    ) {
+      return undefined;
+    }
+    items.push({
+      findingId: item.findingId,
+      source: item.source as HeartbeatSource,
+      title: item.title,
+      at: item.at,
+      note: item.note
+    });
+  }
+  return {
+    version: 1,
+    kind: "heartbeat",
+    occurrenceId: record.occurrenceId,
+    items,
+    intro: record.intro
   };
 }
 

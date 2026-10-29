@@ -90,7 +90,11 @@ export class HeartbeatOccurrenceRepository {
     return {
       lastCheckedAt: latest?.at ?? null,
       nextCheckAt: enabled && stored?.nextDueAt ? stored.nextDueAt.toISOString() : null,
-      outcome: !enabled ? "off" : (latest?.outcome ?? "never"),
+      outcome: !enabled
+        ? "off"
+        : stored && !stored.readable
+          ? "failed"
+          : (latest?.outcome ?? "never"),
       unavailableSources: [],
       recent
     };
