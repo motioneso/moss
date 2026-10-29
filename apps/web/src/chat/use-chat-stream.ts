@@ -524,7 +524,8 @@ function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
     ...(activity.outcome !== undefined ? { outcome: activity.outcome } : {}),
     ...(activity.durationMs !== undefined ? { durationMs: activity.durationMs } : {}),
     ...(activity.decidedBy !== undefined ? { decidedBy: activity.decidedBy } : {}),
-    ...(activity.reason !== undefined ? { reason: activity.reason } : {})
+    ...(activity.reason !== undefined ? { reason: activity.reason } : {}),
+    ...(activity.result !== undefined ? { result: activity.result } : {})
   };
 }
 

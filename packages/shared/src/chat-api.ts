@@ -45,6 +45,8 @@ export interface ChatActivityEventDto {
   readonly durationMs?: number;
   readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
   readonly reason?: string;
+  /** Kept only for tools whose inline card must survive a reload (the heartbeat mute pill). */
+  readonly result?: Record<string, unknown>;
 }
 
 export interface ChatThreadDto {
