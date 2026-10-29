@@ -96,7 +96,7 @@ export const HEARTBEAT_ROUTES = [
 export const HEARTBEAT_STOP_FEATURE: ModuleFeatureManifest = {
   id: "chat.heartbeat_stop",
   description:
-    "Tell Moss in chat to stop mentioning an item or topic from a check-in. Moss saves it as a muted topic and shows a Muted label with Undo. If the topic matches several check-in items, Moss shows up to three choices and saves nothing until one is picked. Undo, and the list of muted topics, are in Settings > Alerts.",
+    "Tell Moss in chat to stop mentioning a check-in item or topic. It shows a Muted label with Undo. If several items match, Moss offers up to three choices and saves nothing until one is picked. Muted topics are listed in Settings > Alerts.",
   featureFlagId: "chat.module",
   errors: [
     {
