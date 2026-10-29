@@ -22,6 +22,10 @@ export async function reserveAttempt(
 ): Promise<{ readonly attempt: number } | null> {
   assertDataContextDb(scopedDb);
   const today = allowanceDay(input.now, input.timeZone);
+  // Beats for one owner queue here until the holder commits, so the count below is never stale.
+  await sql`SELECT pg_advisory_xact_lock(hashtextextended('heartbeat-allowance:' || app.current_actor_user_id()::text, 0))`.execute(
+    scopedDb.db
+  );
   const rows = await scopedDb.db
     .selectFrom("app.heartbeat_allowance_charges")
     .select([sql<string>`local_date::text`.as("local_date"), "attempt"])
