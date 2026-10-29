@@ -108,7 +108,8 @@ export const chatModuleManifest = {
       "sql/0327_chat_voice_requests.sql",
       "sql/0333_chat_automatic_voice_inputs.sql",
       "sql/0343_chat_heartbeat.sql",
-      "sql/0344_chat_heartbeat_unavailable_sources.sql"
+      "sql/0344_chat_heartbeat_unavailable_sources.sql",
+      "sql/0345_chat_heartbeat_worker_publish.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
