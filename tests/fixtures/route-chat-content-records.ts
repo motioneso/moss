@@ -6,6 +6,11 @@ export const RECORDS_MODULE_IDS: ReadonlySet<string> = new Set([
 ]);
 
 export const RECORDS_EXPECTED_ROWS = [
+  "meetings GET /api/meetings/recording-types read user_authored",
+  "meetings PUT /api/meetings/recording-types write user_authored",
+  "meetings GET /api/meetings/records/:id/recording read user_authored",
+  "meetings PUT /api/meetings/records/:id/recording/type blocked external_effect",
+  "meetings POST /api/meetings/manual-transcripts blocked external_effect",
   "meetings POST /api/meetings/voice-enablement blocked external_effect",
   "meetings POST /api/meetings/voice-enablement/:id/disable blocked external_effect",
   "meetings POST /api/meetings/voice-recordings blocked external_effect",
@@ -62,6 +67,7 @@ export const RECORDS_EXPECTED_ROWS = [
   "email PATCH /api/email/briefing-settings blocked self_authority",
   "email GET /api/email/task-creation-mode read user_authored",
   "email PUT /api/email/task-creation-mode blocked self_authority",
+  "weather GET /api/weather/forecast read outbound",
   "weather GET /api/weather/today read"
 ] as const;
 

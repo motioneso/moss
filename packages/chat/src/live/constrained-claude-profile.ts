@@ -6,18 +6,38 @@ import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { ConstrainedProcessError } from "./constrained-structured-process.js";
 import { CliChatUnavailableError } from "./errors.js";
 
-/** Only published binaries whose tool/config paths were inspected are admitted. */
+/**
+ * The image floor stays aligned with the runner recipe. A promoted release joins the allowlist
+ * only after its archive integrity is verified for every listed architecture and its native
+ * profile controls pass on at least one. The evidence doc records which architectures ran.
+ */
 export const CONSTRAINED_CLAUDE_VERSION = "2.1.282";
-export const CONSTRAINED_CLAUDE_SHA256: Readonly<Record<string, string>> = {
-  x64: "3afe8535c0cc33f0e24f7b25dab7a1727b8b592196f8496a8bc302ba2161eed3",
-  arm64: "6764ffc39e9fed425a493ff61ea28506d1ba83996ce81a48d1177dbb393419c9"
+export const CONSTRAINED_CLAUDE_RELEASES: Readonly<
+  Record<string, Readonly<Record<string, string>>>
+> = {
+  [CONSTRAINED_CLAUDE_VERSION]: {
+    x64: "3afe8535c0cc33f0e24f7b25dab7a1727b8b592196f8496a8bc302ba2161eed3",
+    arm64: "6764ffc39e9fed425a493ff61ea28506d1ba83996ce81a48d1177dbb393419c9"
+  },
+  "2.1.286": {
+    x64: "fe503f65c6289d59c23e5b21ae44f03583f997dd33a2cbfc75ab4f96fb8fc73f",
+    arm64: "0292fa22ac2fd43e16be9d0e511ddd8347280d6e0ebaca744ef5b27e05d8d0f8"
+  }
 };
+
+function isSupportedDigest(hash: string, arch: string): boolean {
+  return Object.values(CONSTRAINED_CLAUDE_RELEASES).some((release) => release[arch] === hash);
+}
 
 /** Advisory installed-version check only: no binary execution, hashing, credential or model I/O. */
 export async function findConstrainedClaudeExecutable(
   searchPath = process.env.PATH ?? ""
 ): Promise<string | undefined> {
-  if (process.platform !== "linux" || !CONSTRAINED_CLAUDE_SHA256[process.arch]) return undefined;
+  if (
+    process.platform !== "linux" ||
+    !CONSTRAINED_CLAUDE_RELEASES[CONSTRAINED_CLAUDE_VERSION]?.[process.arch]
+  )
+    return undefined;
   for (const directory of searchPath.split(delimiter)) {
     if (!isAbsolute(directory)) continue;
     try {
@@ -33,7 +53,9 @@ export async function findConstrainedClaudeExecutable(
         "name" in metadata &&
         "version" in metadata &&
         metadata.name === `@anthropic-ai/claude-code-linux-${process.arch}` &&
-        metadata.version === CONSTRAINED_CLAUDE_VERSION
+        typeof metadata.version === "string" &&
+        Object.hasOwn(CONSTRAINED_CLAUDE_RELEASES, metadata.version) &&
+        CONSTRAINED_CLAUDE_RELEASES[metadata.version]?.[process.arch]
       )
         return executable;
     } catch {
@@ -144,10 +166,10 @@ export async function prepareConstrainedClaudeProfile(
   deps: ConstrainedClaudeProfileDeps = {}
 ): Promise<ConstrainedClaudeProfile> {
   if (options.signal?.aborted) throw new ConstrainedProcessError("cancelled");
-  const expected = CONSTRAINED_CLAUDE_SHA256[deps.arch ?? process.arch];
+  const arch = deps.arch ?? process.arch;
   if (
     (deps.platform ?? process.platform) !== "linux" ||
-    !expected ||
+    !CONSTRAINED_CLAUDE_RELEASES[CONSTRAINED_CLAUDE_VERSION]?.[arch] ||
     !isAbsolute(options.executablePath) ||
     !isAbsolute(options.privateHome) ||
     options.privateHome === "/" ||
@@ -166,7 +188,7 @@ export async function prepareConstrainedClaudeProfile(
     throw new ConstrainedClaudeUnsupportedError();
   }
   if (options.signal?.aborted) throw new ConstrainedProcessError("cancelled");
-  if (digest !== expected) throw new ConstrainedClaudeUnsupportedError();
+  if (!isSupportedDigest(digest, arch)) throw new ConstrainedClaudeUnsupportedError();
   let schema: string;
   try {
     schema = JSON.stringify(options.schema);

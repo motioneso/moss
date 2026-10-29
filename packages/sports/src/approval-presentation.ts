@@ -528,10 +528,24 @@ export function sportsSourcePresentation(
 
 /** Outbound reads may also need a card when outside content influenced the call. */
 export function sportsPublicReadPresentation(
-  kind: "teams" | "standings" | "icon"
+  kind: "teams" | "standings" | "icon" | "results"
 ): RouteApprovalPresentation {
   return async (db, input, ctx) => {
     if (!presentApprovalFields(input.body, {})) return null;
+    if (kind === "results") {
+      if (Object.keys(input.params).length) return null;
+      const fields = presentApprovalFields(input.query, {
+        teamName: { label: "Team", present: approvalText },
+        competitionKey: { label: "Competition", present: competitionLabel },
+        sourceTeamId: {
+          label: "Provider team ID",
+          present: (value) => (typeof value === "string" && /^\d{1,20}$/.test(value) ? value : null)
+        }
+      });
+      return fields?.length
+        ? { content: "user_authored", target: "Latest available sports result", fields }
+        : null;
+    }
     if (kind === "icon") {
       assertDataContextDb(db);
       if (

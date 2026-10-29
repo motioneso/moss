@@ -55,6 +55,7 @@ export * from "./sports-sources-api.js";
 export * from "./news-api.js";
 export * from "./news-credentials-api.js";
 export * from "./weather-api.js";
+export * from "./weather-forecast-api.js";
 export * from "./web-search-api.js";
 export * from "./family-key-api.js";
 export * from "./runtime-config-api.js";
@@ -80,6 +81,8 @@ export * from "./meeting-api.js";
 export * from "./meeting-transcript-api.js";
 export * from "./meeting-record-api.js";
 export * from "./meeting-preferences-api.js";
+export * from "./meeting-transcript-language.js";
+export * from "./meeting-vocabulary.js";
 export * from "./meeting-transcript-storage-api.js";
 export * from "./meeting-chat-api.js";
 export * from "./meeting-output-api.js";
@@ -90,6 +93,7 @@ export * from "./meeting-history-api.js";
 
 export * from "./meeting-capture-api.js";
 
+export * from "./heartbeat-api.js";
 export * from "./scheduled-tasks-api.js";
 export * from "./responsibility-agreement.js";
 export * from "./briefing-email-evidence.js";
@@ -97,3 +101,39 @@ export * from "./briefing-email-evidence.js";
 export * from "./meeting-recording-import-api.js";
 export * from "./outlook-calendar-api.js";
 export * from "./meeting-recording-upload-api.js";
+export * from "./visual-chat.js";
+export * from "./visual-chat-catalog.js";
+
+export * from "./sports-results-api.js";
+
+export * from "./meeting-recording-api.js";
+
+export type {
+  RecordingNoteSource,
+  ManagedNoteActorExport,
+  ManagedNoteSourceExport,
+  ManagedNotesExportSection,
+  ManagedNoteBindingExport,
+  ManagedNoteContributionExport,
+  ManagedNoteProposalExport,
+  ManagedNoteOperationExport,
+  ManagedNoteProposalStateExport,
+  ManagedNoteOperationStateExport,
+  ManagedNoteOperationLegExport,
+  ManagedNoteDestinationExport,
+  RecordingNoteDestinationChoice,
+  RecordingNoteCandidate,
+  RecordingNoteInventory,
+  RecordingNoteDestination,
+  RecordingNoteReceipt,
+  PrepareRecordingNoteInput,
+  RecordingNoteProposal,
+  ApplyRecordingNoteInput,
+  ReviseRecordingNoteInput,
+  RecordingNoteResult
+} from "./note-contribution-api.js";
+
+export * from "./recording-memory-api.js";
+
+export * from "./module-notice-api.js";
+export * from "./heartbeat-source-api.js";

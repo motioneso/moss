@@ -40,12 +40,11 @@ export type ReminderTurnPlan =
       readonly destination?: string;
     }
   | { readonly kind: "unsupported"; readonly reason: ReminderUnsupportedReason }
-  | { readonly kind: "list" }
   | { readonly kind: "cancel"; readonly target: string | null }
   | { readonly kind: "pause" | "resume" | "delete"; readonly target: string | null }
   | { readonly kind: "confirm_delete"; readonly agree: boolean }
 
-  /** A save, list or cancel refused before it reaches storage. `manage` marks list or cancel. */
+  /** A save or cancel refused before it reaches storage. `manage` marks cancel. */
   | { readonly kind: "main_only"; readonly manage?: boolean };
 
 export interface ReminderTurnDecision {

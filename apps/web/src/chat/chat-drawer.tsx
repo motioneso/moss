@@ -1,4 +1,4 @@
-import { VoiceRequests } from "./voice-requests";
+import { VoiceInputThread } from "./voice-requests";
 import type { ChatDrawerProps } from "./chat-drawer-props";
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatTurnResponse } from "@moss/shared";
@@ -21,7 +21,7 @@ import {
   useRef,
   useState
 } from "react";
-import { BrandMark, Chip, IconButton, Menu, Thread } from "@moss/ui";
+import { BrandMark, Chip, IconButton, Menu } from "@moss/ui";
 import {
   cancelChatTurn,
   beaconEndPrivateChat,
@@ -47,6 +47,7 @@ import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
+  mergeFallbacks,
   reconcileFallbacks,
   recordsFromMessages,
   shouldEndPrivateChatOnStreamDisconnect,
@@ -353,6 +354,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
               kind: "user",
               text: trimmed,
               messageId: result.userMessageId,
+              // Send time on this device, so a ring receipt can be ordered against the turn.
+              createdAt: new Date().toISOString(),
               attachments,
               ...("meetingContext" in result ? { meetingContext: result.meetingContext } : {})
             },
@@ -360,6 +363,9 @@ export function ChatDrawer(props: ChatDrawerProps) {
               kind: "reply",
               text: result.reply,
               messageId: result.assistantMessageId,
+              visualReply: "visualReply" in result ? result.visualReply : undefined,
+              visualFallbackText:
+                "visualFallbackText" in result ? result.visualFallbackText : undefined,
               sourceFreshness: "sourceFreshness" in result ? result.sourceFreshness : undefined,
               ...("meetingContext" in result
                 ? {
@@ -452,10 +458,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
         )
       : [];
   const displayRecords = reviewing ? [...persistedRecords, ...liveTail] : props.records;
-  const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
   const effectiveRecords: readonly TranscriptRecord[] = [
-    ...displayRecords,
-    ...visibleFallbackRecords,
+    ...mergeFallbacks(fallbackRecords, displayRecords),
     ...(pendingUser
       ? [
           {
@@ -871,37 +875,57 @@ export function ChatDrawer(props: ChatDrawerProps) {
           {messagesQuery.isError ? (
             <ChatConversationError onRetry={() => void messagesQuery.refetch()} />
           ) : null}
-          {effectiveRecords.length > 0 ? (
-            <Thread
-              records={effectiveRecords}
-              working={isWaiting}
-              renderRecord={(record, _index, context) => (
-                <RecordRow
-                  approvalOutcomeShown={context.approvalOutcomeShown}
-                  record={record}
-                  meetingScoped={Boolean(props.meetingContext)}
-                  focusActionRequestId={props.focusActionRequestId}
-                  onActionRequestFocused={props.onActionRequestFocused}
-                  linkedMessageId={props.focusMessageId}
-                />
-              )}
-            />
-          ) : rechecking ? (
-            <div className="chatd-empty" aria-busy="true" />
-          ) : noModelAvailable ? (
-            <ConnectProviderEmpty isFounder={props.isFounder} />
-          ) : props.meetingContext ? (
-            <div className="chatd-empty">
-              <div className="chatd-empty__title">Ask about this meeting</div>
-              <div className="chatd-empty__sub">Ask about the transcript or your saved notes.</div>
-            </div>
-          ) : (
-            <ChatEmptyState
-              onSend={sendMessage}
-              isSending={isSending}
-              lockedModelUnavailable={lockedModelUnavailable}
-            />
-          )}
+          <VoiceInputThread
+            ownerId={props.ownerId}
+            surface={props.surface}
+            mainThreadId={mainThreadId}
+            selectedThreadId={selectedThreadId}
+            privateMode={
+              privateMode ||
+              Boolean(privacyStateQuery.data?.incognito) ||
+              Boolean(props.meetingContext)
+            }
+            selectionPending={
+              transition.pending ||
+              Boolean(props.selectionPending) ||
+              historyActivationPending ||
+              conversationOverlayOpen ||
+              activatingPrivate ||
+              privacyStateQuery.isFetching
+            }
+            privacyConfirmed={privacyStateQuery.isSuccess}
+            records={effectiveRecords}
+            working={isWaiting}
+            renderRecord={(record, _index, context) => (
+              <RecordRow
+                approvalOutcomeShown={context.approvalOutcomeShown}
+                record={record}
+                meetingScoped={Boolean(props.meetingContext)}
+                focusActionRequestId={props.focusActionRequestId}
+                onActionRequestFocused={props.onActionRequestFocused}
+                linkedMessageId={props.focusMessageId}
+              />
+            )}
+          >
+            {rechecking ? (
+              <div className="chatd-empty" aria-busy="true" />
+            ) : noModelAvailable ? (
+              <ConnectProviderEmpty isFounder={props.isFounder} />
+            ) : props.meetingContext ? (
+              <div className="chatd-empty">
+                <div className="chatd-empty__title">Ask about this meeting</div>
+                <div className="chatd-empty__sub">
+                  Ask about the transcript or your saved notes.
+                </div>
+              </div>
+            ) : (
+              <ChatEmptyState
+                onSend={sendMessage}
+                isSending={isSending}
+                lockedModelUnavailable={lockedModelUnavailable}
+              />
+            )}
+          </VoiceInputThread>
           {isWaiting ? <ChatWaitingIndicator assistantName={assistantName} /> : null}
         </div>
         {!stickToBottom ? (
@@ -917,24 +941,6 @@ export function ChatDrawer(props: ChatDrawerProps) {
           </button>
         ) : null}
       </div>
-      <VoiceRequests
-        ownerId={props.ownerId}
-        surface={props.surface}
-        mainThreadId={mainThreadId}
-        selectedThreadId={selectedThreadId}
-        privateMode={
-          privateMode || Boolean(privacyStateQuery.data?.incognito) || Boolean(props.meetingContext)
-        }
-        selectionPending={
-          sendPending ||
-          historyActivationPending ||
-          conversationOverlayOpen ||
-          activatingPrivate ||
-          privacyStateQuery.isFetching
-        }
-        privacyConfirmed={privacyStateQuery.isSuccess}
-        onOpenThread={selectThread}
-      />
       {props.meetingContext ? (
         <p className="jds-hint">Uses the transcript so far and your saved notes.</p>
       ) : null}

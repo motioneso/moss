@@ -75,7 +75,7 @@ export function recordingWavDuration(
 export function recordingSidecarMetadata(
   bytes: Buffer,
   durationMs: number,
-  limits: { maxBytes: number; maxEntries: number; durationDigits: number }
+  limits: { maxBytes: number; maxEntries: number }
 ) {
   if (bytes.length > limits.maxBytes) throw new RecordingImportInputError(413);
   let entries: unknown;
@@ -113,23 +113,17 @@ export function recordingSidecarMetadata(
           recordedDurationMs !== null ||
           typeof pair[1] !== "string" ||
           !/^\d+$/.test(pair[1]) ||
-          pair[1].length > limits.durationDigits
+          !Number.isSafeInteger(Number(pair[1]))
         )
           invalid();
         recordedDurationMs = Number(pair[1]);
       }
     }
   }
-  if (
-    startMs === null ||
-    endMs === null ||
-    endMs < startMs ||
-    Math.abs(endMs - startMs - durationMs) > 1500 ||
-    recordedDurationMs === null ||
-    Math.abs(recordedDurationMs - durationMs) > 1000
-  )
-    invalid();
-  const bookmarksMs = bookmarks.map((at) => at - startMs);
-  if (bookmarksMs.some((at) => at < 0 || at > durationMs)) invalid();
+  // The decoded WAV is the duration of record. The ring's own clock and declared
+  // duration drift from it, so they are kept as reported and never refuse audio.
+  if (startMs === null || endMs === null || recordedDurationMs === null) invalid();
+  const start = startMs;
+  const bookmarksMs = bookmarks.map((at) => at - start).filter((at) => at >= 0 && at <= durationMs);
   return { startMs, endMs, recordedDurationMs, bookmarksMs };
 }

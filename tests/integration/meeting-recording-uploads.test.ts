@@ -31,6 +31,7 @@ import {
 import { recordingChunkPath } from "../../packages/meetings/src/recording-upload-manifest.js";
 import { recordingUpload } from "../fixtures/recording-upload.js";
 import { recordingBundle } from "../fixtures/recording-bundle.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 let app: Kysely<MossDatabase>,
@@ -125,6 +126,325 @@ async function serverFor(service: RecordingImportService) {
   return server;
 }
 describe("resumable recording transport and checkpointed transcription", () => {
+  it("refuses a hold upload aimed at a meeting", async () => {
+    const { service } = setup();
+    await expect(
+      service.uploads.reserve(actor, recordingUpload(90_000, true).manifest)
+    ).rejects.toMatchObject({ statusCode: 409 });
+    const rows = await context.withDataContext(actor, (db) =>
+      sql`SELECT 1 FROM app.meeting_recording_imports WHERE recording_id LIKE 'amsg\\_%'`.execute(
+        db.db
+      )
+    );
+    expect(rows.rows).toHaveLength(0);
+  });
+  it("refuses to finalize a hold upload that was reserved as a meeting before the rule", async () => {
+    const { service } = setup();
+    const uploaded = await upload(service, recordingUpload(30_500));
+    await sql`UPDATE app.meeting_recording_imports SET source_manifest_json=replace(source_manifest_json, '"recordingId":"', '"recordingId":"amsg_') WHERE id=${uploaded.id}::uuid`.execute(
+      bootstrap
+    );
+    await expect(service.uploads.finalize(actor, uploaded.id)).rejects.toMatchObject({
+      statusCode: 409
+    });
+  });
+  it("bounds real ASR end drift before checkpointing windows and schedules one final summary", async () => {
+    const summary = vi.fn<RecordingImportDependencies["scheduleSummary"]>(async () => {});
+    const transcribe = vi.fn<RecordingImportDependencies["transcribe"]>();
+    transcribe.mockResolvedValueOnce({
+      segments: [
+        { startMs: 0, endMs: 29_840, text: "Before the boundary" },
+        { startMs: 29_840, endMs: 30_340, text: "At the boundary" }
+      ]
+    });
+    transcribe.mockResolvedValueOnce({
+      segments: [{ startMs: 0, endMs: 840, text: "Short final window" }]
+    });
+    const { service } = setup({
+      transcribe,
+      scheduleSummary: summary,
+      describeFailure: () => ({ retryable: false, unavailable: false })
+    });
+    const uploaded = await upload(service, recordingUpload(30_500));
+    await service.uploads.finalize(actor, uploaded.id);
+    const accepted = await service.status(actor, uploaded.id);
+    await service.process(actor, job(uploaded.id));
+    expect(await service.status(actor, uploaded.id)).toMatchObject({ state: "queued" });
+    expect(summary).not.toHaveBeenCalled();
+    await service.process(actor, job(uploaded.id, 30_000));
+    expect(await service.status(actor, uploaded.id)).toMatchObject({
+      state: "complete",
+      meetingId: accepted!.meetingId
+    });
+    const snapshot = await context.withDataContext(actor, (db) =>
+      transcripts.snapshot(db, accepted!.meetingId, { maxSegments: 500, maxCharacters: 100000 })
+    );
+    expect(
+      snapshot!.segments.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }))
+    ).toEqual([
+      { startMs: 0, endMs: 29_840, text: "Before the boundary" },
+      { startMs: 29_840, endMs: 30_000, text: "At the boundary" },
+      { startMs: 30_000, endMs: 30_500, text: "Short final window" }
+    ]);
+    await service.process(actor, job(uploaded.id, 30_000));
+    expect(transcribe).toHaveBeenCalledTimes(2);
+    expect(summary).toHaveBeenCalledTimes(1);
+  });
+  it("recovers thin audible speech with the same preferences and one 30-second checkpoint", async () => {
+    const preferences = new MeetingPreferencesRepository();
+    const sent = vi.fn();
+    const schedule = vi.fn<RecordingImportDependencies["schedule"]>(async () => {});
+    const transcribe = vi.fn<RecordingImportDependencies["transcribe"]>(async (_actor, input) =>
+      input.dispatch(async () => {
+        sent(input.audio);
+        return {
+          segments: [
+            {
+              startMs: 0,
+              endMs: sent.mock.calls.length === 1 ? 1000 : 15_340,
+              text:
+                sent.mock.calls.length === 1
+                  ? "Two words"
+                  : "Recovered the missing stretch of speech in this half"
+            }
+          ]
+        };
+      })
+    );
+    const { service } = setup({ transcribe, schedule });
+    const uploaded = await upload(service, recordingUpload(60_000, false, 0, 12_000));
+    await service.uploads.finalize(actor, uploaded.id);
+    try {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, {
+          transcriptLanguage: "es",
+          transcriptVocabulary: ["José", "Moss"]
+        })
+      );
+      await service.process(actor, job(uploaded.id));
+      expect(sent).toHaveBeenCalledTimes(3);
+      for (const [, request] of transcribe.mock.calls) {
+        expect(request).toMatchObject({
+          language: "es",
+          prompt: "José, Moss",
+          expectedModelRoute: "synthetic-test"
+        });
+        expect(request.signal).toBeInstanceOf(AbortSignal);
+      }
+      expect(new Set(transcribe.mock.calls.map(([, request]) => request.signal)).size).toBe(3);
+      expect(sent.mock.calls.map(([audio]) => audio.length)).toEqual([
+        44 + 30_000 * 32,
+        44 + 15_000 * 32,
+        44 + 15_000 * 32
+      ]);
+      const row = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+      expect(row).toMatchObject({ next_window_ms: 30_000, attempts: 0, state: "queued" });
+      expect(schedule.mock.calls.at(-1)![1]).toEqual(job(uploaded.id, 30_000));
+      const snapshot = await context.withDataContext(actor, (db) =>
+        transcripts.snapshot(db, row!.meeting_id!, { maxSegments: 500, maxCharacters: 100000 })
+      );
+      expect(snapshot!.segments.map(({ startMs, endMs }) => ({ startMs, endMs }))).toEqual([
+        { startMs: 0, endMs: 15_000 },
+        { startMs: 15_000, endMs: 30_000 }
+      ]);
+      await service.process(actor, job(uploaded.id));
+      expect(sent).toHaveBeenCalledTimes(3);
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
+      );
+    }
+  });
+
+  it.each(["provider error", "half timeout", "combined budget"])(
+    "checkpoints the original transcript when the retry hits %s",
+    async (failure) => {
+      let calls = 0;
+      const { service } = setup({
+        transcribe: async (_actor, request) =>
+          request.dispatch(async () => {
+            calls++;
+            if (calls === 2 && failure === "provider error")
+              throw new Error("Provider unavailable");
+            if (calls === 3 && failure === "half timeout")
+              throw new DOMException("Half expired", "TimeoutError");
+            return {
+              segments: [
+                {
+                  startMs: 0,
+                  endMs: calls === 1 ? 1000 : 15_000,
+                  text: calls === 1 ? "Two words" : "text ".repeat(600)
+                }
+              ]
+            };
+          })
+      });
+      const uploaded = await upload(service, recordingUpload(30_000, false, 0, 12_000));
+      await service.uploads.finalize(actor, uploaded.id);
+      await service.process(actor, job(uploaded.id));
+      const row = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+      expect(row).toMatchObject({ state: "complete", next_window_ms: 30_000 });
+      const snapshot = await context.withDataContext(actor, (db) =>
+        transcripts.snapshot(db, row!.meeting_id!, { maxSegments: 500, maxCharacters: 100000 })
+      );
+      expect(
+        snapshot!.segments.map(({ startMs, endMs, text }) => ({ startMs, endMs, text }))
+      ).toEqual([{ startMs: 0, endMs: 1000, text: "Two words" }]);
+      expect(calls).toBe(failure === "provider error" ? 2 : 3);
+    }
+  );
+
+  it.each([1, 2])(
+    "rechecks dispatch admission after request %s supersedes the piece",
+    async (supersedeAfter) => {
+      const sent = vi.fn();
+      const { service } = setup({
+        transcribe: async (_actor, input) => {
+          const result = await input.dispatch(async () => {
+            sent();
+            return { segments: [{ startMs: 0, endMs: 1000, text: "Two words" }] };
+          });
+          if (sent.mock.calls.length === supersedeAfter)
+            await sql`UPDATE app.meeting_recording_imports SET state='failed' WHERE id=${importId}::uuid`.execute(
+              bootstrap
+            );
+          return result;
+        }
+      });
+      const uploaded = await upload(service, recordingUpload(30_000, false, 0, 12_000));
+      const importId = uploaded.id;
+      await service.uploads.finalize(actor, uploaded.id);
+      await service.process(actor, job(uploaded.id));
+      expect(sent).toHaveBeenCalledTimes(supersedeAfter);
+      const row = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+      expect(row).toMatchObject({ state: "failed", next_window_ms: 0 });
+      const snapshot = await context.withDataContext(actor, (db) =>
+        transcripts.snapshot(db, row!.meeting_id!, { maxSegments: 500, maxCharacters: 100000 })
+      );
+      expect(snapshot?.segments ?? []).toHaveLength(0);
+    }
+  );
+
+  it("recovers a no-meeting voice piece before admitting its transcript once", async () => {
+    const chat = new VoiceRequestService({
+      dataContext: context,
+      bootId: randomUUID(),
+      now: () => new Date(),
+      assertAvailable: async () => {},
+      schedule: createVoiceRequestScheduler(boss),
+      submit: async () => {
+        throw new Error("Receiver test must not invoke a model");
+      }
+    });
+    const admit = vi.fn<NonNullable<RecordingImportDependencies["admitVoiceRequest"]>>(
+      async (db, input) => ({ id: (await chat.admitInTransaction(db, input)).request.id })
+    );
+    let calls = 0;
+    const transcribe = vi.fn<RecordingImportDependencies["transcribe"]>(async (_actor, request) =>
+      request.dispatch(async () => ({
+        segments: [
+          {
+            startMs: 0,
+            endMs: ++calls === 1 ? 1000 : 15_000,
+            text: calls === 1 ? "Two words" : "Recovered the rest of this voice request"
+          }
+        ]
+      }))
+    );
+    const { service } = setup({ transcribe, admitVoiceRequest: admit });
+    const fixture = recordingUpload(30_000, true, 0, 12_000);
+    const enabled = await service.enableVoice(actor, {
+      version: 2,
+      sourceDeviceId: fixture.manifest.sourceDeviceId,
+      requestKey: randomUUID(),
+      recordingIds: []
+    });
+    const uploaded = await upload(service, {
+      ...fixture,
+      manifest: {
+        ...fixture.manifest,
+        destination: { intent: "voice-request", enablementId: enabled.id, capturedAt: null }
+      }
+    });
+    await service.uploads.finalize(actor, uploaded.id);
+    await service.process(actor, job(uploaded.id));
+    expect(transcribe).toHaveBeenCalledTimes(3);
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(admit.mock.calls[0]![1].transcript).toBe(
+      "Recovered the rest of this voice request\nRecovered the rest of this voice request"
+    );
+    const row = await context.withDataContext(actor, (db) => imports.get(db, uploaded.id));
+    expect(row).toMatchObject({ meeting_id: null, next_window_ms: 30_000, state: "complete" });
+    for (const [, request] of transcribe.mock.calls) expect(request).not.toHaveProperty("language");
+    await service.process(actor, job(uploaded.id));
+    expect(admit).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains a safe failure when a window request rejects during admission commit", async () => {
+    const { service } = setup({
+      describeFailure: () => ({ retryable: false, unavailable: false }),
+      transcribe: async (_actor, request) =>
+        request.dispatch(async () => {
+          throw new Error("Synthetic immediate window transport rejection");
+        })
+    });
+    const normal = await upload(service, recordingUpload(60000));
+    await service.uploads.finalize(actor, normal.id);
+    await service.process(actor, job(normal.id));
+    expect(await service.status(actor, normal.id)).toMatchObject({
+      state: "failed",
+      code: "transcription_failed"
+    });
+  });
+  it("applies changed language to subsequent normal windows", async () => {
+    const preferences = new MeetingPreferencesRepository();
+    try {
+      const { service, deps } = setup();
+      const normal = await upload(service, recordingUpload(60_000));
+      await service.uploads.finalize(actor, normal.id);
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: "es", transcriptVocabulary: ["José", "Moss"] })
+      );
+      await service.process(actor, job(normal.id));
+      expect(vi.mocked(deps.transcribe).mock.calls[0]![1].language).toBe("es");
+      expect(vi.mocked(deps.transcribe).mock.calls[0]![1].prompt).toBe("José, Moss");
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
+      );
+      await service.process(actor, job(normal.id, 30_000));
+      expect(vi.mocked(deps.transcribe).mock.calls[1]![1]).not.toHaveProperty("language");
+      expect(vi.mocked(deps.transcribe).mock.calls[1]![1]).not.toHaveProperty("prompt");
+      expect(await service.status(actor, normal.id)).toMatchObject({ state: "complete" });
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
+      );
+    }
+  });
+  it.each([
+    [2_513_160, -4_160],
+    [442_320, -2_320]
+  ])(
+    "finalizes a %s ms recording whose ring clock drifted %s ms through the HTTP receiver",
+    async (durationMs, driftMs) => {
+      const { service } = setup();
+      const uploaded = await upload(service, recordingUpload(durationMs, false, driftMs));
+      const server = await serverFor(service);
+      try {
+        const response = await server.inject({
+          method: "POST",
+          url: `/api/meetings/recording-uploads/${uploaded.id}/finalize`,
+          headers: { authorization: `Bearer ${ids.userA}`, "content-type": "application/json" },
+          payload: "null"
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ ready: true });
+      } finally {
+        await server.close();
+      }
+    }
+  );
+
   it("admits one short resumable hold transcript through the real Chat boundary after its final window", async () => {
     const chat = new VoiceRequestService({
       dataContext: context,
@@ -163,7 +483,18 @@ describe("resumable recording transport and checkpointed transcription", () => {
     };
     const uploaded = await upload(service, source);
     await service.uploads.finalize(actor, uploaded.id);
-    await service.process(actor, job(uploaded.id));
+    const preferences = new MeetingPreferencesRepository();
+    await context.withDataContext(actor, (db) =>
+      preferences.update(db, { transcriptLanguage: "es" })
+    );
+    try {
+      await service.process(actor, job(uploaded.id));
+      expect(vi.mocked(deps.transcribe).mock.calls[0]![1]).not.toHaveProperty("language");
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null })
+      );
+    }
     vi.mocked(deps.transcribe).mockRejectedValueOnce(new Error("Provider unavailable"));
     await service.process(actor, job(uploaded.id, 30_000));
     const failed = (await service.voiceStatus(actor, uploaded.id))!;

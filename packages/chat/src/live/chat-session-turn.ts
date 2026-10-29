@@ -1,9 +1,19 @@
 import { randomUUID } from "node:crypto";
+import {
+  bindChatAttemptSignal,
+  bindChatAttemptThread,
+  chatAttemptObservationEnabled,
+  observeChatAttempt,
+  observeChatTurn,
+  registerChatAttemptSites
+} from "./chat-attempt-observer.js";
 
+import { validateVisualCatalogReply, type VisualReplyV1 } from "@moss/shared";
 import { recordModelActivity } from "@moss/ai";
 import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
+import type { VisualPresentationTurn } from "../visual/presentation-service.js";
 import { answerDetailSteps } from "./activity-detail-steps.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
@@ -75,6 +85,15 @@ export interface ChatTurnHost {
   ): Promise<UserSession>;
 }
 
+registerChatAttemptSites(
+  "turn",
+  "ensure.initial",
+  "ensure.retry",
+  "heal",
+  "submit.initial",
+  "submit.retry"
+);
+
 /**
  * Run one accepted user turn: echo it to subscribers, send it to the engine, fan out
  * every new transcript record until the engine reports complete, persist the
@@ -96,13 +115,33 @@ export async function runChatTurn(
   userMessageId?: string;
   assistantMessageId?: string;
   sourceFreshness?: SourceFreshnessV1 | null;
+  visualReply?: VisualReplyV1;
 }> {
   const sessionKey = surfaceSessionKey(actorUserId, surface);
   // #2956: one turn id files shadow, audit and answer rows across launch/replay retries.
   const turnId = opts?.admittedTurn?.turnId ?? randomUUID();
+  if (chatAttemptObservationEnabled()) {
+    return observeChatTurn({ actorUserId, surface, turnId }, () =>
+      runAcceptedChatTurn(host, actorUserId, userName, text, opts, surface, sessionKey, turnId)
+    );
+  }
+  return runAcceptedChatTurn(host, actorUserId, userName, text, opts, surface, sessionKey, turnId);
+}
+
+async function runAcceptedChatTurn(
+  host: ChatTurnHost,
+  actorUserId: string,
+  userName: string,
+  text: string,
+  opts: Parameters<typeof runChatTurn>[4],
+  surface: ChatSurface,
+  sessionKey: string,
+  turnId: string
+): ReturnType<typeof runChatTurn> {
   // File this session's tool rows under the turn; cleared in the finally below.
   host.deps.setCurrentTurnId?.(sessionKey, turnId);
   const controller = new AbortController();
+  bindChatAttemptSignal(controller.signal);
   const ensureOpts = { signal: controller.signal };
   host.turnControllers.set(sessionKey, controller);
   host.actionResultsBySession.set(sessionKey, []);
@@ -138,6 +177,9 @@ export async function runChatTurn(
   let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
   // #3128: the in-flight record, settled in the finally unless the turn saved.
   let liveTurn: LiveTurnRecord | undefined;
+  let visualTurn: VisualPresentationTurn | undefined;
+  const discardVisualTurn = () => visualTurn?.discard();
+  controller.signal.addEventListener("abort", discardVisualTurn, { once: true });
   try {
     await waitForOriginThreadTransition(host.originTransitions, sessionKey, controller.signal);
     if (controller.signal.aborted)
@@ -166,12 +208,20 @@ export async function runChatTurn(
       flushActions,
       opts?.admittedTurn ? Promise.resolve(pinnedThread) : undefined
     );
+    bindChatAttemptThread(requestThreadId, { actorUserId, surface, turnId });
     if (gated) return gated;
     // #2934 finding 1 — a stop during the gate attempt stops the turn pre-emit.
     if (controller.signal.aborted)
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, undefined);
     try {
-      session = await host.ensureSession(actorUserId, userName, ensureOpts, surface);
+      session = await (chatAttemptObservationEnabled()
+        ? observeChatAttempt(
+            "ensure.initial",
+            () => host.ensureSession(actorUserId, userName, ensureOpts, surface),
+            { actorUserId, surface },
+            controller.signal
+          )
+        : host.ensureSession(actorUserId, userName, ensureOpts, surface));
     } catch (err) {
       if (
         !(err instanceof CliChatUnavailableError) ||
@@ -182,7 +232,14 @@ export async function runChatTurn(
         throw err;
       }
       host.pendingForcedReplay.add(sessionKey);
-      session = await host.ensureSession(actorUserId, userName, ensureOpts, surface);
+      session = await (chatAttemptObservationEnabled()
+        ? observeChatAttempt(
+            "ensure.retry",
+            () => host.ensureSession(actorUserId, userName, ensureOpts, surface),
+            { actorUserId, surface },
+            controller.signal
+          )
+        : host.ensureSession(actorUserId, userName, ensureOpts, surface));
     }
     // Refuse another conversation's model, including a same-privacy resume during the mode wait.
     if (
@@ -221,7 +278,7 @@ export async function runChatTurn(
       session,
       opts?.moduleControl
     );
-    const engineText = await buildEngineText(
+    let engineText = await buildEngineText(
       {
         persistence: host.deps.persistence,
         conversationProvenance: host.deps.conversationProvenance,
@@ -245,7 +302,21 @@ export async function runChatTurn(
     if (engineText.locale) session.locale = engineText.locale;
     const currentProvider = await host.deps.persistence.resolveActiveProvider(actorUserId);
     await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
-    host.emit(actorUserId, surface, { kind: "user", text });
+    host.emit(actorUserId, surface, {
+      kind: "user",
+      text,
+      turnId,
+      ...(attachments.length > 0
+        ? {
+            attachments: attachments.map((meta) => ({
+              id: meta.id,
+              fileName: meta.fileName,
+              mimeType: meta.mimeType,
+              sizeBytes: meta.sizeBytes
+            }))
+          }
+        : {})
+    });
     // #3157 — an over-budget session hands off to a fresh one for this exact conversation.
     const servingThreadId = session.threadId;
     let rollover: Awaited<ReturnType<typeof rollOverSessionIfDue>>;
@@ -286,8 +357,46 @@ export async function runChatTurn(
       userText: text,
       attachments
     });
+    if (
+      surface === DEFAULT_CHAT_SURFACE &&
+      !session.incognito &&
+      session.threadId &&
+      host.deps.visualPresentation
+    ) {
+      visualTurn = host.deps.visualPresentation.begin(
+        sessionKey,
+        {
+          actorUserId,
+          threadId: session.threadId,
+          turnId
+        },
+        () =>
+          host.emit(actorUserId, surface, {
+            kind: "status",
+            id: `visual:${turnId}`,
+            turnId,
+            actionThreadId: servingThreadId ?? undefined,
+            text: "Preparing visual…",
+            visualState: "preparing"
+          })
+      );
+      if (controller.signal.aborted) visualTurn.discard();
+      const context = visualTurn.registerPrompt(
+        text,
+        new Date(host.deps.clock.now()).toISOString()
+      );
+      if (context) engineText = { ...engineText, text: `${engineText.text}\n\n${context}` };
+    }
     try {
-      await submitPreparedTurn(session.engine, engineText);
+      const submitTurn = () => submitPreparedTurn(session.engine, engineText);
+      await (chatAttemptObservationEnabled()
+        ? observeChatAttempt(
+            "submit.initial",
+            submitTurn,
+            { actorUserId, surface },
+            controller.signal
+          )
+        : submitTurn());
       noteSessionSubmission(session.usage, engineText.text, "turn");
     } catch (err) {
       // #2934 finding 1 — a stop around a failed submit refuses instead of resubmitting.
@@ -307,7 +416,14 @@ export async function runChatTurn(
           host.deps.persistence.resolveActiveProvider(actorUserId)
         );
         controller.signal.throwIfAborted();
-        const recovery = healAndRelaunchSession(host.lifecycleHost, actorUserId, userName, session);
+        const recovery = chatAttemptObservationEnabled()
+          ? observeChatAttempt(
+              "heal",
+              () => healAndRelaunchSession(host.lifecycleHost, actorUserId, userName, session),
+              { actorUserId, surface },
+              controller.signal
+            )
+          : healAndRelaunchSession(host.lifecycleHost, actorUserId, userName, session);
         session = await waitForChatAdmission(recovery, controller.signal);
         // A new chat inside the heal: re-check stop, identity and privacy before resubmit.
         if (controller.signal.aborted)
@@ -321,7 +437,15 @@ export async function runChatTurn(
         toolsListBaseline = session.mcpToken // #2164 r21 — recapture against the fresh token
           ? host.deps.getToolsListObservationCount?.(session.mcpToken)
           : undefined;
-        await submitPreparedTurn(session.engine, engineText);
+        const submitTurn = () => submitPreparedTurn(session.engine, engineText);
+        await (chatAttemptObservationEnabled()
+          ? observeChatAttempt(
+              "submit.retry",
+              submitTurn,
+              { actorUserId, surface },
+              controller.signal
+            )
+          : submitTurn());
         noteSessionSubmission(session.usage, engineText.text, "turn");
       } else {
         throw err;
@@ -370,7 +494,18 @@ export async function runChatTurn(
         if (record.sequence !== undefined) flushPending(record.sequence);
         const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
         if (!rejectionOnly) {
-          host.emit(actorUserId, surface, record.kind === "reply" ? { ...record, turnId } : record);
+          // Engine output cannot publish a visual; only the validated post-save record can.
+          const {
+            visualReply: _visual,
+            visualFallbackText: _fallback,
+            visualState: _state,
+            ...engineRecord
+          } = record;
+          host.emit(
+            actorUserId,
+            surface,
+            record.kind === "reply" ? { ...engineRecord, turnId } : engineRecord
+          );
           if (record.kind !== "reply" && record.kind !== "status") {
             upsertActivityRecord(turnActivityRecords, record);
           }
@@ -464,6 +599,12 @@ export async function runChatTurn(
     if (controller.signal.aborted)
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
 
+    // A reminder listing always gets its card, even when the model answered in prose.
+    visualTurn?.presentRegisteredSource("reminders.summary");
+    const checkedVisual = visualTurn?.reply
+      ? validateVisualCatalogReply(visualTurn.reply)
+      : undefined;
+    const visualReply = checkedVisual?.ok ? checkedVisual.reply : undefined;
     const stored = await host.deps.persistence.recordTurn(
       actorUserId,
       text,
@@ -476,6 +617,8 @@ export async function runChatTurn(
         threadId: session.threadId,
         invokedToolNames,
         answerProvenance,
+        visualReply,
+        stopSignal: controller.signal,
         attachments:
           attachments.length > 0
             ? attachments.map((meta) => ({
@@ -496,7 +639,13 @@ export async function runChatTurn(
       },
       surface
     );
-    if (stored !== undefined) liveTurn?.saved();
+    if (stored !== undefined) {
+      liveTurn?.saved();
+      visualTurn?.close();
+    }
+    // A commit that won the Stop race may remain in history; never publish it into a stopped turn.
+    if (controller.signal.aborted)
+      return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
     session.lastActivity = host.deps.clock.now();
     host.deps.touchMcpToken?.(sessionKey);
 
@@ -515,13 +664,15 @@ export async function runChatTurn(
     }
 
     // Post-store: re-emit reply with messageId + sourceFreshness so live UI picks it up
-    if (stored?.assistantMessageId && stored.sourceFreshness !== undefined) {
+    if (stored?.assistantMessageId) {
       host.emit(actorUserId, surface, {
         kind: "reply",
         text: reply,
         messageId: stored.assistantMessageId,
         turnId,
+        actionThreadId: session.threadId ?? undefined,
         sourceFreshness: stored.sourceFreshness,
+        visualReply,
         ...(turnElapsedMs !== undefined ? { elapsedMs: turnElapsedMs } : {}),
         ...(turnUsage !== undefined ? { usage: turnUsage } : {})
       });
@@ -531,13 +682,25 @@ export async function runChatTurn(
       reply,
       userMessageId: stored?.userMessageId,
       assistantMessageId: stored?.assistantMessageId,
-      sourceFreshness: stored?.sourceFreshness
+      sourceFreshness: stored?.sourceFreshness,
+      ...(stored?.assistantMessageId && visualReply ? { visualReply } : {})
     };
   } catch (error) {
     if (!controller.signal.aborted) liveTurn?.interrupted();
     if (!controller.signal.aborted || error !== controller.signal.reason) throw error;
     return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, gateShadow);
   } finally {
+    if (visualTurn)
+      host.emit(actorUserId, surface, {
+        kind: "status",
+        id: `visual:${turnId}`,
+        turnId,
+        actionThreadId: visualTurn.identity.threadId,
+        text: "",
+        visualState: "clear"
+      });
+    controller.signal.removeEventListener("abort", discardVisualTurn);
+    if (visualTurn) host.deps.visualPresentation?.release(sessionKey, visualTurn);
     await liveTurn?.settle();
     // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
     gateShadow?.finish();

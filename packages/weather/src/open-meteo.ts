@@ -35,7 +35,7 @@ const WMO_CODE_MAP: Record<number, { condition: string; icon: WeatherIcon }> = {
   99: { condition: "Thunderstorm with heavy hail", icon: "cloud-rain" }
 };
 
-function resolveWmoCode(code: number): { condition: string; icon: WeatherIcon } {
+export function resolveWmoCode(code: number): { condition: string; icon: WeatherIcon } {
   return WMO_CODE_MAP[code] ?? { condition: "Unknown", icon: "cloud" };
 }
 

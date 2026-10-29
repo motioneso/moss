@@ -12,10 +12,10 @@ const { Client } = pg;
 const GATE_KEY = "chat.classifier_gate_mode";
 const CLASSIFIER_PROVIDER_MODEL_ID = "gate-classifier-json";
 
-// #2881, #2984 R2.4: the classifier gate setting has ONE write door, its typed runtime-config route,
-// which enforces the off/shadow/on enum and the shadow-review check. These tests run the real API
-// server against a real database to prove the generic settings route refuses the key, and that the
-// typed route refuses `on` until a shadow review exists for the exact current classifier selection.
+// #2881: the classifier gate setting has ONE write door, its typed runtime-config route, which
+// enforces the off/shadow/on enum and admin-only writes. These tests run the real API server
+// against a real database. They prove the generic settings route refuses the key, that an admin
+// can turn the gate on with no shadow review recorded, and that a non-admin cannot.
 
 describe("classifier gate setting route guards", () => {
   let appDb: Kysely<MossDatabase>;
@@ -60,7 +60,7 @@ describe("classifier gate setting route guards", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("defaults to off, and refuses on until the current classifier has a shadow review", async () => {
+  it("defaults to off, and turns on with no shadow review recorded", async () => {
     // Missing value resolves to the off default.
     const initial = await server.inject({
       method: "GET",
@@ -69,38 +69,26 @@ describe("classifier gate setting route guards", () => {
     });
     expect(initial.json()).toEqual({ config: { value: "off", source: "default" } });
 
-    // off and shadow are always accepted.
+    // Off to On, with no classifier chosen and no review.
+    const onFromOff = await putGate("on");
+    expect(onFromOff.statusCode).toBe(200);
+    expect(onFromOff.json()).toEqual({ config: { value: "on", source: "instance" } });
+
+    // Shadow to On after a classifier is chosen, still with no review.
     expect((await putGate("shadow")).statusCode).toBe(200);
+    await selectClassifier();
+    const onFromShadow = await putGate("on");
+    expect(onFromShadow.statusCode).toBe(200);
+    expect(onFromShadow.json()).toEqual({ config: { value: "on", source: "instance" } });
 
-    // No classifier is selected, so there is nothing a review could match.
-    expect((await putGate("on")).statusCode).toBe(409);
+    // On is not one-way.
+    const off = await putGate("off");
+    expect(off.statusCode).toBe(200);
+    expect(off.json()).toEqual({ config: { value: "off", source: "instance" } });
 
-    // A retired per-tool release row no longer unlocks on.
-    await bootstrapQuery(
-      `INSERT INTO app.chat_classifier_release_eligibility
-         (module_id, tool_name, classifier_config_version, approved_by_user_id)
-       VALUES ('calendar', 'calendar.listVisibleEvents', 'cfg-v1', $1)`,
-      [ids.userA]
-    );
-    expect((await putGate("on")).statusCode).toBe(409);
-
-    // Select a classifier. Still no review for it.
-    const modelId = await selectClassifier();
-    const unreviewed = await putGate("on");
-    expect(unreviewed.statusCode).toBe(409);
-    expect(unreviewed.json().error).toBe(
-      "The classifier gate cannot be turned on: no shadow review is recorded for the current classifier."
-    );
-
-    // A review for a different selection does not count.
-    await insertReview(modelId, "some-other-provider-model");
-    expect((await putGate("on")).statusCode).toBe(409);
-
-    // A review for the exact current selection unlocks on.
-    await insertReview(modelId, CLASSIFIER_PROVIDER_MODEL_ID);
-    const onAccepted = await putGate("on");
-    expect(onAccepted.statusCode).toBe(200);
-    expect(onAccepted.json()).toEqual({ config: { value: "on", source: "instance" } });
+    expect(
+      await bootstrapCount("SELECT count(*)::int AS n FROM app.chat_classifier_shadow_reviews")
+    ).toBe(0);
   });
 
   async function selectClassifier(): Promise<string> {
@@ -140,31 +128,30 @@ describe("classifier gate setting route guards", () => {
     return modelId;
   }
 
-  it("refuses a non-admin writing the gate on its typed route", async () => {
+  it("refuses a non-admin turning the gate on on its typed route", async () => {
     const res = await server.inject({
       method: "PUT",
       url: `/api/admin/runtime-config/${GATE_KEY}`,
       headers: { authorization: `Bearer ${ids.sessionB}` },
-      payload: { value: "shadow" }
+      payload: { value: "on" }
     });
     expect(res.statusCode).toBe(403);
+
+    const stored = await server.inject({
+      method: "GET",
+      url: `/api/admin/runtime-config/${GATE_KEY}`,
+      headers: { authorization: `Bearer ${ids.sessionA}` }
+    });
+    expect(stored.json().config.value).toBe("off");
   });
 });
 
-async function insertReview(modelId: string, providerModelId: string): Promise<void> {
-  await bootstrapQuery(
-    `INSERT INTO app.chat_classifier_shadow_reviews
-       (classifier_model_id, classifier_provider_model_id, reviewed_by_user_id)
-     VALUES ($1, $2, $3)`,
-    [modelId, providerModelId, ids.userA]
-  );
-}
-
-async function bootstrapQuery(text: string, values: unknown[]): Promise<void> {
+async function bootstrapCount(text: string): Promise<number> {
   const client = new Client({ connectionString: connectionStrings.bootstrap });
   await client.connect();
   try {
-    await client.query(text, values);
+    const result = await client.query<{ n: number }>(text);
+    return result.rows[0]?.n ?? -1;
   } finally {
     await client.end();
   }

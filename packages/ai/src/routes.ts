@@ -622,7 +622,7 @@ export function registerAiRoutes(
     }
   );
 
-  registerAiServiceRoutes(server, dependencies, repository);
+  registerAiServiceRoutes(server, dependencies, repository, secretCipher);
   registerAiTranscriptionRoutes(server, dependencies, repository, secretCipher);
   // #874: dedicated admin GET/PUT for the single instance-wide Voice (STT) endpoint (no discovery).
   registerAiVoiceEndpointRoutes(server, dependencies, repository, secretCipher);

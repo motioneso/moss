@@ -20,14 +20,14 @@ if [[ "$build_mode" == release ]]; then
 fi
 rm -rf build/classes build/dex
 mkdir -p build/classes build/dex
-sources=(src/ai/moss/vocci/*.java)
+sources=(src/ai/moss/android/*.java)
 if [[ "$build_mode" == release ]]; then
-  sources=(); for source in src/ai/moss/vocci/*.java; do
+  sources=(); for source in src/ai/moss/android/*.java; do
     [[ "$source" == *Checks.java ]] || sources+=("$source")
   done
 fi
 javac --release 11 -cp "$android_jar" -d build/classes "${sources[@]}"
-"$build_tools/d8" --lib "$android_jar" --min-api 33 --output build/dex build/classes/ai/moss/vocci/*.class
+"$build_tools/d8" --lib "$android_jar" --min-api 33 --output build/dex build/classes/ai/moss/android/*.class
 manifest_path=AndroidManifest.xml
 if [[ "$build_mode" == release ]]; then
   python3 - <<'PY'
@@ -44,7 +44,7 @@ tree = ET.parse('AndroidManifest.xml'); root = tree.getroot()
 root.set(attr('versionCode'), code); root.set(attr('versionName'), name)
 app = root.find('application')
 app.set(attr('debuggable'), 'false'); app.set(attr('usesCleartextTraffic'), 'false')
-app.set(attr('label'), 'Moss ring companion')
+app.set(attr('label'), 'Moss')
 for item in root.findall('instrumentation'): root.remove(item)
 tree.write('build/AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
 PY

@@ -175,7 +175,9 @@ describe("Tasks module M1", () => {
       permissionId: "tasks.update"
     });
     expect(tasksManifest?.assistantTools?.map((tool) => tool.name)).toEqual([
+      "tasks.summary",
       "tasks.list",
+      "tasks.heartbeatWindow",
       "tasks.get",
       "tasks.focus",
       "tasks.atRisk",

@@ -48,7 +48,7 @@ function fixture() {
 }
 
 describe("explicit constrained adapter", () => {
-  it.each(["anthropic"] as const)(
+  it.each(["anthropic", "openai-compatible"] as const)(
     "keeps %s on the owner and exact model with a fresh constrained profile",
     async (kind) => {
       const f = fixture();
@@ -93,12 +93,12 @@ describe("explicit constrained adapter", () => {
     ).rejects.toThrow("unavailable");
     expect(f.factory).not.toHaveBeenCalled();
   });
-  it("rejects Codex before creating or launching any engine", async () => {
+  it("rejects an unimplemented constrained transport before creating any engine", async () => {
     const f = fixture();
     await expect(
-      createConstrainedCliStructuredAdapterFactory(f.factory)(
-        "openai-compatible"
-      ).generateStructured(input("openai-compatible"))
+      createConstrainedCliStructuredAdapterFactory(f.factory)("google").generateStructured(
+        input("google")
+      )
     ).rejects.toThrow("Structured transport is unavailable");
     expect(f.factory).not.toHaveBeenCalled();
     expect(f.submitStructured).not.toHaveBeenCalled();

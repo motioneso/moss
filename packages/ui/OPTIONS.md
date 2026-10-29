@@ -132,6 +132,10 @@ _No enum or boolean props._
 - **size** (optional, default `md`): `sm`, `md`, `lg`
 - **active** (optional boolean flag)
 
+## identity-metric
+
+_No enum or boolean props._
+
 ## indicator
 
 - **status** (required): `ready`, `drift`, `error`, `idle`
@@ -152,7 +156,7 @@ _No enum or boolean props._
 
 ## menu
 
-- **triggerVariant** (optional): `icon`, `content`
+- **triggerVariant** (optional): `icon`, `content`, `chip`
 - **placement** (optional): `bottom`, `top`
 
 ## month-chip
@@ -216,6 +220,10 @@ _No enum or boolean props._
 - **disabled** (optional boolean flag)
 
 ## tabs
+
+_No enum or boolean props._
+
+## textarea
 
 _No enum or boolean props._
 

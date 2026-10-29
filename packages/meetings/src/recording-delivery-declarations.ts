@@ -61,7 +61,7 @@ export const recordingDeliveryRoutes = [
 export const recordingUploadFeature = {
   id: "meetings.resumable_recordings",
   description:
-    "Developer uploads resume missing chunks for 24 hours. Meetings up to two hours use checkpointed transcription before analysis. Hold-to-talk stays limited to 120 seconds and enters Main. Consumer setup is not yet available.",
+    "Android uploads resume for 24h. Meetings: 2h; hold: 120s to Main. Sparse audible windows retry once in halves; more text wins; failed retries keep the original. End drift up to 500ms is clamped; larger drift fails with evidence retained.",
   errors: [
     {
       code: "recording_import_conflict",
@@ -73,7 +73,7 @@ export const recordingUploadFeature = {
       code: "recording_import_invalid",
       class: "validation",
       description:
-        "Use the approved canonical audio format, complete sidecar and matching SHA256 hashes. Chunks are at most 1 MiB."
+        "Use canonical audio, a complete sidecar and matching SHA256 hashes. Chunks are at most 1 MiB. Ring clock times and declared duration are kept as reported and never refuse audio; bookmarks outside the audio are dropped."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];
@@ -89,14 +89,14 @@ export const recordingVoiceFeature = {
     }
   ],
   description:
-    "Opted-in hold recordings retain audio and enter Main after transcription. Stable inventory and old queued files stay Meetings evidence. Android uses explicit Send for unobserved capture timing. Maximum 120 seconds.",
+    "Opted-in hold audio enters normal Main chat automatically after transcription, including uncertain timing. Legacy requests keep their prior confirmation policy; baseline inventory stays Meetings evidence. Maximum 120 seconds.",
   errors: [
     {
       code: "recording_voice_ineligible",
       class: "prerequisite",
       remediationRef: "meetings.voice_developer_setup",
       description:
-        "Enable hold-to-talk with a complete ring inventory first. Baseline recordings remain meeting imports."
+        "Enable hold-to-talk with a complete ring inventory first. Older hold recordings already on the ring are not imported."
     }
   ]
 } satisfies NonNullable<MossModuleManifest["features"]>[number];
@@ -112,7 +112,7 @@ export const recordingImportFeature = {
     }
   ],
   description:
-    "Developer imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Configured transcripts appear in Meetings history. Limit: 120 seconds. No request execution or consumer ring setup.",
+    "Imports retain source bytes, hashes, WAV, bookmarks and normal/voice-request mode. Transcripts appear in Meetings history. Uploaded voice requests start sooner. Legacy limit: 120 seconds; Android resumes longer uploads.",
   errors: [
     {
       code: "recording_import_invalid",

@@ -8,6 +8,15 @@ import {
   runConstrainedStructuredProcess
 } from "./constrained-structured-process.js";
 import { prepareConstrainedClaudeProfile } from "./constrained-claude-profile.js";
+import { prepareConstrainedCodexProfile } from "./constrained-codex-profile.js";
+vi.mock("./constrained-codex-profile.js", () => ({
+  prepareConstrainedCodexProfile: vi.fn(async () => ({
+    command: "/managed/codex",
+    args: ["exec"],
+    env: { HOME: "/neutral/fresh/constrained-home" }
+  })),
+  parseConstrainedCodexOutput: (value: string) => JSON.parse(value).text
+}));
 vi.mock("node:fs/promises", () => ({
   access: vi.fn(async () => {}),
   realpath: vi.fn(async (path: string) => path)
@@ -111,11 +120,69 @@ describe("constrained runner engine", () => {
     await engine.kill();
     expect(retry).toHaveBeenCalledTimes(1);
   });
-  it("rejects a direct Codex profile before any launch preparation or transcript dispatch", async () => {
+  it("retries failed identity cleanup through public kill until it succeeds", async () => {
+    const { engine, identity } = fixture("anthropic");
+    let unavailable = true;
+    vi.mocked(identity.release).mockImplementation(async () => {
+      if (unavailable) throw new Error("storage unavailable");
+    });
+    await expect(engine.kill()).rejects.toThrow("storage unavailable");
+    await expect(engine.kill()).rejects.toThrow("storage unavailable");
+    unavailable = false;
+    await engine.kill();
+    expect(identity.release).toHaveBeenCalledTimes(3);
+    await engine.kill();
+    expect(identity.release).toHaveBeenCalledTimes(3);
+  });
+  it("retries cleanup that failed at the end of a running request before acknowledging stop", async () => {
+    const { engine, identity } = fixture("anthropic");
+    let unavailable = true;
+    vi.mocked(identity.release).mockImplementation(async () => {
+      if (unavailable) throw new Error("storage unavailable");
+    });
+    vi.mocked(runConstrainedStructuredProcess).mockImplementation(async (options) => {
+      await options.identity?.release();
+      return { stdout: '{"result":"{}"}', exitCode: 0, signal: null };
+    });
+    await engine.launchStructured(opts);
+    await engine.submitStructured("synthetic transcript");
+    await expect(engine.kill()).rejects.toThrow("storage unavailable");
+    unavailable = false;
+    await engine.kill();
+    expect(identity.release).toHaveBeenCalledTimes(3);
+  });
+  it("shares identity cleanup between concurrent stop requests", async () => {
+    const { engine, identity } = fixture("anthropic");
+    await Promise.all([engine.kill(), engine.kill()]);
+    expect(identity.release).toHaveBeenCalledOnce();
+  });
+  it("rejects Codex without the runner-created private home before transcript dispatch", async () => {
     const { engine } = fixture("openai-compatible");
     await expect(engine.launchStructured(opts)).rejects.toThrow();
     expect(prepareConstrainedClaudeProfile).not.toHaveBeenCalled();
     expect(runConstrainedStructuredProcess).not.toHaveBeenCalled();
+  });
+  it("runs Codex using the temporary login home and exact selected model", async () => {
+    const { io, identity } = fixture("openai-compatible");
+    const engine = new ConstrainedStructuredEngine(
+      "openai-compatible",
+      io,
+      "/neutral/fresh/constrained-home",
+      identity
+    );
+    await engine.launchStructured(opts);
+    expect(prepareConstrainedCodexProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privateHome: "/neutral/fresh/constrained-home",
+        model: "exact-model",
+        schema: opts.schema
+      })
+    );
+    expect(prepareConstrainedClaudeProfile).not.toHaveBeenCalled();
+    await engine.submitStructured("synthetic transcript");
+    await vi.waitFor(async () => expect((await engine.readStructured(0)).complete).toBe(true));
+    expect((await engine.readStructured(0)).text).toBe("{}");
+    await engine.kill();
   });
   it("refuses execution without the runner's owner identity", async () => {
     const { io } = fixture("anthropic");

@@ -7,7 +7,7 @@ const messages: Record<VoiceRequest["state"], string> = {
   queued: "Waiting until Main chat is available.",
   dispatching: "Moss is responding in Main chat.",
   replied: "Moss replied in Main chat.",
-  interrupted: "This request was interrupted. Check Main chat before sending a new message."
+  interrupted: "Moss was interrupted before replying. Anything it started may not be done."
 };
 
 /** Explicit public projection: dispatch boot identity and internal fingerprints stay internal. */
@@ -17,6 +17,8 @@ export function voiceRequestStatus(row: VoiceRequest): ChatVoiceRequestStatus {
     sourceDeviceId: row.source_device_id,
     recordingId: row.recording_id,
     threadId: row.thread_id,
+    turnId: row.turn_id,
+    createdAt: row.created_at.toISOString(),
     transcript: row.transcript,
     state: row.state,
     capturedAt: row.captured_at?.toISOString() ?? null,

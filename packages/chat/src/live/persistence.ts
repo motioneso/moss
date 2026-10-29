@@ -35,11 +35,7 @@ import {
   type MossDatabase,
   type PreferencesPort
 } from "@moss/db";
-import {
-  CHAT_SETTINGS_PREFERENCE_KEY,
-  DEFAULT_CHAT_SURFACE,
-  normalizeChatSettings
-} from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 import type {
   AnswerProvenanceMetadataV1,
   AiAuthMethod,
@@ -49,7 +45,8 @@ import type {
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   LocaleSettingsDto,
-  SourceFreshnessV1
+  SourceFreshnessV1,
+  VisualReplyV1
 } from "@moss/shared";
 import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/shared";
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
@@ -115,8 +112,6 @@ export interface DataContextChatPersistenceDeps {
   ) => Promise<Date | null>;
   /** Used to read the user's IANA timezone from their locale preference (key "locale"). */
   readonly localePreferences?: PreferencesPort;
-  /** Reads the user's saved ACP model choice for the live launch. */
-  readonly chatPreferences?: PreferencesPort;
   /** Builds the cipher that opens API-key provider credentials for chat launches. */
   readonly resolveAiSecretCipher?: () => AiSecretCipher;
   /** #3128 — this process's boot id; tests pass one per simulated boot. */
@@ -134,6 +129,8 @@ interface PersistTurnOptions {
   readonly threadId?: string | null;
   readonly invokedToolNames?: ReadonlySet<string>;
   readonly answerProvenance?: AnswerProvenanceMetadataV1;
+  readonly visualReply?: VisualReplyV1;
+  readonly stopSignal?: AbortSignal;
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ActionResultMetadata[];
   readonly activityRecords?: readonly TranscriptRecord[];
@@ -162,7 +159,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly boss: PgBoss | undefined;
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
   private readonly localePreferences: PreferencesPort | undefined;
-  private readonly chatPreferences: PreferencesPort | undefined;
   private readonly resolveAiSecretCipher: (() => AiSecretCipher) | undefined;
   private readonly bootId: string;
   private readonly canProposeBoundedAction: DataContextChatPersistenceDeps["canProposeBoundedAction"];
@@ -178,7 +174,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.boss = deps.boss;
     this.connectorSyncAt = deps.connectorSyncAt;
     this.localePreferences = deps.localePreferences;
-    this.chatPreferences = deps.chatPreferences;
     this.resolveAiSecretCipher = deps.resolveAiSecretCipher;
     this.bootId = deps.bootId ?? CHAT_PROCESS_BOOT_ID;
     this.editCliAdapter = deps.editCliAdapter;
@@ -227,19 +222,14 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     acpModel?: string;
     providerConfigRevision?: string;
   }> {
-    const { model, openCodeModel, revision } = await this.run(
+    const { model, revision } = await this.run(
       actorUserId,
       "resolve-provider",
       async (scopedDb) => {
         // Sequential: model selection can write through a savepoint.
         const model = await this.ai.selectChatModelForUser(scopedDb);
-        const rawChatSettings = await this.chatPreferences?.get(
-          scopedDb,
-          CHAT_SETTINGS_PREFERENCE_KEY
-        );
         return {
           model,
-          openCodeModel: normalizeChatSettings(rawChatSettings).openCodeModel,
           revision: await chatLaunchRevision(this.ai, scopedDb, model)
         };
       }
@@ -250,7 +240,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     }
 
     const provider = toLiveProvider(model);
-    const acpModel = chatAcpModel(model, openCodeModel);
+    const acpModel = chatAcpModel(model);
     return {
       provider,
       model: model.provider_model_id,
@@ -355,6 +345,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly threadId?: string | null;
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
+      readonly visualReply?: VisualReplyV1;
+      readonly stopSignal?: AbortSignal;
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
       readonly activityRecords?: readonly TranscriptRecord[];
@@ -562,6 +554,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     if (threadId === null) return undefined;
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, operation, async (scopedDb) => {
+      opts?.stopSignal?.throwIfAborted();
       const thread =
         threadId === undefined
           ? ((await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)) ??
@@ -596,6 +589,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       const completedOpts = {
         sourceFreshness,
         answerProvenance: opts?.answerProvenance,
+        visualReply: opts?.visualReply,
         attachments: opts?.attachments,
         actionResults: opts?.actionResults,
         activityRecords: opts?.activityRecords,
@@ -652,6 +646,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               )
             : undefined;
       if (result && handled && "save" in handled) await handled.save?.(result.userMessage.id);
+      opts?.stopSignal?.throwIfAborted();
       // #3311: only a stored model turn acknowledges the reminders it was shown.
       if (result && "executed" in turn && opts?.acknowledgeReminderMessageIds) {
         await this.reminders.acknowledgeMain(
@@ -714,6 +709,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
           await sendJob(this.boss, CHAT_ARCHIVE_DAY_QUEUE, archivePayload);
         }
       }
+      // Last in-transaction boundary: Stop before commit rolls back the message and visual together.
+      opts?.stopSignal?.throwIfAborted();
       return result
         ? {
             userMessageId: result.userMessage.id,

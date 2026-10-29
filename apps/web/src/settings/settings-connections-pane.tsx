@@ -6,7 +6,6 @@ import { useSearchParams } from "react-router";
 import { listConnectorAccounts, listIntegrations } from "../api/client";
 import { getNotesSource } from "../api/notes-client";
 import { queryKeys } from "../api/query-keys";
-import { useAssistantName } from "../api/use-assistant-name.js";
 import { SettingsIntegrationsPane } from "./settings-integrations-pane";
 import { ConnectedPane, SourcesPane } from "./settings-personal-data-panes";
 import { PaneHead } from "./settings-ui";
@@ -18,7 +17,6 @@ import { PaneHead } from "./settings-ui";
  * hidden, so nothing loses its state.
  */
 export function ConnectionsPane() {
-  const assistantName = useAssistantName();
   const [searchParams] = useSearchParams();
   const [accountFlow, setAccountFlow] = useState(false);
   const [folderFlow, setFolderFlow] = useState(false);
@@ -51,10 +49,7 @@ export function ConnectionsPane() {
     <>
       {anyFlow ? null : (
         <>
-          <PaneHead
-            title="Connections"
-            desc={`Everything ${assistantName} can reach outside itself, and how each one is doing.`}
-          />
+          <PaneHead title="Connections" />
           <dl className="conn__counts" aria-label="Connections at a glance">
             <div className="conn__count">
               <dd>{accountCount ?? "-"}</dd>

@@ -3,7 +3,12 @@ import type { MeetingRecordingUploadManifest } from "@moss/shared";
 
 const chunkBytes = 1024 * 1024;
 /** Generated PCM/framing fixtures are transport evidence, never hardware or ASR proof. */
-export function recordingUpload(durationMs = 90_000, hold = false) {
+export function recordingUpload(
+  durationMs = 90_000,
+  hold = false,
+  elapsedDifferenceMs = 0,
+  amplitude = 0
+) {
   const recordingId = `${hold ? "amsg_" : ""}1792470000_${randomUUID().slice(0, 8)}`;
   const packets = Buffer.alloc(Math.ceil(durationMs / 60) * 3);
   for (let i = 0; i < packets.length / 3; i++) {
@@ -11,7 +16,7 @@ export function recordingUpload(durationMs = 90_000, hold = false) {
     packets[i * 3 + 1] = 1;
   }
   const sidecar = Buffer.from(
-    `{"record":["1792470000","start"]},{"btn":["1792470001000","1"]},{"duration":["1792470000","${durationMs}"]},{"record":["${1792470000000 + durationMs}","end"]}`
+    `{"record":["1792470000","start"]},{"btn":["1792470001000","1"]},{"duration":["1792470000","${durationMs}"]},{"record":["${1792470000000 + durationMs + elapsedDifferenceMs}","end"]}`
   );
   const wavLength = 44 + durationMs * 32;
   function* chunks(kind: "packets" | "sidecar" | "wav") {
@@ -37,6 +42,9 @@ export function recordingUpload(durationMs = 90_000, hold = false) {
         chunk.write("data", 36);
         chunk.writeUInt32LE(length - 44, 40);
       }
+      if (amplitude)
+        for (let i = offset === 0 ? 44 : 0; i < chunk.length; i += 2)
+          chunk.writeInt16LE((i % 4 ? -1 : 1) * amplitude, i);
       yield chunk;
     }
   }

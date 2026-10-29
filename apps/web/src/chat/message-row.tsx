@@ -32,6 +32,7 @@ import {
 import { ActionRequestCard } from "./action-request-card";
 import { formatAttachmentSize } from "./attachments";
 import { MarkdownMessage } from "./markdown-message";
+import { VisualReply } from "./visual-reply";
 import { ModuleBuildPlanRecord, parseModuleBuildPlanResult } from "./module-build-plan-record";
 import { WorkshopProjectRecord, parseWorkshopProjectResult } from "./workshop-project-record";
 import { WorkflowApprovalCard } from "./workflow-approval-card";
@@ -149,6 +150,9 @@ export function RecordRow(props: {
             answerProvenance={props.record.answerProvenance}
             answerProvenanceCitedIds={props.record.answerProvenanceCitedIds}
           />
+          {!props.record.meetingContext && !props.meetingScoped ? (
+            <VisualReply record={props.record} />
+          ) : null}
         </div>
         {props.record.meetingContext ? (
           <p className="chatd-empty__sub">{meetingCoverageLabel(props.record.meetingContext)}</p>

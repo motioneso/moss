@@ -30,6 +30,17 @@ import type { ProviderKind } from "./transcript-reader.js";
 import { providerBaseUrl } from "../provider-base-url.js";
 import { transcriptionHttpFailure } from "../transcription-errors.js";
 
+const AUDIO_EXTENSIONS: Readonly<Record<string, string>> = {
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "mp4",
+  "audio/mpeg": "mp3",
+  "audio/flac": "flac",
+  "audio/aac": "aac"
+};
+
 // ---------------------------------------------------------------------------
 // HttpApiAdapter
 // ---------------------------------------------------------------------------
@@ -177,7 +188,10 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         const base = providerBaseUrl("openai-compatible", this._baseUrl);
         const form = new FormData();
         form.set("model", input.model.provider_model_id);
-        form.set("file", input.audio, "audio");
+        const extension = AUDIO_EXTENSIONS[input.audio.type.split(";")[0] ?? ""];
+        form.set("file", input.audio, extension ? `audio.${extension}` : "audio");
+        if (input.language) form.set("language", input.language);
+        if (input.prompt !== undefined) form.set("prompt", input.prompt);
         if (input.timestamps === "segment") {
           form.set("response_format", "verbose_json");
           form.append("timestamp_granularities[]", "segment");

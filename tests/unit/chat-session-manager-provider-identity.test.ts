@@ -409,6 +409,8 @@ describe("ChatSessionManager provider identity", () => {
     await expect(turn).rejects.toMatchObject({ name: "ChatProviderChangedError" });
     expect(oldEngine.submitted).toEqual([]);
     expect(newEngine.submitted).toEqual([]);
-    expect(emitted).not.toContainEqual({ kind: "user", text: "prepared for Codex" });
+    expect(emitted).not.toContainEqual(
+      expect.objectContaining({ kind: "user", text: "prepared for Codex" })
+    );
   });
 });

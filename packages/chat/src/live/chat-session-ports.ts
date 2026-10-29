@@ -1,4 +1,5 @@
 import type { ScheduledReadPlan } from "../scheduled-reads/request.js";
+import type { VisualPresentationService } from "../visual/presentation-service.js";
 /**
  * Persistence + passive-retrieval port interfaces for ChatSessionManager, split out of
  * chat-session-manager.ts (#1157) to keep that file under the repo's 1000-line cap. All
@@ -15,7 +16,8 @@ import type {
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   LocaleSettingsDto,
-  SourceFreshnessV1
+  SourceFreshnessV1,
+  VisualReplyV1
 } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
@@ -96,6 +98,8 @@ export interface ChatPersistencePort {
       readonly threadId?: string | null;
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
+      readonly visualReply?: VisualReplyV1;
+      readonly stopSignal?: AbortSignal;
       /** #1133 — display metadata for files sent with this turn (user-message tool_metadata). */
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
@@ -161,7 +165,7 @@ export interface ChatPersistencePort {
       }
     | undefined
   >;
-  /** Resolve an explicit scheduled Tasks check; unmatched selections leave the turn unchanged. */
+  /** Resolve an explicit scheduled Tasks check. A one-time check stays terminal once interpretation starts. */
   resolveScheduledReadRequest?(
     actorUserId: string,
     text: string,
@@ -368,6 +372,8 @@ export interface ChatSessionManagerDeps {
    * (tests, embedders) means tool rows carry no turn id.
    */
   readonly setCurrentTurnId?: (chatSessionId: string, turnId: string) => void;
+  /** Internal integration seam; production activation awaits the remaining visual gates. */
+  readonly visualPresentation?: VisualPresentationService;
   readonly clearCurrentTurnId?: (chatSessionId: string) => void;
   /**
    * #2159 — resolves once this session's MCP client has completed its first tools/list round

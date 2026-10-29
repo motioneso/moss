@@ -1,0 +1,442 @@
+{
+  "scope": "internal opt-in separate executable and trusted private Unix transport; no runtime/owner acceptance",
+  "base": "583819299a29c900a5391aef4fcdf5952b87f1d4",
+  "production_source": "17f45ed68b0bd9e735f1a0d8d17dbfdb0aedec63",
+  "source_restored": true,
+  "source_test_sha256": {
+    "apps/api/package.json": "eef925e786bbedfef60071aa47a9c0448ca37df7aa5b517548dc24a401a786f1",
+    "apps/api/src/computer/auth-server.ts": "211fa28ddd7ad735d6eb9f5401944fb30daf6416758adc5a5f1e080b6c81ec8d",
+    "apps/api/src/computer/gateway-channel.ts": "d37ad9bfdb08cb1eb78f7e60689d8d3ae6e26dd727f9f05525be8758c61a3c49",
+    "apps/api/src/computer/gateway-client.ts": "d2a6ad8e4f850fb865b548aaf7b6ad00fcf4be04a5fc3672e0514973bfb4dd70",
+    "apps/api/src/computer/gateway-server.ts": "f120141716ba35f9678774a0589bc920643d8229e99092c282f8cfed46b3779e",
+    "apps/api/src/computer/guest-websocket.ts": "d5c1ba6b791066d35a139c2c69ea7b215ba13bc97811d79752e0f35edf5ce152",
+    "apps/api/src/computer/private-endpoint.ts": "c40c26c1b705a71e57f7fb875f6f468b64b7662bc745baf1995368f1264a4509",
+    "pnpm-lock.yaml": "c1aeb9ba0c811c1a43a78e9148edf2cc79f19876ff77c482adba8e25d81e009b",
+    "scripts/computer-gateway.ts": "4605b73610ec23e85199ed9b9ba65354031bf0317677c53b4b15fa78e392ad98",
+    "scripts/computer-gateway/config.ts": "5b848ba765196aea1dcbe2017c4123387d1b9347a85c66311cf4ecb631d4e969",
+    "tests/unit/computer-gateway-channel.test.ts": "38c572c3cfab1a9ea7f052422f3b13b372264772d420ed2609e9510e2fe8464a",
+    "tests/unit/computer-gateway-process.test.ts": "471164957c03cec818164b4d18d028005ac231841cbcf8aae126f99081faeb74",
+    "tests/unit/computer-guest-websocket.test.ts": "9a12ebfabda6da8dcd174870dbed8ddc286e7217f68805757bdb23c8a5869f24",
+    "tests/unit/computer-process-fixture.ts": "59ffd11558fd9f7c09bec8ff1ae3bb815355d7f13e1710fb1eced3a329e0d744"
+  },
+  "tests": {
+    "passed": 139,
+    "files": 10,
+    "transport": "real private Unix IPC, ws8.21.1, rfb2 and actual opt-in child executable",
+    "stand_ins": "synthetic fresh session lookup and library server Fence extension; no actual TigerVNC"
+  },
+  "checks": [
+    {
+      "name": "behavior-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-auth-endpoint.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-input-control.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 48.79,
+      "log_sha256": "53b33cc7555d39fabf2ab1ec12d5ee427f52e26f4ea1d13365c47da900503f1b"
+    },
+    {
+      "name": "root-typescript-final",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "seconds": 159.52,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-typescript-final",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 125.22,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "apps/api/src/computer/private-endpoint.ts",
+        "apps/api/src/computer/auth-server.ts",
+        "apps/api/src/computer/guest-websocket.ts",
+        "apps/api/src/computer/gateway-channel.ts",
+        "apps/api/src/computer/gateway-server.ts",
+        "apps/api/src/computer/gateway-client.ts",
+        "scripts/computer-gateway.ts",
+        "scripts/computer-gateway/config.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 17.29,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "apps/api/package.json",
+        "apps/api/src/computer/private-endpoint.ts",
+        "apps/api/src/computer/auth-server.ts",
+        "apps/api/src/computer/guest-websocket.ts",
+        "apps/api/src/computer/gateway-channel.ts",
+        "apps/api/src/computer/gateway-server.ts",
+        "apps/api/src/computer/gateway-client.ts",
+        "scripts/computer-gateway.ts",
+        "scripts/computer-gateway/config.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "pnpm-lock.yaml",
+        "docs/superpowers/plans/2026-10-24-moss-computer-gateway-process.md",
+        "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-runtime.md",
+        "docs/evidence/moss-computer/2026-10-24-gateway-process.md"
+      ],
+      "exit": 0,
+      "seconds": 5.15,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-final",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 13.42,
+      "log_sha256": "c791be5b2ccb537b09098f183909860a44bcffbe0ca486cbdb843910b5b802a0"
+    },
+    {
+      "name": "whitespace-final",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "seconds": 0.06,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "controls": [
+    {
+      "name": "ws-payload",
+      "file": "apps/api/src/computer/guest-websocket.ts",
+      "test": "payload length",
+      "original_sha256": "d5c1ba6b791066d35a139c2c69ea7b215ba13bc97811d79752e0f35edf5ce152",
+      "mutant_sha256": "6246f8525ce5b617f68436eb0dc8ef04b650ad592ad944378bfcee7e08d2f37c",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "-t",
+        "payload length"
+      ],
+      "exit": 1,
+      "seconds": 1.65,
+      "log_sha256": "97f80ef494a0102426bfdb6d79a8c055cb6c67f32fbc9f022bfd4d67454d5744",
+      "observed_assertions": ["AssertionError: expected false to be true // Object.is equality"],
+      "restored": true
+    },
+    {
+      "name": "ws-fragments",
+      "file": "apps/api/src/computer/guest-websocket.ts",
+      "test": "1024 fragments",
+      "original_sha256": "d5c1ba6b791066d35a139c2c69ea7b215ba13bc97811d79752e0f35edf5ce152",
+      "mutant_sha256": "8d23809e7ba8b4ed572e7a3573645e8d8a4f58c0e0f16564e4283917153d727f",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "-t",
+        "1024 fragments"
+      ],
+      "exit": 1,
+      "seconds": 3.39,
+      "log_sha256": "e80701b9f467b5b59cb491fa542d037dd54ab34d180ab2bf4bcb256e79197358",
+      "observed_assertions": ["AssertionError: expected false to be true // Object.is equality"],
+      "restored": true
+    },
+    {
+      "name": "ws-queued-writes",
+      "file": "apps/api/src/computer/guest-websocket.ts",
+      "test": "public writes",
+      "original_sha256": "d5c1ba6b791066d35a139c2c69ea7b215ba13bc97811d79752e0f35edf5ce152",
+      "mutant_sha256": "b6e5dd53886ccacd2d45576bf5c940b06c85a9b7b64113a29dafde722943af88",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "-t",
+        "public writes"
+      ],
+      "exit": 1,
+      "seconds": 3.27,
+      "log_sha256": "bd20486e9675806392cc88e41c56a956b18b9d3e215dc672ba83f270c42623a1",
+      "observed_assertions": ["AssertionError: expected false to be true // Object.is equality"],
+      "restored": true
+    },
+    {
+      "name": "ws-deadline",
+      "file": "apps/api/src/computer/guest-websocket.ts",
+      "test": "empty idle",
+      "original_sha256": "d5c1ba6b791066d35a139c2c69ea7b215ba13bc97811d79752e0f35edf5ce152",
+      "mutant_sha256": "ce17f2b1dfc20d3f6ee9e31c5da714561daf361d4e2854276da99274a22dc8c4",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "-t",
+        "empty idle"
+      ],
+      "exit": 1,
+      "seconds": 3.99,
+      "log_sha256": "72575c0e976ec402a7493095b93230ac21f35734ffb74d4857d7cb99d709c71a",
+      "observed_assertions": ["AssertionError: expected false to be true // Object.is equality"],
+      "restored": true
+    },
+    {
+      "name": "ws-startup-deadline",
+      "file": "apps/api/src/computer/guest-websocket.ts",
+      "test": "TERM during a stalled",
+      "original_sha256": "d5c1ba6b791066d35a139c2c69ea7b215ba13bc97811d79752e0f35edf5ce152",
+      "mutant_sha256": "09bbf9dbaf3d9a7e932336bf418a1e5c04c31abe7b2c1c156993160b7ddac1c0",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-process.test.ts",
+        "-t",
+        "TERM during a stalled"
+      ],
+      "exit": 1,
+      "seconds": 6.26,
+      "log_sha256": "527d8028ff4c3d25fc58a3c74a48b8369127678f5d83b48918a505e329d0c694",
+      "observed_assertions": [
+        "AssertionError: expected 'still running' to be 1 // Object.is equality"
+      ],
+      "restored": true
+    },
+    {
+      "name": "fifo-open",
+      "file": "scripts/computer-gateway/config.ts",
+      "test": "private FIFO",
+      "original_sha256": "5b848ba765196aea1dcbe2017c4123387d1b9347a85c66311cf4ecb631d4e969",
+      "mutant_sha256": "7f3adcd6e072bff0c751aa57d8ae454402c180ee046f3d36aa6b2152cb994505",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "-t",
+        "private FIFO"
+      ],
+      "exit": 1,
+      "seconds": 5.32,
+      "log_sha256": "93b2369377702ea6db49c708e1c44dab6345d9a8e3692f7783832595b0743a4e",
+      "observed_assertions": ["AssertionError: expected null to be +0 // Object.is equality"],
+      "restored": true
+    },
+    {
+      "name": "client-correlation",
+      "file": "apps/api/src/computer/gateway-client.ts",
+      "test": "wrong correlation",
+      "original_sha256": "d2a6ad8e4f850fb865b548aaf7b6ad00fcf4be04a5fc3672e0514973bfb4dd70",
+      "mutant_sha256": "06b267a5f8f3bb2ea916149b900ff2b378c1363dbfb279150a62d090279a569f",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "-t",
+        "wrong correlation"
+      ],
+      "exit": 1,
+      "seconds": 1.58,
+      "log_sha256": "8ab6cd322a36b368c53ebf5aab2a9468044731abb102dfcb59ee609062b044e6",
+      "observed_assertions": [
+        "AssertionError: promise resolved \"ComputerGatewayViewer{ input: { \u2026(2) } }\" instead of rejecting"
+      ],
+      "restored": true
+    },
+    {
+      "name": "private-output-budget",
+      "file": "apps/api/src/computer/gateway-channel.ts",
+      "test": "corked outgoing",
+      "original_sha256": "d37ad9bfdb08cb1eb78f7e60689d8d3ae6e26dd727f9f05525be8758c61a3c49",
+      "mutant_sha256": "0d93a5bf6318512d17e642180209830225b94cd49c5a55673bd52b9acc6a1f19",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "-t",
+        "corked outgoing"
+      ],
+      "exit": 1,
+      "seconds": 1.32,
+      "log_sha256": "9712f03d412e35ff854c007913da3748d167c061a2dc6bab7d0e3a1a9d0ad438",
+      "observed_assertions": ["AssertionError: expected false to be true // Object.is equality"],
+      "restored": true
+    },
+    {
+      "name": "control-loss",
+      "file": "apps/api/src/computer/gateway-server.ts",
+      "test": "without any parser",
+      "original_sha256": "f120141716ba35f9678774a0589bc920643d8229e99092c282f8cfed46b3779e",
+      "mutant_sha256": "650f860618f54418f8bfd38e3ede1ba0021d04248bb28913818ee03cf450c35a",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-process.test.ts",
+        "-t",
+        "without any parser"
+      ],
+      "exit": 1,
+      "seconds": 1.37,
+      "log_sha256": "58f46d1cc88fd14f032f1e3de3d42549741e0f60d7d3912633998aefed6b086a",
+      "observed_assertions": [
+        "AssertionError: expected { mode: 'owner', viewerCount: 2, \u2026(3) } to match object { mode: 'paused', viewerCount: 1 }"
+      ],
+      "restored": true
+    },
+    {
+      "name": "connection-budget",
+      "file": "apps/api/src/computer/gateway-server.ts",
+      "test": "unbound sockets",
+      "original_sha256": "f120141716ba35f9678774a0589bc920643d8229e99092c282f8cfed46b3779e",
+      "mutant_sha256": "a65033bb632b0f35d0cefa3953236d51c256ee5ad92cf6c847df38df19565883",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-process.test.ts",
+        "-t",
+        "unbound sockets"
+      ],
+      "exit": 1,
+      "seconds": 1.98,
+      "log_sha256": "7da1058ea0d6a0baf8457b0d80167fce3a8a672e1a58ee74df0cf5d9affcff9b",
+      "observed_assertions": ["AssertionError: expected false to be true // Object.is equality"],
+      "restored": true
+    },
+    {
+      "name": "endpoint-ownership",
+      "file": "apps/api/src/computer/private-endpoint.ts",
+      "test": "replacement private endpoints",
+      "original_sha256": "c40c26c1b705a71e57f7fb875f6f468b64b7662bc745baf1995368f1264a4509",
+      "mutant_sha256": "5dddee188ad08b0efbf5921686ecc392f1618e87110a72b0f97832fe2df2483b",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-process.test.ts",
+        "-t",
+        "replacement private endpoints"
+      ],
+      "exit": 1,
+      "seconds": 1.67,
+      "log_sha256": "0b6acd7f069add23780a315bba266628226517c7373e813b9f5c0415daf3de12",
+      "observed_assertions": ["Error: ENOENT: no such file or directory"],
+      "restored": true
+    }
+  ],
+  "control_script_sha256": "7b3211ff730d8d046fe0c350f1604dd5c2944ef53ce1ea2381d57d22f27c9e88",
+  "reviews": [
+    {
+      "receipt": "plan-review-r1.md",
+      "sha256": "ad2ec29b70254ae757f2de92c3b2c5ba206abc2176436915f432d0a36b6890d5"
+    },
+    {
+      "receipt": "plan-review-r2.md",
+      "sha256": "4e7a0bd61cdb45db2473fbaf52171c46a5c3138617b6f78e49ff5d9201589435"
+    },
+    {
+      "receipt": "plan-review-r3.md",
+      "sha256": "72f20deb99a9fa5a139dbb63a6a40a40f5f4cd2d7807da90669489ff14a3c18f"
+    },
+    {
+      "receipt": "security-source-r1.md",
+      "sha256": "27f6d514dccff6b968545bfcc03010d806c086a0f22cf1db45548a06ee51d747"
+    },
+    {
+      "receipt": "security-source-r2.md",
+      "sha256": "d91934bf33800bf544618b525a47eb13d254bd49252c55b2c3694fec3dba0197"
+    },
+    {
+      "receipt": "spec-r1.md",
+      "sha256": "153d8d30ba5df3fa8ff5bad7fded81b0293763e22723fe2dc96e682a11441a65"
+    },
+    {
+      "receipt": "spec-r2.md",
+      "sha256": "833115f41a934a2d3a23c03353597cb32b42e7372d0ff85723df8b151e9f452a"
+    },
+    {
+      "receipt": "standards-r1.md",
+      "sha256": "8aa9a06e5c4d200b4d8d5dcb0d049f98498bab430dc3613a6097d1a00fa8c5c3"
+    },
+    {
+      "receipt": "standards-r2.md",
+      "sha256": "e0adf4c1d553f2ede1a99ee7badaf38a8935885a36620483038d6cdb1cf588f4"
+    }
+  ],
+  "earlier_failures": [
+    {
+      "receipt": "focused.json",
+      "sha256": "7598f513eef2e9d9f23a47e4000813a678ba9dc547734b20adbd6b361189ff69",
+      "exit": 1
+    },
+    {
+      "receipt": "lint.json",
+      "sha256": "e4a33ff5239d550e0af2bf7e77be7c55105048beb7ffd88b5296f9449e551a81",
+      "exit": 1
+    },
+    {
+      "receipt": "stalled-startup-current.json",
+      "sha256": "5628d2a31a1aea38f5181ac311ffdd6e640d7b76468e277aebfa85fbce55e71b",
+      "exit": 1
+    },
+    {
+      "receipt": "startup-diagnostic.json",
+      "sha256": "8738cdc6e8ffb3412ee374c24cf59c9c56d75d3caf5a8ee982cdc90a96954b77",
+      "exit": 1
+    },
+    {
+      "receipt": "fifo-config-red.json",
+      "sha256": "09add411fe8cdd57ebcfdf46a236ae0e50706469972939c2b7abba4aaa30e908",
+      "exit": 1
+    }
+  ],
+  "no_db_docker_actual_guest_browser_image_production_mutation": true,
+  "resources": "only temporary Unix test fixtures/in-memory streams and child executables; closed; no TCP listener/devport",
+  "remaining_issues": [3618, 3619, 3616, 3577],
+  "handoff": "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-runtime.md"
+}

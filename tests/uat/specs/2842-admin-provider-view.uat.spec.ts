@@ -63,9 +63,18 @@ test("a second admin sees the models of a provider another admin added (#2842)",
   await signIn(page, UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD);
   await skipOnboardingIfShown(page);
   await openAssistantAndAiSettings(page);
-  await page.getByRole("button", { name: "Add provider" }).click();
-  await page.getByRole("button", { name: "Anthropic", exact: true }).click();
-  const ownerCard = page.locator(".prov").filter({ has: page.getByLabel("Remove Anthropic") });
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const addDialog = page.getByRole("dialog", { name: /Add a provider|Connect/ });
+  await addDialog.getByRole("radio", { name: "Claude" }).check();
+  await addDialog.getByRole("button", { name: "Next" }).click();
+  await addDialog.getByRole("button", { name: /^Add/ }).click();
+  // Adding a subscription provider opens its sign-in dialog; close it to reach the card.
+  const addedSignIn = page.getByRole("dialog", { name: /^Sign in to / });
+  await addedSignIn.waitFor({ timeout: 10_000 }).then(
+    () => addedSignIn.getByRole("button", { name: "Close" }).click(),
+    () => undefined
+  );
+  const ownerCard = page.locator(".prov").filter({ has: page.getByLabel("Remove Claude") });
   // No provider CLI on this stack, so nothing is discovered; admin one types a model in by hand.
   await ownerCard.getByRole("button", { name: "Add model", exact: true }).click();
   await ownerCard.getByLabel("Model id").fill("uat-shared-model");

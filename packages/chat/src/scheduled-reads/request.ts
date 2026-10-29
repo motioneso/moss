@@ -47,6 +47,9 @@ export interface ScheduledReadCandidate {
 export interface ScheduledReadPlan {
   readonly kind: "scheduled_read";
   readonly failure?: "unavailable" | "invalid";
+  // Set once interpretation starts for a one-time check. The attempt then
+  // stays terminal instead of falling back to ordinary chat.
+  readonly interpretationStarted?: true;
   readonly taskId: string | null;
   readonly title: string;
   readonly when:
@@ -103,11 +106,15 @@ export async function resolveScheduledReadRequest(
     title: "",
     when: null
   };
+  const requestedRepeat = recognizeRepeatingReminder(`remind me to ${request}`);
+  const isRepeat = requestsRepeat || requestedRepeat?.kind === "repeat_request";
+  let interpretationStarted = false;
   const refuse = (stage: ScheduledReadFailureStage) => {
     recordScheduledReadFailure(stage, signal?.aborted ? "aborted" : "ValidationError");
-    return refused;
+    return interpretationStarted && !isRepeat
+      ? { ...refused, failure: "invalid" as const, interpretationStarted: true as const }
+      : refused;
   };
-  const requestedRepeat = recognizeRepeatingReminder(`remind me to ${request}`);
   if (
     signal?.aborted ||
     requestedRepeat?.kind === "unsupported" ||
@@ -115,6 +122,7 @@ export async function resolveScheduledReadRequest(
     /\b(?:delete|remove|update|change|complete|mark|monthly)\b/i.test(request)
   )
     return refuse("request");
+  interpretationStarted = true;
   const output = await interpret();
   if (signal?.aborted || !output || typeof output !== "object" || Array.isArray(output))
     return refuse("output_shape");
@@ -126,7 +134,9 @@ export async function resolveScheduledReadRequest(
   const matches = candidates.filter((item) => item.id === taskId);
   if (matches.length !== 1) {
     recordScheduledReadFailure("item_selection", "ValidationError");
-    return requestsRepeat ? refused : undefined;
+    return isRepeat
+      ? refused
+      : { ...refused, failure: "invalid" as const, interpretationStarted: true as const };
   }
   const task = matches[0]!;
   const titleAt = task.title ? request.toLowerCase().indexOf(task.title.toLowerCase()) : -1;
@@ -162,5 +172,11 @@ export async function resolveScheduledReadRequest(
   if (repeat) return refuse("timing");
   const when = recognizeRelativeReminder(timing);
   if (when.kind !== "request" && when.kind !== "clock_request") return refuse("timing");
-  return { kind: "scheduled_read", taskId: task.id, title: task.title, when };
+  return {
+    kind: "scheduled_read",
+    interpretationStarted: true,
+    taskId: task.id,
+    title: task.title,
+    when
+  };
 }

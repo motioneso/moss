@@ -46,12 +46,19 @@ export {
 import { readBearerToken, toWebHeaders } from "./headers.js";
 import { resolveAuthOriginConfig } from "./runtime-config.js";
 import { createMeSessionsService, type MeSessionsRuntimeService } from "./session-service.js";
+import {
+  SessionInvalidations,
+  sessionInvalidationHooks,
+  withSessionInvalidation
+} from "./session-invalidations.js";
+export { SessionInvalidations, type SessionInvalidation } from "./session-invalidations.js";
 
 import { createSessionBindingsService, type SessionBindingsService } from "./session-bindings.js";
 export {
   createSessionBindingsService,
   SessionBindingError,
-  type SessionBindingsService
+  type SessionBindingsService,
+  type BrowserSessionBinding
 } from "./session-bindings.js";
 
 const { Pool } = pg;
@@ -157,6 +164,7 @@ export interface MossAuthRuntime {
   readonly ringDevices?: CompanionDevicesService;
   /** Fresh cookie-session/device binding checks for separately approved capabilities. */
   readonly sessionBindings: SessionBindingsService;
+  readonly sessionInvalidations: SessionInvalidations;
   readonly recordingCapabilities: RecordingCapabilitiesService;
   readonly close: () => Promise<void>;
 }
@@ -235,8 +243,17 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     recordBootstrapOwnerAuditEvent: settingsRecordBootstrapOwnerAuditEvent,
     recordAuditEvent: settingsRecordAuditEvent
   };
+  const sessionInvalidations = new SessionInvalidations();
   const auth = betterAuth(
-    createBetterAuthOptions(pool, options.appDb, env, options.runner, settings, options.logger)
+    createBetterAuthOptions(
+      pool,
+      options.appDb,
+      env,
+      options.runner,
+      settings,
+      options.logger,
+      sessionInvalidations
+    )
   );
 
   return {
@@ -250,19 +267,22 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
         logger: options.logger
       }),
     listConfiguredProviders: () => listConfiguredAuthProviders(env),
-    revokeUserSessions: async (userId: string) => {
-      const browser = await pool.query("DELETE FROM app.better_auth_sessions WHERE user_id = $1", [
-        userId
-      ]);
-      // A linked Mac is a way into the account, so cutting someone off has to take it
-      // too. It also shows in the same Active sessions list, which would otherwise keep
-      // listing a Mac an admin was told they had just signed out.
-      const companion = await pool.query("DELETE FROM app.companion_devices WHERE user_id = $1", [
-        userId
-      ]);
-      return (browser.rowCount ?? 0) + (companion.rowCount ?? 0);
-    },
-    meSessions: createMeSessionsService({ pool, auth }),
+    sessionInvalidations,
+    revokeUserSessions: (userId: string) =>
+      withSessionInvalidation(sessionInvalidations, { actorUserId: userId }, async () => {
+        const browser = await pool.query(
+          "DELETE FROM app.better_auth_sessions WHERE user_id = $1",
+          [userId]
+        );
+        // A linked Mac is a way into the account, so cutting someone off has to take it
+        // too. It also shows in the same Active sessions list, which would otherwise keep
+        // listing a Mac an admin was told they had just signed out.
+        const companion = await pool.query("DELETE FROM app.companion_devices WHERE user_id = $1", [
+          userId
+        ]);
+        return (browser.rowCount ?? 0) + (companion.rowCount ?? 0);
+      }),
+    meSessions: createMeSessionsService({ pool, auth, sessionInvalidations }),
     trustedOrigins: resolveAuthOriginConfig(env).trustedOrigins,
     // Both companion services run on the auth pool, because migration 0238 grants the
     // companion tables to jarvis_auth_runtime alone.
@@ -301,6 +321,7 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
       return result.rows[0]?.exists ?? false;
     },
     close: async () => {
+      sessionInvalidations.close();
       await maintenancePool.close();
       await pool.end();
     }
@@ -363,7 +384,8 @@ export function createBetterAuthOptions(
   env: NodeJS.ProcessEnv,
   runner: DataContextRunner,
   settings: BootstrapSettings,
-  logger?: AuthLogger
+  logger?: AuthLogger,
+  sessionInvalidations?: SessionInvalidations
 ): BetterAuthOptions {
   const socialProviders = readSocialProviders(env);
   const plugins = readAuthPlugins(env);
@@ -440,6 +462,7 @@ export function createBetterAuthOptions(
       }
     },
     databaseHooks: {
+      session: sessionInvalidationHooks(sessionInvalidations),
       user: {
         create: {
           before: (user) => registrationGate(appDb, user),

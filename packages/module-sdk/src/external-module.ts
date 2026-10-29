@@ -16,6 +16,7 @@
 // This file is the union — main's name, with the job-search additions folded in. There is no
 // `external-manifest.ts`; do not reintroduce one.
 import type {
+  ModuleAiTaskDeclaration,
   ModuleAssistantActionFamilyManifest,
   ModuleAssistantOnboardingManifest,
   ModuleAssistantToolExecutionPolicy,
@@ -124,6 +125,8 @@ export interface ExternalModuleQueueDeclaration {
   readonly retryLimit?: number;
   readonly deadLetterQueue?: string;
   readonly allowManualRun?: boolean;
+  /** Opt in to module-authored jobs; requires a paramsSchema without free string fields. */
+  readonly allowModuleEnqueue?: boolean;
   // #1286 Task 2e: per-queue override of the worker's hard invocation ceiling
   // (WorkerLane's invocationHardTimeoutMs default), clamped to MAX_INVOCATION_MS by
   // validateWorker below. Absent means the runtime's own default applies.
@@ -408,6 +411,7 @@ export interface JsonMossModuleManifest {
   readonly web?: ModuleWebDeclaration;
   readonly runtime?: ModuleWorkerDeclaration;
   readonly assistantTools?: readonly ExternalModuleAssistantToolDeclaration[];
+  readonly aiTasks?: readonly ModuleAiTaskDeclaration[];
   readonly assistantActionFamilies?: readonly ModuleAssistantActionFamilyManifest[];
   readonly worker?: ExternalModuleWorkerDeclaration;
   readonly fetchHosts?: readonly string[];

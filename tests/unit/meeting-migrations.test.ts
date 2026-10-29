@@ -37,7 +37,8 @@ const expectedSequence = [
   "0325_meeting_recording_imports.sql",
   "0326_meeting_import_summaries.sql",
   "0328_meeting_voice_recordings.sql",
-  "0329_meeting_recording_uploads.sql"
+  "0329_meeting_recording_uploads.sql",
+  "0335_meeting_recording_identity.sql"
 ];
 
 describe("unapplied Meetings migration sequence", () => {

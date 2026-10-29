@@ -3,22 +3,61 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 export const androidDeliveryFeature = {
   id: "meetings.android_delivery",
   description:
-    "Android browser linking, restart recovery and optional seven-day cleanup. Only Start enables recovery; stopped voice/cleanup/retry actions ask for Start. Meetings: two hours; voice: 120 seconds. Initial ring setup needs a developer.",
+    "Android ring delivery; separate Main hold opt-in. Ring storage: stopped refresh, source inspection and durable owner/source exclusions. Current requests may finish; evidence stays. No undo or ring deletion. Meetings: 2h; voice: 120s.",
   remediations: [
     {
       id: "meetings.android_developer_setup",
       path: "/settings?section=modules&module=meetings",
       description:
-        "Open the Android companion for account linking, permissions and local audio. Initial existing-ring provisioning is documented in apps/vocci-delivery/README.md. Meetings settings enable the receiver only."
+        "Fresh Android installs show Set up your ring. Choose another ring before Verify keeps Moss connected and repeats Vocci lookup. Configured installs keep setup. See apps/vocci-delivery/README.md. Meetings settings enable the receiver only."
     }
   ],
   errors: [
+    {
+      code: "recording_identity_change",
+      class: "prerequisite",
+      remediationRef: "meetings.android_developer_setup",
+      description:
+        "Saved recording management belongs to a different origin, owner, ring or source journal. Restore the original setup; neither exclusions nor queued audio are reassigned."
+    },
+    {
+      code: "source_changed",
+      class: "validation",
+      description:
+        "The selected source or advertised file sizes changed before exclusion. Refresh Ring storage, inspect the source and confirm again. No exclusion was saved."
+    },
+    {
+      code: "exclusion_limit",
+      class: "validation",
+      description:
+        "The bounded exclusion ledger has 1024 sources. No additional exclusion was saved; existing exclusions and recordings are retained."
+    },
+    {
+      code: "ring_unavailable",
+      class: "transient",
+      description:
+        "Ring storage refresh failed. Check Nearby devices, Bluetooth, competing Vocci access and the saved ring account, then explicitly refresh again. Prior inventory stays dated; delivery remains stopped if it was stopped."
+    },
     {
       code: "configuration_or_storage_required",
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Developer provisioning and writable app-private storage are required before delivery can start. Credentials use Android Keystore encryption."
+        "Complete setup for an already-owned ring: browser-approved Moss link, native Vocci sign-in, explicit ring selection and physical identity/key verification. Writable app-private storage and Android Keystore are required."
+    },
+    {
+      code: "setup_cleanup_required",
+      class: "prerequisite",
+      remediationRef: "meetings.android_developer_setup",
+      description:
+        "Reconnect and Cancel setup to finish pending cleanup. Offline sign-out is unconfirmed. A saved verified Vocci session offers Finish ring lookup. Opening setup sends no email automatically."
+    },
+    {
+      code: "setup_ownership_unsupported",
+      class: "prerequisite",
+      remediationRef: "meetings.android_developer_setup",
+      description:
+        "Use an already-owned ring and native email-code sign-in, with an authenticator code if required. Missing rings, unsupported methods or invalid binding details need legitimate recovery in Vocci. No ownership reset is attempted."
     },
     {
       code: "background_restart_required",
@@ -71,7 +110,7 @@ export const androidDeliveryFeature = {
       class: "prerequisite",
       remediationRef: "meetings.android_developer_setup",
       description:
-        "Moss permanently rejected a request. Delivery is blocked, or the affected recording failed. Inspect the developer setup before restarting; retain source identity."
+        "Moss permanently rejected a request. Delivery is blocked, or the affected recording failed. Inspect the companion connection status before restarting; retain source identity."
     },
     {
       code: "retry_exhausted",

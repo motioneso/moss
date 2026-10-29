@@ -20,6 +20,8 @@ import {
 } from "@moss/shared";
 
 import type { AiRepository } from "./repository.js";
+import type { AiSecretCipher } from "./crypto.js";
+import { parseAiApiKeyCredential } from "./credentials.js";
 import { type AiRoutesDependencies, serializeModel, serializeProvider } from "./routes.js";
 
 type CapabilityParams = { readonly capability: string };
@@ -27,18 +29,14 @@ type ServiceParams = { readonly service: string };
 type IdParams = { readonly id: string };
 
 const MODEL_CAPABILITIES = new Set<AiModelCapability>(AI_MODEL_CAPABILITIES);
-// #874 HIGH-2: Chat is the ONLY bindable service. Voice (STT) is no longer a per-service binding —
-// it is configured as a dedicated instance-wide endpoint (see /api/ai/voice-endpoint) and resolves
-// through its own `purpose='voice'` provider row, not the generic binding map. Slice-1 briefly
-// bound `transcription` here; that read-through is dropped outright (no back-compat) so no assistant
-// provider can be wired to Voice. Worker capabilities stay cross-provider automatic; #915 D6 adds
-// module.* binding keys as admin routing knobs for structured module work.
-const BINDABLE_SERVICES = new Set<AiModelCapability>(["chat"]);
+// Voice uses an explicit model selection, with the existing endpoint as its unbound default.
+const BINDABLE_SERVICES = new Set<AiModelCapability>(["chat", "transcription"]);
 
 export function registerAiServiceRoutes(
   server: FastifyInstance,
   dependencies: AiRoutesDependencies,
-  repository: AiRepository
+  repository: AiRepository,
+  secretCipher: AiSecretCipher
 ): void {
   // Lookup remains — used by the composer / chat-drawer / settings subviews to resolve the effective
   // model + reason (including the new `needs-config`) for a given capability at request time.
@@ -78,9 +76,7 @@ export function registerAiServiceRoutes(
     }
   );
 
-  // #870 Slice 1: the unified per-service binding map, replacing the old free-form per-capability
-  // model routes. #874 HIGH-2: Chat is now the only bindable service (Voice moved to its own
-  // dedicated endpoint), so this map carries a single `chat` entry.
+  // Explicit instance bindings. Unbound transcription retains the existing voice endpoint.
   server.get(
     "/api/ai/service-bindings",
     { schema: listAiServiceBindingsRouteSchema },
@@ -151,6 +147,35 @@ export function registerAiServiceRoutes(
               throw new HttpError(400, "the sorting model accepts only a specific model");
             }
 
+            if (service === "transcription") {
+              const model =
+                binding.kind === "model"
+                  ? await repository.selectSharedTranscriptionModel(scopedDb, binding.modelId)
+                  : undefined;
+              if (!model) {
+                throw new HttpError(
+                  400,
+                  "transcription requires an active shared API-key transcription model"
+                );
+              }
+              const provider = await repository.selectProviderWithCredential(
+                scopedDb,
+                model.provider_config_id
+              );
+              if (
+                !provider ||
+                !parseAiApiKeyCredential(secretCipher.decryptJson(provider.encrypted_credential))
+              ) {
+                throw new HttpError(400, "transcription provider has no usable API key");
+              }
+              return repository.setServiceBinding(
+                scopedDb,
+                service,
+                binding,
+                accessContext.actorUserId
+              );
+            }
+
             // Module structured work and the sorting model require json; chat keeps its own
             // capability. The sorting model must also run on a structured-capable provider kind.
             if (binding.kind === "model") {
@@ -201,8 +226,15 @@ export function registerAiServiceRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const service = parseBindableService(request.params.service);
-        if (service !== SORTING_SERVICE_KEY && !isModuleServiceKey(service)) {
-          throw new HttpError(400, "only module and sorting bindings can be deleted");
+        if (
+          service !== SORTING_SERVICE_KEY &&
+          service !== "transcription" &&
+          !isModuleServiceKey(service)
+        ) {
+          throw new HttpError(
+            400,
+            "only module, sorting and transcription bindings can be deleted"
+          );
         }
 
         await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {

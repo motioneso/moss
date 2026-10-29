@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./live": "./src/live/public.ts",
-    "./priority-consumer": "./src/priority-consumer.ts"
+    "./priority-consumer": "./src/priority-consumer.ts",
+    "./visual": "./src/reminders/summary/contract.ts",
+    "./web/visual": "./src/reminders/summary/card.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -30,6 +32,7 @@
     "@moss/source-behaviors": "workspace:*",
     "@moss/structured-state": "workspace:*",
     "@moss/tasks": "workspace:*",
+    "@moss/ui": "workspace:*",
     "@moss/usefulness-feedback": "workspace:*",
     "@moss/vault": "workspace:*",
     "@moss/workshop": "workspace:*",
@@ -38,6 +41,7 @@
     "kysely": "^0.29.2",
     "mammoth": "^1.12.0",
     "pdf-parse": "^2.4.5",
-    "pg-boss": "^12.18.2"
+    "pg-boss": "^12.18.2",
+    "react": "^19.0.0"
   }
 }

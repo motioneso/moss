@@ -1,5 +1,11 @@
 import { isUuid } from "@moss/db";
-import { scopedJobDatabase, sendJob, type PgBoss, type QueueDefinition } from "@moss/jobs";
+import {
+  notifyJobQueue,
+  scopedJobDatabase,
+  sendJob,
+  type PgBoss,
+  type QueueDefinition
+} from "@moss/jobs";
 import {
   RecordingImportService,
   type RecordingImportDependencies,
@@ -30,6 +36,7 @@ export function createRecordingImportScheduler(
       startAfter: delaySeconds
     });
     if (!id) throw new Error("Recording import scheduling unavailable");
+    if (delaySeconds === 0) await notifyJobQueue(db, RECORDING_IMPORT_QUEUE);
   };
 }
 export async function registerRecordingImportWorker(
@@ -39,7 +46,7 @@ export async function registerRecordingImportWorker(
   const service = new RecordingImportService(deps);
   const id = await boss.work<RecordingImportPayload>(
     RECORDING_IMPORT_QUEUE,
-    { pollingIntervalSeconds: 2 },
+    { pollingIntervalSeconds: 0.5 },
     async ([job]) => {
       if (
         !job ||

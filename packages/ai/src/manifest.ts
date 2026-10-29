@@ -139,7 +139,7 @@ export const aiModuleManifest = {
     {
       id: "ai.clip_transcription_timestamps",
       description:
-        "Transcription can return clip-relative segment timestamps when requested. This is file transcription, not streaming or speaker separation. Invalid or unsupported timestamps fail without changing providers.",
+        "File transcription can return clip-relative segment timestamps. Empty zero-duration markers are ignored; invalid speech timestamps fail without changing providers. Streaming and speaker separation are not supported.",
       remediations: [
         {
           id: "ai.clip_transcription.configure",
@@ -278,35 +278,12 @@ export const aiModuleManifest = {
     {
       id: "ai.classifier_gate_setting",
       description:
-        "Classifier gate: the Chat gate choice (Off, Shadow, On) in the Classifier row on Settings > " +
-        "AI providers, an instance-wide setting. On needs a shadow review of the current " +
-        "classifier; changing the classifier drops On back to Shadow.",
-      remediations: [
-        {
-          id: "ai.classifier_gate_setting.not_released",
-          description:
-            "Run the Classifier gate on Shadow and record a shadow review for the current " +
-            "classifier; the gate cannot be turned On before then.",
-          path: "/settings?section=aiproviders"
-        }
-      ],
-      errors: [
-        {
-          code: "ai.classifier_gate_setting.not_released",
-          class: "prerequisite",
-          remediationRef: "ai.classifier_gate_setting.not_released",
-          description:
-            "Setting the classifier gate to On was refused because no shadow review is recorded " +
-            "for the current classifier."
-        }
-      ]
+        "Use in chat (Off, Watch only, On) in the Decision model row on Settings > AI providers. Instance-wide. Shown once a decision model is chosen. On needs no Watch only run first."
     },
     {
       id: "ai.sorting_model",
       description:
-        "Classifier: a row under Services on Settings > AI providers. An admin picks a small, " +
-        "fast model for sorting, or Use main model. News and Sports ask it yes/no questions per " +
-        "story and preference, falling back to the main model.",
+        "Decision model: a row on Settings > AI providers. An admin picks a small, fast model for sorting, or Use main model. News and Sports ask it yes/no questions, falling back to the main model.",
       remediations: [
         {
           id: "ai.sorting_model.use_main_model",

@@ -13,6 +13,7 @@ import {
 } from "@moss/shared";
 
 import { readBearerToken, toWebHeaders } from "./headers.js";
+import { withSessionInvalidation, type SessionInvalidations } from "./session-invalidations.js";
 
 /**
  * The auth-runtime alias of the settings-owned port. Keeping it an alias guarantees the
@@ -72,6 +73,7 @@ interface SessionRow {
 export function createMeSessionsService(deps: {
   readonly pool: pg.Pool;
   readonly auth: AuthSessionReader;
+  readonly sessionInvalidations?: SessionInvalidations;
 }): MeSessionsRuntimeService {
   const { pool, auth } = deps;
 
@@ -133,9 +135,14 @@ export function createMeSessionsService(deps: {
           return { revoked: false, wasCurrent: true };
         }
         // user_id scoping is the cross-user guard: another user's id deletes zero rows.
-        const cookie = await pool.query(
-          "DELETE FROM app.better_auth_sessions WHERE id = $1 AND user_id = $2",
-          [sessionId, actorUserId]
+        const cookie = await withSessionInvalidation(
+          deps.sessionInvalidations,
+          { actorUserId, sessionId },
+          () =>
+            pool.query("DELETE FROM app.better_auth_sessions WHERE id = $1 AND user_id = $2", [
+              sessionId,
+              actorUserId
+            ])
         );
         if ((cookie.rowCount ?? 0) > 0) return { revoked: true, wasCurrent: false };
 
@@ -170,25 +177,31 @@ export function createMeSessionsService(deps: {
 
     async revokeOthers({ actorUserId, headers }) {
       const currentSessionId = await resolveCurrentSessionId(headers);
-      // `id <> $2` with a null current id evaluates to NULL (never true), so a session we
-      // failed to identify deletes NOTHING — the safe failure mode (never sign self out).
-      // `expires_at > now()` keeps the deleted-count consistent with the (non-expired) list
-      // the user is acting on; already-expired rows are cleaned up by normal expiry.
-      const cookie = await pool.query(
-        "DELETE FROM app.better_auth_sessions WHERE user_id = $1 AND id <> $2 AND expires_at > now()",
-        [actorUserId, currentSessionId]
+      return withSessionInvalidation(
+        deps.sessionInvalidations,
+        { actorUserId, ...(currentSessionId ? { exceptSessionId: currentSessionId } : {}) },
+        async () => {
+          // `id <> $2` with a null current id evaluates to NULL (never true), so a session we
+          // failed to identify deletes NOTHING — the safe failure mode (never sign self out).
+          // `expires_at > now()` keeps the deleted-count consistent with the (non-expired) list
+          // the user is acting on; already-expired rows are cleaned up by normal expiry.
+          const cookie = await pool.query(
+            "DELETE FROM app.better_auth_sessions WHERE user_id = $1 AND id <> $2 AND expires_at > now()",
+            [actorUserId, currentSessionId]
+          );
+          const bearer = await pool.query(
+            "DELETE FROM app.auth_sessions WHERE user_id = $1 AND id <> $2 AND expires_at > now()",
+            [actorUserId, currentSessionId]
+          );
+          // A companion device is never the current session, so "sign out everywhere else"
+          // always unlinks every Mac.
+          const companion = await pool.query(
+            "DELETE FROM app.companion_devices WHERE user_id = $1 AND expires_at > now() AND absolute_expires_at > now()",
+            [actorUserId]
+          );
+          return (cookie.rowCount ?? 0) + (bearer.rowCount ?? 0) + (companion.rowCount ?? 0);
+        }
       );
-      const bearer = await pool.query(
-        "DELETE FROM app.auth_sessions WHERE user_id = $1 AND id <> $2 AND expires_at > now()",
-        [actorUserId, currentSessionId]
-      );
-      // A companion device is never the current session, so "sign out everywhere else"
-      // always unlinks every Mac.
-      const companion = await pool.query(
-        "DELETE FROM app.companion_devices WHERE user_id = $1 AND expires_at > now() AND absolute_expires_at > now()",
-        [actorUserId]
-      );
-      return (cookie.rowCount ?? 0) + (bearer.rowCount ?? 0) + (companion.rowCount ?? 0);
     }
   };
 }
@@ -219,7 +232,7 @@ function toDto(row: SessionRow, currentSessionId: string | null): MeSessionDto {
       row.source === "companion"
         ? {
             product:
-              row.companion_platform === "android" ? "Moss ring companion" : COMPANION_PRODUCT_NAME,
+              row.companion_platform === "android" ? "Moss for Android" : COMPANION_PRODUCT_NAME,
             displayName:
               row.display_name ?? (row.companion_platform === "android" ? "Android phone" : "Mac"),
             appVersion: row.app_version,

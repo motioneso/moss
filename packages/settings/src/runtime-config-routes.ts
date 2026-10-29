@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import {
   getRuntimeConfigRouteSchema,
@@ -11,7 +11,6 @@ import {
 
 import {
   getRuntimeConfigEntry,
-  CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
   type RuntimeConfigKeyEntry,
   type RuntimeConfigType
 } from "./runtime-config-keys.js";
@@ -26,15 +25,6 @@ export interface RuntimeConfigRoutesDependencies {
   readonly repository: SettingsRepository;
   readonly env?: NodeJS.ProcessEnv;
   readonly onConfigChanged?: (key: string) => void;
-  /**
-   * Classifier gate activation check (#2984 R2.4). Injected so the settings boundary never imports
-   * chat module internals. Absent port fails CLOSED: `chat.classifier_gate_mode = "on"` is rejected,
-   * never accepted fail-open. The composition root supplies the chat-owned check, which reads the
-   * shadow review for the current classifier selection under the caller's actor context.
-   */
-  readonly classifierActivation?: {
-    readonly hasShadowReviewForCurrentClassifier: (scopedDb: DataContextDb) => Promise<boolean>;
-  };
 }
 
 function requireRequestId(accessContext: AccessContext): string {
@@ -140,21 +130,6 @@ export function registerRuntimeConfigRoutes(
         const accessContext = await resolveAccessContext(request);
         const config = await dataContext.withDataContext(accessContext, async (scopedDb) => {
           await assertAdminUser(repository, scopedDb, accessContext.actorUserId);
-          // Classifier gate (#2984 R2.4): turning the gate `on` requires a shadow review for the
-          // current classifier. Checked under the actor's RLS context, before any write, so a
-          // forged PUT cannot bypass it. A missing port fails closed.
-          if (key === CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY && value === "on") {
-            const allowed =
-              (await dependencies.classifierActivation?.hasShadowReviewForCurrentClassifier(
-                scopedDb
-              )) ?? false;
-            if (!allowed) {
-              throw new HttpError(
-                409,
-                "The classifier gate cannot be turned on: no shadow review is recorded for the current classifier."
-              );
-            }
-          }
           if (value.length === 0) {
             await repository.deleteInstanceSetting(scopedDb, {
               key,

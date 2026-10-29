@@ -121,7 +121,7 @@ function LinkRequest({ code }: { readonly code: string }) {
   return (
     <section
       className="page-stack"
-      aria-label={`Link ${android ? "Moss ring companion" : COMPANION_PRODUCT_NAME}`}
+      aria-label={`Link ${android ? "Moss for Android" : COMPANION_PRODUCT_NAME}`}
     >
       <Card padding="lg" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
         <h1 className="jds-section-title">{heading}</h1>
@@ -150,7 +150,7 @@ function LinkRequest({ code }: { readonly code: string }) {
           <p role="status">
             <strong>{deviceName}</strong> is linked.{" "}
             {android
-              ? "Return to the Android companion to start delivery."
+              ? "Moss for Android opens Moss as soon as this finishes."
               : "Keep using this tab to start a meeting when you’re ready."}{" "}
             You can sign the {device} out any time from Settings, under Active sessions.
           </p>
@@ -180,7 +180,7 @@ function LinkRequest({ code }: { readonly code: string }) {
                 <ul style={{ margin: "var(--space-1) 0 0", paddingLeft: "var(--space-4)" }}>
                   {(android
                     ? [
-                        "upload completed ring recordings to Meetings for transcription and summaries",
+                        "upload completed recordings from your hardware to Meetings for transcription and summaries",
                         "send opted-in hold recordings to Main for transcription and text replies",
                         "read recording delivery and voice reply status"
                       ]

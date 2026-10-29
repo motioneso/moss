@@ -11,8 +11,8 @@ import { meetingKeys } from "./client.js";
 export const historyKeys = {
   view: ["meetings", "history-view"] as const,
   lists: [...meetingKeys.history, "search"] as const,
-  search: (query: string, filter: MeetingHistoryFilter) =>
-    [...meetingKeys.history, "search", { query, filter }] as const,
+  search: (query: string, filter: MeetingHistoryFilter, typeId?: string) =>
+    [...meetingKeys.history, "search", { query, filter, ...(typeId ? { typeId } : {}) }] as const,
   item: (id: string) => [...meetingKeys.history, "item", id] as const
 };
 

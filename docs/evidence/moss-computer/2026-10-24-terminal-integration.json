@@ -1,0 +1,1619 @@
+{
+  "schemaVersion": 1,
+  "scope": "Opt-in existing-resource root observer to receiving lifetime IPC only",
+  "base": "6da85fff63ab4e0144bab49caa99086934ee004a",
+  "acceptedContract": "0902fcef059a9693764a99591ea923c2f851c2c0",
+  "sourceCommit": "3a8eafe969505d8ef9975ee6e4e17f407d8ce16b",
+  "productionSourceCommit": "b30d3be7d59c8c184b5f628e8acb5defa0ff381b",
+  "sourceFiles": [
+    {
+      "file": "apps/api/src/computer/gateway-channel.ts",
+      "sha256": "393515cbeba6171ca41f1c59f621610e46f57768f6fcaf3609f04ce0086fa6fa"
+    },
+    {
+      "file": "apps/api/src/computer/gateway-server.ts",
+      "sha256": "18972b0464e941d88a13d9f50ad8036f4e38a2abbb60c0025f2ff9ad82d1ad57"
+    },
+    {
+      "file": "apps/api/src/computer/host-contract.ts",
+      "sha256": "848721c69c871339f7b9f6724803ef44008d3ea556690f485ec66a7824282a15"
+    },
+    {
+      "file": "apps/api/src/computer/lifetime-channel.ts",
+      "sha256": "5dd48c53c86eda360de9c18782fa32a942554d9163b4577b5f171a0ef146b3e6"
+    },
+    {
+      "file": "apps/api/src/computer/lifetime-protocol.ts",
+      "sha256": "61443c0c7b0b0bda0bc861195022fff327826287b8dab1e69d5e6fcfca6e231c"
+    },
+    {
+      "file": "apps/api/src/computer/lifetime-receiver.ts",
+      "sha256": "d99bebb34795a88423a358374d4ae45f12c9b7c7437d94908c382bf3397bbd98"
+    },
+    {
+      "file": "apps/api/src/computer/receiving-gateway.ts",
+      "sha256": "acc0e0a448f5052fe3f8832fdc0d59adb72c48a3d7671668245b0552d36f04d6"
+    },
+    {
+      "file": "apps/api/src/computer/rfb-input.ts",
+      "sha256": "679ae5b5d00f36fe7e8546dc61eb7f0a303b81d331b8592d0284a7610b768989"
+    },
+    {
+      "file": "scripts/computer-gateway/config.ts",
+      "sha256": "27428ab36cb103e73531944425d4890adef8d7d8c36563cfc20dcbc3cafbc519"
+    },
+    {
+      "file": "scripts/computer-watchdog.ts",
+      "sha256": "08843fee5024da67939251c1c15c6cde123a4171ce1382eb8c1fb9edbdf34432"
+    },
+    {
+      "file": "scripts/computer-watchdog/lifetime.ts",
+      "sha256": "4c78ab86ccf4b5feec08e2d7be88767b5ec9a0e0d6981c4b10b46358cc70ed57"
+    },
+    {
+      "file": "scripts/computer-watchdog/observe.ts",
+      "sha256": "2f2825aa6d90ae3bd1c5a314bf81e741776e713dc0997fb1a90bf9fe1b750e4f"
+    },
+    {
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "sha256": "1e2e6600b1979cd14e218057ab31451dbc2012c4a0a3e4a7b814f3ac78a04c83"
+    },
+    {
+      "file": "scripts/computer-watchdog/trust.ts",
+      "sha256": "a89b1e46d76d6f8057360dc5b4c5ff66722fec354fa1e06b6e60916d9a2bc4e0"
+    },
+    {
+      "file": "tests/unit/computer-gateway-channel.test.ts",
+      "sha256": "e57367ba84f66585c8ea714cac771c9d27d9db8a5b2d085d4dfc8e2b917dc4a5"
+    },
+    {
+      "file": "tests/unit/computer-gateway-process.test.ts",
+      "sha256": "23f50f982ddbe9470585eb6a1210035c01e67603447da2d2a9562e174653c659"
+    },
+    {
+      "file": "tests/unit/computer-lifetime-fixture.ts",
+      "sha256": "4ef4749162e461be310f34632d7f04a137b1243a0470ed449b9ec21b2c0527d5"
+    },
+    {
+      "file": "tests/unit/computer-lifetime-process.test.ts",
+      "sha256": "0bb5b6d685ab41c16f6180e6eb20ec87eed9cde9005d527f9db7b539f616ba83"
+    },
+    {
+      "file": "tests/unit/computer-lifetime-startup.test.ts",
+      "sha256": "55a9bdc44c70a4dd687da6974f767c17b22ebd74be6afb051c2b9334ee245100"
+    },
+    {
+      "file": "tests/unit/computer-lifetime.test.ts",
+      "sha256": "792f9a8a927e62bf0b9704cd504e556924ba699eea25fa8856cd5ae2a171fae7"
+    },
+    {
+      "file": "tests/unit/computer-process-fixture.ts",
+      "sha256": "8c5f7b4ad795ea1047eea00e6df14e65c3bb09a63370652b3d5886005f1bf39d"
+    },
+    {
+      "file": "tests/unit/computer-watchdog-observe.test.ts",
+      "sha256": "e887f5369fb1f6efc4355472225ac6e4599bc5245576cb54955edbc5c3fdc516"
+    },
+    {
+      "file": "tests/unit/computer-watchdog-supervisor.test.ts",
+      "sha256": "4ab17de6c73fa49eb96c48d6fbcdedf9c5a4eed9d7cc1ab2d5e9f2cc23f41dbe"
+    },
+    {
+      "file": "tests/unit/computer-watchdog-trust.test.ts",
+      "sha256": "3a506f709a15317261424aa88bdd982a876395c535114e62bce70658903ecb68"
+    }
+  ],
+  "priorPrerequisite": {
+    "pr": 3647,
+    "state": "MERGED",
+    "head": "346bcadd3dda2a150889a7643da597787e799c30",
+    "merge": "6da85fff63ab4e0144bab49caa99086934ee004a",
+    "ciRun": 40089817925,
+    "attempt": 1,
+    "requiredGate": "SUCCESS",
+    "independentFinalAndSupplementalAcceptance": "Reconciled on predecessor PR; private pr3647-reconciliation.json",
+    "reconciliationSha256": "2ee68e2c68fe811b2281c74b9ba616363ed48432f886919352e9ac1bc512453b"
+  },
+  "checks": [
+    {
+      "name": "behavior-accepted",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-auth-endpoint.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-recovery.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 88.45,
+      "logSha256": "95d8deda31c0e7e3f64dcd5ece5aae1dbb772c089ce278ccee22c0fd50c4670c"
+    },
+    {
+      "name": "root-tsc-accepted",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 96.193,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc-accepted",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 50.552,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-accepted",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "apps/api/src/computer/gateway-channel.ts",
+        "apps/api/src/computer/gateway-server.ts",
+        "apps/api/src/computer/host-contract.ts",
+        "apps/api/src/computer/lifetime-channel.ts",
+        "apps/api/src/computer/lifetime-protocol.ts",
+        "apps/api/src/computer/lifetime-receiver.ts",
+        "apps/api/src/computer/receiving-gateway.ts",
+        "apps/api/src/computer/rfb-input.ts",
+        "scripts/computer-gateway/config.ts",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/lifetime.ts",
+        "scripts/computer-watchdog/observe.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "scripts/computer-watchdog/trust.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-lifetime-fixture.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 2.469,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-accepted",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "apps/api/src/computer/gateway-channel.ts",
+        "apps/api/src/computer/gateway-server.ts",
+        "apps/api/src/computer/host-contract.ts",
+        "apps/api/src/computer/lifetime-channel.ts",
+        "apps/api/src/computer/lifetime-protocol.ts",
+        "apps/api/src/computer/lifetime-receiver.ts",
+        "apps/api/src/computer/receiving-gateway.ts",
+        "apps/api/src/computer/rfb-input.ts",
+        "scripts/computer-gateway/config.ts",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/lifetime.ts",
+        "scripts/computer-watchdog/observe.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "scripts/computer-watchdog/trust.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-lifetime-fixture.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 1.588,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-accepted",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "elapsedSeconds": 1.663,
+      "logSha256": "1bf8e6d224e8e14bc64f458ca2ff0099d2fdd2bfc40093c83e052d589524cc7d"
+    },
+    {
+      "name": "diff-accepted",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "elapsedSeconds": 0.007,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "observer-bundle-accepted",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-watchdog.ts",
+        "--bundle",
+        "--platform=node",
+        "--format=cjs",
+        "--target=node24",
+        "--outfile=<private>/watchdog-accepted.cjs",
+        "--metafile=<private>/watchdog-accepted-meta.json"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 0.398,
+      "logSha256": "c864f065d7088c308c631b360a67e06a5fbaefb899d0f4fd7d677ab52a2949e8"
+    },
+    {
+      "name": "gateway-build-accepted",
+      "command": ["pnpm", "build:computer-gateway", "<private>/gateway-build-accepted"],
+      "exit": 0,
+      "elapsedSeconds": 0.804,
+      "logSha256": "4fe228146f1b249ea7f36a86680cbc1f6570062f60e07ec00ec2cbfb1ae3d8b1"
+    }
+  ],
+  "behavior": {
+    "passed": 480,
+    "files": 24
+  },
+  "controls": [
+    {
+      "control": "mac-proof",
+      "file": "apps/api/src/computer/lifetime-protocol.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "retires on (mac|binding) forgery|replaced endpoint cannot forge a mac"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "61443c0c7b0b0bda0bc861195022fff327826287b8dab1e69d5e6fcfca6e231c",
+      "patchSha256": "9e159ce56c12fb017a85c9e2a954ef9e5f493c0105c67bcd8e5d957ddf4f8a43",
+      "logSha256": "9e80167f107dbcd3902dbdd66cbbad0fd8e7d2cc2da1d0944078c7b1d8341b4d",
+      "elapsedSeconds": 5.227,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "root-replay",
+      "file": "scripts/computer-watchdog/lifetime.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "root bounds replayed first challenge"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "4c78ab86ccf4b5feec08e2d7be88767b5ec9a0e0d6981c4b10b46358cc70ed57",
+      "patchSha256": "2c79967d99c104730a4e38d573ab5560d679b9a3a6dc791f4285566821f68533",
+      "logSha256": "c2bb3f23cc0d723847285c675650504e35b3f06646c5942a291f4ea1be6b0b14",
+      "elapsedSeconds": 1.372,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "stop-nonce",
+      "file": "scripts/computer-watchdog/lifetime.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "replaced endpoint cannot forge a nonce"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "4c78ab86ccf4b5feec08e2d7be88767b5ec9a0e0d6981c4b10b46358cc70ed57",
+      "patchSha256": "f18573b2a873e98d4f31e42155b11e220c4c9eca0df8eb12a937ac3d14b35c15",
+      "logSha256": "eb899f6fc4a84f4caf95b501d49c267d05ee50d8074c17567707fd0ec29803e7",
+      "elapsedSeconds": 1.219,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "receiver-equality",
+      "file": "apps/api/src/computer/lifetime-receiver.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "expires at equality before accepting"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "d99bebb34795a88423a358374d4ae45f12c9b7c7437d94908c382bf3397bbd98",
+      "patchSha256": "4bfc71de4f7005c6d9e120e4227a17e41895e238b333bd115049821123d14f97",
+      "logSha256": "dc5b18c4c259c4c6924f3eeee616df5cb50be0180a4e9ad9d27feb4771572aef",
+      "elapsedSeconds": 2.269,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "root-equality",
+      "file": "scripts/computer-watchdog/lifetime.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "root rejects challenge equality"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "4c78ab86ccf4b5feec08e2d7be88767b5ec9a0e0d6981c4b10b46358cc70ed57",
+      "patchSha256": "10e177e286857d44fe3a804046c49c99cb215aae652f415965fa0cc4147f0d9f",
+      "logSha256": "d5d5aa3928f62f95197327d6176adf5d94d0e8b5279926922e88267606a30888",
+      "elapsedSeconds": 3.223,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "dispatch-equality",
+      "file": "apps/api/src/computer/lifetime-receiver.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "-t",
+        "dispatch expires at equality|authorization completing at lifetime expiry"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "d99bebb34795a88423a358374d4ae45f12c9b7c7437d94908c382bf3397bbd98",
+      "patchSha256": "963ba035739eb182b154124d8805dcb62a0b833b117a0d5bb3389326ac003d84",
+      "logSha256": "bd23f4c14d452a135e710e45be71f440b96c4b48eb91c74cfc7221b88f2c179d",
+      "elapsedSeconds": 4.477,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "retire-before-ack",
+      "file": "apps/api/src/computer/lifetime-receiver.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "-t",
+        "invokes core retirement before signed ack"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "d99bebb34795a88423a358374d4ae45f12c9b7c7437d94908c382bf3397bbd98",
+      "patchSha256": "1f4c3aa37439176efebafd56dac529cf28637ccb933152bd40adb408c5293554",
+      "logSha256": "6a331a930cb8c96300063929fe232355b4f50d3280fc111f2ed0c076e56b1156",
+      "elapsedSeconds": 2.124,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "frame-budget",
+      "file": "apps/api/src/computer/lifetime-channel.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "bounds four valid frames"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "5dd48c53c86eda360de9c18782fa32a942554d9163b4577b5f171a0ef146b3e6",
+      "patchSha256": "15c8c4101611328cb8087b67897bd587f890de78a16f23f889251bed6299a0b3",
+      "logSha256": "e63ffbbfa31c1ebf85a4c8f73dac326be49e55725f77508fa589cb1c371b9ef5",
+      "elapsedSeconds": 1.167,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "outgoing-budget",
+      "file": "apps/api/src/computer/lifetime-channel.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "bounds actual outgoing backlog"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "5dd48c53c86eda360de9c18782fa32a942554d9163b4577b5f171a0ef146b3e6",
+      "patchSha256": "b84272049debe96b5f0ab78edfcf4c38c357f1a5d205a385119afbf7ce8a4f26",
+      "logSha256": "b804ab8334bc95012b65c82c0d81d0b8b7cf52fa3ff6f0b48dda5e12659c9d53",
+      "elapsedSeconds": 1.219,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "partial-equality",
+      "file": "apps/api/src/computer/lifetime-channel.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime.test.ts",
+        "-t",
+        "partial-line equality expiry"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "5dd48c53c86eda360de9c18782fa32a942554d9163b4577b5f171a0ef146b3e6",
+      "patchSha256": "8c904954cce3773388f71e602ddff79ac5bffb421c529422fdcb10defc071f65",
+      "logSha256": "59e2ae8e4a300d887e3cf3525e1692355aee23f8e10b5c61d88158313254317d",
+      "elapsedSeconds": 1.219,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "startup-equality",
+      "file": "apps/api/src/computer/gateway-server.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "-t",
+        "startup equality rejects"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "18972b0464e941d88a13d9f50ad8036f4e38a2abbb60c0025f2ff9ad82d1ad57",
+      "patchSha256": "5fa7ad27cb7fab0a242cb84053db667d0baeff9262e5f77574aa6201269118fc",
+      "logSha256": "8627f729a0948b5e499385c77f6e47f0b5d4829ad040f8179877bf3d60e2cc1c",
+      "elapsedSeconds": 1.317,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "durable-first",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "never publishes a lifetime until"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "1e2e6600b1979cd14e218057ab31451dbc2012c4a0a3e4a7b814f3ac78a04c83",
+      "patchSha256": "105043924e42783738aba1349e384e56141e787d4f0fc39d3da839f8d256b9d2",
+      "logSha256": "2e7ed57440229675129ee248d724dcf25e28175590d191ff26ad8ae6236a7a0a",
+      "elapsedSeconds": 1.117,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "late-sample",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "-t",
+        "sample persistence completing at age equality"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "1e2e6600b1979cd14e218057ab31451dbc2012c4a0a3e4a7b814f3ac78a04c83",
+      "patchSha256": "5a2c3ca269cee08ba664b0320d5247292a35dafdab991cf47fdb0f7e37f70918",
+      "logSha256": "99598cc2e5c7e7472c908753ed11aa4bfe2d2c1581f0b8f789d29df55216d614",
+      "elapsedSeconds": 1.117,
+      "intendedAssertionFailure": true
+    },
+    {
+      "control": "stop-marker",
+      "file": "scripts/computer-watchdog/observe.ts",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "-t",
+        "fenced mode binds enabled"
+      ],
+      "exit": 1,
+      "timeout": false,
+      "restored": true,
+      "sourceSha256": "2f2825aa6d90ae3bd1c5a314bf81e741776e713dc0997fb1a90bf9fe1b750e4f",
+      "patchSha256": "2d74803c1e0c3259638b5b6419c8992c32607be1e38a0340bca9d3d7ed9b81ae",
+      "logSha256": "4124b10be8616db782c95dea885127b801d2ace5229acf7a61476d554acb498d",
+      "elapsedSeconds": 1.468,
+      "intendedAssertionFailure": true
+    }
+  ],
+  "controlSourceDisclosure": "Surgical pre-ack control observed on136a4c7da; final3a8eafe96 changes only test snapshot binding syntax, same production bytes/semantic assertion; final restored batch reruns this test. Other controls preceded test-only refinements and have matching exact production source hashes.",
+  "reviewArtifacts": [
+    {
+      "file": "plan-security-r1.md",
+      "sha256": "7f9cc7f7ed3426535234106395463f8bf6d82ac021c7e57f272563bcf3f9b607"
+    },
+    {
+      "file": "plan-security-r2.md",
+      "sha256": "5d947d908cf70f6638570faf5737fb2acbe154ca3310b74808cf60cf3112b2b0"
+    },
+    {
+      "file": "plan-spec-r1.md",
+      "sha256": "fd96cd2b5f3b6e6b5bc654392586a2d6371f0818f0a3d39022ad0a9ae5205e55"
+    },
+    {
+      "file": "plan-spec-r2.md",
+      "sha256": "68ee142522a163232125d7624cb60b9b29c8a4676d960205918e8a16fddb8a1e"
+    },
+    {
+      "file": "source-security-r1.md",
+      "sha256": "a3c4c00250a1a0862e9c3466669d391edebed8f6f7345c44538f24be24df53fd"
+    },
+    {
+      "file": "source-security-r2.md",
+      "sha256": "9432e96b453c1fbeb772bf850708f96903a09284e2a0e771dede8652440b8b43"
+    },
+    {
+      "file": "source-security-r3.md",
+      "sha256": "47dcdd0b2bb0d4d3b99d922af1f1494995909544e08bb2eccdc3215ad3f935ad"
+    },
+    {
+      "file": "source-security-r4.md",
+      "sha256": "810f7f935d4809dae172799b0e18e410a5dcbe1fa77978c8b8823bc7e6179b6b"
+    },
+    {
+      "file": "source-security-r5.md",
+      "sha256": "0e727d963d136aac9236d6f8445e1152ec0549d1db7fae62b53b0215b1533c39"
+    },
+    {
+      "file": "source-security-r6.md",
+      "sha256": "84444e371602a9066c8052bf95a1068adc017e5c08261c5af45d193f926c5403"
+    },
+    {
+      "file": "source-spec-r1.md",
+      "sha256": "a3faeee258f320f6e7f6310edf813f2f27f75c9f3a62990ba0b1c898729bbd21"
+    },
+    {
+      "file": "source-spec-r2.md",
+      "sha256": "76064e02b0a128433242cd25c52e3589de0b95df35b279b6123a2abf21374801"
+    },
+    {
+      "file": "source-spec-r3.md",
+      "sha256": "1c5a4379ffd7abad3433d435f74b69cf3e157d1c7c21c20cbe8dd1f660b5edad"
+    },
+    {
+      "file": "source-spec-r4.md",
+      "sha256": "0d58ef3cbdfd1478e5252a95f0560dd3d3b74998f7a187edb5ed326a0fbf1edf"
+    },
+    {
+      "file": "source-spec-r5.md",
+      "sha256": "b14c44a1d5ec6d77d63622f07aaa6cf37b096d590e896c06fad0dd7f6291d958"
+    },
+    {
+      "file": "source-spec-r6.md",
+      "sha256": "7627b67dc2224afa0a430d134db34286de05f56451312a7872c45b56345c2f80"
+    },
+    {
+      "file": "source-standards-r1.md",
+      "sha256": "2839d6eedd5b749dbb06a4aab90440a830949203e3e64b871b776c7b967f62d4"
+    },
+    {
+      "file": "source-standards-r2.md",
+      "sha256": "adb3abf39d48c6afcdb31357c4f1c52425655262604da916d767c11174a6e829"
+    },
+    {
+      "file": "source-standards-r3.md",
+      "sha256": "538ce50cd6347163817cc8c51ae909afe9e33c63136696e0209afb7e672ec836"
+    },
+    {
+      "file": "source-standards-r4.md",
+      "sha256": "9325c9d738a84e39c3c512ea8b7ae955035c6418eeddbd7fc958aa6e8b3a3433"
+    },
+    {
+      "file": "source-standards-r5.md",
+      "sha256": "d2fbc3225c87eaa789f7270503809ecea8cffd3e75587a5f14913a3d281d9813"
+    },
+    {
+      "file": "source-standards-r6.md",
+      "sha256": "2506e996520f1735c77afabf3a323f23239a3e28efd3c6f313a6877dca33e873"
+    }
+  ],
+  "privateArtifacts": [
+    {
+      "name": "ack-order-green.log",
+      "sha256": "817dabe05a35bcd67344e8c742abdad564a253ce315b08ed901ff4ed54ac1299"
+    },
+    {
+      "name": "behavior-accepted.log",
+      "sha256": "95d8deda31c0e7e3f64dcd5ece5aae1dbb772c089ce278ccee22c0fd50c4670c"
+    },
+    {
+      "name": "behavior-final.log",
+      "sha256": "777720f47332f75956c18e16b68115669daf074d587d4583a5da644461de0cc0"
+    },
+    {
+      "name": "behavior-first.log",
+      "sha256": "48cf6307b8bfd5d149b5d1f96c429f074bf78899640d5c5c34ddb442f08cf4cd"
+    },
+    {
+      "name": "behavior-r2.log",
+      "sha256": "6e9f993b16e64a8a8a93d0ea62cdacd2a5aa3bfd1f54cdf373d6c91e9295a6ca"
+    },
+    {
+      "name": "behavior-r3.log",
+      "sha256": "88380cc2aafc85a2a8d6ced04c2429d483f3bd8b45736bca4a901801cc048e79"
+    },
+    {
+      "name": "behavior-restored.log",
+      "sha256": "77ca32a485f99c9a12c56c3bc7062500d93766763cd74088f82cf4c5de3dc2d8"
+    },
+    {
+      "name": "control-dispatch-equality.log",
+      "sha256": "bd23f4c14d452a135e710e45be71f440b96c4b48eb91c74cfc7221b88f2c179d"
+    },
+    {
+      "name": "control-durable-first.log",
+      "sha256": "2e7ed57440229675129ee248d724dcf25e28175590d191ff26ad8ae6236a7a0a"
+    },
+    {
+      "name": "control-frame-budget-first.log",
+      "sha256": "34d3e624670b29406bf2f1772ee89e2b6bf401209aea13884549e88dd22ecd2c"
+    },
+    {
+      "name": "control-frame-budget.log",
+      "sha256": "e63ffbbfa31c1ebf85a4c8f73dac326be49e55725f77508fa589cb1c371b9ef5"
+    },
+    {
+      "name": "control-late-sample.log",
+      "sha256": "99598cc2e5c7e7472c908753ed11aa4bfe2d2c1581f0b8f789d29df55216d614"
+    },
+    {
+      "name": "control-mac-proof.log",
+      "sha256": "9e80167f107dbcd3902dbdd66cbbad0fd8e7d2cc2da1d0944078c7b1d8341b4d"
+    },
+    {
+      "name": "control-outgoing-budget.log",
+      "sha256": "b804ab8334bc95012b65c82c0d81d0b8b7cf52fa3ff6f0b48dda5e12659c9d53"
+    },
+    {
+      "name": "control-partial-equality-first.log",
+      "sha256": "7a481f5d1b7130b22dbe398c2e3e0b66244abf9d9ddb378daf52623666c018ed"
+    },
+    {
+      "name": "control-partial-equality.log",
+      "sha256": "59e2ae8e4a300d887e3cf3525e1692355aee23f8e10b5c61d88158313254317d"
+    },
+    {
+      "name": "control-receiver-equality.log",
+      "sha256": "dc5b18c4c259c4c6924f3eeee616df5cb50be0180a4e9ad9d27feb4771572aef"
+    },
+    {
+      "name": "control-retire-before-ack-paired.log",
+      "sha256": "363f767ba853d138e7b0cec06b2b91fce221e8968835e3c4ac954e4f233220f4"
+    },
+    {
+      "name": "control-retire-before-ack.log",
+      "sha256": "6a331a930cb8c96300063929fe232355b4f50d3280fc111f2ed0c076e56b1156"
+    },
+    {
+      "name": "control-root-equality.log",
+      "sha256": "d5d5aa3928f62f95197327d6176adf5d94d0e8b5279926922e88267606a30888"
+    },
+    {
+      "name": "control-root-replay-first.log",
+      "sha256": "f3399fc883a981148ba7e971ea0db26968e9769fabb8b275675a2c1cda9d5539"
+    },
+    {
+      "name": "control-root-replay.log",
+      "sha256": "c2bb3f23cc0d723847285c675650504e35b3f06646c5942a291f4ea1be6b0b14"
+    },
+    {
+      "name": "control-startup-equality.log",
+      "sha256": "8627f729a0948b5e499385c77f6e47f0b5d4829ad040f8179877bf3d60e2cc1c"
+    },
+    {
+      "name": "control-stop-marker.log",
+      "sha256": "4124b10be8616db782c95dea885127b801d2ace5229acf7a61476d554acb498d"
+    },
+    {
+      "name": "control-stop-nonce.log",
+      "sha256": "eb899f6fc4a84f4caf95b501d49c267d05ee50d8074c17567707fd0ec29803e7"
+    },
+    {
+      "name": "corrections-first.log",
+      "sha256": "fa9abaf784fb348ebe7606621966c39c6b73a4b5a05aebfa47d600f2bb952497"
+    },
+    {
+      "name": "corrections-r2.log",
+      "sha256": "69fb08f9f01ab473bf12c0f2f14b04dd25636d1dba5b70947a9c632fbc2bed08"
+    },
+    {
+      "name": "diff-accepted.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "diff-restored.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "docs-format.log",
+      "sha256": "3e78b35768e23a9e60fe935dac9d7066e566342afc00d7d58689eeb7f5060a63"
+    },
+    {
+      "name": "docs-precheck.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-accepted.log",
+      "sha256": "1bf8e6d224e8e14bc64f458ca2ff0099d2fdd2bfc40093c83e052d589524cc7d"
+    },
+    {
+      "name": "file-size-final.log",
+      "sha256": "1bf8e6d224e8e14bc64f458ca2ff0099d2fdd2bfc40093c83e052d589524cc7d"
+    },
+    {
+      "name": "file-size-first.log",
+      "sha256": "1bf8e6d224e8e14bc64f458ca2ff0099d2fdd2bfc40093c83e052d589524cc7d"
+    },
+    {
+      "name": "file-size-restored.log",
+      "sha256": "1bf8e6d224e8e14bc64f458ca2ff0099d2fdd2bfc40093c83e052d589524cc7d"
+    },
+    {
+      "name": "format-accepted.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "format-check-first.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "format-corrections-r2.log",
+      "sha256": "1ae4a66e86c4e599fc6aab5d679354ee08f2a9ee088a920efae0b168735c3886"
+    },
+    {
+      "name": "format-corrections-r3.log",
+      "sha256": "6b326c3ba5b9ed471d5c1cce8381af1a841218ba5553661ac2d9a4ad1c4de36f"
+    },
+    {
+      "name": "format-corrections.log",
+      "sha256": "9c203a691115f5f4a0c625dd868d3b5697801f6798dddc62c343f2534bc38b25"
+    },
+    {
+      "name": "format-final.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "format-first.log",
+      "sha256": "5eafc53d1fbea34b0705de5b65991fc092a54b63a63359c7d73415d1c9c712bc"
+    },
+    {
+      "name": "format-r3.log",
+      "sha256": "582d21d93fe371409f6929c14c1c58db0694c81250c02ccb80ff3f6ad6f23778"
+    },
+    {
+      "name": "format-r4.log",
+      "sha256": "27e761c7f1b58221a6eeae396485e934fc5b57a015a50a95cf69e19ae72b754f"
+    },
+    {
+      "name": "format-restored.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "format-tests.log",
+      "sha256": "8675a9bd73d281ecca710600613a0b39092c5152ff9b0e21cb0e8d1fb69ba35f"
+    },
+    {
+      "name": "gateway-build-accepted.log",
+      "sha256": "4fe228146f1b249ea7f36a86680cbc1f6570062f60e07ec00ec2cbfb1ae3d8b1"
+    },
+    {
+      "name": "gateway-build-final.log",
+      "sha256": "607e60075506f2fbf71ff20114826afb894d856c17680df05301700cd05bafd4"
+    },
+    {
+      "name": "gateway-build-restored.log",
+      "sha256": "6cf59f5a97421ba5b9ebe3c14706e226996ddb37fc7b3b411c3c2297f3d56061"
+    },
+    {
+      "name": "gateway-build.log",
+      "sha256": "e99aae3811530bbadcccd97e755715197af556ef04312082f007f825e8d6638a"
+    },
+    {
+      "name": "install.log",
+      "sha256": "6a137c0a9df59c62c1d56ee403f1a4710c03e707099b8557b2e795eb6bbe2b08"
+    },
+    {
+      "name": "lifetime-first.log",
+      "sha256": "a1f960e69d4af77ca31165631f62cee66d5d074890010089d0eb8ff99ef0967d"
+    },
+    {
+      "name": "lint-accepted.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-corrections.log",
+      "sha256": "154d55e927258b9c5cd323235121b80b9efadcb304efdc411df849039e3aeea4"
+    },
+    {
+      "name": "lint-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-first.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-restored.log",
+      "sha256": "0aab1bf1aeecfe0667181c3c343bf08cf33b0a843f1a1821548ff598cc4f4c03"
+    },
+    {
+      "name": "native-debug.log",
+      "sha256": "71ceb5904f7f243b43e09fee7b7bcc3db0d5a91d679a36ac06bb4fc3063207e2"
+    },
+    {
+      "name": "native-diagnostic.log",
+      "sha256": "a54ba0c46019da29671921c49b2599203fd1bdfcd232556f5558e3313e7cb13c"
+    },
+    {
+      "name": "native-fixed.log",
+      "sha256": "bae8361595caea224125a96618b0047764312b7c1ebadcdd814d22326fcce0a8"
+    },
+    {
+      "name": "observer-build.log",
+      "sha256": "8956a5ee48f036923f8daac30f1216013c7654497413c7bce76bef7618093dcc"
+    },
+    {
+      "name": "observer-bundle-accepted.log",
+      "sha256": "c864f065d7088c308c631b360a67e06a5fbaefb899d0f4fd7d677ab52a2949e8"
+    },
+    {
+      "name": "observer-bundle-final.log",
+      "sha256": "16d15b1b2ea477f66861b87b2c213ee93608a79d3aa75d7e40606fcb6557d2a5"
+    },
+    {
+      "name": "observer-bundle-restored.log",
+      "sha256": "38a84cd3d33540e51c6d448f98fa420350402334b8c308d473680e95ee1b5c30"
+    },
+    {
+      "name": "replay-assertion-green.log",
+      "sha256": "5cd56c1cc77d60cbb4c656a8f32e8f91b9610861ae02f5389f6ceb7a1c8e2d0c"
+    },
+    {
+      "name": "root-tsc-accepted.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "root-tsc-final.log",
+      "sha256": "90249902edac709655adfd5a2cb2dfc5e50372591fd56998ed4b78097d2cd1b3"
+    },
+    {
+      "name": "root-tsc-restored.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "spy-format-final.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "spy-lint-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "spy-typing-behavior.log",
+      "sha256": "28bff9446375182a350e9261427a00d45192f7b62beb845d9b54aaf75366e1d6"
+    },
+    {
+      "name": "tests-tsc-accepted.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc-restored.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tsc-corrections.log",
+      "sha256": "90249902edac709655adfd5a2cb2dfc5e50372591fd56998ed4b78097d2cd1b3"
+    },
+    {
+      "name": "tsc-first.log",
+      "sha256": "c0e8c173b4c0c2a4edf3d8feed2663f20622a736435ed0a570d54f156bae900b"
+    },
+    {
+      "name": "tsc-root-r2.log",
+      "sha256": "476e2129ff549926fb06245cc9d38f2f181f960394679e6399bf9a5c874d4509"
+    },
+    {
+      "name": "tsc-tests-corrections.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tsc-tests-first.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tsc-tests-r2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tsc-tests-r3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tsc-tests-r4.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tsc-tests-r5.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "control-dispatch-equality.patch",
+      "sha256": "963ba035739eb182b154124d8805dcb62a0b833b117a0d5bb3389326ac003d84"
+    },
+    {
+      "name": "control-durable-first.patch",
+      "sha256": "105043924e42783738aba1349e384e56141e787d4f0fc39d3da839f8d256b9d2"
+    },
+    {
+      "name": "control-frame-budget.patch",
+      "sha256": "15c8c4101611328cb8087b67897bd587f890de78a16f23f889251bed6299a0b3"
+    },
+    {
+      "name": "control-late-sample.patch",
+      "sha256": "5a2c3ca269cee08ba664b0320d5247292a35dafdab991cf47fdb0f7e37f70918"
+    },
+    {
+      "name": "control-mac-proof.patch",
+      "sha256": "9e159ce56c12fb017a85c9e2a954ef9e5f493c0105c67bcd8e5d957ddf4f8a43"
+    },
+    {
+      "name": "control-outgoing-budget.patch",
+      "sha256": "b84272049debe96b5f0ab78edfcf4c38c357f1a5d205a385119afbf7ce8a4f26"
+    },
+    {
+      "name": "control-partial-equality.patch",
+      "sha256": "8c904954cce3773388f71e602ddff79ac5bffb421c529422fdcb10defc071f65"
+    },
+    {
+      "name": "control-receiver-equality.patch",
+      "sha256": "4bfc71de4f7005c6d9e120e4227a17e41895e238b333bd115049821123d14f97"
+    },
+    {
+      "name": "control-retire-before-ack-paired.patch",
+      "sha256": "abbc28436f02fdc1603e6bbd5822ffdd76ceffa29b728eac0c2cc27ce27258e1"
+    },
+    {
+      "name": "control-retire-before-ack.patch",
+      "sha256": "1f4c3aa37439176efebafd56dac529cf28637ccb933152bd40adb408c5293554"
+    },
+    {
+      "name": "control-root-equality.patch",
+      "sha256": "10e177e286857d44fe3a804046c49c99cb215aae652f415965fa0cc4147f0d9f"
+    },
+    {
+      "name": "control-root-replay.patch",
+      "sha256": "2c79967d99c104730a4e38d573ab5560d679b9a3a6dc791f4285566821f68533"
+    },
+    {
+      "name": "control-startup-equality.patch",
+      "sha256": "5fa7ad27cb7fab0a242cb84053db667d0baeff9262e5f77574aa6201269118fc"
+    },
+    {
+      "name": "control-stop-marker.patch",
+      "sha256": "2d74803c1e0c3259638b5b6419c8992c32607be1e38a0340bca9d3d7ed9b81ae"
+    },
+    {
+      "name": "control-stop-nonce.patch",
+      "sha256": "f18573b2a873e98d4f31e42155b11e220c4c9eca0df8eb12a937ac3d14b35c15"
+    },
+    {
+      "name": "plan-r1.patch",
+      "sha256": "4ac39296ea03790d900243c5a73a979401f35dd71f7b4a26fd4f55eff98bb926"
+    }
+  ],
+  "bundle": {
+    "target": "node24 metadata only",
+    "executedNodeVersion": "v22.22.2",
+    "actualNode24RuntimeQualified": false,
+    "sha256": "79fbb2f5086fc83e180e5e954e630870c9b97477c7531ab9867e4c070e15112c",
+    "bytes": 73438,
+    "externalImports": [
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:http",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:https",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:http",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:crypto",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:crypto",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:net",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:child_process",
+        "kind": "require-call",
+        "external": true
+      }
+    ]
+  },
+  "reviewLedger": [
+    {
+      "round": "planR1",
+      "commit": "d7253545508c64e3df092ba375a1e48d97480890",
+      "verdict": "revise",
+      "findings": "Fresh root nonce, absolute initial/idle root deadlines, separate lifetime slot and terminal-marker observation refusal"
+    },
+    {
+      "round": "planR2",
+      "commit": "0902fcef059a9693764a99591ea923c2f851c2c0",
+      "verdict": "independent Spec/security accepted before implementation"
+    },
+    {
+      "round": "sourceR1",
+      "commit": "7a0bc6b1a733e584aaf4578d3555e1edc7cb84a4",
+      "verdict": "revise",
+      "findings": "Canonical field validator duplicated; receiver absolute expiry was timer-dependent at actual dispatch; startup late-completion regressions missing"
+    },
+    {
+      "round": "sourceR2",
+      "commit": "b30d3be7d59c8c184b5f628e8acb5defa0ff381b",
+      "verdict": "independent Standards/Spec/security accepted"
+    },
+    {
+      "round": "sourceR3",
+      "commit": "22ab0050e755a135a807fe98a6f34d47eae3e5dc",
+      "verdict": "independent Standards/Spec/security accepted",
+      "changes": "Test spy explicit this and captured receiving core"
+    },
+    {
+      "round": "sourceR4",
+      "commit": "8ad8175c2a75b1023850cd8a509314b678422690",
+      "verdict": "independent Standards/Spec/security accepted",
+      "changes": "Test-only nonce no-alive assertion; direct framing assertions before cleanup"
+    },
+    {
+      "round": "sourceR5",
+      "commit": "136a4c7dad54d5ff8250560c1fbfceb3c4244254",
+      "verdict": "independent Standards/Spec/security accepted",
+      "changes": "Observe core state at actual signed fenced write; surgical pre-ack retirement control"
+    },
+    {
+      "round": "sourceR6",
+      "commit": "3a8eafe969505d8ef9975ee6e4e17f407d8ce16b",
+      "verdict": "independent Standards/Spec/security accepted",
+      "changes": "Retain bound snapshot method to satisfy no-this-alias; same actual core sampled at ack write"
+    }
+  ],
+  "attempts": [
+    {
+      "name": "initial source checks",
+      "result": "Retained logs: native fixture-loader and auth timing, legacy startup config, TypeScript and format corrections; superseded by restored pinned batch"
+    },
+    {
+      "name": "first final batch",
+      "checks": [
+        {
+          "name": "behavior-final",
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "tests/unit/computer-auth-endpoint.test.ts",
+            "tests/unit/computer-auth-lifetime.test.ts",
+            "tests/unit/computer-auth.test.ts",
+            "tests/unit/computer-gateway-build.test.ts",
+            "tests/unit/computer-gateway-channel.test.ts",
+            "tests/unit/computer-gateway-process.test.ts",
+            "tests/unit/computer-guest-envelope.test.ts",
+            "tests/unit/computer-guest-websocket.test.ts",
+            "tests/unit/computer-host-client.test.ts",
+            "tests/unit/computer-host-recovery.test.ts",
+            "tests/unit/computer-host.test.ts",
+            "tests/unit/computer-input-control.test.ts",
+            "tests/unit/computer-lifetime-process.test.ts",
+            "tests/unit/computer-lifetime-startup.test.ts",
+            "tests/unit/computer-lifetime.test.ts",
+            "tests/unit/computer-receiving-gateway.test.ts",
+            "tests/unit/computer-rfb-input.test.ts",
+            "tests/unit/computer-watchdog-journal.test.ts",
+            "tests/unit/computer-watchdog-linux-files.test.ts",
+            "tests/unit/computer-watchdog-linux.test.ts",
+            "tests/unit/computer-watchdog-observe.test.ts",
+            "tests/unit/computer-watchdog-policy.test.ts",
+            "tests/unit/computer-watchdog-supervisor.test.ts",
+            "tests/unit/computer-watchdog-trust.test.ts"
+          ],
+          "exit": 0,
+          "elapsedSeconds": 78.11,
+          "logSha256": "777720f47332f75956c18e16b68115669daf074d587d4583a5da644461de0cc0"
+        },
+        {
+          "name": "root-tsc-final",
+          "command": ["pnpm", "exec", "tsc", "--noEmit"],
+          "exit": 2,
+          "elapsedSeconds": 100.772,
+          "logSha256": "90249902edac709655adfd5a2cb2dfc5e50372591fd56998ed4b78097d2cd1b3"
+        },
+        {
+          "name": "tests-tsc-final",
+          "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+          "exit": 0,
+          "elapsedSeconds": 57.565,
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "lint-final",
+          "command": [
+            "pnpm",
+            "exec",
+            "eslint",
+            "apps/api/src/computer/gateway-channel.ts",
+            "apps/api/src/computer/gateway-server.ts",
+            "apps/api/src/computer/host-contract.ts",
+            "apps/api/src/computer/lifetime-channel.ts",
+            "apps/api/src/computer/lifetime-protocol.ts",
+            "apps/api/src/computer/lifetime-receiver.ts",
+            "apps/api/src/computer/receiving-gateway.ts",
+            "apps/api/src/computer/rfb-input.ts",
+            "scripts/computer-gateway/config.ts",
+            "scripts/computer-watchdog.ts",
+            "scripts/computer-watchdog/lifetime.ts",
+            "scripts/computer-watchdog/observe.ts",
+            "scripts/computer-watchdog/supervisor.ts",
+            "scripts/computer-watchdog/trust.ts",
+            "tests/unit/computer-gateway-channel.test.ts",
+            "tests/unit/computer-gateway-process.test.ts",
+            "tests/unit/computer-lifetime-fixture.ts",
+            "tests/unit/computer-lifetime-process.test.ts",
+            "tests/unit/computer-lifetime-startup.test.ts",
+            "tests/unit/computer-lifetime.test.ts",
+            "tests/unit/computer-process-fixture.ts",
+            "tests/unit/computer-watchdog-observe.test.ts",
+            "tests/unit/computer-watchdog-supervisor.test.ts",
+            "tests/unit/computer-watchdog-trust.test.ts",
+            "--max-warnings=0"
+          ],
+          "exit": 0,
+          "elapsedSeconds": 2.053,
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "format-final",
+          "command": [
+            "pnpm",
+            "exec",
+            "prettier",
+            "--check",
+            "apps/api/src/computer/gateway-channel.ts",
+            "apps/api/src/computer/gateway-server.ts",
+            "apps/api/src/computer/host-contract.ts",
+            "apps/api/src/computer/lifetime-channel.ts",
+            "apps/api/src/computer/lifetime-protocol.ts",
+            "apps/api/src/computer/lifetime-receiver.ts",
+            "apps/api/src/computer/receiving-gateway.ts",
+            "apps/api/src/computer/rfb-input.ts",
+            "scripts/computer-gateway/config.ts",
+            "scripts/computer-watchdog.ts",
+            "scripts/computer-watchdog/lifetime.ts",
+            "scripts/computer-watchdog/observe.ts",
+            "scripts/computer-watchdog/supervisor.ts",
+            "scripts/computer-watchdog/trust.ts",
+            "tests/unit/computer-gateway-channel.test.ts",
+            "tests/unit/computer-gateway-process.test.ts",
+            "tests/unit/computer-lifetime-fixture.ts",
+            "tests/unit/computer-lifetime-process.test.ts",
+            "tests/unit/computer-lifetime-startup.test.ts",
+            "tests/unit/computer-lifetime.test.ts",
+            "tests/unit/computer-process-fixture.ts",
+            "tests/unit/computer-watchdog-observe.test.ts",
+            "tests/unit/computer-watchdog-supervisor.test.ts",
+            "tests/unit/computer-watchdog-trust.test.ts"
+          ],
+          "exit": 0,
+          "elapsedSeconds": 1.683,
+          "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+        },
+        {
+          "name": "file-size-final",
+          "command": ["pnpm", "check:file-size"],
+          "exit": 0,
+          "elapsedSeconds": 1.852,
+          "logSha256": "1bf8e6d224e8e14bc64f458ca2ff0099d2fdd2bfc40093c83e052d589524cc7d"
+        },
+        {
+          "name": "diff-final",
+          "command": ["git", "diff", "--check"],
+          "exit": 0,
+          "elapsedSeconds": 0.009,
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "observer-bundle-final",
+          "command": [
+            "pnpm",
+            "exec",
+            "esbuild",
+            "scripts/computer-watchdog.ts",
+            "--bundle",
+            "--platform=node",
+            "--format=cjs",
+            "--target=node24",
+            "--outfile=<private>/watchdog-final.cjs",
+            "--metafile=<private>/watchdog-final-meta.json"
+          ],
+          "exit": 0,
+          "elapsedSeconds": 0.507,
+          "logSha256": "16d15b1b2ea477f66861b87b2c213ee93608a79d3aa75d7e40606fcb6557d2a5"
+        },
+        {
+          "name": "gateway-build-final",
+          "command": ["pnpm", "build:computer-gateway", "<private>/gateway-build-final"],
+          "exit": 0,
+          "elapsedSeconds": 0.995,
+          "logSha256": "607e60075506f2fbf71ff20114826afb894d856c17680df05301700cd05bafd4"
+        }
+      ],
+      "result": "480 tests passed; root TypeScript exit2 on test spy typing. Other checks0; superseded after test-only correction"
+    },
+    {
+      "name": "intermediate restored batch",
+      "checks": [
+        {
+          "name": "behavior-restored",
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "tests/unit/computer-auth-endpoint.test.ts",
+            "tests/unit/computer-auth-lifetime.test.ts",
+            "tests/unit/computer-auth.test.ts",
+            "tests/unit/computer-gateway-build.test.ts",
+            "tests/unit/computer-gateway-channel.test.ts",
+            "tests/unit/computer-gateway-process.test.ts",
+            "tests/unit/computer-guest-envelope.test.ts",
+            "tests/unit/computer-guest-websocket.test.ts",
+            "tests/unit/computer-host-client.test.ts",
+            "tests/unit/computer-host-recovery.test.ts",
+            "tests/unit/computer-host.test.ts",
+            "tests/unit/computer-input-control.test.ts",
+            "tests/unit/computer-lifetime-process.test.ts",
+            "tests/unit/computer-lifetime-startup.test.ts",
+            "tests/unit/computer-lifetime.test.ts",
+            "tests/unit/computer-receiving-gateway.test.ts",
+            "tests/unit/computer-rfb-input.test.ts",
+            "tests/unit/computer-watchdog-journal.test.ts",
+            "tests/unit/computer-watchdog-linux-files.test.ts",
+            "tests/unit/computer-watchdog-linux.test.ts",
+            "tests/unit/computer-watchdog-observe.test.ts",
+            "tests/unit/computer-watchdog-policy.test.ts",
+            "tests/unit/computer-watchdog-supervisor.test.ts",
+            "tests/unit/computer-watchdog-trust.test.ts"
+          ],
+          "exit": 0,
+          "elapsedSeconds": 68.99,
+          "logSha256": "77ca32a485f99c9a12c56c3bc7062500d93766763cd74088f82cf4c5de3dc2d8"
+        },
+        {
+          "name": "root-tsc-restored",
+          "command": ["pnpm", "exec", "tsc", "--noEmit"],
+          "exit": 0,
+          "elapsedSeconds": 104.307,
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "tests-tsc-restored",
+          "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+          "exit": 0,
+          "elapsedSeconds": 63.494,
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "lint-restored",
+          "command": [
+            "pnpm",
+            "exec",
+            "eslint",
+            "apps/api/src/computer/gateway-channel.ts",
+            "apps/api/src/computer/gateway-server.ts",
+            "apps/api/src/computer/host-contract.ts",
+            "apps/api/src/computer/lifetime-channel.ts",
+            "apps/api/src/computer/lifetime-protocol.ts",
+            "apps/api/src/computer/lifetime-receiver.ts",
+            "apps/api/src/computer/receiving-gateway.ts",
+            "apps/api/src/computer/rfb-input.ts",
+            "scripts/computer-gateway/config.ts",
+            "scripts/computer-watchdog.ts",
+            "scripts/computer-watchdog/lifetime.ts",
+            "scripts/computer-watchdog/observe.ts",
+            "scripts/computer-watchdog/supervisor.ts",
+            "scripts/computer-watchdog/trust.ts",
+            "tests/unit/computer-gateway-channel.test.ts",
+            "tests/unit/computer-gateway-process.test.ts",
+            "tests/unit/computer-lifetime-fixture.ts",
+            "tests/unit/computer-lifetime-process.test.ts",
+            "tests/unit/computer-lifetime-startup.test.ts",
+            "tests/unit/computer-lifetime.test.ts",
+            "tests/unit/computer-process-fixture.ts",
+            "tests/unit/computer-watchdog-observe.test.ts",
+            "tests/unit/computer-watchdog-supervisor.test.ts",
+            "tests/unit/computer-watchdog-trust.test.ts",
+            "--max-warnings=0"
+          ],
+          "exit": 1,
+          "elapsedSeconds": 2.008,
+          "logSha256": "0aab1bf1aeecfe0667181c3c343bf08cf33b0a843f1a1821548ff598cc4f4c03"
+        },
+        {
+          "name": "format-restored",
+          "command": [
+            "pnpm",
+            "exec",
+            "prettier",
+            "--check",
+            "apps/api/src/computer/gateway-channel.ts",
+            "apps/api/src/computer/gateway-server.ts",
+            "apps/api/src/computer/host-contract.ts",
+            "apps/api/src/computer/lifetime-channel.ts",
+            "apps/api/src/computer/lifetime-protocol.ts",
+            "apps/api/src/computer/lifetime-receiver.ts",
+            "apps/api/src/computer/receiving-gateway.ts",
+            "apps/api/src/computer/rfb-input.ts",
+            "scripts/computer-gateway/config.ts",
+            "scripts/computer-watchdog.ts",
+            "scripts/computer-watchdog/lifetime.ts",
+            "scripts/computer-watchdog/observe.ts",
+            "scripts/computer-watchdog/supervisor.ts",
+            "scripts/computer-watchdog/trust.ts",
+            "tests/unit/computer-gateway-channel.test.ts",
+            "tests/unit/computer-gateway-process.test.ts",
+            "tests/unit/computer-lifetime-fixture.ts",
+            "tests/unit/computer-lifetime-process.test.ts",
+            "tests/unit/computer-lifetime-startup.test.ts",
+            "tests/unit/computer-lifetime.test.ts",
+            "tests/unit/computer-process-fixture.ts",
+            "tests/unit/computer-watchdog-observe.test.ts",
+            "tests/unit/computer-watchdog-supervisor.test.ts",
+            "tests/unit/computer-watchdog-trust.test.ts"
+          ],
+          "exit": 0,
+          "elapsedSeconds": 1.835,
+          "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+        },
+        {
+          "name": "file-size-restored",
+          "command": ["pnpm", "check:file-size"],
+          "exit": 0,
+          "elapsedSeconds": 1.663,
+          "logSha256": "1bf8e6d224e8e14bc64f458ca2ff0099d2fdd2bfc40093c83e052d589524cc7d"
+        },
+        {
+          "name": "diff-restored",
+          "command": ["git", "diff", "--check"],
+          "exit": 0,
+          "elapsedSeconds": 0.006,
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "observer-bundle-restored",
+          "command": [
+            "pnpm",
+            "exec",
+            "esbuild",
+            "scripts/computer-watchdog.ts",
+            "--bundle",
+            "--platform=node",
+            "--format=cjs",
+            "--target=node24",
+            "--outfile=<private>/watchdog-restored.cjs",
+            "--metafile=<private>/watchdog-restored-meta.json"
+          ],
+          "exit": 0,
+          "elapsedSeconds": 0.384,
+          "logSha256": "38a84cd3d33540e51c6d448f98fa420350402334b8c308d473680e95ee1b5c30"
+        },
+        {
+          "name": "gateway-build-restored",
+          "command": ["pnpm", "build:computer-gateway", "<private>/gateway-build-restored"],
+          "exit": 0,
+          "elapsedSeconds": 0.762,
+          "logSha256": "6cf59f5a97421ba5b9ebe3c14706e226996ddb37fc7b3b411c3c2297f3d56061"
+        }
+      ],
+      "result": "Root/tests TypeScript and480 tests passed; scoped lint exit1 on no-this-alias in test spy. Corrected by bound snapshot method; final batch follows final committed source"
+    },
+    {
+      "name": "root-replay first countercheck",
+      "exit": 0,
+      "result": "Insufficient test: later protocol failure masked nonce response; retained log and receipt, strengthened no-alive assertion"
+    },
+    {
+      "name": "frame-budget and partial-equality first counterchecks",
+      "exit": 1,
+      "result": "Test timeouts, not accepted sensitivity proof. Retained logs, replaced by direct intended-assertion failures"
+    }
+  ],
+  "disclosure": {
+    "nativeUnixSocketsAndSeparateSupervisorProcess": true,
+    "syntheticAuthReadinessDockerRootOwnershipNamespaceAndLibraryFence": true,
+    "imageRuntimeDockerOperations": false,
+    "databaseOrFoundationCommand": false,
+    "tcpServerOrBrowser": false,
+    "productionDeployment": false,
+    "independentComputerClosure": false,
+    "runtimeQualified": false,
+    "ownerDelivery": false,
+    "unavailableAdmissionChanged": false
+  },
+  "remaining": "Normal disable/recreate and daemon/root lifecycle mutation, config provisioning, new-run/reset and uncertain-create quiescence, independent Computer closure, installed image/Node24/128MiB/TigerVNC, real owner HTTPS/WSS/chat/agent leases and independent live proof",
+  "ci": "Independent final local evidence acceptance and exact final PR HEAD required CI gate plus supplemental acceptance are premerge gates recorded on PR."
+}

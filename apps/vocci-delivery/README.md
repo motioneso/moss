@@ -2,7 +2,7 @@
 
 This repo-owned Android client retrieves finished legacy Vocci recordings and
 uploads them to Moss's existing Meetings receiver. It is a developer-installed
-foreground service, not consumer ring setup. No ownership, pairing, recording
+foreground service with guided setup for already-owned rings. No ownership, pairing, recording
 control, ring deletion or destructive sync acknowledgement commands exist. Normal
 recordings become Meetings evidence; newly opted-in hold recordings go to Main chat.
 
@@ -14,14 +14,49 @@ in ignored `build/`. The default APK is debuggable and development-only; use the
 separate release mode below for distribution packaging. Target API 35, minimum
 API 33; tested devices/results belong on the PR.
 
-## Provision and start
+## Set up an already-owned ring
+
+The Hardware page opens from Moss Settings. Its status card offers **Set up ring** when
+setup is needed, or the current delivery/account/permission action for configured
+installs. Updates keep the current ring, account, pending audio and hold choice.
+The new wizard is implemented; its complete setup-to-recording live acceptance is
+still pending in #3565. Use a development build for this pre-release flow.
+
+1. Enter your Moss server address and choose **Connect Moss in browser**. Sign into
+   Moss, review the Android permissions and approve. Return and **Check approval**.
+2. Enter the email for the existing Vocci account that owns the ring. Choose
+   **Send code** and enter the email code directly in the app. If requested, enter
+   your authenticator code. Resend is explicit and shows a cooldown. Unsupported
+   sign-in methods stop with an explanation; this does not create an account.
+3. Choose a ring from **Rings on your Vocci account**, then **Select ring**. If Vocci
+   is installed, open its app settings → Permissions and remove Nearby devices access.
+   Then allow Nearby devices for this app, turn Bluetooth on and keep the ring close.
+   Return and choose **Verify ring**. Cloud lookup alone does not complete verification.
+4. After setup is saved, choose **Continue to Vocci ring**. Home offers the current
+   action: resolve account or permission blockers, then explicitly **Start delivery**.
+   **Settings → Permissions and battery** holds Android background help.
+   Enable **Settings → Voice messages** only when you want hold-to-talk.
+   Enrollment waits for two stable ring inventories. Existing voice consent and
+   transcript-review behavior are unchanged. Setup starts neither delivery nor voice input.
+   **Settings → Set up ring again** opens the saved **Ring connection** summary;
+   completed sign-in forms stay hidden. Back keeps saved setup.
+
+Cancel setup confirms remote cleanup when online. If offline, reconnect and retry;
+unconfirmed cleanup remains pending. Reopening resumes staged Moss/ring selection.
+An interrupted unverified email attempt needs sign-in cleanup before another code;
+a verified saved attempt offers **Finish ring lookup**. No background email sends.
+Keep the original Moss origin/owner/ring for recovery. Corrupt configuration or
+orphaned queued audio blocks adoption of another setup. A new factory-fresh ring,
+ownership transfer, firmware and ring-audio deletion are outside this flow.
+
+## Developer bootstrap and checks
 
 Use the authorized Android device explicitly with `adb -s <serial>` for every
 command; do not operate on another attached device. Install
 `apps/vocci-delivery/build/moss-vocci-dev.apk` with `install -r`. Instrumentation:
 
 ```bash
-adb -s <serial> shell am instrument -w ai.moss.vocci/.DeviceChecks
+adb -s <serial> shell am instrument -w ai.moss.android/.DeviceChecks
 ```
 
 Require `INSTRUMENTATION_RESULT: result=PASS` and code `-1`; ADB can exit zero even
@@ -39,7 +74,7 @@ a form content type to an empty POST, which the receiver rejects with HTTP 415.
 
 Create the app-private `files/` directory with `run-as` on a fresh install.
 A developer provisions a one-use app-private `files/bootstrap.json` over stdin
-with `run-as ai.moss.vocci sh -c 'cat > files/bootstrap.json'`. Supply JSON fields:
+with `run-as ai.moss.android sh -c 'cat > files/bootstrap.json'`. Supply JSON fields:
 `address`, `sn`, `deviceId`, `bindKey` (existing owner binding), `origin` (plain
 HTTPS origin, no trailing slash), and `cookie` (normal signed-in Moss cookie).
 Read credentials from private owner-only files or the authorized diagnostic app's
@@ -48,9 +83,9 @@ checks the live session owner, consumes/removes the bootstrap, then retains conf
 with Android Keystore AES-GCM in `no_backup/config.enc`. An authorized debugging
 host can inspect a debug process; Keystore does not remove that trust boundary.
 
-There is no Vocci account sign-in/key recovery UI. Reuse an already-retained valid
-binding; do not ask its owner to sign in again unless it is actually unavailable.
-A new owner still needs legitimate Vocci account/backend key recovery. Refreshing
+The guided flow above retrieves an existing owner binding. Developer bootstrap
+remains available for diagnostics. Reuse an already-retained valid binding; do not
+ask its owner to sign in again unless it is actually unavailable. Refreshing
 Moss credentials preserves the same origin/owner/ring and requires an explicit
 restart. Session cookies are general account credentials; browser linking below
 replaces the initial developer cookie with an Android device credential.
@@ -65,18 +100,18 @@ Bluetooth state in `finally` after stopping Moss. Test this handoff on the devic
 the companion's Open Vocci app settings action supports this handoff without
 changing the binding.
 
-Start `ai.moss.vocci/.DeliveryActivity` from the launcher or ADB. Grant Bluetooth
+Open Hardware from Moss Settings, Connections, Hardware. The Hardware page is not exported, so ADB cannot start it directly; start `ai.moss.android/.MossActivity` and navigate. Grant Bluetooth
 and notifications. The ongoing notification reports record-derived progress and
-opens the status screen, with Start/Stop, permissions, account/ring identity,
-voice opt-in and recent queue entries. To stop explicitly, launch the activity with action `stop`; physical
+opens Home, with one state-appropriate action, account/ring identity and recent deliveries.
+Settings contains voice opt-in, account disconnection and permission help. To stop explicitly, launch the activity with action `stop`; physical
 proof cleanup also force-stops this developer package before restoring Vocci.
-The service polls every 30 seconds and retains a partial wake lock only during
+The service polls every 30 seconds. While hold-to-talk is on it instead keeps one ring link open between cycles and starts a cycle when the ring reports a press ending (hold, then idle), re-checking every 1.5 s for up to five tries until the recording is complete. A silent or dropped link reconnects after 3 s, and a one-minute listen acts as the safety net. A hold-to-talk recording is fetched on first sighting once its sidecar is complete; other recordings need identical sizes on two listings. It retains a partial wake lock only during
 bounded work. Sticky service restart handles OS reclamation. An explicit Start also enables
 recovery after boot/unlock and app update; Stop disables recovery. Android can
 refuse a background start, which leaves an Open app/Start delivery reminder.
 Only **Start delivery** enables recovery. While stopped, voice changes, manual cleanup
 and transcription retries ask you to Start first; maintenance actions never enable
-restart recovery. Force-stop still requires a manual launch. Permissions and background settings opens App settings
+restart recovery. Force-stop still requires a manual launch. Settings → Permissions and battery opens Android app settings
 for battery/permission recovery and Vocci settings for Nearby devices handoff.
 Choose Unrestricted battery use and remove Moss from Samsung Sleeping apps for
 daily use. Device-specific endurance remains a live validation requirement.
@@ -85,19 +120,100 @@ HTTP is accepted only at loopback for isolated development using an owned ADB
 reverse on a claimed devport. Remote delivery requires HTTPS; redirects are
 rejected. Never reuse/remove another session's forward or server.
 
-## Native screen
+## Moss screen and Hardware page
 
-The existing status activity follows Moss’s Park Press roles: paper/forest colours,
-Archivo headings, sans body text, numbered sections with hairlines and 48 dp minimum
-controls. `NativeTheme.java` maps semantic roles from the web token source. Android’s
-system light/dark mode and font scale apply; insets keep controls outside system bars.
-The bundled Archivo Black TTF is converted from the repository’s Latin 900 WOFF2;
-its OFL license is included under `assets/fonts/` and packaged by `build.sh`.
+The launcher (`MossActivity`) opens the Moss site full screen in a web view, at the
+connected address. With no Moss link it shows Connect to Moss (`ConnectActivity`):
+one address field, then Moss's own approval page inside the app, polled every few
+seconds until approved. The link is the staged `SetupLink`, so ring setup picks up
+at the Vocci account step and never disconnects Moss. With a link and no ring, no
+ring service runs and nothing outside Hardware mentions the ring. Pages
+on that address stay in the web view, and any other web address opens in the browser.
+Back goes back in web history, then leaves the app. The web view adds
+`MossAndroid/<version>` to its user agent, which makes Moss Settings show a
+**Hardware** entry under Connections. That entry links to `moss-android://hardware`,
+the only address the app intercepts. There is no JavaScript bridge, file and content
+access are off, mixed content is blocked and third-party cookies are off. Moss
+signs in inside the web view with its own cookies, separate from the ring's account
+link. Microphone and location are not offered to web pages. If Moss fails to load,
+a native message offers **Try again** and **Open Hardware**.
 
-Snapshot polling updates keyed views in place. Unchanged snapshots retain controls,
-focus and scroll position; status changes update text and destinations. A theme
-recreation restores the scroll offset. This is the developer status screen, with
-existing provisioning requirements and destinations.
+**Hardware** (`DeliveryActivity`) is one native page styled like Moss Settings. Its
+back link **Settings** returns to the Moss screen. In order it holds:
+
+- a status card with one action chosen by the plain `HomeStatus` policy: setup/recovery,
+  account connection, pending approval with a text Cancel link, competing Vocci access,
+  missing permissions, background battery restriction, recovery message, then Start or
+  Stop. Blocking states show an amber dot. An unreadable saved setup shows its recovery
+  text without an action.
+- **Recent**: the latest three deliveries with kind, retained length, source time and
+  outcome. Tap a row for details, **Open meeting** or **Review in Moss**, and eligible
+  **Retry transcription**. **All deliveries** keeps the 30-entry history.
+- **Ring**: **Remind me after an hour**, **Voice messages**, **Recordings on ring**,
+  **Set up ring again**, **About this ring**, **How to use your ring**.
+- **Phone storage**: **Clear delivered audio** with the phone size.
+- **Account**: name and origin, with **Disconnect** when connected.
+- **Troubleshooting**: **Permissions and battery**.
+
+The subpages live in `HardwareActivity` (`page=storage|recording|phone|connection|guide|about`)
+and their back returns to Hardware.
+
+**Ring problems** notifications use a separate channel. While delivery is on and the
+status card shows a blocker (cannot reach the ring, permission needed, account not
+connected, setup could not be opened), one notification repeats the card's text and
+opens Hardware. It posts once per state and clears when the state resolves or delivery
+stops (`RingProblem` decides, with host tests).
+
+The app is named **Moss**, application id `ai.moss.android`. Opening Hardware starts neither delivery nor hold enrollment. Existing service commands,
+intent actions and preference names are unchanged. Hardware is native; the only web change is the Settings link.
+
+Battery, recording state, ring capacity and firmware are optional saved observations,
+with per-field times. A stale read never claims a current connection. Queries run on
+the service's serialized GATT connection after file retrieval, with at most nine
+seconds per cycle; telemetry failure cannot fail a recording. The standard ring-info
+query also aligns the ring clock with the phone, matching the official protocol.
+Storage and recording queries do not control recording. Malformed data retains its
+previous observation time. No destructive command is added. Snapshot polling preserves
+native controls,
+focus and scroll; system dark mode and font scale apply. Archivo is bundled under
+`assets/fonts/` with its OFL license.
+
+Ring storage and Phone audio stay separate. Completed phone-copy cleanup confirms
+its scope; optional seven-day cleanup keeps pending/failed/interrupted audio. Neither
+removes ring sources or Moss copies. Settings → Permissions and battery has Android permission,
+battery and official-app handoff guidance. How to use your ring explains double-click
+recording, bookmarks, hold review/send and offline behavior. About this ring shows
+saved identity and observed versions.
+
+An opt-in **Remind me after an hour** notification follows repeated observations
+of the same active recording. It requires delivery and notifications and never stops
+capture. It alerts as a heads-up banner with sound and vibration, then repeats every 30
+minutes until swiped away or tapped; either silences it for that recording only. It
+clears once the recording is no longer observed. Unknown/missing status, observation gaps
+over two minutes, and service restart reset the timer. A missing source name cannot
+start a timer. This is observed time, not a measurement of the recording duration.
+
+**Vocci ring → Recordings on ring → Refresh saved recordings** explicitly reads the saved ring inventory
+without enabling delivery or hold enrollment, including while delivery is stopped.
+Keep Bluetooth available and relinquish the official app's Nearby devices access.
+The dated snapshot lists actual supported audio sources in pages of 25; absence from
+an old snapshot is not proof that a source is currently absent. Inspection separates
+advertised audio/sidecar bytes, retained completion/duration metadata where available,
+phone delivery and the last known Moss status. Missing metadata means unknown.
+
+**Exclude from delivery** confirms the selected source and saves an exclusion tied
+to the existing Moss origin/owner, ring and source journal. The service acknowledges
+only after an atomic save. A request waiting behind a current transfer is pending;
+an in-flight request may finish before exclusion commits. Later retrievals and
+uploads stop, including later chunks of a retained upload. Already sent bytes,
+accepted Meetings and existing Main items cannot be recalled. The exclusion survives
+restart and reinventory, leaves ring/phone evidence and saved destinations intact,
+and has no undo in this build. Changed source sizes require a fresh selection.
+The ledger retains at most 1024 exclusions and fails closed on a changed identity.
+
+Individual ring deletion and firmware updating remain unavailable, tracked in #3584.
+The official APK has a selected-file transport path, but complete legacy bundle
+removal and physical behavior have not been verified. No delete command is sent.
 
 ## Durable behavior and limits
 
@@ -170,7 +286,7 @@ reliability beyond the actual PR proof remain unverified.
 
 ## Link your Moss account
 
-After the existing ring is provisioned, open the companion and choose **Connect
+After setup is saved, open the companion and choose **Connect
 Moss in browser**. This stops delivery while you change its account connection.
 Sign into the original Moss account, review the Android permissions, and approve.
 Return to the companion; it shows **Account connected · device approval**. Press
@@ -188,15 +304,15 @@ never replace the local recording IDs. A different-account approval is rejected
 without moving the existing ring queue. The rejected device is cancelled too.
 
 In Moss, **Settings → Account & preferences → Active sessions** lists the phone
-as **Moss ring companion**. Sign it out there to revoke its connection. The
+as **Moss for Android**. Sign it out there to revoke its connection. The
 companion stops at the next rejected owner or upload request and asks you to
 reconnect. Credentials expire after 90 inactive days, with a one-year ceiling;
 normal owner checks refresh the inactivity window. **Disconnect Moss account**
 revokes the device before removing its local credential. Ring binding, owner pin,
 queue, and pending audio stay on the phone. Reconnect with the original account
 and press Start to resume. Replacing an existing account link retires its previous
-device credential after the new connection is verified. Initial ring ownership setup still requires developer
-provisioning; linking does not recover a Vocci account or bind a new ring.
+device credential after the new connection is verified. Already-owned rings use the guided setup above. Factory-fresh ownership must first
+be established in Vocci; Moss reconnection does not repeat key lookup or bind a ring.
 
 ## Release packaging
 
@@ -258,7 +374,7 @@ remains supported alongside version 3. Version 2 denotes short explicit voice in
    with `{ version: 2, sourceDeviceId, requestKey, recordingIds }`. Keep the request
    key and response ID durably before attempting voice delivery. Retrying the same
    key returns the same snapshot and enablement time; changed inventory conflicts.
-2. Existing inventory members remain meeting imports across later enablements.
+2. Existing inventory members are never imported, as meetings or as chat input; hold recordings never become meetings.
    For a new hold file only, POST `/api/meetings/voice-recordings` with
    `{ version: 2, intent: "voice-request", enablementId, capturedAt, recording }`.
    `recording` is the original version-1 bundle, including exact source evidence.
@@ -305,3 +421,9 @@ configured transcription. No network interception or substituted packet uploads.
 Keep recordings, private drivers, cookies, endpoint details and transcript text
 outside git. Record bounded assertion receipts on the PR. Restore phone state and
 release only owned resources even when a check fails.
+
+For explicit, non-uploading telemetry checks with delivery stopped, run DeviceChecks
+with `-e hardware true`. It authenticates the configured ring, reads inventory and
+status, and publishes a real Hardware snapshot without retrieving or uploading audio.
+It reports only field-availability booleans. Keep the official app from competing
+for Bluetooth and restore any temporary permission changes after the check.

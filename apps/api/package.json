@@ -25,6 +25,8 @@
     "@moss/vault": "workspace:*",
     "fastify": "^5.6.2",
     "kysely": "^0.29.2",
-    "pg-boss": "^12.18.2"
+    "pg-boss": "^12.18.2",
+    "rfb2": "1.1.0",
+    "ws": "8.21.1"
   }
 }

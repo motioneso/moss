@@ -1,0 +1,39 @@
+{
+  "revision": "ecf79aab772cb6448a302c9ec90cfbd0f5979fba",
+  "requestId": "req-146",
+  "requestStartedAt": "2026-10-26T00:05:01.976Z",
+  "requestCompletedAt": "2026-10-26T00:05:53.037Z",
+  "httpStatus": 200,
+  "serverDurationMs": 51060.59432299994,
+  "browserDurationSeconds": 51.955,
+  "userMessageId": "56a58742-c465-46cc-a0f0-36d4e4fdc92b",
+  "assistantMessageId": "92478d33-29aa-400b-9086-05f8c857179b",
+  "activity": {
+    "id": "7b6419d8-d6ab-4cea-a0a7-9a07d56d1ffb",
+    "occurredAt": "2026-10-26T00:05:53.038Z",
+    "kind": "chat",
+    "outcome": "ok",
+    "durationMs": 17060,
+    "failureCode": null,
+    "factCounts": {
+      "tools": 3,
+      "tools_failed": 0
+    }
+  },
+  "sourceRows": 3,
+  "assertions": {
+    "sourceIdsTextDueAtStatesMatch": true,
+    "exactSubmittedUserMessageAdjacent": true,
+    "exactResponseVisualEnvelopePersisted": true,
+    "desktopCardVisible": true,
+    "phoneWidth": 390,
+    "phoneNoHorizontalOverflow": true,
+    "cardHasNoControls": true,
+    "reminderRowsUnchanged": true,
+    "reloadExactVisualEnvelope": true
+  },
+  "freshSubmissions": 1,
+  "freshRunExitCode": 1,
+  "freshRunFailure": "Locator.screenshot: Element is not attached to the DOM, after successful HTTP response and source assertions",
+  "readOnlyFollowupExitCode": 0
+}

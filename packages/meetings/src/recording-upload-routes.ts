@@ -1,3 +1,4 @@
+import { RecordingVoiceIneligibleError } from "./recording-voice-enablement.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { isUuid, type AccessContext } from "@moss/db";
 import { handleRouteError, HttpError } from "@moss/module-sdk";
@@ -54,6 +55,10 @@ export function registerRecordingUploadRoutes(
               throw new HttpError(400, "Invalid recording upload id");
             return await run(actor, request);
           } catch (error) {
+            if (error instanceof RecordingVoiceIneligibleError)
+              return reply
+                .code(409)
+                .send({ code: "recording_voice_ineligible", error: error.message });
             if (error instanceof RecordingImportConflictError)
               return reply.code(409).send({ code: "recording_import_conflict" });
             if (error instanceof RecordingImportInputError)

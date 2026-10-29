@@ -1,0 +1,435 @@
+{
+  "run": "persistence-r7",
+  "status": "REJECTED_INCOMPLETE_PROOF",
+  "operator": "Codex /root",
+  "session": "01a169de-aa02-7990-a145-aadb18a73dbe",
+  "task": 3578,
+  "parent": 3577,
+  "launch_packet_commit": "93cbe881ebe6645a8610c85246280d89aa6555ae",
+  "readiness_review": {
+    "reviewer": "/root/independent_review",
+    "verdict": "PASS_READY",
+    "commit": "93cbe881ebe6645a8610c85246280d89aa6555ae",
+    "packet_sha256": "c14026788dde8fee980ce64ee85bbe17db72d5575d303b9833fdf931c9f3e05f",
+    "manifest_sha256": "911cd237a99a9d83f7add8b9226d069b8077ad8bd1a85cdeede75b00ab2675c7",
+    "conditional": "fresh alive/healthy watchdog; no runtime acceptance"
+  },
+  "archive_verification": {
+    "timestamp": "2026-10-23T17:46:51Z",
+    "archive_bytes": 1026041856,
+    "archive_sha256": "48cdd56f8d026af02c873513d36c86ab48b3b9e0b169cefe7a4f2ab7a1ceb4f9",
+    "config_sha256": "c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "layers": [
+      "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+      "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+      "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+      "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+      "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+      "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+      "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+    ],
+    "os": "linux",
+    "architecture": "amd64",
+    "result": "PASS"
+  },
+  "image_load": {
+    "at": "2026-10-23T17:48:01Z",
+    "ram": 13801873408,
+    "root": 23199199232,
+    "data": 1009811963904,
+    "moss": "running healthy",
+    "load_exit": 0,
+    "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+    "layers": [
+      "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70",
+      "sha256:cf38657aa40debc08f876ff28fe1111e5a9c029ad4b41f16f4b891edb65adf69",
+      "sha256:5081629800f4799dc36ce476fd3216aabb087c8508c4b4285ca6c8809822680c",
+      "sha256:87dbe8be5ee5d5faadd00fbb87b89cdf30802a25e2c26b4518097fa3c8813c52",
+      "sha256:8b4d05c71259bdefd19424b0c0f5d0a4884ac5f30c2d70f0d6f64f5e4c6796da",
+      "sha256:7137d2203c2ab3c7167df1c6ab91e829fe92e75e6d869ea52eb4cdb14563c80b",
+      "sha256:ffd42c0b13a130364a3a479332aa896b52e5da48d9c2377edf29d3b8ee96a49b"
+    ]
+  },
+  "runner_exit": {
+    "observed_exec_exit": 1,
+    "source": "unified exec session45867 completion",
+    "rerun": false
+  },
+  "runner": {
+    "started": "2026-10-23T17:52:04.577252+00:00",
+    "operations": [
+      {
+        "name": "launch",
+        "started": "2026-10-23T17:52:04.789316+00:00",
+        "finished": "2026-10-23T17:52:05.604829+00:00",
+        "exit": 0
+      },
+      {
+        "name": "isolation-before",
+        "started": "2026-10-23T17:52:05.605052+00:00",
+        "finished": "2026-10-23T17:52:06.069621+00:00",
+        "exit": 0
+      },
+      {
+        "name": "access-controls",
+        "started": "2026-10-23T17:52:06.069907+00:00",
+        "finished": "2026-10-23T17:52:07.387748+00:00",
+        "exit": 1
+      },
+      {
+        "name": "cgroup-desktop",
+        "started": "2026-10-23T17:52:07.415836+00:00",
+        "finished": "2026-10-23T17:52:07.531112+00:00",
+        "exit": 0
+      },
+      {
+        "name": "failure-diagnostics",
+        "started": "2026-10-23T17:52:07.531404+00:00",
+        "finished": "2026-10-23T17:52:07.999167+00:00",
+        "exit": 0
+      },
+      {
+        "name": "failure-browser-close",
+        "started": "2026-10-23T17:52:07.999267+00:00",
+        "finished": "2026-10-23T17:52:08.063586+00:00",
+        "exit": 1
+      },
+      {
+        "name": "cgroup-gateway",
+        "started": "2026-10-23T17:52:08.078559+00:00",
+        "finished": "2026-10-23T17:52:08.192803+00:00",
+        "exit": 0
+      },
+      {
+        "name": "cleanup",
+        "started": "2026-10-23T17:52:10.270779+00:00",
+        "finished": "2026-10-23T17:52:10.692484+00:00",
+        "exit": 0
+      },
+      {
+        "name": "port-release",
+        "started": "2026-10-23T17:52:10.693523+00:00",
+        "finished": "2026-10-23T17:52:10.712042+00:00",
+        "exit": 0
+      }
+    ],
+    "first_healthy_sample": {
+      "elapsed": 0.0,
+      "heartbeat_age": 0.0,
+      "home_bytes": 0,
+      "host_available_bytes": 9055002624,
+      "data_free_bytes": 1000042885120,
+      "root_free_bytes": 22797508608,
+      "running": 0
+    },
+    "status": "FAIL",
+    "error": "AssertionError({'name': 'access-controls', 'started': '2026-10-23T17:52:06.069907+00:00', 'finished': '2026-10-23T17:52:07.387748+00:00', 'exit': 1})",
+    "final_ids": [
+      "10f6e11742dfd3abbf9e120a1b3672b267f6cec3c04385562d4db37d5cebfb7c",
+      "6ce141bdb9918948d904a36afe235f8e78ed6cd04438b11e74d61f4c4f19b3be"
+    ],
+    "supervisor_exit": 0,
+    "host_browser_closure": {
+      "not_launched_or_snapshot_unavailable": true,
+      "remaining": []
+    },
+    "closure_containers": "",
+    "closure_networks": "",
+    "listener": "",
+    "moss": "running healthy",
+    "finished": "2026-10-23T17:52:10.870766+00:00"
+  },
+  "proof": null,
+  "window_regression": "Private synthetic transition seam: old cached ID BadWindow; actual terminal call-site TypeError before correction; amended tests pass. Not real Firefox runtime acceptance.",
+  "launch_artifacts": {
+    "compose.yaml": "b4da6c4a56b57afc26efd73a2f53cc18f21cc2f86d68580dede308f9f3ba95a9",
+    ".env": "4de642b7a51a1ac610f2feccd8715ecb3d774575b71ad6b9b955ac993b8c7041",
+    "gateway/nginx.conf": "285d0b3a705aba8dffa751614cd3a0aa7b12a34b75e71e89aaab5f0dec2ca21e",
+    "supervise.py": "0ad1b7e38d61f7018632ee0cbdaba2f3094529783e67e569ad3a71d6777e4510",
+    "access-check.mjs": "80bbad111ec8afb93c6d71351d4c30794b758ef19329c394db77255552718d97",
+    "access-controls.py": "17a183950491c630eb9bb4230e448e68b4af11a6c28308573deb5224b06b9628",
+    "isolation.py": "2727729f5e7827adb13dd400033871041a12d7d69d8e53f71973128c56e08d94",
+    "process.py": "2ede92bae11e2fca8ccf611534d27bbfaf08311e63ed13e06732a38d92f9f5c7",
+    "check-state.py": "50eb76dccb2ab4af6a6998d6fe0787d4eb606eca0971d0a3dffab34b0d5ae83c",
+    "controls.py": "c9e56dc2a2502a3fd5bab625e9549a42c767f3a16a91a75a8c484059c44ade18",
+    "persistence.mjs": "3f9aedc564fb741bdec11b308e3da4f6312db9003788ade030ac86d4f88db555",
+    "window.mjs": "42699e01f2a2764c4ebd035248470c4b4780598b181aa4b8011cd3c59840897c",
+    "window-test.mjs": "f68328b08caed9c6d3515ee58b8fcd997e5d7e61d99ea1ea191eff2da823f2c5",
+    "diagnostics.py": "d78e0e28a87c383ce2c9d2a003f57ae0a4eee6e9e34607df7f6ddfa050ce0e51",
+    "run.py": "b982bd3673457e3fee2783502baa7179e75e7c1671870f0144b56b19022e21ae",
+    "proof.json": "471024dae85e4a749d79c5c258f3a20f8bda93267f485b1332e91c9d6d11851d",
+    "receipts/resolved-config.json": "cf59dfb249415d9a20e763a5b5aac5e263e0228da2535871128c9f0d0bfe42f3",
+    "mutate.py": "e8396dbe945be53f0563f5957d7b3354bb2b8a3b250afa9e2407e4a738d4308e"
+  },
+  "access_controls": {
+    "results": [
+      {
+        "case": "protected",
+        "exit": 1,
+        "expected_exit": 0,
+        "observed_expected_assertion": false
+      }
+    ],
+    "restored_sha256": "285d0b3a705aba8dffa751614cd3a0aa7b12a34b75e71e89aaab5f0dec2ca21e"
+  },
+  "persistence_controls": null,
+  "failure_analysis": {
+    "failure": "Protected owner WebSocket actual502, expected101",
+    "cause": "UNKNOWN; startup-readiness timing hypothesis only. No gateway error-log receipt before teardown.",
+    "firefox_launched": false,
+    "persistence_harness_launched": false,
+    "replacement_operations": [],
+    "diagnostics_captures": [
+      {
+        "name": "window-tree",
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 1187,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "active-clients",
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 79,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "windows-titles-classes-processes",
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 40,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "processes",
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 1121,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "firefox-log-tail",
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 0,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "backend-log-tail",
+        "exit": 0,
+        "error": null,
+        "stdout_bytes": 0,
+        "stderr_bytes": 3977
+      }
+    ],
+    "live_process_observations": [
+      "Xtigervnc PID11",
+      "websockify PID39",
+      "xfce4-session PID41",
+      "no Firefox in bounded process list or window search"
+    ],
+    "launch_artifacts_unchanged": true,
+    "elapsed_seconds": 6.293514,
+    "monitor_limit": "Only one healthy prelaunch watchdog sample; runtime lasted6.294s including closure, no later sample. No continuous host-floor assertion."
+  },
+  "monitor": {
+    "count": 1,
+    "samples": [
+      {
+        "elapsed": 0.0,
+        "heartbeat_age": 0.0,
+        "home_bytes": 0,
+        "host_available_bytes": 9055002624,
+        "data_free_bytes": 1000042885120,
+        "root_free_bytes": 22797508608,
+        "running": 0
+      }
+    ],
+    "stop_receipt": "operator closure\nNO_RUNNING_PROOF_CONTAINERS\n",
+    "limit": "Only first prelaunch sample retained; no postlaunch host-floor or workload benchmark claim"
+  },
+  "closure": {
+    "at": "2026-10-23T17:52:20.942050+00:00",
+    "containers": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "networks": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "listener": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "moss": {
+      "exit": 0,
+      "stdout": "running healthy",
+      "stderr": ""
+    },
+    "port_reservation": {
+      "list_exit": 0,
+      "owned_name_present": false
+    },
+    "ephemeral_identity_files": [],
+    "owned_script_processes": [],
+    "recorded_host_browser_remaining": [],
+    "retained_paths_present": {
+      "<private-run>/home": true,
+      "<private-siblings>/moss-computer-persistence-r6/home": true,
+      "<private-siblings>/moss-computer-recovery-r4/home": true,
+      "<private-siblings>/moss-computer-recovery-r3/home": true,
+      "<private-siblings>/moss-computer-proof-r1/home": true,
+      "<private-siblings>/moss-computer-reconstruct-r2/candidate-image.tar": true
+    }
+  },
+  "qualification": {
+    "initial_isolation": "PASS sampled actual image/default protections/limits/mounts/routes",
+    "protected_access": "FAIL first owner WS502 expected101",
+    "access_removal_restoration_controls": "NOT_RUN; protected check failed before removal, finally restored unchanged config",
+    "viewer_frame_and_keyboard": "NOT_RUN",
+    "real_Firefox_window_transition": "NOT_RUN",
+    "active_Firefox_sandbox": "NOT_RUN",
+    "clean_UI_flush_and_persistence_controls": "NOT_RUN",
+    "container_replacement": "NOT_RUN; operations=[]",
+    "post_replacement_UI_and_sandbox": "NOT_RUN"
+  },
+  "isolation_before": [
+    {
+      "id": "10f6e11742dfd3abbf9e120a1b3672b267f6cec3c04385562d4db37d5cebfb7c",
+      "role": "desktop",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "network_mode": "none",
+      "apparmor": "docker-default",
+      "proc": {
+        "Uid": "1000\t1000\t1000\t1000",
+        "CapEff": "0000000000000000",
+        "NoNewPrivs": "1",
+        "Seccomp": "2"
+      },
+      "limits": {
+        "memory": 4294967296,
+        "swap_total": 4294967296,
+        "pids": 512,
+        "nano_cpus": 2000000000
+      },
+      "mounts": [
+        {
+          "destination": "/home/desktop",
+          "rw": true
+        },
+        {
+          "destination": "/socket",
+          "rw": true
+        }
+      ],
+      "routes": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT",
+      "connects": [
+        {
+          "destination": "169.254.169.254",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "<private-range-test-A>",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "<private-range-test-B>",
+          "port": 80,
+          "errno": 101
+        },
+        {
+          "destination": "127.0.0.1",
+          "port": 1533,
+          "errno": 111
+        }
+      ]
+    },
+    {
+      "id": "6ce141bdb9918948d904a36afe235f8e78ed6cd04438b11e74d61f4c4f19b3be",
+      "role": "gateway",
+      "image": "sha256:c84e2db2add5f4c3c5073c7f021f6a2b4a04866948f7a5c4c47437c0d5d9ffbf",
+      "network_mode": "moss-computer-persistence-r7_viewer",
+      "apparmor": "docker-default",
+      "proc": {
+        "Uid": "1000\t1000\t1000\t1000",
+        "CapEff": "0000000000000000",
+        "NoNewPrivs": "1",
+        "Seccomp": "2"
+      },
+      "limits": {
+        "memory": 134217728,
+        "swap_total": 134217728,
+        "pids": 32,
+        "nano_cpus": 500000000
+      },
+      "mounts": [
+        {
+          "destination": "/gateway",
+          "rw": false
+        },
+        {
+          "destination": "/socket",
+          "rw": false
+        }
+      ]
+    }
+  ],
+  "private_reference": "Sibling ../moss-computer-persistence-r7/; previous r6 and other homes/scripts/receipts/archive untouched",
+  "historical_causes": "Image disappearance and Herdr restart UNKNOWN; first protected WS502 cause UNKNOWN",
+  "not_run": [
+    "Real Firefox correction acceptance",
+    "Replacement persistence and active sandbox",
+    "Moss owner/session/download/Internet/product integration",
+    "Idle sleep/wake implementation",
+    "Manual MacBook/platform/installer/release; News/Direct On gates remain separate"
+  ],
+  "next_proposal": "One separately reviewed bounded startup-readiness qualification with actual current UI/RFB and gateway/backend failure diagnostics before protected assertions; no automatic retry or runtime dispatched.",
+  "cgroup_desktop": "memory.current\n215494656\nmemory.peak\n216985600\nmemory.events\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\ncpu.stat\nusage_usec 1204881\nuser_usec 779629\nsystem_usec 425252\ncore_sched.force_idle_usec 0\nnr_periods 21\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\npids.current\n22\n",
+  "cgroup_gateway": "memory.current\n9900032\nmemory.peak\n12423168\nmemory.events\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\ncpu.stat\nusage_usec 160432\nuser_usec 112204\nsystem_usec 48228\ncore_sched.force_idle_usec 0\nnr_periods 12\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\npids.current\n5\n",
+  "private_receipt_sha256": {
+    "access-controls.json": "e6239e1f8a96d5a43d0a0e39073175490d66d9b1df065a1bc19d3f88420af0c6",
+    "access-controls.log": "de94ed5165088392e73286b4386ff6ef4e71e7e1283dd0f0f349dc11f39e9acc",
+    "access-protected.log": "be88a7274987ae793192dad8f4444dd657c9327ae7f3cbb8b22da4b15784d33d",
+    "archive-verification.json": "54be50dc92ff14da02badf8772004e60ecd07f6e4a86350a0cf840fdc5c120f9",
+    "cgroup-desktop.log": "96492c6a325dbca60791dbfaf55a17f0615f52ce3cf39bf32d6198e75bba04a2",
+    "cgroup-gateway.log": "b07399f9115a63b51ee182b6aa36396d50ef14457ebe1588ff0df073b7b68028",
+    "cleanup.log": "40c208e47d13caea4b4f96671f48f9eb0dccee5ef7e1238fef395f4af880721f",
+    "closure.json": "f3e766f07c8dc95ff1574b7ec0f2d5a74ec03c11d166fff7efe37380be8bafea",
+    "failure-analysis.json": "bd002fa4205a996322d8ee30b4c2f378681b1eb6f840ee714e4c39e7b68c3eeb",
+    "failure-browser-close.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "failure-diagnostics.json": "1ccae0aa7e6c86df87158aeb0e246df8e0a737a0dac3db7502ee07aadcc9ad05",
+    "failure-diagnostics.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "final-desktop-inspect.json": "96caf4ef4dcbdba07f682b83ae2302f822e769d66d236800d94adf34141e6425",
+    "final-gateway-inspect.json": "593b80196a7eec585358ea308b204939b51f65a09acceb6af0e0c081bcad3e56",
+    "image-load.json": "977479e25b4441537372205a0e5248079f29037804e686ea87e80ec17bd2a183",
+    "image-load.log": "77f4262f0593dd9c7e65e2c2808cfeb87e93d928a2ef4f95d8e35f43fcf69dd2",
+    "isolation-before.json": "24edc5a585eb52898dfba953f98499560aba8db47ba63f3162285f5c9dfe1003",
+    "isolation-before.log": "95e251bff7a488ee12d33cf634152b43d92f82a1e1458065f8714aecfadb349f",
+    "isolation.json": "24edc5a585eb52898dfba953f98499560aba8db47ba63f3162285f5c9dfe1003",
+    "launch.log": "606dfe1aa8d7cbf8b150a6034a891fb0af8dc4c7386b6a5c282032605971c460",
+    "monitor-stop.txt": "84b3c04b0a7557cd9f6d8e702ab3a861d27d47e8bf0469ebfccf15b9c67cd979",
+    "monitor.jsonl": "63f6dfb02ecbd9512876fc9eb0ad94128792236a677310335e86091cf0af754a",
+    "port-release.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "preflight.json": "b2e5ac09828775435d632daf1b81ce5663202b3441edd663d57beee78d4d540a",
+    "readiness-review.json": "91800f303f978bd1386d6c04cc5632372fbf593577ad8e5f11482ba38f07e677",
+    "resolved-config.json": "cf59dfb249415d9a20e763a5b5aac5e263e0228da2535871128c9f0d0bfe42f3",
+    "run.json": "825db354308b723efdf4b90b20e5954d2e8ec59559cf88a4bbad2a675b2fdc1d",
+    "runner-exit.json": "5c512e281493767e476310e6767e55d29b6c8a664a359d7d1e7c425790850cbb",
+    "supervisor.log": "9399172fce29d40abf77a1226ea71c346a2b39e1b2deb42768eff9ff5dded880",
+    "terminal-before.log": "398c156c6f83b86f831d2264d66ee3b9f2943cf95cf8036edf6b8acbe0265ce4",
+    "window-after.log": "0a5ae1758810abd3be93648b31daa04b8ad1847c830f6331fab694e4e5e2a8df",
+    "window-before.log": "a464bbeb83778120861074dc65d11c64c939ddeb1537fe57de35eea057bff7a3"
+  },
+  "private_support_sha256": {
+    "runner.log": "8a8d199dd0d1334764c5b8a26bbfd5b1a8f429f04f4c0d7a6e836ad32d5ec30e",
+    "closure.py": "bfb0a1d41f7a69f33a1c614fc51bee61d1fd21fe607bdcf35460aef93b868704",
+    "artifacts.json": "911cd237a99a9d83f7add8b9226d069b8077ad8bd1a85cdeede75b00ab2675c7"
+  }
+}

@@ -1,5 +1,11 @@
 import { isUuid } from "@moss/db";
-import { scopedJobDatabase, sendJob, type PgBoss, type QueueDefinition } from "@moss/jobs";
+import {
+  notifyJobQueue,
+  scopedJobDatabase,
+  sendJob,
+  type PgBoss,
+  type QueueDefinition
+} from "@moss/jobs";
 import type { VoiceRequestDependencies, VoiceRequestService } from "./voice-request-service.js";
 
 export const CHAT_VOICE_REQUEST_QUEUE = "chat.voice-request";
@@ -31,6 +37,7 @@ export function createVoiceRequestScheduler(
       { db: scopedJobDatabase(db), startAfter: delaySeconds }
     );
     if (!jobId) throw new Error("Voice request scheduling unavailable");
+    if (delaySeconds === 0) await notifyJobQueue(db, CHAT_VOICE_REQUEST_QUEUE);
   };
 }
 
@@ -41,7 +48,7 @@ export async function registerVoiceRequestWorker(
 ) {
   return boss.work<VoiceRequestPayload>(
     CHAT_VOICE_REQUEST_QUEUE,
-    { pollingIntervalSeconds: 2 },
+    { pollingIntervalSeconds: 0.5 },
     async ([job]) => {
       if (
         !job?.data ||

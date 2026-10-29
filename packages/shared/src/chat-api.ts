@@ -1,4 +1,10 @@
+import {
+  chatModuleNoticeOriginSchema,
+  type ChatModuleNoticeOriginV1
+} from "./module-notice-api.js";
 import type { AiCapabilityRouteReason, AiConfiguredModelDto, AiModelCapability } from "./ai-api.js";
+import { visualReplySchema } from "./visual-chat-schema.js";
+import type { VisualReplyV1 } from "./visual-chat.js";
 import type { SourceFreshnessV1 } from "./freshness-types.js";
 import type { MeetingChatCoverage } from "./meeting-chat-api.js";
 import type { WorkflowApprovalStatusDto } from "./workflows-api.js";
@@ -89,6 +95,9 @@ export interface UploadChatAttachmentResponse {
 }
 
 export interface ChatMessageDto {
+  readonly turnId?: string;
+  readonly visualReply?: VisualReplyV1;
+  readonly visualFallbackText?: string;
   readonly meetingContext?: MeetingChatCoverage;
   readonly id: string;
   readonly threadId: string;
@@ -203,6 +212,10 @@ export interface ActionRequestDetails {
 }
 
 export interface TranscriptRecord {
+  readonly origin?: ChatTurnOriginV1;
+  readonly visualState?: "preparing" | "clear";
+  readonly visualReply?: VisualReplyV1;
+  readonly visualFallbackText?: string;
   /** Captured destination for admitted voice turns; never changes browser selection. */
   readonly voiceThreadId?: string;
   /** Captured action origin, including events arriving after its turn completes. */
@@ -219,6 +232,8 @@ export interface TranscriptRecord {
   readonly id?: string;
   readonly sequence?: number;
   readonly messageId?: string;
+  /** Save time of a stored message; absent on live records that are not saved yet. */
+  readonly createdAt?: string;
   /** #3195: the server turn behind a reply. Its stored version replaces only that turn's reply. */
   readonly turnId?: string;
   /** #3195: a message committed outside any turn, such as a delivered reminder. */
@@ -351,7 +366,10 @@ export interface ChatReminderOriginV1 {
   readonly late?: boolean;
 }
 
-export type ChatTurnOriginV1 = ChatClassifierGateOriginV1 | ChatReminderOriginV1;
+export type ChatTurnOriginV1 =
+  | ChatClassifierGateOriginV1
+  | ChatReminderOriginV1
+  | ChatModuleNoticeOriginV1;
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
 export type MemoryCorrectionSourceDto = "chat" | "pattern-reject";
@@ -382,6 +400,8 @@ export interface AppendChatUserMessageRequest {
 }
 
 export interface SendChatTurnResponse {
+  readonly visualReply?: VisualReplyV1;
+  readonly visualFallbackText?: string;
   readonly reply: string;
   readonly userMessageId?: string;
   readonly assistantMessageId?: string;
@@ -639,6 +659,7 @@ const chatModelRouteSchema = {
  */
 const chatTurnOriginSchema = {
   anyOf: [
+    chatModuleNoticeOriginSchema,
     {
       type: "object",
       additionalProperties: false,
@@ -714,6 +735,9 @@ const chatMessageSchema = {
       enum: ["stored", "pending", "blocked", "no_model", "working", "error"]
     },
     body: { type: "string" },
+    turnId: { type: "string" },
+    visualReply: visualReplySchema,
+    visualFallbackText: { type: "string", maxLength: 4000 },
     modelRoute: { anyOf: [chatModelRouteSchema, { type: "null" }] },
     tools: { type: "array", items: chatSelectedToolMetadataSchema },
     activity: { type: "array", items: chatActivityEventSchema },

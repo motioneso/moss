@@ -1,0 +1,58 @@
+# Explicit add-on trial only. Never attach production networks or volumes.
+name: moss-computer-${COMPUTER_RUN_ID:?Set a unique proof run ID}
+services:
+  desktop:
+    image: ${COMPUTER_IMAGE:?Set the reviewed local image ID}
+    labels:
+      com.moss.proof: ${COMPUTER_RUN_ID:?Set a unique proof run ID}
+    network_mode: none
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 2
+    mem_limit: 4g
+    memswap_limit: 4g
+    pids_limit: 512
+    shm_size: 256m
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+      - /run:size=32m,uid=1000,gid=1000,mode=0700
+    volumes:
+      - ${COMPUTER_DATA_DIR:?Set isolated persistent data directory}:/home/desktop
+      - ${COMPUTER_SOCKET_DIR:?Set isolated socket directory}:/socket
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: 2m
+        max-file: "2"
+  gateway:
+    image: ${COMPUTER_IMAGE:?Set the reviewed local image ID}
+    labels:
+      com.moss.proof: ${COMPUTER_RUN_ID:?Set a unique proof run ID}
+    user: "1000:1000"
+    command: [nginx, -c, /gateway/nginx.conf, -g, "daemon off;"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.5
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 32
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - ${COMPUTER_SOCKET_DIR:?Set isolated socket directory}:/socket:ro
+      - ${COMPUTER_GATEWAY_DIR:?Set private gateway directory}:/gateway:ro
+    ports:
+      - "127.0.0.1:${COMPUTER_PORT:?Reserve using devports}:8443"
+    networks: [viewer]
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: 2m
+        max-file: "2"
+networks:
+  viewer: {}

@@ -208,6 +208,9 @@
   cursor: pointer;
   transition: var(--transition-control);
 }
+a.set2__navitem {
+  text-decoration: none;
+}
 .set2__navitem .ic {
   display: inline-flex;
   flex: none;
@@ -283,6 +286,17 @@
 }
 .pane__cardaction {
   flex: none;
+}
+.pane__cardtoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.pane__cardchevron {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.pane__cardtoggle[aria-expanded="true"] .pane__cardchevron {
+  transform: rotate(180deg);
 }
 .pane__cardbody {
   padding: 0;
@@ -516,4 +530,17 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   margin: var(--space-5) 0;
+}
+
+/* ---- Add provider dialog ---- */
+.provdlg {
+  max-width: 720px;
+}
+.provdlg__body {
+  display: grid;
+  gap: var(--space-5);
+}
+.provdlg__group {
+  display: grid;
+  gap: var(--space-3);
 }

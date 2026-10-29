@@ -27,6 +27,7 @@ import {
   CODEX_LOGIN_READ_LIMITS,
   codexPeerHomes,
   ownerCodexHomeAccess,
+  preserveTemporaryCodexLogin,
   syncCodexLoginIntoHome,
   type CodexHomeAccess
 } from "./codex-shared-login.js";
@@ -101,6 +102,7 @@ export async function preparePerUserStructuredLaunch(
     readonly schema?: unknown;
     readonly needsStructuredOutput?: boolean;
     readonly personaText?: string;
+    readonly constrainedStructured?: boolean;
   }
 ): Promise<PerUserStructuredLaunch> {
   const owner = uidSlotOwner(key, params);
@@ -140,6 +142,21 @@ export async function preparePerUserStructuredLaunch(
   await handOverOwnedFile(key, personaPath, created, slot.uid, slot.gid, deps.applyOwnership);
   await handOverOwnedPath(key, neutral.levels, slot.uid, slot.gid, deps.applyOwnership);
 
+  // Constrained Codex gets only a reconciled login, never the owner's coding config/skills.
+  const privateHome =
+    params.constrainedStructured && codexHome ? join(neutralDir, "constrained-home") : undefined;
+  if (privateHome) {
+    const made = await createOwnerIo(identity, { home: agentHome }).run("mkdir", [
+      "-m",
+      "700",
+      "-p",
+      join(privateHome, ".codex")
+    ]);
+    if (made.code !== 0) throw new Error("Constrained Codex home unavailable");
+  }
+  const privateCodexHome = privateHome ? codexAccess(privateHome, identity) : undefined;
+  if (privateCodexHome) await syncCodexLoginIntoHome(deps.homeBase, privateCodexHome, [codexHome!]);
+
   // Same login source as ACP chat: the runner reads the saved token and hands it over in env.
   // With none saved, the CLI falls back to the login stored in the owner's own home.
   const credentialEnv = await readProviderCredentialEnv(
@@ -153,10 +170,10 @@ export async function preparePerUserStructuredLaunch(
 
   const purge = deps.purgeOwnedPath ?? purgeOwnedPath;
   return {
-    agentHome,
+    agentHome: privateHome ?? agentHome,
     neutralDir,
     personaPath,
-    io: createOwnerIo(identity, { home: agentHome }),
+    io: createOwnerIo(identity, { home: privateHome ?? agentHome }),
     childIdentity: {
       wrap: (command, args) => {
         const dropped = buildSetprivDropCommand(command, args, identity);
@@ -171,7 +188,21 @@ export async function preparePerUserStructuredLaunch(
           () => undefined
         );
         if (codexHome) {
-          await syncCodexLoginIntoHome(deps.homeBase, codexHome).catch(() => undefined);
+          if (privateCodexHome) {
+            await preserveTemporaryCodexLogin(deps.homeBase, codexHome, privateCodexHome).catch(
+              () => {
+                console.warn(
+                  `[engine-host] ${key} Codex login preservation failed; cleanup deferred`
+                );
+                throw new Error("Codex login preservation failed; temporary home retained");
+              }
+            );
+          }
+          await syncCodexLoginIntoHome(
+            deps.homeBase,
+            codexHome,
+            privateCodexHome ? [privateCodexHome] : []
+          ).catch(() => undefined);
         }
         await removeOwnedFolder(neutralDir, identity, purge).catch((err: unknown) => {
           console.warn(

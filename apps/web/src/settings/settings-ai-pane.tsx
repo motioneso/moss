@@ -19,6 +19,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { loadPersonaSettings, useAssistantName } from "../api/use-assistant-name.js";
+import { ChatLockRows, useOwnAiPin } from "./settings-ai-chat-lock-group";
 import { useFeedback } from "./settings-feedback";
 import {
   applyGuidedPersonaText,
@@ -139,7 +140,7 @@ function Persona({ who }: { readonly who: string }) {
       setP(next);
       setSaved(result.persona);
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.persona });
-      toast("Persona saved. Your next briefing and replies will use this voice.", {
+      toast("Saved. Your next briefing and replies use this voice.", {
         icon: <GitCommitHorizontal size={17} />
       });
     },
@@ -261,12 +262,7 @@ function Persona({ who }: { readonly who: string }) {
             options={["Concise", "Balanced", "Detailed"]}
             onChange={(v) =>
               chatSettingsMutation.mutate({
-                chat: {
-                  responseStyle: v.toLowerCase() as ChatResponseStyle,
-                  ...(chatSettingsQuery.data?.chat.openCodeModel
-                    ? { openCodeModel: chatSettingsQuery.data.chat.openCodeModel }
-                    : {})
-                }
+                chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
               })
             }
           />
@@ -357,28 +353,12 @@ function ChatModel({
     queryFn: getChatModelOverrideSettings,
     retry: false
   });
-  const chatSettingsQuery = useQuery({
-    queryKey: queryKeys.chat.settings,
-    queryFn: getChatSettings,
-    retry: false
-  });
   const settings = settingsQuery.data?.settings;
+  const ownPin = useOwnAiPin(isAdmin).pinQuery.data?.pin;
+  const locked = Boolean(ownPin?.pinnedModelId || ownPin?.pinnedProviderId);
+  const unavailableLock = ownPin?.effectiveChatReason === "admin-pin-unavailable";
   const mutation = useMutation({
-    mutationFn: async (modelId: string | null) => {
-      const selectedModel = modelId
-        ? selectableOverrideModels.find((model) => model.id === modelId)
-        : defaultModel;
-      if (selectedModel?.providerKind === "openai-compatible") {
-        const chatSettings = await getChatSettings();
-        if (chatSettings.chat.openCodeModel !== undefined) {
-          const cleared = await putChatSettings({
-            chat: { responseStyle: chatSettings.chat.responseStyle }
-          });
-          queryClient.setQueryData(queryKeys.chat.settings, cleared);
-        }
-      }
-      return putChatModelOverride({ modelId });
-    },
+    mutationFn: (modelId: string | null) => putChatModelOverride({ modelId }),
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.ai.chatModelOverride, result);
       const model = result.settings.effectiveOverrideModelId
@@ -407,9 +387,6 @@ function ChatModel({
     ? (selectableOverrideModels.find((m) => m.id === currentOverride) ?? null)
     : defaultModel;
   const hasWebSearch = selectedModel?.capabilities.includes("web-search") ?? false;
-  const canReaffirmSelection =
-    selectedModel?.providerKind === "openai-compatible" &&
-    chatSettingsQuery.data?.chat.openCodeModel !== undefined;
 
   return (
     <Group
@@ -421,11 +398,15 @@ function ChatModel({
           {settings?.overrideEnabled ? (
             <Field
               label="Powering your chat"
-              hint="Defaults to the instance routing your admin set. Override it to a specific model for your own conversations."
+              hint={
+                locked
+                  ? "Your own AI lock is set below, so it decides the model and this picker is off."
+                  : "Starts with the model your admin chose. Pick another for your own chats."
+              }
             >
               <Select
                 value={value}
-                disabled={mutation.isPending || settingsQuery.isLoading}
+                disabled={mutation.isPending || settingsQuery.isLoading || locked}
                 onChange={(e) =>
                   mutation.mutate(e.target.value === "default" ? null : e.target.value)
                 }
@@ -440,16 +421,6 @@ function ChatModel({
                   </option>
                 ))}
               </Select>
-              {canReaffirmSelection ? (
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  disabled={mutation.isPending || settingsQuery.isLoading}
-                  onClick={() => mutation.mutate(currentOverride)}
-                >
-                  Use {selectedModel.providerDisplayName} for chat
-                </Button>
-              ) : null}
               {hasWebSearch ? <Badge tone="steel">Web search</Badge> : null}
             </Field>
           ) : (
@@ -470,14 +441,23 @@ function ChatModel({
             <GitCommitHorizontal size={20} aria-hidden="true" />
           </div>
           <div className="ai-empty__main">
-            <div className="ai-empty__t">No assistant configured yet</div>
+            <div className="ai-empty__t">
+              {unavailableLock ? "Your locked model is unavailable" : "No assistant configured yet"}
+            </div>
             <div className="ai-empty__d">
-              An admin needs to add an AI provider before {assistantName} can chat. Ask whoever set
-              up this instance. If that's you, add one under {providerSettingsLink}.
+              {unavailableLock ? (
+                "Clear your lock below, or ask an admin to turn the model back on."
+              ) : (
+                <>
+                  An admin needs to add an AI provider before {assistantName} can chat. Ask whoever
+                  set up this instance. If that's you, add one under {providerSettingsLink}.
+                </>
+              )}
             </div>
           </div>
         </div>
       )}
+      {isAdmin ? <ChatLockRows /> : null}
     </Group>
   );
 }
@@ -513,16 +493,16 @@ function YoloMode() {
   return (
     <Group
       title="Auto-approve actions"
-      desc="Your personal approval preference for interactive chat. The instance owner controls whether it can take effect."
+      desc="Your own setting for chat. The owner decides whether it applies."
     >
       <Row
         name="Auto-approve actions"
         desc={
           state.instanceEnabled && state.self.enabled
-            ? "Effective state: enabled for interactive chat. Background work still uses its own policy."
+            ? "On for chat. Background work still asks as usual."
             : state.instanceEnabled
-              ? "Effective state: inactive because your preference is off."
-              : "Effective state: inactive because the instance owner has turned auto-approve off. Your preference remains saved."
+              ? "Off, because you have it switched off."
+              : "Off, because the owner turned it off for everyone. Your choice is saved."
         }
         control={
           <Switch

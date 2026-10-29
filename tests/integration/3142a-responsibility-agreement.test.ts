@@ -180,7 +180,7 @@ describe("real persistence binds inert agreement once", () => {
     expect(
       await gateway().runBackgroundReadForActor(ids.userA, {
         operation: saved.scope.operation,
-        itemId: saved.task.id,
+        input: { taskId: saved.task.id },
         runId: saved.proposal.id
       })
     ).toMatchObject({ ok: false });

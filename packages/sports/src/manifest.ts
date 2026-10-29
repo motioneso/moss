@@ -1,4 +1,11 @@
 import {
+  heartbeatSourceReadInputSchema,
+  sportsResultQuerySchema,
+  sportsResultResponseSchema
+} from "@moss/shared";
+import { sportsLatestResultTool } from "./results/tool.js";
+import { sportsResultTemplate } from "./results/contract.js";
+import {
   sportsPublicReadPresentation,
   sportsFollowPresentation,
   sportsUnfollowPresentation,
@@ -39,7 +46,11 @@ import {
   updateSportsSourceRecipeSchema
 } from "@moss/shared";
 
-import { sportsFollowedFactsTodayExecute } from "./briefing-tool.js";
+import {
+  authorizeSportsHeartbeatRead,
+  sportsFollowedFactsTodayExecute,
+  sportsHeartbeatNextFixturesExecute
+} from "./briefing-tool.js";
 import { sportsFollowTarget, sportsSourceTarget } from "./chat-targets.js";
 import { collectSportsSourcesExportSection } from "./data-lifecycle.js";
 import {
@@ -98,6 +109,7 @@ export const sportsAddSourceRequirement = {
 
 export const sportsModuleManifest = {
   id: SPORTS_MODULE_ID,
+  visualTemplates: [sportsResultTemplate],
   name: "Sports",
   version: "0.1.0",
   publisher: "Moss",
@@ -136,6 +148,30 @@ export const sportsModuleManifest = {
     ]
   },
   features: [
+    {
+      id: "sports.visual_result",
+      description:
+        "Chat reads latest available completed results over 90 days and can show saved scorecards with real permitted crests, score, competition, date, source and coverage. Missing sources retain text; history never refreshes scores.",
+      errors: [
+        {
+          code: "needs_team",
+          class: "validation",
+          description:
+            "Specify a team and competition when identity is missing or men's/women's teams are ambiguous."
+        },
+        {
+          code: "unavailable",
+          class: "transient",
+          description:
+            "Source or roster coverage is unavailable; keep text and explicitly retry the read later."
+        }
+      ]
+    },
+    {
+      id: "sports.result_coverage",
+      description:
+        "Result reads use follows or explicit team/competition context. Ambiguous identities require clarification. Coverage names checked and failed competitions; unavailable coverage cannot establish the latest match overall."
+    },
     {
       id: "sports.settings_sections",
       description:
@@ -305,6 +341,20 @@ export const sportsModuleManifest = {
       // The query filters fixed catalog rosters locally; it is not sent to the provider.
       chat: { access: "read", content: "outside" },
       responseSchema: sportsTeamSearchResponseSchema,
+      permissionId: "sports.view"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/results/latest",
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Read latest available sports result",
+        presentation: sportsPublicReadPresentation("results")
+      },
+      requestSchema: sportsResultQuerySchema,
+      responseSchema: sportsResultResponseSchema,
       permissionId: "sports.view"
     },
     {
@@ -534,6 +584,18 @@ export const sportsModuleManifest = {
     }
   ],
   assistantTools: [
+    sportsLatestResultTool,
+    {
+      name: "sports.heartbeatNextFixtures",
+      description:
+        "Background heartbeat read. Lists the next fixtures for the actor's followed teams from cached data only, with a change revision. Never contacts the sports provider.",
+      permissionId: "sports.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeSportsHeartbeatRead,
+      execute: sportsHeartbeatNextFixturesExecute
+    },
     {
       name: "sports.followedFactsToday",
       description:
@@ -800,6 +862,7 @@ export const sportsModuleManifest = {
       datasets: [
         { key: "teams", ttlMs: TEAMS_TTL_MS, staleness: "degrade-empty" },
         { key: "scoreboard", ttlMs: SCOREBOARD_TTL_MS, staleness: "degrade-empty" },
+        { key: "results", ttlMs: SCOREBOARD_TTL_MS, staleness: "degrade-empty" },
         {
           key: "standings",
           ttlMs: STANDINGS_HEADLINES_SCHEDULE_TTL_MS,

@@ -42,6 +42,8 @@ const device: MeetingCaptureDevice = {
   }
 };
 const newPreferences = (): MeetingCapturePreferences => ({
+  transcriptLanguage: null,
+  transcriptVocabulary: [],
   defaultCaptureMode: "computer-audio",
   rememberedSource: null,
   summarizeOnStop: true,
@@ -166,7 +168,12 @@ beforeEach(() => {
             ? { rememberedSource: update.rememberedSource }
             : {}),
           summarizeOnStop: update.summarizeOnStop ?? preferences.summarizeOnStop,
-          summaryTemplateId: update.summaryTemplateId ?? preferences.summaryTemplateId
+          summaryTemplateId: update.summaryTemplateId ?? preferences.summaryTemplateId,
+          transcriptVocabulary: update.transcriptVocabulary ?? preferences.transcriptVocabulary,
+          transcriptLanguage:
+            update.transcriptLanguage === undefined
+              ? preferences.transcriptLanguage
+              : update.transcriptLanguage
         };
       }
       return json(preferences);
@@ -199,6 +206,94 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("minimal Meetings settings (synthetic transport, not live Mac proof)", () => {
+  it("saves, reloads and clears transcript language without altering summary or audio", async () => {
+    await mount();
+    await select("meeting-settings-transcript-language", "es");
+    expect(writes().at(-1)?.body).toEqual({ transcriptLanguage: "es" });
+    expect(preferences.transcriptLanguage).toBe("es");
+    await act(async () => root.render(null));
+    await mount();
+    expect(
+      host.querySelector<HTMLSelectElement>("#meeting-settings-transcript-language")!.value
+    ).toBe("es");
+    await select("meeting-settings-transcript-language", "");
+    expect(writes().at(-1)?.body).toEqual({ transcriptLanguage: null });
+    expect(preferences).toMatchObject({
+      transcriptLanguage: null,
+      summarizeOnStop: true,
+      defaultCaptureMode: "computer-audio"
+    });
+  });
+  it("keeps a failed language choice for retry while the saved choice still applies", async () => {
+    await mount();
+    transport.mockRejectedValueOnce(new Error("Synthetic disconnect"));
+    await select("meeting-settings-transcript-language", "es");
+    expect(host.textContent).toContain("Couldn’t save your meeting settings");
+    expect(
+      host.querySelector<HTMLSelectElement>("#meeting-settings-transcript-language")!.value
+    ).toBe("es");
+    expect(preferences.transcriptLanguage).toBeNull();
+    await click("Retry");
+    expect(preferences.transcriptLanguage).toBe("es");
+    expect(writes().at(-1)?.body).toEqual({ transcriptLanguage: "es" });
+  });
+  async function typeVocabulary(value: string) {
+    await act(async () => {
+      const element = host.querySelector<HTMLTextAreaElement>("#meeting-settings-vocabulary")!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
+        element,
+        value
+      );
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+  }
+  it("validates, saves normalized vocabulary, reloads and clears with deterministic acknowledgement", async () => {
+    await mount();
+    await typeVocabulary("Moss\nVocci");
+    expect(button("Save vocabulary").disabled).toBe(true);
+    expect(host.textContent).toContain("Choose a transcript language");
+    await select("meeting-settings-transcript-language", "en");
+    await typeVocabulary(" Moss \nVocci\nMoss");
+    await click("Save vocabulary");
+    expect(writes().at(-1)?.body).toEqual({ transcriptVocabulary: ["Moss", "Vocci"] });
+    expect(host.textContent).toContain("Saved vocabulary: Moss, Vocci.");
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount();
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Moss\nVocci");
+    await typeVocabulary("a".repeat(201));
+    expect(button("Save vocabulary").disabled).toBe(true);
+    await click("Clear vocabulary");
+    expect(writes().at(-1)?.body).toEqual({ transcriptVocabulary: [] });
+    expect(host.textContent).toContain("Vocabulary cleared.");
+  });
+  it("retains a failed vocabulary draft through remount and retries the actual save", async () => {
+    preferences = {
+      ...newPreferences(),
+      transcriptLanguage: "en",
+      transcriptVocabulary: ["Saved"]
+    };
+    const original = transport.getMockImplementation()!;
+    let fail = true;
+    transport.mockImplementation(async (path, options) => {
+      if (fail && path === preferencesPath && options?.method === "PUT")
+        return json({ code: "unavailable" }, 503);
+      return original(path, options);
+    });
+    await mount();
+    await typeVocabulary("Draft");
+    await click("Save vocabulary");
+    expect(host.textContent).toContain("Your draft is kept here");
+    expect(preferences.transcriptVocabulary).toEqual(["Saved"]);
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount();
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Draft");
+    fail = false;
+    await click("Save vocabulary");
+    expect(preferences.transcriptVocabulary).toEqual(["Draft"]);
+  });
   it("shows linked status, audio source, automatic summary switch and Unlink Mac", async () => {
     await mount();
     expect(host.textContent).toContain("Studio Mac");
@@ -210,9 +305,11 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
       "Microphone only"
     ]);
     expect([...host.querySelectorAll("button")].map((item) => item.textContent)).toEqual([
+      "Save vocabulary",
+      "Clear vocabulary",
       "Unlink Mac"
     ]);
-    expect(host.querySelectorAll("select")).toHaveLength(1);
+    expect(host.querySelectorAll("select")).toHaveLength(2);
     expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
     expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(0);
     expect(summarySwitch().checked).toBe(true);

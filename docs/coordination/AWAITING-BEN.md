@@ -79,5 +79,34 @@ No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
 source-quality checks remain required before imports are enabled (#3567).
+
+### Vocci: every remaining item needs Ben (#3565, #3584) — 2026-10-24
+
+Checked at origin/main `cf6ade9c3`. Production runs edge `8786e0a3c` (healthy after the
+host reboot). The remaining physical checks and decisions are:
+
+- Package-update recovery: no new testable lead; any probe needs a phone package replacement.
+- One-hour reminder endurance: reminder is built; the physical run needs a new long recording.
+- Single-recording deletion: needs a validated command and a disposable sample.
+- Audio enhancement: needs a design decision on how originals are kept, plus mockups.
+- Firmware and streaming: need hardware compatibility evidence first.
+
+Resolved 2026-10-25: Ben accepted the out-of-range/offline and interrupted-upload checks as passed
+(`docs/evidence/vocci/2026-10-25-phone-range-check.md`).
+
+Resolved 2026-10-25: Ben used hold-to-talk on production and accepted it after the speedups
+(#3704, #3707, #3709) were deployed: "It's fine for now, I've updated moss but we don't need to do
+more tests". Further speed is expected from the classifier gate, tracked separately.
 <!-- Resolved 2026-10-20: Ben approved the Vocci companion spec (task #3553)
 in chat: "great, approved". Implementation proceeds under the approved spec. -->
+
+<!-- Resolved 2026-10-21: Ben completed production-wizard Vocci sign-in. Real
+inventory/selection/restart passed. The installed UI and state subsequently
+confirmed committed ring setup; the combined harness failed on ADB before its
+success observation. Browser cleanup signed out the disposable device, isolated
+configuration was removed and EMPTY confirmed. This is partial acceptance. -->
+
+<!-- Resolved 2026-10-22: Ben is available for phone/ring steps again.
+The latest proof passed physical Verify and Start/hold enrollment, then expired
+waiting for fresh samples. Ben is recording during his meeting; no additional
+user step is requested during it. Delivery of those samples is unverified. -->

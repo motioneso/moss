@@ -237,7 +237,9 @@ describe("capture service authorization and dispatch", () => {
       },
       defaultCaptureMode: "microphone-only",
       summarizeOnStop: true,
-      summaryTemplateId: "general"
+      summaryTemplateId: "general",
+      transcriptVocabulary: [],
+      transcriptLanguage: null
     });
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
     const result = await f.service.browserControl(f.browser, meetingId, {
@@ -343,7 +345,9 @@ describe("capture service authorization and dispatch", () => {
       defaultCaptureMode: null,
       rememberedSource: null,
       summarizeOnStop: true,
-      summaryTemplateId: "general"
+      summaryTemplateId: "general",
+      transcriptVocabulary: [],
+      transcriptLanguage: null
     });
     const automatic = new MeetingStopSummaryRepository(preferences);
     vi.spyOn(automatic, "row").mockResolvedValue(null);
@@ -449,6 +453,20 @@ describe("capture service authorization and dispatch", () => {
     });
     expect(JSON.stringify([...f.receipts.values()])).not.toContain(input.pcmBase64);
   });
+  it.each([null, "es"])(
+    "passes the saved language %s to live speech dispatch",
+    async (language) => {
+      const f = fixture();
+      vi.mocked(f.preferences.getTranscriptionOptions).mockResolvedValue(
+        language ? { language, prompt: "Moss, Vocci" } : {}
+      );
+      await f.service.audio(f.headers, "language", audio());
+      const input = vi.mocked(f.deps.transcribe).mock.calls[0]![1];
+      expect(input.language).toBe(language ?? undefined);
+      expect(input.prompt).toBe(language ? "Moss, Vocci" : undefined);
+      expect(f.deps.transcribe).toHaveBeenCalledTimes(1);
+    }
+  );
   it.each([0, 1, 99, 100])(
     "persists and clamps a provider end %dms beyond the clip without extending its source",
     async (overshoot) => {

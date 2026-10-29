@@ -1,3 +1,7 @@
+import { collectModuleNoticeExport } from "./module-notice-export.js";
+import { MODULE_NOTICE_FEATURE } from "./module-notice-feature.js";
+import { approvalFeatures } from "./approval-features.js";
+import { userDataVisualFeature } from "./visual/manifest.js";
 import { REMINDER_CONTROL_FEATURE, REMINDER_CONTROL_ROUTES } from "./reminders/manifest.js";
 import { fileURLToPath } from "node:url";
 import { collectVoiceRequestExport } from "./voice-request-export.js";
@@ -18,10 +22,13 @@ import {
 } from "@moss/shared";
 
 import { reminderFeatures } from "./reminders/features.js";
+import { HEARTBEAT_FEATURE, HEARTBEAT_ROUTES } from "./heartbeat/manifest.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
 import { chatReadAttachmentExecute } from "./attachment-tool.js";
+import { chatPresentTool } from "./visual/present-tool.js";
+import { reminderSummaryTemplate, reminderSummaryTool } from "./reminders/summary/surface.js";
 import {
   chatSetResponseStyleExecute,
   chatResponseStylePresentation,
@@ -95,13 +102,19 @@ export const chatModuleManifest = {
       "sql/0321_chat_repeating_reads.sql",
       "sql/0322_chat_responsibility_agreements.sql",
       "sql/0323_chat_unread_messages.sql",
-      "sql/0327_chat_voice_requests.sql"
+      "sql/0324_chat_scheduled_read_attempts.sql",
+      "sql/0327_chat_voice_requests.sql",
+      "sql/0333_chat_automatic_voice_inputs.sql",
+      "sql/0342_chat_module_notices.sql",
+      "sql/0343_chat_heartbeat.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
       "app.chat_threads",
       "app.chat_messages",
       "app.chat_unread_messages",
+      "app.chat_module_notices",
+      "app.chat_module_notice_intents",
       "app.chat_user_memory_settings",
       "app.chat_skills",
       "app.chat_classifier_shadow_records",
@@ -114,7 +127,13 @@ export const chatModuleManifest = {
       "app.chat_scheduled_reads",
       "app.chat_reminder_quiet_allowances",
       "app.chat_reminder_quiet_proposals",
-      "app.chat_responsibility_proposals"
+      "app.chat_responsibility_proposals",
+      "app.heartbeat_settings",
+      "app.heartbeat_source_checkpoints",
+      "app.heartbeat_occurrences",
+      "app.heartbeat_findings",
+      "app.heartbeat_mutes",
+      "app.heartbeat_allowance_charges"
     ]
   },
   permissions: [
@@ -152,6 +171,7 @@ export const chatModuleManifest = {
   ],
   dataLifecycle: {
     exportSections: [
+      { key: "moduleNotices", displayName: "Module notices", collect: collectModuleNoticeExport },
       { key: "voiceRequests", displayName: "Voice requests", collect: collectVoiceRequestExport }
     ],
     deletion: {
@@ -161,6 +181,8 @@ export const chatModuleManifest = {
           "app.chat_threads",
           "app.chat_messages",
           "app.chat_unread_messages",
+          "app.chat_module_notices",
+          "app.chat_module_notice_intents",
           "app.chat_skills",
           "app.chat_classifier_shadow_records",
           "app.chat_conversation_provenance",
@@ -170,7 +192,13 @@ export const chatModuleManifest = {
           "app.chat_scheduled_reads",
           "app.chat_reminder_quiet_allowances",
           "app.chat_reminder_quiet_proposals",
-          "app.chat_responsibility_proposals"
+          "app.chat_responsibility_proposals",
+          "app.heartbeat_settings",
+          "app.heartbeat_source_checkpoints",
+          "app.heartbeat_occurrences",
+          "app.heartbeat_findings",
+          "app.heartbeat_mutes",
+          "app.heartbeat_allowance_charges"
         ].map((table) => ({ table, countPredicate: "owner_user_id = $1::uuid" })),
         { table: "app.chat_user_memory_settings", countPredicate: "user_id = $1::uuid" },
         {
@@ -184,11 +212,25 @@ export const chatModuleManifest = {
       ]
     }
   },
+  visualTemplates: [reminderSummaryTemplate],
   features: [
+    MODULE_NOTICE_FEATURE,
+    {
+      id: "chat.domain_read_resolution",
+      description:
+        "Moss tries authorized reads before clarifying saved names. Replies honor resolved units and actual sample times; comparisons may convert. Explicit sources are honored. Ambiguity needs clarification; unavailable reads keep truthful text.",
+      featureFlagId: "chat.module"
+    },
     {
       id: "chat.voice_requests",
       description:
-        "Review ring transcripts in Main with Send and Open reply. Private/module/other chats hide review. Links open owned receipts without sending. Busy chats defer; runner outages keep requests queued. Interrupted turns never auto-replay.",
+        "Ring text sends normally in Main. Busy inputs retry when Chat is ready, with delayed recovery. Legacy inputs keep inline Send; Load older pages retained inputs. Private/other chats defer and hide inputs; interrupted turns never auto-replay.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.voice_request_notices",
+      description:
+        "An interrupted ring request shows 'Moss was interrupted before replying' under its question until you send a newer message. Ring text with no letters or digits counts as no speech and never becomes a message.",
       featureFlagId: "chat.module"
     },
     {
@@ -198,6 +240,7 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     REMINDER_CONTROL_FEATURE,
+    HEARTBEAT_FEATURE,
     {
       id: "chat.current_view_grounding",
       description:
@@ -298,54 +341,7 @@ export const chatModuleManifest = {
       ]
     },
     ...reminderFeatures,
-    {
-      id: "chat.pending_action_disclosure",
-      description:
-        "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +
-        "Native permissions keep exact commands or paths. Missing details keep Reject only. Outside content adds one notice.",
-      errors: [
-        {
-          code: "invalid_input",
-          class: "validation",
-          description:
-            "Invalid fields or impossible target changes return a correction before approval; nothing executes. The quiet row says details need correcting. Extra-field errors identify safe field names, never values. Correct the fields and ask again."
-        },
-        {
-          code: "approval_setup_required",
-          class: "prerequisite",
-          remediationRef: "chat.configure_action_source",
-          description:
-            "Required setup is missing before this action can be prepared. Follow its safe prerequisite reason; notes need a linked folder in Settings, Connections."
-        },
-        {
-          code: "approval_preparation_failed",
-          class: "transient",
-          description:
-            "An unexpected error prevented the app or connected tool from preparing this action. Try again; private dependency details stay hidden. This does not mean setup is missing."
-        },
-        {
-          code: "approval_unavailable",
-          class: "prerequisite",
-          description:
-            "Complete server details are unavailable, so this request cannot be approved.",
-          remediationRef: "chat.request_fresh_action"
-        }
-      ],
-      remediations: [
-        {
-          id: "chat.configure_action_source",
-          description:
-            "Review the source or connection setup in Settings, Connections. Choose a notes folder if none is linked.",
-          path: "/settings?section=sources"
-        },
-        {
-          id: "chat.request_fresh_action",
-          description: "Reject the request and ask Moss to find the action again.",
-          path: "/today"
-        }
-      ],
-      featureFlagId: "chat.module"
-    },
+    ...approvalFeatures,
     {
       id: "chat.legacy_memory_delete",
       description:
@@ -496,6 +492,7 @@ export const chatModuleManifest = {
         "Each ACP reply shows elapsed time and the token counts reported by the provider.",
       featureFlagId: "chat.module"
     },
+    userDataVisualFeature,
     {
       id: "chat.model_picker",
       description:
@@ -576,6 +573,7 @@ export const chatModuleManifest = {
       permissionId: "chat.view"
     },
     ...REMINDER_CONTROL_ROUTES,
+    ...HEARTBEAT_ROUTES,
     {
       method: "GET",
       path: "/api/chat/quiet-hours-allowances",
@@ -876,6 +874,8 @@ export const chatModuleManifest = {
     }
   ],
   assistantTools: [
+    chatPresentTool,
+    reminderSummaryTool,
     {
       name: "chat.listTodaysTurns",
       description: "List today's non-incognito chat turns for the active actor.",

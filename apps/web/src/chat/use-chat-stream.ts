@@ -1,7 +1,8 @@
-import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, readStoredVisual, readModuleNoticeOrigin } from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
+  ChatAttachmentDto,
   ChatMessageDto,
   ChatSurface,
   SourceFreshnessV1,
@@ -28,6 +29,7 @@ import {
   applyStreamRecord,
   isBackgroundRecord,
   mergeBackgroundRecords,
+  mergeRecoveredReplies,
   mergeHydratedRecords
 } from "./stream-record-identity.js";
 
@@ -132,21 +134,26 @@ export function useChatStream(
   const hydrationGeneration = useRef(0);
   // The exact owned drawer thread this browser shows, for background arrival and catch-up.
   const hydratedDrawerThread = useRef<string | undefined>(undefined);
-  // Private and module chats do not accept reminder arrivals.
+  // An empty account can create Main during its first turn, before that turn can finish.
+  const emptyDrawerOwner = useRef<string | undefined>(undefined);
+  // Private and module chats do not accept background arrivals.
   const hydratedSideThread = useRef(false);
   // Messages already hydrated at selection are not re-added by catch-up.
-  const knownDrawerReminders = useRef<Promise<ReadonlySet<string>>>(Promise.resolve(new Set()));
+  const knownDrawerBackgroundMessages = useRef<Promise<ReadonlySet<string>>>(
+    Promise.resolve(new Set())
+  );
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
   // Bind a confirmed drawer selection before accepting arrivals or catch-up.
   const clearRecords = useCallback((threadId?: string) => {
+    emptyDrawerOwner.current = undefined;
     const onDrawer =
       threadId !== undefined &&
       (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
     hydratedDrawerThread.current = onDrawer ? threadId : undefined;
     hydratedSideThread.current = !onDrawer;
-    knownDrawerReminders.current = onDrawer
+    knownDrawerBackgroundMessages.current = onDrawer
       ? readBackgroundMessageIds(threadId, streamScope.current.surface)
       : Promise.resolve(new Set());
     hydrationGeneration.current += 1;
@@ -173,7 +180,10 @@ export function useChatStream(
     const catchUpDrawer = () => {
       const threadId = hydratedDrawerThread.current;
       if (!threadId) return;
-      void Promise.all([knownDrawerReminders.current, listChatThreadMessages(threadId, surface)])
+      void Promise.all([
+        knownDrawerBackgroundMessages.current,
+        listChatThreadMessages(threadId, surface)
+      ])
         .then(([known, { messages }]) => {
           if (!isCurrent() || hydratedDrawerThread.current !== threadId) return;
           const missed = recordsFromMessages(messages).filter(
@@ -183,7 +193,10 @@ export function useChatStream(
           );
           setRecords((current) =>
             isCurrent() && hydratedDrawerThread.current === threadId
-              ? mergeBackgroundRecords(current, missed)
+              ? mergeRecoveredReplies(
+                  mergeBackgroundRecords(current, missed),
+                  recordsFromMessages(messages.filter((message) => message.threadId === threadId))
+                )
               : current
           );
         })
@@ -207,6 +220,27 @@ export function useChatStream(
         // #1135 — reset error count on successful message so transient errors don't lock private chat
         setStreamErrorCount(0);
         const record = parseRecord(event.data);
+        if (record?.actionThreadId && !hydratedDrawerThread.current && emptyDrawerOwner.current) {
+          const ownerId = emptyDrawerOwner.current;
+          // Verify Main through the owner-scoped API; an incoming event cannot select a thread.
+          void listChatThreads(surface)
+            .then(({ threads }) => {
+              if (!isCurrent() || emptyDrawerOwner.current !== ownerId) return;
+              const main = threads.find(
+                (thread) => thread.isMain && thread.ownerUserId === ownerId
+              );
+              if (!main || main.id !== record.actionThreadId) return;
+              hydratedDrawerThread.current = main.id;
+              knownDrawerBackgroundMessages.current = readBackgroundMessageIds(main.id, surface);
+              setRecords((current) =>
+                isCurrent() && hydratedDrawerThread.current === main.id
+                  ? applyStreamRecord(current, record)
+                  : current
+              );
+            })
+            .catch(() => undefined);
+          return;
+        }
         if (
           record &&
           (!record.actionThreadId || record.actionThreadId === hydratedDrawerThread.current) &&
@@ -244,8 +278,9 @@ export function useChatStream(
   useEffect(() => {
     setHydratedSurface(undefined);
     hydratedDrawerThread.current = undefined;
+    emptyDrawerOwner.current = undefined;
     hydratedSideThread.current = false;
-    knownDrawerReminders.current = Promise.resolve(new Set());
+    knownDrawerBackgroundMessages.current = Promise.resolve(new Set());
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -278,6 +313,7 @@ export function useChatStream(
           ? (ownedThreads.find((candidate) => candidate.isMain) ?? ownedThreads[0])
           : threads[0];
         if (!thread) {
+          if (isDrawer) emptyDrawerOwner.current = viewer?.user.id;
           setRecords((current) => (current.length === 0 ? workflowRecords : current));
           return;
         }
@@ -294,11 +330,11 @@ export function useChatStream(
           actions: []
         }));
         if (!active || generation !== hydrationGeneration.current) return;
+        if (isDrawer) hydratedDrawerThread.current = thread.id;
+        hydratedSideThread.current = !isDrawer;
         const { messages } = await listChatThreadMessages(thread.id, surface);
         if (!active || generation !== hydrationGeneration.current) return;
         const history = recordsFromMessages(messages);
-        if (isDrawer) hydratedDrawerThread.current = thread.id;
-        hydratedSideThread.current = !isDrawer;
         // #1253 — re-hydrate pending action request cards (only "pending" status; others already resolved)
         const pendingActions = actionsResult.actions.filter((a) => a.status === "pending");
         const actionRecords: TranscriptRecord[] = pendingActions.map((action) => {
@@ -413,6 +449,8 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
           kind: "user",
           text: message.body,
           messageId: message.id,
+          createdAt: message.createdAt,
+          turnId: message.turnId,
           meetingContext: message.meetingContext,
           attachments: message.attachments
         }
@@ -433,13 +471,18 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
             {
               kind: message.status === "error" ? ("error" as const) : ("reply" as const),
               text: message.body,
+              ...(message.origin ? { origin: message.origin } : {}),
               scheduledReadSource: message.scheduledReadSource,
               messageId: message.id,
-              ...(isDeliveredReminder(message)
+              createdAt: message.createdAt,
+              turnId: message.turnId,
+              ...(isDeliveredBackgroundMessage(message)
                 ? { background: true as const, backgroundThreadId: message.threadId }
                 : {}),
               sourceFreshness: message.sourceFreshness,
               meetingContext: message.meetingContext,
+              visualReply: message.visualReply,
+              visualFallbackText: message.visualFallbackText,
               answerProvenance: message.answerProvenance,
               answerProvenanceCitedIds: message.answerProvenanceCitedIds,
               ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
@@ -451,8 +494,13 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
   });
 }
 
-function isDeliveredReminder(message: ChatMessageDto): boolean {
-  return message.origin?.kind === "reminder" && message.origin.event === "delivered";
+function isDeliveredBackgroundMessage(message: ChatMessageDto): boolean {
+  return (
+    (message.origin?.kind === "reminder" && message.origin.event === "delivered") ||
+    (message.role === "assistant" &&
+      message.status === "stored" &&
+      readModuleNoticeOrigin(message.origin) !== undefined)
+  );
 }
 
 function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
@@ -491,10 +539,27 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
     return {
       kind: parsed.kind,
       text: parsed.text,
+      ...(readModuleNoticeOrigin(parsed.origin)
+        ? { origin: readModuleNoticeOrigin(parsed.origin) }
+        : {}),
+      visualState:
+        parsed.kind === "status" &&
+        (parsed.visualState === "preparing" || parsed.visualState === "clear")
+          ? parsed.visualState
+          : undefined,
+      ...(parsed.kind === "reply"
+        ? readStoredVisual(
+            parsed.visualReply ??
+              (typeof parsed.visualFallbackText === "string"
+                ? { fallbackText: parsed.visualFallbackText }
+                : undefined)
+          )
+        : {}),
       id: typeof parsed.id === "string" ? parsed.id : undefined,
       sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
+      attachments: parsed.kind === "user" ? parseAttachments(parsed.attachments) : undefined,
       voiceThreadId: typeof parsed.voiceThreadId === "string" ? parsed.voiceThreadId : undefined,
       actionThreadId: typeof parsed.actionThreadId === "string" ? parsed.actionThreadId : undefined,
       background: parsed.background === true ? true : undefined,
@@ -557,6 +622,21 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
   }
 }
 
+function parseAttachments(value: unknown): ChatAttachmentDto[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const attachments = value.flatMap((item): ChatAttachmentDto[] => {
+    if (!item || typeof item !== "object") return [];
+    const { id, fileName, mimeType, sizeBytes } = item as Record<string, unknown>;
+    return typeof id === "string" &&
+      typeof fileName === "string" &&
+      typeof mimeType === "string" &&
+      typeof sizeBytes === "number"
+      ? [{ id, fileName, mimeType, sizeBytes }]
+      : [];
+  });
+  return attachments.length > 0 ? attachments : undefined;
+}
+
 function parseUsage(value: unknown): TranscriptRecord["usage"] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const usage = value as Record<string, unknown>;
@@ -580,15 +660,52 @@ export function reconcileFallbacks(
 ): readonly TranscriptRecord[] {
   const unmatched = [...liveRecords];
   return fallbacks.filter((fallback) => {
-    const idx = unmatched.findIndex(
-      (record) =>
-        record.kind === fallback.kind &&
-        (record.messageId && fallback.messageId
-          ? record.messageId === fallback.messageId
-          : record.text === fallback.text)
-    );
+    const idx = unmatched.findIndex((record) => sameFallbackRecord(record, fallback));
     if (idx === -1) return true;
     unmatched.splice(idx, 1);
     return false;
   });
+}
+
+function sameFallbackRecord(record: TranscriptRecord, fallback: TranscriptRecord): boolean {
+  return (
+    record.kind === fallback.kind &&
+    (record.messageId && fallback.messageId
+      ? record.messageId === fallback.messageId
+      : record.text === fallback.text)
+  );
+}
+
+/** Keep HTTP-only messages between their shared live message anchors, including turn activity. */
+export function mergeFallbacks(
+  fallbacks: readonly TranscriptRecord[],
+  liveRecords: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  const before = Array.from({ length: liveRecords.length + 1 }, (): TranscriptRecord[] => []);
+  const claimed = new Set<number>();
+  let pending: TranscriptRecord[] = [];
+  let lastAnchor = -1;
+  for (const fallback of fallbacks) {
+    const anchor = liveRecords.findIndex(
+      (record, index) => !claimed.has(index) && sameFallbackRecord(record, fallback)
+    );
+    if (anchor === -1) {
+      pending.push(fallback);
+      continue;
+    }
+    before[anchor]!.push(...pending);
+    pending = [];
+    claimed.add(anchor);
+    lastAnchor = anchor;
+  }
+  // A completed HTTP reply can precede a new streamed turn before that turn's POST finishes.
+  const nextTurn =
+    lastAnchor < 0
+      ? -1
+      : liveRecords.findIndex((record, index) => index > lastAnchor && record.kind === "user");
+  before[nextTurn < 0 ? liveRecords.length : nextTurn]!.push(...pending);
+  return [
+    ...liveRecords.flatMap((record, index) => [...before[index]!, record]),
+    ...before[liveRecords.length]!
+  ];
 }

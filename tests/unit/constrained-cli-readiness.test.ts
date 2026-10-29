@@ -7,6 +7,18 @@ function connection() {
 }
 
 describe("shared constrained CLI readiness", () => {
+  it("probes the selected provider instead of silently probing Claude", async () => {
+    const rpc = connection();
+    rpc.probeProvider.mockResolvedValue({ status: "ready" });
+    await expect(
+      createConstrainedCliReadinessProbe(() => rpc)("owner", undefined, "openai-compatible")
+    ).resolves.toBe("available");
+    expect(rpc.probeProvider).toHaveBeenCalledWith(
+      { provider: "openai-compatible", constrainedStructured: true },
+      "owner",
+      { timeoutMs: 5_000, signal: undefined }
+    );
+  });
   it("resolves late-bound API connections per call without retaining an absent or stale connection", async () => {
     let current: ReturnType<typeof connection> | undefined;
     const probe = createConstrainedCliReadinessProbe(() => current);

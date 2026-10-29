@@ -1,0 +1,8 @@
+step 1 action: Signed in to rebuilt moss-proof through actual UI; no response interception
+step 3 action: Read 3 existing reminder records through authenticated real API; no setup writes
+step 4 action: Verifying exact response and adjacent user message from the single fresh HTTP-200 turn; no POST submitted in this run
+step 4 action: Real chat returned reminders.summary scope=all, 3 rows; source IDs/text/times/states match real saved reminders
+step 5 action: Desktop real card visible; row count correct; no interactive controls; cropped desktop screenshot saved
+step 6 action: Phone 390px card visible without horizontal overflow; cropped phone screenshot saved
+step 7 action: Authenticated reminder source is byte-equivalent before/after summary; no reminder changed
+step 8 action: Reload restored the exact persisted visual envelope; live proof PASS

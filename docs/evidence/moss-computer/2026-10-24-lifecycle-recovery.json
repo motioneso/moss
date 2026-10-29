@@ -1,0 +1,685 @@
+{
+  "schemaVersion": 1,
+  "scope": "bounded existing-only terminal stop/reconciliation prerequisite",
+  "base": "e6f0c388297e31b065f3dc93b651a8dede318d95",
+  "acceptedSource": "1762b346100c2f84aafc1a273efb9d4f290b3407",
+  "checkedCommit": "2889b3d4a74dbee8d92f3f9b7b8eec6614c41572",
+  "sourceFiles": [
+    {
+      "path": "docs/superpowers/plans/2026-10-24-moss-computer-lifecycle-recovery.md",
+      "sha256": "de0261719f64af19a703f79afe8eae6dfe7b70ded58a8c161ebbd241798a8fc5"
+    },
+    {
+      "path": "scripts/computer-host/docker.ts",
+      "sha256": "2f0b753aa29b9df18fa0343a97d88c4651cf2fed6a3b43c5f0428d1cd04c371b"
+    },
+    {
+      "path": "scripts/computer-host/operations.ts",
+      "sha256": "a886881e6cb04a4f8f445a7bcdf67e10f341b7edac747366f71fdcee7e587dc3"
+    },
+    {
+      "path": "scripts/computer-host/recovery.ts",
+      "sha256": "d00a0f58898aed19b7f502fcf461eddf416b5d46ff9af90671b15d5e7ed0da25"
+    },
+    {
+      "path": "scripts/computer-host/state.ts",
+      "sha256": "3367fadd4977039fdb6a9018092fbba9caa2c530e5aca977c8a2faaf796cda34"
+    },
+    {
+      "path": "scripts/computer-recovery.ts",
+      "sha256": "628dd3962d323a30a0d8e2bd12a38d745c5fc2bdd704e18002a3c9bea47d8ec2"
+    },
+    {
+      "path": "tests/unit/computer-host-fixture.ts",
+      "sha256": "3ed1352a492b455b26171b631e4eec0148e1a49f0c12031466fb242575aff9dc"
+    },
+    {
+      "path": "tests/unit/computer-host-recovery.test.ts",
+      "sha256": "bf03315eb6a7bbcb58533be496a0f8a637d3f18056b75743c7aac4f2914e6da5"
+    }
+  ],
+  "checks": [
+    {
+      "name": "root-typecheck-r2",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 158.097,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-typecheck-r2",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "elapsedSeconds": 66.307,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "scoped-lint-r2",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/operations.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-host/recovery.ts",
+        "scripts/computer-recovery.ts",
+        "tests/unit/computer-host-fixture.ts",
+        "tests/unit/computer-host-recovery.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 2.204,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "scoped-format-r2",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/operations.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-host/recovery.ts",
+        "scripts/computer-recovery.ts",
+        "tests/unit/computer-host-fixture.ts",
+        "tests/unit/computer-host-recovery.test.ts"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 1.147,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size-r2",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "elapsedSeconds": 2.024,
+      "logSha256": "956f549d69ea289d558887ed071bb7eaf4027e3d5f9110d098bd5ca7ad5a81eb"
+    },
+    {
+      "name": "diff-check-r2",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "elapsedSeconds": 0.008,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "recovery-bundle-r2",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-recovery.ts",
+        "--bundle",
+        "--platform=node",
+        "--format=cjs",
+        "--target=node24",
+        "<private-output>",
+        "<private-output>"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 0.472,
+      "logSha256": "c32b26d51137f9a4e9e8dcce5a4090761439c053c66506e3663b2c72b90987bc"
+    },
+    {
+      "name": "behavior-final-r2",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts"
+      ],
+      "exit": 0,
+      "elapsedSeconds": 28.262,
+      "logSha256": "7709ced24f6b5111c174e421d3a192f3f888c2c28470fcae6e8f5c3b3f52f601"
+    }
+  ],
+  "controls": [
+    {
+      "control": "existing-only",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "existing-only open"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 4.135,
+      "logSha256": "9d9b54b2e88af5efd6a57984d8f86dc9ff8c6a9e56697896e898f07ad851cea8",
+      "patchSha256": "764a782313c750b7a22f17809e34cb1ed57a25b53d09f83436d71ffaec431dfa"
+    },
+    {
+      "control": "file-fsync",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "failed file durability"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 3.745,
+      "logSha256": "f679b69756b869ea414a4a841e5b91cabe9cc2d81ec6e7ddc6cd04b20759d882",
+      "patchSha256": "c6547ca723be933f55c650e61082818febff66248841dbdcbf6ee9318b09fbdd"
+    },
+    {
+      "control": "directory-fsync",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "failed directory durability"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 2.174,
+      "logSha256": "789cd698871d6564bab1f09657ef91bafd9ec67afa4bcce8a9bff3be16b0f2d5",
+      "patchSha256": "e382dc4513db4ba583f96dba636e31c03ac0ea3ca69e9273cc8f4d9c09593310"
+    },
+    {
+      "control": "write-before-mutation",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "failed write durability"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.824,
+      "logSha256": "8781a69c9c42bebad23af9b27fefd40624ff2af4b6c7c40297e6e19a215b0f80",
+      "patchSha256": "d0a7448210984a9ec52c5a2fd2fae4c11a0fc7c007fae365aa2886bddb472322"
+    },
+    {
+      "control": "resync-existing",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "resyncs an existing marker"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.722,
+      "logSha256": "ae8a15dedbca339f699c1f28a2ace11f6140c8a5400f56cb36e1888c7728a3e8",
+      "patchSha256": "90a891d6dc921ffdc830b44dd1f3426d875039630976bba6fb8dde937a7c5d82"
+    },
+    {
+      "control": "terminal-launch",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "unsafe .* stop marker"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.971,
+      "logSha256": "10e97542103860814650c737ec35781c33896739950290255020efd8c8eb9056",
+      "patchSha256": "1f6f31377e0e93af8624f521ea92302d61f8626a2e654f94cda111e2be0e3a36"
+    },
+    {
+      "control": "tuple-binding",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "refuses (role|generation|id) marker tuple"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.974,
+      "logSha256": "dbd9552558cf0a30c1cfdc33968e6da3066d75faac83550b4d785afa32dc9f26",
+      "patchSha256": "5ed338eccedd91f42e4350a2654a1119140cb178258d6766ece6a4362d78bbfa"
+    },
+    {
+      "control": "pending-intent",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "pending-name404 remains unresolved"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.875,
+      "logSha256": "7515ead8e2ebaa6776f6d304ce77734a9152cdcffb07c8f0db234772e6d9258b",
+      "patchSha256": "0e7498224c853fb3573c13d2ce29f8d868a0707b5a63a93f55c336a179f26799"
+    },
+    {
+      "control": "stop-cas",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "fsyncs immutable first intent"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.926,
+      "logSha256": "3b2cd3f4f4b62e1162eb5615e19dee15b03f04ccc180acb69a6d0b13cee934cc",
+      "patchSha256": "ee7e49e46a4f1000d56c9fa0352187903b9650d72ec6c65fb7e61d4ed44fa0f2"
+    },
+    {
+      "control": "gateway-first",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "gateway removal failure halts"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.821,
+      "logSha256": "7dac166273a7ebd8fa0e0891e9c92aef19cb2a2707e93281e6f552643b08ae20",
+      "patchSha256": "4cb9d2056c542bb3a973842c426717fda94537d2621294fcfd661340a47c9ff7"
+    },
+    {
+      "control": "retain-identities",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "fsyncs immutable first intent"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.769,
+      "logSha256": "1eace37932114a70792604e1d50e4ba4e81441b7e729755a2bb8f4908a22ce1f",
+      "patchSha256": "af2739a37e7ce87141d6ff85210bfac07578fb134f78f36717c716244a2353e7"
+    },
+    {
+      "control": "postinspect-start",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "terminal entry during Docker start inspect"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.519,
+      "logSha256": "e251333cb90c118c03605d92f3b4d7570c599f0107fbbe7fec6cafa3f5b88f76",
+      "patchSha256": "8dd7988d4d8e2089d51a3c2cab2a5f129e8f8da83ce8f862920248be9321aedb"
+    },
+    {
+      "control": "final-sync-guard",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "final synchronous guard catches"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.418,
+      "logSha256": "1a3749d8e1df696f8624504288944a3b19880ca5b963f304ee24378bdec13658",
+      "patchSha256": "009b741353965baf9f909abcd33b237c3757bac49774a723f514c0c08035c140"
+    },
+    {
+      "control": "late-publication",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "terminal entry during state save file-sync"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.472,
+      "logSha256": "9334b9a59b76965c8748cc3b442d241f332cdb739ff0aa88ac2ee3eaf80998af",
+      "patchSha256": "85834cb522df29660f5387de17f792c12a9de49164da16b1dce8187d05903655"
+    },
+    {
+      "control": "disable-guard",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "terminal entry during normal disable"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.519,
+      "logSha256": "25642822185f059d433e48e0cd2f7f7bf3186f11792fc49da6c4888335130906",
+      "patchSha256": "997a68cb990314154a31da2527b58261d7230f10c77e39b558d7e5ce0c63ae59"
+    },
+    {
+      "control": "late-id-retry",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "late create identity survives terminal entry during its state-file fsync"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.418,
+      "logSha256": "abb397edffa4fdd35e5b142beb5723c905856410009a828a04a20bacf105363b",
+      "patchSha256": "35190f93473ed15d3bf779815c8c703f2cd9b61c9923c77c04e56e4c652e637f"
+    },
+    {
+      "control": "marker-replacement",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "same-byte marker replacement"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.726,
+      "logSha256": "6de118f27deeb8123d34fc8d093abcc6d32a59e234c57d5888a0b7f79a94fe7e",
+      "patchSha256": "d944ebaa1f9bd824ad3019db0545301e22cef12240e44bc93a94034c35232560"
+    },
+    {
+      "control": "no-volume-delete",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "fsyncs immutable first intent"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 1.771,
+      "logSha256": "8e84645cf7a602139d99d7a77c5e3cdc359bf28fe249fc7b8aa8912a340d2777",
+      "patchSha256": "1550c1edc3b1b704dcddcb77cdd2b0ce29147c003fc0748acc2356150d4983c3"
+    },
+    {
+      "control": "fixed-cli",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "actual CLI inspects/stops"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 3.179,
+      "logSha256": "314dd1f87799827c39a08c8c0b11f18b62c3ec8674376fb4980e725a77dffcb9",
+      "patchSha256": "e271b585aee8cb8c8e3cfb9ae17721703c358351a5500731f457da347c3ab309"
+    },
+    {
+      "control": "late-id-retention",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host-recovery.test.ts",
+        "-t",
+        "late create identity survives terminal entry during its state-file fsync"
+      ],
+      "exit": 1,
+      "intendedAssertionFailure": true,
+      "restored": true,
+      "elapsedSeconds": 3.738,
+      "logSha256": "a9c45d5e0454c4addf091f4b1cc0486c47b748c18aa8cf3f5f9814eda6a766c9",
+      "patchSha256": "a0708d6634d05a5e260bd0209dffab0d26fc11d49ceef34c3742f8441e820f50"
+    }
+  ],
+  "privateArtifacts": [
+    {
+      "name": "plan-security-r1.md",
+      "sha256": "9b35bd33a8a0d52ff77b1781047cedd3551b0299fd2162a98c85f2150bd7e16a"
+    },
+    {
+      "name": "plan-security-r2.md",
+      "sha256": "0b18588a436a50583a35c1cc8940c04df7c565e6ded77a7be40e3771414af488"
+    },
+    {
+      "name": "plan-spec-r1.md",
+      "sha256": "b3829cb51cef63faeb6b99164ac180262a9b2293adcc9f3e2c529a1da9789b3e"
+    },
+    {
+      "name": "plan-spec-r2.md",
+      "sha256": "c570838f913380308fe0bbf689906c1b803bb9e39af185668063aab0bdbe1f86"
+    },
+    {
+      "name": "source-security-r1.md",
+      "sha256": "129afa1557e65c03a66291af8454f0dd5045c7165ef68b2b844dac56ec8183ce"
+    },
+    {
+      "name": "source-security-r2.md",
+      "sha256": "c0833f59e6495daf53f71e1137609bb1a03203db8f44ec87c22dc5d5b483495b"
+    },
+    {
+      "name": "source-spec-r1.md",
+      "sha256": "02a35d5522e6ef0385f2dffca481b7415b14fe7440134266fcb7a607684aec0a"
+    },
+    {
+      "name": "source-spec-r2.md",
+      "sha256": "281be14cd0e072da2d6f0f055ba18d45e812fba57697484ea473f0a952ccba56"
+    },
+    {
+      "name": "source-standards-r1.md",
+      "sha256": "08451e624fa16ccc063d62d9cf0f8d44c1b3d474dcb01e84295fa408fbfcbeea"
+    },
+    {
+      "name": "source-standards-r2.md",
+      "sha256": "8f54bc69472802ccf858988694cc9454a8a8019c2bb4320a86c623674561125c"
+    },
+    {
+      "name": "review-races-red.log",
+      "sha256": "9a828e34f3cf1a67ad1afef17010e3f26c1e3f3f4ccde48b1cb396d3afe7207f"
+    },
+    {
+      "name": "review-races-green.log",
+      "sha256": "1b88fcdabe020d6c0850c44717a2b0d2a459192cf627b575b81d6717278affbe"
+    },
+    {
+      "name": "recovery-races-r2.log",
+      "sha256": "e44df6e020c2eca9549e2a063b899f78131d05506637a8e57384be7a8db1ddcb"
+    },
+    {
+      "name": "marker-replacement-green.log",
+      "sha256": "f135a15c2f1addda8de1f60c4249becbb44a52f26876dd16a0a5d40f59a67e2a"
+    },
+    {
+      "name": "checks-r1.json.receipts.json",
+      "sha256": "6066f3b7d4e5fb3da94701bee13257fbcefd3b1a6847780e5e03340abae70fa7"
+    },
+    {
+      "name": "checks-r2.json.receipts.json",
+      "sha256": "21a73f4d9eddd08207304524c4de1a996e485d236305e106e8d899fe1af47af4"
+    },
+    {
+      "name": "checks-r2-source.json",
+      "sha256": "155e56087b58ffd9c0168ce9b6c41f8c6acfe53f70729a7f1c66c5588a53f232"
+    },
+    {
+      "name": "controls-receipts.json",
+      "sha256": "be06911c8faabbbfe7261ad929afd53e3a3d0449a766f7fe1bd2f8732578e7c6"
+    },
+    {
+      "name": "control-late-id-retention.receipt.json",
+      "sha256": "b79d5313f0b6bc3536025bc4ad0827cb430874abaf43593890a71056dbf19217"
+    },
+    {
+      "name": "pr3645-reconciliation.json",
+      "sha256": "d59aa8f6a2cee8cb24db909389a41ebf1d3f5360598dda3c34cbabfdb581fa45"
+    }
+  ],
+  "bundle": {
+    "sha256": "47d89f951138f37115b15b58c746b91bcbd4b0d2497b3f28af9fc3c50426ba7d",
+    "imports": [
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:http",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:crypto",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:fs/promises",
+        "kind": "require-call",
+        "external": true
+      },
+      {
+        "path": "node:path",
+        "kind": "require-call",
+        "external": true
+      }
+    ],
+    "target": "node24 metadata only",
+    "executedNodeVersion": "v22.22.2",
+    "actualNode24RuntimeQualified": false
+  },
+  "attempts": [
+    {
+      "attempt": "initial shell helper",
+      "exit": 127,
+      "reason": "python unavailable; corrected to python3; no check executed"
+    },
+    {
+      "attempt": "checks-r1",
+      "exit": 0,
+      "finalExactEvidence": false,
+      "reason": "source changed during review corrections; retained, superseded by pinned checks-r2"
+    },
+    {
+      "attempt": "review races RED",
+      "exit": 1,
+      "failed": 3,
+      "intended": true
+    },
+    {
+      "attempt": "corrected recovery suite",
+      "exit": 0,
+      "passed": 35
+    }
+  ],
+  "independentClosure": false,
+  "runtimeQualified": false,
+  "productionDeployed": false,
+  "unavailableAdmissionChanged": false,
+  "ci": "Exact final PR HEAD CI gate and supplemental independent acceptance required on PR before merge.",
+  "behaviorResults": {
+    "passed": 289,
+    "files": 10,
+    "recoveryTests": 36
+  }
+}

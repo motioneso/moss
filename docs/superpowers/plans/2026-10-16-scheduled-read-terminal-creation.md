@@ -1,0 +1,491 @@
+# Local plan: terminal one-time task-check interpretation
+
+2026-10-16. Canonical plan for #3529. The original local plan below retains its historical baseline, prerequisite observations and bounded test agreement; those observations are not current executable status or a new permission request. This observer R2 amendment grants only the two-document local amendment. No executable path is leased yet.
+
+## Scope and process gates
+
+Implement only the standalone local behavior in `docs/superpowers/specs/2026-10-16-scheduled-read-terminal-creation.md`. The owner must explicitly choose the separately bounded local work while the installed total-call experiment stays held. This choice waives no original N1 or Stage4 requirement. Issue #3528 is harness context only; a new `task` issue is required. No new behavior interview, broad provider audit, queue feature or policy redesign is needed.
+
+The local grant must name an explicit temporary exception to the normal requirement that canonical spec/plan documents have a PR before a lane starts. It permits sanitized approved docs to be committed locally before code, pending a future separately authorized PR. Local commits do not satisfy publication; this exception authorizes no push/PR/merge. Without that exact exception or a separately authorized publication path, STOP before a build lane starts. The private drafts themselves use the existing private-preparation exception only.
+
+## Current-source seams checked
+
+Paths below are under `~/Jarv1s/`. Frozen source baseline supplied for this preparation: HEAD `8b0e95f3ea3ec5529c093b4643a1cd1b72cb345e`, product parent `8814c9b43101e40619cf1e89055cf4eab2a6ce04`. This plan is fixed-source preparation, not a freshness audit or installation identity claim. Revalidate exact paths and baseline before a later authorized build; do not fetch, pull or run audit preflight merely to implement this plan.
+
+| Capability                                         | Current source and consequence                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recognizer and callback entry                      | `packages/chat/src/scheduled-reads/request.ts:58`, `:97`, `:110`, `:118`. Preserve admission/repeat guards; mark only nonrepeat callback entry.                                                                                                                                                                                                                                                                                                                                                       |
+| Current counterexample                             | `packages/chat/src/scheduled-reads/request.ts:126` exact match count; `:129` returns undefined for unmatched nonrepeat after interpretation.                                                                                                                                                                                                                                                                                                                                                          |
+| Real generation composition                        | `packages/chat/src/scheduled-reads/generation.ts:60`, `:63`, `:65`, `:95`, `:107`: real candidates, model route, prepared run and outer refusal handler. Preserve post-entry provenance on failure.                                                                                                                                                                                                                                                                                                   |
+| Prepared validation and single application attempt | `packages/ai/src/structured/generate-structured.ts:278`, `:308`, `:375`, `:405`: captured explicit route, one-use closure and injected CLI structured adapter. No provider internals are proved by this seam.                                                                                                                                                                                                                                                                                         |
+| Production route/runtime                           | `packages/chat/src/routes.ts:123`, `:132`, `:133`, `:468`, `:483`; `packages/chat/src/live-routes.ts:120`, `:182`: external adapters injectable, real scheduled resolver wired. Gate classifier uses its own CLI adapter factory at `routes.ts:374`; fake engine launch/submit observation therefore covers its external execution entry too.                                                                                                                                                         |
+| Terminal routing                                   | `packages/chat/src/live/pre-model-turn.ts:81`, `:98`, `:202`, `:229`, `:247`, `:270`; `packages/chat/src/live/chat-session-turn.ts:148`, `:157`, `:162`. Retain marked plans and terminal save failure; manager early return prevents ordinary launch.                                                                                                                                                                                                                                                |
+| Existing receipts and transactional save           | `packages/chat/src/reminders/commands/scheduled-read.ts:11`, `:23`, `:72`, `:79`; `packages/chat/src/reminders/commands/save.ts:42`, `:49`; `packages/chat/src/scheduled-reads/repository.ts:14`: deterministic receipt, real reminder/source operation.                                                                                                                                                                                                                                              |
+| Correct queued work                                | `packages/chat/src/reminders/deliver.ts:72`, `:81`: a scheduled operation queues `chat.scheduled-read`, not `chat.deliver-reminder`; count both names to catch accidental plain reminders. `packages/chat/src/scheduled-reads/queue.ts:2` is the scheduled-read queue name.                                                                                                                                                                                                                           |
+| Failure/stop seam                                  | `packages/chat/src/live/persistence.ts:478`, `:496`, `:639`, `:942`: real transaction with request ID `chat-live:record-reminder-turn`; existing rollback stop guard. P9 can target database inserts under that request without replacing persistence.                                                                                                                                                                                                                                                |
+| Auxiliary coverage gap                             | `packages/chat/src/live/persistence.ts:661`: normal completed-turn enqueue remains intact; no workers run in the fixture.                                                                                                                                                                                                                                                                                                                                                                             |
+| Main and actor setup                               | `tests/integration/scheduled-read-fixture.ts:60`, `:80`, `:89` demonstrates owned DB/queue setup but its direct save is not the creation oracle. `tests/integration/main-chat.test.ts:37` and `tests/integration/chat-reminders-cancel-turn.test.ts:58` show Main establishment. `packages/db/src/auth-session.ts:11` resolves seeded session IDs against the real DB.                                                                                                                                |
+| Real gate modes                                    | `packages/chat/src/classifier-shadow-review-repository.ts:27`, `:72`: on requires an exact matching classifier selection review. `packages/chat/sql/0271_chat_classifier_shadow_reviews.sql:12` supplies fixture row fields. `packages/settings/src/runtime-config-resolver.ts:99` reads stored config before env; an env `on` alone fails closed.                                                                                                                                                    |
+| Synthetic provider/model configuration             | `packages/ai/src/repository.ts:491`, `:619`, `:899`: create only test CLI-marker provider/model and bind module.chat/sorting under the admin context in the disposable DB. `tests/unit/ai-prepare-structured-cli.test.ts:59` shows the sealed `{cli:true}` marker. No discovery, binary, login or real provider is needed.                                                                                                                                                                            |
+| Runtime scratch isolation                          | `packages/chat/src/live/cli-structured-adapter.ts:36` captures `join(tmpdir(), "jarv1s-structured")` at module evaluation; `:38`, `:159`, `:242` derive/write/remove the service directory before the external-engine sentinel. Set inherited `TMPDIR` to one owned per-run root **before all runner/module imports**, not inside a statically imported test. `scripts/test-integration.ts:78` passes `process.env` to Vitest. Keep `MOSS_CHAT_HOME`/`MOSS_CLI_HOME_BASE` below that same owned root. |
+| App-map owner                                      | `packages/chat/src/reminders/features.ts:9`, `:21`; `packages/chat/src/manifest.ts:244`: change owning feature/error wording, preserving remediation and pre-admission/recurrence limits.                                                                                                                                                                                                                                                                                                             |
+| Safe exact gate target                             | `scripts/run-gate.sh:349`, `:667`: accepts a named pnpm script, migrates owned throwaway Postgres before running it. `scripts/test-integration.ts:32` defaults to every integration test; exact file arguments replace that default. A new named script is necessary to avoid running unrelated service-dependent suites.                                                                                                                                                                             |
+| Gate ownership confinement                         | `scripts/run-gate.sh:319` globally enumerates prefixed containers and `:443` invokes that sweep before own-container creation. Prospectively add opt-in `start --no-sweep` and guard only that invocation; preserve default sweep and all own creation/cleanup. Existing mock pattern is `tests/scripts/test-run-gate-own-postgres.sh:26`; the exact new persistent regression path is `tests/scripts/test-run-gate-no-sweep.sh`. No Docker execution is needed for that shell regression.            |
+
+Read current root/area instructions before implementation and use `shared-checkout` before any commit. Preparation found no nested AGENTS.md/CLAUDE.md in the selected packages/chat, tests or scripts areas. Research/codebase-design and repository plan-build guided this bounded seam choice. Existing generation-wrapper unit tests use internal AI/candidate mocks and cannot substitute for the proposed public test.
+
+## Prospective exact write set
+
+The original eight behavior/test/app-map paths and ninth `package.json` tooling path remain. R1/S1 adds exactly two tooling/regression paths for an own-resource-only gate: `scripts/run-gate.sh` and `tests/scripts/test-run-gate-no-sweep.sh`, bringing the prospective set to eleven. Nothing is edited by this draft.
+
+| Path                                                               | Responsibility                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/chat/src/scheduled-reads/request.ts`                     | Optional internal provenance field; marked nonrepeat post-entry success/refusal; unmatched nonrepeat becomes invalid terminal plan. Preserve early/repeat behavior.                                                                                                                  |
+| `packages/chat/src/scheduled-reads/generation.ts`                  | Track callback entry locally and retain nonrepeat provenance on existing unavailable failure results. No route, provider, prompt or retry change.                                                                                                                                    |
+| `packages/chat/src/live/pre-model-turn.ts`                         | Keep marked incomplete plan; prefer cancellation for marked aborted unsuccessful persistence; preserve committed saved result and unmarked behavior.                                                                                                                                 |
+| `packages/chat/src/live/chat-session-ports.ts`                     | Correct resolver comment; existing port signature unchanged.                                                                                                                                                                                                                         |
+| `packages/chat/src/reminders/features.ts`                          | Truthful post-interpret terminal-refusal error description in `chat.scheduled_owner_read`, preserving remediation and other behavior.                                                                                                                                                |
+| `tests/unit/3151-scheduled-read-request.test.ts`                   | Resolver-interface invalid/success/provenance/early/repeat regressions; duplicate candidate arrays only here.                                                                                                                                                                        |
+| `tests/unit/chat-reminder-turn.test.ts`                            | Manager terminality/cancellation/storage regressions plus unmarked/missing-resolver/ordinary/repeat/attachment/private/side/module controls. Counts are local regression evidence only.                                                                                              |
+| `tests/integration/scheduled-read-terminal-creation.test.ts` (new) | Public P1–P10 cases using real composition and owned DB/queue with external adapters. Keep its fixture helpers in this file; STOP if it cannot stay below the file-size rule without another path.                                                                                   |
+| `package.json`                                                     | Add only `"test:integration:scheduled-read-terminal": "tsx scripts/test-integration.ts tests/integration/scheduled-read-terminal-creation.test.ts"`. No dependency, existing script or lockfile change.                                                                              |
+| `scripts/run-gate.sh`                                              | Add optional `start --no-sweep` parsing and usage/comment wording in this file. Default stays unchanged. Skip **only** the call to `sweep_gate_containers` when selected; do not alter sweep implementation, owned launch/provisioning, abort/finish/stop cleanup or other commands. |
+| `tests/scripts/test-run-gate-no-sweep.sh` (new)                    | Bounded mock-only shell regression following the existing own-postgres fixture pattern. Self-contained fake Docker/node/pnpm/launcher tools, temporary fixture repos/state and exact emitted-log waits; no real Docker/provider/DB access. Cases and command are fixed below.        |
+
+The two canonical doc paths at this plan's start and in the spec are additional documentation paths, committed before code only after approval. No original N1 harness, migrations, queue handlers, provider adapters, shared app-map-core, settings, runtime composition or other source path is leased. Expand nothing automatically.
+
+## Contract and design decision
+
+Keep existing exports/signatures:
+
+- `resolveScheduledReadRequest(request: string, candidates: readonly ScheduledReadCandidate[], interpret: () => Promise<unknown>, signal?: AbortSignal): Promise<ScheduledReadPlan | undefined>`.
+- `createScheduledReadResolver(deps: { readonly dataContext: DataContextRunner; readonly resolveActiveModules: ActiveModulesResolver; readonly createCliStructuredAdapter: GenerateStructuredDeps["createCliStructuredAdapter"] }): (actorUserId: string, request: string, signal: AbortSignal) => Promise<ScheduledReadPlan | undefined>`.
+- Existing optional `ChatPersistencePort.resolveScheduledReadRequest` signature and `tryPreModelTurn(...args: Parameters<typeof tryGatedTurn>): ReturnType<typeof tryGatedTurn>`.
+
+Only type addition: `ScheduledReadPlan` gains `readonly interpretationStarted?: true`. It marks interpretation entry, not successful adapter admission. Local generation state preserves provenance after an exception; no new exported helper/service is needed.
+
+The alternative of turning every incomplete scheduled plan into a refusal is simpler mechanically but changes pre-interpret/unmarked behavior and recurrence. A general budget or queue prohibition might address a different all-path claim, but introduces policy and transport/attribution work outside this scope. The selected provenance field keeps the behavior decision local to existing resolver/generation/pre-model machinery. It does not pretend to solve total-call enforcement.
+
+The determinism contract is unchanged: selecting one listed UUID and expressing supported timing are the model's only two interpretation jobs; the code validates and renders the saved/refused/unsaved result. Add no prompt guidance and no model-written feedback. No new screen/mockup is needed because no UI surface is added.
+
+## Public fixture: exact allowed setup and observations
+
+1. Run only inside verify-gate's owned container/database receipt. Use existing `resetFoundationDatabase`, `connectionStrings`, seeded actors/sessions and real `DataContextRunner`; open app/pg-boss/bootstrap handles from that environment, never a manually supplied host URL. Start pg-boss for enqueue only; register no workers.
+2. Use a test-process synthetic AI secret key and CLI-marker provider, synthetic JSON/chat-capable economy model, and explicit module.chat and sorting model bindings via real repositories in the seeded admin context. Use real built-in active-module resolution. This is test configuration only, no installed provider selection/discovery/login. Restore process variables; never print inherited secrets/environment.
+3. For **each gate run**, create/record the owned `N3_RUN_ROOT` and use the exact environment-prefixed start below. Its `TMPDIR`, `MOSS_CHAT_HOME` and `MOSS_CLI_HOME_BASE` exist beneath that root before pnpm/tsx/Vitest or any product imports; the detached gate child and all test workers inherit them unchanged. The integration fixture asserts the absolute owned-root receipt, `tmpdir()` and both home values before constructing routes and never resets TMPDIR. Expected classifier scratch is only `$N3_RUN_ROOT/tmp/jarv1s-structured/<sanitized-service>/persona.md` and its descendant service directory, including if a forbidden fallback fails before launch. All other fixture temp files stay below the same root. If this import-time/inherited isolation cannot be established, STOP_IMPORT_TIME_TMPDIR_ISOLATION before the gate; no shared service directory cleanup is permitted. Use Fastify injection, real `registerChatRoutes`, real database-backed seeded-session resolution and the real scheduled resolver/runtime/persistence. No listener/port/browser is needed. A synthetic MCP URL is configuration only and must receive no network traffic. Globally fail unexpected fetches in this isolated test file and restore in `finally`; never intercept/rewrite product responses as proof.
+4. Seed `Synthetic task` through `TasksRepository.create` as user A and a foreign synthetic task as user B. Ensure user A has a real Main thread, with no pending proposals, using `ChatRepository`; submit through POST /api/chat/turn. Before each case snapshot relevant messages, reminders, scheduled operations and actor-scoped jobs; compare deltas tied to actor/thread/resource, never global counts from another case.
+5. Supply a scripted `StructuredProviderAdapter.generateStructured` through the external `createCliStructuredAdapter` port. Count admission before reading fixture output. Return raw text and zero synthetic usage; real prepared validation must parse/check it. The external chat engine records any launch/submit and throws a sentinel if attempted; factory construction itself is not model admission. Never spy/replace internal gate.evaluate, resolver, candidate lookup, repositories, persistence or transaction results.
+6. P1 runs off/shadow/on. Seed stored gate mode through the real settings repository in admin context. For on, seed the exact synthetic sorting-model selection's admin shadow-review row in the disposable database, then check `resolveEffectiveGateMode` returns on with its real query. An injected true check or merely storing on is insufficient. These are disclosed synthetic setup rows, never an installed review claim.
+7. P6 uses a bounded deferred entry signal in the external adapter and actual cancel HTTP request. On received abort reject, or return invalid output in its second variant. Do not advance fake timers, abort private manager state, or wait on a due schedule. Keep test/hook timeouts finite under existing Vitest limits.
+8. P9 installs, through the existing disposable bootstrap client, a uniquely named BEFORE INSERT trigger on `app.chat_messages` restricted to the synthetic actor, assistant role, and `current_setting('app.request_id', true) = 'chat-live:record-reminder-turn'`; it raises a fixed synthetic database exception. This faults real persistence after interpretation while leaving candidate/model setup intact. Drop trigger and function in `finally`, verify removal and no partial turn/schedule/source/job. This is test-only DDL in the gate-owned database, not a committed migration or host-schema change. Failure to install/remove it is a failed fixture/cleanup, not a passed behavior test.
+9. Positive cases assert saved deterministic text and rows: one reminder, one `app.chat_scheduled_reads` row with `operation='tasks.get'` and the owned item ID, one `chat.scheduled-read` pg-boss job for that reminder/version, no mistaken `chat.deliver-reminder` job. Refusals assert no deltas in either delivery queue or source-operation table. Record ordinary embed/extract/summary enqueue inventory separately and do not run its workers. No installed total-count inference.
+10. On pass/fail/cancel, close Fastify/runtime, pg-boss, all DB handles and descendant-only fixture temp files in `finally`; restore test-process synthetic AI configuration/fetch without changing inherited TMPDIR during the run. Let run-gate own its own container teardown. After the exact wait reaches a terminal verdict and owned child processes/handles are closed, preserve receipts privately, remove only the recorded owned `N3_RUN_ROOT`, and verify absence. Do not remove a root while its detached child is active, infer another run's root, or remove the shared host `jarv1s-structured` directory. Cleanup failure is STOP; retain/report the owned identity for bounded recovery. No manual docker/database teardown, foreign-container enumeration/removal, host data mutation or retained test installation.
+
+P1–P10 and resolver/manager cases in the spec are the exact proposed test agreement. Public duplicates are excluded; malformed primitive shapes belong to resolver unit tests while real malformed raw output is P3. Real provider timeout, transport internals, candidate-query fault and precise late-persistence abort are not promised public cases. The latter has manager-only regression coverage. If public P9 or any required public case is unproducible, report finite NOT_VERIFIED with case, failing seam and exact proposed next external fixture; STOP without new internals, extra files or research chain.
+
+## Ordered one-session build after approval
+
+1. Verify owner grant/test agreement and coordinator approval, restored local tool prerequisite, clean fixed baseline and exclusive lease; read shared-checkout. The preparation observed no node_modules or required local tool executables, so the current result is STOP_MISSING_LOCAL_DEPENDENCIES. Do not start publication/canonical writes/build checks on that state. The same consolidated owner proposal offers a separately named optional dependency-restoration clause; it is not implied by build approval. If that clause is granted, restore once using the bounded command below; otherwise remain stopped. After readiness, create exactly the approved new public task from the frozen issue draft and record its assigned number. Sanitize and locally commit the two exact approved canonical docs first, using explicit paths and the named temporary publication exception. No lane starts before these gates.
+2. First implement only the `--no-sweep` opt-in and its exact mock regression; require its meaningful red/green and default-behavior control before any real gate. Add the single package script and only enough public P1 fixture to exercise unchanged **product** source with import-time TMPDIR isolation. Run the narrow integration gate with `--no-sweep`; require a decisive **assertion failure** attributable to old fallback in off mode, not a missing tool, DB failure, scratch-isolation failure or fixture crash. Tooling-only changes do not count as the product fix. Save exact owned-root/start/wait receipts, exits and fingerprint. If P1 passes, STOP: reconcile the counterexample/design before any product change.
+3. Implement the minimal provenance/terminal path, then re-run P1 through the same gate. Continue vertical slices through P2–P10 and the focused unit regressions; retain old unmarked controls. Every claimed protection needs its relevant observed failing assertion or truthful existing-regression basis; no guard-off execution is claimed by this plan.
+4. Run supported static checks, focused unit checks and final narrow integration gate on the final candidate. Review only leased diffs, scan canonical docs/public task text for private content, record actual exits and identities. Locally commit exact leased paths after shared-checkout checks. Run an independent Standards and Spec code review of the final frozen commit/diff; retain lease until accepted or corrected. Do not turn a report-only review into code acceptance.
+5. Finish at locally code-complete, unverified for shipping/installation if scoped checks/review pass; otherwise exact STOP/failed-check result. Full foundation/CI and installed real-UI/provider proof are unrun holds. Preserve local commits/private evidence and a clean tree. No push, PR, merge, app installation or issue Done/closure.
+
+## Prospective exact commands and verdicts — all NOT_RUN
+
+Commands execute from the authorized isolated checkout. Never pipe verification commands. Record raw exit codes, not a last log line. No install is implied by build approval: the optional named setup clause below is the only proposed dependency-restoration permission. No `npx` download, `audit:preflight`, manual DB variables/URLs, direct integration runner or bare foundation command.
+
+Required read-only availability check (each exit 0 required; no tool execution or install fallback):
+
+```bash
+command -v pnpm
+command -v docker
+test -x node_modules/.bin/vitest
+test -x node_modules/.bin/tsx
+test -x node_modules/.bin/tsc
+test -x node_modules/.bin/eslint
+test -x node_modules/.bin/prettier
+```
+
+Actual read-only preparation result: pnpm and docker resolve; node_modules does not exist; all five listed local executables are absent. No versions, tests or gates were executed. **Current executable status: STOP_MISSING_LOCAL_DEPENDENCIES.** Root package.json pins pnpm10.6.2 and has a prepare script that changes Git hooks; pnpm-workspace.yaml allows native build scripts for onnxruntime-node/sharp/node-pty/opencode-ai. Those scripts must remain disabled. The repository .npmrc contains public-hoist settings, no registry override in the inspected noncredential settings; a user .npmrc exists and was not read. No pnpmfile was found in the repository file listing. Therefore setup must ignore user/global npm config and pnpmfiles and must not acquire another package-manager version.
+
+Exact optional prerequisite restoration, **only if its named clause in the same owner decision is explicitly granted**: in one coordinator-approved isolated worktree at the frozen HEAD, create one owned temporary N3_SETUP_ROOT and run the following. The owner clause covers that worktree creation/branch reservation, registry package fetches, worktree node_modules writes and owned setup store/cache writes. It covers no lifecycle/native build scripts or host credential/config changes. No source or lockfile modification is allowed. The variable is a task-specific owned temporary directory, not HOME/CODEX_HOME; record its path privately and remove it at close-out.
+
+```bash
+env -i PATH="$PATH" COREPACK_ENABLE_NETWORK=0 pnpm --version
+```
+
+Require exactly10.6.2. A missing cached Corepack version is STOP; do not download pnpm or change the pin. Then, expected0:
+
+```bash
+env -i PATH="$PATH" COREPACK_ENABLE_NETWORK=0 pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --userconfig=/dev/null --globalconfig=/dev/null --registry=https://registry.npmjs.org --store-dir="$N3_SETUP_ROOT/pnpm-store" --cache-dir="$N3_SETUP_ROOT/pnpm-cache"
+```
+
+The sterile environment passes only PATH and disabled Corepack networking; it does not pass npm tokens, auth environment, proxy credentials or user/global npm config. The fixed public registry/null config and owned store/cache are explicit; HOME is not reassigned. Do not print inherited npm credentials or retry with them; stop on an authentication/configuration requirement. Recheck all five executable paths, unchanged package/lockfile bytes, and no unexpected tracked diff. Unsupported options, failed restore, missing native/build prerequisites or any attempted lifecycle script is a finite STOP with the exact command/error and missing prerequisite. Do not enable scripts, install more packages, repair the toolchain, alter registry settings or infer broader setup permission. These commands are prospective and unrun. If the owner omits the optional setup clause, the exact next action is obtain that named clause; no product lane starts.
+
+### S1 mock-only tooling regression
+
+Before any real gate, the new persistent `tests/scripts/test-run-gate-no-sweep.sh` uses the stateful fake-Docker pattern from `tests/scripts/test-run-gate-own-postgres.sh` without running that older entire suite. All fixture paths are descendants of the supplied owned root: `$N3_MOCK_ROOT/{pass,fail,abort,default}/{repo,bin,state,logs,receipts}` and `$N3_MOCK_ROOT/tmp`. Each fixture repo contains only the copied script and a synthetic tracked file; temporary git init/config/local base commit permit the script's ordinary identity receipt. These are disposable fixture repos, never the product index/history; disable Git hooks and inherited global/system config for their setup. Its fake `docker`, `pnpm`, `node`, `python3` (synthetic port, no socket) and abort-case launcher are executable files in the named bin directories; require those fakes on PATH and never delegate to host Docker/node/pnpm. Process launch uses real setsid/nohup/bash, with bounded management of only owned children.
+
+Seed two fake foreign containers, including a sweep-eligible orphan, in each no-sweep case's state. For `start --no-sweep`, assert no `docker ps` enumeration, no foreign inspection or removal, and both foreign rows unchanged. Require ordinary own `docker run`/provisioning and cleanup selection after (a) fake gate success, (b) fake gate failure and (c) aborted launch with a broken fake launcher and 3-second launch bound. Assert the owned name from that case's exact log is removed, cleanup receipt exists, no other name is removed and raw start/wait codes match. Case (d), with the flag omitted, must still enumerate/sweep the **fake** stale foreign row and then create/clean its own server, proving the default is unchanged. On the pre-change script, the no-sweep contract must fail (unsupported flag/absent own launch is a tooling failure, never P1 product evidence); after the opt-in it must pass. No real Docker/socket/DB/provider effects or blanket foreign-delete authority result from fake-state assertions.
+
+Exact prospective command, expected0 after the tooling change:
+
+```bash
+N3_MOCK_ROOT="$(mktemp -d /tmp/moss-n3-gate-mock.XXXXXXXX)"
+mkdir -m 700 "$N3_MOCK_ROOT/tmp"
+env TMPDIR="$N3_MOCK_ROOT/tmp" N3_GATE_MOCK_ROOT="$N3_MOCK_ROOT" timeout 120s bash tests/scripts/test-run-gate-no-sweep.sh
+```
+
+Record the owned root and raw exit privately. The script traps EXIT/TERM/INT, closes/stops only the exact mocked runners it launched (using each own log/PID and fake tool environment), and never removes a root with an active child. Preserve bounded receipts privately, then remove only the recorded owned mock root and verify absence. A missing timeout/setsid/fake, 120-second limit, incomplete own cleanup or any host-tool escape is finite STOP; do not rerun through real Docker or broaden setup. The mock test and all its fixture paths are prospective only.
+
+Before a DB gate, require a functioning Docker daemon and cached `pgvector/pgvector:pg17` using `docker image inspect pgvector/pgvector:pg17` (expected0; no image pull). Confirm no JARVIS_GATE_PGIMAGE override selects a different image. A missing image/daemon is finite STOP; Docker/image provisioning is outside the proposed setup clause. No default gate or browser/service launch is a readiness probe. Every real start below requires the reviewed opt-in and passing mock-only regression; setting JARVIS_GATE_DIR alone never confines the global sweep.
+
+Focused units, expected 0 after implementation and nonzero for newly introduced red cases before it:
+
+```bash
+pnpm test:unit tests/unit/3151-scheduled-read-request.test.ts tests/unit/chat-reminder-turn.test.ts
+```
+
+Static, expected 0 (includes lint, format, file-size, design/dependency/migration-number checks, root/tests/web/external typechecks and app-map generation; no browser claim):
+
+```bash
+pnpm verify:static
+```
+
+### D1 per-run import-time isolation and exact integration command
+
+For **each** first-red/final-green start, create a fresh absolute private root with the exact command below; do not reuse another run's root or an inherited TMPDIR. `mktemp` must succeed and produce a new owned directory; all children listed here must be created successfully. Record the literal root and intended descendant paths privately before starting. No runner, Vitest or product import runs before this environment exists. The `env` prefix reaches detached `__run`, migration, pnpm/tsx, the integration runner and its Vitest child (`env: process.env`), including a failing classifier fallback. The fixture retains this TMPDIR for its complete lifetime; a test-body assignment after static imports is prohibited. If any environment layer replaces/drops it, STOP_IMPORT_TIME_TMPDIR_ISOLATION with that exact prerequisite rather than importing against the host scratch root.
+
+Narrow owned integration, first red and final green, expected start0 for launched; start nonzero/4 is STOP, never product counterexample evidence:
+
+```bash
+N3_RUN_ROOT="$(mktemp -d /tmp/moss-n3-terminal.XXXXXXXX)"
+mkdir -m 700 "$N3_RUN_ROOT/tmp" "$N3_RUN_ROOT/chat-home" "$N3_RUN_ROOT/cli-home" "$N3_RUN_ROOT/gate-state"
+env N3_RUN_ROOT="$N3_RUN_ROOT" TMPDIR="$N3_RUN_ROOT/tmp" MOSS_CHAT_HOME="$N3_RUN_ROOT/chat-home" MOSS_CLI_HOME_BASE="$N3_RUN_ROOT/cli-home" JARVIS_GATE_DIR="$N3_RUN_ROOT/gate-state" scripts/run-gate.sh start --no-sweep --gate test:integration:scheduled-read-terminal >"$N3_RUN_ROOT/start.receipt" 2>&1
+```
+
+For **each** start, read only its owned `start.receipt` (bounded read), record its raw exit, and bind a fresh `N3_GATE_LOG` to that receipt's exact literal `LOG=...` path under `$N3_RUN_ROOT/gate-state`. No inferred latest-run identity. Record `N3_RUN_ROOT`, TMPDIR, both homes and gate-state alongside that exact log privately; the integration fixture prints a synthetic `N3_OWNED_ROOT`/`N3_TMPDIR` receipt into that gate's output and asserts inherited values. Expected pre-engine scratch, even on failure, is only `$N3_RUN_ROOT/tmp/jarv1s-structured/<sanitized-service>/persona.md`; recursive service cleanup and any residual cleanup must stay below that root. Launch the following exact wait as one supported background tool call with a completion notification, as required by verify-gate; no hand-rolled subshell/poll loop or repeated empty drains:
+
+```bash
+scripts/run-gate.sh wait --follow --log "$N3_GATE_LOG"
+```
+
+Expected wait 1 with the identified P1 assertion for red, 0 for final green; 2 is dead/STOP. Retain matching start/wait `### COMMIT`, `### DIRTY`, `### FINGERPRINT`, `### TOOLCHAIN`, `### POSTGRES`, `### GATE_CONTAINER`, `### DB` and exact `### GATE`, plus raw exits and cleanup receipt. A different or unknown fingerprint/log/DB/command invalidates the evidence. A source change after a receipt invalidates final reuse. If the execution tool cannot launch the skill's one asynchronous wait, STOP and resume with a supported background-capable tool; do not replace it with repeated foreground polling.
+
+The narrow script is the only authorized DB-touching verification target. Run-gate's owned pgvector container, migrations, test database, seeded synthetic rows, queue enqueue, scoped P9 DDL and owned descendant temp cleanup are the explicit disposable effects. The opt-in skips only global sweep invocation; own abort/finish/stop cleanup remains mandatory. After terminal wait/closed handles and verified own-container cleanup, preserve exact receipts privately, remove **only** the recorded owned N3_RUN_ROOT and verify absence. A failed start still requires its own log/container/child cleanup before root removal; if ownership/liveness is uncertain, STOP and retain the owned identity rather than delete by prefix. Never enumerate/remove foreign containers or remove a shared service scratch directory. No existing host DB, GreenMail, provider, cli-runner, browser, installed app, shared containers or credentials may be used. Full `verify:foundation`/default integration/CI/browser/UAT are deferred because this grant does not authorize unrelated service effects. Green static/scoped tests do not imply those gates passed.
+
+## Kill gates and local verdict
+
+Stop immediately for unauthorized effects, host environment/data/provider contact, absent exact approval/task/docs/lease, extra source paths, unsupported external fixture, nondecisive baseline negative, wrong/missing owned-root or gate receipt/fingerprint, failed mock confinement, unavailable `--no-sweep`, missing pre-import/inherited TMPDIR isolation, missing tools, cleanup failure, or more than one structured admission/fallback entry after the change. Two identical failures mean stop/rethink, not retry. Coordinator decides whether a corrected finite packet fits the grant; Ben decides any new authority/scope. No automatic Phase 2 or provider/queue research follows.
+
+This plan can justify only the separately approved local behavior result. The original installed transport/count/async/public-fault holds, N1 experiment and all Stage4 requirements remain unchanged.
+
+## Observer R2 amendment: serial implementation plan
+
+The observer contract in the canonical spec supplements the original N3 behavior/test agreement above. The original prospective commands and dependency observations are retained historical scope, not instructions to repeat accepted checks or restore dependencies now. Lifecycle findings 1–3/P1 at `5113700e878158212a42b33c42336ee46947beaf` are independently accepted. Observer finding 4 remains hardblocked. This window changes only this plan and its canonical spec; it does not grant any executable-path lease, install, runtime, Docker/DB/provider/browser run, full gate, CI, push, PR, merge or primary-signup work.
+
+### Exact prospective fifteen-path reservation
+
+All repository paths are under `~/Jarv1s`. This table is a reservation for later serial grants, not present ownership. The producer retains overlapping paths until explicit handover; this builder must not edit its tree or integrate its candidate.
+
+| Window | Exact path                                                              | Bounded responsibility                                                                                                                         |
+| ------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| O1     | `packages/chat/src/live/chat-attempt-observer.ts` (new)                 | Lazy disabled-default observer/context, versioned registrations, synchronous entries, actual settlements and nonthrowing subscriber boundary.  |
+| O1     | `packages/chat/src/live/chat-session-turn.ts`                           | Existing accepted-turn ID scopes the whole body; bind independently checked request-thread context and initial/retry/healing/submit entries.   |
+| O1     | `packages/chat/src/live/chat-session-launch.ts`                         | Existing ensure/factory/launch/replay calls inherit context and preserve delegate identities/semantics.                                        |
+| O1     | `packages/chat/src/live/classifier-gate-lifecycle.ts`                   | Actual classifier evaluation entry, outcome, abort and settlement.                                                                             |
+| O1     | `packages/chat/src/live/classifier-gate-shadow.ts`                      | Distinguish start from actual run body/finally; retain detached settlement.                                                                    |
+| O1     | `tests/unit/chat-attempt-observer.test.ts` (new)                        | Disabled/noninterference, actual callsite sensitivity, subscriber async failures, correlation/settlement and bounded-protocol/helper controls. |
+| O2     | `tests/uat/n3-fallback-observer-bootstrap.mjs` (new)                    | Fixed pinned import; bind/activate only the exact API entry/PID/birth/container; secret-free bounded transport.                                |
+| O2     | `tests/uat/run-scheduled-read-terminal-uat.ts`                          | Minimal helper wiring and reviewed source bindings; preserve accepted host lifetime, deadline, retention and 1000-line cap.                    |
+| O2     | `tests/uat/specs/3529-scheduled-read-terminal-real.uat.spec.ts`         | Correlated quiescent windows/barriers, original N3 assertions and separate ordinary real positive.                                             |
+| Docs   | `docs/superpowers/specs/2026-10-16-scheduled-read-terminal-creation.md` | Canonical diagnostic contract; this window only.                                                                                               |
+| Docs   | `docs/superpowers/plans/2026-10-16-scheduled-read-terminal-creation.md` | Serial leases, exact locks, test/acceptance gates; this window only.                                                                           |
+| O2     | `tests/uat/provisioner.ts`                                              | Narrow typed option forwarded to the env writer before initial start; consume accepted producer inventory/cleanup.                             |
+| O2     | `tests/uat/provisioner.test.ts`                                         | Exact option forwarding/env output, invalid-input rejection, default-byte equivalence and failure/cleanup controls.                            |
+| O2     | `tests/uat/env-file.ts`                                                 | Emit only the pinned opt-in initial-start configuration; no arbitrary inherited `NODE_OPTIONS`.                                                |
+| O2     | `tests/uat/n3-fallback-observer-runner.ts` (new)                        | Focused activation/identity receipts, exact-container queries, bounded windows/barriers and cleanup; unit controls in the O1 test path.        |
+
+No manager/runtime/helper signature changes, container recreation/snapshot API, source-loader adapter, process-wide exception interception, new app-visible semantics, or unrelated shared signatures are in this reservation. Existing package script/map and all original acceptance obligations remain unchanged; no dedicated row replaces a blocking UAT.
+
+### Reviewed source anchors and required handover
+
+- Product base **966**: `966527c413adc752def72f45ce0c54e660ca0615`; contract source **E**: `e0638457e1612e49bef5bf082ff79fec39954963` (product-equivalent). Accepted lifecycle/runner **R**: `5113700e878158212a42b33c42336ee46947beaf`.
+- Old producer anchor: `81e824a73c74bcd17a9ccce8dcb7f8e0b470d961`, **SUPERSEDED, NOT INTEGRATABLE**. Exact replacement **P**: `04436bad186750c7b569a30d460b960a464052d1`, direct child of that anchor, independently **ACCEPT_FINITE_REPAIR** on Standards and Spec. The finite repair changes only `tests/uat/provisioner.ts`, `tests/uat/lifecycle-records.ts` and `tests/uat/provisioner.test.ts`. Bind source/inventory to this exact immutable commit; inspect Git objects only, never the mutable producer checkout. Acceptance and this pin authorize neither cherry-pick/integration nor executable edits. Producer author is held read-only; explicit overlapping-path transfer remains pending canonical/O1 acceptance.
+- This docs-only commit pins the accepted replacement P for canonical source-lock review; it grants no executable lease or integration. No executable implementation starts before canonical acceptance and an explicit grant for its window. O1 needs its separate six-path grant; O2 integration and overlapping producer-path transfer follow canonical/O1 acceptance and require explicit handover and the O2 grant. The existing executable lock remains unchanged until its reviewed amendment; a reservation is not an allowlist expansion.
+- Freeze O1 independently after its grant/checks. Record exact O1 SHA before any granted O2 composition. O2 must reconcile accepted P inventory/chain, source/image/bundle/bootstrap hashes and all consumer bindings with the final candidate. Ambiguous identity or an unreviewed lock is STOP. Producer records retain their own command/exit/absence authority; never relabel them as new records.
+
+### O1: observer/product hooks and unit sensitivity
+
+After canonical acceptance of this exact P source-lock amendment and a separate explicit O1 lease, edit only the first six table paths. The overlapping producer-path handover belongs to O2 after canonical/O1 acceptance. Install no subscriber, async context, I/O, timers or wrappers by default. When enabled, preserve factory selection, original engine objects, arguments, `this`, result/error identity and cancellation. Make the whole subscriber nonthrowing across initialization, validation, serialization, sockets, errors, timers and rejection callbacks; any failure is sticky evidence error/unavailability, not a product exception or process-wide interception. Readiness belongs to the observer, not product health.
+
+Register exactly version 1 sites `turn`, `ensure.initial`, `ensure.retry`, `heal`, `factory`, `launch`, `replay.submit`, `submit.initial`, `submit.retry`, `classifier.evaluate`, `shadow.start`, `shadow.run` before Ready. Hook entry synchronously before each delegate, even immediate failure. Scope the complete accepted-turn body directly after its existing turn ID is minted using lazy `AsyncLocalStorage`; bind captured request-thread before terminal return and require the independently owned Main thread. Preserve actor/thread/surface/turn context through initial/retry ensure, asynchronous healing, factory/launch/replay and submit. Track original healing promises even after admission stops waiting, and actual shadow run/finally rather than just start return. Unknown context is RED; no shared signatures change.
+
+Offline unit controls in the dedicated test file exercise the actual hooked callsites, including immediate throws, failed/aborted launch/submit/evaluation, retries, detached healing and shadow settlement, terminal/error/finally correlation and unknown context. Check disabled noninterference and enabled delegate/identity/cancellation preservation. Induce subscriber initialization/validation/serialization/socket/timer/rejection failures and verify product equivalence plus sticky failure/unavailability. Observe decisive failures when relevant observer guards/protections are removed, then restore exact final bytes. No real provider/classification or network result is claimed. After meaningful scoped unit/static/type checks, freeze exact local O1 source/results for independent review; do not integrate O2 or remove live guards on unit evidence.
+
+### O2: initial bootstrap and owned composition
+
+O2 waits for independently accepted producer repair, exact replacement P/source-lock amendment and explicit overlapping-path transfer, plus the reviewed O1 freeze and explicit O2 lease. Its executable lease covers the seven remaining executable table paths. Focused helper controls belong in the dedicated O1 test path and run against the composed helper when available; O2 does not implicitly lease an O1 test-file edit or another test path. Keep the 1000-line runner at minimal composition wiring. No current executable edit is authorized.
+
+Add a typed option accepting only a 64-hex nonce, bootstrap SHA256, schema version 1 and shared absolute deadline. Internally derive `/app/tests/uat/n3-fallback-observer-bootstrap.mjs`; reject arbitrary inherited `NODE_OPTIONS` and conflicting scripted-provider configuration. Before initial start, verify committed/image bootstrap hashes and private env identity. The absent option must produce byte-for-byte unchanged env output. Do not recreate a container or add snapshot/rebinding APIs. Imported bootstrap stays inert in supervisor/migration/worker/health/query children and activates only for resolved `/app/dist/server.js`, bound API PID/birth and exact container; use the bundled channel, without source-loader adapters.
+
+Consume the first-start producer inventory and immutable chain to bind exact container/image/source/bundle/bootstrap hashes and auth/socket volume IDs/mounts. Keep nonce directory 0700/socket 0600, exact-container queries, 4 KiB frames, 256 attempts and 64 KiB buffered metadata. Transmit IDs/enums only, never content/secrets/raw errors. Bound every operation by the shared absolute deadline. Preserve cumulative sequence/counters/coverage/sticky failures across windows. Begin requires healthy identity/coverage and globally zero open turns/attempts; end requires exactly one matching actor/thread/surface/turn begin/end, actual descendant settlement, terminal HTTP/UI completion and an acknowledged sequence barrier with global quiescence. An event-loop tick, unknown context, restart/reset/loss/concurrency/unclassified work or forbidden delta cannot pass.
+
+Use the helper for activation/identity receipts, queries, barriers and cleanup. Keep the accepted explicit CLI termination and bounded terminal handling unchanged. Service-plus-slot credential cleanup precedes `down -v`; require successful returned teardown and terminal producer absence records on every outcome. Retain roots/resources/port and explicit RED on uncertainty or deadline; promise completion/host exit never proves child closure. Preserve prior evidence and use the sole gate monitor only when a later executable protocol is independently released.
+
+Focused fake/offline controls cover bootstrap activation versus other children, pinned hash/identity and exact env forwarding/default bytes, invalid input and scripted-provider conflicts, transport bounds/sticky errors, unmatched turns/concurrency, unsettled healing/shadow, barrier/sequence loss, deadline, returned teardown/failure paths and retained ownership. Exercise meaningful protection-removal controls and restore final bytes. Run only subsequently authorized scoped checks; freeze integrated source/image/producer/command/raw-exit bindings for independent executable review before any live run or guard release.
+
+### Separate real positive, release hold and completion
+
+After both N3 evidence windows, the future independently reviewed protocol runs one bounded harmless real ordinary UI turn. Offline actual-classifier/shadow adverse, abort and guard-removal controls remain separate sensitivity evidence. Do not substitute provider, model or classifier mode, infer classification from `shadow.start`, or create additional future tasks. Preserve all original structured-admission, deterministic result, schedule/source/job, identity and cleanup assertions.
+
+The seeded-owner supplemental proof does not establish primary signup through Settings/provider setup into N3. Existing nine blocking UATs, N1, original count/async/public-fault requirements and all other held acceptance obligations remain pending as applicable. This canonical amendment is docs-complete only. O1/O2 implementation, exact producer handover, controls, integrated locks and final executable acceptance remain outstanding; no live/push/integration is authorized by this plan amendment.
+
+## O2a structural rider R2 — authorized layout maintenance
+
+The coordinator’s O2a R1 brief and structural rider R2 explicitly authorize this finite continuation on accepted O1 `80ceefc563fb9eeb2df0e89b0fbfb498e128389c`, after conflict-free producer integration at `8fe37b0858a3ccd8f838d4c6ddbf42763708f558` (tree `84d66053e1ba4c0868f51c1ca4c99c3556fff2bc`). P remains exactly `04436bad186750c7b569a30d460b960a464052d1`; the integration freeze and R1 evidence remain immutable. This explicit lease supersedes the historical pending-lease/layout statements above only for O2a, without changing the diagnostic contract or any runtime/acceptance hold.
+
+The following exact structural additions resolve the 999-line provisioner/test constraint without compaction or broad refactoring. Repository paths are under `~/Jarv1s`:
+
+| O2a path                                           | Narrow responsibility                                                                                                                                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/uat/provisioner-options.ts`                 | Move the existing options interface intact, retaining the public type re-export; hide narrowly typed observer validation, pin and env preparation. No new lifecycle or cleanup manager.                             |
+| `tests/uat/provisioner-lifecycle-fixture.ts`       | Move the existing private `lifecycleFixture` factory intact into a test-only shared helper; no test registration, module mocks or global side effects. Retain all existing assertions, cases and fixture semantics. |
+| `tests/uat/n3-fallback-observer-bootstrap.test.ts` | Focused fake/offline subscriber and initial-provisioning controls, reusing the extracted fixture; no importing a test module or duplicating the whole fixture.                                                      |
+
+The complete O2a executable lease is those three paths plus `tests/uat/n3-fallback-observer-bootstrap.mjs`, `tests/uat/provisioner.ts`, `tests/uat/provisioner.test.ts` and `tests/uat/env-file.ts`. All seven files stay at most 1000 lines. Accepted O1’s six files, including its unit file, stay byte-for-byte unchanged. `tests/uat/lifecycle-records.ts` remains exact P. Preserve all 103 retained tests and their original case bodies. This nonsemantic layout amendment is committed separately before source edits and needs no additional plan gate; it adds no user-visible behavior or app-map declaration.
+
+O2a implements only the original nonthrowing subscriber/bootstrap and typed initial-provisioning contract. O2b retains runner/helper/spec wiring, independently owned identity/source/image/producer consumer bindings, windows’ UI/HTTP completion proof and the separate real positive. The original N3 runner/spec hard guards stay unchanged. No consumer relabeling, recreation, arbitrary NODE_OPTIONS, provider/model substitution, weakened bindings, uncaught-exception interception or new lifecycle recorder is permitted. Shared absolute deadlines, private transport, bounded metadata, cumulative correlation/settlement/barrier requirements, decisive offline protection-removal controls and exact restoration remain mandatory. Independent exact-commit review is still required; no Docker/DB/provider/browser/installed/live/socket execution, full gate, CI, push, PR, merge, signup, final O2 acceptance or automatic successor is released.
+
+## O2b serial layout amendment — offline consumer lease
+
+For #3529, the coordinator’s O2b1 R1 brief authorizes a finite offline build on accepted O2a
+`c1739462bc364d0665818a25207d253a9039ebc8`. This nonsemantic amendment supersedes only the
+historical helper-test placement and unsplit O2b layout. Commit it separately before executable edits.
+
+O2b1 leases exactly two new executable paths under `~/Jarv1s`:
+`tests/uat/n3-fallback-observer-runner.ts` for the inert typed consumer, independent receipt and
+identity checks, fixed persistent native bridge, cumulative windows and bounded bridge disposal;
+and `tests/uat/n3-fallback-observer-runner.test.ts` for dedicated fake-only controls. Each stays at
+most 1000 lines without compaction. Expected authoritative pins remain separate from independently
+collected installation, API and producer observations. Preserve the version 1 schema, private
+channel, immutable chain, source/image/volume identity, actual descendant settlement, external
+UI/HTTP completion attestation, barrier and inherited absolute deadline contracts above.
+
+After independent exact-commit O2b1 acceptance, O2b2 requires its own serial ownership transfer
+and lease for minimal existing runner and real UI spec composition, plus finite adapter/test
+integration changes. O2b1 does not lease those paths or an O1 test edit. The original runner/UI
+guards, accepted O1/O2a and exact P bytes remain frozen. O2b1 runs fake-only tests and scoped static
+checks; it opens no actual Docker/socket/DB/provider/browser resources and runs no existing runner
+selftest, full gate or CI. Freeze local evidence for two-axis independent review. O2b2, runtime,
+publication and Stage4 acceptance remain held; no push, PR, merge or automatic successor is granted.
+
+## O2b2 packaging prerequisite R1 — static execution and serial handover
+
+For #3529, execute only the explicit finite three-path packaging grant in one owned worktree/session: `.dockerignore`, this canonical plan and `docs/superpowers/specs/2026-10-16-scheduled-read-terminal-creation.md`. Produce one local direct child K of accepted C `cb9420a924a6725f501e03f6155ce0e70228aa92`, tree `5ee00eb9de7e27d473ca0dbb7ebfb6e44873f1d9`, for independent exact-commit review before coordinator acceptance. This supersedes historical pending authority only for packaging. It leases no executable/test/helper/Dockerfile/package/lock/compose/config edit or runtime operation.
+
+### Fixed fourteen-key handover map
+
+The fixed installed map has exactly fourteen duplicate-free keys: the complete four-member accepted fixture union, five inherited product-source checks and five O1 production sources after deduplication. The fixture corroborates required membership; it is not a production map or image proof. All thirteen source members below are normal mode `100644` blobs at C and remain byte-identical. Their source hashes are authoritative frozen Git inputs, independent of observations. The generated bundle has no invented source hash.
+
+| Installed key                                              | Frozen C source SHA256 / generated baseline                         | Role                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
+| `/app/tests/uat/n3-fallback-observer-bootstrap.mjs`        | `cb5e0aad361cd18305d511752bfd05fb40362f4673176225f04d1ef435afd97d`  | initial-start bootstrap                               |
+| `/app/tests/uat/lifecycle-records.ts`                      | `aaeed62a44bfd45c1767f7a0ecdb8198227562c22a913187fe2550430d4251e0`  | passive producer source mirror; executes only on host |
+| `/app/packages/chat/src/live/chat-session-manager.ts`      | `e8687560858dc953a64ba7017a9aff9175588408f3ec3435fb6e8c08e7c8becc`  | retained manager anchor                               |
+| `/app/packages/chat/src/live/chat-session-ports.ts`        | `0195bd5bcd288289b82cc1010463cd99c7049ff98df2729e450cfcf3aa076114`  | inherited product source                              |
+| `/app/packages/chat/src/live/pre-model-turn.ts`            | `113ceb8cc90d8005d5d28017a7d197158bd02e01a168b4d0141422958ed6d140`  | inherited product source                              |
+| `/app/packages/chat/src/reminders/features.ts`             | `91ca420a38f8fc9bdf9003953e2f26429a5c480dd335248aabd4c9f84d922158`  | inherited product source                              |
+| `/app/packages/chat/src/scheduled-reads/generation.ts`     | `b6d4883b3abba7103d07549be68045cdb0bf6b8d77e3c618f725434e42d1979b`  | inherited product source                              |
+| `/app/packages/chat/src/scheduled-reads/request.ts`        | `b9f0cde8124905180fcec82ab2665def136bf98038ee4db9b8958eab7e9f0174`  | inherited product source                              |
+| `/app/packages/chat/src/live/chat-attempt-observer.ts`     | `9a21cd24d0a1888159c0df855deb1116313c009791db928fa3f536dd520d8af1`  | O1 observer source                                    |
+| `/app/packages/chat/src/live/chat-session-turn.ts`         | `d8e4461a87d3785bea18e98bd687843a54ea7401dc69160249eb0c1abce5df84`  | O1 turn hooks                                         |
+| `/app/packages/chat/src/live/chat-session-launch.ts`       | `38e75a015cd7a415071cc09e9747c10274ff15344933c8f3c82e067be7e330a2`  | O1 launch hooks                                       |
+| `/app/packages/chat/src/live/classifier-gate-lifecycle.ts` | `c4483827a5330ace9dac901fedba8b77d600eae9f312bde447d4c9203fd7290c`  | O1 evaluation hooks                                   |
+| `/app/packages/chat/src/live/classifier-gate-shadow.ts`    | `ed0dc5f536d4372718039f6e6606b94414eed4d611d232a4565e1972022d6308`  | O1 shadow hooks                                       |
+| `/app/dist/server.js`                                      | Generated; original closed build and image-backed baseline required | API bundle; no static source hash                     |
+
+`/app/tests/uat/lifecycle-records.ts` is a passive exact source mirror. It is never imported or executed by the API container; lifecycle execution, producer source authentication, immutable chain and command/raw-exit/close receipts remain independently host-owned. The mirror must equal both the independently authenticated host producer and exact accepted P source. Omitting it as “host-only” would change the accepted trust contract and is not authorized.
+
+The eleven `packages/chat` members are existing context inputs. The fixed bootstrap uses Node builtins and activates only for resolved `/app/dist/server.js`; no UAT source-loader or transitive provisioner tree is needed. The unchanged `Dockerfile` copies context with `COPY . .`, invokes `pnpm build:api` in the build stage and inherits that stage into runtime. `package.json` maps that command to `tsx scripts/build-app.ts api`, which emits `dist/server.js`. `**/dist` remains excluded from source context; the bundle digest must come from the original fresh closed build and its image-backed never-started original container. The generated `.js.map` is not an additional installed-map key. This finite map does not enumerate every API dependency or image file; the full reviewed repository source/tree/input fingerprint remains mandatory.
+
+Original runner, real UI spec, provisioner, options/env/compose/auth helpers, accepted consumer adapter, future installed collector, fixtures and all unit/UAT tests remain independently source/tree-pinned host/browser orchestration or fake controls. Their exclusion does not justify further carve-ins. Fixed native bridge/readers remain committed host source passed through the reviewed allowlist. `Dockerfile`, `.dockerignore`, manifests/lock, build scripts, compose inputs, private producer channel and actual command receipts retain their independent build/provenance authority. P already fingerprints `Dockerfile` and `.dockerignore` together with commit/tree. A future build binds its actual final O2b2a source identity and fingerprint, never a relabeled C or a purported packaging-built image.
+
+### Ordered static checks and freeze
+
+1. Verify grant/bound-document hashes, clean owned C/base/branch, normal producer blob, absent Dockerfile-specific ignore override, included ancestors and unchanged original Dockerfile copy/build/runtime and API generation path. Reproduce all thirteen immutable source-row hashes before writing; retain protected correspondence to exact P `04436bad186750c7b569a30d460b960a464052d1`, O1 `80ceefc563fb9eeb2df0e89b0fbfb498e128389c`, O2a `c1739462bc364d0665818a25207d253a9039ebc8` and O2b1 C.
+2. Insert only `!tests/uat/lifecycle-records.ts` immediately after `tests/uat/*.ts`. Original SHA256 `982de9acc88c3e42bf4874c5023b1b931dba76488967c6c48ba10e57eb666570`; result SHA256 `c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`. Removing that one inserted line must reconstruct C byte-for-byte; preserve original rule order/newlines and all other behavior. Append only this canonical reconciliation; retain every earlier behavior/test/acceptance obligation.
+3. Record bounded Docker-compatible last-match and ancestor traces for all thirteen literal sources plus negative probes. C must include twelve, K thirteen; dist stays excluded as a source input. Check the entire tracked-path membership set difference is exactly `{tests/uat/lifecycle-records.ts}`. Use the fixed supported rule grammar and/or explicit literal-domain proof: only the exact target/descendants can match the negation, the target is a regular file without tracked descendants, parents are included and no later rule rematches it. Reject unsupported syntax, excluded ancestor, missing/nonregular member, override or additional context change.
+4. Preserve adjacent/suffix/nested producer-like membership, provisioner, collector/adapter source/tests, real UI spec, O1 tests and all secret/local/runtime exclusions; do not relabel existing nested inclusions. In memory, remove the exception and require the same unchanged producer-membership assertion to fail, then restore and pass. Freeze attributable assertion, numeric statuses and original/proposed/removed/restored hashes. This proves static membership sensitivity only, not installed/image/tar/mount security.
+5. Run doc-only scoped format/diff/size checks, inspect every added line for public/private content, prove exactly three changed paths and all other source/blob/mode/package/lock bytes preserved, then commit only those explicit paths locally. Freeze K commit/tree/parent, three file hashes/blobs/modes, exact diff/line counts, private evidence manifest/numeric results and final clean state; preserve parent artifact modes and evidence mode 0600. No product tests, TypeScript/build/full gate, Docker or network is justified by this packaging delta. Stop at one finite blocker on failed scope/base/map/protected-byte/cap/proof checks; two identical failures require rethinking.
+
+### K acceptance precedes a separately leased O2b2a
+
+Return concrete K and the private result packet to the sole coordinator. This packaging session does not accept itself, publish, integrate, transfer ownership, spawn a successor or start the next slice. Independent review and coordinator acceptance of K plus a separately reviewed complete O2b2a contract must precede that build. The revised five-path scope remains exactly:
+
+- `tests/uat/n3-fallback-observer-installed.ts` (new inert collector/helper; target 750, hard cap 1000 lines).
+- `tests/uat/n3-fallback-observer-installed.test.ts` (new fake-only controls; target 800, hard cap 1000 lines).
+- `tests/uat/provisioner.ts` (only original-child observation/awaiting and original-created-container before-first-up seam; C 984, final at most 1000 lines).
+- `docs/superpowers/specs/2026-10-16-scheduled-read-terminal-creation.md`.
+- `docs/superpowers/plans/2026-10-16-scheduled-read-terminal-creation.md`.
+
+After acceptance K replaces C only as packaging base and `.dockerignore` is frozen again. O2b2a separately commits its own narrow canonical serial/provenance amendment before executable edits, and then freezes its actual final source commit/tree/input fingerprint for the future original build. Do not mix K/C fingerprints, change the separate P anchor or assert an image was built during packaging. Its dedicated test must consume this canonical map and immutable context-membership check, failing at that unchanged assertion when this exception is removed in memory; no test path is leased by packaging.
+
+Retain all R2 obligations without reduction: pre-spawn source/command/daemon freeze, attachment to the original ChildProcess, independent raw exit plus separate close before image-built and omitted-hook default parity; original O2a-created never-started API and awaited hook after O2a before original first up; exact state/identity/source/daemon and empty diff plus all-mount canonical file/ancestor/root exclusion before any baseline cp and again immediately pre-up; independent auth/socket expected-volume/P correspondence; final deadline check with no intervening async work except original start dispatch; strict bounded single-requested-regular-member tar validation, rejecting links/extras/extensions/path overrides/truncation/trailing substitution; fixed read allowlist, connected accepted-adapter receipt composition, independent expected/observed pins and inherited deadline/uncertain retention.
+
+Future mount/tar removal controls retain unchanged assertions and unrelated protections, record attributable RED with original/mutant/restored hashes and numeric exits, restore in `finally` and rerun. Neither this static matcher nor its in-memory removal substitutes for future original closed build/image-backed baseline and installed proof. Original runner/UI, both unconditional guards, accepted P/O1/O2a/O2b1 and all package/lock/config bytes stay frozen. O2b2b, real Docker/socket/DB/provider/browser/port/process/signal work, full gate, CI, guard release, publication/push/PR/merge, primary signup, nine blocking UATs, N1, original total-count/async/public-fault proof, final O2 and Stage4 acceptance remain held. No app-visible behavior or app-map change is proposed.
+
+## O2b2a R3 — finite offline provenance implementation
+
+The finite execution grant on accepted packaging K
+`e2b66b672d625221ddd7139d31046372d94d2e8d` authorizes only this serial offline
+slice for #3529. Commit this amendment separately as A before executable edits;
+freeze the final candidate F and its tree through A/K after fake controls. A future
+original build must bind genuine F, never relabel C/K or claim an offline-built image.
+
+The five owned paths under `~/Jarv1s` are this spec, its matching canonical plan,
+new `tests/uat/n3-fallback-observer-installed.ts` (target 750, hard 1000 lines),
+new `tests/uat/n3-fallback-observer-installed.test.ts` (target 800, hard 1000),
+and only the original-child/pre-first-up seam in `tests/uat/provisioner.ts`
+(984 to at most 1000). No compaction, unrelated extraction or sixth path is leased.
+The fourteen-key packaging map above and all thirteen source pins are unchanged.
+The exact K ignore hash remains
+`c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`;
+Dockerfile, P/O1/O2a/O2b1, adapter/tests, original runner/UI guards and every
+package/lock/config input remain frozen except the expressly reopened provisioner seam.
+
+The optional typed `n3BuildEvidence` requires validated observer opt-in. Prepare
+actual argv/cwd/source/root/input/daemon evidence before spawn, attach synchronously
+to the original build ChildProcess, retain its birth/group/session/boot identity,
+and independently await raw zero exit plus separate close before image-built.
+Keep omitted-hook commands/env/retries/errors identical. Await the new pre-start
+hook after O2a's original container creation and before original `up --no-recreate`.
+Never replace the original build, create owner, lifecycle recorder or host supervisor.
+
+Before any new baseline cp and again immediately before original up, require the
+same original never-started container/image/config/source/daemon, empty diff and
+canonical all-mount exclusion for every fixed reviewed file and its ancestors,
+including `/app` and `/`. Independently authenticate auth/socket mounts and volume
+inspect against P inventory. Accept only the single requested regular tar member:
+validate name, checksum, size, type, padding and termination; reject links, extras,
+path overrides, truncation and trailing archives even when payload hashes match.
+Source payload ceilings equal immutable K byte lengths; bundle 64 MiB, aggregate
+archives 80 MiB, metadata per command 256 KiB, one cp pending. Archive allowance is
+one header plus rounded payload and at most 16 KiB zero termination/padding.
+
+Construct the accepted adapter through verified build/baseline receipts and closed
+fixed readers, with independent expected pins. Import/construction stays inert.
+Keep source/DB semantics, exact namespace API/socket identity, projected errors,
+one inherited absolute deadline, bounded output/closure and uncertain-handle retention.
+Fake controls traverse these seams and actual accepted O2a/P/adapter interfaces.
+Require immutable K context membership and exception removal in memory, plus
+attributable unchanged-assertion guard removals for file/ancestor/final-only mounts
+and link/extra-member tars, exact restoration and tested/Git byte correspondence.
+
+Only offline controls and scoped lint/format/types/size/diff checks are authorized;
+root nonincremental TypeScript is capped at 120 seconds. Stop at the first finite
+cap/source/receipt/context/control limitation; do not claim partial collector completion.
+Independent exact-commit Standards and Spec review precedes acceptance. O2b2b,
+actual build/Docker/socket/DB/provider/browser/port/PID-signal work, process selftest,
+full gate/CI/push/PR/merge/publication and both guard releases remain held. All nine
+blocking UATs remain UNRUN here; runtime/release/Stage4 booleans remain false and
+Stage4 remains NOT_ACCEPTED. No automatic follow-on or successor is authorized.
+
+## O2b2a R4 — six-code layout and aggregate proof treatment
+
+The issued finite offline grant for #3529 activates this exact eight-path slice on
+immutable A `dd6b60dcd458c7d2592b7bb5ecfeeca5ccf82962`, child of accepted K
+`e2b66b672d625221ddd7139d31046372d94d2e8d`. Earlier agreements and source pins
+remain intact. This appendix supersedes only the historical five-path layout,
+commit sequencing and aggregate-only witness classification for this slice.
+
+The exact six code/test paths under `~/Jarv1s`, each at most 1000 complete physical
+canonically formatted lines, are:
+
+- `tests/uat/n3-fallback-observer-installed.ts`: inert original-child capture,
+  trust ordering, baseline and accepted-consumer composition.
+- `tests/uat/n3-fallback-observer-installed-reads.ts`: inert injected bounded
+  transport and closed fixed semantic read allowlist.
+- `tests/uat/n3-fallback-observer-installed-evidence.ts`: typed pure tar, mount
+  and producer authentication, immutable source pins and literal ceilings.
+- `tests/uat/n3-fallback-observer-installed.test.ts`: connected fake controls
+  through the actual provisioner, O2a, producer, bootstrap and consumer.
+- `tests/uat/n3-fallback-observer-installed-evidence.test.ts`: pure policy,
+  immutable Git/context, size/map/arithmetic and sensitivity controls.
+- `tests/uat/provisioner.ts`: only optional typed evidence, observation and
+  awaiting of the original build child, and serial post-O2a/pre-original-up hook.
+
+The other two paths are this canonical document and its matching specification
+or plan. Append this amendment to both and commit docs-only D as a direct child
+of A before executable edits. Freeze D/tree/doc diff; executable candidate F must
+then descend D/A/K/C. F minus D changes only those six code paths; F minus K only
+the eight paths. Preserve all old assertions and every earlier document byte;
+no minification, unrelated extraction, ninth path, package/config change or cap
+waiver. The fixed fourteen installed keys and thirteen source hashes remain
+unchanged. Keep full reviewed source/root/commit/tree/input identity in addition
+to that map, and prove exact tested-versus-F Git bytes and protected correspondence.
+
+### Aggregate80MiB adjudication — exact treatment, no isolated RED claim
+
+Count each of the fourteen baseline archive buffers once, serially; metadata,
+host reads, later running observations and retained receipts do not contribute.
+The exact thirteen immutable K source lengths are 19140, 26903, 19872, 19496,
+11174, 11733, 5278, 6607, 6251, 26118, 13664, 12558 and 20867 bytes. Their sum is
+199661 and their individually 512-rounded sum is 202752. Each archive is bounded
+by the actual transport before accumulation, including malformed archives, at
+one 512-byte header plus rounded payload plus at most 16384 bytes of validated
+zero termination/padding. The single generated bundle remains capped at 67108864
+bytes (64 MiB), with no static or observer-derived expected bundle hash.
+
+The exact safe-integer maximum is
+`202752 + 67108864 + 14*(512+16384) = 67548160 < 83886080`.
+Every nonnegative running partial sum is bounded by that total; the margin is
+16337920 bytes. Metadata retains its separate 256 KiB stdout/stderr limits and
+cannot fill this gap. Retain the delivered 80 MiB guard and every stronger cap.
+Classify it as defense in depth:
+**NO_ISOLATED_AGGREGATE_WITNESS_POSSIBLE_UNDER_FIXED_CAPS**. No independent
+aggregate-guard assertion RED is required or credited; this is no guard waiver.
+
+The named evidence test must independently obtain all thirteen source lengths
+and hashes from immutable K Git blobs and candidate Git inputs, cross-check the
+literal map/lengths, assert thirteen sources plus one bundle and fourteen distinct
+keys, source totals 199661/202752, all fourteen archive ceilings, and the exact
+67548160 maximum strictly below 83886080. Expected paths and numeric results
+cannot come solely from implementation output. Record its actual numeric result
+as arithmetic/model evidence, never aggregate-removal security evidence.
+
+Connected fakes must traverse actual transport and provisioner seams, enforce
+closed key/order/count, one pending cp, source/archive/metadata overflow refusal,
+and malformed-tar controls. The positive receipt retains fourteen ordered archive
+byte counts and their sum below the bound. Independent exact-F structural review
+must establish that no admitted path repeats or adds uncounted archives or bypasses
+those limits. A future map/size/count/transport change invalidating this arithmetic
+requires fresh adjudication. Do not add keys/copies, alter caps, inject oversized
+returns above the real transport or remove another guard to manufacture sensitivity.
+
+Retain every reachable R3 original-child, file/ancestor/final-only overlay and
+link/extra-member tar boundary and its required attributable unchanged-assertion
+removal/restoration. Prepared patches are inputs only. Preserve unrelated guards,
+record numeric exits/durations, patches and original/mutant/restored hashes, restore
+exact source in finally and rerun affected controls. Masked failures, setup errors
+and timeouts are NONDECISIVE. Context-exception removal is in memory only; frozen
+ignore SHA256 remains `c212ecfadfe09b4edf283ba9844246b0595cb89ccafacd8371059103069eb938`.
+
+Pin exact new and retained fake suites and inspect their dependencies before launch.
+Run only finite scoped fake checks, required witnesses, lint/format/strict types,
+root nonincremental noEmit (at most 120 seconds), caps/protected/diff checks, with
+at most 120 seconds per command and 1200 seconds aggregate offline checks. Stop at
+the first unsatisfied source/cap/receipt/context/witness/session obligation; no
+campaign, successor or partial-completion promotion. Freeze F/tree/input/evidence
+before separately owned independent Standards and Spec review of that exact F;
+any repair creates a new candidate requiring renewed exact-commit review.
+
+O2b2b remains separately leased for original runner/UI/source-lock/host-supervisor
+integration, exact Main-thread/message/turn completion, two terminal windows and
+separate harmless real positive, returned teardown plus terminal P absence/chain
+proof, twelve-minute run and two-minute cleanup, credentials before down-v and
+uncertain retention. This slice runs no Docker/build/live socket/DB/provider/browser,
+port/PID-signal work, process selftest, install, full gate, CI, push/PR/merge or
+publication. Both unconditional guards, all runtime/release/Stage4 booleans remain
+false; nine real UATs remain UNRUN/NONLAUNCHABLE and Stage4 NOT_ACCEPTED.

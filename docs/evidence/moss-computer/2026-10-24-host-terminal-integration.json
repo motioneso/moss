@@ -1,0 +1,686 @@
+{
+  "scope": "Internal opt-in existing-resource managed terminal lifecycle; no launch admission or independent closure",
+  "base": "2f3ff6ae6c631c45225b92fd8682a178ece6279f",
+  "prerequisite": {
+    "pr": 3649,
+    "acceptedHead": "a35f508f377ca71248ce1b053578c5ed8c9a4e9d",
+    "merge": "2f3ff6ae6c631c45225b92fd8682a178ece6279f",
+    "merged": true,
+    "mergeTreeEqualsAcceptedHead": true,
+    "sourceHashesMatched": 24,
+    "localAcceptanceComment": 6384345154,
+    "ciAcceptanceComment": 6384478718,
+    "ciRun": 40094799674,
+    "ciAttempt": 1,
+    "requiredGate": 120877071207,
+    "additionalAppActionRun": 40094799707
+  },
+  "plan": "6aba9e2217c6e2447dc600703dd21a15ca747459",
+  "sourceR1": "36b477fcef91cbf310b3bf72f1935478dba6e861",
+  "acceptedProductionSource": "0644b9a35e7723dad3fe166468f16770e3abc75d",
+  "finalCheckedSource": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+  "localNode": "v22.22.2",
+  "bundleTarget": "node24 metadata only, not Node24 runtime qualification",
+  "behavior": {
+    "files": 25,
+    "tests": 501,
+    "managedTests": 21,
+    "exit": 0
+  },
+  "sourceFiles": {
+    "docs/superpowers/plans/2026-10-24-moss-computer-host-terminal-integration.md": "1311b9678b53d14b850689480bfa7bd50d870acdba36388442afb001d27738f7",
+    "scripts/computer-host.ts": "a1c154a85074dc74900365b8fbadc2ad9a6065f8e810082253b752fa01c9d8d3",
+    "scripts/computer-host/recovery.ts": "2f6e39ef126f98ecacb8380990ad63a302ed375a8f3a29e43b870711c1553d7c",
+    "scripts/computer-host/service.ts": "a69b85d013f6a8cfdc75b5f06ecac78b9ccaec3d8157fcca74a0b095aff05ba3",
+    "scripts/computer-host/state.ts": "0a923c416722b504a8af9b856b2c17bba982c141d125f9403f9acf0deffb7a34",
+    "scripts/computer-host/terminal.ts": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+    "scripts/computer-watchdog.ts": "2f6a1f35767a0ce43cf24bad1476117203f2ac7e80840a689ffa824e10c7775e",
+    "scripts/computer-watchdog/managed-host.ts": "8cfa3d732fb3eff03bfe80e9bc65a62ba6f72800ff1fcd5808031f66b9137cea",
+    "scripts/computer-watchdog/supervisor.ts": "bc045d1a707c2b821b7842233048e3272c663de18bb788e2f8a5389da73df8ef",
+    "tests/unit/computer-managed-host-fixture.ts": "d384a6ac8a019eb847a61a8761ff12b81d389f2c93a92e58d2d7f69bb48eaaaf",
+    "tests/unit/computer-managed-host.test.ts": "eba4abdc7941b26b1c35b753005d2b16b28298428e406672de6d801b6dfdfa80",
+    "tests/unit/computer-process-fixture.ts": "b392108aa0f7fe756c4a1d15ed31a7b12af02386715531c3aeebd38343bb94ee"
+  },
+  "builtinOnlyHostWatchdogBundles": true,
+  "checks": [
+    {
+      "name": "lint",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-host.ts",
+        "scripts/computer-host/recovery.ts",
+        "scripts/computer-host/service.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-host/terminal.ts",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/managed-host.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "tests/unit/computer-managed-host-fixture.ts",
+        "tests/unit/computer-managed-host.test.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "seconds": 2.2,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "lint-final.log"
+    },
+    {
+      "name": "format",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/superpowers/plans/2026-10-24-moss-computer-host-terminal-integration.md",
+        "scripts/computer-host.ts",
+        "scripts/computer-host/recovery.ts",
+        "scripts/computer-host/service.ts",
+        "scripts/computer-host/state.ts",
+        "scripts/computer-host/terminal.ts",
+        "scripts/computer-watchdog.ts",
+        "scripts/computer-watchdog/managed-host.ts",
+        "scripts/computer-watchdog/supervisor.ts",
+        "tests/unit/computer-managed-host-fixture.ts",
+        "tests/unit/computer-managed-host.test.ts",
+        "tests/unit/computer-process-fixture.ts"
+      ],
+      "exit": 0,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+      "seconds": 1.491,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "format-final.log"
+    },
+    {
+      "name": "file-size",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "log_sha256": "f8ac898cb5f2d670039caaaa79c957c20047d0f269ab0796d61c7c81cd8b84f7",
+      "seconds": 2.485,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "file-size-final.log"
+    },
+    {
+      "name": "whitespace",
+      "command": ["git", "diff", "--check", "2f3ff6ae6c631c45225b92fd8682a178ece6279f", "HEAD"],
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "seconds": 0.009,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "whitespace-final.log"
+    },
+    {
+      "name": "watchdog-bundle",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-watchdog.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=esm",
+        "--outfile=<private>/watchdog-final.mjs",
+        "--metafile=<private>/watchdog-final.meta.json"
+      ],
+      "exit": 0,
+      "log_sha256": "57d6cea3515bf000403bb2d546c1912b5d6dd8de8f9802085fdd2e8256612888",
+      "seconds": 0.524,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "watchdog-bundle-final.log"
+    },
+    {
+      "name": "host-bundle",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-host.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=esm",
+        "--outfile=<private>/host-final.mjs",
+        "--metafile=<private>/host-final.meta.json"
+      ],
+      "exit": 0,
+      "log_sha256": "b2ad6b202c1fe0bebf5f3cababc4f7606467bc71f28f80c0283ec39ac181da4c",
+      "seconds": 0.527,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "host-bundle-final.log"
+    },
+    {
+      "name": "gateway-build",
+      "command": ["pnpm", "build:computer-gateway", "<private>/gateway-final"],
+      "exit": 0,
+      "log_sha256": "f075d398d161104390557945740a938d0764efac68d1626e4c8502794a4ffeb2",
+      "seconds": 0.969,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "gateway-build-final.log"
+    },
+    {
+      "name": "tests-tsc",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "seconds": 65.246,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "tests-tsc-final.log"
+    },
+    {
+      "name": "behavior",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-auth-endpoint.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-recovery.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-managed-host.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "--reporter=dot"
+      ],
+      "exit": 0,
+      "log_sha256": "2e5e3f5b691090a187cfa27725441e562d88bd202e1ea930858e1b1c382b2e3f",
+      "seconds": 93.893,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "behavior-final.log"
+    },
+    {
+      "name": "root-tsc",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "seconds": 96.47,
+      "head": "8e4cc7bd5bbb3423548472a45a1b269d5fc4a296",
+      "log": "root-tsc-final.log"
+    }
+  ],
+  "protectionRemovalControls": [
+    {
+      "name": "owner",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "owner and CAS denial, enable immutability precede terminal authority",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "owner\\ and\\ CAS\\ denial,\\ enable\\ immutability\\ precede\\ terminal\\ authority",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.518,
+      "patch_sha256": "59272e04ea35ca500ffe2ad0e90c965d37aceb7c72c86529a1838b7c92724bdf",
+      "log_sha256": "1a7de3b4532dfcd79661f74c3f89b58af8ec90fbfc2f8ff02bf84051eab5de36",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected { generation: 1, enabled: true, \u2026(2) } to match object { reason: 'owner-denied' }"
+    },
+    {
+      "name": "cas",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "owner and CAS denial, enable immutability precede terminal authority",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "owner\\ and\\ CAS\\ denial,\\ enable\\ immutability\\ precede\\ terminal\\ authority",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.67,
+      "patch_sha256": "96121abd2e4bd40266dc44753e7c563ccd90681bf5db8772dbad82c908f48f52",
+      "log_sha256": "b6ea119c4754748f74d5782c64379330d4756657ba55c2dc2320533e314be7ef",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected { generation: 2, enabled: false, \u2026(2) } to match object { reason: 'stale-generation' }"
+    },
+    {
+      "name": "enable",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "owner and CAS denial, enable immutability precede terminal authority",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "owner\\ and\\ CAS\\ denial,\\ enable\\ immutability\\ precede\\ terminal\\ authority",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.618,
+      "patch_sha256": "fcd7cbc8ee9c2c35fa8ef8f290f27e99398318489d440f829480a0c75d7b3dc6",
+      "log_sha256": "680154b9ad4f844b13e8e5398cf247ac0127cbe98a83fce6bfac4e39b254b998",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected Buffer[ 123, 34, 103, 101, 110, \u2026(158) ] to deeply equal Buffer[ 123, 34, 103, 101, 110, \u2026(157) ]"
+    },
+    {
+      "name": "receiverFenced",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "refuses cleanup without actual receiverFenced acknowledgement",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "refuses\\ cleanup\\ without\\ actual\\ receiverFenced\\ acknowledgement",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.72,
+      "patch_sha256": "71b9e5881d8d30a822d22dc8aab1e6975cceb5547221c99fbe47747f03ebc9fe",
+      "log_sha256": "30466159103cf21373e574703ad3c4e343fbc824d04935b46c416b636f51eb02",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: promise resolved \"{ operation: 'stop', \u2026(2) }\" instead of rejecting"
+    },
+    {
+      "name": "durableStop",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "refuses cleanup without actual durableStop acknowledgement",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "refuses\\ cleanup\\ without\\ actual\\ durableStop\\ acknowledgement",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.668,
+      "patch_sha256": "99b939fa30452d832298d55b27a6cb0c02d7084babd6fd8220ac09cf522265a3",
+      "log_sha256": "7936ed35eb326a798d65db0222c86e77947bae5a41ab7788dda6c00b0a69648d",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: promise resolved \"{ operation: 'stop', \u2026(2) }\" instead of rejecting"
+    },
+    {
+      "name": "collectorExited",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "refuses cleanup without actual collectorExited acknowledgement",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "refuses\\ cleanup\\ without\\ actual\\ collectorExited\\ acknowledgement",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.768,
+      "patch_sha256": "08fb6cd5c003b335f797e489876f141df12ccf1f64813b4f7f0f8e41461437ce",
+      "log_sha256": "cea4fb1ec89e4653a11fbb2c2e448ad0329481ffb297f6c84fe32ba0aa3d93f9",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: promise resolved \"{ operation: 'stop', \u2026(2) }\" instead of rejecting"
+    },
+    {
+      "name": "root-outcome",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "refuses cleanup without actual exitCode acknowledgement",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "refuses\\ cleanup\\ without\\ actual\\ exitCode\\ acknowledgement",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.719,
+      "patch_sha256": "b8968c59034b93b131525463223f5ab22da71f26a3c8abdc1a1e366ea8673467",
+      "log_sha256": "d58813c41015e53f6fa88196df7b35d730c442a82da046f4c377a4cafb6a7301",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: promise resolved \"{ operation: 'stop', \u2026(2) }\" instead of rejecting"
+    },
+    {
+      "name": "lifecycle-expiry",
+      "file": "scripts/computer-host/terminal.ts",
+      "test": "lifecycle equality expires before any actual Docker mutation",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "lifecycle\\ equality\\ expires\\ before\\ any\\ actual\\ Docker\\ mutation",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.618,
+      "patch_sha256": "08e3286888055bb7e08869adbca12e4e090d607f4fcdad45d9f8544dc7bbaba6",
+      "log_sha256": "9376959c20b02e44c552fd5ee2a43bb0cf2dc2328b4e512c4fa1c15f23269d2f",
+      "original_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored_sha256": "356744a8c41b8ab8220c6bcc9840ea46b1d0c04c343f39c02d2c91f2fde8c7f3",
+      "restored": true,
+      "observed_assertion": "AssertionError: promise resolved \"{ operation: 'stop', \u2026(2) }\" instead of rejecting"
+    },
+    {
+      "name": "postawait-publication",
+      "file": "scripts/computer-host/state.ts",
+      "test": "expiry during state file I/O refuses CAS publication",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "expiry\\ during\\ state\\ file\\ I/O\\ refuses\\ CAS\\ publication",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.669,
+      "patch_sha256": "5c5dee0acaea55dffc78baa2d2398f282805ca854e73d6a2a34d88cdbef7d0f6",
+      "log_sha256": "512ad0d0eabbec71be6be58ee68ef685ba17f94ed73c2f4a3c71482ff2534ea1",
+      "original_sha256": "0a923c416722b504a8af9b856b2c17bba982c141d125f9403f9acf0deffb7a34",
+      "restored_sha256": "0a923c416722b504a8af9b856b2c17bba982c141d125f9403f9acf0deffb7a34",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected Buffer[ 123, 34, 103, 101, 110, \u2026(158) ] to deeply equal Buffer[ 123, 34, 103, 101, 110, \u2026(157) ]"
+    },
+    {
+      "name": "marker-publication",
+      "file": "scripts/computer-host/state.ts",
+      "test": "same-byte stop marker replacement during state fsync refuses publication",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "same\\-byte\\ stop\\ marker\\ replacement\\ during\\ state\\ fsync\\ refuses\\ publication",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.568,
+      "patch_sha256": "00b4eee30df99e99fe733814590da6ff85f5238737867e4ba53faa340147fbbb",
+      "log_sha256": "bb16690c27eb86a1aa7e2ab4547e3e6d4d35396bcfc3ebd4128507d3500e9a90",
+      "original_sha256": "0a923c416722b504a8af9b856b2c17bba982c141d125f9403f9acf0deffb7a34",
+      "restored_sha256": "0a923c416722b504a8af9b856b2c17bba982c141d125f9403f9acf0deffb7a34",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected Buffer[ 123, 34, 103, 101, 110, \u2026(158) ] to deeply equal Buffer[ 123, 34, 103, 101, 110, \u2026(157) ]"
+    },
+    {
+      "name": "file-durability",
+      "file": "scripts/computer-host/recovery.ts",
+      "test": "failed lifecycle file fsync still fences actual receiver, retains lock and performs no mutation",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "failed\\ lifecycle\\ file\\ fsync\\ still\\ fences\\ actual\\ receiver,\\ retains\\ lock\\ and\\ performs\\ no\\ mutation",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.718,
+      "patch_sha256": "65565abacf4d58d21202d75356656136959b51f6cba3b336064fed780ff4b109",
+      "log_sha256": "921fd489c87b38f983df4e5a23ab816e3b1a42f5cf08597eaf10037442eefe6f",
+      "original_sha256": "2f6e39ef126f98ecacb8380990ad63a302ed375a8f3a29e43b870711c1553d7c",
+      "restored_sha256": "2f6e39ef126f98ecacb8380990ad63a302ed375a8f3a29e43b870711c1553d7c",
+      "restored": true,
+      "observed_assertion": "AssertionError: promise resolved \"+0\" instead of rejecting"
+    },
+    {
+      "name": "directory-durability",
+      "file": "scripts/computer-host/recovery.ts",
+      "test": "failed lifecycle directory fsync still fences actual receiver, retains lock and performs no mutation",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "failed\\ lifecycle\\ directory\\ fsync\\ still\\ fences\\ actual\\ receiver,\\ retains\\ lock\\ and\\ performs\\ no\\ mutation",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.669,
+      "patch_sha256": "1564b29797d133de79c7552ef4e550e5d84f7f83705f5e8e5f5aec891e754a61",
+      "log_sha256": "79b75e0ffe46391aad020ab1a99c3cd992ed457563a89820f83b48e18810267e",
+      "original_sha256": "2f6e39ef126f98ecacb8380990ad63a302ed375a8f3a29e43b870711c1553d7c",
+      "restored_sha256": "2f6e39ef126f98ecacb8380990ad63a302ed375a8f3a29e43b870711c1553d7c",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected 2 to be 1 // Object.is equality"
+    },
+    {
+      "name": "gateway-halt",
+      "file": "scripts/computer-host/recovery.ts",
+      "test": "gateway cleanup failure halts desktop and retains every identity",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "gateway\\ cleanup\\ failure\\ halts\\ desktop\\ and\\ retains\\ every\\ identity",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 1.719,
+      "patch_sha256": "b78ae35bcb8542833aa54ca5928f847f957a039cdca80f5d0479e3adc346b6ab",
+      "log_sha256": "4e8ae81d9dbfa3bf3a6657b85c08bd91f9a9632838d6ff4fa19ea63b75104eed",
+      "original_sha256": "2f6e39ef126f98ecacb8380990ad63a302ed375a8f3a29e43b870711c1553d7c",
+      "restored_sha256": "2f6e39ef126f98ecacb8380990ad63a302ed375a8f3a29e43b870711c1553d7c",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected false to be true // Object.is equality"
+    },
+    {
+      "name": "root-terminal-hook",
+      "file": "scripts/computer-watchdog/supervisor.ts",
+      "test": "failed root finalization exits at5s despite held lifecycle file fsync and repeated real TERM",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "failed\\ root\\ finalization\\ exits\\ at5s\\ despite\\ held\\ lifecycle\\ file\\ fsync\\ and\\ repeated\\ real\\ TERM",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 2.971,
+      "patch_sha256": "c1436a587f84145a44e970b50f2cde51c4fbee42033f3d38f8af8f592a8ddb49",
+      "log_sha256": "598c02ff75e2a67fe644697ddb4c3f689b00e80e3c5f2d895d50aaecf88036cb",
+      "original_sha256": "bc045d1a707c2b821b7842233048e3272c663de18bb788e2f8a5389da73df8ef",
+      "restored_sha256": "bc045d1a707c2b821b7842233048e3272c663de18bb788e2f8a5389da73df8ef",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected '' to contain 'lifecycle-sync-held\\n'"
+    },
+    {
+      "name": "immediate-root-exit",
+      "file": "scripts/computer-watchdog/managed-host.ts",
+      "test": "failed root finalization exits at5s despite held lifecycle file fsync and repeated real TERM",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-managed-host.test.ts",
+        "-t",
+        "failed\\ root\\ finalization\\ exits\\ at5s\\ despite\\ held\\ lifecycle\\ file\\ fsync\\ and\\ repeated\\ real\\ TERM",
+        "--reporter=dot"
+      ],
+      "exit": 1,
+      "seconds": 8.482,
+      "patch_sha256": "0b16bb4886d96a42f7d84bf7af2af9d0afbe570245fb120455601297e4f0ba70",
+      "log_sha256": "b368947cfc1807ac42fd87306ae6fdab38cf37bcd9d286ca9a267cf2439a28a5",
+      "original_sha256": "8cfa3d732fb3eff03bfe80e9bc65a62ba6f72800ff1fcd5808031f66b9137cea",
+      "restored_sha256": "8cfa3d732fb3eff03bfe80e9bc65a62ba6f72800ff1fcd5808031f66b9137cea",
+      "restored": true,
+      "observed_assertion": "AssertionError: expected [ 'deadline-expired', null ] to deeply equal [ 2, null ]"
+    }
+  ],
+  "reviewReports": [
+    {
+      "file": "plan-security-r1.md",
+      "sha256": "59902fe0edf9b52f52ba5f741b2dd58733b2042a8080594753d2f8d69e27ff5d"
+    },
+    {
+      "file": "plan-security-r2.md",
+      "sha256": "0a1b0300b1179080d714cae739dcaf8afa3028ee6d978500a30fc7dccea5ecc4"
+    },
+    {
+      "file": "plan-spec-r1.md",
+      "sha256": "fc74a3bd192d1fe4cfda212f64a73cec70ab2ba8d5a99b9eb72d710d65630862"
+    },
+    {
+      "file": "plan-spec-r2.md",
+      "sha256": "ccdc1b0cdd538f3096781871a389d0367204ee3ae6f1a2662b3d403916f6e948"
+    },
+    {
+      "file": "source-security-r1.md",
+      "sha256": "b96a200a64ee9c2837e462060df2fba07f54e3c24f7fb0775a216e4549891ae0"
+    },
+    {
+      "file": "source-security-r2.md",
+      "sha256": "d949c550f9ebb8eee26c327d8cb79dfabf19cab4c393f4f2e8df320011726835"
+    },
+    {
+      "file": "source-spec-r1.md",
+      "sha256": "945ddace438a62f4ed2859da5d87442dc60995557a0da0a78bc177ba6fb44b85"
+    },
+    {
+      "file": "source-spec-r2.md",
+      "sha256": "183418c0f759ff7026b2c7da08b88a5a32077bb090a3585f9d377d63e5069bf7"
+    },
+    {
+      "file": "source-standards-r1.md",
+      "sha256": "3f5ddc55d914adae4f0eeb88139a590d703c90b67b7a6549ee5a49f34ad771b3"
+    },
+    {
+      "file": "source-standards-r2.md",
+      "sha256": "794398741e9dd3caadd4692d00b93af46f9cdfc8bba0f65aac113576b96b9c4b"
+    },
+    {
+      "file": "preplan-review.md",
+      "sha256": "6b1c9862c631d8b7f15aff5d3eb4e751ffdc98af41d6316ad8f1a3087b5a4a36"
+    }
+  ],
+  "failedExecutionRounds": [
+    {
+      "file": "managed-r1.log",
+      "sha256": "389f710bc0ac1001b9b43df146deb0bb467d81a1c8ac6c77d980ab55a678d8b8"
+    },
+    {
+      "file": "managed-r2.log",
+      "sha256": "a5cc2a734db630912041054ad4350ee91b084d95c7e62480adf562cef0f6fcfc"
+    },
+    {
+      "file": "root-tsc-r4.log",
+      "sha256": "c670e6c29c2efeb959c76ded5102d573c503251bab05d8abc3e817ddee559633"
+    },
+    {
+      "file": "r1-state-regression.log",
+      "sha256": "84ac9756d6c74edd63eec5e8a622a34beb406cf88be6e64b832dc410a3f3743a"
+    }
+  ],
+  "reviewedFailureRegression": {
+    "file": "r1-state-regression.log",
+    "sha256": "84ac9756d6c74edd63eec5e8a622a34beb406cf88be6e64b832dc410a3f3743a",
+    "againstSource": "36b477fcef91cbf310b3bf72f1935478dba6e861",
+    "observed": "State bytes changed after equality expiry during awaited state-file fsync; unchanged-state assertion failed"
+  },
+  "artifacts": [
+    {
+      "file": "watchdog-final.mjs",
+      "sha256": "ed74f0a2966998081a9b308d477f313493001706da32cab71d2b5a1ca17d1bc9"
+    },
+    {
+      "file": "host-final.mjs",
+      "sha256": "442e4ac2608b368709f8279c6ad064f9141f346817b85341d024b81120de7faa"
+    }
+  ],
+  "nativeProof": {
+    "composition": "actual runManagedComputerHost with actual root supervisor/lifetime/receiver/core and recording Docker Unix fixture; separate process also executes composition",
+    "rootFailure": "Both actual file/directory fsync holds acknowledge entry; held root journal outcome exits2 between4500ms and6500ms despite held lifecycle fsync/repeated TERM. File case begins from autonomous heartbeat EOF.",
+    "notQualified": [
+      "installed watchdog CLI/root/namespace trust",
+      "real Docker or TigerVNC",
+      "actual image/Node24/128MiB fit",
+      "independent Computer resource closure",
+      "owner HTTPS/WSS/chat"
+    ]
+  },
+  "fixtures": [
+    "synthetic auth/readiness",
+    "recording Docker Unix HTTP",
+    "synthetic root ownership and namespace inputs in inherited trust suites",
+    "synthetic collector measurements/journal ports in managed composition",
+    "library Fence replies"
+  ],
+  "notPerformed": [
+    "Computer image/runtime/Docker operation",
+    "DB/foundation command",
+    "TCP server",
+    "browser",
+    "installation",
+    "production deployment",
+    "persistence requalification"
+  ],
+  "remaining": [
+    "independent exact resource/PID/start/group/endpoint/healthy-Moss closure",
+    "trusted post-create/pre-start per-run config provisioning",
+    "new-run/reset and uncertain-create quiescence",
+    "actual image/Node24/128MiB/TigerVNC qualification",
+    "trusted API agent leases/dispatch and real owner HTTPS/WSS/chat live acceptance"
+  ],
+  "parentIssuesOpen": [3577, 3616, 3617, 3618, 3619],
+  "ciAndMerge": "Exact final PR HEAD required CI gate, independent supplemental acceptance and protected actual merge must be reconciled from PR before successor; local receipts do not assert CI/merge."
+}

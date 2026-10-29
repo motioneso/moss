@@ -67,6 +67,13 @@ describe("ASR route: configured routing, timestamp opt-in and cancellation", () 
       const response = await server.inject(upload);
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({ text: "fixture" });
+      const file = (fetch.mock.calls[0]![1]!.body as FormData).get("file");
+      expect(file).toBeInstanceOf(File);
+      expect((file as File).name).toBe("audio.wav");
+      expect((file as File).type).toBe("audio/wav");
+      expect(new Uint8Array(await (file as File).arrayBuffer())).toEqual(
+        Uint8Array.from(upload.payload)
+      );
       expect(fetch.mock.calls[0]![1]!.signal!.aborted).toBe(false);
       expect(f.selectModel).toHaveBeenCalledWith(f.scopedDb, "transcription");
       expect(f.selectProvider).toHaveBeenCalledWith(f.scopedDb, "pinned-fixture-provider");
@@ -151,7 +158,7 @@ function lifecycleHarness() {
   const replyRaw = Object.assign(new EventEmitter(), { writableEnded: false, destroyed: false });
   const reply = { raw: replyRaw, code: vi.fn().mockReturnThis(), send: vi.fn().mockReturnThis() };
   const log = { error: vi.fn() };
-  const request = { body: Buffer.from([1, 2, 3]), raw, query: {}, log };
+  const request = { body: Buffer.from([1, 2, 3]), headers: upload.headers, raw, query: {}, log };
   return { ...f, request, reply, run: () => handler!(request, reply) };
 }
 

@@ -1,3 +1,4 @@
+import type { ChatVoiceRequestCursor } from "@moss/shared";
 import {
   readScopedActorUserId,
   type AccessContext,
@@ -29,7 +30,8 @@ export interface VoiceRequestDependencies {
       readonly threadId: string;
       readonly turnId: string;
     },
-    claim: () => Promise<boolean>
+    claim: () => Promise<boolean>,
+    whenAvailable: () => Promise<void>
   ): Promise<"deferred" | "unclaimed" | "executed">;
 }
 
@@ -59,9 +61,9 @@ export class VoiceRequestService {
     return admission;
   }
 
-  async list(actor: AccessContext) {
+  async list(actor: AccessContext, before?: ChatVoiceRequestCursor) {
     await this.deps.assertAvailable(actor);
-    return this.deps.dataContext.withDataContext(actor, (db) => this.requests.list(db));
+    return this.deps.dataContext.withDataContext(actor, (db) => this.requests.list(db, before));
   }
 
   async status(actor: AccessContext, id: string) {
@@ -112,7 +114,12 @@ export class VoiceRequestService {
           return this.deps.dataContext.withDataContext(actor, async (db) =>
             Boolean(await this.requests.claim(db, id, this.deps.bootId, this.deps.now()))
           );
-        }
+        },
+        () =>
+          this.deps.dataContext.withDataContext(actor, async (db) => {
+            const current = await this.requests.get(db, id, true);
+            if (current?.state === "queued") await this.deps.schedule(db, actor, id);
+          })
       );
       await this.deps.dataContext.withDataContext(actor, async (db) => {
         if (result === "deferred") {

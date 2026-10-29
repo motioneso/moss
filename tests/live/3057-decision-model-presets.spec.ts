@@ -2,7 +2,7 @@
 //
 // Real API, real worker, real database, real services. Nothing is intercepted or rewritten.
 // Run on a scratch database with a fresh owner, in order, as one serial file. Each service is added
-// through the Settings form, tested where the service allows it, bound to the Classifier row, then
+// through the Add provider dialog, tested where the service allows it, bound to the Classifier row, then
 // one real News relevance sort runs and the Activity history must name the model:
 //   1. Any compatible service (Laya on this machine's CPU): added by address, model added by hand,
 //      bound. No News sort, because CPU answers do not fit inside the 20 second request limit.
@@ -47,16 +47,21 @@ function shot(name: string): string {
 
 async function openProviders(page: Page): Promise<void> {
   await page.goto("/settings?section=aiproviders");
-  await expect(page.getByRole("button", { name: "Add provider" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add provider" }).first()).toBeVisible();
 }
 
 function providerCard(page: Page, name: string): Locator {
   return page.locator(".prov", { has: page.locator(".prov__name", { hasText: name }) }).first();
 }
 
-async function openAddForm(page: Page, choice: string): Promise<void> {
-  await page.getByRole("button", { name: "Add provider" }).click();
-  await page.locator(".provpick__item", { hasText: choice }).click();
+/** Opens the Add provider dialog, picks a choice and names the provider on the Connect step. */
+async function openAddForm(page: Page, choice: string, name: string): Promise<Locator> {
+  await page.getByRole("button", { name: "Add provider" }).first().click();
+  const dialog = page.getByRole("dialog", { name: /Add a provider|Connect/ });
+  await dialog.getByRole("radio", { name: choice }).check();
+  await dialog.getByRole("button", { name: "Next" }).click();
+  await dialog.getByLabel("Name", { exact: true }).fill(name);
+  return dialog;
 }
 
 /** Presses Test on a provider card and returns the message the screen shows. */
@@ -89,18 +94,21 @@ async function modelsOf(page: Page, providerName: string) {
 /** Chooses a model in the Classifier row's picker, through the screen. */
 async function bindClassifier(page: Page, providerName: string, modelLabel: RegExp) {
   await openProviders(page);
-  const picker = page.getByLabel("Classifier model");
-  const value = await picker
-    .locator(`optgroup[label="${providerName}"] option`)
+  await page.getByRole("button", { name: /^(Choose a model|Change model)$/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose a decision model" });
+  const option = dialog
+    .locator("label")
+    .filter({ hasText: providerName })
     .filter({ hasText: modelLabel })
     .first()
-    .getAttribute("value");
-  expect(
-    value,
-    `${providerName} has a model matching ${modelLabel} in the Classifier picker`
-  ).toBeTruthy();
-  await picker.selectOption(value!);
-  await expect(picker).toHaveValue(value!);
+    .getByRole("radio");
+  await expect(
+    option,
+    `${providerName} has a model matching ${modelLabel} in the decision model dialog`
+  ).toBeVisible();
+  await option.check();
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
   await page.waitForTimeout(1_000);
 }
 
@@ -178,11 +186,10 @@ test("Any compatible service: add by address, add the model by hand, bound to th
   test.setTimeout(900_000);
   await signIn(page);
   await openProviders(page);
-  // The earlier presets are added, and this one still offers itself.
-  await openAddForm(page, "Any compatible service");
-  await page.locator(".provpick").getByLabel("Address").fill(compatUrl!);
-  await page.locator(".provpick").getByLabel("API key").fill("unused-by-this-server");
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const dialog = await openAddForm(page, "Any compatible service", compatName);
+  await dialog.getByLabel("Address").fill(compatUrl!);
+  await dialog.getByLabel("API key").fill("unused-by-this-server");
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
   const card = providerCard(page, compatName);
   await expect(card).toBeVisible({ timeout: 60_000 });
 
@@ -215,11 +222,10 @@ test("Clef: add, test, bind to the Classifier row, sort, Activity names the mode
   test.setTimeout(900_000);
   await signIn(page);
   await openProviders(page);
-  await expect(page.locator(".provpick__item", { hasText: "Clef (Cloudflare)" })).toHaveCount(0);
-  await openAddForm(page, "Clef (Cloudflare)");
-  await page.locator(".provpick").getByLabel("Account ID").fill(secret(ACCOUNT_FILE));
-  await page.locator(".provpick").getByLabel("API token").fill(secret(TOKEN_FILE));
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const dialog = await openAddForm(page, "Clef", "Clef (Cloudflare)");
+  await dialog.getByLabel("Account ID").fill(secret(ACCOUNT_FILE));
+  await dialog.getByLabel("API token").fill(secret(TOKEN_FILE));
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
   const card = providerCard(page, "Clef (Cloudflare)");
   await expect(card).toBeVisible({ timeout: 60_000 });
   await card.screenshot({ path: shot("1-clef-added") });
@@ -243,7 +249,7 @@ test("Clef: add, test, bind to the Classifier row, sort, Activity names the mode
 
   await bindClassifier(page, "Clef (Cloudflare)", /clef-flash/i);
   await page
-    .getByLabel("Classifier model")
+    .getByLabel("Decision model")
     .locator("xpath=ancestor::div[@class='rt'][1]")
     .screenshot({
       path: shot("2-clef-flash-bound")
@@ -265,9 +271,9 @@ test("Jev (TypeSafe): still added through the form, bound, and sorting News", as
   test.setTimeout(900_000);
   await signIn(page);
   await openProviders(page);
-  await openAddForm(page, "Jev (TypeSafe)");
-  await page.locator(".provpick").getByLabel("API key").fill(secret(jevKeyFile!));
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const dialog = await openAddForm(page, "Jev", "Jev (TypeSafe)");
+  await dialog.getByLabel("API key").fill(secret(jevKeyFile!));
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
   const card = providerCard(page, "Jev (TypeSafe)");
   await expect(card).toBeVisible({ timeout: 60_000 });
   await card.screenshot({ path: shot("4-jev-added") });

@@ -4,7 +4,7 @@ import { assertDataContextDb, type DataContextDb, type MossDatabase } from "@mos
 
 export const VOICE_AUTOMATIC_MAX_AGE_MS = 15 * 60_000;
 
-import type { VoiceRequestInput } from "@moss/shared";
+import { hasSpokenText, type ChatVoiceRequestCursor, type VoiceRequestInput } from "@moss/shared";
 export type { VoiceRequestInput } from "@moss/shared";
 
 function parseVoiceRequest(value: VoiceRequestInput): VoiceRequestInput {
@@ -67,25 +67,24 @@ export class VoiceRequestConflictError extends Error {
 }
 
 export function voiceNeedsConfirmation(
-  request: Pick<VoiceRequest, "automatic" | "captured_at" | "confirmed_at">,
+  request: Pick<VoiceRequest, "auto_send" | "automatic" | "captured_at" | "confirmed_at">,
   now: Date
 ): boolean {
-  if (request.confirmed_at) return false;
+  if (request.auto_send || request.confirmed_at) return false;
   const age = request.captured_at ? now.getTime() - request.captured_at.getTime() : -1;
   return !request.automatic || age < 0 || age > VOICE_AUTOMATIC_MAX_AGE_MS;
 }
 
 export class VoiceRequestRepository {
-  async list(db: DataContextDb): Promise<VoiceRequest[]> {
+  async list(db: DataContextDb, before?: ChatVoiceRequestCursor): Promise<VoiceRequest[]> {
     assertDataContextDb(db);
-    return db.db
-      .selectFrom("app.chat_voice_requests")
-      .selectAll()
-      .orderBy(sql`CASE WHEN state IN ('ready-to-send', 'queued', 'dispatching') THEN 0 ELSE 1 END`)
-      .orderBy("created_at", "desc")
-      .orderBy("id", "desc")
-      .limit(100)
-      .execute();
+    let query = db.db.selectFrom("app.chat_voice_requests").selectAll();
+    if (before) {
+      query = query.where(
+        sql<boolean>`(created_at, id) < (${before.createdAt}::timestamptz, ${before.id}::uuid)`
+      );
+    }
+    return query.orderBy("created_at", "desc").orderBy("id", "desc").limit(100).execute();
   }
 
   async get(db: DataContextDb, id: string, lock = false): Promise<VoiceRequest | undefined> {
@@ -99,11 +98,12 @@ export class VoiceRequestRepository {
     const input = parseVoiceRequest(value);
     const fingerprint = createHash("sha256").update(JSON.stringify(input)).digest("hex");
     const timing = {
+      auto_send: true,
       automatic: input.automatic,
       captured_at: input.capturedAt ? new Date(input.capturedAt) : null,
       confirmed_at: null
     };
-    const state = !input.transcript.trim()
+    const state = !hasSpokenText(input.transcript)
       ? "no-speech"
       : voiceNeedsConfirmation(timing, now)
         ? "ready-to-send"
@@ -118,7 +118,8 @@ export class VoiceRequestRepository {
         recording_id: input.recordingId,
         fingerprint,
         transcript_revision: input.transcriptRevision,
-        transcript: input.transcript,
+        // The table requires no-speech rows to hold an empty transcript; the fingerprint keeps the source.
+        transcript: state === "no-speech" ? "" : input.transcript,
         ...timing,
         turn_id: randomUUID(),
         user_message_id: randomUUID(),

@@ -144,3 +144,16 @@
   min-width: 12rem;
   margin-right: auto;
 }
+
+.meetings-manual-fields,
+.meetings-history-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-5);
+}
+@media (max-width: 760px) {
+  .meetings-manual-fields,
+  .meetings-history-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

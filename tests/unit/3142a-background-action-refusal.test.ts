@@ -40,7 +40,7 @@ describe("3142a leaves the real background gateway closed to writes", () => {
       expect(
         await gateway.runBackgroundReadForActor("owner", {
           operation,
-          itemId: "approved-target",
+          input: { taskId: "approved-target" },
           runId: "accepted-proposal:1"
         })
       ).toMatchObject({ ok: false });

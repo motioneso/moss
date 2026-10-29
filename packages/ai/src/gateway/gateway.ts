@@ -1,6 +1,7 @@
 import { emitInputValidationFailure } from "./validation-failure.js";
 import { actorReadFailure } from "./actor-read-failure.js";
 import { localeContext } from "./locale-context.js";
+import { captureToolCallContext } from "./tool-call-context.js";
 import { randomUUID } from "node:crypto";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -12,7 +13,7 @@ import type {
   ToolResult,
   ToolServices
 } from "@moss/module-sdk";
-import type { AiAssistantToolDto } from "@moss/shared";
+import { BACKGROUND_READ_OPERATIONS, type AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository } from "../repository.js";
@@ -387,19 +388,15 @@ export class AssistantToolGateway {
     | { found: ExecutableTool; input: Record<string, unknown>; ctx: ToolContext }
     | { failure: GatewayToolResponse; reason: GatewayDeclineReason }
   > {
-    const { actorUserId, chatSessionId, threadId, allowedToolNames } =
-      this.deps.tokens.verify(token);
+    const { context, allowedToolNames } = captureToolCallContext(this.deps.tokens, token);
     if (this.deps.tokens.isInLaunchReplay(token)) {
       return { failure: { ok: false, error: LAUNCH_REPLAY_REFUSAL }, reason: "refused" };
     }
-    const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
+    const locale = (await this.deps.resolveLocale?.(context.actorUserId)) ?? undefined;
     let progressTool: ExecutableTool | undefined;
     let progressAdmission: Promise<void> | undefined;
     const ctx: ToolContext = {
-      actorUserId,
-      requestId: `mcp_${randomUUID()}`,
-      chatSessionId,
-      ...(threadId ? { threadId } : {}),
+      ...context,
       ...localeContext(locale),
       // Only the MCP transport passes a sink; every other caller sends nowhere.
       ...(onProgress
@@ -423,7 +420,7 @@ export class AssistantToolGateway {
         : {})
     };
 
-    const found = (await this.executableTools(actorUserId)).find(
+    const found = (await this.executableTools(ctx.actorUserId)).find(
       (entry) => entry.tool.name === toolName
     );
     if (!found) {
@@ -569,13 +566,14 @@ export class AssistantToolGateway {
 
   async runBackgroundReadForActor(
     actorUserId: string,
-    read: { readonly operation: string; readonly itemId: string; readonly runId: string }
+    read: { operation: string; input: Record<string, unknown>; runId: string }
   ): Promise<GatewayToolResponse> {
-    if (read.operation !== "tasks.get") return { ok: false, error: "Background operation refused" };
+    if (!BACKGROUND_READ_OPERATIONS.has(read.operation))
+      return { ok: false, error: "Background operation refused" };
     return this.runActorRead(
       actorUserId,
       read.operation,
-      { taskId: read.itemId },
+      read.input,
       { threadId: null, chatSessionId: read.runId },
       true
     );
@@ -997,4 +995,5 @@ export class AssistantToolGateway {
     return out;
   }
 }
+
 const backgroundReadRefused = new Error("Background source access refused");

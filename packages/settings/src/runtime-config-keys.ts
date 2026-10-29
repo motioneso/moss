@@ -84,11 +84,10 @@ export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
     minValue: 1,
     moduleOwner: "chat"
   },
-  // Classifier gate, task 1.2 (#2881, Ben's ruling 1, 2026-10-01). One ADMIN-WIDE switch for the
-  // whole instance, sitting beside the Classifier (sorting) binding under Settings > AI providers.
-  // "off" is the default and the missing-value default. "on" may only be stored when an approved
-  // tool release record exists; that check lives in runtime-config-routes.ts, not here (this
-  // registry only validates the enum). Scope is intentionally instance-wide, not per user.
+  // Classifier gate (#2881, Ben's ruling 1, 2026-10-01). One admin-wide switch for the whole
+  // instance, beside the Classifier (sorting) binding under Settings > AI providers. "off" is the
+  // default. An admin may store any of the three values; this registry validates the enum.
+  // Scope is intentionally instance-wide, not per user.
   {
     key: CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY,
     label: "Classifier gate",
@@ -96,8 +95,8 @@ export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
     description:
       "Whether Moss may route eligible chat messages to the classifier model instead of the main " +
       "model. Off sends nothing to the classifier. Shadow records what the gate would do without " +
-      "acting. On lets the gate act; turning it on requires a shadow review for the current " +
-      "classifier, and every user's eligible messages then reach the classifier provider.",
+      "acting. On lets the gate act, and every user's eligible messages then reach the classifier " +
+      "provider.",
     defaultValue: "off",
     envVar: "MOSS_CHAT_CLASSIFIER_GATE_MODE",
     enumValues: ["off", "shadow", "on"],

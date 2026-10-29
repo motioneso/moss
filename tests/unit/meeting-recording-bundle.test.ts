@@ -51,21 +51,26 @@ describe("completed legacy recording validation", () => {
     }),
     (i: ReturnType<typeof recordingBundle>) => ({
       ...i,
-      sidecar: recordingFile(
-        i.sidecar.name,
-        Buffer.from(
-          '{"record":["1792470000","start"]},{"btn":["1792470001","1"]},{"duration":["1792470000","120"]},{"record":["1792470000","end"]}'
-        )
-      )
-    }),
-    (i: ReturnType<typeof recordingBundle>) => ({
-      ...i,
       wav: recordingFile(i.wav.name, Buffer.alloc(46))
     })
   ])("rejects malformed or conflicting evidence %#", (change) => {
     expect(() => validateRecordingBundle(change(recordingBundle()))).toThrow(
       RecordingImportInputError
     );
+  });
+  it("keeps a recording whose ring clock disagrees with its audio and drops the stray bookmark", () => {
+    const input = recordingBundle();
+    const result = validateRecordingBundle({
+      ...input,
+      sidecar: recordingFile(
+        input.sidecar.name,
+        Buffer.from(
+          '{"record":["1792470000","start"]},{"btn":["1792470001","1"]},{"duration":["1792470000","120"]},{"record":["1792470000","end"]}'
+        )
+      )
+    });
+    expect(result.durationMs).toBe(120);
+    expect(result.bookmarksMs).toEqual([]);
   });
   it.each([
     ["packets", 1024 * 1024],

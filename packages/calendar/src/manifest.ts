@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
+import { authorizeCalendarHeartbeatRead, calendarHeartbeatWindowExecute } from "./heartbeat.js";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
   DAY_PLAN_DENIED_CODE,
@@ -22,7 +23,8 @@ import {
   getCalendarEventResponseSchema,
   listCalendarEventsResponseSchema,
   updateCalendarBriefingSettingsRequestSchema,
-  deleteCalendarEventResponseSchema
+  deleteCalendarEventResponseSchema,
+  heartbeatSourceReadInputSchema
 } from "@moss/shared";
 
 import { requiresCalendarConfirmation } from "./confirmation-policy.js";
@@ -118,7 +120,7 @@ export const calendarModuleManifest = {
       id: "calendar",
       label: "Calendar",
       description:
-        "View your connected events in Day, Week or Month in your timezone and 12/24-hour format, retaining the view. On phones, Week and Month scroll horizontally; Day stays compact. Failed reads offer Retry; a failed refresh retains loaded events.",
+        "Day/Week/Month use your timezone and time format; view choice persists. Week/Month open on today and bring it into view. Month fits the screen; Week can scroll sideways. Retry failed reads; failed refreshes retain events.",
       path: "/calendar",
       icon: "calendar-days",
       order: 35,
@@ -339,6 +341,17 @@ export const calendarModuleManifest = {
     }
   ],
   assistantTools: [
+    {
+      name: "calendar.heartbeatWindow",
+      description:
+        "Background heartbeat read. Lists the actor's cached calendar events in a short window with a change revision. Never contacts the calendar provider.",
+      permissionId: "calendar.view",
+      risk: "read",
+      content: "outside",
+      inputSchema: heartbeatSourceReadInputSchema,
+      authorizeBackgroundRead: authorizeCalendarHeartbeatRead,
+      execute: calendarHeartbeatWindowExecute
+    },
     {
       name: "calendar.listVisibleEvents",
       description:

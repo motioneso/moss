@@ -1,3 +1,4 @@
+import { isBoundedTranscriptionPrompt } from "@moss/shared";
 import { createHash } from "node:crypto";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpApiAdapter } from "./adapters/http-api.js";
@@ -47,6 +48,8 @@ export class ConfiguredTranscriptionError extends Error implements Transcription
 }
 
 export interface ConfiguredTranscriptionInput {
+  readonly language?: string;
+  readonly prompt?: string;
   /** A bounded, self-describing audio clip, not raw PCM. */
   readonly audio: Uint8Array;
   readonly signal: AbortSignal;
@@ -172,6 +175,15 @@ export function createConfiguredTranscription(deps: {
             "failed",
             new TranscriptionTransportError("invalid-audio", "validation")
           );
+        if (
+          input.prompt !== undefined &&
+          (!input.language || !isBoundedTranscriptionPrompt(input.prompt))
+        )
+          throw new ConfiguredTranscriptionError("failed", {
+            reason: "unknown",
+            stage: "validation",
+            retryable: false
+          });
         const selected = await deps.dataContext.withDataContext(actor, resolveSealed);
         if (selected.modelRoute !== input.expectedModelRoute)
           throw new ConfiguredTranscriptionError("route-changed");
@@ -216,6 +228,8 @@ export function createConfiguredTranscription(deps: {
             audio: new Blob([Uint8Array.from(input.audio)], { type: "audio/wav" }),
             signal,
             timestamps: "segment",
+            ...(input.language ? { language: input.language } : {}),
+            ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
             ownerUserId: actor.actorUserId,
             actionCode: "transcribe.meeting"
           }),

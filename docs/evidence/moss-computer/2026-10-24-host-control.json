@@ -1,0 +1,273 @@
+{
+  "sourceCandidate": "5bc76f3489d76a2d72cfbaaf49d9641e68db8eea",
+  "pinnedBase": "9ff285c01162535a15fb2cb06d52d52328bc1114",
+  "sourceSha256": {
+    "apps/api/src/computer/host-client.ts": "cebbee845ea82c4944bf17c0aa9b3bf122f006d79a10e9fab7fa12b2260b3cae",
+    "apps/api/src/computer/host-contract.ts": "cdca45129269a8526d8ac697283564fc6c09f30d19435f524d82a61a20e06e64",
+    "apps/api/src/computer/host-http.ts": "6aebcc71992dc953e44e1374e21ba21bd29f8fb4560dcb2c1413f82e83860cdc",
+    "scripts/computer-host.ts": "73af27f13ea5f9f5fda0a78f0c42c5c88994d1974e5e7ebc698da3a37846cade",
+    "scripts/computer-host/config.ts": "403d8678e99ff6ad137d94bedebe80aa8a7d458042dcb99d4652ce6ff73b8c70",
+    "scripts/computer-host/docker.ts": "671618580450582f9f16b2edae95e55feb37662adf560e8e50a4dd19da947db1",
+    "scripts/computer-host/operations.ts": "f92d53fe1f952ed9370c73e0bb9d6bb09e6279757732888476bf17d26333e662",
+    "scripts/computer-host/service.ts": "f13c3406b9d173648ce01380a2e5490ca7e8791240287da8aae871c54de635a4",
+    "scripts/computer-host/spec.ts": "f17bbaaa8c432f39520fb74e7ae1e9478c9b40614f1b882cb5520b1404ddf601",
+    "scripts/computer-host/state.ts": "50934acd56a5f4c9c2a39e451bdb0bda580cd343bd99970a867334f20662f352",
+    "tests/unit/computer-host-client.test.ts": "77f44b4e8c70c0bf2465e8fb72f4bcc62fd44ad832078d02fa0d8190bf7a3e95",
+    "tests/unit/computer-host-fixture.ts": "9aa7d59f62a3db6b70c961d24b7d8eadf5a00b292dabea1bea208d5f1f6a14e0",
+    "tests/unit/computer-host.test.ts": "8558f5d294078ac717d55c0c737f72f927d9ebc97b160dd9da78e02cfe363ed1"
+  },
+  "scope": "internal no-launch fixed host-control prerequisite only",
+  "testCount": 102,
+  "realUnixIpc": true,
+  "dockerHttpRecordingStandIn": true,
+  "actualDockerMutation": false,
+  "runtimeAcceptance": false,
+  "ownerIntegrationComplete": false,
+  "checks": {
+    "root-typescript": {
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "tests-typescript": {
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "tests": {
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-rfb-input.test.ts"
+      ],
+      "exit": 0,
+      "logSha256": "9e4bb45c675ab914bc37aeedc8f8d967c639e64228d1ae7193078d5e5ffaeb7c"
+    },
+    "lint": {
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "apps/api/src/computer/host-client.ts",
+        "apps/api/src/computer/host-contract.ts",
+        "apps/api/src/computer/host-http.ts",
+        "scripts/computer-host.ts",
+        "scripts/computer-host/config.ts",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/operations.ts",
+        "scripts/computer-host/service.ts",
+        "scripts/computer-host/spec.ts",
+        "scripts/computer-host/state.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-fixture.ts",
+        "tests/unit/computer-host.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "apps/api/src/computer/host-client.ts",
+        "apps/api/src/computer/host-contract.ts",
+        "apps/api/src/computer/host-http.ts",
+        "docs/evidence/moss-computer/2026-10-24-host-control.json",
+        "docs/evidence/moss-computer/2026-10-24-host-control.md",
+        "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-integration.md",
+        "docs/superpowers/plans/2026-10-24-moss-computer-host-control.md",
+        "scripts/computer-host.ts",
+        "scripts/computer-host/config.ts",
+        "scripts/computer-host/docker.ts",
+        "scripts/computer-host/operations.ts",
+        "scripts/computer-host/service.ts",
+        "scripts/computer-host/spec.ts",
+        "scripts/computer-host/state.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-fixture.ts",
+        "tests/unit/computer-host.test.ts"
+      ],
+      "exit": 0,
+      "logSha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    "file-size": {
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "logSha256": "e9b65eabb34b222842e4efc1b4c31f3f50902c0c10a3a2a1f151a87c02016ff5"
+    },
+    "whitespace": {
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "removedProtectionControls": [
+    {
+      "control": "owner",
+      "test": "foreign owner is denied",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "fe7c0fa5dc6955fca7d89e2437cc1dcb68c9acc74c63632d5ad15e79340640b8"
+    },
+    {
+      "control": "generation",
+      "test": "rejects stale generation",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "8e338f59723ca87c25563af64f93c9d1c630ae1a4135309d7afb679e799eca28"
+    },
+    {
+      "control": "root-identity",
+      "test": "rejects replaced storage root",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "7673bde201d90ac2c70bc695c1160c75fa152ccb8c816bd50466cf213c63beb7"
+    },
+    {
+      "control": "container-labels",
+      "test": "rejects generation drift",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "ecbde40ff8d719f324164d2c104f752666b6a358211b9d7b6ea8170b8b083f4d"
+    },
+    {
+      "control": "runtime-envelope",
+      "test": "rejects privileged drift",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "c5bcb18c49dd66d745dd248d2244d23e2cb5e1eef97da95c0e8e1a50b4914c5c"
+    },
+    {
+      "control": "http-response-bound",
+      "test": "missing pinned image and oversized Docker replies",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "553300a00484081e461a0405e7bf21410b05a78ca16953c1d91249ddee66ffcd"
+    },
+    {
+      "control": "fresh-auth",
+      "test": "denied/expired session never reaches",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "dcf73d80423989b6a6f57d02c1dc3fb458099f9f56c267a92239b61ca05437d8"
+    },
+    {
+      "control": "startup-running",
+      "test": "successful start reply followed by early exit",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "a322fff2cb6f03eca8c610c0e68cf41806638fe5067606b75c86e689e333510d"
+    },
+    {
+      "control": "admission-invalidation",
+      "test": "disable invalidates receiving admission before the first stop",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "82c4d1eacea53a606fa6ab818a04124945873adc16e468728b4b3b39b27ab1b3"
+    },
+    {
+      "control": "known-id-recovery",
+      "test": "lost successful removal replies reconcile known absent IDs",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "f1a38b2192057bffa96261e01a42c6542ee3c1e02332ea0b149deb03d4c22892"
+    },
+    {
+      "control": "pending-intent-retention",
+      "test": "never clears unresolved create intent",
+      "exit": 1,
+      "intendedAssertion": true,
+      "logSha256": "45cd99d2c70a394e5c1c2125363090930b0677ca39ff89a5513debb8ad389eda"
+    }
+  ],
+  "controlDriverSha256": "05e52b621620145714aebf57bbedaf7883dcb56a253443602a3dd3227375c94c",
+  "reviews": [
+    {
+      "round": "plan-review-r1",
+      "candidate": "8bd962df859c653ae26ba573377c437102038aa3",
+      "ruling": "BLOCKED",
+      "receiptSha256": "813913e8f2ec0334c5b55f884e16a911b575bb0c60a7aec115f57c59a60075c9"
+    },
+    {
+      "round": "plan-review-r2",
+      "candidate": "69799b778c5299a6636a491431638e83105069cb",
+      "ruling": "PASS_BOUNDED_HOST_PLAN",
+      "receiptSha256": "45aedc695a02fad78ede7fd856c262a74170526b663088be7c29f53ee8deb171"
+    },
+    {
+      "round": "standards-r1",
+      "candidate": "c134fe32749aeb62cc125004736a9963ed281dac",
+      "ruling": "NO_BLOCKERS",
+      "receiptSha256": "a437f162539b14daa97c9370cf062982aa7e26988344326a3f4303dbc1daadcc"
+    },
+    {
+      "round": "standards-r2",
+      "candidate": "374957624bad5d0330714b45f1c0bc554f13b72c",
+      "ruling": "NO_BLOCKERS",
+      "receiptSha256": "6b8724cd82181bb2b9b6aa5c8c3c27fb31ea6b9e2a031724dc49f676b0bdce5b"
+    },
+    {
+      "round": "standards-r3",
+      "candidate": "5bc76f3489d76a2d72cfbaaf49d9641e68db8eea",
+      "ruling": "NO_BLOCKERS",
+      "receiptSha256": "ce6202e21169777bb9dca60a81b1e61bb19c2546c5536ffd5e21adb0e86bd3d2"
+    },
+    {
+      "round": "spec-r1",
+      "candidate": "c134fe32749aeb62cc125004736a9963ed281dac",
+      "ruling": "REQUEST_CHANGES",
+      "receiptSha256": "cd1ff2bc8ce482c64c18cdf9a33d51914b95b726cde0f90c4537922e18eb204c"
+    },
+    {
+      "round": "spec-r2",
+      "candidate": "374957624bad5d0330714b45f1c0bc554f13b72c",
+      "ruling": "PASS_BOUNDED_HOST_SPEC",
+      "receiptSha256": "d293c3a5761f026ece44e55530c1566cc9430e1b1822821f84b5a2354eae13e5"
+    },
+    {
+      "round": "spec-r3",
+      "candidate": "5bc76f3489d76a2d72cfbaaf49d9641e68db8eea",
+      "ruling": "PASS_BOUNDED_HOST_SPEC_DELTA",
+      "receiptSha256": "c75e444547923e97e51064d9c3dc366cfefc2f638a18ef7eb2e0820512c83bc1"
+    },
+    {
+      "round": "security-code-r1",
+      "candidate": "374957624bad5d0330714b45f1c0bc554f13b72c",
+      "ruling": "BLOCKED",
+      "receiptSha256": "520d5120e0ae9448c63f4db3df73a0a8e0963332bd99411b68376b4ca5d92765"
+    },
+    {
+      "round": "security-code-r2",
+      "candidate": "5bc76f3489d76a2d72cfbaaf49d9641e68db8eea",
+      "ruling": "PASS_BOUNDED_HOST_IMPLEMENTATION",
+      "receiptSha256": "c345a7e7fccf5fe9f0aca6eb247501871f9407b10f782c5c21089d17b62c6b2e"
+    },
+    {
+      "round": "standards-docs-r1",
+      "candidate": "4971a885885276b5857ec104ec7fd216ef5a26bb",
+      "ruling": "NO_BLOCKERS",
+      "receiptSha256": "ddcfc4503aa90750455547b07d4d40b99e49141e7802b53f8e184f62a10c14e1"
+    },
+    {
+      "round": "spec-docs-r1",
+      "candidate": "4971a885885276b5857ec104ec7fd216ef5a26bb",
+      "ruling": "PASS_BOUNDED_HOST_DOCS_SPEC",
+      "receiptSha256": "88b63bed3e3b1d4adbde18d0adb1f06429554cbc679d6277aca2df04dc9a0fef"
+    }
+  ],
+  "evidenceReview": {
+    "candidate": "4971a885885276b5857ec104ec7fd216ef5a26bb",
+    "ruling": "PASS_BOUNDED_HOST_EVIDENCE",
+    "receiptSha256": "5afe8d6a827d07166b1981e90395e7c2939019f5c148deb714715af471f9a336",
+    "boundary": "internal no-launch prerequisite only; source unchanged from5bc76f348"
+  },
+  "successorHandoff": "docs/superpowers/handoffs/2026-10-24-moss-computer-gateway-integration.md"
+}

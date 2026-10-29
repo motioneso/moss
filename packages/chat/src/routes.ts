@@ -1,3 +1,8 @@
+import {
+  registerModuleNoticeArrivalLifecycle,
+  type ModuleNoticeArrivalDependencies
+} from "./module-notice-arrival.js";
+import type { MemoryGraphRepository } from "@moss/memory";
 import { createScheduledReadResolver } from "./scheduled-reads/generation.js";
 import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -93,6 +98,7 @@ import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
 import { registerScheduledTaskRoutes } from "./reminders/routes.js";
+import { registerHeartbeatRoutes } from "./heartbeat/settings-routes.js";
 import { registerChatUnreadRoutes } from "./unread-routes.js";
 import { registerVoiceRequestRuntime } from "./voice-request-runtime.js";
 import type { VoiceRequestService } from "./voice-request-service.js";
@@ -109,17 +115,16 @@ import {
 import { registerChatSkillsRoutes } from "./skills/routes.js";
 import { ChatSkillsRepository } from "./skills/repository.js";
 import { type AppMapReadService } from "@moss/settings";
-import { RuntimeConfigResolver } from "@moss/settings";
-import { CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY } from "@moss/settings";
 import { buildClassifierGateRunner, GATE_TOKEN_TTL_MS } from "./live/classifier-gate-runner.js";
 import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
 import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter.js";
 import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
 import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
 import { GateSpeedRecord } from "./live/classifier-gate-speed.js";
-import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
-import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
+import { THRESHOLD_VERSION } from "./live/classifier-gate.js";
+import { createGateModeReader } from "./live/classifier-gate-mode.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
+import { VisualPresentationService } from "./visual/presentation-service.js";
 import { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
 
 export { buildCheckTokenMinter, type CheckTokenMinter } from "./check-token-minter.js";
@@ -131,6 +136,7 @@ export {
 } from "./gateway-services.js";
 
 export interface ChatRoutesDependencies {
+  readonly moduleNoticeArrival?: ModuleNoticeArrivalDependencies;
   readonly meetingChat?: MeetingChatData;
   readonly rootDb: Kysely<MossDatabase>;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -177,6 +183,7 @@ export interface ChatRoutesDependencies {
   readonly appMapService?: AppMapReadService;
   /** Read-only platform diagnostics service; never exposed in the write service bag. */
   readonly platformDiagnostics?: PlatformDiagnosticsService;
+  readonly memoryGraphRepository?: MemoryGraphRepository;
   /** Injected by the composition root; settings.notificationPreference.setEnabled tool service. */
   readonly listModuleManifests?: () => readonly MossModuleManifest[];
   /**
@@ -321,6 +328,7 @@ export function registerChatRoutes(
   const resolveActiveModules = dependencies.resolveActiveModules;
   const conversationProvenance = new ConversationProvenanceStore(dependencies.dataContext);
   const mcpServerUrl = dependencies.mcpServerUrl;
+  const visualPresentation = new VisualPresentationService();
   const wiring =
     resolveActiveModules && mcpServerUrl
       ? (() => {
@@ -347,6 +355,7 @@ export function registerChatRoutes(
               notifier: notifierProxy,
               appActions,
               conversationProvenance,
+              visualPresentation,
               collaborators: {
                 googleConnectionService: dependencies.googleConnectionService,
                 googleApiClient: dependencies.googleApiClient,
@@ -362,6 +371,7 @@ export function registerChatRoutes(
               },
               appMapService: dependencies.appMapService,
               platformDiagnostics: dependencies.platformDiagnostics,
+              memoryGraphRepository: dependencies.memoryGraphRepository,
               agencyPreferences: dependencies.agencyPreferences,
               localePreferences: dependencies.localePreferences,
               webSearchEngineForActor: dependencies.webSearchEngineForActor
@@ -394,28 +404,13 @@ export function registerChatRoutes(
       })
     : undefined;
 
-  /**
-   * #2984 R2.4 — the admin mode as the gate runs it: a stored `on` reads as `shadow` until the
-   * current classifier selection has a shadow review. Shared by both runners.
-   */
-  const readGateMode = wiring
-    ? (actorUserId: string) =>
-        dependencies.dataContext.withDataContext({ actorUserId }, async (scopedDb) =>
-          resolveEffectiveGateMode(
-            scopedDb,
-            await new RuntimeConfigResolver(scopedDb).resolveEnum<GateMode>(
-              CHAT_CLASSIFIER_GATE_MODE_CONFIG_KEY
-            ),
-            { classifierDeps: { repository: wiring.aiRepository } }
-          )
-        )
-    : undefined;
+  /** The admin gate mode, read fresh for each turn. Shared by both runners. */
+  const readGateMode = wiring ? createGateModeReader(dependencies.dataContext) : undefined;
 
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
    * `buildClassifierGateRunner` owns the session-id shape, the token lifetime and the admin mode
-   * read. `on` runs only while the current classifier selection has a shadow review. #3365: both
-   * runners share one speed record, so each routing model's time limit survives a mode change.
+   * read.
    */
   const classifierGateSpeed = new GateSpeedRecord();
   const classifierGate =
@@ -472,6 +467,7 @@ export function registerChatRoutes(
         })
       : undefined;
   const runtime = createChatSessionRuntime({
+    visualPresentation: wiring ? visualPresentation : undefined,
     canProposeBoundedAction: wiring
       ? async (actor) =>
           (await wiring.gateway.listToolsForActor(actor)).some(
@@ -617,6 +613,11 @@ export function registerChatRoutes(
 
   registerVoiceRequestRuntime(server, dependencies, runtime);
 
+  if (dependencies.moduleNoticeArrival) {
+    const { manager } = runtime;
+    registerModuleNoticeArrivalLifecycle(server, { ...dependencies.moduleNoticeArrival, manager });
+  }
+
   registerReminderArrivalLifecycle(server, {
     connectionString: dependencies.reminderArrivalConnectionString,
     dataContext: dependencies.dataContext,
@@ -696,6 +697,11 @@ export function registerChatRoutes(
   });
 
   registerScheduledTaskRoutes(server, dependencies);
+  registerHeartbeatRoutes(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    dataContext: dependencies.dataContext,
+    preferences: dependencies.chatPreferences ?? new PreferencesRepository()
+  });
   registerChatUnreadRoutes(server, dependencies);
 
   registerChatSkillsRoutes(
@@ -717,6 +723,9 @@ export function registerChatRoutes(
         const threads = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
           repository.listThreads(scopedDb, surface)
         );
+        const hasMain = threads.some((thread) => thread.is_main && !thread.incognito);
+        if (surface === DEFAULT_CHAT_SURFACE && hasMain)
+          await dependencies.moduleNoticeArrival?.notices.recoverPending(accessContext);
         return { threads: threads.map(serializeThread) };
       } catch (error) {
         return handleRouteError(error, reply);
@@ -731,6 +740,8 @@ export function registerChatRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         const surface = readRouteSurface(request.query);
+        if (surface === DEFAULT_CHAT_SURFACE)
+          await dependencies.moduleNoticeArrival?.notices.recoverPending(access);
         const messages = await dependencies.dataContext.withDataContext(
           access,
           async (scopedDb) => {

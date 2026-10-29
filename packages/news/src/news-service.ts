@@ -230,6 +230,47 @@ export class NewsService {
     };
   }
 
+  /**
+   * Top stories for the heartbeat, from the published snapshot only. A missing or expired snapshot
+   * returns no stories and never triggers a feed fetch.
+   */
+  async getCachedHeadlinesForHeartbeat(
+    scopedDb: DataContextDb,
+    actorUserId: string
+  ): Promise<{
+    readonly stories: NewsBriefingEvidenceV1["stories"];
+    readonly freshness: "fresh" | "stale" | "unknown";
+  }> {
+    const now = this.now();
+    const snapshot = await this.personalization.readLatestSnapshot(scopedDb);
+    if (!snapshot) return { stories: [], freshness: "unknown" };
+    const prefs = await this.repository.list(scopedDb);
+    const exclusions = await this.personalization.listExclusions(scopedDb);
+    const customSources = await this.personalization.listCustomSources(scopedDb);
+    const customTopics = await this.personalization.listCustomTopics(scopedDb);
+    const storyFeedback = this.storyFeedback;
+    const dismissedRefs = storyFeedback
+      ? await withSavepoint(scopedDb, () =>
+          storyFeedback.listDismissedRefs(scopedDb, actorUserId)
+        ).catch(() => new Set<string>())
+      : new Set<string>();
+    const overview = this.composePersonalized(
+      snapshot,
+      prefs,
+      exclusions,
+      customSources,
+      customTopics,
+      now,
+      dismissedRefs
+    );
+    if (!overview) return { stories: [], freshness: "stale" };
+    const top = overview.topStories.slice(0, NEWS_EVIDENCE_STORIES_MAX);
+    return {
+      stories: projectNewsBriefingEvidence(top, now.toISOString(), overview.degraded).stories,
+      freshness: overview.degraded ? "stale" : "fresh"
+    };
+  }
+
   private composePersonalized(
     snapshot: NewsSnapshotRecord | null,
     prefs: readonly NewsPrefDto[],

@@ -1,3 +1,4 @@
+import { configureSportsResultRead } from "./results/tool.js";
 import type { DatasetClient } from "@moss/datasets";
 import { assertDataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult, ToolSummarize } from "@moss/module-sdk";
@@ -27,6 +28,7 @@ export function configureSportsChatTools(
   writer: SportsFollowsWriter = new SportsFollowsRepository(),
   sources?: SportsSourceService
 ): void {
+  configureSportsResultRead(datasetClient, writer);
   service = new SportsService({
     datasetClient,
     dataContext: {

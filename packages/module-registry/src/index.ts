@@ -1,3 +1,11 @@
+import { registerRecordingNoticeWorker, RECORDING_NOTICE_QUEUES } from "@moss/meetings";
+import { createRecordingNoticeRuntime } from "./recording-notice-runtime.js";
+import {
+  createManagedDeletionPreparation,
+  createMeetingDeletionPort
+} from "./managed-deletion-runtime.js";
+import { createRecordingFactAuthority } from "./recording-memory-runtime.js";
+import { installBuiltInVisualTemplates } from "@moss/shared";
 import { createRecordingImportRuntime } from "./recording-import-runtime.js";
 export { createRecordingImportWorkerRuntime } from "./recording-import-runtime.js";
 export { createVoiceRequestWorkerRuntime } from "./voice-request-worker-runtime.js";
@@ -31,6 +39,7 @@ import type { PgBoss } from "pg-boss";
 import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
+  MeetingDeletionService,
   RecordingImportService,
   type RecordingImportDependencies,
   RECORDING_IMPORT_QUEUES,
@@ -45,6 +54,7 @@ import {
   MEETING_STOP_SUMMARY_QUEUES,
   MEETING_CAPTURE_MAINTENANCE_QUEUES,
   createMeetingStopSummaryScheduler,
+  createManualMeetingSummaryEnqueue,
   registerMeetingStopSummaryWorker
 } from "@moss/meetings";
 import {
@@ -179,7 +189,6 @@ import {
   buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
-  isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createConstrainedCliStructuredAdapterFactory,
@@ -253,7 +262,12 @@ import {
   type DataContextRunner,
   type MossDatabase
 } from "@moss/db";
-import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale, type ProactiveSource } from "@moss/shared";
+import {
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale,
+  type ProactiveSource,
+  type AiProviderKind
+} from "@moss/shared";
 import {
   createEmailThreadProvider,
   emailModuleManifest,
@@ -458,6 +472,7 @@ import {
   DatasetCache,
   type DatasetClient
 } from "@moss/datasets";
+import { createManagedNoteSnapshotPort } from "./managed-note-runtime.js";
 import {
   notesModuleManifest,
   notesPrivateExportIngestProvider,
@@ -782,7 +797,8 @@ export interface BuiltInRouteDependencies {
   >;
   readonly probeConstrainedCli?: (
     actorUserId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    providerKind?: AiProviderKind
   ) => Promise<ConstrainedCliReadiness>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
@@ -1816,6 +1832,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     queueDefinitions: [...EXPORT_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
       registerSettingsRoutes(server, {
+        prepareManagedDeletion: createManagedDeletionPreparation({
+          dataContext: deps.dataContext,
+          privateVault: new VaultContextRunner(getVaultBaseDir())
+        }),
         rootDb: deps.rootDb,
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
@@ -1884,15 +1904,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerRuntimeConfigRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
-        repository: new SettingsRepository(),
-        // Classifier gate activation (#2984 R2.4): the settings boundary stays module-isolated
-        // and calls this injected port; the chat-owned check supplies the answer.
-        classifierActivation: {
-          hasShadowReviewForCurrentClassifier: (scopedDb) =>
-            isCurrentClassifierReviewed(scopedDb, {
-              classifierDeps: { repository: new AiRepository() }
-            })
-        }
+        repository: new SettingsRepository()
       });
       installWebSearchResolvers({
         webSearchCipher,
@@ -2061,7 +2073,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     },
     registerWorkers: async (boss, deps) => {
       const repository = new GoalsRepository();
-      const memoryGraphRepo = new MemoryGraphRepository();
+      const memoryGraphRepo = new MemoryGraphRepository(
+        createRecordingFactAuthority(deps.dataContext)
+      );
       return [
         await registerGoalsMemorySyncWorker(boss, deps.dataContext, repository, memoryGraphRepo),
         await registerGoalsMemorySyncReconcileWorker(boss, deps.dataContext, repository)
@@ -2352,7 +2366,20 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     queueDefinitions: CHAT_QUEUE_DEFINITIONS,
     registerRoutes: (server, deps) =>
       registerChatRoutes(server, {
+        moduleNoticeArrival: {
+          connectionString: deps.appConnectionString,
+          notices: createRecordingNoticeRuntime({
+            dataContext: deps.dataContext,
+            isMeetingsAvailable: async (access) =>
+              (await deps.resolveActiveModules(access.actorUserId)).some(
+                (module) => module.id === "meetings"
+              )
+          }).notices
+        },
         meetingChat: createMeetingChatData(deps),
+        memoryGraphRepository: new MemoryGraphRepository(
+          createRecordingFactAuthority(deps.dataContext)
+        ),
         rootDb: deps.rootDb,
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
@@ -2444,10 +2471,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           aiRepository: new AiRepository(),
           cipher: createAiSecretCipher(),
           candidatesRepository: new MemoryCandidatesRepository(),
-          graphRepository: new MemoryGraphRepository()
+          graphRepository: new MemoryGraphRepository(createRecordingFactAuthority(deps.dataContext))
         },
         createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
         probeConstrainedCli: deps.probeConstrainedCli,
+        rootDb: deps.rootDb,
         logger: deps.logger ? createModuleLogger(deps.logger, "chat") : undefined
       })
   },
@@ -2587,10 +2615,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         createApprovalSourceReferences({ manifests: deps.listModuleManifests })
       );
       registerMemoryGraphRoutes(server, {
+        graphRepository: new MemoryGraphRepository(createRecordingFactAuthority(deps.dataContext)),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
       registerMemoryDashboardRoutes(server, {
+        graphRepository: new MemoryGraphRepository(createRecordingFactAuthority(deps.dataContext)),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
@@ -2599,6 +2629,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerVaultIngestWorkers(boss, deps.dataContext, {
         vaultRunner: new VaultContextRunner(getVaultBaseDir()),
         vaultsBaseDir: getVaultBaseDir(),
+        publication: createManagedNoteSnapshotPort(deps.dataContext),
         embeddingProviderFactory: createRuntimeEmbeddingProvider
       })
   },
@@ -2964,6 +2995,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerWorkers: (boss, deps) => {
       registerVaultIngestRootProvider(notesPrivateExportIngestProvider);
       return registerNotesJobWorkers(boss, deps.dataContext, {
+        publication: createManagedNoteSnapshotPort(deps.dataContext),
         embeddingProviderFactory: createRuntimeEmbeddingProvider,
         preferencesRepository: new PreferencesRepository(),
         afterSync: async ({ actorUserId }) => {
@@ -3011,6 +3043,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
     queueDefinitions: [
       ...MEETING_STOP_SUMMARY_QUEUES,
+      ...RECORDING_NOTICE_QUEUES,
       ...MEETING_CAPTURE_MAINTENANCE_QUEUES,
       ...RECORDING_IMPORT_QUEUES
     ],
@@ -3026,16 +3059,32 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveRingRecordingAccessContext ?? deps.resolveAccessContext
       });
       registerMeetingRecordRoutes(server, {
-        beforeRemove: async (db, id, actor) => {
-          await recordingImports.beforeRemove(db, actor, id);
-          await deleteMeetingChatThreads(db, id);
-        },
+        manualSummaryEnqueue: createManualMeetingSummaryEnqueue(deps.boss),
+        deletion: new MeetingDeletionService({
+          dataContext: deps.dataContext,
+          cleanup: createMeetingDeletionPort({
+            dataContext: deps.dataContext,
+            privateVault: new VaultContextRunner(getVaultBaseDir()),
+            boss: deps.boss
+          }),
+          beforeRemove: async (db, id, actor) => {
+            await recordingImports.beforeRemove(db, actor, id);
+            await deleteMeetingChatThreads(db, id);
+          }
+        }),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
       const outputRuntime = createMeetingOutputRuntime(deps);
       registerMeetingOutputRoutes(server, {
         ...outputRuntime,
+        enqueueRecordingNotice: createRecordingNoticeRuntime({
+          dataContext: deps.dataContext,
+          isMeetingsAvailable: async (access) =>
+            (await deps.resolveActiveModules(access.actorUserId)).some(
+              (module) => module.id === "meetings"
+            )
+        }).enqueue(deps.boss),
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
@@ -3051,20 +3100,32 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         )
       });
     },
-    registerWorkers: (boss, deps) =>
-      registerMeetingStopSummaryWorker(
+    registerWorkers: async (boss, deps) => {
+      const resolveActiveModules = createActiveModulesResolver({
+        dataContext: deps.dataContext,
+        manifests: getBuiltInModuleManifests
+      });
+      const notices = createRecordingNoticeRuntime({
+        dataContext: deps.dataContext,
+        isMeetingsAvailable: async (access) =>
+          (await resolveActiveModules(access.actorUserId)).some(
+            (module) => module.id === "meetings"
+          )
+      });
+      const summaryWorkers = await registerMeetingStopSummaryWorker(
         boss,
         deps.dataContext,
         createMeetingOutputRuntime({
           dataContext: deps.dataContext,
           createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
           probeConstrainedCli: deps.probeConstrainedCli,
-          resolveActiveModules: createActiveModulesResolver({
-            dataContext: deps.dataContext,
-            manifests: getBuiltInModuleManifests
-          })
-        }).generator
-      )
+          resolveActiveModules
+        }).generator,
+        notices.enqueue(boss)
+      );
+      const noticeWorkers = await registerRecordingNoticeWorker(boss, notices.publishSideReview);
+      return [...summaryWorkers, ...noticeWorkers];
+    }
   },
   {
     manifest: scratchpadModuleManifest,
@@ -3343,6 +3404,9 @@ function assertAppMapDeclarations(manifest: MossModuleManifest): void {
 // incompatible or not defaultEnabled, naming the offender.
 assertModulesCompatible(BUILT_IN_MODULES.map((module) => module.manifest));
 assertModuleRegistryConsistency(BUILT_IN_MODULES);
+installBuiltInVisualTemplates(
+  BUILT_IN_MODULES.flatMap((module) => module.manifest.visualTemplates ?? [])
+);
 
 // LOADER-SEAM(sports) 7: the web CSP img-src allowlist is derived from every built-in module's
 // manifest-declared `externalSources[].imageHosts` (dataset-connector SDK), not from a single
@@ -4124,3 +4188,12 @@ export async function registerBuiltInModuleWorkers(
 
   return workerIds.flat();
 }
+
+export { createManagedNoteSnapshotPort } from "./managed-note-runtime.js";
+
+export { createRecordingFactAuthority } from "./recording-memory-runtime.js";
+
+export {
+  createManagedDeletionPreparation,
+  createMeetingDeletionPort
+} from "./managed-deletion-runtime.js";

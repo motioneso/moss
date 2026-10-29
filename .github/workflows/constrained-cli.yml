@@ -1,4 +1,4 @@
-name: Constrained Claude runner
+name: Constrained subscription runners
 
 on:
   pull_request:
@@ -12,8 +12,16 @@ permissions:
   contents: read
 
 jobs:
-  claude:
-    name: Verify pinned Claude local isolation
+  native:
+    name: Verify pinned ${{ matrix.display }} local isolation
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - provider: claude
+            display: Claude
+          - provider: codex
+            display: Codex
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -27,4 +35,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Real native CLI against synthetic local fixtures and negative controls
-        run: bash scripts/test-constrained-claude.sh
+        run: bash scripts/test-constrained-${{ matrix.provider }}.sh

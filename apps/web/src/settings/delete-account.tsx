@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
@@ -31,6 +32,9 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
   const [confirmEmail, setConfirmEmail] = useState("");
   const [confirmPhrase, setConfirmPhrase] = useState("");
   const [password, setPassword] = useState("");
+  const [cleanupCode, setCleanupCode] = useState<
+    "managed_cleanup_pending" | "managed_cleanup_conflict" | null
+  >(null);
   const needsPassword = me.hasPasswordCredential;
 
   const reset = () => {
@@ -55,6 +59,14 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
     },
     onError: (error: unknown) => {
       close();
+      if (
+        error instanceof ApiError &&
+        (error.code === "managed_cleanup_pending" || error.code === "managed_cleanup_conflict")
+      ) {
+        setCleanupCode(error.code);
+        return;
+      }
+      setCleanupCode(null);
       if (error instanceof ApiError && error.code === "bootstrap_owner") {
         toast("The instance owner can't be deleted. Transfer ownership first.", {
           tone: "drift",
@@ -100,7 +112,7 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
     <>
       <Group
         title="Danger zone"
-        desc="Irreversible actions. Account deletion is immediate and removes all your personal data."
+        desc="Irreversible actions. Account deletion removes your personal data after recording cleanup completes."
         tone="danger"
       >
         <Row
@@ -117,6 +129,16 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
             </Button>
           }
         />
+        {cleanupCode ? (
+          <Note icon={<TriangleAlert size={13} />}>
+            <span role="status">
+              {cleanupCode === "managed_cleanup_pending"
+                ? "Recording cleanup needs another confirmed request. Your account is still here. Confirm deletion again to continue."
+                : "A note from a recording has changed. Your account is still here. Check the recording and its note before confirming deletion again."}{" "}
+              <Link to="/meetings">Open Meetings</Link>
+            </span>
+          </Note>
+        ) : null}
       </Group>
 
       {open ? (
@@ -128,7 +150,7 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
             }}
             aria-labelledby={titleId}
             title={<span id={titleId}>Delete your account</span>}
-            description="This permanently deletes your account, personal data, and vault files. Audit metadata is retained anonymously. You'll be signed out everywhere immediately."
+            description="This permanently deletes your account, personal data, and vault files. Audit metadata is retained anonymously. You'll be signed out everywhere when deletion completes."
             footer={
               <>
                 <Button variant="quiet" onClick={close} disabled={deleteMutation.isPending}>

@@ -577,7 +577,7 @@ describe("MVP foundation schema catalog", () => {
           version: "0270",
           name: "0270_integration_classifier_sort_worker.sql"
         },
-        // #2984 R2.4 — one admin shadow review per classifier selection unlocks the gate's `on`.
+        // #2984 R2.4 — one admin shadow review per classifier selection, kept as a record only.
         {
           version: "0271",
           name: "0271_chat_classifier_shadow_reviews.sql"
@@ -637,6 +637,7 @@ describe("MVP foundation schema catalog", () => {
         { version: "0321", name: "0321_chat_repeating_reads.sql" },
         { version: "0322", name: "0322_chat_responsibility_agreements.sql" },
         { version: "0323", name: "0323_chat_unread_messages.sql" },
+        { version: "0324", name: "0324_chat_scheduled_read_attempts.sql" },
         { version: "0325", name: "0325_meeting_recording_imports.sql" },
         { version: "0326", name: "0326_meeting_import_summaries.sql" },
         { version: "0327", name: "0327_chat_voice_requests.sql" },
@@ -644,7 +645,18 @@ describe("MVP foundation schema catalog", () => {
         { version: "0329", name: "0329_meeting_recording_uploads.sql" },
         { version: "0330", name: "0330_android_companion_linking.sql" },
         { version: "0331", name: "0331_outlook_browser_calendar.sql" },
-        { version: "0332", name: "0332_outlook_browser_lifecycle.sql" }
+        { version: "0333", name: "0333_chat_automatic_voice_inputs.sql" },
+        { version: "0334", name: "0334_module_page_confirmations.sql" },
+        { version: "0335", name: "0335_meeting_recording_identity.sql" },
+        { version: "0336", name: "0336_notes_managed_source_lifecycle.sql" },
+        { version: "0337", name: "0337_notes_recording_contributions.sql" },
+        { version: "0338", name: "0338_memory_managed_note_snapshots.sql" },
+        { version: "0339", name: "0339_memory_recording_lineage.sql" },
+        { version: "0340", name: "0340_notes_recording_cleanup.sql" },
+        { version: "0341", name: "0341_memory_recording_cleanup.sql" },
+        { version: "0342", name: "0342_chat_module_notices.sql" },
+        { version: "0343", name: "0343_chat_heartbeat.sql" },
+        { version: "0344", name: "0344_outlook_browser_lifecycle.sql" }
       ]);
     } finally {
       await client.end();

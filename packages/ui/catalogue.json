@@ -382,6 +382,15 @@
       "flags": [{ "prop": "active", "optional": true }]
     },
     {
+      "name": "identity-metric",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/identity-metric.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["IdentityMetric"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "indicator",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/indicator.tsx", "type": "registry:ui" }],
@@ -451,7 +460,7 @@
         {
           "prop": "triggerVariant",
           "kind": "enum",
-          "values": ["icon", "content"],
+          "values": ["icon", "content", "chip"],
           "optional": true,
           "default": null
         },
@@ -642,6 +651,15 @@
       "files": [{ "path": "packages/ui/src/tabs.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["Tabs"],
+      "options": [],
+      "flags": []
+    },
+    {
+      "name": "textarea",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/textarea.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Textarea"],
       "options": [],
       "flags": []
     },

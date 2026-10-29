@@ -1,3 +1,5 @@
+import { RecordingMetadataRepository } from "./recording-metadata.js";
+import { RecordingTypesRepository } from "./recording-types.js";
 import {
   projectMeetingRequestInput,
   projectMeetingRequestResult,
@@ -18,6 +20,7 @@ import type {
   MeetingOutputArtifact,
   MeetingOutputContent,
   MeetingOutputInputs,
+  RecordingInterpretation,
   ReviewMeetingActionInput
 } from "@moss/shared";
 import { MeetingRecordsRepository } from "./repository.js";
@@ -94,7 +97,11 @@ export class MeetingOutputsRepository {
     if (!meeting) throw new MeetingOutputError("meeting_not_found", 404);
     return meeting;
   }
-  async inputs(db: DataContextDb, meetingId: string): Promise<MeetingOutputInputs> {
+  async inputs(
+    db: DataContextDb,
+    meetingId: string,
+    initializeRecording = false
+  ): Promise<MeetingOutputInputs> {
     assertDataContextDb(db);
     assertUuid(meetingId, "Meeting id");
     // Read paths retain a shared meeting lock for a consistent notes/transcript snapshot.
@@ -118,12 +125,39 @@ export class MeetingOutputsRepository {
       ? RECORDING_OUTPUT_TRANSCRIPT_LIMITS
       : { maxSegments: 500, maxCharacters: 100000 };
     const transcript = await this.transcripts.snapshot(db, meeting.id, limits, limits);
+    if (initializeRecording) await new RecordingMetadataRepository().ensure(db, meetingId);
+    const metadata = await new RecordingMetadataRepository().get(db, meetingId);
     return {
+      ...(metadata
+        ? { recording: { metadata, configuration: await new RecordingTypesRepository().get(db) } }
+        : {}),
       meetingId: meeting.id,
       transcript,
       personalNotes: meeting.personalNotes,
       notesRevision: meeting.notesRevision
     };
+  }
+  async applyRecording(
+    db: DataContextDb,
+    inputs: MeetingOutputInputs,
+    interpretation: RecordingInterpretation,
+    version: number
+  ) {
+    if (!inputs.recording) return;
+    const current = await this.records.get(db, inputs.meetingId, { forUpdate: true });
+    if (!current) throw new MeetingOutputError("meeting_not_found", 404);
+    await new RecordingMetadataRepository().apply(
+      db,
+      inputs.recording.metadata,
+      interpretation,
+      version
+    );
+    if (inputs.recording.metadata.titleSource === "automatic")
+      await this.records.putTitle(
+        db,
+        { meetingId: inputs.meetingId, expectedTitle: current.title, title: interpretation.title },
+        "automatic"
+      );
   }
   async head(db: DataContextDb, meetingId: string) {
     assertDataContextDb(db);

@@ -1815,3 +1815,61 @@ describe("SportsService news-only competitions (#2661)", () => {
     });
   });
 });
+
+describe("SportsService.getCachedFixturesForHeartbeat", () => {
+  const upcoming: GameSummary = {
+    id: "hb1",
+    competitionKey: "nfl",
+    startsAt: "2026-07-01T23:00:00.000Z",
+    state: "pre",
+    statusDetail: "7:00 PM",
+    home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys" }),
+    away: side({ teamKey: "gb", shortName: "GB", name: "Green Bay Packers" })
+  };
+
+  /** Serves only what is preloaded and fails the test if anything would reach the provider. */
+  function cacheOnlyClient(preloaded: Record<string, unknown>) {
+    const liveCalls: string[] = [];
+    const client: DatasetClient = {
+      async getDataset<T>(
+        key: string,
+        params: Record<string, unknown>,
+        options: { fallback: T; cacheOnly?: boolean }
+      ): Promise<DatasetEnvelope<T>> {
+        if (!options.cacheOnly) liveCalls.push(key);
+        const hit = preloaded[`${key}:${String(params.day ?? "")}`];
+        return hit === undefined
+          ? { data: options.fallback, degraded: true, fetchedAt: "", cacheMiss: true }
+          : { data: hit as T, degraded: false, fetchedAt: "" };
+      }
+    };
+    return { client, liveCalls };
+  }
+
+  it("reads followed fixtures from cache without calling the provider", async () => {
+    const { client, liveCalls } = cacheOnlyClient({
+      [`teams:`]: [dalTeamRef],
+      [`scoreboard:${TODAY}`]: [upcoming]
+    });
+    const service = new SportsService(makeDeps({ source: client }));
+    const read = await service.getCachedFixturesForHeartbeat(fakeScopedDb, { horizonHours: 24 });
+    expect(liveCalls).toEqual([]);
+    expect(read.games.map((g) => g.id)).toEqual(["hb1"]);
+    expect(read.freshness).toBe("stale");
+  });
+
+  it("reports unknown when nothing is cached", async () => {
+    const { client } = cacheOnlyClient({});
+    const service = new SportsService(makeDeps({ source: client }));
+    const read = await service.getCachedFixturesForHeartbeat(fakeScopedDb, { horizonHours: 24 });
+    expect(read).toEqual({ games: [], freshness: "unknown" });
+  });
+
+  it("returns nothing when no team is followed", async () => {
+    const { client } = cacheOnlyClient({});
+    const service = new SportsService(makeDeps({ source: client, follows: [] }));
+    expect(await service.getCachedFixturesForHeartbeat(fakeScopedDb, { horizonHours: 24 })).toEqual(
+      { games: [], freshness: "fresh" }
+    );
+  });
+});

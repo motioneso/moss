@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { Badge, Button, Divider, Field, FormLabel, SectionHead, Select, Switch } from "@moss/ui";
+import { MEETING_TRANSCRIPT_LANGUAGES } from "@moss/shared";
 import { useMeetingSettings } from "./meeting-settings-state.js";
+import { MeetingVocabularyEditor } from "./meeting-vocabulary-editor.js";
 import { MeetingUnlinkDialog } from "./meeting-unlink-dialog.js";
 import "./meeting-settings.css";
+
+const languageNames = new Intl.DisplayNames(["en"], { type: "language" });
+const languages = MEETING_TRANSCRIPT_LANGUAGES.map((code) => ({
+  code,
+  name: languageNames.of(code) ?? code
+})).sort((a, b) => a.name.localeCompare(b.name, "en"));
 
 export function MeetingSettingsForm() {
   const state = useMeetingSettings();
@@ -84,6 +92,34 @@ export function MeetingSettingsForm() {
               <option value="microphone-only">Microphone only</option>
             </Select>
           </Field>
+          <Field>
+            <FormLabel htmlFor="meeting-settings-transcript-language">
+              Transcript language
+            </FormLabel>
+            <Select
+              id="meeting-settings-transcript-language"
+              aria-describedby="meeting-settings-language-hint"
+              value={state.data.transcriptLanguage ?? ""}
+              disabled={state.saving}
+              onChange={(event) => void state.saveLanguage(event.target.value || null)}
+            >
+              <option value="" disabled={!!state.preferences.data?.transcriptVocabulary.length}>
+                Automatic detection
+              </option>
+              {languages.map(({ code, name }) => (
+                <option key={code} value={code}>
+                  {name} ({code})
+                </option>
+              ))}
+            </Select>
+            <p id="meeting-settings-language-hint" className="jds-hint">
+              Used for upcoming transcription, including imports. Existing text stays unchanged.
+            </p>
+          </Field>
+          {state.preferences.data?.transcriptVocabulary.length ? (
+            <p className="jds-hint">Clear vocabulary before choosing Automatic detection.</p>
+          ) : null}
+          <MeetingVocabularyEditor state={state.vocabulary} disabled={state.saving} />
           <Switch
             ariaLabel="Summarize automatically after Stop"
             label="Summarize automatically after Stop"
@@ -92,9 +128,7 @@ export function MeetingSettingsForm() {
             onChange={(enabled) => void state.saveSummary(enabled)}
           />
           <p className="jds-hint">
-            Send the finalized transcript and notes to your default model after Stop or when an
-            imported recording finishes transcription. Turn this off to use Rewrite summary only
-            when you choose.
+            Uses your default model after recording or import. You can also use Rewrite summary.
           </p>
           {state.data.requestKey ? (
             <p role="status" className="jds-hint">

@@ -67,6 +67,22 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     expect(source).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
   });
 
+  it("requires both complete unit shards within the original phase budget", () => {
+    const unitJob = source.slice(source.indexOf("\n  unit:"), source.indexOf("\n  integration:"));
+    expect(unitJob).toContain("name: Verify unit tests (${{ matrix.shard }}/2)");
+    expect(unitJob).toContain("fail-fast: false");
+    expect(unitJob).toContain("shard: [1, 2]");
+    expect(steps.get("Run unit tests")).toContain("MOSS_UNIT_TEST_SHARD: ${{ matrix.shard }}/2");
+    expect(steps.get("Run unit tests")).toContain(
+      "timeout --verbose --signal=TERM 15m pnpm test:unit || status=$?"
+    );
+    expect(steps.get("Run unit tests")).toContain(
+      "CI_PHASE_TIMEOUT phase=unit-${{ matrix.shard }}-of-2 budget=15m"
+    );
+    expect(unitJob).not.toContain("continue-on-error");
+    expect(unitJob).not.toContain("if: matrix.shard");
+  });
+
   it("runs both complete browser shards without changing phase deadlines or worker count", () => {
     const browserJob = source.slice(
       source.indexOf("\n  browser:"),

@@ -241,11 +241,14 @@ export function fixture(selection?: MeetingCaptureSelection, now: () => Date = (
       null
   );
   const preferences = new MeetingPreferencesRepository();
+  vi.spyOn(preferences, "getTranscriptionOptions").mockResolvedValue({});
   vi.spyOn(preferences, "get").mockResolvedValue({
     rememberedSource: { deviceId, microphoneId: "mic-device", mode: "microphone-only" },
     defaultCaptureMode: "microphone-only",
     summarizeOnStop: true,
-    summaryTemplateId: "general"
+    summaryTemplateId: "general",
+    transcriptVocabulary: [],
+    transcriptLanguage: null
   });
   vi.spyOn(connections, "lockRequest").mockResolvedValue();
   const service = new MeetingCaptureService(deps, repository, transcript, connections, preferences);

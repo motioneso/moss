@@ -3,7 +3,7 @@ import {
   registerVoiceRequestWorker,
   type VoiceRequestService
 } from "@moss/chat";
-import { createPgBossClient } from "@moss/jobs";
+import { createPgBossClient, startJobQueueWakeup } from "@moss/jobs";
 
 /** Worker credentials claim jobs; the API's single Chat service owns private work. */
 export function createVoiceRequestWorkerRuntime(
@@ -12,15 +12,21 @@ export function createVoiceRequestWorkerRuntime(
 ) {
   const consumer = createPgBossClient(workerConnectionString);
   let started = false;
+  let wakeup: ReturnType<typeof startJobQueueWakeup> | undefined;
   return {
     async start() {
       const service = getService();
       if (!service) throw new Error("Chat voice admission unavailable");
       try {
         await consumer.start();
-        await registerVoiceRequestWorker(consumer, service);
+        const id = await registerVoiceRequestWorker(consumer, service);
+        wakeup = startJobQueueWakeup(workerConnectionString, CHAT_VOICE_REQUEST_QUEUE, consumer, [
+          id
+        ]);
+        await wakeup.ready;
         started = true;
       } catch (error) {
+        await wakeup?.stop();
         await consumer.stop({ graceful: true });
         throw error;
       }
@@ -28,6 +34,7 @@ export function createVoiceRequestWorkerRuntime(
     async close() {
       if (!started) return;
       try {
+        await wakeup?.stop();
         await consumer.offWork(CHAT_VOICE_REQUEST_QUEUE, { wait: true });
       } finally {
         try {

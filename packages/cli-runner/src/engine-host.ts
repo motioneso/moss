@@ -16,6 +16,7 @@ import {
   VerifiedSubmitError,
   createStructuredEngine,
   probeConstrainedClaudeProvider,
+  findConstrainedCodexExecutable,
   deriveNeutralDir,
   invalidateProviderProbeCache,
   killMuxSessionByName,
@@ -694,7 +695,9 @@ export class CliChatEngineHost {
     const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
     if (opts?.constrainedStructured)
       return this.deps.perUserUid && this.deps.homeBase && userId
-        ? probeConstrainedClaudeProvider(provider)
+        ? provider === "openai-compatible"
+          ? { status: (await findConstrainedCodexExecutable()) ? "ready" : "not_installed" }
+          : probeConstrainedClaudeProvider(provider)
         : { status: "error", constrainedUnavailableReason: "per_user_isolation_required" };
     const cacheScope = provider === "openai-compatible" ? userId : undefined;
     const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;

@@ -37,7 +37,11 @@ export function validateMeetingHistoryInput(input: SearchMeetingHistoryInput = {
     (input.query !== undefined && typeof input.query !== "string") ||
     (input.before !== undefined &&
       (!input.before || typeof input.before !== "object" || Array.isArray(input.before))) ||
-    Object.keys(input).some((key) => !["query", "filter", "limit", "before"].includes(key)) ||
+    Object.keys(input).some(
+      (key) => !["query", "filter", "limit", "before", "typeId"].includes(key)
+    ) ||
+    (input.typeId !== undefined &&
+      (typeof input.typeId !== "string" || !/^[a-z][a-z0-9-]{0,63}$/.test(input.typeId))) ||
     typeof query !== "string" ||
     query.length > 256 ||
     Buffer.byteLength(query) > 512 ||
@@ -59,9 +63,11 @@ export function validateMeetingHistoryInput(input: SearchMeetingHistoryInput = {
     )
       throw new MeetingHistoryInputError();
   }
-  return { query: query.trim(), filter, limit, before: input.before };
+  return { query: query.trim(), filter, limit, before: input.before, typeId: input.typeId };
 }
 interface HistoryRow {
+  type_id?: string | null;
+  recording_side?: "personal" | "work" | null;
   id: string;
   title: string;
   created_at: Date;
@@ -99,6 +105,9 @@ export function meetingHistoryItem(row: HistoryRow): MeetingHistoryItem {
     title: row.title,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
+    ...(row.type_id || row.recording_side
+      ? { recording: { typeId: row.type_id ?? null, side: row.recording_side ?? null } }
+      : {}),
     hasNotes: row.has_notes,
     notesRevision: row.notes_revision,
     capture: { status: "unavailable", durationMs: row.capture_duration_ms ?? null },
@@ -201,13 +210,15 @@ export class MeetingHistoryRepository {
       ? sql<boolean>`(r.created_at, r.id) < (${new Date(input.before.createdAt)}, ${input.before.id}::uuid)`
       : sql<boolean>`true`;
     const identity = id ? sql<boolean>`r.id = ${id}::uuid` : sql<boolean>`true`;
+    const typeFilter = input.typeId ? sql<boolean>`m.type_id=${input.typeId}` : sql<boolean>`true`;
     const earlyLimit = input.filter === "all" ? sql`LIMIT ${input.limit + 1}` : sql``;
     const result = await sql<HistoryRow>`
       WITH records AS MATERIALIZED (
-        SELECT r.id,r.title,r.created_at,r.updated_at,r.notes_revision,
+        SELECT r.id,r.title,r.created_at,r.updated_at,r.notes_revision,m.type_id,m.side AS recording_side,
           btrim(r.personal_notes, ${whitespace}) <> '' AS has_notes
         FROM app.meeting_records r
-        WHERE r.owner_user_id = app.current_actor_user_id() AND ${identity} AND ${cursor} AND ${search}
+        LEFT JOIN app.meeting_recording_metadata m ON m.meeting_id=r.id
+        WHERE r.owner_user_id = app.current_actor_user_id() AND ${identity} AND ${cursor} AND ${search} AND ${typeFilter}
         ORDER BY r.created_at DESC,r.id DESC ${earlyLimit}
       ), history AS (
         SELECT r.*, capture.duration_ms AS capture_duration_ms, coalesce(a.history_overview,n.history_overview) AS output_overview, coalesce(t.transcript_revision,0) AS transcript_revision,

@@ -67,7 +67,7 @@ export const connectorsModuleManifest = {
       "sql/0244_email_refresh.sql",
       "sql/0248_connector_email_history_id.sql",
       "sql/0331_outlook_browser_calendar.sql",
-      "sql/0332_outlook_browser_lifecycle.sql"
+      "sql/0344_outlook_browser_lifecycle.sql"
     ],
     migrationDirectories: ["packages/connectors/sql"],
     ownedTables: [
@@ -398,6 +398,33 @@ export const connectorsModuleManifest = {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.connectors.email-extract",
       description: "Checked new email for follow-ups"
+    },
+    {
+      id: "connectors.work_mail_processing",
+      description:
+        "Fixture-only mail processing uses memory preferences and sender context to append findings " +
+        "to non-private notes in the linked folder or private vault, keeping hashed last-read state. " +
+        "No mailbox reader is enabled.",
+      errors: [
+        {
+          code: "connectors.work_mail.processing_unavailable",
+          class: "prerequisite",
+          description: "Processing stops without advancing past an AI or vault failure.",
+          remediationRef: "connectors.work_mail.check_configuration"
+        }
+      ],
+      remediations: [
+        {
+          id: "connectors.work_mail.check_configuration",
+          description:
+            "Check the work-mail AI task binding and access to the selected notes folder before retrying.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
+      id: "structured.connectors.work-mail",
+      description: "Checked work mail for note context"
     },
     {
       id: "connectors.google_sync",

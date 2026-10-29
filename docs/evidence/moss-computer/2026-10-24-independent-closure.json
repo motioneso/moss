@@ -1,0 +1,885 @@
+{
+  "scope": "Separately executed signed Computer closure tooling; no installed/runtime/owner qualification",
+  "base": "eed6cc9db0575fb476e0f914d1c7d91657f5526f",
+  "plan": "21492cc8807c33db1d231cba0a07e049a6a9b59d",
+  "sourceR1": "6a70f1594db810a176cb5313c52d4c7091870373",
+  "acceptedProductionSource": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+  "finalCheckedSource": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+  "prerequisite": {
+    "pr": 3650,
+    "finalHead": "353698e11ad8b1804dc0554ed15569ce524d9097",
+    "merge": "eed6cc9db0575fb476e0f914d1c7d91657f5526f",
+    "tree": "9f6486de01fc018397c429b1729ec328c6a73d7d",
+    "publishedHashesMatched": 12,
+    "ciRun": "40098454116",
+    "ciGate": "120888910736",
+    "localAcceptance": "6384838999",
+    "supplementalAcceptance": "6385026168"
+  },
+  "sourceFiles": {
+    "scripts/computer-closure.ts": "46109f00642378a58509a627a189a1b75b20d69b4198f07498d2f12ab377351f",
+    "scripts/computer-closure/config.ts": "a812048315d87d7a380ecf373354902609a06f6608c4ec40f1f07fc5627332e6",
+    "scripts/computer-closure/files.ts": "c73fc9bf27f65a16e7550b0c552a7124185f1a101976b7ee8b6afbecaa42f47f",
+    "scripts/computer-closure/observe.ts": "b006b59482a0ee3cfc1dcc01fab67803af33546186a859834a79f62dc70d2981",
+    "scripts/computer-closure/receipt.ts": "3c6cf864714562ddb66fe7654db45ffcd7e4390070bd9632b32e09c0f732d995",
+    "scripts/computer-closure/records.ts": "7fc96dd9c2e3c0c5508d75b1e9368ff183dcc01b93b1ac442f0f20071942315a",
+    "scripts/computer-closure/run.ts": "943efb904911374784750bcc8b9f9264276eb790c8fad022be7ce38e5185f337",
+    "scripts/computer-watchdog/linux.ts": "5bb3be2aa7a546b84ab61254b7d5097329c28df39e1d6c0447b114c54f17b770",
+    "tests/unit/computer-closure-fixture.ts": "20ec20e3040be3c28e663e24b7b4714dcfd76cd582e6df78180fcbdd63e4ef45",
+    "tests/unit/computer-closure-native-fixture.ts": "5401f92ad67255e0f3b7eec5c21eefadd4c9202ebe8f1f954945ba7c383170ab",
+    "tests/unit/computer-closure-trust.test.ts": "046588948f7f036a921ef902d84588cb7d05474fc71a43abbcfc05fa05fe15a8",
+    "tests/unit/computer-closure.test.ts": "cc27fc8a8313b55a209a245edf187d8c7f6656be9910d80df352f7a8e812ea9a"
+  },
+  "localNode": "v22.22.2",
+  "bundleTarget": "node24 (build metadata only)",
+  "behavior": {
+    "tests": 546,
+    "suites": 27,
+    "focusedClosureTests": 45
+  },
+  "checks": [
+    {
+      "name": "behavior",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-auth-endpoint.test.ts",
+        "tests/unit/computer-auth-lifetime.test.ts",
+        "tests/unit/computer-auth.test.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-guest-envelope.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts",
+        "tests/unit/computer-host-client.test.ts",
+        "tests/unit/computer-host-recovery.test.ts",
+        "tests/unit/computer-host.test.ts",
+        "tests/unit/computer-input-control.test.ts",
+        "tests/unit/computer-lifetime-process.test.ts",
+        "tests/unit/computer-lifetime-startup.test.ts",
+        "tests/unit/computer-lifetime.test.ts",
+        "tests/unit/computer-managed-host.test.ts",
+        "tests/unit/computer-receiving-gateway.test.ts",
+        "tests/unit/computer-rfb-input.test.ts",
+        "tests/unit/computer-watchdog-journal.test.ts",
+        "tests/unit/computer-watchdog-linux-files.test.ts",
+        "tests/unit/computer-watchdog-linux.test.ts",
+        "tests/unit/computer-watchdog-observe.test.ts",
+        "tests/unit/computer-watchdog-policy.test.ts",
+        "tests/unit/computer-watchdog-supervisor.test.ts",
+        "tests/unit/computer-watchdog-trust.test.ts",
+        "--reporter=dot",
+        "tests/unit/computer-closure.test.ts",
+        "tests/unit/computer-closure-trust.test.ts"
+      ],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 90.612,
+      "log": "behavior-final.log",
+      "log_sha256": "6e49fe9fcdcec5d0c9c2d7237c42fc6213b5b5b72f84c442bf06e11cb6ad42f6"
+    },
+    {
+      "name": "root-tsc",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 80.283,
+      "log": "root-tsc-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "tests-tsc",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 53.212,
+      "log": "tests-tsc-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-closure.ts",
+        "scripts/computer-closure/config.ts",
+        "scripts/computer-closure/files.ts",
+        "scripts/computer-closure/observe.ts",
+        "scripts/computer-closure/receipt.ts",
+        "scripts/computer-closure/records.ts",
+        "scripts/computer-closure/run.ts",
+        "scripts/computer-watchdog/linux.ts",
+        "tests/unit/computer-closure-fixture.ts",
+        "tests/unit/computer-closure-native-fixture.ts",
+        "tests/unit/computer-closure-trust.test.ts",
+        "tests/unit/computer-closure.test.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 1.924,
+      "log": "lint-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/superpowers/plans/2026-10-24-moss-computer-independent-closure.md",
+        "scripts/computer-closure.ts",
+        "scripts/computer-closure/config.ts",
+        "scripts/computer-closure/files.ts",
+        "scripts/computer-closure/observe.ts",
+        "scripts/computer-closure/receipt.ts",
+        "scripts/computer-closure/records.ts",
+        "scripts/computer-closure/run.ts",
+        "scripts/computer-watchdog/linux.ts",
+        "tests/unit/computer-closure-fixture.ts",
+        "tests/unit/computer-closure-native-fixture.ts",
+        "tests/unit/computer-closure-trust.test.ts",
+        "tests/unit/computer-closure.test.ts"
+      ],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 1.219,
+      "log": "format-final.log",
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "file-size",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 1.89,
+      "log": "file-size-final.log",
+      "log_sha256": "1612c3541e7b0bde76055d2343dddc0fa77d114432dc4010a35c86dfe1bdec25"
+    },
+    {
+      "name": "whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "eed6cc9db0575fb476e0f914d1c7d91657f5526f",
+        "6ffe25c062c1e4ce96d3827d3ac207748b895815"
+      ],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 0.005,
+      "log": "whitespace-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "gateway-build",
+      "command": ["pnpm", "build:computer-gateway", "<private>/gateway-final"],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 0.867,
+      "log": "gateway-build-final.log",
+      "log_sha256": "57941dc153016d902368c72146ae585268afe3311a4a6e1f57f219208deae333"
+    },
+    {
+      "name": "closure-cjs-bundle",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-closure.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=<private>/closure-final.cjs",
+        "--metafile=<private>/closure-final.meta.json"
+      ],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 0.43,
+      "log": "closure-cjs-bundle-final.log",
+      "log_sha256": "0ea341909ff114ce9368c5ca3e159ed0855c32f6a1ae074a92d4c845b5cbbfd2"
+    },
+    {
+      "name": "host-cjs-bundle",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-host.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=<private>/host-final.cjs",
+        "--metafile=<private>/host-final.meta.json"
+      ],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 0.472,
+      "log": "host-cjs-bundle-final.log",
+      "log_sha256": "94065ab0ca45ba4766b377a6ec041cb8820255e0843a9330bbbbbd16f6cc4e98"
+    },
+    {
+      "name": "watchdog-cjs-bundle",
+      "command": [
+        "pnpm",
+        "exec",
+        "esbuild",
+        "scripts/computer-watchdog.ts",
+        "--bundle",
+        "--platform=node",
+        "--target=node24",
+        "--format=cjs",
+        "--outfile=<private>/watchdog-final.cjs",
+        "--metafile=<private>/watchdog-final.meta.json"
+      ],
+      "exit": 0,
+      "head": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "seconds": 0.444,
+      "log": "watchdog-cjs-bundle-final.log",
+      "log_sha256": "3de39fce091d873e4b883752d7e52029f04b9cd53e9a2150f41a656113bc994f"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "closure",
+      "format": "cjs",
+      "target": "node24",
+      "bytes": 53924,
+      "sha256": "9cfe03c59c90bb2c87c94d3ade68d7e64b00c09adbcd4e029f295f9bf9333ca4",
+      "externalImports": [
+        "node:crypto",
+        "node:fs",
+        "node:fs/promises",
+        "node:http",
+        "node:https",
+        "node:net",
+        "node:path"
+      ]
+    },
+    {
+      "name": "host",
+      "format": "cjs",
+      "target": "node24",
+      "bytes": 34326,
+      "sha256": "ce7492dac3a5ad0e70c0d280cdf35ee4796a848d611fcec789dfdf7e7b11915c",
+      "externalImports": ["node:crypto", "node:fs", "node:fs/promises", "node:http", "node:path"]
+    },
+    {
+      "name": "watchdog",
+      "format": "cjs",
+      "target": "node24",
+      "bytes": 93560,
+      "sha256": "c583490d1aea88d7539962df0f289667ef9b23ef7cd4ce6ea0fe223088ff8eb2",
+      "externalImports": [
+        "node:child_process",
+        "node:crypto",
+        "node:fs",
+        "node:fs/promises",
+        "node:http",
+        "node:https",
+        "node:net",
+        "node:path"
+      ]
+    }
+  ],
+  "nonrootCjs": {
+    "argv": ["node", "<private>/closure-final.cjs", "<private>/missing-config.json"],
+    "uid": 1000,
+    "exit": 2,
+    "startedAtNs": "62922330960324",
+    "finishedAtNs": "62922369375095",
+    "elapsedMs": 38.415,
+    "stdoutBytes": 0,
+    "stderrBytes": 0,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifactSha256": "9cfe03c59c90bb2c87c94d3ade68d7e64b00c09adbcd4e029f295f9bf9333ca4"
+  },
+  "nativeProof": [
+    {
+      "name": "native-1.json",
+      "exit": 0,
+      "pid": 3270964,
+      "uid": 1000,
+      "outputBytes": 0,
+      "artifactSha256": "87924a8ed4221c1e5ddecc58a96c19df7110c92219d1975eae10cf6c79216c47",
+      "receiptSha256": "b4c4499034e2bc2484d9fb4f226c582dbd4e1c08af02d1932088f29d1e0099be",
+      "publicKeySha256": "0de01c4a29e1074ac7d2b64830fbb31c7d77ca2f4061f2c2167815497883fd87",
+      "signaturesValid": true,
+      "qualifiedFixture": true,
+      "elapsedMs": 95.143704
+    },
+    {
+      "name": "native-2.json",
+      "exit": 2,
+      "pid": 3270982,
+      "uid": 1000,
+      "outputBytes": 0,
+      "artifactSha256": "87924a8ed4221c1e5ddecc58a96c19df7110c92219d1975eae10cf6c79216c47",
+      "receiptSha256": "258a5b257aa1dbce7702d38809d34bf9e82c83bfd16ae82683aeda923fb4244c",
+      "publicKeySha256": "7000ac223a9ad0d96dbf75d77a6dbeaff66f844ce38c7993867c450020d2f804",
+      "signaturesValid": true,
+      "qualifiedFixture": false,
+      "elapsedMs": 71.056121
+    },
+    {
+      "name": "native-3.json",
+      "exit": 2,
+      "pid": 3271054,
+      "uid": 1000,
+      "outputBytes": 0,
+      "artifactSha256": "87924a8ed4221c1e5ddecc58a96c19df7110c92219d1975eae10cf6c79216c47",
+      "receiptSha256": "3a454c055e1726e18173d1c3f58c9550b477420440b4e45ac821cd7dffb80280",
+      "publicKeySha256": "17872ebde06204ddc63b0ee68a51b27a0984d0a3586bd115528f3f607a6bf190",
+      "signaturesValid": true,
+      "qualifiedFixture": false,
+      "elapsedMs": 71.059892
+    },
+    {
+      "name": "native-4.json",
+      "exit": 0,
+      "pid": 3271085,
+      "uid": 1000,
+      "outputBytes": 0,
+      "artifactSha256": "87924a8ed4221c1e5ddecc58a96c19df7110c92219d1975eae10cf6c79216c47",
+      "receiptSha256": "fb88dda87ddc095fcaa7a077c2f13c6f57b1b5bd85158f0c1096299c859d8bed",
+      "publicKeySha256": "8b6c1d4e44eb824f7f5ecf7ccd8c2e078ed20c17a83e26f69ac110fc6bc26504",
+      "signaturesValid": true,
+      "qualifiedFixture": true,
+      "elapsedMs": 101.766995
+    },
+    {
+      "name": "native-5.json",
+      "exit": 2,
+      "pid": 3271152,
+      "uid": 1000,
+      "outputBytes": 0,
+      "artifactSha256": "87924a8ed4221c1e5ddecc58a96c19df7110c92219d1975eae10cf6c79216c47",
+      "receiptSha256": "020696548e7e10193cb5fe24d66f5365ef3ca2965d349ee61881887acf209d1d",
+      "publicKeySha256": "db8275541fd1cac29a24eed869918d7bea510ba8b455e15fcbcbe6e537a1204a",
+      "signaturesValid": true,
+      "qualifiedFixture": false,
+      "elapsedMs": 86.83156
+    },
+    {
+      "name": "native-6.json",
+      "exit": 0,
+      "pid": 3271248,
+      "uid": 1000,
+      "outputBytes": 0,
+      "artifactSha256": "87924a8ed4221c1e5ddecc58a96c19df7110c92219d1975eae10cf6c79216c47",
+      "receiptSha256": "09b91a561a4f1fcdac5f0ebb3517ba094d69d7dd623aa68bd87e874e556f72a1",
+      "publicKeySha256": "e1dbae6c88a714378b73d4e444261c0c8a57cabd54f2518f47d21039f1a03c9d",
+      "signaturesValid": true,
+      "qualifiedFixture": true,
+      "elapsedMs": 103.399449
+    },
+    {
+      "name": "native-7.json",
+      "exit": 2,
+      "pid": 3271398,
+      "uid": 1000,
+      "outputBytes": 0,
+      "artifactSha256": "87924a8ed4221c1e5ddecc58a96c19df7110c92219d1975eae10cf6c79216c47",
+      "receiptSha256": "09b91a561a4f1fcdac5f0ebb3517ba094d69d7dd623aa68bd87e874e556f72a1",
+      "publicKeySha256": "e1dbae6c88a714378b73d4e444261c0c8a57cabd54f2518f47d21039f1a03c9d",
+      "signaturesValid": true,
+      "qualifiedFixture": false,
+      "elapsedMs": 48.346905
+    }
+  ],
+  "protectionRemovalControls": [
+    {
+      "name": "mount-identity",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/observe.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "same-device bind mount identity"
+      ],
+      "exit": 1,
+      "seconds": 1.417,
+      "restored": true,
+      "sourceSha256": "b006b59482a0ee3cfc1dcc01fab67803af33546186a859834a79f62dc70d2981",
+      "patchSha256": "4af0b0b6aceb087887115daefb8a0cf0dadd3a9d75046aae130db9b50cd2a5b1",
+      "logSha256": "696702a1b3514556348cfa48296f8378f56f9085204ed285c5760806c012c9a0",
+      "intendedAssertion": true
+    },
+    {
+      "name": "process-absence",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/observe.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "surviving detached process"
+      ],
+      "exit": 1,
+      "seconds": 1.417,
+      "restored": true,
+      "sourceSha256": "b006b59482a0ee3cfc1dcc01fab67803af33546186a859834a79f62dc70d2981",
+      "patchSha256": "2499d1a10da875f3c3b39a3eee4293cc89ef80dc81a20c6ddec94484375e3612",
+      "logSha256": "c847d688d516e5bd365f1933fadb11af2dae96aa85d79b87a84b59a4fa9235ce",
+      "intendedAssertion": true
+    },
+    {
+      "name": "process-group",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/observe.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "surviving detached process"
+      ],
+      "exit": 1,
+      "seconds": 1.519,
+      "restored": true,
+      "sourceSha256": "b006b59482a0ee3cfc1dcc01fab67803af33546186a859834a79f62dc70d2981",
+      "patchSha256": "cf777b2e6061fc28666ffe2eee900fb9ccc1c06067f4f9efe740671428f164ef",
+      "logSha256": "249e8b503fe7992ef53b2a9bfb6fcda27bc7f46919a08638b53dc14ac9b726bc",
+      "intendedAssertion": true
+    },
+    {
+      "name": "hidden-listener",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/observe.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "hidden underlying Unix listener"
+      ],
+      "exit": 1,
+      "seconds": 1.517,
+      "restored": true,
+      "sourceSha256": "b006b59482a0ee3cfc1dcc01fab67803af33546186a859834a79f62dc70d2981",
+      "patchSha256": "0b696869f83c98209d8439ee15be741ef66c019dd345a4aa8a6cd48f11ac4cb9",
+      "logSha256": "e8a8249c13cdd90f8dfe84a47cac6b000b7bdafa43fa207cea036608767a9ae7",
+      "intendedAssertion": true
+    },
+    {
+      "name": "inventory",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/observe.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "refuses untracked retained"
+      ],
+      "exit": 1,
+      "seconds": 1.567,
+      "restored": true,
+      "sourceSha256": "b006b59482a0ee3cfc1dcc01fab67803af33546186a859834a79f62dc70d2981",
+      "patchSha256": "4f61ef6c0dbcfc1bfbf5acdaa32bd5434b4e73f333f45f129a79d3d6dfff240f",
+      "logSha256": "d1a6ff062fc881bcede3af6a77ae7d9c91141e42ec66182bdcbd32b2334751ab",
+      "intendedAssertion": true
+    },
+    {
+      "name": "terminal-disabled",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/records.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "refuses resurrected retained"
+      ],
+      "exit": 1,
+      "seconds": 1.768,
+      "restored": true,
+      "sourceSha256": "7fc96dd9c2e3c0c5508d75b1e9368ff183dcc01b93b1ac442f0f20071942315a",
+      "patchSha256": "7ffa012a7f193d5fb8ee45bac013b68132bea2cee8f5e6217f9fa7aad7ee05ca",
+      "logSha256": "a987fa5d536a04c507da83e0d9659e842308c3a9426c6f5532f0f4497c5ebb76",
+      "intendedAssertion": true
+    },
+    {
+      "name": "original-cas",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/records.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "refuses wrong-stop retained"
+      ],
+      "exit": 1,
+      "seconds": 1.467,
+      "restored": true,
+      "sourceSha256": "7fc96dd9c2e3c0c5508d75b1e9368ff183dcc01b93b1ac442f0f20071942315a",
+      "patchSha256": "45911f4ab6568cb7d8f98d7defd818c6217552fba0fbb68fe5f98794188279bc",
+      "logSha256": "223249136004852fb7eb3f468ac14e10924ddc1e2794659e715c2ff16a4fd8ed",
+      "intendedAssertion": true
+    },
+    {
+      "name": "unknown-collector",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/records.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "unknown raw collector PID"
+      ],
+      "exit": 1,
+      "seconds": 1.517,
+      "restored": true,
+      "sourceSha256": "7fc96dd9c2e3c0c5508d75b1e9368ff183dcc01b93b1ac442f0f20071942315a",
+      "patchSha256": "ae1cf0d8a03f9cbf734b6b66c2edac5b2c4c58130e1d4cc9b4394e8f6ba05b8d",
+      "logSha256": "e38d5364c8806a4bc18476b3648b797affe5d91382209ac3b031cd2d0fecb26b",
+      "intendedAssertion": true
+    },
+    {
+      "name": "record-equality",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/run.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "refuses stop replacement"
+      ],
+      "exit": 1,
+      "seconds": 1.618,
+      "restored": true,
+      "sourceSha256": "943efb904911374784750bcc8b9f9264276eb790c8fad022be7ce38e5185f337",
+      "patchSha256": "31c4337debf11edfde9056eb782016e867fc1b591d9ca941e49ff0041dab35ad",
+      "logSha256": "9f61d2b1868131456ee56d409778c530582a691659641c8fbf38283eb3c0d1ed",
+      "intendedAssertion": true
+    },
+    {
+      "name": "config-equality",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/run.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "refuses config replacement"
+      ],
+      "exit": 1,
+      "seconds": 1.567,
+      "restored": true,
+      "sourceSha256": "943efb904911374784750bcc8b9f9264276eb790c8fad022be7ce38e5185f337",
+      "patchSha256": "09d2a25d9ffa3d2479089c6092e5a0e8f9e11369741bb7c98740b58f7d612f86",
+      "logSha256": "5daeb19b3209dcbe20ada31009a88d747524228a36937bc13e78105f71733b2c",
+      "intendedAssertion": true
+    },
+    {
+      "name": "deadline-equality",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/run.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "deadline equality"
+      ],
+      "exit": 1,
+      "seconds": 1.517,
+      "restored": true,
+      "sourceSha256": "943efb904911374784750bcc8b9f9264276eb790c8fad022be7ce38e5185f337",
+      "patchSha256": "0a0b8db609fdc835bda349c48f322cfd182a35fdbfb03049335bba7e32b09afb",
+      "logSha256": "0c9b63ca65d54a3a8c22965ab91b3a236a4d0206d294b3ad21150aea33e80353",
+      "intendedAssertion": true
+    },
+    {
+      "name": "signal-latch",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/run.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "deadline equality"
+      ],
+      "exit": 1,
+      "seconds": 1.467,
+      "restored": true,
+      "sourceSha256": "943efb904911374784750bcc8b9f9264276eb790c8fad022be7ce38e5185f337",
+      "patchSha256": "6d7ce3978743dcdc12c010c914e17f6d32ea7b046fb43c4ff0b68e32b2b0db75",
+      "logSha256": "52c7d850ad399fd9bd694dcae55020b1dcbe0ebbe5bbaf094a31d6c20947c08e",
+      "intendedAssertion": true
+    },
+    {
+      "name": "file-fsync",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/receipt.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "failed file fsync"
+      ],
+      "exit": 1,
+      "seconds": 1.567,
+      "restored": true,
+      "sourceSha256": "3c6cf864714562ddb66fe7654db45ffcd7e4390070bd9632b32e09c0f732d995",
+      "patchSha256": "491eeb0aa7bf19254c2d7fb41f30b1b707963d674b0ceaf8831862d7d7b7682a",
+      "logSha256": "f33577746c5a644f53aac7095546f799609b733ef753f5dc719844ba7ce9c866",
+      "intendedAssertion": true
+    },
+    {
+      "name": "directory-fsync",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/receipt.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "failed directory fsync"
+      ],
+      "exit": 1,
+      "seconds": 1.467,
+      "restored": true,
+      "sourceSha256": "3c6cf864714562ddb66fe7654db45ffcd7e4390070bd9632b32e09c0f732d995",
+      "patchSha256": "585d5538b0d00e72e3756478cd5465aae9fe26c0b5dc7559f1f4e96663af56f3",
+      "logSha256": "4fae9fa972a5b6b0ec60c85e9445698464f291b11a537663253158420eb5130b",
+      "intendedAssertion": true
+    },
+    {
+      "name": "exclusive-receipt",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/receipt.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "exclusive-file overwrite"
+      ],
+      "exit": 1,
+      "seconds": 1.617,
+      "restored": true,
+      "sourceSha256": "3c6cf864714562ddb66fe7654db45ffcd7e4390070bd9632b32e09c0f732d995",
+      "patchSha256": "1b8c41973b67de500f4e780896561b0a59c13610c860a87a4f638b78cab965d8",
+      "logSha256": "6a7d20b172968e6fc9c8aba2c52ecfabb7b86e8cf0d14e1e77243b15fec1e199",
+      "intendedAssertion": true
+    },
+    {
+      "name": "publication-equality",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/run.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "receipt replaced after final"
+      ],
+      "exit": 1,
+      "seconds": 1.568,
+      "restored": true,
+      "sourceSha256": "943efb904911374784750bcc8b9f9264276eb790c8fad022be7ce38e5185f337",
+      "patchSha256": "615bd5d1d6704932bbc618f2cf33966f4c788b0d7f0d32e4cf84cb16374874cb",
+      "logSha256": "f3b6e047d797efbd15122666700ae19bbb240349bb2f3a3f79b11c7c0e3ddb89",
+      "intendedAssertion": true
+    },
+    {
+      "name": "readiness",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/observe.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "unhealthy Moss"
+      ],
+      "exit": 1,
+      "seconds": 1.668,
+      "restored": true,
+      "sourceSha256": "b006b59482a0ee3cfc1dcc01fab67803af33546186a859834a79f62dc70d2981",
+      "patchSha256": "ab52f1281a34adf52c5e12e85a1cf0669fda93dda1406a8825b1b4300f2f15df",
+      "logSha256": "3fb6ac64bb74ad15417878d55a9ee50dc4336ed5029628df0141229439bc6bfe",
+      "intendedAssertion": true
+    },
+    {
+      "name": "signer-pin",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/config.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure-trust.test.ts",
+        "-t",
+        "refuses signer trust"
+      ],
+      "exit": 1,
+      "seconds": 1.367,
+      "restored": true,
+      "sourceSha256": "a812048315d87d7a380ecf373354902609a06f6608c4ec40f1f07fc5627332e6",
+      "patchSha256": "acb2e2d5294c2e9301cfe7375f1c89f44c02674c58e08774b14dd7eb01c30d1b",
+      "logSha256": "0175a6cdf5de44b424ce00cb5d3e2d1b27c2c9d7c724a51d1a12e3cd361ee0ae",
+      "intendedAssertion": true
+    },
+    {
+      "name": "network-anchor",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/config.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure-trust.test.ts",
+        "-t",
+        "refuses net trust"
+      ],
+      "exit": 1,
+      "seconds": 1.418,
+      "restored": true,
+      "sourceSha256": "a812048315d87d7a380ecf373354902609a06f6608c4ec40f1f07fc5627332e6",
+      "patchSha256": "80dcff1ba641818a7cf94512c3dd22384638de3326794915f68d83b578bcc3ef",
+      "logSha256": "1360f86c4a45d9f7f7a719ab4c367058afcff676a1d9a548ab39a80fce2fab9d",
+      "intendedAssertion": true
+    },
+    {
+      "name": "private-file-mode",
+      "sourceCommit": "6ffe25c062c1e4ce96d3827d3ac207748b895815",
+      "path": "scripts/computer-closure/files.ts",
+      "argv": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-closure.test.ts",
+        "-t",
+        "unsafe mode input"
+      ],
+      "exit": 1,
+      "seconds": 1.518,
+      "restored": true,
+      "sourceSha256": "c73fc9bf27f65a16e7550b0c552a7124185f1a101976b7ee8b6afbecaa42f47f",
+      "patchSha256": "251713fd298ecfd915fb364362cdd96a636958c0fd718e5f65936361484cb434",
+      "logSha256": "e96c269bc344edd6d921ee6c00089d2c650db92a32d6d92c491db2dfd2a6fae0",
+      "intendedAssertion": true
+    }
+  ],
+  "reviewReports": [
+    {
+      "name": "plan-security-r1",
+      "sha256": "e0aebdcf9a67873c1b95d2bf990b80e46be0b67f636d3574d8fb0d7f28e83579"
+    },
+    {
+      "name": "plan-spec-r1",
+      "sha256": "c334ab1d5b2bad3fd307330f35789d6de1713efb335bded1ad7d8504ebfc74be"
+    },
+    {
+      "name": "source-security-r1",
+      "sha256": "a4611da9956fa416c26df834e16aaeea76a40abe5e4319035bd9e972f8346478"
+    },
+    {
+      "name": "source-spec-r1",
+      "sha256": "f701cf5c9eea39ab2b3c9cf7607668f5c28ad371fb9d02b1e80c0cae310fc364"
+    },
+    {
+      "name": "source-security-r2",
+      "sha256": "021e75de892389ca0b2163def253451daae528c41e121487721d2ba3b50591de"
+    },
+    {
+      "name": "source-spec-r2",
+      "sha256": "0bdace43758224ff02532507dafb800f7556e930f99001aba01112da2de5ae7e"
+    }
+  ],
+  "failedExecutionRounds": [
+    {
+      "name": "tests-r1",
+      "result": "3 positive fixture tests failed because host fixture listener had not been closed; real verifier correctly refused closure",
+      "logSha256": "f0811d4af169854896c4be66a8cf7e25ad6d31c98a73ef70e5b6ba04782af769"
+    },
+    {
+      "name": "source-security-r1",
+      "result": "REQUEST_CHANGES: st_dev-only check missed same-device bind mounts; corrected using descriptor mount IDs in accepted sourceR2; original report retained"
+    },
+    {
+      "name": "source-spec-r1",
+      "result": "initial source acceptance missed mount-ID gap; corrected R2 assessment explicitly acknowledged miss"
+    }
+  ],
+  "fixtures": [
+    "Installed root/runtime/namespace/code/artifact/pre-stop tuple provenance is synthetic in native composition; trust-loader tests disclose root/runtime/inherited namespace fixtures.",
+    "Docker and readiness are Unix HTTP fixtures; no real Docker daemon or Moss instance is contacted.",
+    "Actual detached child PID/group identities, files/signatures/fsync and Unix listeners/stale socket probes are real.",
+    "Same-device mount regression substitutes bounded fdinfo mnt_id without performing any mount.",
+    "Held final fsync uses a disclosed 500ms-scaled native 60s timer; no real-time or installed watchdog claim."
+  ],
+  "notPerformed": [
+    "No Computer image/runtime/Docker/DB/browser/TCP-server operation",
+    "No installation, trusted key provisioning or deployment",
+    "No actual Node24/image/128MiB/TigerVNC qualification",
+    "No owner cookie/Origin/HTTPS/WSS/chat or agent-lease live qualification",
+    "No unavailableAdmission, product/app-map or deployment-default change"
+  ],
+  "remaining": [
+    "Trusted actual post-create/identity-save/pre-start configuration delivery",
+    "Trusted actual pre-stop desktop/gateway host PID/start/group capture and signer/namespace provenance",
+    "Separately accepted new-run/reset and uncertain-create quiescence",
+    "Separately accepted exact runtime packet and complete inherited watchdog/resource/closure gates",
+    "Actual owner integration and independently accepted live positive/hostile evidence"
+  ],
+  "parentIssuesOpen": [3577, 3616, 3617, 3618, 3619],
+  "ciAndMerge": {
+    "required": "Exact final PR HEAD successful required CI gate and supplemental independent acceptance before protected actual merge; live PR3651 records are authoritative"
+  }
+}

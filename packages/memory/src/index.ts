@@ -132,3 +132,34 @@ export {
   configureMemoryApprovalReferences,
   type MemoryApprovalSourceResolver
 } from "./action-presentations.js";
+
+export {
+  ingestVaultDocument,
+  type VaultDocumentIngestOptions,
+  type VaultDocumentIngestResult
+} from "./ingest-document.js";
+export type {
+  VaultIndexSourceRevision,
+  VaultIndexSnapshot,
+  VaultIndexCapture,
+  VaultIndexPublicationResult,
+  VaultIndexPublicationPort
+} from "./vault-index-publication.js";
+
+export { RecordingMemoryService } from "./recording-facts.js";
+export type {
+  RecordingFactAuthority,
+  RecordingFactSourceSnapshot
+} from "./recording-fact-authority.js";
+export { RecordingFactConflictError } from "./recording-fact-mutations.js";
+export {
+  RecordingMemoryConflictError,
+  RecordingMemoryUnavailableError
+} from "./recording-fact-identity.js";
+export { collectRecordingMemoryExport } from "./recording-memory-export.js";
+
+export {
+  RecordingMemoryCleanupService,
+  type RecordingMemoryCleanupAuthority,
+  type RecordingMemoryCleanupOperation
+} from "./recording-memory-cleanup.js";

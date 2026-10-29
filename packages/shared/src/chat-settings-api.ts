@@ -6,8 +6,6 @@ export const CHAT_SETTINGS_PREFERENCE_KEY = "chat.settings.v1";
 
 export interface ChatSettingsDto {
   readonly responseStyle: ChatResponseStyle;
-  /** ACP model selected by the OpenCode card; omitted until the user chooses one. */
-  readonly openCodeModel?: "default" | "muse-spark-1.3-free";
 }
 
 export interface GetChatSettingsResponse {
@@ -27,10 +25,7 @@ export function normalizeChatSettings(value: unknown): ChatSettingsDto {
   const raw = value as Record<string, unknown>;
   const responseStyle = raw.responseStyle;
   if (!isChatResponseStyle(responseStyle)) return DEFAULT_CHAT_SETTINGS;
-  const openCodeModel = raw.openCodeModel;
-  return openCodeModel === "default" || openCodeModel === "muse-spark-1.3-free"
-    ? { responseStyle, openCodeModel }
-    : { responseStyle };
+  return { responseStyle };
 }
 
 export function isChatResponseStyle(value: unknown): value is ChatResponseStyle {
@@ -52,8 +47,7 @@ const chatSettingsSchema = {
   additionalProperties: false,
   required: ["responseStyle"],
   properties: {
-    responseStyle: { type: "string", enum: CHAT_RESPONSE_STYLES },
-    openCodeModel: { type: "string", enum: ["default", "muse-spark-1.3-free"] }
+    responseStyle: { type: "string", enum: CHAT_RESPONSE_STYLES }
   }
 } as const;
 

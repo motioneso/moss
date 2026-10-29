@@ -14,6 +14,7 @@ import {
 } from "@moss/meetings";
 import { VaultContextRunner } from "@moss/vault";
 import { recordingBundle, recordingFile } from "../fixtures/recording-bundle.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const previousVaultRoot = process.env.MOSS_VAULT_ROOT;
@@ -110,6 +111,7 @@ function setup(options: { fresh?: boolean; text?: string; failAdmission?: boolea
     source,
     snapshot,
     summary,
+    deps,
     attemptedId: () => attemptedId,
     async enable(recordingIds: string[] = []) {
       const enabled = await service.enableVoice(actor, { ...snapshot, recordingIds });
@@ -136,22 +138,10 @@ function setup(options: { fresh?: boolean; text?: string; failAdmission?: boolea
 }
 
 describe("explicit versioned voice recording receiver", () => {
-  it("keeps version-one hold files as meetings forever", async () => {
+  it("refuses version-one hold files sent as meetings", async () => {
     const f = setup();
-    const prior = await f.service.accept(actor, f.source);
-    await f.process(prior.id);
-    expect(await f.service.status(actor, prior.id)).toMatchObject({
-      state: "complete",
-      meetingId: prior.meetingId
-    });
-    expect(f.summary).toHaveBeenCalledOnce();
-    const voice = await f.enable();
-    await expect(f.service.acceptVoice(actor, voice)).rejects.toThrow();
-    expect(await f.chat.list(actor)).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ source_device_id: f.source.sourceDeviceId })
-      ])
-    );
+    await expect(f.service.accept(actor, f.source)).rejects.toMatchObject({ statusCode: 409 });
+    expect(f.summary).not.toHaveBeenCalled();
   });
   it("rejects the baseline even after disable and a later empty snapshot", async () => {
     const f = setup();
@@ -168,11 +158,25 @@ describe("explicit versioned voice recording receiver", () => {
       voice = await f.enable();
     const accepted = await f.service.acceptVoice(actor, voice);
     expect(accepted).toMatchObject({ state: "queued", voiceRequestId: null });
-    await f.process(accepted.id);
+    const transcribe = vi.spyOn(f.deps, "transcribe");
+    const preferences = new MeetingPreferencesRepository();
+    await context.withDataContext(actor, (db) =>
+      preferences.update(db, { transcriptLanguage: "es", transcriptVocabulary: ["José"] })
+    );
+    try {
+      await f.process(accepted.id);
+      expect(transcribe).toHaveBeenCalledTimes(1);
+      expect(transcribe.mock.calls[0]![1]).not.toHaveProperty("language");
+      expect(transcribe.mock.calls[0]![1]).not.toHaveProperty("prompt");
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
+      );
+    }
     const status = await f.service.voiceStatus(actor, accepted.id);
     expect(status).toMatchObject({ state: "complete", voiceRequestId: expect.any(String) });
     expect(await f.chat.status(actor, status!.voiceRequestId!)).toMatchObject({
-      state: "ready-to-send",
+      state: "queued",
       automatic: false,
       transcript: "Synthetic voice question"
     });

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMeetingChat, clearSessionUnsavedChanges } from "@moss/module-web-sdk";
+import { ApiError, useMeetingChat, clearSessionUnsavedChanges } from "@moss/module-web-sdk";
 import { Button, Dialog } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { deleteMeeting, meetingKeys } from "./client.js";
@@ -45,6 +45,13 @@ export function DeleteMeetingDialog({
       if (active.current) onDeleted();
     }
   });
+  const cleanupCode = mutation.error instanceof ApiError ? mutation.error.code : null;
+  const errorMessage =
+    cleanupCode === "meeting_cleanup_pending"
+      ? "Recording cleanup is pending or a notes folder is unavailable. Restore folder access if needed, then retry deletion. The recording is still here."
+      : cleanupCode === "meeting_cleanup_conflict"
+        ? "A note from this recording changed. Review its current contribution and preserve unrelated text before retrying deletion. The recording is still here."
+        : "Couldn’t confirm deletion. You can retry or cancel without losing your edits here.";
   return (
     <Dialog
       initialFocusRef={cancel}
@@ -69,12 +76,13 @@ export function DeleteMeetingDialog({
     >
       <p>
         “{meeting.title}”, its personal notes, transcript revisions, generated versions, and meeting
-        chat will be permanently deleted. This cannot be undone. Unsaved edits will be lost.
-        Accepted Tasks and saved vault copies remain.
+        chat will be permanently deleted. This cannot be undone. Unsaved edits will be lost. Exact
+        source-linked note contributions and unsupported recording memories are removed first.
+        Accepted Tasks and independent saved vault copies remain.
       </p>
       {mutation.isError ? (
         <p role="alert" className="jds-hint jds-hint--error">
-          Couldn’t confirm deletion. You can retry or cancel without losing your edits here.
+          {errorMessage}
         </p>
       ) : null}
     </Dialog>

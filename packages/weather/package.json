@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./visual": "./src/forecast/contract.ts",
+    "./web/visual": "./src/forecast/card.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -13,6 +15,10 @@
     "@moss/db": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/shared": "workspace:*",
-    "fastify": "^5.6.2"
+    "fastify": "^5.6.2",
+    "@moss/ui": "workspace:*",
+    "react": "^19.0.0",
+    "lucide-react": "^0.468.0",
+    "@moss/host-fetch": "workspace:*"
   }
 }

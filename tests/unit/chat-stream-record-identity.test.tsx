@@ -15,6 +15,7 @@ import {
 import {
   applyStreamRecord,
   mergeBackgroundRecords,
+  mergeRecoveredReplies,
   mergeHydratedRecords
 } from "../../apps/web/src/chat/stream-record-identity.js";
 import {
@@ -139,6 +140,47 @@ describe("mergeBackgroundRecords", () => {
   });
 });
 
+describe("recovered saved replies", () => {
+  it("recovers only observed turns, clears progress, replaces drafts and dedupes replay", () => {
+    const pending: TranscriptRecord = {
+      kind: "status",
+      text: "Preparing visual…",
+      turnId: "turn-1",
+      visualState: "preparing"
+    };
+    const saved = { ...storedReply, visualFallbackText: "Your data: hours: 6" };
+    const current = [{ ...user, turnId: "turn-1" }, pending, liveReply];
+    const history = [saved, { ...storedReply, messageId: "other", turnId: "foreign" }];
+    const merged = mergeRecoveredReplies(current, history);
+    expect(merged).toEqual([{ ...user, turnId: "turn-1" }, saved]);
+    expect(mergeRecoveredReplies(merged, history)).toEqual(merged);
+    expect(mergeRecoveredReplies([], history)).toEqual([]);
+    expect(mergeRecoveredReplies([{ ...user, turnId: "turn-1" }, pending], [saved])).toEqual([
+      { ...user, turnId: "turn-1" },
+      saved
+    ]);
+  });
+});
+
+it("clears missed visual progress when reconnect finds a stored interrupted error", () => {
+  const pending: TranscriptRecord = {
+    kind: "status",
+    text: "Preparing visual…",
+    turnId: "turn-1",
+    visualState: "preparing"
+  };
+  const error: TranscriptRecord = {
+    kind: "error",
+    text: "Interrupted",
+    messageId: "error-1",
+    turnId: "turn-1"
+  };
+  expect(mergeRecoveredReplies([{ ...user, turnId: "turn-1" }, pending], [error])).toEqual([
+    { ...user, turnId: "turn-1" },
+    error
+  ]);
+});
+
 describe("record identity on the wire", () => {
   it("parses the turn id and the background mark", () => {
     expect(
@@ -193,6 +235,86 @@ describe("Main stream reconnect", () => {
     lastActiveAt: new Date(0).toISOString(),
     lastMessagePreview: null
   };
+
+  it("recovers a notice when reconnect races an older initial history response", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
+    let completeHistory!: (value: { messages: ChatMessageDto[] }) => void;
+    const initialHistory = new Promise<{ messages: ChatMessageDto[] }>((resolve) => {
+      completeHistory = resolve;
+    });
+    vi.mocked(listChatThreadMessages).mockReturnValueOnce(initialHistory);
+    let renderer!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe, { surface: DEFAULT_CHAT_SURFACE }));
+      });
+      await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalledTimes(1));
+      const notice = message({
+        id: "racing-notice",
+        body: "Recovered racing notice",
+        origin: moduleNoticeOrigin
+      });
+      vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [notice] });
+      const stream = FakeEventSource.instances[0]!;
+      await act(async () => {
+        stream.onerror?.();
+        stream.onopen?.();
+      });
+      await act(async () => {
+        completeHistory({ messages: [message({ id: "earlier", body: "Earlier" })] });
+      });
+      await vi.waitFor(() =>
+        expect(JSON.stringify(renderer.toJSON())).toContain("Recovered racing notice")
+      );
+      expect(JSON.stringify(renderer.toJSON())).toContain("Earlier");
+      expect(listChatThreadMessages).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        stream.onopen?.();
+      });
+      expect(JSON.stringify(renderer.toJSON()).split("Recovered racing notice")).toHaveLength(2);
+    } finally {
+      await act(async () => renderer?.unmount());
+    }
+  });
+
+  it("hydrates a saved completion missed by the stream after reconnect", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(Probe, { surface: DEFAULT_CHAT_SURFACE }));
+    });
+    await vi.waitFor(() => expect(listChatThreadMessages).toHaveBeenCalledTimes(1));
+    const source = FakeEventSource.instances[0]!;
+    await act(async () => {
+      source.onmessage?.({ data: JSON.stringify({ ...user, turnId: "turn-1" }) });
+      source.onmessage?.({
+        data: JSON.stringify({
+          kind: "status",
+          text: "Preparing visual…",
+          turnId: "turn-1",
+          visualState: "preparing"
+        })
+      });
+    });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({
+      messages: [message({ id: "assistant-1", turnId: "turn-1", body: "Saved visual facts" })]
+    });
+    await act(async () => {
+      source.onopen?.();
+    });
+    await vi.waitFor(() =>
+      expect(JSON.stringify(renderer.toJSON())).toContain("Saved visual facts")
+    );
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Preparing visual");
+    await act(async () => {
+      source.onopen?.();
+    });
+    expect(JSON.stringify(renderer.toJSON()).split("Saved visual facts")).toHaveLength(2);
+    await act(async () => renderer.unmount());
+  });
 
   it("keeps voice activity and actionable approvals in their captured Main thread", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
@@ -249,6 +371,7 @@ describe("Main stream reconnect", () => {
   });
 
   it.each([
+    ["module notice", "Recording filed", "module_notice"],
     ["plain reminder", "Reminder: stretch", undefined],
     ["scheduled report", "I checked Proof. Its status is done.", "tasks"]
   ] as const)(
@@ -267,8 +390,11 @@ describe("Main stream reconnect", () => {
       const persisted = message({
         id: "background",
         body,
-        origin: { version: 1, kind: "reminder", event: "delivered", reminderId: "r" },
-        ...(sourceKind ? { scheduledReadSource: sourceKind } : {})
+        origin:
+          sourceKind === "module_notice"
+            ? moduleNoticeOrigin
+            : { version: 1, kind: "reminder", event: "delivered", reminderId: "r" },
+        ...(sourceKind === "tasks" ? { scheduledReadSource: sourceKind } : {})
       });
       vi.mocked(listChatThreadMessages).mockResolvedValue({
         messages: [message({ id: "earlier", body: "Earlier" }), persisted]
@@ -455,5 +581,74 @@ describe("Main stream reconnect", () => {
       source.onopen?.();
     });
     expect(listChatThreadMessages).toHaveBeenCalledTimes(1);
+  });
+});
+
+const moduleNoticeOrigin = {
+  version: 1 as const,
+  kind: "module_notice" as const,
+  noticeId: "10000000-0000-0000-0000-000000000001",
+  moduleId: "meetings",
+  sourceId: "10000000-0000-0000-0000-000000000002",
+  sourceVersion: "output-1",
+  noticeKind: "side_review",
+  actions: [
+    {
+      toolName: "meetings.change_side",
+      label: "Change side",
+      sourceId: "10000000-0000-0000-0000-000000000002",
+      sourceVersion: "output-1"
+    }
+  ]
+};
+
+describe("durable module notice context", () => {
+  const notice = () =>
+    message({ id: "notice-message", body: "Recording filed", origin: moduleNoticeOrigin });
+
+  it("retains source and declared actions in history and the live stream", () => {
+    const [history] = recordsFromMessages([notice()]);
+    expect(history).toMatchObject({
+      messageId: "notice-message",
+      background: true,
+      backgroundThreadId: "main-thread",
+      origin: moduleNoticeOrigin
+    });
+    expect(parseRecord(JSON.stringify(history))).toMatchObject({ origin: moduleNoticeOrigin });
+  });
+
+  it("recovers a missed notice beside an active turn and deduplicates subsequent live arrival", () => {
+    const history = recordsFromMessages([notice()]);
+    const recovered = mergeBackgroundRecords([user, liveReply], history);
+    expect(recovered).toEqual([
+      user,
+      liveReply,
+      expect.objectContaining({ messageId: "notice-message", origin: moduleNoticeOrigin })
+    ]);
+    const live = parseRecord(JSON.stringify(history[0]));
+    expect(live).not.toBeNull();
+    const replayed = applyStreamRecord(recovered, live!);
+    expect(replayed).toHaveLength(3);
+    expect(replayed.slice(0, 2)).toEqual([user, liveReply]);
+    expect(replayed[2]).toMatchObject({ messageId: "notice-message", origin: moduleNoticeOrigin });
+    expect(mergeBackgroundRecords(recovered, history)).toBe(recovered);
+  });
+
+  it("recovers history when a notice races the initial history response", () => {
+    const history = recordsFromMessages([message({ id: "earlier", body: "Earlier" }), notice()]);
+    const live = parseRecord(JSON.stringify(history[1]));
+    expect(mergeHydratedRecords([live!], history)).toEqual(history);
+  });
+
+  it("does not turn malformed context or an unfinished notice into a recovered background reply", () => {
+    const [unfinished] = recordsFromMessages([{ ...notice(), status: "error" }]);
+    expect(unfinished?.background).toBeUndefined();
+    const malformed = {
+      ...moduleNoticeOrigin,
+      actions: [{ ...moduleNoticeOrigin.actions[0], sourceVersion: "wrong-version" }]
+    };
+    expect(
+      parseRecord(JSON.stringify({ kind: "reply", text: "bad", origin: malformed }))?.origin
+    ).toBeUndefined();
   });
 });

@@ -23,8 +23,12 @@ import {
   RECORDING_SOURCE_LIMITS,
   type RecordingSourceKind
 } from "./recording-source-validation.js";
-import { RecordingVoiceEnablementRepository } from "./recording-voice-enablement.js";
+import {
+  RecordingVoiceEnablementRepository,
+  RecordingVoiceIneligibleError
+} from "./recording-voice-enablement.js";
 import { MeetingRecordsRepository } from "./repository.js";
+import { RecordingMetadataRepository } from "./recording-metadata.js";
 
 export class RecordingUploadService {
   private readonly imports = new RecordingImportRepository();
@@ -49,6 +53,10 @@ export class RecordingUploadService {
           throw new RecordingImportConflictError();
         return prior.id;
       }
+      if (input.mode === "voice-request" && input.manifest.destination.intent === "meeting")
+        throw new RecordingVoiceIneligibleError(
+          "Hold recordings go to Main chat and never become meetings"
+        );
       const id = randomUUID();
       const destination = input.manifest.destination;
       if (destination.intent === "voice-request") {
@@ -70,6 +78,13 @@ export class RecordingUploadService {
               })
             ).meeting
           : null;
+      if (meeting)
+        await new RecordingMetadataRepository().create(db, meeting.id, {
+          titleSource: "automatic",
+          typeId: null,
+          source: "recording",
+          recordedAt: null
+        });
       await this.uploads.insert(db, id, meeting?.id ?? null, input);
       await this.deps.schedule(
         db,
@@ -171,6 +186,11 @@ export class RecordingUploadService {
       if (row.ready) return this.progress(db, row);
       this.active(row);
       const input = parseRecordingUpload(JSON.parse(row.source_manifest_json!));
+      // Uploads reserved before hold recordings were refused as meetings must not finish as one.
+      if (input.mode === "voice-request" && input.manifest.destination.intent === "meeting")
+        throw new RecordingVoiceIneligibleError(
+          "Hold recordings go to Main chat and never become meetings"
+        );
       const chunks = await this.uploads.chunks(db, id);
       for (const kind of recordingSourceKinds) {
         const selected = chunks.filter((c) => c.kind === kind);

@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ai.moss.vocci">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ai.moss.android">
   <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="35" />
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
   <uses-permission android:name="android.permission.INTERNET" />
@@ -8,14 +8,19 @@
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <queries><package android:name="com.gygeslabs.odinclient" /></queries>
-  <application android:label="Moss recording delivery (dev)" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
-    <activity android:name=".DeliveryActivity" android:exported="true">
+  <application android:label="Moss" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <activity android:name=".SetupActivity" android:exported="false" />
+    <activity android:name=".ConnectActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+    <activity android:name=".DeliveryActivity" android:exported="false" />
+    <activity android:name=".HardwareActivity" android:exported="true" />
+    <activity android:name=".MossActivity" android:exported="true" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
     </activity>
     <service android:name=".DeliveryService" android:exported="false" android:foregroundServiceType="connectedDevice" />
+    <receiver android:name=".ReminderDismissal" android:exported="false" />
     <receiver android:name=".DeliveryRecovery" android:exported="false">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -23,5 +28,5 @@
       </intent-filter>
     </receiver>
   </application>
-  <instrumentation android:name=".DeviceChecks" android:targetPackage="ai.moss.vocci" android:functionalTest="true" />
+  <instrumentation android:name=".DeviceChecks" android:targetPackage="ai.moss.android" android:functionalTest="true" />
 </manifest>

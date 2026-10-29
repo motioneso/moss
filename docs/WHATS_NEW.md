@@ -29,6 +29,115 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-28
+
+#### Added
+
+- **Recording review messages in chat.** Moss now tells you in Main chat when it is unsure whether a recording is personal or work, with a link to review it. [PR #3815](https://github.com/motioneso/moss/pull/3815)
+- **Moss check-in settings.** You can now choose in Settings how often Moss checks in on your day and which of Calendar, Tasks, Memory, Sports and News it may look at. [PR #3820](https://github.com/motioneso/moss/pull/3820)
+
+### 2026-10-27
+
+#### Added
+
+- **Recording memory history.** Account exports now include recording memory labels, source history and reviewed changes. [PR #3810](https://github.com/motioneso/moss/pull/3810)
+- **Recording note history in exports.** Account exports now include saved recording-source status, note labels and contribution change history. [PR #3802](https://github.com/motioneso/moss/pull/3802)
+- **Edit recording types in chat.** Ask Moss to add, rename or retire recording types and choose how each type is summarized, while keeping older recordings easy to find. [PR #3790](https://github.com/motioneso/moss/pull/3790)
+- **More kinds of recordings.** Paste a transcript into Meetings and let Moss name it, choose its type and label it personal or work, then change or filter the type yourself. [PR #3785](https://github.com/motioneso/moss/pull/3785)
+
+#### Changed
+
+- **Recording cleanup before deletion.** Deleting a recording or account now cleans its linked notes and memories first, keeping changed notes for review before you try again. [PR #3812](https://github.com/motioneso/moss/pull/3812)
+- **Simpler connection settings.** Outlook calendar uses a compact account row, and Connections and Notes settings have less repeated text. [PR #3773](https://github.com/motioneso/moss/pull/3773)
+
+#### Fixed
+
+- **Tool results show plain text in chat.** When Moss uses a tool with a Claude account, the result shown under its thinking steps now reads as plain text instead of showing stray symbols. [PR #3535](https://github.com/motioneso/moss/pull/3535)
+- **Long ring recordings now upload.** Recordings longer than about 45 minutes from your ring now reach Moss instead of failing. [PR #3797](https://github.com/motioneso/moss/pull/3797)
+- **Preserve concurrent note edits.** Moss preserves separate note changes when two updates save together and reports conflicts when it detects an outside edit during a save. [PR #3796](https://github.com/motioneso/moss/pull/3796)
+- **Attached files stay visible while Moss replies.** A file you attach to a chat message now stays visible on your message while Moss writes the reply, instead of disappearing until the reply is done. [PR #3799](https://github.com/motioneso/moss/pull/3799)
+
+### 2026-10-26
+
+#### Added
+
+- **Moss for Android.** Moss now has an Android app that opens Moss full screen, with ring settings under Settings, Connections, Hardware. [PR #3764](https://github.com/motioneso/moss/pull/3764)
+
+#### Fixed
+
+- **Chat stays at the latest message while Moss replies.** The chat now keeps following Moss's reply as it is written, instead of leaving you scrolled up. [PR #3779](https://github.com/motioneso/moss/pull/3779)
+
+### 2026-10-25
+
+#### Fixed
+
+- **More complete recording transcripts.** Noisy recordings no longer lose stretches of speech in their transcripts. [PR #3748](https://github.com/motioneso/moss/pull/3748)
+- **Clear replies when a task check cannot be scheduled.** When a one-time task check cannot be set, Moss now explains the problem without continuing into an unrelated chat response. [PR #3532](https://github.com/motioneso/moss/pull/3532)
+- **Ring recordings no longer get stuck without a transcript.** Recordings from your ring are now transcribed and summarized even when the ring's clock drifts from the audio. [PR #3740](https://github.com/motioneso/moss/pull/3740)
+- **Ring hold commands stay out of Meetings.** Short voice commands you hold the ring button for now go only to chat and no longer also show up as meetings. [PR #3717](https://github.com/motioneso/moss/pull/3717)
+- **Faster ring hold-to-talk.** Holding the ring button to talk now gets a response in about 15 seconds instead of around 50, and those recordings no longer show up as meetings. [PR #3704](https://github.com/motioneso/moss/pull/3704)
+
+#### Changed
+
+- **Simpler ring app.** The ring app now shows the action you need on Home and keeps other controls together in Settings. [PR #3760](https://github.com/motioneso/moss/pull/3760)
+- **Ring recording reminder is harder to miss.** The reminder for a ring recording that has run over an hour now pops up with sound and vibration and repeats every 30 minutes until you dismiss it. [PR #3756](https://github.com/motioneso/moss/pull/3756)
+- **Tidier AI providers settings.** You now choose the decision model in a simple dialog, and you can lock your own assistant to one model from your personal settings. [PR #3701](https://github.com/motioneso/moss/pull/3701)
+- **Better weather cards in chat.** Weather forecasts in chat now show a clear temperature curve, weather icons and easy-to-read hourly details. [PR #3739](https://github.com/motioneso/moss/pull/3739)
+- **Faster queued voice commands.** Voice commands waiting for Chat now continue as soon as the current answer or startup finishes. [PR #3709](https://github.com/motioneso/moss/pull/3709)
+- **Faster voice request pickup.** Moss starts processing uploaded recordings and recognized voice requests sooner. [PR #3707](https://github.com/motioneso/moss/pull/3707)
+
+#### Added
+
+- **Reminder summaries in chat.** Ask chat what reminders you have and it now shows them in a clear card with their times, repeats and status, without changing anything. [PR #3700](https://github.com/motioneso/moss/pull/3700)
+
+### 2026-10-24
+
+#### Fixed
+
+- **Stray dot in Main chat.** A lone dot from a near-silent ring press no longer sticks to the bottom of Main chat, and the "interrupted" notice clears once you send another message. [PR #3693](https://github.com/motioneso/moss/pull/3693)
+- **Meeting summaries work after a Claude update.** Meeting summaries and Rewrite work again after the Claude connection was updated to a newer version. [PR #3690](https://github.com/motioneso/moss/pull/3690)
+- **Ring setup matches Hardware settings.** Ring setup now shows a simpler connection summary and returns to Hardware settings when you finish. [PR #3635](https://github.com/motioneso/moss/pull/3635)
+
+#### Added
+
+- **Task summaries in chat.** Ask about your tasks to see a summary of due dates, progress and priorities alongside Moss’s answer. [PR #3661](https://github.com/motioneso/moss/pull/3661)
+- **Evening weather cards in chat.** Moss can show hourly temperature, rain and wind forecasts for your local evening, with clear sources and missing-data labels. [PR #3648](https://github.com/motioneso/moss/pull/3648)
+- **Meeting transcript vocabulary.** Save spellings for names and terms to guide future meeting transcripts, with best-effort results from your audio service. [PR #3653](https://github.com/motioneso/moss/pull/3653)
+- **Sourced Sports results in chat.** Moss can show the latest available completed match with team logos, the score, its source and coverage when a visual helps your Sports question. [PR #3633](https://github.com/motioneso/moss/pull/3633)
+
+#### Changed
+
+- **Simpler way to add AI providers.** Adding an AI provider now happens in one pop-up window, and the less-used settings on the page fold away until you need them. [PR #3683](https://github.com/motioneso/moss/pull/3683)
+- **The Classifier's chat gate turns on straight away.** You can now switch the Classifier's chat gate to On in Settings straight away, with no Shadow trial or review first. [PR #3673](https://github.com/motioneso/moss/pull/3673)
+- **OpenCode no longer has its own card in AI provider settings.** The separate OpenCode card and its built-in chat model choice are gone, and OpenCode now works like any other provider, using the model you pick from its own list. [PR #3676](https://github.com/motioneso/moss/pull/3676)
+- **Ring messages flow straight into chat.** New ring messages send automatically and appear alongside normal chat messages while preserving your unsent drafts. [PR #3656](https://github.com/motioneso/moss/pull/3656)
+
+### 2026-10-23
+
+#### Added
+
+- **Visual summaries of your chat data.** Moss can show facts you share as a labeled visual summary, with readable text preserved when you copy or reopen the conversation. [PR #3603](https://github.com/motioneso/moss/pull/3603)
+- **Choose your transcription provider.** Admins can choose one configured provider and model for everyone's voice input and Meeting transcripts. [PR #3602](https://github.com/motioneso/moss/pull/3602)
+- **Choose meeting transcript language.** You can choose the spoken language for new meeting transcription or let the transcription service detect it automatically. [PR #3594](https://github.com/motioneso/moss/pull/3594)
+- **Guided setup for existing Vocci rings.** Connect an existing Vocci ring to Moss on Android, then choose when recording delivery and hold-to-talk are enabled. [PR #3566](https://github.com/motioneso/moss/pull/3566)
+
+#### Fixed
+
+- **Respect excluded ring recordings.** Excluded recordings no longer offer or start transcription retries. [PR #3622](https://github.com/motioneso/moss/pull/3622)
+- **More reliable recording transcription.** Recordings now finish transcribing when the speech service places a segment slightly beyond the end of its audio. [PR #3610](https://github.com/motioneso/moss/pull/3610)
+- **Meeting summaries after a chat tool update.** Meeting summaries work with the verified newer chat tool while keeping your chosen default model. [PR #3608](https://github.com/motioneso/moss/pull/3608)
+- **Meeting summaries use your default model.** Meeting summaries now support your configured Codex model alongside existing supported providers, without switching to another model. [PR #3576](https://github.com/motioneso/moss/pull/3576)
+
+#### Changed
+
+- **Shorter meeting settings.** Meeting and transcription settings now show shorter explanations and relevant setup help. [PR #3613](https://github.com/motioneso/moss/pull/3613)
+
+### 2026-10-22
+
+#### Fixed
+
+- **Calendar focuses today and fits month view.** Week and Month open on today, and Month fits the screen without sideways scrolling. [PR #3573](https://github.com/motioneso/moss/pull/3573)
+
 ### 2026-10-21
 
 #### Fixed

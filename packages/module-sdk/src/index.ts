@@ -122,6 +122,8 @@ export interface ToolContext {
   readonly chatSessionId: string;
   /** Conversation captured when the server minted the token; absent is fail-closed. */
   readonly threadId?: string;
+  /** Active host turn captured at authenticated tool-call arrival; never a tool argument. */
+  readonly turnId?: string;
   /** IANA timezone string from the user's locale settings (e.g. "America/Chicago"). Absent when the gateway has no locale available (falls back to UTC at call site). */
   readonly localTimezone?: string;
   /** The person's effective locale. Format every time shown to them with it; absent outside the gateway. */
@@ -160,6 +162,19 @@ export interface ToolResult {
  * module. The gateway treats it as opaque and never inspects its contents.
  */
 export type ToolServices = Readonly<Record<string, unknown>>;
+
+export type { ModuleVisualTemplate } from "./visual-template.js";
+import type { ModuleVisualTemplate } from "./visual-template.js";
+
+/** Injected only into authorized reads. Identity comes from the authenticated call context. */
+export interface VisualSnapshotRegistrationService {
+  registerSnapshot(
+    ctx: ToolContext,
+    snapshot: unknown
+  ):
+    | { ok: true; ref: string; templateKind: string; catalogVersion: string }
+    | { ok: false; code: string };
+}
 
 /**
  * Execution handler for an assistant tool. `scopedDb` is a DataContextDb supplied
@@ -541,6 +556,17 @@ export {
 } from "./ai-capabilities.js";
 import type { AiModelCapability, AiModelTier } from "./ai-capabilities.js";
 
+/** Named structured-AI work declared by a downloaded module (#3716). */
+export interface ModuleAiTaskDeclaration {
+  /** Lowercase slug, starting with a letter, at most 32 characters. */
+  readonly id: string;
+  /** Settings label, 1–48 characters. */
+  readonly label: string;
+  readonly defaultTier: AiModelTier;
+  /** Extra capabilities beyond the implicit structured-output `json` capability. */
+  readonly requires?: readonly "vision"[];
+}
+
 // #1110 regression fix: moved to ./errors.ts (a node-clean leaf) for the same reason as
 // ai-capabilities.ts above — see that leaf's docstring. Re-exported here so existing barrel
 // consumers are unaffected.
@@ -735,6 +761,9 @@ export interface ModuleAssistantToolManifest {
 }
 
 export interface MossModuleManifest {
+  /** Built-ins only. External packages cannot install executable presentation contracts. */
+  readonly visualTemplates?: readonly ModuleVisualTemplate[];
+
   readonly id: string;
   readonly name: string;
   readonly version: string;

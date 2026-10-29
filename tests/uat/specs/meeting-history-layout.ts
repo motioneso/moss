@@ -41,6 +41,8 @@ export async function assertMeetingHistoryKeyboardFocus(page: Page, title: strin
   const row = meetingRow(page, title);
   await page.getByRole("searchbox", { name: "Search meetings", exact: true }).focus();
   await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Recording type", { exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(row).toBeFocused();
   expect(await row.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
   await expect(row).toHaveCSS("box-shadow", /0px 0px 0px 3px$/);

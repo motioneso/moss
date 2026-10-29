@@ -9,6 +9,7 @@ import { renderToString } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
+import { ChatControlsProvider } from "../../apps/web/src/shell/chat-controls-context.js";
 
 const createAiProvider = vi.fn(async (_input: unknown) => ({
   provider: {
@@ -93,6 +94,13 @@ async function flush(): Promise<void> {
   });
 }
 
+const chatControls = {
+  openChat: () => {},
+  openChatThread: () => {},
+  openChatWith: () => {},
+  openAssistantWithDraft: vi.fn()
+};
+
 async function renderPane(): Promise<ReactTestRenderer> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let renderer!: ReactTestRenderer;
@@ -101,7 +109,11 @@ async function renderPane(): Promise<ReactTestRenderer> {
       createElement(
         QueryClientProvider,
         { client },
-        createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        createElement(
+          ChatControlsProvider,
+          { value: chatControls },
+          createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        )
       )
     );
   });
@@ -119,96 +131,277 @@ function clickButtonByText(renderer: ReactTestRenderer, text: string): void {
   });
 }
 
-describe("AiProvidersPane provider picker (#1325)", () => {
+function radioFor(renderer: ReactTestRenderer, id: string) {
+  const radio = renderer.root.findAll(
+    (node) => node.type === "input" && node.props.type === "radio" && node.props.value === id
+  )[0];
+  if (!radio) throw new Error(`choice "${id}" not found`);
+  return radio;
+}
+
+/** Opens the Add provider dialog and walks Choose then Connect for one catalog choice. */
+async function openConnect(renderer: ReactTestRenderer, id: string): Promise<void> {
+  clickButtonByText(renderer, "Add provider");
+  await flush();
+  await act(async () => {
+    (radioFor(renderer, id).props.onChange as () => void)();
+  });
+  clickButtonByText(renderer, "Next");
+  await flush();
+}
+
+async function fill(renderer: ReactTestRenderer, label: string, value: string): Promise<void> {
+  const input = renderer.root.findByProps({ "aria-label": label });
+  await act(async () => {
+    input.props.onChange({ target: { value } });
+  });
+}
+
+function addButton(renderer: ReactTestRenderer) {
+  const button = renderer.root
+    .findAllByType("button")
+    .find((instance) => instance.children.includes("Add"));
+  if (!button) throw new Error('"Add" button not found');
+  return button;
+}
+
+const unmount = (renderer: ReactTestRenderer) =>
+  act(async () => {
+    renderer.unmount();
+  });
+
+describe("AiProvidersPane Add provider dialog", () => {
   beforeEach(() => {
     createAiProvider.mockClear();
   });
 
-  it("opens a credential form for an api_key catalog entry instead of creating immediately", async () => {
+  it("opens a dialog with every choice grouped by how it connects", async () => {
     const renderer = await renderPane();
     clickButtonByText(renderer, "Add provider");
     await flush();
 
-    clickButtonByText(renderer, "Mistral");
-    await flush();
+    expect(renderer.root.findAllByProps({ role: "dialog" }).length).toBeGreaterThan(0);
+    const text = JSON.stringify(renderer.toJSON());
+    for (const group of ["Sign in with a subscription", "Use an API key", "Decision models"]) {
+      expect(text).toContain(group);
+    }
+    for (const id of ["claude", "codex", "gemini", "opencode", "openai-compatible", "anthropic"]) {
+      expect(radioFor(renderer, id)).toBeTruthy();
+    }
+    // The old picker choices are gone.
+    for (const id of ["mistral", "custom"]) {
+      expect(
+        renderer.root.findAll(
+          (node) => node.type === "input" && node.props.type === "radio" && node.props.value === id
+        )
+      ).toHaveLength(0);
+    }
+
+    await unmount(renderer);
+  });
+
+  it("asks for the credential on the Connect step instead of creating immediately", async () => {
+    const renderer = await renderPane();
+    await openConnect(renderer, "openai-compatible");
 
     expect(createAiProvider).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ "aria-label": "API key" })).toBeTruthy();
+    expect(addButton(renderer).props.disabled).toBe(true);
 
-    await act(async () => {
-      renderer.unmount();
-    });
+    await unmount(renderer);
   });
 
-  it("disables Add while the API key field is empty", async () => {
+  it("prefills the name and sends the typed name with the API key", async () => {
     const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-    clickButtonByText(renderer, "Mistral");
-    await flush();
+    await openConnect(renderer, "openai-compatible");
 
-    const addButton = renderer.root
-      .findAllByType("button")
-      .find((instance) => instance.children.includes("Add"));
-    if (!addButton) throw new Error('"Add" button not found');
-    expect(addButton.props.disabled).toBe(true);
-
-    await act(async () => {
-      renderer.unmount();
-    });
-  });
-
-  it("sends credentialPayload.apiKey when creating an api_key provider", async () => {
-    const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-    clickButtonByText(renderer, "Mistral");
-    await flush();
-
-    const apiKeyInput = renderer.root.findByProps({ "aria-label": "API key" });
-    await act(async () => {
-      apiKeyInput.props.onChange({ target: { value: "sk-test-123" } });
-    });
-
+    expect(renderer.root.findByProps({ "aria-label": "Name" }).props.value).toBe(
+      "OpenAI-compatible"
+    );
+    await fill(renderer, "Name", "Work Mistral");
+    await fill(renderer, "API key", "sk-test-123");
     clickButtonByText(renderer, "Add");
     await flush();
 
     expect(createAiProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         providerKind: "openai-compatible",
-        displayName: "Mistral",
+        displayName: "Work Mistral",
         authMethod: "api_key",
         credentialPayload: { apiKey: "sk-test-123" }
       })
     );
 
-    await act(async () => {
-      renderer.unmount();
-    });
+    await unmount(renderer);
   });
 
-  it("still creates a cli catalog entry immediately, with no credentialPayload key at all", async () => {
+  it("prefills the next free name when the same choice already exists", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        {
+          id: "p1",
+          providerKind: "openai-compatible",
+          displayName: "OpenAI-compatible",
+          authMethod: "api_key",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: true,
+          isInstanceDefault: false
+        }
+      ]
+    } as never);
     const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
+    await openConnect(renderer, "openai-compatible");
 
-    clickButtonByText(renderer, "Anthropic");
+    expect(renderer.root.findByProps({ "aria-label": "Name" }).props.value).toBe(
+      "OpenAI-compatible 2"
+    );
+    clickButtonByText(renderer, "Back");
+    await flush();
+    expect(radioFor(renderer, "openai-compatible").props.disabled).toBeFalsy();
+
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    await unmount(renderer);
+  });
+
+  it("creates a subscription choice with no credentialPayload key at all", async () => {
+    const renderer = await renderPane();
+    await openConnect(renderer, "claude");
+
+    expect(renderer.root.findAllByProps({ "aria-label": "API key" })).toHaveLength(0);
+    clickButtonByText(renderer, "Add and sign in");
     await flush();
 
     expect(createAiProvider).toHaveBeenCalledTimes(1);
     const sent = createAiProvider.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
     expect(sent.providerKind).toBe("anthropic");
     expect(sent.authMethod).toBe("cli");
+    expect(sent.displayName).toBe("Claude");
     expect("credentialPayload" in sent).toBe(false);
 
-    await act(async () => {
-      renderer.unmount();
-    });
+    await unmount(renderer);
+  });
+
+  it("disables a subscription choice that already has a provider, with the plain reason", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        {
+          id: "p1",
+          providerKind: "anthropic",
+          displayName: "Claude",
+          authMethod: "cli",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: false,
+          isInstanceDefault: false,
+          cliAvailable: true
+        }
+      ]
+    } as never);
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+
+    expect(radioFor(renderer, "claude").props.disabled).toBe(true);
+    expect(radioFor(renderer, "codex").props.disabled).toBeFalsy();
+    expect(radioFor(renderer, "anthropic").props.disabled).toBeFalsy();
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      "Already connected. Remove it to sign in with another account."
+    );
+
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    await unmount(renderer);
+  });
+
+  it("Back returns to Choose and keeps the chosen group selected", async () => {
+    const renderer = await renderPane();
+    await openConnect(renderer, "anthropic");
+    clickButtonByText(renderer, "Back");
+    await flush();
+
+    expect(radioFor(renderer, "anthropic").props.checked).toBe(true);
+
+    await unmount(renderer);
+  });
+
+  it("renders no Authentication switch or CLI agent dropdown on a provider card", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        {
+          id: "p1",
+          providerKind: "openai-compatible",
+          displayName: "Codex",
+          authMethod: "cli",
+          acpAgentId: "codex-acp",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: false,
+          isInstanceDefault: false,
+          cliAvailable: true
+        }
+      ]
+    } as never);
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Edit");
+    await flush();
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).not.toContain("Authentication");
+    expect(text).not.toContain("CLI agent");
+
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    await unmount(renderer);
+  });
+
+  it("still renders and edits a pre-existing Custom provider", async () => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        {
+          id: "p-custom",
+          providerKind: "custom",
+          displayName: "My custom host",
+          authMethod: "api_key",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: true,
+          isInstanceDefault: false
+        }
+      ]
+    } as never);
+    vi.mocked(apiClient.updateAiProvider).mockClear();
+    const renderer = await renderPane();
+    expect(JSON.stringify(renderer.toJSON())).toContain("My custom host");
+
+    clickButtonByText(renderer, "Edit");
+    await flush();
+    expect(renderer.root.findByProps({ "aria-label": "Base URL" })).toBeTruthy();
+    await fill(renderer, "API key", "sk-custom-new");
+    clickButtonByText(renderer, "Save");
+    await flush();
+
+    expect(apiClient.updateAiProvider).toHaveBeenCalledWith(
+      "p-custom",
+      expect.objectContaining({ credentialPayload: { apiKey: "sk-custom-new" } })
+    );
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).not.toContain("Authentication");
+    expect(text).not.toContain("CLI agent");
+
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    await unmount(renderer);
+  });
+
+  it("shows one section for which model does what, with the override switch inside it", async () => {
+    const renderer = await renderPane();
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain("Which model does what");
+    expect(text).not.toContain("User chat override");
+    expect(text).not.toContain("Chat lock (this account)");
+    await unmount(renderer);
   });
 });
 
 describe("AiProvidersPane services group (#2594)", () => {
-  it("shows the Classifier row under the per-job rows", async () => {
+  it("shows the Decision model row under the per-job rows", async () => {
     const client = await import("../../apps/web/src/api/client.js");
     vi.mocked(client.listAiProviders).mockResolvedValueOnce({
       providers: [
@@ -227,7 +420,7 @@ describe("AiProvidersPane services group (#2594)", () => {
     const renderer = await renderPane();
     const text = JSON.stringify(renderer.toJSON());
     expect(text.indexOf("Email reading")).toBeGreaterThan(-1);
-    expect(text.indexOf("Classifier")).toBeGreaterThan(text.indexOf("Email reading"));
+    expect(text.indexOf("Decision model")).toBeGreaterThan(text.indexOf("Email reading"));
   });
 });
 
@@ -238,7 +431,11 @@ describe("AiProvidersPane", () => {
       createElement(
         QueryClientProvider,
         { client },
-        createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        createElement(
+          ChatControlsProvider,
+          { value: chatControls },
+          createElement(FeedbackProvider, null, createElement(AiProvidersPane))
+        )
       )
     );
 
@@ -255,8 +452,6 @@ describe("AiProvidersPane", () => {
 // separate Trail Marker row. A System One model is offered only in the Classifier row. The
 // Services group only renders once a provider exists, so each test seeds one.
 describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
-  const SORTING_LABEL = "Classifier model";
-
   function seedSystemOne(): void {
     vi.mocked(apiClient.listAiProviders).mockResolvedValue({
       providers: [
@@ -313,7 +508,7 @@ describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
     const renderer = await renderPane();
     expect(selects(renderer, "Binding for Trail Marker focus judgment")).toHaveLength(0);
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("Classifier");
+    expect(text).toContain("Decision model");
     await act(async () => {
       renderer.unmount();
     });
@@ -322,7 +517,15 @@ describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
   it("offers a System One model only in the Classifier row and never as the default provider (fails without the provider-kind filters)", async () => {
     seedSystemOne();
     const renderer = await renderPane();
-    expect(optionTexts(renderer, SORTING_LABEL)).toContain("Jev");
+    await act(async () => {
+      renderer.root
+        .findAllByType("button")
+        .find((button) => button.children.join("") === "Choose a model")!
+        .props.onClick();
+    });
+    const dialogText = JSON.stringify(renderer.toJSON());
+    expect(dialogText).toContain("Choose a decision model");
+    expect(dialogText).toContain("Jev");
     expect(optionTexts(renderer, "Binding for Email reading")).not.toContain("Jev");
     const setDefault = renderer.root
       .findAllByType("button")
@@ -337,12 +540,20 @@ describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
     seedSystemOne();
     vi.mocked(apiClient.putAiServiceBinding).mockResolvedValue({} as never);
     const renderer = await renderPane();
-    const [row] = selects(renderer, SORTING_LABEL);
-    await act(async () => {
-      (row!.props.onChange as (event: { target: { value: string } }) => void)({
-        target: { value: "model:model1" }
+    const press = async (label: string) =>
+      act(async () => {
+        renderer.root
+          .findAllByType("button")
+          .find((button) => button.children.join("") === label)!
+          .props.onClick();
       });
+    await press("Choose a model");
+    await act(async () => {
+      renderer.root
+        .findAll((node) => node.type === "input" && node.props.type === "radio")[0]!
+        .props.onChange();
     });
+    await press("Save");
     await flush();
     expect(apiClient.putAiServiceBinding).toHaveBeenCalledWith("sorting", {
       binding: { kind: "model", modelId: "model1" }
@@ -370,41 +581,31 @@ describe("AiProvidersPane Trail Marker judge is the Classifier (#2570)", () => {
 describe("AiProvidersPane add provider examples (#2586)", () => {
   it("shows each provider its own example address and key, not another company's", async () => {
     const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-    clickButtonByText(renderer, "Jev (TypeSafe)");
-    await flush();
+    await openConnect(renderer, "anthropic");
 
     expect(renderer.root.findByProps({ "aria-label": "Base URL" }).props.placeholder).toBe(
-      "https://api.typesafe.ai"
+      "https://api.anthropic.com"
     );
     expect(renderer.root.findByProps({ "aria-label": "API key" }).props.placeholder).toBe(
-      "apikey_…"
+      "sk-ant-…"
     );
 
-    await act(async () => {
-      renderer.unmount();
-    });
+    await unmount(renderer);
   });
 
-  it("does not show Anthropic's address or an sk- key style to a Mistral (OpenAI-compatible) provider", async () => {
+  it("does not show Anthropic's address or an sk- key style to an OpenAI-compatible provider", async () => {
     const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-    clickButtonByText(renderer, "Mistral");
-    await flush();
+    await openConnect(renderer, "openai-compatible");
 
     const base = renderer.root.findByProps({ "aria-label": "Base URL" }).props.placeholder;
     expect(base).not.toContain("anthropic");
     expect(base).toBe("https://api.openai.com");
 
-    await act(async () => {
-      renderer.unmount();
-    });
+    await unmount(renderer);
   });
 });
 
-// #3057: the picker gains three decision-model presets. Adding Clef builds its address from an
+// #3057: the dialog offers three decision-model presets. Adding Clef builds its address from an
 // account id; the compatible preset never locks out; Jev still recognises existing installs.
 describe("AiProvidersPane decision-model presets (#3057)", () => {
   const ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
@@ -423,14 +624,6 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
     ...overrides
   });
 
-  function catalogButton(renderer: ReactTestRenderer, label: string) {
-    const button = renderer.root
-      .findAllByType("button")
-      .find((instance) => instance.children.includes(label));
-    if (!button) throw new Error(`catalog button "${label}" not found`);
-    return button;
-  }
-
   beforeEach(() => {
     createAiProvider.mockClear();
     createAiModel.mockClear();
@@ -445,10 +638,7 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
 
   it("shows Account ID and token for Clef and submits the built address", async () => {
     const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-    clickButtonByText(renderer, "Clef (Cloudflare)");
-    await flush();
+    await openConnect(renderer, "clef");
 
     expect(renderer.root.findByProps({ "aria-label": "Account ID" })).toBeTruthy();
     expect(renderer.root.findByProps({ "aria-label": "API token" })).toBeTruthy();
@@ -468,7 +658,7 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
     expect(createAiProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         providerKind: "system-one",
-        displayName: "Clef (Cloudflare)",
+        displayName: "Clef",
         authMethod: "api_key",
         baseUrl: CLOUDFLARE_BASE_URL,
         credentialPayload: { apiKey: "cf-token" }
@@ -482,10 +672,7 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
 
   it("disables Add while the Clef account id is malformed", async () => {
     const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-    clickButtonByText(renderer, "Clef (Cloudflare)");
-    await flush();
+    await openConnect(renderer, "clef");
 
     const account = renderer.root.findByProps({ "aria-label": "Account ID" });
     await act(async () => {
@@ -521,35 +708,15 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
     clickButtonByText(renderer, "Add provider");
     await flush();
 
-    expect(catalogButton(renderer, "Any compatible service").props.disabled).toBe(false);
+    expect(radioFor(renderer, "compatible").props.disabled).toBeFalsy();
+    expect(radioFor(renderer, "jev").props.disabled).toBeFalsy();
 
-    await act(async () => {
-      renderer.unmount();
-    });
+    await unmount(renderer);
   });
 
-  it("marks Jev added for an existing TypeSafe provider with no address", async () => {
-    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
-      providers: [systemOneProvider({ displayName: "System One (TypeSafe)", baseUrl: null })]
-    } as never);
+  it("pins the OpenRouter example address and sends the typed name", async () => {
     const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-
-    expect(catalogButton(renderer, "Jev (TypeSafe)").props.disabled).toBe(true);
-    expect(catalogButton(renderer, "Clef (Cloudflare)").props.disabled).toBe(false);
-
-    await act(async () => {
-      renderer.unmount();
-    });
-  });
-
-  it("pins the OpenRouter example address and names a compatible service by its host", async () => {
-    const renderer = await renderPane();
-    clickButtonByText(renderer, "Add provider");
-    await flush();
-    clickButtonByText(renderer, "Any compatible service");
-    await flush();
+    await openConnect(renderer, "compatible");
 
     const address = renderer.root.findByProps({ "aria-label": "Address" });
     expect(address.props.placeholder).toBe("https://openrouter.ai/api");
@@ -567,7 +734,7 @@ describe("AiProvidersPane decision-model presets (#3057)", () => {
     expect(createAiProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         providerKind: "system-one",
-        displayName: "Decision model (openrouter.ai)",
+        displayName: "Any compatible service",
         baseUrl: "https://openrouter.ai/api",
         credentialPayload: { apiKey: "sk-or" }
       })

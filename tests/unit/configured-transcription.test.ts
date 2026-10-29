@@ -98,6 +98,74 @@ afterEach(() => {
 });
 
 describe("configured timestamped transcription", () => {
+  it.each([undefined, "Moss, Vocci", "界".repeat(66) + "ab"])(
+    "transports bounded vocabulary %s and accepts an endpoint that ignores it",
+    async (prompt) => {
+      const h = setup();
+      const result = await h.transcribe(actor, {
+        ...(await h.input()),
+        language: "en",
+        ...(prompt === undefined ? {} : { prompt })
+      });
+      const form = h.fetch.mock.calls[0]![1]!.body as FormData;
+      expect(form.get("prompt")).toBe(prompt ?? null);
+      expect(form.get("model")).toBe("configured-stt");
+      expect(form.get("language")).toBe("en");
+      expect(result.segments[0]?.text).toBe("Generated fixture");
+      expect(h.fetch).toHaveBeenCalledOnce();
+    }
+  );
+  it.each(["", "a".repeat(201), "a\nb", "\ud800"])(
+    "rejects invalid prompt before sending audio",
+    async (prompt) => {
+      const h = setup();
+      await expect(
+        h.transcribe(actor, { ...(await h.input()), language: "en", prompt })
+      ).rejects.toMatchObject({ stage: "validation", retryable: false });
+      expect(h.fetch).not.toHaveBeenCalled();
+    }
+  );
+  it("rejects a vocabulary request without language before fetch", async () => {
+    const h = setup();
+    await expect(
+      h.transcribe(actor, { ...(await h.input()), prompt: "Moss" })
+    ).rejects.toMatchObject({ stage: "validation" });
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it("never strips a rejected prompt and resends the audio", async () => {
+    const h = setup();
+    h.fetch.mockResolvedValue(new Response("Private rejected hint", { status: 400 }));
+    await expect(
+      h.transcribe(actor, { ...(await h.input()), language: "en", prompt: "Moss" })
+    ).rejects.toMatchObject({ httpStatus: 400, retryable: false });
+    expect(h.fetch).toHaveBeenCalledOnce();
+    expect((h.fetch.mock.calls[0]![1]!.body as FormData).get("prompt")).toBe("Moss");
+  });
+  it.each([undefined, "es"])(
+    "sends the actual language hint %s, omitting automatic detection",
+    async (language) => {
+      const h = setup();
+      await h.transcribe(actor, { ...(await h.input()), ...(language ? { language } : {}) });
+      const form = h.fetch.mock.calls[0]![1]!.body as FormData;
+      expect(form.get("language")).toBe(language ?? null);
+      expect(form.get("model")).toBe(model.provider_model_id);
+      expect(form.get("response_format")).toBe("verbose_json");
+      expect(form.get("file")).toBeInstanceOf(Blob);
+    }
+  );
+  it("surfaces rejected language hints without a fallback request", async () => {
+    const h = setup();
+    h.fetch.mockResolvedValue(new Response("Unsupported language", { status: 400 }));
+    await expect(
+      h.transcribe(actor, { ...(await h.input()), language: "es" })
+    ).rejects.toMatchObject({
+      code: "failed",
+      httpStatus: 400,
+      retryable: false
+    });
+    expect(h.fetch).toHaveBeenCalledTimes(1);
+    expect((h.fetch.mock.calls[0]![1]!.body as FormData).get("language")).toBe("es");
+  });
   it("retries a response-body connection failure without retaining transport text", async () => {
     const h = setup();
     const input = await h.input();

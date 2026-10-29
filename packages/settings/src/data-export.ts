@@ -1,4 +1,6 @@
+import type { RecordingMemoryExportSection, ManagedNotesExportSection } from "@moss/shared";
 import { sql, type Kysely } from "kysely";
+import { chatExportText } from "./chat-export-text.js";
 
 import {
   assertQualifiedTableName,
@@ -126,6 +128,8 @@ export interface UserDataExportTables {
   readonly medicationLogs: readonly ExportRow[];
   readonly medications: readonly ExportRow[];
   readonly meetings: MeetingsExportSection;
+  readonly notes: ManagedNotesExportSection;
+  readonly recordingMemory: RecordingMemoryExportSection;
   readonly memoryChunks: readonly ExportRow[];
   readonly memoryAliases: readonly ExportRow[];
   readonly memoryCandidates: readonly ExportRow[];
@@ -277,6 +281,22 @@ async function readExportTables(
     { actorUserId: userId, requestId }
   );
 
+  const recordingMemory = await collectModuleExportSection<RecordingMemoryExportSection>(
+    listModuleManifests,
+    "memory",
+    "recordingMemory",
+    scopedDb,
+    { actorUserId: userId, requestId }
+  );
+
+  const notesSection = await collectModuleExportSection<ManagedNotesExportSection>(
+    listModuleManifests,
+    "notes",
+    "notes",
+    scopedDb,
+    { actorUserId: userId, requestId }
+  );
+
   const meetingsSection = await collectModuleExportSection<MeetingsExportSection>(
     listModuleManifests,
     "meetings",
@@ -313,7 +333,7 @@ async function readExportTables(
     aiAssistantActionRequests: await readRows(scopedDb.db, aiAssistantActionRequestsQuery(userId)),
     jarvisActionAuditLog: await readRows(scopedDb.db, jarvisActionAuditLogQuery(userId)),
     chatThreads: await readRows(scopedDb.db, chatThreadsQuery(userId)),
-    chatMessages: await readRows(scopedDb.db, chatMessagesQuery(userId)),
+    chatMessages: (await readRows(scopedDb.db, chatMessagesQuery(userId))).map(chatExportText),
     chatVoiceRequests: await collectModuleExportSection<readonly ExportRow[]>(
       listModuleManifests,
       "chat",
@@ -344,6 +364,8 @@ async function readExportTables(
     preferences: await readRows(scopedDb.db, preferencesQuery(userId)),
     sportsSources: sportsSourcesSection,
     meetings: meetingsSection,
+    notes: notesSection,
+    recordingMemory,
     usefulnessFeedbackSignals: await readRows(scopedDb.db, usefulnessFeedbackSignalsQuery(userId)),
     usefulnessFeedbackTargets: await readRows(scopedDb.db, usefulnessFeedbackTargetsQuery(userId)),
     focusJudgments: await readRows(scopedDb.db, focusJudgmentsQuery(userId)),

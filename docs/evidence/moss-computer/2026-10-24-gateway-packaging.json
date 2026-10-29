@@ -1,0 +1,448 @@
+{
+  "scope": "internal opt-in standalone gateway packaging; no image/runtime/owner acceptance",
+  "base": "0dc882dc3a8282719cd4cb3118fe21e5146e175e",
+  "accepted_source": "31983368533b2115f0394d22e925985ba0118f26",
+  "source_restored": true,
+  "source_test_sha256": {
+    "package.json": "7e7e05989abf0519c761238adea9991695c3103fa62808aacd94305ab80c7199",
+    "pnpm-lock.yaml": "c1aeb9ba0c811c1a43a78e9148edf2cc79f19876ff77c482adba8e25d81e009b",
+    "scripts/computer-gateway/build.ts": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75",
+    "scripts/build-computer-gateway.ts": "19b6dd8e8093fa95df8e296ea9d7328e14a0ed5eacbd20f7f84e7d15697f1cd7",
+    "infra/computer-gateway/Dockerfile": "41b7497e6fc87035d7df5c778ae202c2c197cd3f013bfa4ff48af8e04846460a",
+    "infra/computer-gateway/.dockerignore": "9c519649ce9017c819f6a960cff4ae4d64c10a7111448b83bead2641926731f3",
+    "tests/unit/computer-gateway-build.test.ts": "0e138caae684ce0ca02d964ea78666826cfef48cd12d46ed705058e8ffd4be98",
+    "tests/unit/computer-process-fixture.ts": "dd2da503b5be0daef33dc445dbe51a5d5ab78dda87d043518f1a178ad2c7f158"
+  },
+  "artifact": {
+    "format": "cjs",
+    "target": "node24",
+    "compiler": {
+      "name": "esbuild",
+      "version": "0.25.12"
+    },
+    "baseImage": "node:24-bookworm-slim@sha256:2dd9a4f758e173b65fee15388f7706af6fb01ef50cf7a2c0538711d67a6981ae",
+    "bundle": {
+      "sha256": "62fa2f2dcea4b06f81f1ae291647d69f73be6cc6509f7ab92bcede32627c617f",
+      "bytes": 301728
+    },
+    "dockerfileSha256": "41b7497e6fc87035d7df5c778ae202c2c197cd3f013bfa4ff48af8e04846460a",
+    "dockerignoreSha256": "9c519649ce9017c819f6a960cff4ae4d64c10a7111448b83bead2641926731f3",
+    "sourceSha256": {
+      "apps/api/src/computer/auth-channel.ts": "4335eefe1746f1a3af5f7ed0a5454a550a21f22cff1a6fd2d0fe779ad5b1f899",
+      "apps/api/src/computer/auth-client.ts": "08e6e49fdab1a4f364cefc30552f94582df35d4097439f924c8f6645a7a3e349",
+      "apps/api/src/computer/gateway-channel.ts": "d37ad9bfdb08cb1eb78f7e60689d8d3ae6e26dd727f9f05525be8758c61a3c49",
+      "apps/api/src/computer/gateway-server.ts": "f120141716ba35f9678774a0589bc920643d8229e99092c282f8cfed46b3779e",
+      "apps/api/src/computer/guest-envelope.ts": "c484029bf65c3a404cc9308d8961253036dd84279d9e46d2b214a9548eb6dc30",
+      "apps/api/src/computer/guest-websocket.ts": "d5c1ba6b791066d35a139c2c69ea7b215ba13bc97811d79752e0f35edf5ce152",
+      "apps/api/src/computer/host-contract.ts": "cdca45129269a8526d8ac697283564fc6c09f30d19435f524d82a61a20e06e64",
+      "apps/api/src/computer/input-control.ts": "d04b0ad354e7ca4adec77d8bdde3f032da861c91886a51a2346c93db7888dcb9",
+      "apps/api/src/computer/private-endpoint.ts": "c40c26c1b705a71e57f7fb875f6f468b64b7662bc745baf1995368f1264a4509",
+      "apps/api/src/computer/receiving-frames.ts": "dabfd0dc9309628bd011ffe8c624f860435c664461742632ec3d77f887955593",
+      "apps/api/src/computer/receiving-gateway.ts": "04f004c0c27ab0bc6336680bb91fcc831d8bf4de5b2e8c9c9f4a0fae03d719ed",
+      "apps/api/src/computer/rfb-input-stream.ts": "7ef45d638e4dc4215ce52fc4057b143ba3ffc6aaf31887607f0873f9a58f62e8",
+      "apps/api/src/computer/rfb-input-writer.ts": "27805e6a6683caefa6d79c2a0c2eae9359a32df9042977b8aa719d638c0a91d0",
+      "apps/api/src/computer/rfb-input.ts": "f9de904e2def4ad6805e6557c5f2824709dbb7f9ea50ed88c9408234936b970b",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/client.js": "9df087660469b98f7f6b3abae422b586ad290ef05bf9206e861038b03e48662c",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/constants.js": "abb57a7fb0e7ff2d804a7b6ea090fd5162c03d237384e89547578b660f55e33d",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/decoder.js": "ad69ffc771c869408d448f0a485e0f7640686b5738ce5ffe03cfd3d74b9f3b06",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/des.js": "5416c284642ebf94fa626fda013be804818fc79387166d5efab5bf240f0fb3cc",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/encodings/cursor.js": "41f184f142b97a6292827876a9a4e78bc38e8c51ef77b9f133881e22b7f57c88",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/encodings/hextile.js": "ec7deedf1503b24b0897e45ad697d96e316d00bc10f7ad09090031ab96839af0",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/encodings/rre.js": "1a16836ec668743e2aa5596529524cb3340f3bf0f01c126dd6365d01b644202a",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/encodings/tight.js": "d4e5f02c9e75a65b4b703eec978b549ea842fa2ca54805623232835f2f6bd424",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/encodings/trle.js": "4ce7686ddd1bd52f078fc24d7a2b38893515d315e754ea49d1f12459af66774c",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/encodings/util.js": "c13ac12f8271b3953a3802b8ac9e88e5298bd1e1217ea97f078d501a6e23dcd0",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/errors.js": "e5841d60fcebd6375795e06335f111d55163c39cea43e7976df2b65d97718e28",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/fbs.js": "d74f3333a3d4e851bce00c006887d7115de18e9ed1db7eef44f44ac67f5eb88b",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/framebuffer.js": "5e5ec38a04e950718183787a6226b944e1829b01e5828c7c3630bde9a0dadb1f",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/index.js": "555a5c652fa47ec60c7331dfd1c592aa87ace49794e06dcd89b0574b2a84c17a",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/inflator.js": "5593fdaaeb8bc1356dc6fc51600e08fe21a6732c4166cf9fedb41a98ce4498a8",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/keysyms.js": "a4f57b29dfc7260278275cbc9f2acf04c4a04f28bbafe1c742af13b780f450f1",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/messages.js": "c598bcd98bae579d7380919c8bba99f55de03d6134a6a20a76e25d1a1f1a4e9a",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/pixel-format.js": "00670c2db046cb127f444fa01fe94544405f0c78e0f40863206ce2448eb2ce97",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/png.js": "e8e6a9c245f5ef30dd2edc3260a2943025979797296db54d30bf5ef98b4e8ff4",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/reader.js": "6ca3df51ab011223b1f5c5692d9f50b33f7cd4692dfe510169a480492f4a3d7f",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/security/basic.js": "35c491e21c5a126ea88fe097df9f69ed45dd16fece0bb72d200f5a2a1fb38f38",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/security/dh.js": "d7afe366c977fb1e7457064db73f472725c6b173050f43293bd6d8b4c4241723",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/security/rsa-aes.js": "70a220e5949abcfce5d38d13e51103741f5f58333fe6a51fa09523f3f87c8cb9",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/security/tight.js": "f8bfa2a40343d631fc80c12b58273059206827531c26c159c5c6067af8e4afe0",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/security/types.js": "8165c80f7f781c4825c1bb02952ae4233baf30b8e9613e9dbd22cb9e2aacaa8f",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/security/vencrypt.js": "0e0cc2b5ac097be549b2c9e6ea39ddaac4045f34d0f9a01534d349d848e9ca92",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/server.js": "7e035398dd65902f0691716a59966fb86083958afad53dc96853b22c62d3425e",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/dist/transport.js": "806a2b664453f1193b8f213113a6e6dbb00105a03c65b0e05eeaf6c3042f1f78",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/buffer-util.js": "8b0a45739132f82e25ea13163780abf547ccfe989267f3eb7abb475beec92da3",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/constants.js": "391e823142b8b370e55a2fd32b022deaf03b8415c56000009674ebc86a0b4f86",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/event-target.js": "c45d3c6e12d170c860c0c3f1a050aa0f864d9806632b609a1e607d675aba128c",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/extension.js": "852564f0f6b460287043803eae732666fb5610f676874354fc89f06aa4e986ed",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/limiter.js": "e0469d4b83f6ba764b15f80e1766b75c136fbff68f048f4c050f0b1c7f065f69",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/permessage-deflate.js": "02c31796f0132a335d4efe7b7adcebadbb69543a1ce65ae04aaccc3530e27ab9",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/receiver.js": "a6ada33c9a2d54eaf595824b821ea89ca2c6395f89aa06755c52142148274884",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/sender.js": "d0791d30c3defd44dcabbddb879a901c757993fea2c00a7ffea01d53b23b4b77",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/stream.js": "a56fcb6e2b152097ee820b6f5410b1f71e59819b45d08d9f8bda588fe39070ec",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/subprotocol.js": "be3f6323d6f549568577dcba9004c1479d95c65a7abb0fe0c582875b9fac0b7c",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/validation.js": "41ce8e83d0d434132e1704895fedb91f6703a701b42d91c80954ab29b2845593",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/websocket-server.js": "6d8dd89a841748c80445fd5fcdb5ba8005369b53cc3525135e11304c8b9c55e5",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/lib/websocket.js": "de5add831db49e159d3ee0adb1c5e042eba3af13166374c5584f4fc520d1e734",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/wrapper.mjs": "fe154662301fd558f935f9c217fccbe7a7dac02ff39e648a000589403ff27c7f",
+      "scripts/computer-gateway.ts": "4605b73610ec23e85199ed9b9ba65354031bf0317677c53b4b15fa78e392ad98",
+      "scripts/computer-gateway/config.ts": "5b848ba765196aea1dcbe2017c4123387d1b9347a85c66311cf4ecb631d4e969"
+    },
+    "controlSha256": {
+      "apps/api/package.json": "eef925e786bbedfef60071aa47a9c0448ca37df7aa5b517548dc24a401a786f1",
+      "infra/computer-gateway/.dockerignore": "9c519649ce9017c819f6a960cff4ae4d64c10a7111448b83bead2641926731f3",
+      "infra/computer-gateway/Dockerfile": "41b7497e6fc87035d7df5c778ae202c2c197cd3f013bfa4ff48af8e04846460a",
+      "node_modules/.pnpm/esbuild@0.25.12/node_modules/esbuild/package.json": "cb7d5b1fe478f8cbaae566a86031b6fdf5f7d444354f35d1cb3cba9adf6d2935",
+      "node_modules/.pnpm/rfb2@1.1.0/node_modules/rfb2/package.json": "da60d77ca6ad1da140315b2d22b7a1143108a350cc53064cb68a9c2f563d8709",
+      "node_modules/.pnpm/ws@8.21.1/node_modules/ws/package.json": "5d9fcf3bb6aaa7c789b4a020b79e208e76fbc32b1989caf2c275db8cb04329de",
+      "package.json": "7e7e05989abf0519c761238adea9991695c3103fa62808aacd94305ab80c7199",
+      "pnpm-lock.yaml": "c1aeb9ba0c811c1a43a78e9148edf2cc79f19876ff77c482adba8e25d81e009b",
+      "scripts/build-computer-gateway.ts": "19b6dd8e8093fa95df8e296ea9d7328e14a0ed5eacbd20f7f84e7d15697f1cd7",
+      "scripts/computer-gateway/build.ts": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75"
+    }
+  },
+  "host_node": "22.22.2",
+  "tests": {
+    "passed": 30,
+    "files": 4,
+    "packaging_tests": 6,
+    "transport": "real private Unix/auth/ws/rfb2 and actual emitted bundle child from output cwd; no tsx/NODE_OPTIONS/NODE_PATH",
+    "stand_ins": "synthetic fresh session lookup and library Fence extension; no actual TigerVNC"
+  },
+  "checks": [
+    {
+      "name": "tests-types-r1",
+      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.tests.json", "--noEmit"],
+      "exit": 0,
+      "seconds": 308.28,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-gateway/build.ts",
+        "scripts/build-computer-gateway.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 0,
+      "seconds": 6.63,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "behavior-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 33.97,
+      "log_sha256": "12c86dbb659b136382a1d33ad36ce607af94466a34610e37d26982d9a6daa932"
+    },
+    {
+      "name": "format-source-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "package.json",
+        "scripts/computer-gateway/build.ts",
+        "scripts/build-computer-gateway.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "docs/superpowers/plans/2026-10-24-moss-computer-gateway-packaging.md"
+      ],
+      "exit": 0,
+      "seconds": 5.18,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "size-r1",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 15.39,
+      "log_sha256": "d156e6ab76ce5454ee0c641c148979a91fdcace4296336e8bb0c8af146b54654"
+    },
+    {
+      "name": "whitespace-final",
+      "command": ["git", "diff", "--check"],
+      "exit": 0,
+      "seconds": 0.03,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "cli-r1",
+      "command": ["pnpm", "build:computer-gateway", "<private-output>"],
+      "exit": 0,
+      "seconds": 3.56,
+      "log_sha256": "832e8ca2ed10bab4f43e2bd090cb6c46e479c293a810bf2f3db874cb637073a9"
+    },
+    {
+      "name": "root-types-final",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "source": "31983368533b2115f0394d22e925985ba0118f26",
+      "exit": 0,
+      "seconds": 362.48,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "docs-format-final",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "docs/evidence/moss-computer/2026-10-24-gateway-packaging.md",
+        "docs/evidence/moss-computer/2026-10-24-gateway-packaging.json",
+        "docs/superpowers/handoffs/2026-10-24-moss-computer-admission-watchdog.md"
+      ],
+      "exit": 0,
+      "seconds": 2.1,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "docs-size-final",
+      "command": ["pnpm", "check:file-size"],
+      "exit": 0,
+      "seconds": 10.08,
+      "log_sha256": "d156e6ab76ce5454ee0c641c148979a91fdcace4296336e8bb0c8af146b54654"
+    }
+  ],
+  "earlier_checks": [
+    {
+      "name": "lint-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "eslint",
+        "scripts/computer-gateway/build.ts",
+        "scripts/build-computer-gateway.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "--max-warnings=0"
+      ],
+      "exit": 1,
+      "seconds": 10.38,
+      "log_sha256": "3dec2de5b1b6d7371745218ddf1758a749439b544750402fd517915dc5413585"
+    },
+    {
+      "name": "behavior-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-gateway-process.test.ts",
+        "tests/unit/computer-gateway-channel.test.ts",
+        "tests/unit/computer-guest-websocket.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 38.86,
+      "log_sha256": "53f5e286f20d14d1b896b0e4f8fcef677756c75301101ab547586702a15eec74"
+    },
+    {
+      "name": "format-r1",
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "--check",
+        "package.json",
+        "scripts/computer-gateway/build.ts",
+        "scripts/build-computer-gateway.ts",
+        "tests/unit/computer-gateway-build.test.ts",
+        "tests/unit/computer-process-fixture.ts",
+        "docs/superpowers/plans/2026-10-24-moss-computer-gateway-packaging.md"
+      ],
+      "exit": 0,
+      "seconds": 5.23,
+      "log_sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "name": "root-types-r1",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "exit": 2,
+      "seconds": 440.95,
+      "log_sha256": "33ae64f2adc703ff24fc6aee0b0a1823e11d37b883a95f63cd318958f8ce3cf4"
+    },
+    {
+      "name": "root-types-r2-aborted",
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "source": "31983368533b2115f0394d22e925985ba0118f26",
+      "exit": 1,
+      "seconds": 131.07,
+      "log_sha256": "8899634a085917a5355e01f3d8cb98307e9331d099a9a1bd4db3bec0c87ef449",
+      "reason": "Owned compiler deliberately terminated after r1 diagnosed omitted worker pino dependency; not an accepted check or negative control"
+    },
+    {
+      "name": "install-worker",
+      "command": [
+        "pnpm",
+        "install",
+        "--filter",
+        ".",
+        "--filter",
+        "@moss/api...",
+        "--filter",
+        "@moss/worker...",
+        "--filter",
+        "@moss/web",
+        "--filter",
+        "@moss/visual-chat-runtime-spike",
+        "--frozen-lockfile",
+        "--offline",
+        "--ignore-scripts"
+      ],
+      "exit": 0,
+      "log_sha256": "9c58e3c7328b11fb5a5943d8a67818c090cae84931b0a5d01cd3e6f16384d713"
+    }
+  ],
+  "controls": [
+    {
+      "name": "external-guard",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-build.test.ts",
+        "-t",
+        "rejects a real compiler result"
+      ],
+      "source_path": "scripts/computer-gateway/build.ts",
+      "original_sha256": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75",
+      "mutant_sha256": "42a7fe4407438c351c61f37db5ce79a7a3372886c98797ac31e0051245c23a97",
+      "exit": 1,
+      "seconds": 11.58,
+      "expected_failure": "promise resolved",
+      "intended_assertion_observed": true,
+      "log_sha256": "a571699c100d8ef805ca8651cc2d28211be3f58604ca77e6f1be47464097794c",
+      "restored_sha256": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75"
+    },
+    {
+      "name": "input-stability",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-build.test.ts",
+        "-t",
+        "rejects an input changed"
+      ],
+      "source_path": "scripts/computer-gateway/build.ts",
+      "original_sha256": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75",
+      "mutant_sha256": "fa9acd5a5b833cda59ea7afdbd254e4a52f44852adc02627718772a4512ca519",
+      "exit": 1,
+      "seconds": 9.29,
+      "expected_failure": "promise resolved",
+      "intended_assertion_observed": true,
+      "log_sha256": "388bcd7de96d0e3a5abeda69c407d59d7e02054f0e2c22af0c465ac76d1a4e1d",
+      "restored_sha256": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75"
+    },
+    {
+      "name": "optional-flags",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "tests/unit/computer-gateway-build.test.ts",
+        "-t",
+        "builds a deterministic closed context"
+      ],
+      "source_path": "scripts/computer-gateway/build.ts",
+      "original_sha256": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75",
+      "mutant_sha256": "8e57d50713fbf8cc0f1271a28987d866c5a3a48f38a36ed0c165af59d8ca03b8",
+      "exit": 1,
+      "seconds": 7.62,
+      "expected_failure": "Computer bundle has nonbuiltin runtime dependencies",
+      "intended_assertion_observed": true,
+      "log_sha256": "fbda8dfc9365079ff129d1a2e55854fde46fc9955c12a3eb156b50ea383e4061",
+      "restored_sha256": "32dbc5c0897d39e1dfdb9fdf661de427ded5e69b92b2983bfa36ccfa60334e75"
+    }
+  ],
+  "control_definitions": {
+    "external-guard": "remove entire result.outputFiles/metafile builtin-import guard before input stability loop",
+    "input-stability": "remove entire captured-control/source reread equality loop before hashes",
+    "optional-flags": "remove complete esbuild define block for both optional ws native accelerators"
+  },
+  "reviews": [
+    {
+      "round": "plan-security-r1",
+      "candidate": "8b93c9e166d951388c60cd04474919985d7757e8",
+      "verdict": "BLOCKED: compiler-child/provenance contract; fixed before implementation",
+      "sha256": "0c167fed75acb5d8a69d188443670a744746dcb7c900368e4a7ba537ce3f277d"
+    },
+    {
+      "round": "plan-security-r2",
+      "candidate": "20109810ea0cb6f188aa47429891c2685bb34cae",
+      "verdict": "PASS_BOUNDED_PACKAGING_PLAN",
+      "sha256": "3548a90a4a54390bf68138e5c2c78248e6030528a345b27d68c8f69a8b325dae"
+    },
+    {
+      "round": "standards-r1",
+      "candidate": "45ca4b5a2a3d883bf25a470c1816a7c511da6672",
+      "verdict": "BLOCKED: test type-import lint; fixed319833685",
+      "sha256": "8f955f509b631a9d7a2cae96eb21bd9e0ce00a8b6426de4a931fdadb07bf2e6f"
+    },
+    {
+      "round": "spec-r1",
+      "candidate": "45ca4b5a2a3d883bf25a470c1816a7c511da6672",
+      "verdict": "PASS_BOUNDED_PACKAGING_SOURCE",
+      "sha256": "347bb0e82a0fd58a982fdfc95e812c9c47e2691705783c5acf11cb9c68c9d686"
+    },
+    {
+      "round": "security-source-r1",
+      "candidate": "45ca4b5a2a3d883bf25a470c1816a7c511da6672",
+      "verdict": "PASS_BOUNDED_PACKAGING_SOURCE",
+      "sha256": "183577565185a463802381d4d632c9c15617e27838a826c0e3356f66f420103b"
+    },
+    {
+      "round": "standards-r2",
+      "candidate": "31983368533b2115f0394d22e925985ba0118f26",
+      "verdict": "SOURCE_ACCEPTED; final required checks separate",
+      "sha256": "4a771b58af99ddbfb31418642b2a293d0c422e910034cc1b89cec4a33c22e47a"
+    },
+    {
+      "round": "spec-r2",
+      "candidate": "31983368533b2115f0394d22e925985ba0118f26",
+      "verdict": "PASS_BOUNDED_PACKAGING_SOURCE",
+      "sha256": "6d3a3589292310919b66fcc9bc1c4d00e60442b0bf88f7630582b5e1083f60dd"
+    },
+    {
+      "round": "security-source-r2",
+      "candidate": "31983368533b2115f0394d22e925985ba0118f26",
+      "verdict": "PASS_BOUNDED_PACKAGING_SOURCE",
+      "sha256": "ade57fae17d78406d39794d07d0cfc22004573f0ce9a80808a2c86575e417b9a"
+    },
+    {
+      "round": "security-evidence-r1",
+      "candidate": "31983368533b2115f0394d22e925985ba0118f26",
+      "verdict": "NO_BLOCKERS_FOUND_DRAFT; exact final acceptance pending",
+      "sha256": "51833de58a275b5b208d648b0ede0d14618177a0ee88e8fc0c8c47563f81577e"
+    }
+  ],
+  "required_pending": [
+    "independent exact final evidence acceptance",
+    "required exact PR CI",
+    "merge then verified fresh isolated successor"
+  ],
+  "resources": {
+    "docker_image_guest_db_browser_tcp_production_mutations": false,
+    "runtime_admission_changed": false,
+    "image_id_configured": false,
+    "persistence": "accepted r21 reused without requalification; r12/r18 causes unknown"
+  }
+}

@@ -454,6 +454,10 @@
   flex: none;
 }
 @media (max-width: 620px) {
+  .ai-own-lock-row {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
   .set-row__control {
     max-width: 100%;
   }

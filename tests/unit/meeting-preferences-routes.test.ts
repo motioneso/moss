@@ -16,7 +16,16 @@ function setup(stored: unknown = null, authError?: Error) {
   apps.push(app);
   const scoped = {} as DataContextDb;
   const actors: AccessContext[] = [];
-  const preferences = { get: vi.fn(async () => stored), upsert: vi.fn(async () => undefined) };
+  const preferences = {
+    lock: vi.fn(async () => undefined),
+    getMany: vi.fn(async (_db: DataContextDb, keys: readonly string[]) =>
+      Object.fromEntries(
+        keys.map((key) => [key, key === "meetings.transcript-vocabulary" ? [] : stored])
+      )
+    ),
+    get: vi.fn(async (_db: DataContextDb, _key: string): Promise<unknown> => stored),
+    upsert: vi.fn(async (_db: DataContextDb, _key: string, _value: unknown) => undefined)
+  };
   registerMeetingPreferenceRoutes(app, {
     resolveAccessContext: async () => {
       if (authError) throw authError;
@@ -33,6 +42,44 @@ function setup(stored: unknown = null, authError?: Error) {
   return { app, scoped, preferences, actors };
 }
 describe("meeting capture defaults", () => {
+  it("round-trips language and automatic detection without changing other preferences", async () => {
+    const { app, preferences } = setup();
+    const values = new Map<string, unknown>([["meetings.summarize-on-stop", false]]);
+    preferences.getMany.mockImplementation(async (_db, keys) =>
+      Object.fromEntries(keys.map((key) => [key, values.get(key) ?? null]))
+    );
+    preferences.upsert.mockImplementation(async (_db, key, value) => {
+      values.set(key, value);
+    });
+    for (const transcriptLanguage of ["es", "ja", null]) {
+      const response = await app.inject({
+        method: "PUT",
+        url: "/api/meetings/preferences",
+        payload: { transcriptLanguage }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ transcriptLanguage, summarizeOnStop: false });
+      expect((await app.inject("/api/meetings/preferences")).json().transcriptLanguage).toBe(
+        transcriptLanguage
+      );
+    }
+    expect(preferences.upsert.mock.calls.map((call) => call[1])).toEqual(
+      Array(3).fill("meetings.transcript-language")
+    );
+  });
+  it.each(["", "ES", "es-ES", "zz", false, {}, 42])(
+    "rejects invalid language %s before writes",
+    async (transcriptLanguage) => {
+      const { app, preferences } = setup();
+      const response = await app.inject({
+        method: "PUT",
+        url: "/api/meetings/preferences",
+        payload: { transcriptLanguage, summarizeOnStop: false }
+      });
+      expect(response.statusCode).toBe(400);
+      expect(preferences.upsert).not.toHaveBeenCalled();
+    }
+  );
   it.each([null, undefined, "unknown-mode", { mode: "computer-audio" }])(
     "uses microphone and system audio for absent or invalid stored mode %s",
     async (value) => {
@@ -41,7 +88,9 @@ describe("meeting capture defaults", () => {
         defaultCaptureMode: "computer-audio",
         rememberedSource: null,
         summarizeOnStop: true,
-        summaryTemplateId: "general"
+        summaryTemplateId: "general",
+        transcriptVocabulary: [],
+        transcriptLanguage: null
       });
       expect(preferences.upsert).not.toHaveBeenCalled();
     }
@@ -54,11 +103,19 @@ describe("meeting capture defaults", () => {
         defaultCaptureMode: mode,
         rememberedSource: null,
         summarizeOnStop: true,
-        summaryTemplateId: "general"
+        summaryTemplateId: "general",
+        transcriptVocabulary: [],
+        transcriptLanguage: null
       });
-      expect(preferences.get).toHaveBeenCalledTimes(4);
-      expect(preferences.get).toHaveBeenCalledWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
-      expect(preferences.get).toHaveBeenCalledWith(scoped, "meetings.capture.remembered-source");
+      expect(preferences.getMany).toHaveBeenCalledExactlyOnceWith(
+        scoped,
+        expect.arrayContaining([
+          MEETING_CAPTURE_DEFAULT_KEY,
+          "meetings.capture.remembered-source",
+          "meetings.transcript-language",
+          "meetings.transcript-vocabulary"
+        ])
+      );
     }
   );
   it.each([null, "microphone-only", "selected-app", "computer-audio"])(

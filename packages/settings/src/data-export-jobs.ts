@@ -105,6 +105,7 @@ export async function handleExportBuildJob(
         preferences: userExport.tables.preferences,
         tasks: userExport.tables.tasks,
         memory: {
+          recordingHistory: userExport.tables.recordingMemory,
           chunks: userExport.tables.memoryChunks,
           facts: userExport.tables.chatMemoryFacts,
           entities: userExport.tables.memoryEntities,
@@ -145,6 +146,7 @@ export async function handleExportBuildJob(
         newsPersonalization: userExport.tables.newsPersonalization,
         sportsSources: userExport.tables.sportsSources,
         meetings: userExport.tables.meetings,
+        notes: userExport.tables.notes,
         connector_metadata: userExport.tables.connectorAccounts,
         calendar_cache: userExport.tables.calendarEvents,
         email_cache: userExport.tables.emailMessages,

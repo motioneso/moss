@@ -58,6 +58,8 @@ docs/superpowers/mockups/integrations-redesign/
 docs/superpowers/mockups/theme-editor-park-press/
 # Moss extensions Customizations mockups: static pages, stylesheet and fonts, frozen for review.
 docs/superpowers/mockups/moss-extensions/
+# Remote access mockups: static pages, stylesheet and fonts, frozen for review.
+docs/superpowers/mockups/remote-access/
 
 # Preserve the historical Meetings critique without reformatting its original review.
 docs/superpowers/mockups/meetings-minimal/critique.md
@@ -70,3 +72,15 @@ docs/superpowers/specs/assets/2026-10-03-activity-history/
 
 # Preserve the historical Meetings critique without reformatting its original review.
 docs/superpowers/mockups/meetings-minimal/critique.md
+docs/evidence/builder-sessions/
+docs/superpowers/specs/ai-providers-polish-mockups/
+# Vocci ring app layout mockups: static page, frozen for review.
+docs/superpowers/mockups/vocci-ring-app-layout/
+# Moss for Android mockups: a static page, frozen for review.
+docs/superpowers/mockups/moss-android-hardware/
+# Outlook work mail settings row mockups: generated pages and a frozen copy of the shipped CSS.
+docs/superpowers/specs/outlook-mail-mockup/*.html
+docs/superpowers/specs/outlook-mail-mockup/moss-ui.css
+
+# Byte-identical copy of the reviewed stage 4 runner protocol (#3538)
+scripts/uat-campaign/PROTOCOL.md

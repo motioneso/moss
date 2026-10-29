@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ai.moss.android.setupproof">
+  <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="35" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <queries><package android:name="com.gygeslabs.odinclient" /></queries>
+  <application android:label="Moss setup proof" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/setup_network" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <activity android:name="ai.moss.android.SetupActivity" android:exported="true" />
+    <activity android:name="ai.moss.android.DeliveryActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+    <activity android:name="ai.moss.android.MossSetupProofActivity" android:exported="true" />
+    <activity android:name="ai.moss.android.VocciProofActivity" android:exported="true" />
+    <service android:name="ai.moss.android.DeliveryService" android:exported="false" android:foregroundServiceType="connectedDevice" />
+  </application>
+  <instrumentation android:name="ai.moss.android.VocciAuthChecks" android:targetPackage="ai.moss.android.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.android.SetupLinkChecks" android:targetPackage="ai.moss.android.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.android.SetupRingChecks" android:targetPackage="ai.moss.android.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.android.SetupPhysicalCheck" android:targetPackage="ai.moss.android.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.android.SetupUiChecks" android:targetPackage="ai.moss.android.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.android.SetupSelectionChecks" android:targetPackage="ai.moss.android.setupproof" android:functionalTest="true" />
+  <instrumentation android:name="ai.moss.android.SetupReadyChecks" android:targetPackage="ai.moss.android.setupproof" android:functionalTest="true" />
+</manifest>

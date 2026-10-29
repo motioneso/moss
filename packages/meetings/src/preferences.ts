@@ -2,6 +2,10 @@ import type { DataContextDb } from "@moss/db";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
   parseMeetingCaptureMode,
+  normalizeMeetingVocabulary,
+  meetingTranscriptionOptions,
+  MeetingVocabularyError,
+  isMeetingTranscriptLanguage,
   parseMeetingRememberedSource,
   type MeetingCapturePreferences,
   type MeetingCaptureInventory,
@@ -16,24 +20,42 @@ export const MEETING_CAPTURE_DEFAULT_KEY = "meetings.capture.default-mode";
 export const MEETING_CAPTURE_SOURCE_KEY = "meetings.capture.remembered-source";
 export const MEETING_SUMMARIZE_KEY = "meetings.summarize-on-stop";
 export const MEETING_TEMPLATE_KEY = "meetings.summary-template";
-export type MeetingPreferenceStore = Pick<PreferencesRepository, "get" | "upsert">;
+export const MEETING_TRANSCRIPT_LANGUAGE_KEY = "meetings.transcript-language";
+export const MEETING_TRANSCRIPT_VOCABULARY_KEY = "meetings.transcript-vocabulary";
+export type MeetingPreferenceStore = Pick<
+  PreferencesRepository,
+  "get" | "getMany" | "lock" | "upsert"
+>;
 export class MeetingPreferencesRepository {
   constructor(private readonly store: MeetingPreferenceStore = new PreferencesRepository()) {}
+  async getTranscriptionOptions(db: DataContextDb) {
+    const current = await this.get(db);
+    return meetingTranscriptionOptions(current.transcriptLanguage, current.transcriptVocabulary);
+  }
   /** Distinguish a saved default from get()’s fallback through the remembered source. */
   async getPersistedDefaultCaptureMode(db: DataContextDb) {
     return parseMeetingCaptureMode(await this.store.get(db, MEETING_CAPTURE_DEFAULT_KEY));
   }
   async get(db: DataContextDb): Promise<MeetingCapturePreferences> {
-    const [mode, source, summarize, template] = await Promise.all(
-      [
-        MEETING_CAPTURE_DEFAULT_KEY,
-        MEETING_CAPTURE_SOURCE_KEY,
-        MEETING_SUMMARIZE_KEY,
-        MEETING_TEMPLATE_KEY
-      ].map((key) => this.store.get(db, key))
-    );
+    const values = await this.store.getMany(db, [
+      MEETING_CAPTURE_DEFAULT_KEY,
+      MEETING_CAPTURE_SOURCE_KEY,
+      MEETING_SUMMARIZE_KEY,
+      MEETING_TEMPLATE_KEY,
+      MEETING_TRANSCRIPT_LANGUAGE_KEY,
+      MEETING_TRANSCRIPT_VOCABULARY_KEY
+    ]);
+    const mode = values[MEETING_CAPTURE_DEFAULT_KEY];
+    const source = values[MEETING_CAPTURE_SOURCE_KEY];
+    const summarize = values[MEETING_SUMMARIZE_KEY];
+    const template = values[MEETING_TEMPLATE_KEY];
+    const language = values[MEETING_TRANSCRIPT_LANGUAGE_KEY];
     const rememberedSource = parseMeetingRememberedSource(source);
     return {
+      transcriptLanguage: isMeetingTranscriptLanguage(language) ? language : null,
+      transcriptVocabulary: normalizeMeetingVocabulary(
+        values[MEETING_TRANSCRIPT_VOCABULARY_KEY] ?? []
+      ),
       defaultCaptureMode:
         parseMeetingCaptureMode(mode) ?? rememberedSource?.mode ?? "computer-audio",
       rememberedSource,
@@ -48,12 +70,15 @@ export class MeetingPreferencesRepository {
     db: DataContextDb,
     input: UpdateMeetingCapturePreferences
   ): Promise<MeetingCapturePreferences> {
+    await this.store.lock(db, "meetings.capture-preferences");
     const current = await this.get(db);
     const source =
       input.rememberedSource === undefined
         ? current.rememberedSource
         : parseMeetingRememberedSource(input.rememberedSource);
     if (
+      (input.transcriptLanguage != null &&
+        !isMeetingTranscriptLanguage(input.transcriptLanguage)) ||
       (input.rememberedSource != null && !source) ||
       (input.summaryTemplateId !== undefined &&
         !getMeetingOutputTemplate(input.summaryTemplateId, 1))
@@ -61,6 +86,14 @@ export class MeetingPreferencesRepository {
       throw new MeetingCaptureError("meeting_capture_invalid_input", 400);
     const next: MeetingCapturePreferences = {
       ...current,
+      transcriptLanguage:
+        input.transcriptLanguage === undefined
+          ? current.transcriptLanguage
+          : input.transcriptLanguage,
+      transcriptVocabulary:
+        input.transcriptVocabulary === undefined
+          ? current.transcriptVocabulary
+          : normalizeVocabularyInput(input.transcriptVocabulary),
       rememberedSource: source,
       defaultCaptureMode:
         input.defaultCaptureMode === undefined
@@ -69,7 +102,18 @@ export class MeetingPreferencesRepository {
       summarizeOnStop: input.summarizeOnStop ?? current.summarizeOnStop,
       summaryTemplateId: input.summaryTemplateId ?? current.summaryTemplateId
     };
+    try {
+      meetingTranscriptionOptions(next.transcriptLanguage, next.transcriptVocabulary);
+    } catch (error) {
+      if (error instanceof MeetingVocabularyError)
+        throw new MeetingCaptureError("meeting_vocabulary_invalid", 400);
+      throw error;
+    }
     const writes: [string, unknown][] = [];
+    if (input.transcriptVocabulary !== undefined)
+      writes.push([MEETING_TRANSCRIPT_VOCABULARY_KEY, next.transcriptVocabulary]);
+    if (input.transcriptLanguage !== undefined)
+      writes.push([MEETING_TRANSCRIPT_LANGUAGE_KEY, next.transcriptLanguage]);
     if (input.defaultCaptureMode !== undefined)
       writes.push([MEETING_CAPTURE_DEFAULT_KEY, next.defaultCaptureMode]);
     if (input.rememberedSource !== undefined) writes.push([MEETING_CAPTURE_SOURCE_KEY, source]);
@@ -79,6 +123,15 @@ export class MeetingPreferencesRepository {
       writes.push([MEETING_TEMPLATE_KEY, next.summaryTemplateId]);
     for (const [key, value] of writes) await this.store.upsert(db, key, value);
     return next;
+  }
+}
+function normalizeVocabularyInput(value: unknown) {
+  try {
+    return normalizeMeetingVocabulary(value);
+  } catch (error) {
+    if (error instanceof MeetingVocabularyError)
+      throw new MeetingCaptureError("meeting_vocabulary_invalid", 400);
+    throw error;
   }
 }
 /** Resolve defaults without persisting hardware choices or broadening a saved exact source. */

@@ -8,7 +8,10 @@ import {
 } from "@moss/vault";
 import { HttpError } from "@moss/module-sdk";
 import type { VoiceRequestInput } from "@moss/shared";
-import { RecordingVoiceEnablementRepository } from "./recording-voice-enablement.js";
+import {
+  RecordingVoiceEnablementRepository,
+  RecordingVoiceIneligibleError
+} from "./recording-voice-enablement.js";
 import { validateVoiceRecordingBundle } from "./recording-voice-bundle.js";
 import { validateRecordingBundle, type RecordingBundle } from "./recording-bundle.js";
 import {
@@ -18,10 +21,12 @@ import {
   voiceRecordingImportStatus
 } from "./recording-import-repository.js";
 import { MeetingRecordsRepository } from "./repository.js";
+import { RecordingMetadataRepository } from "./recording-metadata.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { RecordingUploadRepository } from "./recording-upload-repository.js";
 import { RecordingUploadService } from "./recording-upload-service.js";
 import { RecordingWindowService } from "./recording-window-service.js";
+import { MeetingPreferencesRepository } from "./preferences.js";
 
 export interface RecordingImportPayload {
   actorUserId: string;
@@ -49,6 +54,8 @@ export interface RecordingImportDependencies {
     actor: AccessContext,
     input: {
       audio: Uint8Array;
+      language?: string;
+      readonly prompt?: string;
       signal: AbortSignal;
       expectedModelRoute: string;
       dispatch<T>(
@@ -137,6 +144,10 @@ export class RecordingImportService {
         if (existing.fingerprint !== bundle.fingerprint) throw new RecordingImportConflictError();
         return { row: existing, created: false };
       }
+      if (!voice && bundle.mode === "voice-request")
+        throw new RecordingVoiceIneligibleError(
+          "Hold recordings go to Main chat and never become meetings"
+        );
       const id = randomUUID();
       const policy = voice
         ? await new RecordingVoiceEnablementRepository().admit(db, {
@@ -156,6 +167,13 @@ export class RecordingImportService {
                 bundle.mode === "voice-request" ? "Imported voice request" : "Imported recording"
             })
           ).meeting;
+      if (meeting)
+        await new RecordingMetadataRepository().create(db, meeting.id, {
+          titleSource: "automatic",
+          typeId: null,
+          source: "recording",
+          recordedAt: null
+        });
       const row = await this.imports.insert(db, id, meeting?.id ?? null, bundle, policy);
       await this.deps.schedule(
         db,
@@ -268,7 +286,13 @@ export class RecordingImportService {
           : validateVoiceRecordingBundle(retained);
       });
       if (bundle.fingerprint !== row.fingerprint) throw new Error("Retained recording mismatch");
+      const transcriptionOptions = row.meeting_id
+        ? await this.deps.dataContext.withDataContext(actor, (db) =>
+            new MeetingPreferencesRepository().getTranscriptionOptions(db)
+          )
+        : {};
       const result = await this.deps.transcribe(actor, {
+        ...transcriptionOptions,
         audio: Buffer.from(bundle.manifest.wav.base64, "base64"),
         signal: AbortSignal.timeout(35_000),
         expectedModelRoute: selected.modelRoute,
@@ -285,7 +309,10 @@ export class RecordingImportService {
               throw new Error("Import attempt superseded");
             await this.deps.assertAvailable(actor);
             await validate?.(db);
-            return { request: send() };
+            const request = send();
+            // Observe early rejection while admission commits; the caller still receives it below.
+            void request.catch(() => undefined);
+            return { request };
           });
           return dispatched.request;
         }

@@ -459,7 +459,38 @@ describe("ChatSessionManager", () => {
     expect(replies[0]?.turnId).toBe(replies[1]?.turnId);
     expect(replies[2]?.turnId).toBe(replies[3]?.turnId);
     expect(replies[0]?.turnId).not.toBe(replies[2]?.turnId);
-    expect(seen.filter((r) => r.kind !== "reply").some((r) => r.turnId)).toBe(false);
+    const users = seen.filter((r) => r.kind === "user");
+    expect(users.map((r) => r.turnId)).toEqual([replies[0]?.turnId, replies[2]?.turnId]);
+    expect(seen.filter((r) => r.kind !== "reply" && r.kind !== "user").some((r) => r.turnId)).toBe(
+      false
+    );
+  });
+
+  it("carries the sent files on the live user record", async () => {
+    const { manager } = makeManager();
+    const seen: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (r) => seen.push(r));
+
+    await manager.submitTurn("user-1", "Ben", "look at this", {
+      attachments: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          fileName: "notes.txt",
+          mimeType: "text/plain",
+          sizeBytes: 16,
+          createdAt: "2026-10-27T00:00:00.000Z"
+        }
+      ]
+    });
+
+    expect(seen.find((r) => r.kind === "user")?.attachments).toEqual([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+        sizeBytes: 16
+      }
+    ]);
   });
 
   it("emits records to subscribers, returns the reply, and persists the turn", async () => {
@@ -473,7 +504,7 @@ describe("ChatSessionManager", () => {
 
     expect(reply).toBe(`reply to: ${withTime("hello")}`);
     // user echo + thinking + reply all fanned out
-    expect(seen).toContainEqual({ kind: "user", text: "hello" });
+    expect(seen).toContainEqual({ kind: "user", text: "hello", turnId: expect.any(String) });
     expect(seen).toContainEqual({ kind: "thinking", text: "considering" });
     expect(seen).toContainEqual({
       kind: "reply",
@@ -520,7 +551,8 @@ describe("ChatSessionManager", () => {
 
     expect(drawer.filter((r) => r.kind === "reply").map((r) => r.messageId)).toEqual([
       "reminder-1",
-      undefined
+      undefined,
+      "assistant-message-id"
     ]);
     expect(drawer.at(-1)?.turnId).toEqual(expect.any(String));
     expect(moduleChat).toEqual([]);

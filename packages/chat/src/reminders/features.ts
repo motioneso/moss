@@ -1,14 +1,16 @@
 import { responsibilityAgreementFeature } from "../responsibility-agreements/feature.js";
 import { REMINDER_SETTINGS_FEATURE } from "./manifest.js";
 import type { ModuleFeatureManifest } from "@moss/module-sdk";
+import { reminderSummaryFeature } from "./summary/feature.js";
 import { quietHoursAllowanceFeature } from "./quiet-hours-feature.js";
 
 export const reminderFeatures: readonly ModuleFeatureManifest[] = [
   responsibilityAgreementFeature,
+  reminderSummaryFeature,
   {
     id: "chat.scheduled_owner_read",
     description:
-      "In regular chat, check one owned task once or repeatedly. Repeats start with a quiet baseline and report only title/status changes. Configured JSON models prepare sourced reports. Controls, quiet retries and notification policy apply.",
+      "Check one owned task once or repeatedly. Repeats keep a quiet baseline and report changes. Checks share one recovery attempt; interrupted checks record unknown outcomes without another read. Pauses and saved cadence remain in force.",
     featureFlagId: "chat.module",
     errors: [
       {
@@ -21,7 +23,7 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
         code: "scheduled_read_unresolved",
         class: "validation",
         description:
-          "An unresolved repeating check is refused and saves nothing; an unresolved one-time check stays in ordinary chat. Name one task you own and a supported time or cadence."
+          "An unresolved check is refused and saves nothing once Moss has started interpreting it. Name one task you own and a supported time or cadence."
       },
       {
         code: "scheduled_read_unavailable",
@@ -43,13 +45,32 @@ export const reminderFeatures: readonly ModuleFeatureManifest[] = [
           "Missing model setup, a model timeout, an invalid report or a changed source produces an honest failure without source prose. Check your configured JSON model and ask for a new check."
       },
       {
+        code: "scheduled_read_interrupted",
+        class: "transient",
+        description:
+          "An interrupted final check records an unknown outcome without reading the task again. Paused checks stay paused; repeats keep their saved cadence and three-failure guidance policy."
+      },
+      {
+        code: "scheduled_read_legacy_unknown",
+        class: "prerequisite",
+        remediationRef: "chat.review_interrupted_check",
+        description:
+          "Upgrade skips an existing check with unknown history without a source read. Future checks wait; pauses and deadlines apply. Only recurrence advancement creates a fresh check. One-time checks receive no automatic replacement."
+      },
+      {
         code: "scheduled_read_failed",
         class: "transient",
         description:
-          "Temporary source failures retry quietly twice. Recurring checks record every failed run and post guidance once after three consecutive failures, resetting after a valid success. One-time checks post failures immediately."
+          "Task checks share one recovery attempt across retries and restart. Repeating checks record failures and post guidance after three consecutive failures; success resets the streak. One-time failures post immediately."
       }
     ],
     remediations: [
+      {
+        id: "chat.review_interrupted_check",
+        description:
+          "Review saved task checks in Settings. Resume a paused check through normal controls, or request a new check in regular chat if needed. Support recovery never restores spent attempts.",
+        path: "/settings?section=scheduled"
+      },
       {
         id: "chat.restore_scheduled_read_access",
         description:

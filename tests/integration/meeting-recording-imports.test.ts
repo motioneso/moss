@@ -1,3 +1,4 @@
+import { recordingInterpretation } from "../fixtures/meeting-recording.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -108,6 +109,48 @@ const payload = (id: string, kind: "transcribe" | "abandoned" | "purge" = "trans
   kind
 });
 describe("completed recording imports through real owner DB/vault paths", () => {
+  it("reads the owner's saved language for short normal imports and omits automatic detection", async () => {
+    const preferences = new MeetingPreferencesRepository();
+    try {
+      for (const transcriptLanguage of ["es", null]) {
+        await context.withDataContext(actor, (db) =>
+          preferences.update(db, {
+            transcriptLanguage,
+            transcriptVocabulary: transcriptLanguage ? ["Moss", "José"] : []
+          })
+        );
+        const { service, deps, input } = setup();
+        const accepted = await service.accept(actor, input);
+        await service.process(actor, payload(accepted.id));
+        expect(deps.transcribe).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(deps.transcribe).mock.calls[0]![1].language).toBe(
+          transcriptLanguage ?? undefined
+        );
+        expect(vi.mocked(deps.transcribe).mock.calls[0]![1].prompt).toBe(
+          transcriptLanguage ? "Moss, José" : undefined
+        );
+        expect(await service.status(actor, accepted.id)).toMatchObject({ state: "complete" });
+      }
+    } finally {
+      await context.withDataContext(actor, (db) =>
+        preferences.update(db, { transcriptLanguage: null, transcriptVocabulary: [] })
+      );
+    }
+  });
+  it("retains a safe terminal failure when the admitted request rejects before commit", async () => {
+    const { service, input } = setup({
+      transcribe: async (_actor, request) =>
+        request.dispatch(async () => {
+          throw new Error("Synthetic immediate transport rejection");
+        })
+    });
+    const accepted = await service.accept(actor, input);
+    await service.process(actor, payload(accepted.id));
+    expect(await service.status(actor, accepted.id)).toMatchObject({
+      state: "failed",
+      code: "transcription_failed"
+    });
+  });
   it("blocks actual dispatch when the accepted recording owner is deactivated", async () => {
     const bootstrap = createDatabase({ connectionString: connectionStrings.bootstrap });
     let sent = false;
@@ -284,23 +327,17 @@ describe("completed recording imports through real owner DB/vault paths", () => 
     );
     expect(rows.rows).toHaveLength(2);
   });
-  it("retains voice-request classification without executing tasks", async () => {
+  it("refuses a hold recording sent as a meeting and creates no meeting", async () => {
     const { service } = setup();
-    const accepted = await service.accept(actor, {
-      ...recordingBundle(true),
-      sourceDeviceId: randomUUID()
-    });
-    await service.process(actor, payload(accepted.id));
-    expect(await service.status(actor, accepted.id)).toMatchObject({
-      mode: "voice-request",
-      state: "complete"
-    });
-    const tasks = await context.withDataContext(actor, (db) =>
-      sql`SELECT * FROM app.meeting_action_candidates WHERE meeting_id=${accepted.meetingId}::uuid`.execute(
+    await expect(
+      service.accept(actor, { ...recordingBundle(true), sourceDeviceId: randomUUID() })
+    ).rejects.toMatchObject({ statusCode: 409 });
+    const rows = await context.withDataContext(actor, (db) =>
+      sql`SELECT 1 FROM app.meeting_recording_imports WHERE recording_id LIKE 'amsg\\_%'`.execute(
         db.db
       )
     );
-    expect(tasks.rows).toHaveLength(0);
+    expect(rows.rows).toHaveLength(0);
   });
   it("does not dispatch without configuration and never resets failed work on replay", async () => {
     const { service, input, deps } = setup({
@@ -468,6 +505,7 @@ describe("completed recording imports through real owner DB/vault paths", () => 
           modelRoute: "synthetic-summary",
           content: {
             overview: "Recording follow-up",
+            recording: recordingInterpretation("Recording follow-up"),
             decisions: [],
             openQuestions: [],
             warnings: [],
