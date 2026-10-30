@@ -654,7 +654,7 @@ describe("MVP foundation schema catalog", () => {
         { version: "0339", name: "0339_memory_recording_lineage.sql" },
         { version: "0340", name: "0340_notes_recording_cleanup.sql" },
         { version: "0341", name: "0341_memory_recording_cleanup.sql" },
-        { version: "0342", name: "0342_module_page_audit_source.sql" }
+        { version: "0354", name: "0354_module_page_audit_source.sql" }
       ]);
     } finally {
       await client.end();

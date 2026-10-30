@@ -94,3 +94,23 @@ refill aggregate failed with exactly those 277 identities and no additions; it i
 aggregate result. Broader card reserves, account-linked/debt goals, household writes, unlinked
 provider matching, whole-update atomicity, richer reports and holdings remain staged in the
 [parity matrix](../specs/2026-10-28-finance-parity.md).
+
+## Clean implementation verdict and upstream migration numbering
+
+Clean implementation cf8aa8431d3e48cc8ef64d6694bc3dd07dfb3581, fingerprint
+cd5af37482fc: finance-complete receipt 134452-en0hhV passed all 190 tests in 17
+files (169 backend and 21 installed browser flows). This includes the final-cursor
+interruption case and actual report HTTP 429 recovery with Retry-After 12. All
+785 Finance unit tests in 82 files passed separately. These are synthetic-provider
+results, not a real bank acceptance run or permission to merge.
+
+The aggregate receipt 134451-fhbeeG failed before type checking or units at
+check:migration-numbers. Current fetched main 3a9c744d035bf1d91220ec13a634c51453282bb3
+claims global 0342 for chat notices; this branch's earlier unmerged module-page audit
+migration independently used 0342. This is a branch integration defect, not one of
+the historical 277 unit failures. Current main uses numbers through 0353. Read-only
+GitHub file-list inspection of all four currently open PRs (3851, 3571, 3771, 3534)
+found no claim on 0354. The unshipped task migration is therefore renamed to 0354,
+with identical SQL bytes and the schema-catalog expectation updated. No deployed
+migration, production database, or main branch is changed. Fresh disposable gates
+must validate the renamed migration and schema catalog before accepting this fix.
