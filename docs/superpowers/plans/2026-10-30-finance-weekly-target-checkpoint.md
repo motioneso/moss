@@ -65,3 +65,17 @@ funding and no repeated funding after spending. Account-linked/debt/custom-perio
 payment reserves, household writes, existing-record transfer matching, atomic different-ID
 provider convergence and broader reporting/investments remain distinct gaps. Do not infer
 universal parity from the unit count or the 21 broader native scenarios.
+
+Clean weekly commit 6b7a3573, input 0d579c00aaf7: backend 124103-mM6FOB
+passed all 153 cases in 16 suites (the opt-in browser file skipped separately). Installed
+browser 124101-qXW0Zt passed all 21 flows, exit 0; weekly editor, reload, selection,
+cancel/confirmed funding and unchanged accounts/receipts are included. Clean Finance units
+passed all 761 in 78 files. Full repository lint, formatting, size, UI classes and type
+checks passed on the clean commit. The detached same-commit aggregate 124315-sSpn8n
+is running with supported Chromium and isolated XDG paths; its result is pending.
+
+Continue with the separately committed monthly-refill design. A read-only synthetic reducer
+probe also found two subsequent ledger-review tasks: a named predecessor need not actually
+be pending before removal, and a changed-amount pending replacement can remain confirmed.
+Prove bounded fixes with reducer, persistence and native review coverage; do not mislabel
+that work as atomic provider convergence or actual bank acceptance.
