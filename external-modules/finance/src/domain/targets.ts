@@ -1,3 +1,4 @@
+import { weeklyTargetPeriod, type WeeklyTargetPeriod } from "./weekly-targets.js";
 import { safeCents } from "./values.js";
 import type { BudgetCategoryState } from "./envelope.js";
 import type { BudgetReview } from "./budget-context.js";
@@ -5,11 +6,13 @@ import type { BudgetReview } from "./budget-context.js";
 export interface CategoryTarget {
   categoryId: string;
   effectiveMonth: string;
-  kind: "monthly" | "balance" | "removed";
+  kind: "monthly" | "weekly" | "balance" | "removed";
   amountCents: number;
   dueDate: string | null;
+  weekday?: number;
 }
 export interface TargetProgress extends CategoryTarget {
+  weekly?: WeeklyTargetPeriod;
   progressCents: number;
   remainingCents: number;
   suggestedCents: number;
@@ -29,10 +32,16 @@ export function targetProgress(
   month: string,
   asOfDate: string
 ): TargetProgress {
-  const amount = BigInt(safeCents(target.amountCents));
+  const weekly =
+    target.kind === "weekly"
+      ? weeklyTargetPeriod(month, target.weekday!, target.amountCents)
+      : undefined;
+  const amount = BigInt(weekly?.totalCents ?? safeCents(target.amountCents));
   const base = BigInt(
     safeCents(
-      target.kind === "monthly" ? (state?.assignedCents ?? 0) : (state?.availableCents ?? 0)
+      target.kind === "monthly" || target.kind === "weekly"
+        ? (state?.assignedCents ?? 0)
+        : (state?.availableCents ?? 0)
     )
   );
   const remaining = amount > base ? amount - base : 0n;
@@ -44,6 +53,7 @@ export function targetProgress(
       : 1;
   return {
     ...target,
+    ...(weekly ? { weekly } : {}),
     progressCents: safeCents(progress),
     remainingCents: safeCents(remaining),
     suggestedCents: safeCents((remaining + BigInt(months) - 1n) / BigInt(months)),

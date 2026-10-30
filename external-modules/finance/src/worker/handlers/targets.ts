@@ -1,3 +1,4 @@
+import { MAX_WEEKLY_CENTS } from "../../domain/weekly-targets.js";
 import { assertCategoryFunding } from "./flex-guards.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readEnum, readInt, readString } from "../validate.js";
@@ -13,14 +14,18 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
   const month = readString(input, "month", { required: true });
   if (!isCalendarMonth(month)) throw new InputError("month must be YYYY-MM");
   const categoryId = readString(input, "categoryId", { required: true });
-  const kind = readEnum(input, "kind", ["monthly", "balance", "removed"] as const, {
+  const kind = readEnum(input, "kind", ["monthly", "weekly", "balance", "removed"] as const, {
     required: true
   });
   const amountCents = readInt(input, "amountCents", {
     required: true,
     min: kind === "removed" ? 0 : 1,
-    max: Number.MAX_SAFE_INTEGER
+    max: kind === "weekly" ? MAX_WEEKLY_CENTS : Number.MAX_SAFE_INTEGER
   });
+  const weekday =
+    kind === "weekly" ? readInt(input, "weekday", { required: true, min: 0, max: 6 }) : undefined;
+  if (kind !== "weekly" && input.weekday !== undefined)
+    throw new InputError("Only weekly targets have a weekday");
   const date = readString(input, "dueDate");
   if (kind === "balance" && (!date || !isCalendarDate(date)))
     throw new InputError("Choose a valid target date");
@@ -40,7 +45,8 @@ export const targetSetHandler: ToolFactory = (ports) => async (input) => {
         effectiveMonth: month,
         kind,
         amountCents,
-        dueDate: kind === "balance" ? date! : null
+        dueDate: kind === "balance" ? date! : null,
+        ...(weekday !== undefined ? { weekday } : {})
       },
       expected,
       ports.now().toISOString()

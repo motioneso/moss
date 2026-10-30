@@ -1,3 +1,5 @@
+import { WEEKDAYS, weeklyTargetPeriod, type WeeklyTargetPeriod } from "../domain/weekly-targets";
+import { targetDescription, weeklyPeriodLabel } from "./target-description";
 import { FLEX_POOL } from "../domain/flex";
 import { TargetFundingDialog } from "./target-funding-dialog";
 import type { TargetFundingLine } from "../domain/target-funding";
@@ -15,7 +17,7 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import type { TargetProgress } from "../domain/targets";
-import { formatCents, monthLabel, parseAmountToCents, centsToAmountInput } from "./format";
+import { monthLabel, parseAmountToCents, centsToAmountInput } from "./format";
 import { isCalendarDate } from "../domain/values";
 import { invalidateQueries } from "./store";
 interface BudgetTargetsProps {
@@ -63,7 +65,7 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
             <RowIndexItem
               key={target.categoryId}
               title={targetName(target.categoryId)}
-              excerpt={`${target.kind === "monthly" ? "Monthly contribution" : `Balance by ${target.dueDate}`} · ${formatCents(target.amountCents, props.currency)} · ${target.status === "reached" ? "Target reached" : `${formatCents(target.remainingCents, props.currency)} remaining${target.status === "overdue" ? " · overdue" : ""}${target.kind === "balance" ? ` · ${formatCents(target.suggestedCents, props.currency)} additional suggested` : ""}`}`}
+              excerpt={targetDescription(target, props.currency, props.month)}
               meta={
                 <Button
                   variant="secondary"
@@ -80,7 +82,7 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
           ))}
         </RowIndex>
       ) : (
-        <p>No targets yet. Set a monthly contribution or save toward a date.</p>
+        <p>No targets yet. Plan monthly or weekly contributions, or save toward a date.</p>
       )}
       <div>
         <Button
@@ -97,7 +99,7 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
         </p>
       ) : null}
       {props.targets.length > 0 && props.funding ? (
-        <div className="fnm-block fnm-block--tight">
+        <div className="fnm-block fnm-block--tight fnm-account-management">
           <div>
             <Button
               variant="secondary"
@@ -170,7 +172,12 @@ function TargetDialog(
 ): ReactNodeLike {
   const existing = props.targets.find((t) => t.categoryId === props.initialId);
   const [categoryId, setCategory] = useState(props.initialId || props.categories[0]?.id || "");
-  const [kind, setKind] = useState(existing?.kind === "balance" ? "balance" : "monthly");
+  const [kind, setKind] = useState<string>(
+    existing?.kind === "balance" || existing?.kind === "weekly" ? existing.kind : "monthly"
+  );
+  const [weekday, setWeekday] = useState(
+    existing?.weekday === undefined ? "" : String(existing.weekday)
+  );
   const [amount, setAmount] = useState(existing ? centsToAmountInput(existing.amountCents) : "");
   const [dueDate, setDate] = useState(existing?.dueDate ?? "");
   const [review] = useState({
@@ -185,13 +192,26 @@ function TargetDialog(
     if (!lock.current) props.onClose();
   };
   const cents = parseAmountToCents(amount);
+  let weekly: WeeklyTargetPeriod | null = null;
+  if (kind === "weekly" && weekday !== "" && cents !== null) {
+    try {
+      weekly = weeklyTargetPeriod(props.month, Number(weekday), cents);
+    } catch {
+      /* Keep invalid amounts unsaved. */
+    }
+  }
   const save = async (remove = false) => {
     if (!props.tools || lock.current || blocked || (!remove && !props.canEdit)) return;
     if (
       !remove &&
-      (cents === null || cents <= 0 || (kind === "balance" && !isCalendarDate(dueDate)))
+      (cents === null ||
+        cents <= 0 ||
+        (kind === "balance" && !isCalendarDate(dueDate)) ||
+        (kind === "weekly" && !weekly))
     ) {
-      setMessage("Enter a positive amount and a valid target date when needed.");
+      setMessage(
+        "Enter a positive supported amount and choose the required target date or weekday."
+      );
       return;
     }
     lock.current = true;
@@ -203,6 +223,7 @@ function TargetDialog(
         kind: remove ? "removed" : kind,
         amountCents: remove ? 0 : cents!,
         ...(kind === "balance" && !remove ? { dueDate } : {}),
+        ...(kind === "weekly" && !remove ? { weekday: Number(weekday) } : {}),
         ...review
       });
       if (result.status === "succeeded" && result.result.status === "ok") {
@@ -244,13 +265,16 @@ function TargetDialog(
               Remove target
             </Button>
           ) : null}
-          <Button disabled={busy || blocked || !props.canEdit} onClick={() => void save()}>
+          <Button
+            disabled={busy || blocked || !props.canEdit || (kind === "weekly" && !weekly)}
+            onClick={() => void save()}
+          >
             {busy ? "Saving…" : "Save target"}
           </Button>
         </div>
       }
     >
-      <div className="fnm-block fnm-block--tight">
+      <div className="fnm-block fnm-block--tight fnm-account-management">
         <Note variant="practical">
           {props.canEdit
             ? "Saving a target does not assign money. Earlier months keep their target history."
@@ -282,11 +306,32 @@ function TargetDialog(
             onChange={(e: { currentTarget: { value: string } }) => setKind(e.currentTarget.value)}
           >
             <option value="monthly">Monthly contribution</option>
+            <option value="weekly">Weekly contribution</option>
             <option value="balance">Balance by a date</option>
           </Select>
         </label>
+        {kind === "weekly" ? (
+          <label className="fnm-block fnm-block--tight">
+            Contribution weekday
+            <Select
+              aria-label="Contribution weekday"
+              value={weekday}
+              disabled={busy || !props.canEdit}
+              onChange={(e: { currentTarget: { value: string } }) =>
+                setWeekday(e.currentTarget.value)
+              }
+            >
+              <option value="">Choose a weekday</option>
+              {WEEKDAYS.map((name, day) => (
+                <option key={day} value={String(day)}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+          </label>
+        ) : null}
         <label className="fnm-block fnm-block--tight">
-          Amount ({props.currency})
+          {kind === "weekly" ? "Weekly amount" : "Amount"} ({props.currency})
           <input
             className="jds-input"
             aria-label="Target amount"
@@ -309,10 +354,19 @@ function TargetDialog(
             />
           </label>
         ) : null}
+        {kind === "weekly" ? (
+          <p role="status">
+            {weekly
+              ? weeklyPeriodLabel(weekly, props.currency, props.month)
+              : "Choose a weekday and a supported weekly amount to preview the full month."}
+          </p>
+        ) : null}
         <p className="jds-hint">
-          {kind === "monthly"
-            ? "Progress counts this month's assigned money, independent of spending and rollover."
-            : "Progress counts the category's available money. Spending reduces progress."}
+          {kind === "weekly"
+            ? "Full-month plan, including when created mid-month. Progress counts new assignments, independent of spending and rollover. Funding is always a separate reviewed choice."
+            : kind === "monthly"
+              ? "Progress counts this month's assigned money, independent of spending and rollover."
+              : "Progress counts the category's available money. Spending reduces progress."}
         </p>
         {message ? <p role="alert">{message}</p> : null}
       </div>

@@ -1,3 +1,4 @@
+import type { WeeklyTargetPeriod } from "./weekly-targets.js";
 import type { BudgetCategoryState } from "./envelope.js";
 import type { TargetProgress } from "./targets.js";
 import { safeCents } from "./values.js";
@@ -5,7 +6,8 @@ const ASSIGNMENT_BOUND = 100000000n;
 export interface TargetFundingLine {
   categoryId: string;
   name: string;
-  kind: "monthly" | "balance" | "removed";
+  kind: TargetProgress["kind"];
+  weekly?: WeeklyTargetPeriod;
   dueDate: string | null;
   previousCents: number;
   amountCents: number;
@@ -62,6 +64,7 @@ export function targetFundingLines(
       categoryId: target.categoryId,
       name: category?.name ?? "Archived category",
       kind: target.kind,
+      ...(target.weekly ? { weekly: target.weekly } : {}),
       dueDate: target.dueDate,
       previousCents,
       amountCents,

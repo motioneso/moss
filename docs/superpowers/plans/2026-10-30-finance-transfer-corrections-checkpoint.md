@@ -122,3 +122,11 @@ aggregate checks with the supported browser path, retaining exact receipts. Cont
 an explicitly named weekly contribution target that counts calendar occurrences; investigate its
 official comparison and define carry/spending behavior before implementation. Refill targets,
 account-linked goals and card reserve policy remain separate gaps, not implied by weekly wording.
+
+Clean detached a74fdb09 verification, input 21b4402f5ed6: backend 121939-fjEOpf
+passed all 150 cases in 16 suites; browser 122604-2RFSM4 passed all 21 installed flows.
+Aggregate 121938-YPaTRd finished exit 1: 1,629 unit files passed / 21 failed; 19,651
+tests passed / 277 failed / 3 skipped. All 277 normalized failure identities exactly match
+040401-c9zwQ0 (zero added or removed). Static checks passed; later aggregate DB stages
+were not reached. This run used the supported Chromium path. This is a failed aggregate,
+not a claim that the whole repository is green.

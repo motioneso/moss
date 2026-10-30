@@ -69,7 +69,7 @@
       {
         "id": "finance.budget",
         "label": "Budget",
-        "description": "Choose one fixed working currency through reviewed setup; existing assignment amounts require acknowledgement and stay unchanged. Only accounts and posted activity in that currency fund the budget. Tracking accounts and pending entries are excluded. Past manual balances use the opening ledger; connected balances use recorded snapshots at or before month end. Missing history makes ready-to-assign unavailable. Future months show the plan without claiming spendable cash; future assignments reserve current cash. Exact integer calculations refuse unsafe totals. Review target funding selects up to 20 current-month suggestions within ready money, shows before/after assignments and requires host confirmation. Dated suggestions recalculate with saved balances. Cancel retains review; stale/uncertain saves require checking saved records. After saves, target actions wait for refreshed totals. Cover category overspending before target funding.",
+        "description": "Choose one fixed working currency through review; legacy amounts require acknowledgement and stay unchanged. Only accounts and posted activity in that currency fund the budget. Tracking accounts and pending entries are excluded. Past manual balances use the opening ledger; connected balances use recorded snapshots at or before month end. Missing history makes ready-to-assign unavailable. Future months show the plan without claiming spendable cash; future assignments reserve current cash. Exact integer calculations refuse unsafe totals. Fund up to 20 current-month target suggestions within ready money, with before/after totals and host confirmation. Dated suggestions recalculate with saved balances. Cancel retains review; stale/uncertain saves require checking saved records. After saves, target actions wait for refreshed totals. Cover category overspending before target funding. Weekly targets count full-month weekdays and assigned money; no proration or automatic funding.",
         "path": "/"
       },
       {
@@ -116,7 +116,7 @@
       },
       {
         "id": "finance.budget-typing",
-        "description": "Assigned totals save through awaited, reviewed host actions. Cancel keeps typed amounts. Assistant actions refresh saved reads. Typed amounts keep their original review; changed budgets and rejected/uncertain saves require an explicit successful Check saved records before saving. Failed reads end Refreshing and keep the write block; busy reads honor the server wait. Discard typed amounts clears local input only. Targets guide saving without moving money; old archived/pooled targets offer read-only removal preserving money/history. New targets exclude the synthetic pool. Flexible mode routes chosen category activity, guidance and carry into one funded pool; members cannot be funded separately. Current-month mode changes need review/confirmation, no funded future plans or conflicting targets; leaving needs exact destinations for available money. Historical policies and transaction categories stay intact. Open target/mode reviews retain captured versions."
+        "description": "Assigned totals save through awaited, reviewed host actions. Cancel keeps typed amounts. Assistant actions refresh saved reads. Typed amounts keep their original review; changed budgets and rejected/uncertain saves require an explicit successful Check saved records before saving. Failed reads end Refreshing and keep the write block; busy reads honor the server wait. Discard clears local input only. Targets guide monthly, weekly or dated saving without moving money; old archived/pooled targets offer read-only removal preserving money/history. New targets exclude the synthetic pool. Flexible mode routes chosen category activity, guidance and carry into one funded pool; members cannot be funded separately. Mode changes need current-month confirmation and no future funding or conflicting targets; leaving needs exact destinations for available money. History and transaction categories stay intact. Open reviews retain captured versions."
       },
       {
         "id": "finance.getting-started",
@@ -989,7 +989,7 @@
       "name": "finance.target.set",
       "permissionId": "finance.target.set",
       "actionLabel": "Save a category target",
-      "description": "Save or remove monthly or balance-by-date guidance from this month onward. Does not assign money. Read budget status before saving.",
+      "description": "Save or remove monthly, full-month weekly contribution or balance-by-date guidance from this month onward. Weekly requires per-week cents and weekday Sunday=0 through Saturday=6; every occurrence in the month counts. Does not assign money. Read budget status first.",
       "risk": "write",
       "executionPolicy": "auto",
       "actionFamilyId": "drafting",
@@ -1000,9 +1000,10 @@
         "properties": {
           "month": { "type": "string" },
           "categoryId": { "type": "string" },
-          "kind": { "type": "string", "enum": ["monthly", "balance", "removed"] },
+          "kind": { "type": "string", "enum": ["monthly", "weekly", "balance", "removed"] },
           "amountCents": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
           "dueDate": { "type": "string" },
+          "weekday": { "type": "integer", "minimum": 0, "maximum": 6 },
           "expectedRevision": { "type": "integer", "minimum": 0 },
           "expectedFingerprint": {
             "type": "string",

@@ -1,3 +1,4 @@
+import { targetKindLabel, weeklyPeriodLabel } from "./target-description";
 import {
   Button,
   Checkbox,
@@ -176,8 +177,8 @@ export function TargetFundingDialog(props: {
           <>
             <p className="jds-hint">
               Choose up to 20 targets. Dated suggestions divide the remaining balance across months
-              left, including this month; they recalculate as you save or spend. Monthly
-              contributions count assigned money.
+              left, including this month; they recalculate as you save or spend. Monthly and weekly
+              contributions count assigned money. Weekly plans cover the full calendar month.
             </p>
             <div className="fnm-block fnm-block--tight">
               {data.lines.map((line) => (
@@ -202,7 +203,7 @@ export function TargetFundingDialog(props: {
                   <p className="jds-hint">
                     {line.unavailableReason
                       ? reason[line.unavailableReason]
-                      : `${line.kind === "monthly" ? "Monthly contribution" : `Balance by ${line.dueDate}`} · add ${formatCents(line.amountCents, data.currency)} · assigned ${formatCents(line.previousCents, data.currency)} → ${formatCents(line.newAssignedCents!, data.currency)}`}
+                      : `${targetKindLabel(line)}${line.weekly ? ` · ${weeklyPeriodLabel(line.weekly, data.currency, data.month)}` : ""} · add ${formatCents(line.amountCents, data.currency)} · assigned ${formatCents(line.previousCents, data.currency)} → ${formatCents(line.newAssignedCents!, data.currency)}`}
                   </p>
                 </div>
               ))}

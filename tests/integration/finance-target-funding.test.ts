@@ -230,6 +230,153 @@ beforeEach(async () => {
     });
 });
 describe("installed selected target funding", () => {
+  it("persists weekly plans, funds the calendar total and preserves historical targets and ledger receipts", async () => {
+    const before = await snapshot(),
+      view = await status();
+    await owner((s) =>
+      targetSetHandler(ports(s))({
+        month,
+        categoryId: "groceries",
+        kind: "weekly",
+        amountCents: 2501,
+        weekday: 5,
+        expectedRevision: view.revision,
+        expectedFingerprint: view.fingerprint
+      })
+    );
+    const saved = await status();
+    expect(saved.targetFunding).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          categoryId: "groceries",
+          kind: "weekly",
+          amountCents: 11505,
+          weekly: { weekday: 5, occurrences: 5, totalCents: 12505 }
+        })
+      ])
+    );
+    const edited = await snapshot();
+    expect(edited.accounts).toEqual(before.accounts);
+    expect(edited.transactions).toEqual(before.transactions);
+    expect(edited.ledger).toEqual(before.ledger);
+    expect(edited.prior).toEqual(before.prior);
+    expect(edited.history.filter((t) => t.effectiveMonth === "2026-09")).toEqual(
+      before.history.filter((t) => t.effectiveMonth === "2026-09")
+    );
+    expect((await status("2026-11")).targetFunding).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          categoryId: "groceries",
+          weekly: { weekday: 5, occurrences: 4, totalCents: 10004 }
+        })
+      ])
+    );
+    expect(await fund(command(saved, ["groceries"]))).toMatchObject({
+      status: "ok",
+      totalCents: 11505
+    });
+    expect((await snapshot()).ledger?.assignments.groceries).toBe(12505);
+    await owner((s) =>
+      s.manual!.createEntry({
+        id: "manual:weekly-spending",
+        accountId,
+        name: "Synthetic later groceries",
+        date: "2026-10-30",
+        amountCents: 1,
+        isoCurrency: "USD",
+        categoryId: "groceries",
+        notes: "",
+        cleared: false,
+        digest: "c".repeat(64),
+        at
+      })
+    );
+    expect((await status()).targetFunding).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          categoryId: "groceries",
+          amountCents: 0,
+          unavailableReason: "reached"
+        })
+      ])
+    );
+    const latest = await status();
+    await owner((s) =>
+      targetSetHandler(ports(s))({
+        month,
+        categoryId: "groceries",
+        kind: "removed",
+        amountCents: 0,
+        expectedRevision: latest.revision,
+        expectedFingerprint: latest.fingerprint
+      })
+    );
+    expect(
+      (await snapshot()).history.find(
+        (t) => t.categoryId === "groceries" && t.effectiveMonth === month
+      )
+    ).toEqual({
+      categoryId: "groceries",
+      effectiveMonth: month,
+      kind: "removed",
+      amountCents: 0,
+      dueDate: null
+    });
+  });
+  it("invalidates a captured funding review when only the weekly day changes with the same monthly total", async () => {
+    await owner(async (s) =>
+      s.targets!.save(
+        {
+          categoryId: "groceries",
+          effectiveMonth: month,
+          kind: "weekly",
+          amountCents: 2501,
+          weekday: 5,
+          dueDate: null
+        },
+        (await s.budgetPolicy!.get())!,
+        at
+      )
+    );
+    const captured = await status();
+    await runner.withDataContext({ actorUserId: ids.userA }, (scope) =>
+      createModuleStorageRpc(scope, "finance").query(
+        "UPDATE app.finance_targets SET weekday=6 WHERE category_id='groceries' AND effective_month=$1",
+        [month]
+      )
+    );
+    const changed = await status();
+    expect(changed.revision).toBe(captured.revision);
+    expect(changed.fingerprint).not.toBe(captured.fingerprint);
+    const amounts = (view: typeof changed) =>
+      (view.targetFunding as TargetFundingLine[]).find((l) => l.categoryId === "groceries")!
+        .amountCents;
+    expect(amounts(changed)).toBe(amounts(captured));
+    const stable = await snapshot();
+    await expect(fund(command(captured, ["groceries"]))).rejects.toThrow();
+    expect(await snapshot()).toEqual(stable);
+  });
+  it("enforces weekly target shape in installed SQL without changing saved history on rejection", async () => {
+    const stable = await snapshot();
+    for (const shape of [
+      { kind: "weekly" as const, amountCents: 100 },
+      { kind: "weekly" as const, amountCents: 100, weekday: 7 },
+      { kind: "weekly" as const, amountCents: 100, weekday: 5, dueDate: "2026-10-30" },
+      { kind: "weekly" as const, amountCents: 1801439850948199, weekday: 5 },
+      { kind: "monthly" as const, amountCents: 100, weekday: 5 }
+    ]) {
+      await expect(
+        owner(async (s) =>
+          s.targets!.save(
+            { categoryId: "groceries", effectiveMonth: month, dueDate: null, ...shape },
+            (await s.budgetPolicy!.get())!,
+            at
+          )
+        )
+      ).rejects.toThrow();
+      expect(await snapshot()).toEqual(stable);
+    }
+  });
   it("atomically adds exact suggestions and activity while preserving accounts, receipts and historical targets", async () => {
     const before = await snapshot(),
       view = await status();
