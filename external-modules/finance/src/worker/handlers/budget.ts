@@ -1,3 +1,4 @@
+import { targetFundingLines, hasTargetFundingOverspending } from "../../domain/target-funding.js";
 import { FLEX_POOL } from "../../domain/flex.js";
 import { assertCategoryFunding, storedFlexTotal } from "./flex-guards.js";
 import { today } from "./manual-ledger.js";
@@ -94,6 +95,16 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
     ...context,
     categories,
     targets,
+    targetFundingOverspent:
+      !context.setupRequired && hasTargetFundingOverspending(context.state.categories),
+    targetFunding: context.setupRequired
+      ? []
+      : targetFundingLines(
+          targets,
+          context.state.categories,
+          allCategories,
+          context.flex?.active ? context.flex.flexIds : []
+        ),
     flexDetail,
     flexChoices: allCategories
       .filter((c) => !c.archived && c.id !== "income" && c.id !== "transfers")

@@ -1,3 +1,5 @@
+import { TargetFundingDialog } from "./target-funding-dialog";
+import type { TargetFundingLine } from "../domain/target-funding";
 import {
   Button,
   Dialog,
@@ -7,6 +9,7 @@ import {
   RowIndex,
   RowIndexItem,
   useState,
+  useRef,
   type ExternalModuleToolsHandleV1,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
@@ -21,9 +24,21 @@ interface BudgetTargetsProps {
   fingerprint: string;
   categories: { id: string; name: string; archived?: boolean }[];
   targets: TargetProgress[];
+  disabled?: boolean;
+  funding?: {
+    currentMonth: string;
+    readyCents: number | null;
+    lines: TargetFundingLine[];
+    overspent?: boolean;
+  };
+  onUncertain?: () => void;
   tools?: ExternalModuleToolsHandleV1;
 }
 export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
+  const [awaitingFingerprint, setAwaitingFingerprint] = useState<string | null>(null);
+  const waiting = awaitingFingerprint !== null && awaitingFingerprint === props.fingerprint;
+  const disabled = props.disabled || waiting;
+  const [funding, setFunding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const categories = props.categories.filter(
     (c) => !c.archived && c.id !== "income" && c.id !== "transfers"
@@ -42,12 +57,12 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
               title={
                 categories.find((c) => c.id === target.categoryId)?.name ?? "Archived category"
               }
-              excerpt={`${target.kind === "monthly" ? "Monthly contribution" : `Balance by ${target.dueDate}`} · ${formatCents(target.amountCents, props.currency)} · ${target.status === "reached" ? "Target reached" : `${formatCents(target.remainingCents, props.currency)} remaining${target.status === "overdue" ? " · overdue" : ""}${target.kind === "balance" ? ` · ${formatCents(target.suggestedCents, props.currency)} suggested this month` : ""}`}`}
+              excerpt={`${target.kind === "monthly" ? "Monthly contribution" : `Balance by ${target.dueDate}`} · ${formatCents(target.amountCents, props.currency)} · ${target.status === "reached" ? "Target reached" : `${formatCents(target.remainingCents, props.currency)} remaining${target.status === "overdue" ? " · overdue" : ""}${target.kind === "balance" ? ` · ${formatCents(target.suggestedCents, props.currency)} additional suggested` : ""}`}`}
               meta={
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={!props.tools}
+                  disabled={!props.tools || disabled}
                   onClick={() => setEditing(target.categoryId)}
                 >
                   Edit target
@@ -62,12 +77,67 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
       <div>
         <Button
           variant="secondary"
-          disabled={!props.tools || !categories.length}
+          disabled={!props.tools || disabled || !categories.length}
           onClick={() => setEditing("")}
         >
           Add a target
         </Button>
       </div>
+      {waiting ? (
+        <p role="status">
+          Refreshing saved target totals. If this stays here, check saved records.
+        </p>
+      ) : null}
+      {props.targets.length > 0 && props.funding ? (
+        <div className="fnm-block fnm-block--tight">
+          <div>
+            <Button
+              variant="secondary"
+              disabled={
+                !props.tools ||
+                disabled ||
+                props.month !== props.funding.currentMonth ||
+                props.funding.overspent ||
+                props.funding.readyCents === null ||
+                props.funding.readyCents <= 0 ||
+                !props.funding.lines.some((line) => !line.unavailableReason)
+              }
+              onClick={() => setFunding(true)}
+            >
+              Review target funding
+            </Button>
+          </div>
+          <p className="jds-hint">
+            {props.month !== props.funding.currentMonth
+              ? "Fund targets from the current month."
+              : props.funding.overspent
+                ? "Cover category overspending before funding targets. Assign or move money to those categories, then check saved records."
+                : props.funding.readyCents === null
+                  ? "Ready to assign is unavailable. Check the saved budget before funding targets."
+                  : props.funding.readyCents <= 0
+                    ? "Assign new ready money before adding target contributions."
+                    : !props.funding.lines.some((line) => !line.unavailableReason)
+                      ? "No eligible target suggestions. Reached targets need no additional contribution; pooled categories use their flexible pool."
+                      : "Choose current suggestions, review the assignment totals, then confirm. No automatic funding."}
+          </p>
+        </div>
+      ) : null}
+      {funding && props.funding ? (
+        <TargetFundingDialog
+          data={{
+            month: props.month,
+            currency: props.currency,
+            revision: props.revision,
+            fingerprint: props.fingerprint,
+            readyCents: props.funding.readyCents,
+            lines: props.funding.lines
+          }}
+          tools={props.tools}
+          onClose={() => setFunding(false)}
+          onSaved={setAwaitingFingerprint}
+          onUncertain={() => props.onUncertain?.()}
+        />
+      ) : null}
       {editing !== null ? (
         <TargetDialog
           key={editing}
@@ -75,13 +145,18 @@ export function BudgetTargets(props: BudgetTargetsProps): ReactNodeLike {
           categories={categories}
           initialId={editing}
           onClose={() => setEditing(null)}
+          onSaved={setAwaitingFingerprint}
         />
       ) : null}
     </section>
   );
 }
 function TargetDialog(
-  props: BudgetTargetsProps & { initialId: string; onClose: () => void }
+  props: BudgetTargetsProps & {
+    initialId: string;
+    onClose: () => void;
+    onSaved: (fingerprint: string) => void;
+  }
 ): ReactNodeLike {
   const existing = props.targets.find((t) => t.categoryId === props.initialId);
   const [categoryId, setCategory] = useState(props.initialId || props.categories[0]?.id || "");
@@ -95,9 +170,13 @@ function TargetDialog(
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
+  const lock = useRef(false);
+  const close = () => {
+    if (!lock.current) props.onClose();
+  };
   const cents = parseAmountToCents(amount);
   const save = async (remove = false) => {
-    if (!props.tools || busy || blocked) return;
+    if (!props.tools || lock.current || blocked) return;
     if (
       !remove &&
       (cents === null || cents <= 0 || (kind === "balance" && !isCalendarDate(dueDate)))
@@ -105,6 +184,7 @@ function TargetDialog(
       setMessage("Enter a positive amount and a valid target date when needed.");
       return;
     }
+    lock.current = true;
     setBusy(true);
     try {
       const result = await props.tools.invoke("finance.target.set", {
@@ -117,10 +197,12 @@ function TargetDialog(
       });
       if (result.status === "succeeded" && result.result.status === "ok") {
         invalidateQueries();
+        props.onSaved(review.expectedFingerprint);
         props.onClose();
       } else if (result.status === "cancelled") setMessage("Cancelled. Your entries are kept.");
       else {
         setBlocked(true);
+        props.onUncertain?.();
         setMessage(
           "Saving could not be confirmed or the budget changed. Close this form, check saved records, and review the target before trying again."
         );
@@ -128,8 +210,10 @@ function TargetDialog(
       }
     } catch {
       setBlocked(true);
+      props.onUncertain?.();
       setMessage("Check saved records before trying again. Your entries are kept here.");
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   };
@@ -137,12 +221,12 @@ function TargetDialog(
     <Dialog
       title={existing ? "Edit target" : "Add a target"}
       description={`From ${monthLabel(props.month)} onward · ${props.currency}`}
-      onClose={() => {
-        if (!busy) props.onClose();
-      }}
+      scrollBody
+      closeDisabled={busy}
+      onClose={close}
       footer={
         <div className="fnm-spread">
-          <Button variant="secondary" disabled={busy} onClick={props.onClose}>
+          <Button variant="secondary" disabled={busy} onClick={close}>
             Cancel
           </Button>
           {existing ? (

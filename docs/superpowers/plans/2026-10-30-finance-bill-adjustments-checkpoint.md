@@ -99,3 +99,15 @@ funding. Broader targets/funding assistance, existing-record transfer matching a
 reversal, provider convergence, household co-editing and investment holdings remain
 separate capabilities. Bill detection/calendar/series editing/provider Bill Sync/
 automatic posting/payments are not complete from this bounded slice.
+
+## Clean committed verification
+
+`5b5b3db7acb3e51a7dcb21e44e2ffe5a54f81491` was committed and pushed. Clean input
+`b47759043b80` passed all twenty installed browser flows (`102123-cJ7BZY`) and all
+thirty-two SQL/migration/lifecycle cases (`102131-KQOXMz`). The full-page moved-row
+captures were inspected at dark 320px and light 1440px as well as the earlier dialog
+views. Foundation `102634-XvpNGa` passed every static check, then passed 1,623 files /
+19,608 tests and failed 21 files / 277 tests, with three skipped. Failure identifiers
+exactly match the clean `3c620d58` baseline (zero added or removed); later aggregate
+database stages were unrun. This is not an overall green gate. Target funding now
+continues through its separate design and checkpoint.

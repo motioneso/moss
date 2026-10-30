@@ -1,3 +1,5 @@
+import { exercisePlanning } from "./helpers/finance-live-planning.js";
+import { exerciseTargetFunding } from "./helpers/finance-live-target-funding.js";
 import { exerciseMerchantRules } from "./helpers/finance-live-rules.js";
 import { exerciseFreshFinanceStartup } from "./helpers/finance-live-startup.js";
 import { exerciseIndividualMetadata } from "./helpers/finance-live-metadata.js";
@@ -10,8 +12,6 @@ import { exerciseFinanceImport } from "./helpers/finance-live-import.js";
 import { seedReportDetails } from "./helpers/finance-live-report-data.js";
 import { exerciseReportDetails } from "./helpers/finance-live-reports.js";
 import { exerciseBulkCategory } from "./helpers/finance-live-bulk.js";
-import { exerciseFlex } from "./helpers/finance-live-flex.js";
-import { exerciseBills } from "./helpers/finance-live-bills.js";
 // Opt-in live path: built production host, installed bundles, actual auth/API/workers/RLS.
 // No application response interception. All identities/records live in the gate's throwaway DB.
 import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -288,6 +288,21 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       }
     }, 90_000);
 
+    it("reviews selected target funding through host confirmation and rejects stale second-tab guidance", async () => {
+      const other = await signedInContext(freshApproved.cookie);
+      try {
+        await exerciseTargetFunding(
+          other,
+          base,
+          month,
+          (name, input) => readTool(name, input, freshApproved.cookie),
+          artifacts
+        );
+      } finally {
+        await other.close();
+      }
+    }, 120_000);
+
     it("saves a split through the signed-in Finance UI, real API and installed SQL worker", async () => {
       const page = await context.newPage();
       try {
@@ -463,37 +478,16 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
       }
     }, 90_000);
 
-    it("plans matches skips and stops bills through the installed app without changing the ledger", async () => {
-      const page = await context.newPage();
-      try {
-        await exerciseBills(page, base, month, readTool, artifacts);
-      } catch (error) {
-        if (artifacts)
-          await page.screenshot({
-            path: join(resolve(artifacts), "finance-bills-debug.png"),
-            fullPage: true
-          });
-        throw error;
-      } finally {
-        await page.close();
-      }
-    }, 120_000);
-
-    it("confirms one funded flexible pool and an exact return to envelopes without changing transactions", async () => {
-      const page = await context.newPage();
-      try {
-        await exerciseFlex(page, base, month, readTool, artifacts);
-      } catch (error) {
-        if (artifacts)
-          await page.screenshot({
-            path: join(resolve(artifacts), "finance-flex-debug.png"),
-            fullPage: true
-          });
-        throw error;
-      } finally {
-        await page.close();
-      }
-    }, 180_000);
+    it(
+      "plans matches skips and stops bills through the installed app without changing the ledger",
+      () => exercisePlanning(context, base, month, readTool, "bills", artifacts),
+      120_000
+    );
+    it(
+      "confirms one funded flexible pool and an exact return to envelopes without changing transactions",
+      () => exercisePlanning(context, base, month, readTool, "flex", artifacts),
+      180_000
+    );
 
     it("reviews unchanged legacy amounts in EUR and excludes the other currency in the actual page", async () => {
       const other = await browser.newContext({

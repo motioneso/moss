@@ -1,3 +1,4 @@
+import { targetFundHandler } from "./handlers/target-funding.js";
 import { billAdjustHandler, billAdjustResetHandler } from "./handlers/bill-adjustments.js";
 import {
   rulesListHandler,
@@ -122,6 +123,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "flex.configure": flexConfigureHandler,
   "flex.assign": flexAssignHandler,
   "target.set": targetSetHandler,
+  "targets.fund": targetFundHandler,
   "bills.read": billsReadHandler,
   billClearHandler,
   "bill.create": billCreateHandler,

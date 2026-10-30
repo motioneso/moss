@@ -68,7 +68,7 @@
       {
         "id": "finance.budget",
         "label": "Budget",
-        "description": "Choose one fixed working currency through reviewed setup; existing assignment amounts require acknowledgement and stay unchanged. Only accounts and posted activity in that currency fund the budget. Tracking accounts and pending entries are excluded. Past manual balances use the opening ledger; connected balances use recorded snapshots at or before month end. Missing history makes ready-to-assign unavailable. Future months show the plan without claiming spendable cash; future assignments reserve current cash. Exact integer calculations refuse unsafe totals.",
+        "description": "Choose one fixed working currency through reviewed setup; existing assignment amounts require acknowledgement and stay unchanged. Only accounts and posted activity in that currency fund the budget. Tracking accounts and pending entries are excluded. Past manual balances use the opening ledger; connected balances use recorded snapshots at or before month end. Missing history makes ready-to-assign unavailable. Future months show the plan without claiming spendable cash; future assignments reserve current cash. Exact integer calculations refuse unsafe totals. Review target funding selects up to 20 current-month suggestions within ready money, shows before/after assignments and requires host confirmation. Dated suggestions recalculate with saved balances. Cancel retains review; stale/uncertain saves require checking saved records. After saves, target actions wait for refreshed totals. Cover category overspending before target funding.",
         "path": "/"
       },
       {
@@ -1694,6 +1694,62 @@
           }
         },
         "required": ["merchant", "categoryId", "enabled"]
+      }
+    },
+    {
+      "name": "finance.targets.fund",
+      "permissionId": "finance.targets.fund",
+      "handler": "targets.fund",
+      "actionLabel": "Assign money to selected targets",
+      "description": "Assign the captured additional suggestions to one to twenty selected owned current-month targets, within ready-to-assign money. Rebuild and compare guidance; all assignments and activity commit atomically. No bank money or transactions move.",
+      "risk": "write",
+      "executionPolicy": "confirm",
+      "actionFamilyId": "moving_money",
+      "confirmWhenKeys": ["categoryIds"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "categoryIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "expectedAmountsCents": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000000
+            }
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": [
+          "month",
+          "categoryIds",
+          "expectedAmountsCents",
+          "expectedRevision",
+          "expectedFingerprint"
+        ]
       }
     }
   ],

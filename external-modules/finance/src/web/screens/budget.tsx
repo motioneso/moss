@@ -1,3 +1,4 @@
+import type { TargetFundingLine } from "../../domain/target-funding";
 import { FLEX_POOL } from "../../domain/flex";
 import { FlexBudgetPanel, type FlexBudgetView } from "../flex-budget";
 import { BudgetTargets } from "../budget-targets";
@@ -61,6 +62,8 @@ interface BudgetAccount {
 interface BudgetStatusResult extends Record<string, unknown> {
   month: string;
   targets?: TargetProgress[];
+  targetFunding?: TargetFundingLine[];
+  targetFundingOverspent?: boolean;
   flex?: FlexBudgetView["flex"];
   flexChoices?: FlexBudgetView["flexChoices"];
   flexDetail?: FlexBudgetView["flexDetail"];
@@ -724,6 +727,14 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                     fingerprint={body.fingerprint}
                     categories={(body.categories ?? []).filter((c) => c.id !== FLEX_POOL)}
                     targets={body.targets ?? []}
+                    disabled={busy || checking || uncertain || Object.keys(drafts).length > 0}
+                    funding={{
+                      currentMonth: body.currentMonth ?? "",
+                      readyCents: body.readyToAssignCents ?? null,
+                      lines: body.targetFunding ?? [],
+                      overspent: body.targetFundingOverspent === true
+                    }}
+                    onUncertain={() => setUncertain(true)}
                     tools={props.tools}
                   />
                 ) : null}

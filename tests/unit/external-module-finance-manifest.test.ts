@@ -214,7 +214,8 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.manual.transfer-create", "manual.transfer-create"],
         ["finance.rules.list", "rules.list"],
         ["finance.rules.preview", "rules.preview"],
-        ["finance.rules.update", "rules.update"]
+        ["finance.rules.update", "rules.update"],
+        ["finance.targets.fund", "targets.fund"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {
@@ -265,6 +266,11 @@ describe("finance manifest contract (#1146)", () => {
         confirmWhenKeys: ["planId", "dueDate"]
       });
     }
+    expect(toolByName("finance.targets.fund")).toMatchObject({
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["categoryIds"],
+      risk: "write"
+    });
     expect(toolByName("finance.rule.set").actionFamilyId).toBe("rules");
     expect(toolByName("finance.category.upsert").actionFamilyId).toBe("categories");
     expect(toolByName("finance.category.archive").actionFamilyId).toBe("categories");
