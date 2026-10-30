@@ -247,6 +247,10 @@ describe("meeting output generation service", () => {
     expect(harness.requests.has(secondInput.requestKey)).toBe(false);
     expect(harness.generator).toHaveBeenCalledOnce();
     expect(harness.reserve).toHaveBeenCalledOnce();
+    // The reservation must outlive the ten minute generation deadline, or a
+    // finished multi-piece run is discarded as interrupted at save time.
+    const expiresAt = harness.reserve.mock.calls[0]?.[4] as Date;
+    expect(expiresAt.getTime() - Date.now()).toBeGreaterThan(600_000);
     provider.resolve({ content: CONTENT, modelRoute: "configured-route" });
     expect(await winner).toMatchObject({ status: "saved", replayed: false });
     expect(harness.save).toHaveBeenCalledOnce();
@@ -426,7 +430,7 @@ describe("meeting output generation service", () => {
     });
     const first = harness.service.generate(ACTOR, MEETING_ID, INPUT);
     await started.promise;
-    expect(timeout).toHaveBeenCalledExactlyOnceWith(110_000);
+    expect(timeout).toHaveBeenCalledExactlyOnceWith(600_000);
     controller.abort();
     const result = await first;
     expect(result).toEqual({

@@ -411,15 +411,13 @@ describe("meeting output composition HTTP boundary", () => {
     });
     expect(h.fetch).toHaveBeenCalledTimes(2);
   });
-  it("fails oversized UTF-8 input before selecting or dispatching without truncation", async () => {
+  it("summarises oversized UTF-8 notes in pieces instead of failing", async () => {
     const h = setup();
     const request = input();
     request.inputs.personalNotes = "🥭".repeat(18000);
-    await expect(h.generator(actor, request)).rejects.toMatchObject({
-      code: "meeting_output_input_too_large"
-    });
-    expect(h.fetch).not.toHaveBeenCalled();
-    expect(h.route).not.toHaveBeenCalled();
+    const generated = await h.generator(actor, request);
+    expect(generated.content).toMatchObject({ overview: "A synthetic meeting" });
+    expect(h.fetch.mock.calls.length).toBeGreaterThan(1);
   });
   it("ignores caller-supplied template guidance and rejects unknown versions", async () => {
     const h = setup();

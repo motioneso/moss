@@ -111,7 +111,15 @@ export class MeetingOutputService {
       });
     if (!inputs.personalNotes.trim() && !inputs.transcript?.segments.length)
       throw new MeetingOutputError("meeting_output_evidence_unavailable", 400);
-    await this.repository.reserve(db, meetingId, input.requestKey, encoded);
+    // A summary can take several model calls. The reservation must outlive the
+    // generation deadline below, or a finished run is discarded as interrupted.
+    await this.repository.reserve(
+      db,
+      meetingId,
+      input.requestKey,
+      encoded,
+      new Date(Date.now() + 660_000)
+    );
     return { inputs };
   }
 
@@ -139,7 +147,7 @@ export class MeetingOutputService {
     try {
       // Transport must honor this deadline. It must resolve live routing/credential state
       // itself and reject tool-capable transports; the service never retries or falls back.
-      const signal = AbortSignal.timeout(110000);
+      const signal = AbortSignal.timeout(600000);
       let rejectAbort: (() => void) | undefined;
       const aborted = new Promise<never>((_resolve, reject) => {
         rejectAbort = () => reject(new MeetingOutputError("meeting_output_timed_out"));
