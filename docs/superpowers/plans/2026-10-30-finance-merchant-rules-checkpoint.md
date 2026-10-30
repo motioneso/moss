@@ -89,3 +89,12 @@ Moss's current signed-card/net-debt funding semantics before a versioned policy 
 silently reinterpret existing allocations. One-off bill date/amount overrides, broader goals,
 existing-record transfer matching, provider convergence and household/investment coverage remain
 separate acceptance work. No universal parity or live bank coverage is implied.
+
+## Clean committed preservation
+
+Implementation was committed and pushed as `3eb33c492a72d91c970fab1fefa55ad7ac5668ca`.
+The independent verification checkout is clean with input `aa09e2a3ec7d`. Its installed complete
+browser `075030-QqSw1t` passed all twenty flows; real rule/migration/install SQL `075031-As2Dcj`
+passed seventeen across three files, both exit 0. The combined foundation check follows on that
+frozen source. Main continues the separately specified one-off bill changes; credit-card payment
+reserve policy is deliberately left unchanged pending its own reviewed transition.
