@@ -166,7 +166,7 @@ export function useTransactionNoteEditor(props: {
     start,
     reset,
     body: (
-      <div className="fnm-block">
+      <div className="fnm-block fnm-block--tight fnm-note-editor">
         {message ? <p role="status">{message}</p> : null}
         <p className="jds-hint">
           Only your private note changes. Amount, category and reconciliation stay as saved.
@@ -176,6 +176,17 @@ export function useTransactionNoteEditor(props: {
             {saved.date} · {saved.name}
           </p>
         ) : null}
+        {recovered && saved ? (
+          <label className="fnm-block fnm-block--tight">
+            Currently saved note
+            <Textarea
+              aria-label="Currently saved private note"
+              readOnly
+              rows={4}
+              value={saved.notes}
+            />
+          </label>
+        ) : null}
         {draft === null ? (
           <p>{busy ? "Reading saved note…" : "Check the saved note to begin editing."}</p>
         ) : (
@@ -184,7 +195,7 @@ export function useTransactionNoteEditor(props: {
               Private note
               <Textarea
                 aria-label="Edit private transaction note"
-                rows={7}
+                rows={recovered ? 5 : 7}
                 value={draft}
                 disabled={busy || blocked}
                 aria-describedby="finance-note-capacity"
@@ -200,26 +211,6 @@ export function useTransactionNoteEditor(props: {
             </p>
           </>
         )}
-        {recovered && saved ? (
-          <label className="fnm-block fnm-block--tight">
-            Currently saved note
-            <Textarea
-              aria-label="Currently saved private note"
-              readOnly
-              rows={4}
-              value={saved.notes}
-            />
-          </label>
-        ) : null}
-        {blocked ? (
-          <Button
-            variant="secondary"
-            disabled={busy || cooldown.cooling}
-            onClick={() => void check()}
-          >
-            {busy ? "Checking…" : "Check saved note"}
-          </Button>
-        ) : null}
       </div>
     ),
     footer: (
@@ -227,9 +218,15 @@ export function useTransactionNoteEditor(props: {
         <Button variant="secondary" disabled={busy} onClick={reset}>
           Back to details
         </Button>
-        <Button disabled={busy || blocked || !valid || !changed} onClick={() => void save()}>
-          {busy ? (blocked || draft === null ? "Checking…" : "Saving…") : "Save private note"}
-        </Button>
+        {blocked ? (
+          <Button disabled={busy || cooldown.cooling} onClick={() => void check()}>
+            {busy ? "Checking…" : "Check saved note"}
+          </Button>
+        ) : (
+          <Button disabled={busy || !valid || !changed} onClick={() => void save()}>
+            {busy ? "Saving…" : "Save private note"}
+          </Button>
+        )}
       </div>
     )
   };

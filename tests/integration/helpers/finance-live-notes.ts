@@ -106,10 +106,22 @@ export async function exercisePrivateNotes(
       expect(await editor.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(false);
       const foot = (await editor.locator(".jds-dialog__foot").boundingBox())!;
       expect(foot.y + foot.height).toBeLessThanOrEqual(900);
-      if (state === "stale") {
+      if (state === "stale" || state === "uncertain") {
         const status = (await editor.getByRole("status").boundingBox())!;
         expect(status.y).toBeGreaterThanOrEqual(0);
         expect(status.y + status.height).toBeLessThan(foot.y);
+        const check = (await editor
+          .getByRole("button", { name: "Check saved note", exact: true })
+          .boundingBox())!;
+        expect(check.y).toBeGreaterThanOrEqual(foot.y);
+        expect(check.y + check.height).toBeLessThanOrEqual(900);
+      }
+      if (state === "recovered") {
+        const current = (await editor
+          .getByRole("textbox", { name: "Currently saved private note", exact: true })
+          .boundingBox())!;
+        expect(current.y).toBeGreaterThanOrEqual(0);
+        expect(current.y + current.height).toBeLessThan(foot.y);
       }
       if (artifacts)
         await page.screenshot({
@@ -184,8 +196,8 @@ export async function exercisePrivateNotes(
       )
       .waitFor();
     expect(
-      await editor.getByRole("button", { name: "Save private note", exact: true }).isDisabled()
-    ).toBe(true);
+      await editor.getByRole("button", { name: "Save private note", exact: true }).count()
+    ).toBe(0);
     await capture("stale");
     await editor.getByRole("button", { name: "Check saved note", exact: true }).click();
     await waitForFinanceAction(
@@ -233,8 +245,8 @@ export async function exercisePrivateNotes(
     expect(confirmedRequests).toBe(1);
     expect(await field().inputValue()).toBe(uncertainDraft);
     expect(
-      await editor.getByRole("button", { name: "Save private note", exact: true }).isDisabled()
-    ).toBe(true);
+      await editor.getByRole("button", { name: "Save private note", exact: true }).count()
+    ).toBe(0);
     const committed = await snapshot();
     expect(committed.note!.notes).toBe(uncertainDraft);
     await capture("uncertain");
