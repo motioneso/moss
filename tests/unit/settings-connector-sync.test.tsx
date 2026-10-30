@@ -43,6 +43,22 @@ describe("connector sync account health", () => {
     expect(health.alert).toContain("Google access needs to be reconnected");
   });
 
+  it("a temporary Google outage says it will retry, with no reconnect offer", () => {
+    const health = getConnectorAccountHealth({
+      ...baseAccount,
+      lastSyncStatus: "failed",
+      lastSyncError: "provider-unavailable"
+    });
+
+    expect(health).toMatchObject({
+      indicator: "idle",
+      badgeTone: "amber",
+      label: "Will retry",
+      canReconnect: false
+    });
+    expect(health.alert).toContain("Google is not answering, will retry");
+  });
+
   it("keeps partial syncs visible without sending users through reconnect", () => {
     const health = getConnectorAccountHealth({
       ...baseAccount,

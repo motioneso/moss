@@ -437,6 +437,15 @@ export const connectorsModuleManifest = {
           description:
             "Access to the Google account expired or was taken away, so sync stopped for now. " +
             "Moss marks the run failed rather than retrying blindly."
+        },
+        {
+          // #3839: a 5xx, a 429, a timeout or a lost network path says nothing about the grant.
+          code: "connectors.google.unreachable",
+          class: "transient",
+          description:
+            "Google did not answer in time or asked Moss to come back later. The saved sign-in " +
+            "is kept, the account still shows as connected, nothing asks for a reconnect, and " +
+            "the next scheduled sync tries again."
         }
       ],
       remediations: [

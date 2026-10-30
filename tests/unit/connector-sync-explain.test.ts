@@ -124,6 +124,20 @@ describe("explainConnectorSync", () => {
     expect(result.canReconnect).toBe(true);
   });
 
+  it("a temporary Google outage keeps the connection and promises a retry", () => {
+    const result = explainConnectorSync(
+      { ...base, lastSyncStatus: "failed", lastSyncError: "provider-unavailable" },
+      NOW
+    );
+    expect(result.code).toBe("provider-unavailable");
+    expect(result.label).toBe("Will retry");
+    expect(result.tone).toBe("amber");
+    expect(result.reason).toBe("Google is not answering right now.");
+    expect(result.next).toBe("Moss will try again on the next check.");
+    expect(result.canReconnect).toBe(false);
+    expect(result.canSyncNow).toBe(true);
+  });
+
   it("a failed run with a non-auth error names the error code's plain sentence", () => {
     const result = explainConnectorSync(
       { ...base, lastSyncStatus: "failed", lastSyncError: "calendar-error" },
@@ -259,6 +273,21 @@ describe("explainConnectorAccountHealth", () => {
       "Last sync failed because Google access needs to be reconnected. Reconnect to resume syncing."
     );
     expect(health.canReconnect).toBe(true);
+  });
+
+  it("a temporary Google outage never asks for a reconnect", () => {
+    const health = explainConnectorAccountHealth(
+      {
+        ...base,
+        lastSyncStatus: "failed",
+        lastSyncError: "provider-unavailable",
+        syncInFlight: false
+      },
+      NOW
+    );
+    expect(health.label).toBe("Will retry");
+    expect(health.alert).toBe("Google is not answering, will retry automatically.");
+    expect(health.canReconnect).toBe(false);
   });
 
   it("a failed run names the failure and the tallies worth naming", () => {

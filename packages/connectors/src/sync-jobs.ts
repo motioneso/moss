@@ -21,7 +21,7 @@ import {
   type GmailMessageFull
 } from "./google-api-client.js";
 import { decryptGoogleConnectionSecret, GoogleConnectionService } from "./google-connection.js";
-import { GoogleOAuthClient } from "./oauth.js";
+import { GoogleOAuthClient, isTransientGoogleTokenFailure } from "./oauth.js";
 import { ConnectorsRepository, type ConnectorSyncTrigger } from "./repository.js";
 import type { EmailExtractDeps } from "./email-extract.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
@@ -340,9 +340,14 @@ export async function runGoogleSyncChunk(
   const tokenHolder = { token: "" };
   try {
     tokenHolder.token = await deps.getFreshAccessToken(scopedDb);
-  } catch {
+  } catch (error) {
+    // #3839: a revoked grant and a Google outage are different stories. A temporary failure
+    // keeps the connection as it is, records a label the card turns into "will retry", and the
+    // next scheduled run simply tries again. Only a real refusal asks for a reconnect.
+    const transient = isTransientGoogleTokenFailure(error);
+    const label = transient ? "provider-unavailable" : "auth-error";
     // Never log the underlying auth error object (may carry client_secret/refresh_token).
-    logger.warn({ actorScoped: true, stage: "auth" }, "google-sync auth failed");
+    logger.warn({ actorScoped: true, stage: "auth", transient }, "google-sync auth failed");
     // Record a failed run with the bounded auth label only — never the raw provider error.
     try {
       await connectorsRepo.markSyncFinished(scopedDb, account.id, {
@@ -350,7 +355,7 @@ export async function runGoogleSyncChunk(
         ...(trigger ? { trigger } : {}),
         finishedAt: now(),
         status: "failed",
-        error: "auth-error",
+        error: label,
         counts: {
           calendarUpserted: 0,
           calendarReconciled: 0,
@@ -372,7 +377,7 @@ export async function runGoogleSyncChunk(
         emailUpserted,
         emailFailures,
         escalations,
-        errors: ["auth-error"],
+        errors: [label],
         truncated: false
       }
     };
