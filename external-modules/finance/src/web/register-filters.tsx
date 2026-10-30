@@ -11,6 +11,7 @@ export interface RegisterFilters {
   categoryId: string;
   postingState: "" | "pending" | "posted";
   direction: "" | "inflow" | "outflow";
+  ledgerState: "" | "uncleared" | "cleared" | "reconciled";
   attention: "" | "uncategorized" | "duplicates";
 }
 
@@ -19,6 +20,7 @@ export const EMPTY_FILTERS: RegisterFilters = {
   categoryId: "",
   postingState: "",
   direction: "",
+  ledgerState: "",
   attention: ""
 };
 
@@ -28,6 +30,7 @@ export function filterInput(filters: RegisterFilters): Record<string, unknown> {
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.postingState ? { postingState: filters.postingState } : {}),
     ...(filters.direction ? { direction: filters.direction } : {}),
+    ...(filters.ledgerState ? { ledgerState: filters.ledgerState } : {}),
     ...(filters.attention === "uncategorized" ? { uncategorizedOnly: true } : {}),
     ...(filters.attention === "duplicates" ? { duplicatesOnly: true } : {})
   };
@@ -121,6 +124,21 @@ export function RegisterFilterBar(props: {
             <option value="">All directions</option>
             <option value="inflow">Money in</option>
             <option value="outflow">Money out</option>
+          </Select>
+        </label>
+        <label className="fnm-block fnm-block--tight">
+          Manual ledger status
+          <Select
+            value={props.value.ledgerState}
+            aria-label="Filter by manual ledger status"
+            onChange={(event: { target: { value: string } }) =>
+              update("ledgerState", event.target.value)
+            }
+          >
+            <option value="">All ledger statuses</option>
+            <option value="uncleared">Uncleared</option>
+            <option value="cleared">Cleared</option>
+            <option value="reconciled">Reconciled</option>
           </Select>
         </label>
         <label className="fnm-block fnm-block--tight">

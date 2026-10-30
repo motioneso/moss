@@ -76,7 +76,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Filter by month, account, category, payee/notes, posting, direction, review or possible duplicates. Owned posted unsplit edits to non-transfer categories and loaded confirmation capture revisions, ask for host confirmation and await persistence. Stale batches save nothing; cancellation keeps review. Pending/KV and merchant-rule queues remain separate. Splits and linked transfers retain their protections. Loaded CSV reflects visible scope; owned history export captures cross-month dates/account/count, omits notes and mirrors, and refuses beyond 5,000 rows or 2 MiB. Loading, empty, error and busy states preserve filters. Shared records remain read only. Owned linked manual transfers offer audited inverse correction after captured review and host confirmation; original entries and statements stay intact. Duplicate corrections refuse; uncertain saves require a fresh read.",
+        "description": "Filter month, account, category, payee/notes, posting, manual ledger status, direction, review and duplicates. Manual status isolates owned posted uncleared, cleared or reconciled entries. Captured owned posted unsplit category edits and confirmations ask the host and await persistence; stale batches save nothing and cancellation keeps review. Pending/KV/rule queues remain separate. Splits and transfers retain protections. Loaded CSV uses visible scope; owned date/account history export omits notes and mirrors, refusing over 5,000 rows or 2 MiB. Empty/error/busy states preserve filters. Shared rows remain read only. Manual linked transfers offer captured, host-confirmed audited inverse correction; originals and statements remain. Duplicate corrections refuse; uncertain saves require a fresh read.",
         "path": "/transactions"
       },
       {
@@ -480,7 +480,7 @@
     {
       "name": "finance.transactions.query",
       "permissionId": "finance.transactions.query",
-      "description": "Query a calendar month of transactions by account, category, payee or private notes, posting status, direction, uncategorized state, or possible duplicate. Possible duplicates remain in the ledger; no automatic deletion.",
+      "description": "Query a calendar month of transactions by account, category, payee or private notes, posting status, manual ledger status, direction, uncategorized state, or possible duplicate. Manual status includes only owned posted manual entries and distinguishes uncleared, cleared-unreconciled and reconciled. Possible duplicates remain in the ledger; no automatic deletion.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
@@ -497,6 +497,7 @@
           "needsLookOnly": { "type": "boolean" },
           "limit": { "type": "integer", "minimum": 1, "maximum": 2000 },
           "postingState": { "type": "string", "enum": ["pending", "posted"] },
+          "ledgerState": { "type": "string", "enum": ["uncleared", "cleared", "reconciled"] },
           "direction": { "type": "string", "enum": ["inflow", "outflow"] },
           "uncategorizedOnly": { "type": "boolean" },
           "duplicatesOnly": { "type": "boolean" },

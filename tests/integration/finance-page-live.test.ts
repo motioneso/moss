@@ -1,3 +1,7 @@
+import {
+  exerciseLedgerFilter,
+  captureStatementReview
+} from "./helpers/finance-live-ledger-filter.js";
 import { configureFinanceProofFixture } from "./helpers/finance-live-negative-fixtures.js";
 import { exercisePlanning } from "./helpers/finance-live-planning.js";
 import { exerciseTargetFunding } from "./helpers/finance-live-target-funding.js";
@@ -13,8 +17,6 @@ import { exerciseFinanceImport } from "./helpers/finance-live-import.js";
 import { seedReportDetails } from "./helpers/finance-live-report-data.js";
 import { exerciseReportDetails } from "./helpers/finance-live-reports.js";
 import { exerciseBulkCategory } from "./helpers/finance-live-bulk.js";
-// Opt-in live path: built production host, installed bundles, actual auth/API/workers/RLS.
-// No application response interception. All identities/records live in the gate's throwaway DB.
 import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createServer as createTcpServer } from "node:net";
@@ -703,6 +705,15 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
           await readTool("finance.transactions.query", { month, accountId: account.accountId })
         ).transactions as { reconciledAt: string | null }[];
         expect(beforeReconcile[0]?.reconciledAt).toBeNull();
+        await exerciseLedgerFilter(
+          page,
+          base,
+          month,
+          account.accountId,
+          "cleared",
+          readTool,
+          artifacts
+        );
         await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
         await review.getByLabel("Statement balance", { exact: true }).fill("122.22");
         expect(await finish.isEnabled()).toBe(true);
@@ -714,33 +725,22 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         expect(await finish.isDisabled()).toBe(true);
         await selection.locator("..").click();
         expect(await finish.isEnabled()).toBe(true);
-        for (const mode of ["light", "dark"]) {
-          await page.evaluate((mode) => {
-            document.documentElement.dataset.theme = mode;
-          }, mode);
-          for (const width of [320, 390, 768, 1440]) {
-            await page.setViewportSize({ width, height: 900 });
-            await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
-            await finish.scrollIntoViewIfNeeded();
-            expect(
-              await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
-            ).toBe(false);
-            expect(
-              await review.evaluate((element) => element.scrollWidth > element.clientWidth)
-            ).toBe(false);
-            if (artifacts)
-              await page.screenshot({
-                path: join(resolve(artifacts), `finance-reconcile-${mode}-${width}.png`),
-                fullPage: true
-              });
-          }
-        }
+        await captureStatementReview(page, review, finish, artifacts);
         await finish.click();
         await review.waitFor({ state: "detached" });
         const reconciled = (
           await readTool("finance.transactions.query", { month, accountId: account.accountId })
         ).transactions as { reconciledAt: string | null }[];
         expect(reconciled[0]?.reconciledAt).toBeTruthy();
+        await exerciseLedgerFilter(
+          page,
+          base,
+          month,
+          account.accountId,
+          "reconciled",
+          readTool,
+          artifacts
+        );
         await page.reload();
         await page.getByRole("button", { name: "Reconcile Synthetic wallet", exact: true }).click();
         await review.getByText(/Last reconciled statement:/).waitFor();

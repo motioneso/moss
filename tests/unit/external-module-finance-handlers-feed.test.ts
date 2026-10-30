@@ -199,6 +199,81 @@ function ids(result: Record<string, unknown>): string[] {
 }
 
 describe("finance feed handlers (#1147)", () => {
+  it.each([
+    ["uncleared", ["manual-absent", "manual-uncleared"]],
+    ["cleared", ["manual-cleared"]],
+    ["reconciled", ["manual-reconciled", "manual-reconciled-old-flag"]]
+  ])(
+    "isolates owned posted manual %s rows without changing the ledger",
+    async (ledgerState, expected) => {
+      const kv = fakeKv();
+      await seedFeed(kv);
+      const manual = (id: string, patch: Partial<TransactionRecord> = {}) =>
+        txRecord({ id, source: "manual", categoryId: "groceries", ...patch });
+      const records = [
+        manual("manual-absent"),
+        manual("manual-uncleared", { cleared: false }),
+        manual("manual-cleared", { cleared: true }),
+        manual("manual-reconciled", { cleared: true, reconciledAt: "2026-07-12T12:00:00Z" }),
+        manual("manual-reconciled-old-flag", {
+          cleared: false,
+          reconciledAt: "2026-07-12T12:00:00Z"
+        }),
+        manual("manual-pending", { cleared: true, pending: true }),
+        txRecord({ id: "provider-cleared", cleared: true }),
+        txRecord({ id: "provider-reconciled", reconciledAt: "2026-07-12T12:00:00Z" })
+      ];
+      await kv.set(NS.transactions, "acc-1:2026-07", { transactions: records });
+      const mirror = readOnlyMirror({
+        [sharedMonthKey(OTHER, "shared", "2026-07")]: {
+          transactions: [manual("shared-manual", { accountId: "shared", cleared: true })]
+        }
+      });
+      const writesBefore = kv.ops.length;
+      const handler = transactionsQueryHandler(fakePorts(kv, mirror));
+      const input = {
+        actorUserId: ACTOR,
+        activeUserIds: [ACTOR, OTHER],
+        ledgerState,
+        accountId: "acc-1",
+        categoryId: "groceries",
+        search: "acme",
+        postingState: "posted",
+        direction: "outflow"
+      };
+      const result = await handler(input);
+      expect(ids(result)).toEqual(expected);
+      expect(result.totalCount).toBe(expected.length);
+      const limited = await handler({ ...input, limit: 1 });
+      expect(ids(limited)).toEqual(expected.slice(0, 1));
+      expect(limited.totalCount).toBe(expected.length);
+      expect(ids(await handler({ ...input, postingState: "pending" }))).toEqual([]);
+      const withoutAccount = await handler({
+        actorUserId: ACTOR,
+        activeUserIds: [ACTOR, OTHER],
+        ledgerState
+      });
+      expect(ids(withoutAccount)).toEqual(expected);
+      expect(kv.ops.length).toBe(writesBefore);
+      expect(await kv.get(NS.transactions, "acc-1:2026-07")).toEqual({ transactions: records });
+      expect(ids(await handler({ actorUserId: ACTOR, accountId: "acc-1" }))).toHaveLength(
+        records.length
+      );
+    }
+  );
+  it.each(["posted", "all", "", 1])(
+    "rejects invalid manual ledger state %s",
+    async (ledgerState) => {
+      const kv = fakeKv();
+      await expect(
+        transactionsQueryHandler(fakePorts(kv, readOnlyMirror()))({
+          actorUserId: ACTOR,
+          ledgerState
+        })
+      ).rejects.toThrow("ledgerState must be one of");
+      expect(kv.ops).toEqual([]);
+    }
+  );
   it("combines posting, direction, duplicate and category filters before limiting", async () => {
     const kv = fakeKv();
     await seedFeed(kv);

@@ -603,6 +603,7 @@ describe("finance manifest contract (#1146)", () => {
       "needsLookOnly",
       "limit",
       "postingState",
+      "ledgerState",
       "direction",
       "uncategorizedOnly",
       "duplicatesOnly",

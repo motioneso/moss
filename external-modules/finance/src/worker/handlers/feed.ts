@@ -91,6 +91,11 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   const duplicatesOnly = readBool(input, "duplicatesOnly") ?? false;
   const postingState = readEnum(input, "postingState", ["pending", "posted"] as const);
   const direction = readEnum(input, "direction", ["inflow", "outflow"] as const);
+  const ledgerState = readEnum(input, "ledgerState", [
+    "uncleared",
+    "cleared",
+    "reconciled"
+  ] as const);
   const limit = readInt(input, "limit", { min: 1, max: MAX_QUERY_LIMIT }) ?? 50;
 
   // FIN-06c (#1166) Task 9: one store call for the requested month, across
@@ -154,6 +159,12 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     transactions = transactions.filter((record) =>
       direction === "inflow" ? record.amountCents < 0 : record.amountCents > 0
     );
+  if (ledgerState)
+    transactions = transactions.filter((record) => {
+      if (record.shared || record.source !== "manual" || record.pending) return false;
+      if (ledgerState === "reconciled") return Boolean(record.reconciledAt);
+      return !record.reconciledAt && Boolean(record.cleared) === (ledgerState === "cleared");
+    });
   if (uncategorizedOnly)
     transactions = transactions.filter(
       (record) => record.categoryId === null && !splitsBalance(record)
