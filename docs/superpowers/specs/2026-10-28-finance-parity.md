@@ -348,3 +348,10 @@ currency/outside-window rows and claimed matches. Installed UI acceptance must s
 range and match a synthetic prior-month posted expense through the existing confirmation route.
 No transaction creation or bank instruction is added by this slice. The separate reviewed
 “Record bill entry” implementation remains the next larger action.
+
+Implementation of the bounded bill-match continuation is committed at 170dc61f and passed
+both selected installed native flows at that clean input, with twenty others intentionally
+skipped. The 18 focused recurrence/handler cases pass, including an observed-red empty-index
+regression. See the [bill-match checkpoint](../plans/2026-10-30-finance-bill-match-checkpoint.md)
+for exact receipts, static-check outcome, original screenshots and manual continuation. Recurring
+obligations remain Partial; recording an entry directly from an occurrence remains missing.
