@@ -79,3 +79,8 @@ probe also found two subsequent ledger-review tasks: a named predecessor need no
 be pending before removal, and a changed-amount pending replacement can remain confirmed.
 Prove bounded fixes with reducer, persistence and native review coverage; do not mislabel
 that work as atomic provider convergence or actual bank acceptance.
+
+Weekly aggregate 124315-sSpn8n completed exit 1 on clean 6b7a3573 / 0d579c00aaf7.
+Static checks passed; unit files 1631 passed / 21 failed, tests 19680 passed / 277 failed /
+3 skipped. Normalized failures exactly match 040401-c9zwQ0: zero added or removed.
+Subsequent aggregate DB stages were not reached. This remains a failed aggregate.

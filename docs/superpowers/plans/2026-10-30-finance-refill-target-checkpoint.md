@@ -71,3 +71,9 @@ allow pending removal and posted addition on separate pages. Design and test tha
 claiming provider convergence. Larger atomic/concurrent provider changes, credit payment reserves,
 account-linked/debt/custom-period goals, household writes, richer reporting and investment holdings
 remain separately staged. Keep the [parity matrix](../specs/2026-10-28-finance-parity.md) Partial.
+
+Clean refill e13fb5b0 / decedc828d1d: complete backend 125645-atWZXh passed all
+154 cases in 16 suites (opt-in browser skipped separately). Full installed browser
+125935-1xHcOA passed all 21 flows, exit 0, including weekly/refill create, reload,
+eligible-first selection, cancel and confirmed funding. No application code changed
+after these runs. The next committed design addresses durable pending handoffs.
