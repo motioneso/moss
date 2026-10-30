@@ -89,7 +89,7 @@
       {
         "id": "finance.reports",
         "label": "Reports",
-        "description": "Reports is a primary Finance tab. Spending, cash flow and own-account net worth are shown in a selected currency, with no FX conversion. Mixed-currency data requires a choice before totals appear. Pending transactions remain included in spending; transfers are excluded. Snapshot net worth carries earlier balances forward and omits accounts without recorded balances. Monetary overflow is rejected instead of showing rounded totals. Category/payee bars and monthly income/outflow open paginated signed transaction contributions, including split portions. Totals and full counts remain visible beyond the loaded page. Changed totals are disclosed; private notes are omitted. Details reload independently; Refresh reports updates aggregate totals. Periods use the owner local calendar.",
+        "description": "Reports is a primary tab with currency-separated spending, cash flow and own-account net worth; mixed currencies require a choice and no FX conversion occurs. Manual net worth reconstructs opening balances and posted ledger entries through the owner local date; connected accounts retain recorded snapshots. Sources, dated coverage, missing balances and accessible history are disclosed. Category/payee bars and monthly income/outflow open bounded exact signed contributions, including split portions, with a full count/total and changed-record disclosure. Pending spending remains included and transfers are excluded per owner. Private notes are omitted; details reload independently and Refresh reports updates aggregates. Unsafe monetary outputs are rejected.",
         "path": "/reports"
       },
       {

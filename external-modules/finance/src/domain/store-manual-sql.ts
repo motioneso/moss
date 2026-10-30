@@ -4,6 +4,28 @@ import type { FinanceDb } from "./store-sql.js";
 /** All balance changes depend on inserted rows; conflict replays cannot move a balance twice. */
 export function manualSqlStore(db: FinanceDb): ManualLedgerStore {
   return {
+    async netWorthMovements(through) {
+      const result = await db.query<{
+        account_id: string;
+        date: string;
+        amount_cents: string;
+        invalid_count: string;
+      }>(
+        `SELECT t.account_id,t.date::text AS date,sum(t.amount_cents::numeric)::text AS amount_cents,
+          sum(CASE WHEN t.amount_cents BETWEEN -9007199254740991 AND 9007199254740991
+            AND t.iso_currency=a.iso_currency AND t.date>=a.opening_date THEN 0 ELSE 1 END)::text AS invalid_count
+          FROM app.finance_transactions t JOIN app.finance_accounts a ON a.account_id=t.account_id
+          WHERE t.source='manual' AND a.source='manual' AND NOT t.pending AND t.date<=$1::date
+          GROUP BY t.account_id,t.date ORDER BY t.account_id,t.date`,
+        [through]
+      );
+      return result.rows.map((row) => ({
+        accountId: row.account_id,
+        date: row.date,
+        amountCents: row.amount_cents,
+        valid: row.invalid_count === "0"
+      }));
+    },
     async createAccount(input) {
       const changed = await db.query<{ account_id: string }>(
         `WITH inserted AS (

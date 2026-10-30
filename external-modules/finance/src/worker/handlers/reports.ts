@@ -1,3 +1,10 @@
+import { FinanceKvError } from "../../domain/errors.js";
+import {
+  ledgerNetWorthInputs,
+  netWorthCoverage,
+  NetWorthHistoryError
+} from "../../domain/net-worth-ledger.js";
+import { today } from "./manual-ledger.js";
 import { loadReportRows, readWindow } from "./report-rows.js";
 // external-modules/finance/src/worker/handlers/reports.ts
 //
@@ -79,9 +86,46 @@ export const reportsNetWorthHandler: ToolFactory = (ports) => async (input) => {
     const days = await store.getSnapshotChunk(accountId, month);
     if (days) chunks[`${accountId}:${month}`] = { days };
   }
-  return {
-    window,
-    ...scope,
-    ...deriveNetWorth(selectedAccounts, chunks, window)
-  };
+  const currentDate = ports.localTimezone ? today(ports) : ports.now().toISOString().slice(0, 10);
+  const manualSupported = Boolean(store.manual?.netWorthMovements);
+  const movements =
+    selectedAccounts.some((a) => a.source === "manual") && manualSupported
+      ? await store.manual!.netWorthMovements!(currentDate)
+      : [];
+  try {
+    const history = ledgerNetWorthInputs(
+      selectedAccounts,
+      chunks,
+      movements,
+      currentDate,
+      window,
+      manualSupported
+    );
+    const series = deriveNetWorth(selectedAccounts, history.chunks, window, history.referenceDays);
+    const asOf = series.points.at(-1)?.date ?? null;
+    return {
+      window,
+      ...scope,
+      ...series,
+      asOf,
+      coverage: netWorthCoverage(history, selectedAccounts, asOf)
+    };
+  } catch (error) {
+    if (
+      error instanceof NetWorthHistoryError ||
+      error instanceof RangeError ||
+      (error instanceof FinanceKvError && error.code === "invalid_record")
+    )
+      return {
+        window,
+        ...scope,
+        points: [],
+        headlineCents: null,
+        asOf: null,
+        coverage: [],
+        unavailableReason:
+          error instanceof NetWorthHistoryError ? "invalid_history" : "unsafe_money"
+      };
+    throw error;
+  }
 };

@@ -204,7 +204,8 @@
     "test:integration:finance-parity": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-tables-install.test.ts tests/integration/finance-storage-migrate.test.ts tests/integration/external-module-finance.test.ts",
     "test:integration:finance-bills": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bills.test.ts",
     "test:integration:finance-flex": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-flex.test.ts",
-    "test:integration:finance-bulk": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bulk.test.ts"
+    "test:integration:finance-bulk": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-bulk.test.ts",
+    "test:integration:finance-net-worth": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/finance-net-worth.test.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

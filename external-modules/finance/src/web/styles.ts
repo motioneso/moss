@@ -23,6 +23,7 @@ export const MODULE_STYLES = `
 .fnm-catpick { display: inline-flex; align-items: center; gap: 0.375rem; }
 /* Amounts align on digits via numeric variants — mono is retired app-wide. */
 .fnm-amount { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.fnm-money-wrap { min-width: 0; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 /* FIN-05 (#1150) reports: bars/trend are layout-only — the bar track is a
    .jds-progress (packages/ui), .jds-progress--current making the fill inherit
    currentColor at reduced opacity so no raw color enters the module. */

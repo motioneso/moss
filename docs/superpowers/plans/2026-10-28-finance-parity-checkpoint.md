@@ -753,3 +753,45 @@ commit with restored ACL tools and supported system Chromium in the separate cle
 checkout: `moss_finance_verify-20261030-025417-pHZUqY.log`. Resume its existing wait; do not confuse
 its pending outcome with a pass or with the completed earlier 68282552 receipt. CI and release
 acceptance remain separate. The next work follows the committed manual-ledger net-worth spec.
+
+## Manual ledger net worth — October 30 implementation
+
+Implements the committed `2026-10-30-finance-ledger-net-worth.md` design. SQL projects only owned
+posted manual movements by day, with exact numeric sums and invalid-source evidence; no notes or
+payee names. Manual history reconstructs immutable opening baselines through owner-local today,
+replacing legacy manual snapshots. Provider accounts retain recorded snapshots without substituting
+live balances. Bigint accumulation preserves exact cancellation; unsafe public totals and incompatible
+history produce explicit review states. Selected-currency source coverage shows included/omitted
+accounts and dates, with keyboard disclosures and paginated balance history. No migration is needed.
+
+Development evidence (base `cfdbe419`, dirty inputs explicitly recorded in each gate):
+
+- Focused Finance: 61 files, 609 unit tests passed after fixing invalid-record error classification.
+- Installed SQL: six passed, gate `031100-0PTMgs`, input `ca4980cc6ccc`. Includes pre-window carry,
+  future exclusion, zero baseline, debt/refund/transfer conservation, reconciliation/category invariance,
+  source validation, exact projection privacy and two owners with identical local account/entry IDs.
+  Pending manual entries and unsafe individual cents are rejected by the existing database constraint;
+  the tests assert that protection rather than weakening it to inject impossible fixtures.
+- Owner negative control: gate `031457-BVTPd7`, input `daf927e8d20d`, five passed / one failed.
+  Disabling transaction RLS only in the disposable fixture changed the owner's projected movement
+  from 1,000 to 5,000 cents. The isolation assertion failed. The test modification was restored.
+- Installed browser: 12 flows passed, gate `031244-NMudm2`, input `16e8c2b0a3f0`. The additional
+  signed-in manual-only owner has no bank items: EUR 1,234.50 and USD 9,999.99 stay separate;
+  reload, dated coverage and Enter/Space disclosures work. Captures at 320/390/768/1440 in
+  light/dark/Sage have no horizontal overflow. Desktop light and phone dark inspected. Images
+  named `finance-ledger-net-worth-<theme>-<width>.png` are kept outside the checkout.
+  A subsequent singular-account copy polish requires the final clean-checkpoint browser rerun.
+
+The restored-prerequisite full foundation run on clean `3868564e`, input `1cbfcde236a5`, ended
+rc=1: 1,612 unit files / 19,495 tests passed, 21 files / 277 tests failed, three skipped. Static
+passed. Log receipt: `moss_finance_verify-20261030-025417-pHZUqY`. All failures are outside Finance:
+Computer native root/ownership/signing/runtime fixtures, auth-session-invalidations, Sports requiring
+its unavailable bundled browser, and three native vault ACL fixtures using an unmapped UID. Official
+ACL tools plus the supported system-Chromium override recovered the earlier browser setup failures
+and two ACL cases without weakening guards. Remaining aggregate failures are not claimed resolved;
+later migration/UAT/full-integration stages did not run. Historical baseline has the same failure count,
+but its lost log prevents a claim that all individual failure identifiers match. CI remains unrun.
+
+Net worth remains **partial**, with provider valuation freshness and manual-only provenance explicit.
+Next independent slice: full owned transaction export, with honest bounded/consistent scope and
+spreadsheet-safe output; account lifecycle and legacy individual-write concurrency also remain gaps.

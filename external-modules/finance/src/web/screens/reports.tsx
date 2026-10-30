@@ -1,3 +1,5 @@
+import { NetWorthHistory } from "../net-worth-history";
+import type { NetWorthCoverage } from "../../domain/net-worth-ledger";
 // external-modules/finance/src/web/screens/reports.tsx
 // FIN-05 (#1150) Task 6: the read-only Reports screen. Two read-risk tool
 // queries (finance.reports.spending / finance.reports.net-worth) — this
@@ -7,6 +9,7 @@
 import {
   Button,
   Masthead,
+  Note,
   SectionHead,
   Select,
   useEffect,
@@ -58,6 +61,9 @@ interface NetWorthResult extends CurrencyResult {
   window: string[];
   points: NetWorthPoint[];
   headlineCents: number | null;
+  asOf?: string | null;
+  coverage?: NetWorthCoverage[];
+  unavailableReason?: "unsafe_money" | "invalid_history";
 }
 
 interface BarRow {
@@ -123,20 +129,36 @@ function BarList(props: {
 
 function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
   const { points, headlineCents, currency } = props.result;
+  if (props.result.unavailableReason)
+    return (
+      <section className="fnm-block fnm-block--tight" aria-label="Net worth">
+        <SectionHead number="01" title="Net worth needs review" rule />
+        <Note variant="practical">
+          {props.result.unavailableReason === "unsafe_money"
+            ? "This balance history cannot be totaled without losing precision. Review its amounts, then refresh Reports."
+            : "The balance history contains incompatible dates, currencies or amounts. Review opening balances and recorded entries, then refresh Reports."}
+        </Note>
+      </section>
+    );
   return (
     <section className="fnm-block fnm-block--tight" aria-label="Net worth">
       <SectionHead number="01" title="Net worth" meta={currency ?? undefined} rule />
       {headlineCents === null || !currency ? (
         <EmptyState
           title="No recorded balance history"
-          body="Connected accounts build this chart from saved balance snapshots. Manual ledger history is not yet included."
+          body="A manual opening balance or a connected balance snapshot is needed in this period. Open sources below to see what is missing."
         />
       ) : (
         <div className="fnm-stack">
-          <strong className="fnm-amount">{formatCents(headlineCents, currency)}</strong>
+          <SectionHead
+            title={<span className="fnm-money-wrap">{formatCents(headlineCents, currency)}</span>}
+            titleAs="h3"
+            meta={props.result.asOf ? `As of ${props.result.asOf}` : undefined}
+          />
           <p className="jds-caption">
-            Recorded account balances; earlier balances carry forward. Accounts without snapshots
-            are omitted, including manual ledger accounts.
+            Manual balances follow opening amounts and recorded entries. Connected accounts use
+            saved snapshots, which may be older and carry forward. Missing balances are omitted. No
+            market values or exchange rates are estimated.
           </p>
           {/* A polyline needs ≥2 points; a single snapshot day renders the
                 headline alone. */}
@@ -158,6 +180,14 @@ function NetWorthSection(props: { result: NetWorthResult }): ReactNodeLike {
           ) : null}
         </div>
       )}
+      {currency && props.result.coverage ? (
+        <NetWorthHistory
+          key={`${currency}:${points[0]?.date}:${points.at(-1)?.date}`}
+          coverage={props.result.coverage}
+          points={points}
+          currency={currency}
+        />
+      ) : null}
     </section>
   );
 }

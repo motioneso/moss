@@ -6,7 +6,7 @@
 // snapshot chunks (pre-window months feed carry-forward) and the window.
 import { balanceSign } from "./account-sign.js";
 import type { AccountRecord, SnapshotChunk } from "./records.js";
-import { addCents, requireSingleCurrency } from "./values.js";
+import { isCalendarDate, safeCents, requireSingleCurrency } from "./values.js";
 
 export type NetWorthPoint = { date: string; totalCents: number };
 
@@ -20,7 +20,8 @@ export type NetWorthSeries = {
 export function deriveNetWorth(
   accounts: AccountRecord[],
   chunks: Record<string, SnapshotChunk>,
-  window: string[]
+  window: string[],
+  referenceDays: readonly string[] = []
 ): NetWorthSeries {
   requireSingleCurrency(accounts.map((account) => account.isoCurrency));
   const windowSet = new Set(window);
@@ -50,19 +51,30 @@ export function deriveNetWorth(
     list.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   }
 
+  for (const day of referenceDays) {
+    if (!isCalendarDate(day)) throw new Error("Invalid net worth reference day");
+    if (
+      windowSet.has(day.slice(0, 7)) &&
+      [...perAccount.values()].some((list) => list[0] && list[0][0] <= day)
+    )
+      days.add(day);
+  }
+  const cursors = new Map<string, { index: number; last: number | undefined }>();
   const points: NetWorthPoint[] = [...days].sort().map((day) => {
-    let totalCents = 0;
+    let totalCents = 0n;
     for (const [accountId, list] of perAccount) {
       // Last known balance on or before `day`; accounts with no snapshot yet
       // contribute nothing (no back-fill — inventing history lies on charts).
-      let last: number | undefined;
-      for (const [date, balanceCents] of list) {
-        if (date > day) break;
-        last = balanceCents;
+      const cursor = cursors.get(accountId) ?? { index: 0, last: undefined };
+      while (cursor.index < list.length && list[cursor.index]![0] <= day) {
+        cursor.last = safeCents(list[cursor.index]![1]);
+        cursor.index++;
       }
-      if (last !== undefined) totalCents = addCents(totalCents, last * (sign.get(accountId) ?? 1));
+      cursors.set(accountId, cursor);
+      if (cursor.last !== undefined)
+        totalCents += BigInt(cursor.last) * BigInt(sign.get(accountId) ?? 1);
     }
-    return { date: day, totalCents };
+    return { date: day, totalCents: safeCents(totalCents) };
   });
 
   return {

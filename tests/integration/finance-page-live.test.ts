@@ -1,3 +1,4 @@
+import { exerciseManualNetWorth } from "./helpers/finance-live-net-worth.js";
 import { exerciseFinanceImport } from "./helpers/finance-live-import.js";
 import { seedReportDetails } from "./helpers/finance-live-report-data.js";
 import { exerciseReportDetails } from "./helpers/finance-live-reports.js";
@@ -707,6 +708,16 @@ describe.skipIf(process.env.MOSS_FINANCE_LIVE !== "1")(
         await context.setOffline(false);
         await page.close();
       }
+    }, 90_000);
+
+    it("shows manual ledger net worth without a bank, with source dates and separated currencies", async () => {
+      await exerciseManualNetWorth(
+        browser,
+        base,
+        member.cookie,
+        (name, input) => readTool(name, input, member.cookie),
+        artifacts
+      );
     }, 90_000);
 
     it("confirms and cancels real worker deletion through the actual host dialog", async () => {

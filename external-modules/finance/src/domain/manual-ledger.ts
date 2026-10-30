@@ -60,7 +60,15 @@ export type ManualWriteResult =
   | "invalid_date"
   | "reconciled_period"
   | "overflow";
+export interface ManualDailyMovement {
+  accountId: string;
+  date: string;
+  /** Exact internal daily movement; may exceed a public JS integer before cancellation. */
+  amountCents: string;
+  valid: boolean;
+}
 export interface ManualLedgerStore {
+  netWorthMovements?(through: string): Promise<ManualDailyMovement[]>;
   createAccount(input: ManualAccountCreate): Promise<ManualWriteResult>;
   createEntry(input: ManualEntryCreate): Promise<ManualWriteResult>;
 }
