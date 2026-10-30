@@ -1,3 +1,4 @@
+import { projectBillOccurrences } from "../../domain/bill-adjustments.js";
 import type { ToolFactory } from "../registry.js";
 import { InputError, readEnum, readInt, readString } from "../validate.js";
 import { isCalendarDate } from "../../domain/values.js";
@@ -31,7 +32,21 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
   const plans = await store.bills.plans();
   if (plans.length > 500)
     throw new InputError("Narrow the saved bill list before projecting more than 500 plans");
-  const decisions = await store.bills.decisions(from, to);
+  const adjustments = (await store.billAdjustments?.rows(from, to)) ?? [];
+  let projected;
+  try {
+    projected = projectBillOccurrences(plans, adjustments, from, to);
+  } catch {
+    throw new InputError(
+      "invalid_bill_projection",
+      "Use a shorter window or check saved bill changes before projecting this range"
+    );
+  }
+  const decisions = await store.bills.decisions(
+    from,
+    to,
+    adjustments.map((a) => a.dueDate)
+  );
   const accounts = (await store.listAccounts()).filter((a) => a.isoCurrency === policy.isoCurrency);
   const categories = (await loadCategories(ports)).filter(
     (c) => !c.archived && c.id !== "income" && c.id !== "transfers"
@@ -70,32 +85,27 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
   }
   if (transactions.length > 1000)
     throw new InputError("Use a shorter window to review bill matches");
-  const used = new Set(decisions.map((d) => d.transactionId).filter(Boolean));
-  const occurrences = plans
-    .flatMap((plan) =>
-      billOccurrences(plan, from, to).map((dueDate) => {
-        const decision = decisions.find((d) => d.planId === plan.id && d.dueDate === dueDate);
-        return {
-          planId: plan.id,
-          name: plan.name,
-          accountId: plan.accountId,
-          categoryId: plan.categoryId,
-          dueDate,
-          expectedCents: plan.amountCents,
-          state:
-            decision?.state === "matched"
-              ? decision.matchedValid
-                ? "posted"
-                : "review"
-              : (decision?.state ?? "projected"),
-          actualCents: decision?.actualCents ?? null,
-          transactionId: decision?.transactionId ?? null
-        };
-      })
-    )
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name));
-  if (occurrences.length > 500)
-    throw new InputError("Use a shorter window to show no more than 500 occurrences");
+  const used = new Set(
+    store.billAdjustments
+      ? await store.billAdjustments.claimedTransactionIds(transactions.map((t) => t.id))
+      : decisions.map((d) => d.transactionId).filter(Boolean)
+  );
+  const occurrences = projected.map((o) => {
+    const decision = decisions.find((d) => d.planId === o.planId && d.dueDate === o.dueDate);
+    const account = accounts.find((a) => a.accountId === o.accountId);
+    return {
+      ...o,
+      canAdjust: Boolean(store.billAdjustments && account && !account.archivedAt && !decision),
+      state:
+        decision?.state === "matched"
+          ? decision.matchedValid
+            ? "posted"
+            : "review"
+          : (decision?.state ?? "projected"),
+      actualCents: decision?.actualCents ?? null,
+      transactionId: decision?.transactionId ?? null
+    };
+  });
   requireSameReview(policy, await requireBudgetPolicy(store));
   return {
     status: "ok",
@@ -105,6 +115,7 @@ export const billsReadHandler: ToolFactory = (ports) => async (input) => {
     fingerprint: policy.fingerprint,
     plans,
     occurrences,
+    supportsAdjustments: Boolean(store.billAdjustments),
     accounts: accounts.map((a) => ({ accountId: a.accountId, name: a.name })),
     categories: categories.map((c) => ({ id: c.id, name: c.name })),
     transactions: transactions.filter((t) => !used.has(t.id))

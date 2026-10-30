@@ -28,7 +28,8 @@ const blockers: Record<AccountCloseBlocker, string> = {
   future_entries: "Review future-dated entries before closing this ledger.",
   unreconciled:
     "Reconcile a zero statement through today. A pristine zero opening ledger needs no statement.",
-  future_plans: "Stop future plans that use this account in Upcoming before closing."
+  future_plans:
+    "In Upcoming, reset later one-off changes and stop future plans that use this account before closing."
 };
 interface ReviewResult extends Record<string, unknown> {
   status: string;

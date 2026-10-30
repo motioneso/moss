@@ -86,7 +86,8 @@ const ownedTables = [
   "app.finance_bill_occurrences",
   "app.finance_flex_policies",
   "app.finance_manual_transfers",
-  "app.finance_merchant_rules"
+  "app.finance_merchant_rules",
+  "app.finance_bill_adjustments"
 ];
 
 const NOW_1 = "2026-07-18T12:00:00.000Z";

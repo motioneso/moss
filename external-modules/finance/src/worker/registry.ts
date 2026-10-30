@@ -1,3 +1,4 @@
+import { billAdjustHandler, billAdjustResetHandler } from "./handlers/bill-adjustments.js";
 import {
   rulesListHandler,
   rulesPreviewHandler,
@@ -127,6 +128,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "bill.decide": billDecideHandler,
   "bill.stop": billStopHandler,
   "bill.clear": billClearHandler,
+  "bill.adjust": billAdjustHandler,
+  "bill.adjust-reset": billAdjustResetHandler,
   "budget.configure": budgetConfigureHandler,
   "budget.assign": budgetAssignHandler,
   "budget.apply": budgetApplyHandler,

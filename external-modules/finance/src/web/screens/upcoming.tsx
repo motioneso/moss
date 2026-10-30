@@ -18,13 +18,17 @@ import type { BillPlan } from "../../domain/bills";
 import { currentMonth, formatCents } from "../format";
 import { invalidateQueries, useToolQuery } from "../store";
 import { outcomeGate } from "../states";
+import { BillAdjustmentDialog } from "../bill-adjustment-dialog";
 import { BillPlanDialog } from "../bill-plan-dialog";
-interface Occurrence {
+export interface Occurrence {
   planId: string;
   name: string;
   accountId: string;
   categoryId: string;
   dueDate: string;
+  plannedDate?: string;
+  adjusted?: boolean;
+  canAdjust?: boolean;
   expectedCents: number;
   state: "projected" | "posted" | "skipped" | "review";
   actualCents: number | null;
@@ -49,6 +53,9 @@ export interface BillsView extends Record<string, unknown> {
 }
 export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth());
+  const [adjusting, setAdjusting] = useState<{ occurrence: Occurrence; reset: boolean } | null>(
+    null
+  );
   const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState<Occurrence | null>(null);
   const [stopping, setStopping] = useState<BillPlan | null>(null);
@@ -107,7 +114,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
     setBusy(true);
     try {
       const result = await props.tools.invoke("finance.bills.read", { from, to });
-      if (result.status === "succeeded") {
+      if (result.status === "succeeded" && result.result.status === "ok") {
         invalidateQueries();
         setBlocked(false);
         setMessage("Saved bills refreshed. Review the current records before saving.");
@@ -134,14 +141,16 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
             aria-label="Bill month"
             type="month"
             value={month}
-            disabled={busy || adding || Boolean(selected) || Boolean(stopping)}
+            disabled={
+              busy || adding || Boolean(selected) || Boolean(stopping) || Boolean(adjusting)
+            }
             onChange={(e: { currentTarget: { value: string } }) => {
               if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.currentTarget.value))
                 setMonth(e.currentTarget.value);
             }}
           />
         </label>
-        <div className="fnm-inline">
+        <div className="fnm-spread">
           <Button
             variant="secondary"
             disabled={!data || busy || blocked || !props.tools}
@@ -174,13 +183,13 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                   <RowIndexItem
                     key={`${o.planId}:${o.dueDate}`}
                     title={o.name}
-                    excerpt={`${o.dueDate} · ${body.accounts.find((a) => a.accountId === o.accountId)?.name ?? "Unavailable account"} · ${body.categories.find((c) => c.id === o.categoryId)?.name ?? "Archived category"}`}
+                    excerpt={`${o.plannedDate ?? o.dueDate}${o.adjusted ? ` · one-off change from ${o.dueDate}` : ""} · ${body.accounts.find((a) => a.accountId === o.accountId)?.name ?? "Unavailable account"} · ${body.categories.find((c) => c.id === o.categoryId)?.name ?? "Archived category"}`}
                     meta={
                       <div className="fnm-block fnm-block--tight fnm-end">
                         <strong>{formatCents(o.expectedCents, body.isoCurrency)} expected</strong>
                         <Badge>
                           {o.state === "projected"
-                            ? o.dueDate < body.today
+                            ? (o.plannedDate ?? o.dueDate) < body.today
                               ? "Past due · projected"
                               : "Projected"
                             : o.state === "posted"
@@ -189,6 +198,30 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
                                 ? "Skipped"
                                 : "Match needs review"}
                         </Badge>
+                        {o.canAdjust ? (
+                          <div className="fnm-spread">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={busy || blocked || !props.tools}
+                              onClick={() => setAdjusting({ occurrence: o, reset: false })}
+                            >
+                              Change this occurrence
+                            </Button>
+                            {o.adjusted ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={busy || blocked || !props.tools}
+                                onClick={() => setAdjusting({ occurrence: o, reset: true })}
+                              >
+                                Reset one-off change
+                              </Button>
+                            ) : null}
+                          </div>
+                        ) : o.state !== "projected" ? (
+                          <p className="jds-hint">Undo review before changing this projection.</p>
+                        ) : null}
                         <div className="fnm-spread">
                           {o.state === "projected" ? (
                             <>
@@ -287,6 +320,16 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
         ),
         { loadingLabel: "Loading bills" }
       )}
+      {data && adjusting ? (
+        <BillAdjustmentDialog
+          data={data}
+          occurrence={adjusting.occurrence}
+          reset={adjusting.reset}
+          tools={props.tools}
+          onClose={() => setAdjusting(null)}
+          onUncertain={() => setBlocked(true)}
+        />
+      ) : null}
       {data && adding ? (
         <BillPlanDialog data={data} tools={props.tools} onClose={() => setAdding(false)} />
       ) : null}
@@ -296,7 +339,7 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           scrollBody
           closeLabel="Close"
           closeDisabled={busy}
-          description={`${selected.name} · ${selected.dueDate} · ${formatCents(selected.expectedCents, data.isoCurrency)} expected`}
+          description={`${selected.name} · ${selected.plannedDate ?? selected.dueDate} · ${formatCents(selected.expectedCents, data.isoCurrency)} expected`}
           onClose={() => {
             if (!busy) setSelected(null);
           }}
@@ -382,8 +425,8 @@ export function UpcomingScreen(props: { tools?: ExternalModuleToolsHandleV1 }): 
           <div className="fnm-block">
             <p>
               Keep occurrences through this date. Later projections disappear; posted transactions
-              and reviewed history remain. Undo any later bill reviews before choosing an earlier
-              stop date.
+              and reviewed history remain. Undo later bill reviews and reset later one-off changes
+              before choosing an earlier stop date.
             </p>
             {message ? (
               <p role="alert">

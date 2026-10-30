@@ -10,7 +10,8 @@ const facts = (source: "app.finance_accounts" | "reviewed") => `
     a.opening_balance_cents::numeric-(CASE WHEN a.type IN ('credit','loan') THEN -1 ELSE 1 END)*ledger.movement=a.balance_cents AS ledger_matches,
     (a.last_reconciled_date=$2::date OR (ledger.n=0 AND a.opening_balance_cents=0)) AS statement_ready,
     (SELECT count(*) FROM app.finance_bill_plans p WHERE p.account_id=a.account_id
-      AND (p.end_date IS NULL OR p.end_date>$2::date) AND (p.cadence<>'once' OR p.anchor_date>$2::date)) AS future_plans
+      AND (((p.end_date IS NULL OR p.end_date>$2::date) AND (p.cadence<>'once' OR p.anchor_date>$2::date))
+        OR EXISTS(SELECT 1 FROM app.finance_bill_adjustments b WHERE b.plan_id=p.id AND b.planned_date>$2::date))) AS future_plans
   FROM ${source} a CROSS JOIN LATERAL (
     SELECT count(*) AS n,max(t.date) AS last_entry,
       coalesce(sum(t.amount_cents::numeric) FILTER (WHERE t.source='manual' AND NOT t.pending AND t.date <= $2::date),0) AS movement,

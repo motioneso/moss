@@ -18,7 +18,11 @@ export interface BillDecision {
 }
 export interface BillStore {
   plans(): Promise<BillPlan[]>;
-  decisions(from: string, to: string): Promise<BillDecision[]>;
+  decisions(
+    from: string,
+    to: string,
+    additionalDueDates?: readonly string[]
+  ): Promise<BillDecision[]>;
   create(plan: BillPlan, expected: BudgetReview, at: string): Promise<boolean>;
   stop(id: string, endDate: string, expected: BudgetReview, at: string): Promise<boolean>;
   clear(planId: string, dueDate: string, expected: BudgetReview, at: string): Promise<boolean>;

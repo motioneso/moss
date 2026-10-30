@@ -98,3 +98,9 @@ browser `075030-QqSw1t` passed all twenty flows; real rule/migration/install SQL
 passed seventeen across three files, both exit 0. The combined foundation check follows on that
 frozen source. Main continues the separately specified one-off bill changes; credit-card payment
 reserve policy is deliberately left unchanged pending its own reviewed transition.
+
+The clean `3eb33c49` foundation run `075541-I17Lb9`, input `aa09e2a3ec7d`, finished
+with exit 1: all static checks passed; 1,621 files / 19,585 tests passed, 21 files /
+277 tests failed, three skipped. Normalized failure identifiers exactly match the
+clean `3c620d58` baseline (zero added or removed). Later aggregate database stages
+were unrun. This is not an overall pass. One-off bill work continues separately.

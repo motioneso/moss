@@ -33,7 +33,7 @@ export function billSqlStore(db: FinanceDb): BillStore {
         endDate: r.end_date
       }));
     },
-    async decisions(from, to) {
+    async decisions(from, to, additionalDueDates = []) {
       const result = await db.query<{
         plan_id: string;
         due_date: string;
@@ -42,8 +42,8 @@ export function billSqlStore(db: FinanceDb): BillStore {
         actual_cents: string | null;
         matched_valid: boolean;
       }>(
-        "SELECT d.plan_id,d.due_date::text AS due_date,d.state,d.transaction_id,t.amount_cents AS actual_cents, coalesce(NOT t.pending AND t.amount_cents > 0 AND t.account_id=p.account_id AND t.iso_currency=p.iso_currency AND coalesce(t.category_id,'') NOT IN ('income','transfers'),false) AS matched_valid FROM app.finance_bill_occurrences d JOIN app.finance_bill_plans p ON p.owner_user_id=d.owner_user_id AND p.id=d.plan_id LEFT JOIN app.finance_transactions t ON t.owner_user_id=d.owner_user_id AND t.id=d.transaction_id WHERE d.due_date >= $1::date AND d.due_date <= $2::date ORDER BY d.due_date,d.plan_id",
-        [from, to]
+        "SELECT d.plan_id,d.due_date::text AS due_date,d.state,d.transaction_id,t.amount_cents AS actual_cents, coalesce(NOT t.pending AND t.amount_cents > 0 AND t.account_id=p.account_id AND t.iso_currency=p.iso_currency AND coalesce(t.category_id,'') NOT IN ('income','transfers'),false) AS matched_valid FROM app.finance_bill_occurrences d JOIN app.finance_bill_plans p ON p.owner_user_id=d.owner_user_id AND p.id=d.plan_id LEFT JOIN app.finance_transactions t ON t.owner_user_id=d.owner_user_id AND t.id=d.transaction_id WHERE (d.due_date >= $1::date AND d.due_date <= $2::date) OR d.due_date=ANY($3::date[]) ORDER BY d.due_date,d.plan_id",
+        [from, to, additionalDueDates]
       );
       return result.rows.map((r) => ({
         planId: r.plan_id,
@@ -88,7 +88,7 @@ export function billSqlStore(db: FinanceDb): BillStore {
         "WITH " +
           budgetEligibilitySql(
             4,
-            "EXISTS (SELECT 1 FROM app.finance_bill_plans WHERE id=$1::uuid AND (end_date IS NULL OR $2::date<end_date)) AND NOT EXISTS (SELECT 1 FROM app.finance_bill_occurrences WHERE plan_id=$1::uuid AND due_date > $2::date)"
+            "EXISTS (SELECT 1 FROM app.finance_bill_plans WHERE id=$1::uuid AND (end_date IS NULL OR $2::date<end_date)) AND NOT EXISTS (SELECT 1 FROM app.finance_bill_occurrences WHERE plan_id=$1::uuid AND due_date > $2::date) AND NOT EXISTS (SELECT 1 FROM app.finance_bill_adjustments WHERE plan_id=$1::uuid AND (due_date > $2::date OR planned_date > $2::date))"
           ) +
           ", saved AS (UPDATE app.finance_bill_plans SET end_date=$2::date WHERE id=$1::uuid AND EXISTS (SELECT 1 FROM eligible) RETURNING id), " +
           logged(

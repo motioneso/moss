@@ -1,3 +1,4 @@
+import type { BillAdjustmentStore } from "./bill-adjustments.js";
 import type { MerchantRuleStore } from "./merchant-rules.js";
 import type { TransactionMetadataStore } from "./transaction-metadata.js";
 import type { ManualTransferStore } from "./manual-transfers.js";
@@ -63,6 +64,7 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly billAdjustments?: BillAdjustmentStore;
   readonly rules?: MerchantRuleStore;
   readonly metadata?: TransactionMetadataStore;
   readonly transfers?: ManualTransferStore;

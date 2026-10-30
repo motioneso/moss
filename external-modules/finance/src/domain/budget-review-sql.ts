@@ -11,6 +11,7 @@ export const BUDGET_FINGERPRINT_SQL =
     ["finance_categories", "id"],
     ["finance_targets", "jsonb_build_array(category_id, effective_month)"],
     ["finance_bill_plans", "id"],
+    ["finance_bill_adjustments", "jsonb_build_array(plan_id, due_date)"],
     ["finance_flex_policies", "month"],
     ["finance_bill_occurrences", "jsonb_build_array(plan_id, due_date)"]
   ]

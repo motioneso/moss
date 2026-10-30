@@ -58,7 +58,8 @@
       "app.finance_bill_occurrences",
       "app.finance_flex_policies",
       "app.finance_manual_transfers",
-      "app.finance_merchant_rules"
+      "app.finance_merchant_rules",
+      "app.finance_bill_adjustments"
     ]
   },
   "settingsPath": "/settings",
@@ -103,7 +104,7 @@
       {
         "id": "finance.upcoming",
         "path": "/upcoming",
-        "description": "Review projected bills, match a posted transaction once, skip an occurrence, or stop future plans. Plans do not post payments.",
+        "description": "Upcoming changes or resets one unreviewed occurrence on an active owned account through captured review and mandatory host confirmation. Effective dates may cross months or years; original cadence, matched actuals and money stay intact. Cancel retains input. Stale or uncertain saves block until checking saved bills. Undo review before changing matched/skipped projections; closed-ledger projection changes are read only. Reset later one-off changes and undo later reviews before stopping earlier. No payments, ledger entries or automatic retries.",
         "label": "Upcoming bills"
       }
     ],
@@ -1148,6 +1149,87 @@
         "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint"]
       },
       "executionPolicy": "auto",
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.adjust",
+      "permissionId": "finance.bill.adjust",
+      "actionLabel": "Change one bill occurrence",
+      "description": "Change one bill occurrence. Only unreviewed projections on active owned accounts; original schedule and ledger stay intact. Requires the captured bills review and host confirmation.",
+      "risk": "write",
+      "handler": "bill.adjust",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "plannedDate": {
+            "type": "string"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          }
+        },
+        "required": [
+          "planId",
+          "dueDate",
+          "expectedRevision",
+          "expectedFingerprint",
+          "plannedDate",
+          "amountCents"
+        ]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["planId", "dueDate"],
+      "actionFamilyId": "drafting"
+    },
+    {
+      "name": "finance.bill.adjust-reset",
+      "permissionId": "finance.bill.adjust-reset",
+      "actionLabel": "Reset a one-off bill change",
+      "description": "Reset a one-off bill change. Only unreviewed projections on active owned accounts; original schedule and ledger stay intact. Requires the captured bills review and host confirmation.",
+      "risk": "write",
+      "handler": "bill.adjust-reset",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expectedFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        },
+        "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint"]
+      },
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["planId", "dueDate"],
       "actionFamilyId": "drafting"
     },
     {

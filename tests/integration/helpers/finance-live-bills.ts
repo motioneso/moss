@@ -1,3 +1,4 @@
+import { exerciseBillAdjustments } from "./finance-live-bill-adjustments.js";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
 import type { Page } from "playwright-core";
@@ -55,6 +56,7 @@ export async function exerciseBills(
       expect.objectContaining({ planId: plan.id, state: "projected", expectedCents: 8200 })
     ])
   );
+  await exerciseBillAdjustments(page, base, month, plan.id, read, artifacts);
   await page.getByRole("button", { name: "Match posted", exact: true }).click();
   const match = page.getByRole("dialog", { name: "Match a posted transaction", exact: true });
   await match.getByLabel("Posted transaction", { exact: true }).selectOption("synthetic-market");

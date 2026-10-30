@@ -1,3 +1,4 @@
+import { billAdjustmentSqlStore } from "./store-bill-adjustments-sql.js";
 import { merchantRuleSqlStore } from "./store-merchant-rules-sql.js";
 import { transactionMetadataSqlStore } from "./store-transaction-metadata-sql.js";
 import { manualTransferSqlStore } from "./store-manual-transfers-sql.js";
@@ -264,6 +265,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     transfers: manualTransferSqlStore(db),
     metadata: transactionMetadataSqlStore(db),
     rules: merchantRuleSqlStore(db),
+    billAdjustments: billAdjustmentSqlStore(db),
     accountLifecycle: accountLifecycleSqlStore(db),
     supportsSplits: true,
     bulk: transactionBulkSqlStore(db),

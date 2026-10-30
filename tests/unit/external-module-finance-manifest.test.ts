@@ -199,6 +199,8 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.bill.decide", "bill.decide"],
         ["finance.bill.stop", "bill.stop"],
         ["finance.bill.clear", "bill.clear"],
+        ["finance.bill.adjust", "bill.adjust"],
+        ["finance.bill.adjust-reset", "bill.adjust-reset"],
         ["finance.flex.preview", "flex.preview"],
         ["finance.flex.configure", "flex.configure"],
         ["finance.flex.assign", "flex.assign"],
@@ -256,6 +258,13 @@ describe("finance manifest contract (#1146)", () => {
       confirmAbove: { inputKey: "amountCents", preferenceKey: "freedomLimitDollars", scale: 100 }
     });
     expect(toolByName("finance.budget.move").confirmAbove?.baseKey).toBeUndefined();
+    for (const name of ["finance.bill.adjust", "finance.bill.adjust-reset"]) {
+      expect(toolByName(name)).toMatchObject({
+        risk: "write",
+        executionPolicy: "confirm",
+        confirmWhenKeys: ["planId", "dueDate"]
+      });
+    }
     expect(toolByName("finance.rule.set").actionFamilyId).toBe("rules");
     expect(toolByName("finance.category.upsert").actionFamilyId).toBe("categories");
     expect(toolByName("finance.category.archive").actionFamilyId).toBe("categories");
