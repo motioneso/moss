@@ -65,8 +65,9 @@ export async function exerciseCardReserves(
       ).toBe("created");
     await s.setAssignment(month, "groceries", 10000);
   });
-  await new DataContextRunner(db).withDataContext({ actorUserId }, (scope) =>
-    setModuleKvValue(
+  await new DataContextRunner(db).withDataContext({ actorUserId }, async (scope) => {
+    await sql`SELECT set_config('app.current_module_id','finance',true)`.execute(scope.db);
+    await setModuleKvValue(
       scope,
       {
         moduleId: "finance",
@@ -76,8 +77,8 @@ export async function exerciseCardReserves(
         key: "storage:migrated"
       },
       { at }
-    )
-  );
+    );
+  });
   expect(await entry("card-proof-purchase", 5000)).toBe("created");
   const status = () => read("finance.budget.status", { month });
   const page = await context.newPage();

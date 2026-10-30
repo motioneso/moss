@@ -310,12 +310,28 @@ describe("installed manual-card payment reserves", () => {
       if (negative)
         for (const table of ["finance_card_policies", "finance_card_assignments"])
           await client.query(`ALTER TABLE app.${table} DISABLE ROW LEVEL SECURITY`);
+      const results = [];
       for (const user of [ids.userB, ids.adminUser]) {
-        expect({
+        results.push({
           policies: await owner((s) => s.cardReserves!.policies(), user),
-          assignments: await owner((s) => s.cardReserves!.assignments(), user)
-        }).toEqual({ policies: [], assignments: [] });
+          assignments: await owner((s) => s.cardReserves!.assignments(), user),
+          changed: await runner.withDataContext(
+            { actorUserId: user },
+            async (scope) =>
+              (
+                await createModuleStorageRpc(scope, "finance").query(
+                  "UPDATE app.finance_card_assignments SET assigned_cents=99999 WHERE account_id=$1 RETURNING account_id",
+                  ["synthetic-card"]
+                )
+              ).rows
+          )
+        });
       }
+      expect(results).toEqual([
+        { policies: [], assignments: [], changed: [] },
+        { policies: [], assignments: [], changed: [] }
+      ]);
+      expect((await owner((s) => s.cardReserves!.assignments()))[0]!.assignedCents).toBe(10000);
     } finally {
       if (negative)
         for (const table of ["finance_card_policies", "finance_card_assignments"])
