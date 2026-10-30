@@ -1,3 +1,4 @@
+import type { ManualTransferStore } from "./manual-transfers.js";
 import type { AccountLifecycleStore } from "./account-lifecycle.js";
 import type { HistoryExportStore } from "./history-export.js";
 import type { TransactionBulkStore } from "./transaction-bulk.js";
@@ -60,6 +61,7 @@ export interface ActivityRecord {
 }
 
 export interface FinanceStore {
+  readonly transfers?: ManualTransferStore;
   readonly accountLifecycle?: AccountLifecycleStore;
   readonly historyExport?: HistoryExportStore;
   readonly supportsSplits: boolean;

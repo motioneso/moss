@@ -245,6 +245,8 @@ async function applyCategory(
     // Names the condition only — ids from a queue payload are still inputs.
     throw new InputError("not_found", "no transaction matches the given ids");
   }
+  if (record.transferId)
+    throw new InputError("linked_transfer", "A linked transfer cannot become category spending");
   const previousCategoryId = record.categoryId;
   if (record.splits?.length)
     throw new InputError("split_transaction", "Edit the transaction's split categories instead");

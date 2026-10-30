@@ -1,3 +1,4 @@
+import { ManualTransferDialog } from "../manual-transfer";
 import { ManualAccountManager } from "../account-management";
 // external-modules/finance/src/web/screens/accounts.tsx
 // #3177: the Accounts screen. One read (finance.accounts.list) gives accounts
@@ -243,18 +244,35 @@ export function AccountsScreen(props: {
   tools?: ExternalModuleToolsHandleV1;
 }): ReactNodeLike {
   const [editing, setEditing] = useState<ManualAccountChoice | null | undefined>(undefined);
+  const [transferring, setTransferring] = useState(false);
   const [managed, setManaged] = useState<string | null>(null);
   const [reconciling, setReconciling] = useState<ManualAccountChoice | null>(null);
   const [importing, setImporting] = useState<ManualAccountChoice | null>(null);
   const accounts = useToolQuery<AccountsResult>("finance.accounts.list");
   return (
     <section aria-label="Accounts" className="fnm-stack">
+      {transferring ? (
+        <ManualTransferDialog
+          tools={props.tools}
+          onClose={() => setTransferring(false)}
+          onSaved={() => {
+            setTransferring(false);
+            invalidateQueries();
+          }}
+        />
+      ) : null}
+
       <SectionHead
         title="Accounts"
         meta={
-          <Button variant="secondary" onClick={() => setEditing(null)}>
-            Add manual account
-          </Button>
+          <div className="fnm-chips">
+            <Button variant="secondary" onClick={() => setTransferring(true)}>
+              Record transfer
+            </Button>
+            <Button variant="secondary" onClick={() => setEditing(null)}>
+              Add manual account
+            </Button>
+          </div>
         }
         rule
       />

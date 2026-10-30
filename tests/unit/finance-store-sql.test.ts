@@ -79,7 +79,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls).toHaveLength(1);
     expect(db.calls[0]!.text).toBe(
       "SELECT id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at " +
+        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at, transfer_id " +
         "FROM app.finance_transactions " +
         "WHERE account_id = $1 AND date >= $2 AND date < $3 ORDER BY date DESC, id ASC"
     );
@@ -220,7 +220,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
 
     expect(db.calls[0]!.text).toBe(
       "SELECT id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at " +
+        "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at, transfer_id " +
         "FROM app.finance_transactions " +
         "WHERE date >= $1 AND date < $2 ORDER BY date DESC, id ASC"
     );

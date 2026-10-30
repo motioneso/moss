@@ -20,11 +20,16 @@ export interface BulkRow {
   amountCents: number;
   isoCurrency: string;
   shared?: boolean;
+  transferId?: string;
   pending?: boolean;
   splits?: readonly unknown[];
 }
 export const bulkEligible = (row: BulkRow) =>
-  !row.shared && !row.pending && !row.splits?.length && Boolean(row.writeRevision);
+  !row.transferId &&
+  !row.shared &&
+  !row.pending &&
+  !row.splits?.length &&
+  Boolean(row.writeRevision);
 export function TransactionBulkBar(props: {
   selected: readonly BulkRow[];
   loaded: readonly BulkRow[];

@@ -104,6 +104,19 @@ describe("finance manifest app map (#3177)", () => {
     });
   });
 
+  it("always confirms exact linked transfer endpoints and amount", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string }[];
+    };
+    expect(
+      manifest.assistantTools.find((t) => t.name === "finance.manual.transfer-create")
+    ).toMatchObject({
+      risk: "write",
+      executionPolicy: "confirm",
+      confirmWhenKeys: ["fromAccountId", "toAccountId", "amountCents"]
+    });
+  });
+
   it("lets chat adjust a draft through the drafting family", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       assistantTools: { name: string; handler?: string; risk: string; actionFamilyId?: string }[];
@@ -194,7 +207,9 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.transactions.export", "transactions.export"],
         ["finance.transactions.confirm", "transactions.confirm"],
         ["finance.manual.account-review", "manual.account-review"],
-        ["finance.manual.account-update", "manual.account-update"]
+        ["finance.manual.account-update", "manual.account-update"],
+        ["finance.manual.transfer-context", "manual.transfer-context"],
+        ["finance.manual.transfer-create", "manual.transfer-create"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {

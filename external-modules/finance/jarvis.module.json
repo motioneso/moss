@@ -56,7 +56,8 @@
       "app.finance_targets",
       "app.finance_bill_plans",
       "app.finance_bill_occurrences",
-      "app.finance_flex_policies"
+      "app.finance_flex_policies",
+      "app.finance_manual_transfers"
     ]
   },
   "settingsPath": "/settings",
@@ -71,13 +72,13 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Transactions supports month/account/category/search/posting/direction/review and duplicate filters, clear loaded/full matching counts, splits and confirmed atomic bulk categorization. Selection persists across filters; stale batches save nothing. Export loaded rows keeps the visible scope. Export history prepares an owned-only CSV across stored months with optional inclusive dates and account selection. It shows captured scope/count/time before download, omits notes and household mirrors, and refuses over 5,000 rows or 2 MiB without truncation. Includes useful loading, empty, failed-read and retry states; shared rows stay read only. Loaded category confirmation captures up to 200 owned posted unsplit needs-look rows, waits for atomic persistence, and rejects stale batches. Cancellation retains review; failures require an explicit fresh register check. Individual/rule queues remain separate.",
+        "description": "Transactions filters by month/account/category/search/posting/direction/review/duplicates, with loaded/full counts, splits and confirmed atomic bulk categorization. Selection survives filters; stale batches save nothing. Loaded category confirmation captures up to 200 owned posted unsplit needs-look rows, awaits persistence and requires fresh reads after failure. Cancellation retains review. Individual/rule queues remain separate. Linked manual transfer legs cannot become category spending or splits. Export loaded rows keeps visible scope. Export history prepares an owned-only cross-month CSV by inclusive dates/account, with captured scope/count/time and durable transfer links. Notes and household mirrors are omitted; over 5,000 rows or 2 MiB refuses rather than truncates. Loading/empty/error/retry states preserve filters; busy reads explain the server wait. Shared records remain read only.",
         "path": "/transactions"
       },
       {
         "id": "finance.accounts",
         "label": "Accounts",
-        "description": "Accounts shows separate currency totals, manual ledgers and dated bank balances. Manual accounts support entry, CSV import and statement reconciliation. Manage reads an owned revision for host-confirmed rename/close/reopen; no opening/type/currency or financial history is rewritten. Closing requires a valid zero ledger, current statement or pristine zero baseline, no future entries and resolved future bill plans. Closed accounts keep history and reopen without unlocking reconciled periods. History links initialize validated account/month register filters. Provider/shared accounts never get manual edit controls. Read/stale failures preserve drafts and require fresh review.",
+        "description": "Accounts keeps currency totals separate, subtracts debts and dates bank balances. Manual ledgers support entries, CSV import and reconciliation. Manage captures an owned version for confirmed rename/close/reopen, preserving opening/currency/type, money, observation dates and history. Closing requires a valid zero ledger, current statement or pristine baseline, no future entries and resolved bill plans. Reopening keeps statement locks. Closed history links use validated owned register filters. Record transfer reviews two active owned manual cash/card ledgers, exact amount/date and resulting balances. Confirmed linked entries save atomically with version/date/statement/precision/replay guards; no bank instruction or money is sent. Provider, shared, loan, investment and FX endpoints are unsupported. Failed/stale reads and writes retain drafts and require explicit fresh review. Busy reads explain the server wait before retry.",
         "path": "/accounts"
       },
       {
@@ -1441,6 +1442,95 @@
           "name": { "type": "string", "minLength": 1, "maxLength": 80 }
         },
         "required": ["accountId", "expectedRevision", "operation"]
+      }
+    },
+    {
+      "name": "finance.manual.transfer-context",
+      "permissionId": "finance.manual.transfer-context",
+      "description": "Read owned active manual cash/card ledgers and captured account versions for recording same-currency linked transfers. No credentials, bank instructions, shared-owner endpoints or private notes.",
+      "risk": "read",
+      "handler": "manual.transfer-context",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "finance.manual.transfer-create",
+      "permissionId": "finance.manual.transfer-create",
+      "actionLabel": "Record a linked manual transfer",
+      "description": "Record a past movement as an atomic linked pair in two owned manual cash/card ledgers of the same currency. Rechecks captured versions, statement/date/precision bounds and replay identity. This records history in Moss and sends no money or bank instructions. Loan, investment, provider and shared endpoints are unsupported.",
+      "risk": "write",
+      "handler": "manual.transfer-create",
+      "executionPolicy": "confirm",
+      "confirmWhenKeys": ["fromAccountId", "toAccountId", "amountCents"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fromAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "toAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "fromRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "toRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "isoCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "CAD",
+              "AUD",
+              "NZD",
+              "CHF",
+              "CNY",
+              "HKD",
+              "SGD",
+              "INR",
+              "MXN"
+            ]
+          },
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operationId",
+          "fromAccountId",
+          "toAccountId",
+          "fromRevision",
+          "toRevision",
+          "date",
+          "amountCents",
+          "isoCurrency",
+          "cleared"
+        ]
       }
     }
   ],

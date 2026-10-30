@@ -5,6 +5,7 @@ import { centsToAmountInput } from "./format.js";
 /** The explicit, loaded register selection exported by the user. Never fetches hidden rows. */
 export interface ExportTransaction {
   id: string;
+  transferId?: string;
   date: string;
   accountId: string;
   name: string;
@@ -22,7 +23,7 @@ export function transactionsCsv(
   categoryName: (row: ExportTransaction) => string
 ): string {
   const header =
-    "Date,Payee,Account,Category,Outflow,Inflow,Currency,Status,Scope,Transaction ID,Allocations";
+    "Date,Payee,Account,Category,Outflow,Inflow,Currency,Status,Scope,Transaction ID,Allocations,Transfer ID";
   return (
     [
       header,
@@ -45,7 +46,8 @@ export function transactionsCsv(
                   `${categoryName({ ...row, categoryId: part.categoryId })}: ${centsToAmountInput(part.amountCents)} ${row.isoCurrency}`
               )
               .join("; ")
-          )
+          ),
+          csvText(row.transferId ?? "")
         ].join(",")
       )
     ].join("\r\n") + "\r\n"

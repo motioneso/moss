@@ -1,3 +1,4 @@
+import { manualTransferSqlStore } from "./store-manual-transfers-sql.js";
 import { accountLifecycleSqlStore } from "./store-account-lifecycle-sql.js";
 import { historyExportSqlStore } from "./store-history-export-sql.js";
 import { transactionBulkSqlStore } from "./store-transaction-bulk-sql.js";
@@ -252,6 +253,7 @@ function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     historyExport: historyExportSqlStore(db),
+    transfers: manualTransferSqlStore(db),
     accountLifecycle: accountLifecycleSqlStore(db),
     supportsSplits: true,
     bulk: transactionBulkSqlStore(db),
@@ -269,7 +271,7 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           "category_id = $2, categorized_by = 'user', review_state = 'confirmed', " +
           "split_revision = split_revision + 1 " +
           "WHERE id = $3 AND account_id = $4 AND date >= $5 AND date < $6 " +
-          "AND amount_cents = $7 AND split_revision = $8 AND iso_currency = $9 AND pending = false RETURNING id), " +
+          "AND amount_cents = $7 AND split_revision = $8 AND iso_currency = $9 AND pending = false AND transfer_id IS NULL RETURNING id), " +
           "logged AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params) " +
           "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), 'user', 'transaction.split', $10::jsonb " +
           "FROM changed RETURNING id) SELECT id FROM changed",

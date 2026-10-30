@@ -55,6 +55,11 @@ export const transactionSplitHandler: ToolFactory = (ports) => async (params) =>
     (r) => r.id === transactionId
   );
   if (!row) throw new InputError("not_found", "Transaction is unavailable");
+  if (row.transferId)
+    throw new InputError(
+      "linked_transfer",
+      "Linked transfers cannot be split into spending categories"
+    );
   if (row.pending)
     throw new InputError(
       "pending_transaction",

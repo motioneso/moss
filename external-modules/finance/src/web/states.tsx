@@ -91,7 +91,12 @@ export function outcomeGate<T extends Record<string, unknown>>(
   }
   if (outcome.kind === "error")
     return (
-      <ErrorState message={opts?.errorMessage ?? outcome.message} action={opts?.errorAction} />
+      <ErrorState
+        message={
+          outcome.retryAfterSeconds ? outcome.message : (opts?.errorMessage ?? outcome.message)
+        }
+        action={opts?.errorAction}
+      />
     );
   const status = (outcome.result as { status?: unknown }).status;
   if (status === "error") {

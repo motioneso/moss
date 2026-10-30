@@ -54,6 +54,7 @@ export function toSharedTransaction(transaction: TransactionRecord): Transaction
   // a field added to TransactionRecord later must be shared on purpose.
   return {
     id: transaction.id,
+    ...(transaction.transferId ? { transferId: transaction.transferId } : {}),
     accountId: transaction.accountId,
     date: transaction.date,
     amountCents: transaction.amountCents,

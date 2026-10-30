@@ -220,3 +220,9 @@ synthetic manifest temporarily allowed routine auto execution for only account-u
 dialog never appeared and the debug screenshot showed the renamed account, proving the metadata
 write had auto-executed. Mandatory confirmation, operation keys and original family policy restored.
 Phone inspection prompted tighter dialog spacing with unchanged semantic typography/colors.
+
+Further implementation and current gate status: [linked-transfer checkpoint](2026-10-30-finance-linked-transfers-checkpoint.md).
+Manual lifecycle implementation was committed/pushed as `6ee3d8db`; design and diagnostic/fixture
+follow-ups through `1e5a9a98` are also pushed. Its clean SQL eight passed at `045043-dgiF4C`,
+input `02876b121391`. The later root-type fixture mutation was fixed without weakening readonly
+ports. Full-browser rate-limit diagnostics and the pending clean aggregate are detailed above.

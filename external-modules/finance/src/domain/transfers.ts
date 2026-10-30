@@ -34,11 +34,12 @@ export function pairTransfers(transactions: TransactionRecord[]): TransferPair[]
   const pairs: TransferPair[] = [];
   for (let i = 0; i < sorted.length; i += 1) {
     const a = sorted[i]!;
-    if (matched.has(a.id) || a.amountCents === 0 || a.splits?.length) continue;
+    // A durable link is authoritative; never borrow an unrelated row as its other leg.
+    if (a.transferId || matched.has(a.id) || a.amountCents === 0 || a.splits?.length) continue;
     for (let j = i + 1; j < sorted.length; j += 1) {
       const b = sorted[j]!;
       if (dateDiffDays(a.date, b.date) > 3) break;
-      if (matched.has(b.id)) continue;
+      if (b.transferId || matched.has(b.id)) continue;
       if (b.splits?.length) continue;
       if (b.amountCents !== -a.amountCents) continue;
       if (b.accountId === a.accountId) continue;
@@ -61,7 +62,7 @@ export function effectiveTransferIds(transactions: TransactionRecord[]): Set<str
     ids.add(pair.bId);
   }
   for (const txn of transactions) {
-    if (txn.categoryId === "transfers") ids.add(txn.id);
+    if (txn.transferId || txn.categoryId === "transfers") ids.add(txn.id);
   }
   return ids;
 }

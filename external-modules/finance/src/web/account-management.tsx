@@ -1,3 +1,4 @@
+import { useReadCooldown } from "./read-cooldown";
 import {
   Badge,
   Button,
@@ -49,6 +50,7 @@ export function ManualAccountManager(props: {
     [busy, setBusy] = useState(false),
     [blocked, setBlocked] = useState(false),
     [message, setMessage] = useState<string | null>(null);
+  const cooldown = useReadCooldown();
   const generation = useRef(0),
     touched = useRef(false),
     pending = useRef(false);
@@ -69,10 +71,14 @@ export function ManualAccountManager(props: {
       if (!touched.current) setName(outcome.result.account.name);
     } else {
       setBlocked(true);
+      if (outcome.kind === "error" && outcome.retryAfterSeconds)
+        cooldown.wait(outcome.retryAfterSeconds);
       setMessage(
-        outcome.kind === "ok" && outcome.result.status === "storage_update_required"
-          ? "Update Finance storage before managing manual accounts."
-          : "The saved manual account could not be read. Your draft is kept; check your connection and review again."
+        outcome.kind === "error" && outcome.retryAfterSeconds
+          ? outcome.message
+          : outcome.kind === "ok" && outcome.result.status === "storage_update_required"
+            ? "Update Finance storage before managing manual accounts."
+            : "The saved manual account could not be read. Your draft is kept; check your connection and review again."
       );
     }
   };
@@ -180,7 +186,11 @@ export function ManualAccountManager(props: {
         {loading ? <p role="status">Reading saved account…</p> : null}
         {message ? <p role="status">{message}</p> : null}
         {blocked || !review ? (
-          <Button variant="secondary" disabled={busy || loading} onClick={() => void read()}>
+          <Button
+            variant="secondary"
+            disabled={busy || loading || cooldown.cooling}
+            onClick={() => void read()}
+          >
             Review saved account
           </Button>
         ) : null}

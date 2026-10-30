@@ -1,3 +1,5 @@
+import { setModuleKvValue } from "@moss/settings";
+import { NS } from "../../../external-modules/finance/src/domain/index.js";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
 import { sql, type Kysely } from "kysely";
@@ -62,6 +64,22 @@ export async function exerciseAccountLifecycle(
       archivedAt: string | null;
       revision: string;
     };
+  // Synthetic fixture setup matches the existing installed Finance SQL fixtures. Migration itself
+  // is covered separately; this actor starts with no legacy KV financial records.
+  await new DataContextRunner(db).withDataContext({ actorUserId: userId }, async (scope) => {
+    await sql`select set_config('app.current_module_id','finance',true)`.execute(scope.db);
+    return setModuleKvValue(
+      scope,
+      {
+        moduleId: "finance",
+        namespace: NS.meta,
+        scope: "user",
+        ownerUserId: userId,
+        key: "storage:migrated"
+      },
+      { at: new Date().toISOString() }
+    );
+  });
   const page = await context.newPage();
   const failedReads: { status: number; retryAfter: number | null; patternRejected: boolean }[] = [];
   page.on("response", async (response) => {
@@ -125,11 +143,9 @@ export async function exerciseAccountLifecycle(
     await guard.getByRole("button", { name: "Confirm action", exact: true }).click();
     await manager.waitFor({ state: "detached" });
     expect((await saved()).archivedAt).not.toBeNull();
-    expect(
-      await page
-        .getByRole("button", { name: "Add transaction to Synthetic renamed cash", exact: true })
-        .count()
-    ).toBe(0);
+    await page
+      .getByRole("button", { name: "Add transaction to Synthetic renamed cash", exact: true })
+      .waitFor({ state: "detached" });
     await page.getByRole("button", { name: /Closed accounts \(/ }).click();
     await page.getByRole("button", { name: "Manage Synthetic renamed cash", exact: true }).click();
     await manager.getByRole("button", { name: "Review reopening", exact: true }).click();

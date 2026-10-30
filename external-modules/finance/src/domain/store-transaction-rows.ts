@@ -3,7 +3,7 @@ import { safeCents } from "./values.js";
 
 export const TXN_COLUMNS =
   "id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at";
+  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence, splits, split_revision, source, cleared, reconciled_at, transfer_id";
 
 export type TransactionRow = {
   id: string;
@@ -26,6 +26,7 @@ export type TransactionRow = {
   source?: string;
   cleared?: boolean;
   reconciled_at?: string | null;
+  transfer_id?: string | null;
 };
 
 export function rowToTransaction(row: TransactionRow): TransactionRecord {
@@ -45,6 +46,7 @@ export function rowToTransaction(row: TransactionRow): TransactionRecord {
     notes: row.notes ?? undefined,
     reviewState: row.review_state,
     aiConfidence: row.ai_confidence,
+    ...(row.transfer_id ? { transferId: row.transfer_id } : {}),
     ...(row.source === "manual"
       ? {
           source: "manual" as const,

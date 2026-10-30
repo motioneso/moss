@@ -44,6 +44,7 @@ export type TransactionRecord = {
   source?: "provider" | "manual";
   cleared?: boolean;
   reconciledAt?: string | null;
+  transferId?: string;
 };
 
 /** One month-chunk value at monthKey(); sorted date desc, then id asc. */

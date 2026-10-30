@@ -60,6 +60,7 @@ interface Tx extends SplitTransaction {
   pending?: boolean;
   possibleDuplicate?: boolean;
   source?: "manual";
+  transferId?: string;
   cleared?: boolean;
   reconciledAt?: string | null;
   writeRevision?: string;
@@ -251,7 +252,9 @@ function CategoryControls({
 }): ReactNodeLike {
   return (
     <div className="fnm-category-controls">
-      {tx.splits?.length ? (
+      {tx.transferId ? (
+        <Badge>Linked transfer</Badge>
+      ) : tx.splits?.length ? (
         <span>
           {tx.splits.length} categories ·{" "}
           {tx.splits
@@ -273,7 +276,7 @@ function CategoryControls({
           onChange={ctx.onChange}
         />
       )}
-      {ctx.supportsSplits && !tx.shared && !tx.pending ? (
+      {ctx.supportsSplits && !tx.transferId && !tx.shared && !tx.pending ? (
         <Button
           variant="link"
           size="sm"

@@ -14,7 +14,7 @@ export function transactionBulkSqlStore(db: FinanceDb): TransactionBulkStore {
           SELECT t.id,t.account_id,t.date,t.category_id FROM app.finance_transactions t
           JOIN requested r ON r.id=t.id
           WHERE md5(t.id || ':' || t.xmin::text)=r."writeRevision"
-            AND t.review_state='needs_look' AND NOT t.pending AND t.splits='[]'::jsonb
+            AND t.review_state='needs_look' AND t.transfer_id IS NULL AND NOT t.pending AND t.splits='[]'::jsonb
             AND t.category_id IS NOT NULL
           ORDER BY t.id FOR UPDATE OF t
         ), categories AS MATERIALIZED (
@@ -60,7 +60,7 @@ export function transactionBulkSqlStore(db: FinanceDb): TransactionBulkStore {
           SELECT t.id,t.account_id,t.date,t.category_id FROM app.finance_transactions t
           JOIN requested r ON r.id=t.id
           WHERE md5(t.id || ':' || t.xmin::text)=r."writeRevision"
-            AND NOT t.pending AND t.splits='[]'::jsonb
+            AND t.transfer_id IS NULL AND NOT t.pending AND t.splits='[]'::jsonb
           ORDER BY t.id FOR UPDATE OF t
         ), destination AS MATERIALIZED (
           SELECT id FROM app.finance_categories WHERE id=$2 AND archived_at IS NULL AND id<>'transfers' FOR SHARE

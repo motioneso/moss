@@ -6,6 +6,7 @@ export function historyExportSqlStore(db: FinanceDb): HistoryExportStore {
     async read(scope) {
       const result = await db.query<{
         id: string | null;
+        transfer_id: string | null;
         account_id: string;
         account_name: string;
         date: string;
@@ -22,13 +23,13 @@ export function historyExportSqlStore(db: FinanceDb): HistoryExportStore {
       }>(
         `WITH selected AS MATERIALIZED (
           SELECT t.owner_user_id,t.id,t.account_id,t.date,t.amount_cents,t.iso_currency,t.name,
-            t.category_id,t.pending,t.source,t.cleared,t.reconciled_at,t.splits FROM app.finance_transactions t
+            t.transfer_id,t.category_id,t.pending,t.source,t.cleared,t.reconciled_at,t.splits FROM app.finance_transactions t
           WHERE ($1::date IS NULL OR t.date >= $1::date)
             AND ($2::date IS NULL OR t.date <= $2::date)
             AND ($3::text IS NULL OR t.account_id=$3)
         ), summary AS (SELECT count(*) AS n FROM selected), limited AS (
           SELECT * FROM selected WHERE (SELECT n FROM summary) <= ${MAX_HISTORY_ROWS} ORDER BY date DESC,id ASC LIMIT ${MAX_HISTORY_ROWS}
-        ) SELECT t.id,t.account_id,coalesce(a.name,t.account_id) AS account_name,
+        ) SELECT t.id,t.transfer_id,t.account_id,coalesce(a.name,t.account_id) AS account_name,
           t.date::text AS date,t.name,t.amount_cents::text,t.iso_currency,t.category_id,
           coalesce(c.name,t.category_id,'Uncategorized') AS category_name,t.pending,
           CASE WHEN t.source='manual' THEN t.cleared ELSE NULL END AS cleared,
@@ -48,6 +49,7 @@ export function historyExportSqlStore(db: FinanceDb): HistoryExportStore {
           .filter((r) => r.id !== null)
           .map((r) => ({
             id: r.id!,
+            ...(r.transfer_id ? { transferId: r.transfer_id } : {}),
             accountId: r.account_id,
             accountName: r.account_name,
             date: r.date,
