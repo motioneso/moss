@@ -5,6 +5,49 @@ Date: 2026-10-30. Branch task/finance-parity-20261028. No merge, deployment or P
 [filter spec](../specs/2026-10-30-finance-ledger-status-filters.md),
 [details spec](../specs/2026-10-30-finance-transaction-details.md).
 
+## Final verified checkpoint
+
+Implementation 682a8162 and documentation/evidence 4992a91c are committed and pushed.
+Serialized Finance-complete receipt 144932-1D2ZVh passed **all 190 tests in 17 files**
+(169 backend plus all 21 installed browser flows) on clean 4992a91c, fingerprint
+102955f9ba388c8b8e6356448962032f784fa2a38fad6c4080c9dbe52c67fd57. Source code and
+tests are unchanged from 682a8162; intervening files are docs/images only. The final
+evidence commit that records this verdict does not change implementation.
+
+The corrected broad aggregate 143017-SaB79F on clean implementation 682a8162 /
+ef9dfd37eadc passed all static checks, including lint, formatting, file-size, design,
+package/migration checks, root/test/web/external types and app map. It then failed
+exactly the **277 historical environment-baseline FAIL identities**, with zero added
+or removed: 21 files failed / 1,637 passed; 277 tests failed / 19,720 passed / 3 skipped
+(20,000 total). This is a failed full gate. Its later chained migration/UAT/integration
+stages were not reached, though the wrapper bootstrapped a fresh migrated server.
+CI e2e is unrun. No failure is reclassified merely to obtain a green result.
+
+All 801 Finance units plus three unchanged browser-dependency checks passed separately
+(804 in 85 files). Snapshot-policy negative 143802-Lq4en4 produced one intended failure
+and 28 passes; restored positive SQL 144017-p5z2a7 passed all 29 on clean 682a8162 /
+ef9dfd37eadc. The UI shared-note guard was also observed red when removed and green
+after restoration. All negative changes are fixture-only or restored in finally.
+
+The isolated complete run passed manual statement filters, private and actual shared
+transaction details, pending settlement review, targets, bills, flex, export, reporting,
+ledger and host confirmation flows. Its real HTTP 429 read recovered after Retry-After
+5 with an explicit read retry. No pattern rejection occurred in that run. Earlier
+400 rejection evidence is retained below; serialization supports resource pressure as
+a possible cause without proving the worker's internal reason. The 100ms validation
+guard, rate limits, timeouts and financial-write confirmation/retry contracts are intact.
+
+[Four inspected original UI frames](../evidence/finance-parity-2026-10-30/README.md)
+are committed, covering desktop/phone details and reconciled state. Full widths/themes
+are exercised in the installed fixture. Provider/credential ports and mirror transport
+are explicitly synthetic where documented; no real bank/provider HTTP acceptance or
+production deployment is claimed. All gate servers and native browsers clean up on exit.
+No merge, deployment or PR publication occurred.
+
+Full YNAB/Monarch parity remains incomplete. Continue with the card-reserve conservation
+model and staged capabilities listed at the end and in the evidence-linked matrix.
+The following sections retain the intermediate failures and corrections for review.
+
 ## Implemented scope
 
 358524bf implements separate manual uncleared, cleared-unreconciled and reconciled filters.
@@ -29,7 +72,7 @@ UI shared-note guard made the malformed-household test fail because a textarea a
 (1 expected failure, 7 skipped). The source was restored in finally and all 24 then passed.
 This proves the followed new UI guard, not an audit of every historical sharing path.
 
-## Verification still required
+## Verification required at the initial checkpoint
 
 Run fresh complete Finance backend/installed acceptance on the clean implementation,
 all Finance units and static checks, fixture-only snapshot privacy negative and restored
@@ -121,7 +164,7 @@ main fetch still resolves 3a9c744d035bf1d91220ec13a634c51453282bb3; migration co
 checking passes. Automatic cross-PR checking is unavailable in the CLI; the documented
 manual four-PR file-list snapshot found no 0354 claim.
 
-## Exact continuation
+## Interim continuation (completed above)
 
 Wait for aggregate 143017-SaB79F, compare every FAIL identity with 040401-c9zwQ0 and
 record additions/removals. Then run finance-complete alone through verify-gate, using

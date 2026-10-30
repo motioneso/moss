@@ -41,7 +41,7 @@ Architectural observations below come from inspected source, not unavailable gra
 
 Statuses updated through the target, pending-settlement and register-detail slices on 2026-10-30. Supported means the bounded
 capability is implemented, not full product equivalence. Exact verification and remaining limits
-are in the [checkpoint](../plans/2026-10-28-finance-parity-checkpoint.md). The audit above remains
+are in the [current checkpoint](../plans/2026-10-30-finance-register-details-checkpoint.md). The audit above remains
 a dated baseline.
 
 | Area                 | Official comparison evidence                                                                                                                                                                                                | Moss status                                                                     | Acceptance criteria / next deliverable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -280,7 +280,8 @@ The [manual ledger filter spec](2026-10-30-finance-ledger-status-filters.md) add
 separate manual statement-state selector. It intersects existing filters before counts/limits;
 provider/pending/shared rows have no manual statement meaning. Cleared excludes reconciled
 rows. This is a bounded register improvement, not general query-language parity or provider
-reconciliation. Implementation acceptance is pending the clean unit/static/installed runs.
+reconciliation. Final installed acceptance passed the actual cleared-to-reconciled transition;
+see the register checkpoint for complete clean receipts and aggregate limitations.
 
 ## October 30 readable transaction details continuation
 
@@ -291,3 +292,16 @@ test; removing that guard was observed failing, then restored. The dialog has no
 controls or extra network calls. Notes editing, tags, attachments and general merchant/date
 edits remain gaps. Acceptance and the final restored filter run are tracked in the
 [register checkpoint](../plans/2026-10-30-finance-register-details-checkpoint.md).
+
+## Final October 30 verification
+
+[Current tested checkpoint](../plans/2026-10-30-finance-register-details-checkpoint.md):
+801 Finance units plus three browser-source-graph checks passed. Serialized installed
+and backend Finance acceptance passed all 190 in 17 files, including every one of the
+21 native flows. Fixture-only privacy negative controls were observed failing, restored
+and followed by passing positive SQL/native checks. The broad aggregate passed static
+checks and failed exactly the 277 earlier environment-baseline identities with no additions
+or removals; it is not a green full repository gate. CI e2e and actual bank/provider HTTP
+acceptance remain unrun. [Original inspected screenshots](../evidence/finance-parity-2026-10-30/README.md)
+are committed. Supported/partial/missing/out-of-scope classifications above stay bounded;
+test count does not establish universal parity. No merge, deployment or PR publication.
