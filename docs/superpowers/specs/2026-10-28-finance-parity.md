@@ -373,3 +373,11 @@ candidate read using an explicitly pending synthetic fixture expense, refuse sav
 the fixture and prove explicit selection, confirmed match and unchanged final ledger. Inspect
 phone/desktop layouts; preserve the original date-range explanation. This adds no transaction,
 bank payment or automatic match. Larger reviewed manual bill-entry creation remains separate.
+
+The explicit review refinement is implemented at c788fb17. All 38 focused cases pass, and the
+installed app passes both selected flows at clean d5215bee, including actual pending-based empty
+reads, disabled saving, explicit restored selection and unchanged ledger state. e8a10979 contains
+only a unit-test library compatibility correction; fresh repository-wide static checks pass.
+See the [updated handoff](../plans/2026-10-30-finance-bill-match-checkpoint.md) for exact input
+fingerprints, the observed fixture-version failure and correction, original screenshots and the
+larger remaining reviewed bill-entry slice. Broader recurring-obligation parity remains Partial.

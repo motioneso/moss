@@ -1,6 +1,6 @@
 # Bill matching across month boundaries: checkpoint
 
-Date: 2026-10-30. Branch: task/finance-parity-20261028. Implementation: 170dc61f.
+Date: 2026-10-30. Branch: task/finance-parity-20261028. Date-window implementation: 170dc61f; review refinement: c788fb17; final test compatibility: e8a10979.
 All work is isolated and pushed; no merge, deployment, PR publication or live bank action.
 Repository paths below are relative to ~/Jarv1s.
 
@@ -19,7 +19,7 @@ This fixes a bounded matching gap; recurring obligations remain Partial. Creatin
 from a due occurrence is still missing. Bank Bill Sync, real credentials/provider acceptance,
 investment holdings/performance and the other recorded gaps are not established by this slice.
 
-## Verification
+## Date-window verification (170dc61f)
 
 - Eighteen focused recurrence/handler cases pass. The empty-index regression was observed failing
   before preserving the original month partitions, then passing after the correction. Receipt:
@@ -58,6 +58,61 @@ server and browser close on completion.
 
 [Original inspected phone/desktop screenshots](../evidence/finance-bill-match-2026-10-30/README.md).
 [Evidence-linked parity matrix and accepted scope](../specs/2026-10-28-finance-parity.md).
+
+## Explicit candidate review refinement
+
+Implementation c788fb17 keeps every same-account candidate and orders by nearest effective
+planned date, then exact expected-amount distance, then date/identity for deterministic ties.
+Adjusted dates participate. Nothing is automatically chosen. The review explains the ordering
+and keeps variable actual amounts available. No-candidate reads show a practical Transactions /
+Check saved bills recovery path, disable the select and Save, and keep Cancel available. Save
+also requires the selected identity to remain in the current candidate list. These presentation
+changes do not implement automatic matching or create ledger entries.
+
+Verification for this continuation:
+
+- All 38 focused cases in finance-bill-match-candidates, external-module-finance-web-format,
+  finance-recurrence and finance-bill-handlers pass. They cover immutable/stable account-scoped
+  ordering, adjusted dates, exact one-cent distinctions at safe integer limits, leap/DST dates,
+  invalid data rejection, calendar windows and the existing precise money formatting.
+  Receipt /tmp/finance-bill-review-units.log. The formatter was already exact and was not changed.
+- The native gate at clean d5215bee passed both selected installed flows, twenty intentionally
+  skipped. Receipt 203254-Z9aprb, fingerprint
+  f0a3e1e07b4774e5e6aae9ad31ce67bbbbe35b97d092568107141d5a29563438;
+  Node 24.19.0, pnpm 10.6.2, disposable PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2).
+  It exercises an actual empty candidate read after a controlled synthetic pending flip,
+  disabled Save/select, cancellation, restoration, explicit choice and the original match /
+  reload / Undo / skip / stop workflow. Phone dark and desktop light originals were inspected.
+- Initial native receipt 203028-WCJB0H at clean c788fb17 failed one final assertion, one flow
+  passed and twenty skipped: changing a fixture row's pending state changes its xmin-based
+  review version even after restoring the field. d5215bee now asserts the expected token
+  change and exact preservation of every other response field, then keeps the refreshed full
+  response as the baseline. The actual matching workflow must preserve that full response,
+  including its new version. No financial assertion or runtime guard was removed.
+- Initial static checking failed only on the test's toReversed API being newer than the target
+  TypeScript library. e8a10979 changes that one test expression to a copied-array reversal;
+  all 38 cases pass again. Production code is unchanged after c788fb17; native helper code is
+  unchanged after d5215bee. The native receipt is not a gate of e8a10979 or the later docs commit.
+- The fresh full pnpm verify:static passes after e8a10979, including lint, formatting, all
+  policy checks, root/test/web/external-module typechecks and app-map generation. Receipt
+  /tmp/finance-bill-review-final-static.log. The final evidence/handoff additions are separately
+  formatted; they do not constitute a new native or full Finance acceptance gate.
+- Full Finance acceptance, verify:foundation, CI e2e and actual provider HTTP were not rerun for
+  this review-only refinement. Earlier complete Finance/aggregate receipts retain their own
+  tested commits; this narrower result does not certify them anew or establish universal parity.
+
+The native fixture restores its pending flag and date in finally; the disposable server and
+browser close after the run. No actual bank, credential, production data or financial instruction
+was used. Existing account, captured-review and host-confirmation write contracts are unchanged.
+
+[Original review/empty-state screenshots](../evidence/finance-bill-match-2026-10-30/README.md).
+Optional synthetic check: open Match posted on an account with no posted expenses; verify the
+explanation and disabled controls, then Cancel. Record an already-occurred synthetic manual
+expense from Accounts, return and Check saved bills. Reopen: nothing should be preselected;
+choose the expense explicitly, confirm, reload and check the ledger still contains it once.
+
+This is a bounded usability improvement. Recurring obligations remain Partial, and the larger
+reviewed manual bill-entry flow below remains the next implementation action.
 
 ## Manual continuation
 

@@ -22,3 +22,23 @@ ledger entry. These images are bounded workflow evidence, not universal product 
 
 [Verification, limitations and manual continuation](../../plans/2026-10-30-finance-bill-match-checkpoint.md).
 [Design and official comparison sources](../../specs/2026-10-28-finance-parity.md).
+
+## Explicit candidate review and empty state
+
+These original, inspected screenshots are from the passing native refinement receipt
+203254-Z9aprb at clean d5215bee, fingerprint
+f0a3e1e07b4774e5e6aae9ad31ce67bbbbe35b97d092568107141d5a29563438.
+Both selected flows passed; twenty others were intentionally skipped.
+
+- [No candidates, phone dark](finance-bill-match-empty-dark-320.png): a controlled pending
+  synthetic expense leaves no posted match. Select and Save are disabled, recovery instructions
+  are visible and Cancel stays available inside the phone viewport.
+- [Explicit review, desktop light](finance-bill-review-light-1440.png): after fixture restoration,
+  the review explains nearest-date / nearest-amount ordering and preserves variable actual
+  amounts. The test asserts that nothing is preselected and chooses the expense explicitly.
+
+The temporary fixture flip changes its review version; the test verifies every other field is
+restored, then compares the full current ledger response across actual matching. Production UI
+is unchanged after c788fb17; d5215bee corrects that fixture assertion. e8a10979 changes only an
+array-reversal expression in a pure unit test to match the TypeScript target. Those later inputs
+must not be described as the same native gate. No image editing, real bank or production data.
